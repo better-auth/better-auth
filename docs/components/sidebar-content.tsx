@@ -1609,6 +1609,46 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 		),
 		list: [
 			{
+				title: "Contribute",
+				href: "/docs/reference/contribution",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+					>
+						<g fill="none" stroke="currentColor" strokeWidth="2">
+							<circle
+								cx="6"
+								cy="6"
+								r="3"
+								fill="currentColor"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+							<circle
+								cx="18"
+								cy="6"
+								r="3"
+								fill="currentColor"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+							<circle
+								cx="12"
+								cy="18"
+								r="3"
+								fill="currentColor"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+							<path d="M6 9v1a2 2 0 0 0 2 2h4m6-3v1a2 2 0 0 1-2 2h-4m0 0v3" />
+						</g>
+					</svg>
+				),
+			},
+			{
 				title: "Options",
 				href: "/docs/reference/options",
 				icon: () => (
@@ -1637,77 +1677,45 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 		],
 	},
-	{
-		title: "Contribute",
-		Icon: () => (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-			>
-				<g fill="none" stroke="currentColor" strokeWidth="2">
-					<circle
-						cx="6"
-						cy="6"
-						r="3"
-						fill="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-					<circle
-						cx="18"
-						cy="6"
-						r="3"
-						fill="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-					<circle
-						cx="12"
-						cy="18"
-						r="3"
-						fill="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-					<path d="M6 9v1a2 2 0 0 0 2 2h4m6-3v1a2 2 0 0 1-2 2h-4m0 0v3" />
-				</g>
-			</svg>
-		),
-		list: [
-			{
-				title: "Getting Started",
-				href: "/docs/contribute/getting-started",
-				icon: () => <BookOpenCheck className="text-current size-4" />,
-			},
-			{
-				title: "Areas to Contribute",
-				href: "/docs/contribute/areas-to-contribute",
-				icon: () => <HandHelping className="w-4 h-4 text-current" />,
-			},
-			// {
-			// 	title: "Database Adapters",
-			// 	href: "/docs/contribute/database-adapters",
-			// 	icon: () => <Plug className="w-4 h-4 text-current" />,
-			// },
-			{
-				title: "Testing",
-				href: "/docs/contribute/testing",
-				icon: () => <FlaskConical className="w-4 h-4 text-current" />,
-			},
-			{
-				title: "Documenting",
-				href: "/docs/contribute/documenting",
-				icon: () => <NotebookPen className="w-4 h-4 text-current" />,
-			},
-			{
-				title: "Security Issues",
-				href: "/docs/contribute/security-issues",
-				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
-			},
-		],
-	},
+	// {
+
+	// 	title: "Contribute",
+	// 	Icon: () => (
+	//
+	// 	),
+	// 	list: [
+	// 		{
+	// 			title: "Getting Started",
+	// 			href: "/docs/contribute/getting-started",
+	// 			icon: () => <BookOpenCheck className="text-current size-4" />,
+	// 		},
+	// 		{
+	// 			title: "Areas to Contribute",
+	// 			href: "/docs/contribute/areas-to-contribute",
+	// 			icon: () => <HandHelping className="w-4 h-4 text-current" />,
+	// 		},
+	// 		// {
+	// 		// 	title: "Database Adapters",
+	// 		// 	href: "/docs/contribute/database-adapters",
+	// 		// 	icon: () => <Plug className="w-4 h-4 text-current" />,
+	// 		// },
+	// 		{
+	// 			title: "Testing",
+	// 			href: "/docs/contribute/testing",
+	// 			icon: () => <FlaskConical className="w-4 h-4 text-current" />,
+	// 		},
+	// 		{
+	// 			title: "Documenting",
+	// 			href: "/docs/contribute/documenting",
+	// 			icon: () => <NotebookPen className="w-4 h-4 text-current" />,
+	// 		},
+	// 		{
+	// 			title: "Security Issues",
+	// 			href: "/docs/contribute/security-issues",
+	// 			icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
+	// 		},
+	// 	],
+	// },
 ];
 
 export const examples: Content[] = [

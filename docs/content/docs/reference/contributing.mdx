@@ -1,0 +1,140 @@
+
+---
+title: Contributing to BetterAuth
+description: A concise guide to contributing to BetterAuth
+---
+
+# Contributing to BetterAuth
+
+Thank you for your interest in contributing to Better Auth! This guide will help you get started.
+
+## Quick Start
+
+<Steps>
+    <Step>
+        ### 1. Fork and clone
+        
+        Fork the [repository](https://github.com/better-auth/better-auth), then clone your fork:
+        
+        ```bash
+        git clone https://github.com/YOUR-USERNAME/better-auth.git
+        cd better-auth
+        ```
+    </Step>
+    <Step>
+        ### 2. Set up development environment
+        
+        ```bash
+        # Install dependencies
+        pnpm install
+        
+        # Set up environment variables
+        cp -n ./docs/.env.example ./docs/.env
+        
+        # Start development server
+        pnpm dev
+        # Or for docs
+        pnpm -F docs dev
+        ```
+    </Step>
+    <Step>
+        ### 3. Create a branch and make changes
+        
+        ```bash
+        git checkout -b feature/your-feature-name
+        ```
+    </Step>
+</Steps>
+
+## Ways to Contribute
+
+### Issues and Bug Fixes
+
+- Check our [GitHub issues](https://github.com/better-auth/better-auth/issues) for tasks labeled `good first issue`
+- When reporting bugs, include steps to reproduce and expected behavior
+- Comment on issues you'd like to work on to avoid duplicate efforts
+
+### Framework Integrations
+
+We welcome contributions to support more frameworks:
+
+- Focus on framework-agnostic solutions where possible
+- Keep integrations minimal and maintainable
+- All integrations currently live in the main package
+
+### Plugin Development
+
+- For core plugins: Open an issue first to discuss your idea
+- For community plugins: Feel free to develop independently
+- Follow our plugin architecture guidelines
+
+### Documentation
+
+- Fix typos and errors
+- Add examples and clarify existing content
+- Ensure documentation is up-to-date with code changes
+
+## Testing
+
+We use Vitest for testing. Place test files next to the source files they test:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { getTestInstance } from "./test-utils/test-instance";
+
+describe("Feature", () => {
+    it("should work as expected", async () => {
+        const { client } = getTestInstance();
+        // Test code here
+        expect(result).toBeDefined();
+    });
+});
+```
+
+### Testing Best Practices
+
+- Write descriptive test names
+- Test both success and failure cases
+- Keep tests focused and atomic
+- Test edge cases and boundary conditions
+
+## Pull Request Process
+
+<Steps>
+    <Step>
+        ### 1. Ensure your code passes tests
+        
+        ```bash
+        pnpm test
+        ```
+    </Step>
+    <Step>
+        ### 2. Push changes and create PR
+        
+        ```bash
+        git push origin feature/your-feature-name
+        ```
+        
+        Create a pull request on GitHub with a clear description of your changes.
+    </Step>
+    <Step>
+        ### 3. Address feedback
+        
+        Be responsive to code review feedback and make necessary changes.
+    </Step>
+</Steps>
+
+## Code Style and Standards
+
+- Follow the existing code style
+- Use TypeScript for type safety
+- Write clear, descriptive comments
+- Keep functions small and focused
+
+## Getting Help
+
+- Join our [Discord community](https://discord.gg/GYC3W7tZzb)
+- Comment on relevant GitHub issues
+- Check our [documentation](https://better-auth.dev)
+
+Thank you for contributing to Better Auth!

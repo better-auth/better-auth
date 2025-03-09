@@ -8,6 +8,8 @@ import { vi } from "vitest";
 import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
+import Database from "better-sqlite3";
+import { getMigrations } from "better-auth/db";
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -707,5 +709,56 @@ describe("stripe", async () => {
 		await eventTestAuth.handler(deleteRequest);
 
 		expect(onSubscriptionDeleted).toHaveBeenCalled();
+	});
+});
+
+describe.only("stripe", () => {
+	const _stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+	const auth = betterAuth({
+		database: new Database(":memory:"),
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [
+			stripe({
+				stripeClient: _stripeClient,
+				stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+	});
+
+	const authClient = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [
+			bearer(),
+			stripeClient({
+				subscription: true,
+			}),
+		],
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const testUser = {
+		email: "test@email.com",
+		password: "password",
+		name: "Test User",
+	};
+
+	it("should create a customer on sign up", async () => {
+		const userRes = await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+		console.log(userRes);
 	});
 });
