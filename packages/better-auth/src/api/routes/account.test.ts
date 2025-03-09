@@ -136,6 +136,12 @@ describe("account", async () => {
 
 	it("should unlink account", async () => {
 		const { headers } = await signInWithTestUser();
+		const previousAccounts = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(previousAccounts.data?.length).toBe(2);
 		const unlinkRes = await client.unlinkAccount({
 			providerId: "google",
 			fetchOptions: {
@@ -143,6 +149,12 @@ describe("account", async () => {
 			},
 		});
 		expect(unlinkRes.data?.status).toBe(true);
+		const accounts = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(accounts.data?.length).toBe(1);
 	});
 
 	it("should fail to unlink a user last account", async () => {

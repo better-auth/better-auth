@@ -469,17 +469,13 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteAccount: async (providerId: string, userId: string) => {
+		deleteAccount: async (accountId: string) => {
 			await adapter.delete({
 				model: "account",
 				where: [
 					{
-						field: "providerId",
-						value: providerId,
-					},
-					{
-						field: "userId",
-						value: userId,
+						field: "id",
+						value: accountId,
 					},
 				],
 			});
