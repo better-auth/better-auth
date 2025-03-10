@@ -104,5 +104,6 @@ export default defineBuildConfig({
 		"./src/plugins/sso/index.ts",
 		"./src/plugins/two-factor/index.ts",
 		"./src/plugins/username/index.ts",
+		"./src/plugins/app-invite/index.ts",
 	],
 });
