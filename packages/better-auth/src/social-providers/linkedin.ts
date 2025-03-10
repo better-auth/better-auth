@@ -50,6 +50,9 @@ export const linkedin = (options: LinkedInOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<LinkedInProfile>(
 				"https://api.linkedin.com/v2/userinfo",
 				{
