@@ -16,7 +16,7 @@ describe("adapter test", async () => {
 	const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
 	async function clearDb() {
 		await db.collection(user).deleteMany({});
-		await db.collection("session").deleteMany({});
+		await db.collection("sessions").deleteMany({});
 	}
 
 	beforeAll(async () => {
