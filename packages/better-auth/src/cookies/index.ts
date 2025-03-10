@@ -238,6 +238,7 @@ export const getSessionCookie = (
 	config?: {
 		cookiePrefix?: string;
 		cookieName?: string;
+		useSecureCookies?: boolean;
 	},
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
@@ -245,9 +246,17 @@ export const getSessionCookie = (
 	if (!cookies) {
 		return null;
 	}
-	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
-		config || {};
-	const name = isProduction
+	const {
+		cookieName = "session_token",
+		cookiePrefix = "better-auth",
+		useSecureCookies = (request instanceof Request &&
+			isProduction &&
+			request.url.startsWith("https://")) ||
+			(request instanceof Request && request.url.startsWith("https://")
+				? true
+				: false),
+	} = config || {};
+	const name = useSecureCookies
 		? `__Secure-${cookiePrefix}.${cookieName}`
 		: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
