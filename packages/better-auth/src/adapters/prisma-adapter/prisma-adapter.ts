@@ -42,12 +42,9 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 	}
 
 	function operatorToPrismaOperator(
-		// if no operator is provided, set it to "eq" by default
-		operator: Where["operator"] = "eq",
+		operator: Exclude<Where["operator"], "eq" | undefined>,
 	): string {
 		switch (operator) {
-			case "eq":
-				return "equals";
 			case "ne":
 				return "not";
 			// lt, lte, gt, gte, in, contains operators have same name
@@ -139,13 +136,16 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 			// Map each where condition to a prisma query condition
 			const conditions = where.map((w) => ({
 				condition: {
-					[getField(model, w.field)]: {
-						[operatorToPrismaOperator(w.operator)]:
-							// If the operator is "in" and the value is not an array, wrap it in an array
-							w.operator === "in" && !Array.isArray(w.value)
-								? [w.value]
-								: w.value,
-					},
+					[getField(model, w.field)]:
+						w.operator === "eq" || !w.operator
+							? w.value
+							: {
+									[operatorToPrismaOperator(w.operator)]:
+										// If the operator is "in" and the value is not an array, wrap it in an array
+										w.operator === "in" && !Array.isArray(w.value)
+											? [w.value]
+											: w.value,
+								},
 				},
 				connector: w.connector,
 			}));
