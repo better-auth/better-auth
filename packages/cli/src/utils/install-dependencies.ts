@@ -1,40 +1,59 @@
 import { exec } from "child_process";
+import type { DependenciesGroup, PackageManager } from "../commands/init/types";
 
 export function installDependencies({
 	dependencies,
 	packageManager,
 	cwd,
 }: {
-	dependencies: string[];
-	packageManager: "npm" | "pnpm" | "bun" | "yarn";
+	dependencies: string[] | DependenciesGroup;
+	packageManager: PackageManager;
 	cwd: string;
-}): Promise<boolean> {
+}): Promise<{
+	success: boolean;
+	error: string | null;
+}> {
 	let installCommand: string;
 	switch (packageManager) {
-		case "npm":
-			installCommand = "npm install --force";
-			break;
 		case "pnpm":
 			installCommand = "pnpm install";
 			break;
 		case "bun":
 			installCommand = "bun install";
 			break;
-		case "yarn":
-			installCommand = "yarn install";
-			break;
 		default:
-			throw new Error("Invalid package manager");
+			installCommand = "npm install --force";
 	}
-	const command = `${installCommand} ${dependencies.join(" ")}`;
+	let dependenciesString = "";
+	const flags: string[] = [];
+	if (typeof dependencies === "object" && "type" in dependencies) {
+		dependenciesString = dependencies.dependencies
+			.map((x) => `${x.packageName}${x.version ? `@${x.version}` : ""}`)
+			.join(" ");
+
+		if (dependencies.type === "dev") {
+			flags.push("--save-dev");
+		} else if (dependencies.type === "peer") {
+			flags.push("--save-peer");
+		}
+	} else {
+		dependenciesString = dependencies.join(" ");
+	}
+	const command = `${installCommand} ${flags.join(" ")} ${dependenciesString}`;
 
 	return new Promise((resolve, reject) => {
 		exec(command, { cwd }, (error, stdout, stderr) => {
 			if (error) {
-				reject(new Error(stderr));
+				resolve({
+					success: false,
+					error: error.message,
+				});
 				return;
 			}
-			resolve(true);
+			resolve({
+				success: true,
+				error: null,
+			});
 		});
 	});
 }
