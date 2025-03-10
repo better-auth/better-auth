@@ -74,7 +74,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
          ```ts title="auth-client.ts"
             import { createAuthClient } from "better-auth/client"
-            import { passkeyClient } from "better-auth/client/plugins"
+            import { passkeyClient } from "better-auth/client/plugins" // [!code highlight]
 
             const authClient =  createAuthClient({
                 plugins: [ // [!code highlight]
@@ -98,13 +98,12 @@ import { passkeyClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
   plugins: [
-    // [!code highlight]
-    passkeyClient(), // [!code highlight]
-  ], // [!code highlight]
+    passkeyClient(),
+  ],
 });
 
 // Default behavior allows both platform and cross-platform passkeys
-const { data, error } = await authClient.passkey.addPasskey();
+const { data, error } = await authClient.passkey.addPasskey(); // [!code highlight]
 ```
 
 This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
@@ -135,11 +134,11 @@ import { passkeyClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
   plugins: [
-    // [!code highlight]
-    passkeyClient(), // [!code highlight]
-  ], // [!code highlight]
+    passkeyClient(),
+  ],
 });
-const data = await authClient.signIn.passkey();
+
+const data = await authClient.signIn.passkey(); // [!code highlight]
 ```
 
 ### Conditional UI
