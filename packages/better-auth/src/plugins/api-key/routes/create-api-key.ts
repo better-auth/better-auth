@@ -270,6 +270,7 @@ export function createApiKey({
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled: rateLimitEnabled ?? true,
 				requestCount: 0,
+				//@ts-ignore - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -287,7 +288,10 @@ export function createApiKey({
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(apiKey.permissions)
+					? safeJSONParse(
+							//@ts-ignore - from DB, this value is always a string
+							apiKey.permissions,
+						)
 					: null,
 			});
 		},
