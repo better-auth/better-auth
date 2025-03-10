@@ -1,5 +1,6 @@
 import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
+import { battlenet } from "./battlenet";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { github } from "./github";
@@ -18,6 +19,7 @@ import { z } from "zod";
 import { vk } from "./vk";
 export const socialProviders = {
 	apple,
+	battlenet,
 	discord,
 	facebook,
 	github,
@@ -70,5 +72,6 @@ export * from "./tiktok";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./vk";
+export * from "./battlenet";
 
 export type SocialProviderList = typeof socialProviderList;
