@@ -93,7 +93,7 @@ export default async function Page({
 					</p>
 				</div>
 			</div>
-			<div className="px-4 relative md:px-8 pb-12 md:py-12">
+			<div className="px-4 relative md:px-8 pb-12 pt-10 md:py-12">
 				<div className="absolute top-0 left-0 h-full -translate-x-full w-px bg-gradient-to-b from-black/5 dark:from-white/10 via-black/3 dark:via-white/5 to-transparent"></div>
 				<DocsBody>
 					<MDX
