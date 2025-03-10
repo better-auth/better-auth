@@ -11,11 +11,12 @@ const FadeInStaggerContext = createContext(false);
 
 const viewport = { once: true, margin: "0px 0px -200px" };
 
-export const FadeIn = (
-	props: React.ComponentPropsWithoutRef<typeof motion.div> & {
-		fromTopToBottom?: boolean;
-	},
-) => {
+export const FadeIn = ({
+	fromtoptobottom,
+	...props // Destructure fromtoptobottom and collect remaining props
+}: React.ComponentPropsWithoutRef<typeof motion.div> & {
+	fromtoptobottom?: boolean;
+}) => {
 	const shouldReduceMotion = useReducedMotion();
 	const isInStaggerGroup = useContext(FadeInStaggerContext);
 
@@ -24,7 +25,7 @@ export const FadeIn = (
 			variants={{
 				hidden: {
 					opacity: 0,
-					y: shouldReduceMotion ? 0 : props.fromTopToBottom ? -24 : 2,
+					y: shouldReduceMotion ? 0 : fromtoptobottom ? -24 : 2,
 				},
 				visible: { opacity: 1, y: 0 },
 			}}
@@ -36,11 +37,12 @@ export const FadeIn = (
 						whileInView: "visible",
 						viewport,
 					})}
-			{...props}
+			{...props} // Spread the remaining props, excluding fromtoptobottom
 		/>
 	);
 };
 
+// Rest of the code remains the same
 export const FadeInStagger = ({
 	faster = false,
 	...props

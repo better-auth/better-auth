@@ -80,7 +80,7 @@ export const NavbarMobile = () => {
 			<AnimatePresence>
 				{isOpen && (
 					<FadeIn
-						fromTopToBottom
+						fromtoptobottom
 						className="p-5 overflow-y-auto bg-transparent divide-y"
 					>
 						{navMenu.map((menu, i) => (
@@ -166,7 +166,7 @@ export const DocsNavBarMobile = () => {
 		<AnimatePresence>
 			{isOpen && (
 				<FadeIn
-					fromTopToBottom
+					fromtoptobottom
 					className="absolute top-[100px] left-0 bg-background h-[calc(100%-57px-27px)] w-full z-[1000] p-5 divide-y overflow-y-auto"
 				>
 					{content.map((menu, i) => (
