@@ -687,12 +687,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				) {
 					return ctx.redirect(getUrl(ctx, callbackURL));
 				}
+				const customerId =
+					subscription?.stripeCustomerId || user.stripeCustomerId;
 
-				if (user?.stripeCustomerId) {
+				if (customerId) {
 					try {
 						const stripeSubscription = await client.subscriptions
 							.list({
-								customer: user.stripeCustomerId,
+								customer: customerId,
 								status: "active",
 							})
 							.then((res) => res.data[0]);
