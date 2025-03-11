@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface GithubProfile {
 	login: string;
@@ -76,6 +80,17 @@ export const github = (options: GithubOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint,
+			});
+		},
+		async refreshAccessToken(refreshToken) {
+			return refreshAccessToken({
+				refreshToken,
+				options: {
+					clientId: options.clientId,
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
+				tokenEndpoint: "https://github.com/login/oauth/token",
 			});
 		},
 		async getUserInfo(token) {

@@ -5,13 +5,17 @@ import type { ProviderOptions } from "./types";
 export async function refreshAccessToken({
 	refreshToken,
 	options,
-	providerConfig,
+	tokenEndpoint,
+	authentication,
+	extraParams,
+	grantType = "refresh_token",
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	extraParams?: Record<string, string>;
+	grantType?: string;
 }): Promise<OAuth2Tokens> {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -19,7 +23,7 @@ export async function refreshAccessToken({
 		accept: "application/json",
 	};
 
-	body.set("grant_type", "refresh_token");
+	body.set("grant_type", grantType);
 	body.set("refresh_token", refreshToken);
 	if (authentication === "basic") {
 		const encodedCredentials = btoa(
