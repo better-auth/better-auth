@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
-
+import { refreshAccessToken } from "../oauth2";
 export interface FacebookProfile {
 	id: string;
 	name: string;
@@ -92,7 +92,17 @@ export const facebook = (options: FacebookOptions) => {
 			/* access_token */
 			return true;
 		},
-
+		async refreshAccessToken(refreshToken) {
+			return refreshAccessToken({
+				refreshToken,
+				options: {
+					clientId: options.clientId,
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
+				tokenEndpoint: "https://graph.facebook.com/v18.0/oauth/access_token",
+			});
+		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
