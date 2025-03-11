@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.4-beta.6",
+  "version": "1.2.4-beta.8",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -608,7 +608,7 @@
     "oauth2-mock-server": "^7.2.0",
     "pg": "^8.13.1",
     "prisma": "^5.22.0",
-    "react": "^18.3.1",
+    "react": "^19.0.0",
     "react-native": "~0.74.6",
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
@@ -628,7 +628,7 @@
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
-    "kysely": "^0.27.4",
+    "kysely": "^0.27.6",
     "nanostores": "^0.11.3",
     "valibot": "1.0.0-beta.15",
     "zod": "^3.24.1"

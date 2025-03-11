@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 export default function SignIn() {
 	const [options] = useAtom(optionsAtom);
 	return (
-		<Card className="z-50 rounded-none max-w-md">
+		<Card className="z-50 rounded-none max-w-full">
 			<CardHeader>
 				<CardTitle className="text-lg md:text-xl">Sign In</CardTitle>
 				<CardDescription className="text-xs md:text-sm">
