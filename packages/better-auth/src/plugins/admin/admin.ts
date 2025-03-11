@@ -1205,7 +1205,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								"invalid permission check. you can only check one resource permission at a time.",
 						});
 					}
-					const session = ctx.context.session;
+					const session = await getSessionFromCtx(ctx);
 
 					if (
 						!session &&
