@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+	refreshAccessToken,
+} from "../oauth2";
 
 export interface LinkedInProfile {
 	sub: string;
@@ -46,6 +50,17 @@ export const linkedin = (options: LinkedInOptions) => {
 				code,
 				redirectURI,
 				options,
+				tokenEndpoint,
+			});
+		},
+		async refreshAccessToken(refreshToken) {
+			return refreshAccessToken({
+				refreshToken,
+				options: {
+					clientId: options.clientId,
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
 				tokenEndpoint,
 			});
 		},
