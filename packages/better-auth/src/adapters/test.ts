@@ -185,7 +185,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				userId: user.id,
-				expiresAt: new Date(),
+				expiresAt: new Date(Date.now() + 1000 * 60 * 20),
 			},
 		});
 		token = session.token;
@@ -385,6 +385,128 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			],
 		});
 		expect(res).toBeNull();
+	});
+
+	test("should not find user with ne operator", async () => {
+		const user = await adapter.create<User>({
+			model: "user",
+			data: {
+				id: "6",
+				name: "testuserop",
+				email: "test-userop@email.com",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					operator: "ne",
+					value: "test-userop@email.com",
+				},
+			],
+		});
+		expect(res).not.toContainEqual(user);
+	});
+
+	test("should find user with eq operator", async () => {
+		const res = await adapter.findOne<User>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					operator: "eq",
+					value: "test-userop@email.com",
+				},
+			],
+		});
+		expect(res?.email).toBe("test-userop@email.com");
+	});
+
+	test("should find user with no(undefined) operator", async () => {
+		const res = await adapter.findOne<User>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: "test-userop@email.com",
+				},
+			],
+		});
+		expect(res?.email).toBe("test-userop@email.com");
+	});
+
+	test("should find session with lt operator", async () => {
+		const res = await adapter.findMany({
+			model: "session",
+			where: [
+				{
+					field: "createdAt",
+					operator: "lt",
+					value: new Date(),
+				},
+			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should find session with lte operator", async () => {
+		const res = await adapter.findMany({
+			model: "session",
+			where: [
+				{
+					field: "createdAt",
+					operator: "lte",
+					value: new Date(),
+				},
+			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should find session with gt operator", async () => {
+		const res = await adapter.findMany({
+			model: "session",
+			where: [
+				{
+					field: "expiresAt",
+					operator: "gt",
+					value: new Date(),
+				},
+			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should find session with gte operator", async () => {
+		const res = await adapter.findMany({
+			model: "session",
+			where: [
+				{
+					field: "expiresAt",
+					operator: "gte",
+					value: new Date(),
+				},
+			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should find user with in operator", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					operator: "in",
+					value: ["test-userop@email.com", "test@email.com"],
+				},
+			],
+		});
+		expect(res.length).toBe(2);
 	});
 
 	test("should find many with contains operator", async () => {

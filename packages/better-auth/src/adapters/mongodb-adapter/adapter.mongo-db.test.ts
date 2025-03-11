@@ -1,4 +1,4 @@
-import { describe, beforeAll, it, expect } from "vitest";
+import { describe, beforeAll, it, expect, test } from "vitest";
 
 import { MongoClient } from "mongodb";
 import { runAdapterTest } from "../test";
@@ -45,6 +45,66 @@ describe("adapter test", async () => {
 			});
 		},
 		skipGenerateIdTest: true,
+	});
+
+	test("should sanitize regex input to prevent regex injection", async () => {
+		await clearDb();
+
+		const mdb = adapter({
+			user: {
+				fields: {
+					email: "email_address",
+				},
+			},
+			session: {
+				modelName: "sessions",
+			},
+		});
+
+		for (const id of ["re1", "re2", "re3"]) {
+			await mdb.create({
+				model: "user",
+				data: {
+					id,
+					name: `${id} test`,
+					email: `email@test-${id}.com`,
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		}
+		const checkUsers = await mdb.count({ model: "user" });
+		expect(checkUsers).toBe(3);
+
+		const regexInputs = [
+			".*",
+			".*@",
+			".*test.*",
+			"^.*$",
+			"test(re1|re2)",
+			"test(re1)?",
+		];
+
+		for (const input of regexInputs) {
+			const containOperator = await mdb.findMany({
+				model: "user",
+				where: [{ field: "email", operator: "contains", value: input }],
+			});
+			expect(containOperator.length).toBe(0);
+
+			const startsWithOperator = await mdb.findMany({
+				model: "user",
+				where: [{ field: "email", operator: "starts_with", value: input }],
+			});
+			expect(startsWithOperator.length).toBe(0);
+
+			const endsWithOperator = await mdb.findMany({
+				model: "user",
+				where: [{ field: "email", operator: "ends_with", value: input }],
+			});
+			expect(endsWithOperator.length).toBe(0);
+		}
 	});
 });
 
