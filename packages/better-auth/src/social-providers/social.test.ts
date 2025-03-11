@@ -10,7 +10,7 @@ import { betterFetch } from "@better-fetch/fetch";
 
 let server = new OAuth2Server();
 
-vi.mock("../oauth2/refresh-access-token", async (importOriginal) => {
+vi.mock("../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,
