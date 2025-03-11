@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode } from "../oauth2";
+import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
