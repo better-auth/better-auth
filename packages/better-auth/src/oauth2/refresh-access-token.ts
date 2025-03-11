@@ -9,11 +9,9 @@ export async function refreshAccessToken({
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
-	providerConfig: {
-		tokenEndpoint: string;
-		authentication?: "basic" | "post";
-		extraParams?: Record<string, string>;
-	};
+	tokenEndpoint: string;
+	authentication?: "basic" | "post";
+	extraParams?: Record<string, string>;
 }): Promise<OAuth2Tokens> {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -23,7 +21,7 @@ export async function refreshAccessToken({
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
-	if (providerConfig.authentication === "basic") {
+	if (authentication === "basic") {
 		const encodedCredentials = btoa(
 			`${options.clientId}:${options.clientSecret}`,
 		);
@@ -33,8 +31,8 @@ export async function refreshAccessToken({
 		body.set("client_secret", options.clientSecret);
 	}
 
-	if (providerConfig.extraParams) {
-		for (const [key, value] of Object.entries(providerConfig.extraParams)) {
+	if (extraParams) {
+		for (const [key, value] of Object.entries(extraParams)) {
 			body.set(key, value);
 		}
 	}
@@ -46,7 +44,7 @@ export async function refreshAccessToken({
 		token_type?: string;
 		scope?: string;
 		id_token?: string;
-	}>(providerConfig.tokenEndpoint, {
+	}>(tokenEndpoint, {
 		method: "POST",
 		body,
 		headers,

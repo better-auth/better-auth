@@ -94,9 +94,7 @@ export const google = (options: GoogleOptions) => {
 					clientKey: options.clientKey,
 					clientSecret: options.clientSecret,
 				},
-				providerConfig: {
-					tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
-				},
+				tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
 			});
 		},
 		async verifyIdToken(token, nonce) {

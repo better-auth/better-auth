@@ -43,11 +43,11 @@ vi.mock("../oauth2", async (importOriginal) => {
 				return tokens;
 			}),
 		refreshAccessToken: vi.fn().mockImplementation(async (args) => {
-			const { refreshToken, options, providerConfig } = args;
+			const { refreshToken, options, tokenEndpoint } = args;
 			expect(refreshToken).toBeDefined();
 			expect(options.clientId).toBe("test-client-id");
 			expect(options.clientSecret).toBe("test-client-secret");
-			expect(providerConfig.tokenEndpoint).toBe("http://localhost:8080/token");
+			expect(tokenEndpoint).toBe("http://localhost:8080/token");
 
 			const data: GoogleProfile = {
 				email: "user@email.com",
@@ -178,9 +178,7 @@ describe("Social Providers", async (c) => {
 					clientKey: "test-client-key",
 					clientSecret: "test-client-secret",
 				},
-				providerConfig: {
-					tokenEndpoint: "http://localhost:8080/token",
-				},
+				tokenEndpoint: "http://localhost:8080/token",
 			});
 			return tokens;
 		}
