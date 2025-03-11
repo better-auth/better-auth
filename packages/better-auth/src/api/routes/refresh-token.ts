@@ -49,7 +49,6 @@ export const refreshToken = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const { providerId, accountId } = ctx.body;
-
 		const provider = ctx.context.socialProviders.find(
 			(p) => p.id === providerId,
 		);
@@ -69,9 +68,7 @@ export const refreshToken = createAuthEndpoint(
 			);
 
 			return ctx.json({
-				accessToken: tokens.accessToken,
-				refreshToken: tokens.refreshToken,
-				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				...tokens,
 			});
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {

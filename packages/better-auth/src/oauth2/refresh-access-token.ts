@@ -54,7 +54,6 @@ export async function refreshAccessToken({
 	if (error) {
 		throw error;
 	}
-
 	const tokens: OAuth2Tokens = {
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
