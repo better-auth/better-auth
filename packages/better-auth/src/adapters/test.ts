@@ -295,6 +295,26 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 	});
 
+	test("should count records", async () => {
+		const res = await adapter.count({
+			model: "user",
+		});
+		expect(res).toBe(5);
+	});
+
+	test("should count records with where", async () => {
+		const res = await adapter.count({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: user.id,
+				},
+			],
+		});
+		expect(res).toBe(1);
+	});
+
 	test("delete model", async () => {
 		await adapter.delete({
 			model: "user",
