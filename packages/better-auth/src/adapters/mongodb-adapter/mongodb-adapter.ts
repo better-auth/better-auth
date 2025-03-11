@@ -165,6 +165,11 @@ const createTransform = (options: BetterAuthOptions) => {
 					};
 				};
 				const field = getField(_field, model);
+
+				function escapeRegex(value: string) {
+					return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+				}
+
 				switch (operator.toLowerCase()) {
 					case "eq":
 						condition = {
@@ -197,13 +202,28 @@ const createTransform = (options: BetterAuthOptions) => {
 						break;
 
 					case "contains":
-						condition = { [field]: { $regex: `.*${value}.*` } };
+						if (typeof value !== "string") {
+							throw new BetterAuthError(
+								`[# Mongodb Adapter]: contains operator requires a string but was provided ${typeof value}`,
+							);
+						}
+						condition = { [field]: { $regex: escapeRegex(value) } };
 						break;
 					case "starts_with":
-						condition = { [field]: { $regex: `${value}.*` } };
+						if (typeof value !== "string") {
+							throw new BetterAuthError(
+								`[# Mongodb Adapter]: starts_with operator requires a string but was provided ${typeof value}`,
+							);
+						}
+						condition = { [field]: { $regex: `^${escapeRegex(value)}` } };
 						break;
 					case "ends_with":
-						condition = { [field]: { $regex: `.*${value}` } };
+						if (typeof value !== "string") {
+							throw new BetterAuthError(
+								`[# Mongodb Adapter]: ends_with operator requires a string but was provided ${typeof value}`,
+							);
+						}
+						condition = { [field]: { $regex: `${escapeRegex(value)}$` } };
 						break;
 					default:
 						// throw an error if unknown operator is provided
