@@ -304,10 +304,11 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 			return res.map((r) => transform.transformOutput(r, model));
 		},
 		async count(data) {
-			const { model } = data;
+			const { model, where } = data;
+			const clause = where ? transform.convertWhereClause(model, where) : {};
 			const res = await db
 				.collection(transform.getModelName(model))
-				.countDocuments();
+				.countDocuments(clause);
 			return res;
 		},
 		async update(data) {

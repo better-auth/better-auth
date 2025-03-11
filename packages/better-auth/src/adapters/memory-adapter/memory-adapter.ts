@@ -171,8 +171,10 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 			}
 			return table.map((record) => transformOutput(record, model));
 		},
-		count: async ({ model }) => {
-			return db[model].length;
+		count: async ({ model, where }) => {
+			const table = db[model];
+			const res = where ? convertWhereClause({ model, table, where }) : table;
+			return res.length;
 		},
 		update: async ({ model, where, update }) => {
 			const table = db[model];
