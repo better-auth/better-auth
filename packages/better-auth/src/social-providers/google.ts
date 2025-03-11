@@ -86,17 +86,19 @@ export const google = (options: GoogleOptions) => {
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
+					});
 				},
-				tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
-			});
-		},
 		async verifyIdToken(token, nonce) {
 			if (options.disableIdTokenSignIn) {
 				return false;
