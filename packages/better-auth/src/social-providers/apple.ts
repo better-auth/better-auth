@@ -121,6 +121,17 @@ export const apple = (options: AppleOptions) => {
 			}
 			return !!jwtClaims;
 		},
+		async refreshAccessToken(refreshToken) {
+			return refreshAccessToken({
+				refreshToken,
+				options: {
+					clientId: options.clientId,
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
+				tokenEndpoint: "https://appleid.apple.com/auth/token",
+			});
+		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);

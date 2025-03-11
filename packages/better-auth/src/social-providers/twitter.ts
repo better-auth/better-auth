@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface TwitterProfile {
 	data: {
@@ -121,6 +125,17 @@ export const twitter = (options: TwitterOption) => {
 				redirectURI,
 				options,
 				tokenEndpoint: "https://api.x.com/2/oauth2/token",
+			});
+		},
+		async refreshAccessToken(refreshToken) {
+			return refreshAccessToken({
+				refreshToken,
+				options: {
+					clientId: options.clientId,
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
+				tokenEndpoint: "    https://api.twitter.com/2/oauth2/token",
 			});
 		},
 		async getUserInfo(token) {

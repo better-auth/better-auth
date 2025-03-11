@@ -1,6 +1,10 @@
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { logger } from "../utils";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+	refreshAccessToken,
+} from "../oauth2";
 import { decodeJwt } from "jose";
 
 export interface TwitchProfile {
@@ -55,6 +59,17 @@ export const twitch = (options: TwitchOptions) => {
 				code,
 				redirectURI,
 				options,
+				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
+			});
+		},
+		async refreshAccessToken(refreshToken) {
+			return refreshAccessToken({
+				refreshToken,
+				options: {
+					clientId: options.clientId,
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
 				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
 			});
 		},
