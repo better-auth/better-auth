@@ -82,17 +82,19 @@ export const github = (options: GithubOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://github.com/login/oauth/token",
+					});
 				},
-				tokenEndpoint: "https://github.com/login/oauth/token",
-			});
-		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);

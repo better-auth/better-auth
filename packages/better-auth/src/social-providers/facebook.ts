@@ -92,17 +92,20 @@ export const facebook = (options: FacebookOptions) => {
 			/* access_token */
 			return true;
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint:
+							"https://graph.facebook.com/v18.0/oauth/access_token",
+					});
 				},
-				tokenEndpoint: "https://graph.facebook.com/v18.0/oauth/access_token",
-			});
-		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);

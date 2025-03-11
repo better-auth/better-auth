@@ -56,17 +56,19 @@ export const dropbox = (options: DropboxOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://api.dropbox.com/oauth2/token",
+					});
 				},
-				tokenEndpoint: "https://api.dropbox.com/oauth2/token",
-			});
-		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);

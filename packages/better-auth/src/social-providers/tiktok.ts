@@ -146,17 +146,19 @@ export const tiktok = (options: TiktokOptions) => {
 				tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+					});
 				},
-				tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
-			});
-		},
 		async getUserInfo(token) {
 			const fields = [
 				"open_id",

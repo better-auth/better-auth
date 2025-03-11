@@ -107,17 +107,19 @@ export const gitlab = (options: GitlabOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://gitlab.com/oauth/token",
+					});
 				},
-				tokenEndpoint: "https://gitlab.com/oauth/token",
-			});
-		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);

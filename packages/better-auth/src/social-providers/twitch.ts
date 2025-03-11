@@ -62,17 +62,19 @@ export const twitch = (options: TwitchOptions) => {
 				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://id.twitch.tv/oauth2/token",
+					});
 				},
-				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
-			});
-		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);

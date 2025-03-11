@@ -71,17 +71,19 @@ export const vk = (options: VkOption) => {
 				tokenEndpoint: "https://id.vk.com/oauth2/auth",
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://id.vk.com/oauth2/auth",
+					});
 				},
-				tokenEndpoint: "https://id.vk.com/oauth2/auth",
-			});
-		},
 		async getUserInfo(data) {
 			if (!data.accessToken) {
 				return null;

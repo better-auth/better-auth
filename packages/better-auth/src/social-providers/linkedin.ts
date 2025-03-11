@@ -53,17 +53,19 @@ export const linkedin = (options: LinkedInOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async refreshAccessToken(refreshToken) {
-			return refreshAccessToken({
-				refreshToken,
-				options: {
-					clientId: options.clientId,
-					clientKey: options.clientKey,
-					clientSecret: options.clientSecret,
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint,
+					});
 				},
-				tokenEndpoint,
-			});
-		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<LinkedInProfile>(
 				"https://api.linkedin.com/v2/userinfo",
