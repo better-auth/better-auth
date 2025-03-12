@@ -170,12 +170,6 @@ export const refreshToken = createAuthEndpoint(
 		if (req) {
 			resolvedUserId = userId;
 		}
-		console.log({ resolvedUserId });
-		if (!resolvedUserId) {
-			throw new APIError("BAD_REQUEST", {
-				message: "User ID is required",
-			});
-		}
 
 		const provider = providerId
 			? ctx.context.socialProviders.find((p) => p.id === providerId)
@@ -200,7 +194,6 @@ export const refreshToken = createAuthEndpoint(
 					message: "Account not found",
 				});
 			}
-			console.log({ account });
 			const resolvedProvider =
 				provider ||
 				ctx.context.socialProviders.find((p) => p.id === account?.providerId);
