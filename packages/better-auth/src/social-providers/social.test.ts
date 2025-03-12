@@ -341,7 +341,7 @@ describe("Social Providers", async (c) => {
 			await client.$fetch("/refresh-token", {
 				body: {
 					accountId: "test-id",
-					// providerId: "google",
+					providerId: "google",
 				},
 				headers,
 				method: "POST",

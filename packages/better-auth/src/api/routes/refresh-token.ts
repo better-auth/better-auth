@@ -78,7 +78,11 @@ export const refreshToken = createAuthEndpoint(
 		if (req) {
 			resolvedUserId = userId;
 		}
-
+		if (!resolvedUserId && accountId && providerId) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Either userId , accountId or providerId is required`,
+			});
+		}
 		let account: Account | null = null;
 		const provider = providerId
 			? ctx.context.socialProviders.find((p) => p.id === providerId)
