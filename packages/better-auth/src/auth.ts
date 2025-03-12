@@ -9,9 +9,10 @@ import type {
 	AuthContext,
 } from "./types";
 import type { PrettifyDeep, Expand } from "./types/helper";
-import { getBaseURL } from "./utils/url";
+import { getBaseURL, getOrigin } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";
+import { BetterAuthError } from "./error";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
@@ -33,10 +34,15 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			const basePath = ctx.options.basePath || "/api/auth";
 			const url = new URL(request.url);
 			if (!ctx.options.baseURL) {
-				const baseURL =
-					getBaseURL(undefined, basePath) || `${url.origin}${basePath}`;
-				ctx.options.baseURL = baseURL;
-				ctx.baseURL = baseURL;
+				const baseURL = getBaseURL(undefined, basePath, request);
+				if (baseURL) {
+					ctx.baseURL = baseURL;
+					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+				} else {
+					throw new BetterAuthError(
+						"Could not get base URL from request. Please provide a valid base URL.",
+					);
+				}
 			}
 			ctx.trustedOrigins = [
 				...(options.trustedOrigins
