@@ -1,95 +1,3 @@
-// import { createAuthEndpoint } from "../call";
-// import { z } from "zod";
-// import { APIError } from "better-call";
-// import type { OAuth2Tokens } from "../../oauth2";
-// import { getSessionFromCtx } from "./session";
-// export const refreshToken = createAuthEndpoint(
-//   "/refresh-token",
-//   {
-//     method: "POST",
-//     body: z.object({
-//       accountId: z.string({
-//         description: "The refresh token used to obtain a new access token",
-//       }),
-//       providerId: z
-//         .string({
-//           description: "The provider ID for the OAuth provider",
-//         })
-//         .optional(),
-//       userId: z
-//         .string({
-//           description: "The provider ID for the OAuth provider",
-//         })
-//         .optional(),
-//     }),
-//     metadata: {
-//       openapi: {
-//         description: "Refresh the access token using a refresh token",
-//         responses: {
-//           200: {
-//             description: "Access token refreshed successfully",
-//             content: {
-//               "application/json": {
-//                 schema: {
-//                   type: "object",
-//                   properties: {
-//                     accessToken: {
-//                       type: "string",
-//                     },
-//                     refreshToken: {
-//                       type: "string",
-//                     },
-//                     accessTokenExpiresAt: {
-//                       type: "string",
-//                       format: "date-time",
-//                     },
-//                   },
-//                 },
-//               },
-//             },
-//           },
-//           400: {
-//             description: "Invalid refresh token or provider configuration",
-//           },
-//         },
-//       },
-//     },
-//   },
-//   async (ctx) => {
-//     const { providerId, accountId, userId } = ctx.body;
-//     const provider = ctx.context.socialProviders.find(
-//       (p) => p.id === providerId,
-//     );
-//     const session = await getSessionFromCtx(ctx);
-//     if (!provider || !provider.refreshAccessToken) {
-//       throw new APIError("BAD_REQUEST", {
-//         message: `Provider ${providerId} does not support token refreshing.`,
-//       });
-//     }
-//     const account = await ctx.context.internalAdapter.findAccount(accountId);
-//     try {
-//       // this is for the userid fetch if it is coming from server
-
-//       const account =
-//         await ctx.context.internalAdapter.findAccountByUserId(accountId);
-//       // const accountById = await ctx.context.internalAdapter.
-//       const userAccount = account[0];
-//       const tokens: OAuth2Tokens = await provider.refreshAccessToken(
-//         userAccount.refreshToken ?? "",
-//       );
-
-//       return ctx.json({
-//         ...tokens,
-//       });
-//     } catch (error) {
-//       throw new APIError("BAD_REQUEST", {
-//         message: "Failed to refresh access token",
-//         cause: error,
-//       });
-//     }
-//   },
-// );
-
 import { createAuthEndpoint } from "../call";
 import { z } from "zod";
 import { APIError } from "better-call";
@@ -171,7 +79,7 @@ export const refreshToken = createAuthEndpoint(
 			resolvedUserId = userId;
 		}
 
-		let account: Account | null;
+		let account: Account | null = null;
 		const provider = providerId
 			? ctx.context.socialProviders.find((p) => p.id === providerId)
 			: undefined;
