@@ -28,6 +28,8 @@ async function bootstrap() {
 bootstrap();
 ```
 
+Don't worry, better-auth will automatically re-add the default body parsers.
+
 <Callout type="warn">
 Currently, Better Auth's NestJS integration **only supports Express** and does not work with Fastify.
 </Callout>
@@ -43,16 +45,11 @@ import { auth } from "./auth";
 
 @Module({
   imports: [
-    AuthModule.forRoot(auth, { disableExceptionFilter: true }),
+    AuthModule.forRoot(auth),
   ],
 })
 export class AppModule {}
 ```
-
-This will automatically:
-- Mount the Better Auth handler at `/api/auth/*`
-- Set up proper CORS configuration
-- Configure session handling
 
 ## Route Protection
 

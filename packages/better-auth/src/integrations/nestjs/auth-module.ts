@@ -95,7 +95,7 @@ export class AuthModule implements NestModule, OnModuleInit {
 					credentials: true,
 				});
 			}
-		} else
+		} else if (trustedOrigins)
 			throw new Error(
 				"Function-based trustedOrigins not supported in NestJS. Use string array or disable CORS with disableTrustedOriginsCors: true.",
 			);
