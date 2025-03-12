@@ -349,12 +349,7 @@ describe("Social Providers", async (c) => {
 					cookieSetter(headers)(context as any);
 				},
 			});
-			const session = await client.getSession({
-				fetchOptions: {
-					headers,
-				},
-			});
-			console.log("Session data: ", session.data.user);
+
 			const authUrl = signInRes.data.url;
 			const mockEndpoint = authUrl.replace(
 				"https://accounts.google.com/o/oauth2/auth",
