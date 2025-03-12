@@ -335,8 +335,8 @@ describe("Social Providers", async (c) => {
 					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 				},
 			});
-			const url = signInRes.data.url;
-			const mockEndpoint = url.replace(
+			const authUrl = signInRes.data.url;
+			const mockEndpoint = authUrl.replace(
 				"https://accounts.google.com/o/oauth2/auth",
 				"http://localhost:8080/authorize",
 			);
