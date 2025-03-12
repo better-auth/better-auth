@@ -335,6 +335,26 @@ describe("Social Providers", async (c) => {
 					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 				},
 			});
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers },
+			});
+			await client.$fetch("/refresh-token", {
+				body: {
+					accountId: "test-id",
+					// providerId: "google",
+				},
+				headers,
+				method: "POST",
+				onError(context) {
+					cookieSetter(headers)(context as any);
+				},
+			});
+			const session = await client.getSession({
+				fetchOptions: {
+					headers,
+				},
+			});
+			console.log("Session data: ", session.data.user);
 			const authUrl = signInRes.data.url;
 			const mockEndpoint = authUrl.replace(
 				"https://accounts.google.com/o/oauth2/auth",
