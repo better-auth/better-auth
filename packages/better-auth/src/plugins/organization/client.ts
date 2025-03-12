@@ -178,6 +178,16 @@ export const organizationClient = Object.assign(
 				},
 				{
 					matcher(path) {
+						return (
+							path === "/organization/create" ||
+							path === "/organization/delete" ||
+							path === "/organization/update"
+						);
+					},
+					signal: "$activeOrgSignal",
+				},
+				{
+					matcher(path) {
 						return path.startsWith("/organization");
 					},
 					signal: "$activeOrgSignal",
