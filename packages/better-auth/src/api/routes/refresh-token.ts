@@ -170,6 +170,8 @@ export const refreshToken = createAuthEndpoint(
 		if (req) {
 			resolvedUserId = userId;
 		}
+
+		let account: Account | null;
 		const provider = providerId
 			? ctx.context.socialProviders.find((p) => p.id === providerId)
 			: undefined;
@@ -178,7 +180,6 @@ export const refreshToken = createAuthEndpoint(
 				message: `Provider ${providerId} does not support token refreshing.`,
 			});
 		}
-		let account: Account | null;
 		try {
 			if (accountId && !providerId) {
 				account = await ctx.context.internalAdapter.findAccount(accountId);
