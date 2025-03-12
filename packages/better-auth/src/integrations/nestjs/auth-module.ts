@@ -163,6 +163,7 @@ export class AuthModule implements NestModule, OnModuleInit {
 		}
 
 		return {
+			global: true,
 			module: AuthModule,
 			providers,
 			exports: [
