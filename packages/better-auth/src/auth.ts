@@ -32,7 +32,6 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 		handler: async (request: Request) => {
 			const ctx = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
-			const url = new URL(request.url);
 			if (!ctx.options.baseURL) {
 				const baseURL = getBaseURL(undefined, basePath, request);
 				if (baseURL) {
@@ -51,7 +50,6 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 						: await options.trustedOrigins(request)
 					: []),
 				ctx.options.baseURL!,
-				url.origin,
 			];
 			const { handler } = router(ctx, options);
 			return handler(request);
