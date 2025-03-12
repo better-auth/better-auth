@@ -42,7 +42,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				...(options.trustedOrigins
 					? Array.isArray(options.trustedOrigins)
 						? options.trustedOrigins
-						: options.trustedOrigins(request)
+						: await options.trustedOrigins(request)
 					: []),
 				ctx.options.baseURL!,
 				url.origin,
