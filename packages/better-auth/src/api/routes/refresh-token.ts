@@ -163,7 +163,6 @@ export const refreshToken = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const { providerId, accountId, userId } = ctx.body;
-		// req if coming from client
 		const req = ctx.request;
 		const session = await getSessionFromCtx(ctx);
 
@@ -194,7 +193,7 @@ export const refreshToken = createAuthEndpoint(
 			} else if (providerId) {
 				const accounts =
 					await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-				account = accounts.find((acc) => acc.providerId === providerId);
+				account = accounts.find((acc) => acc.providerId === providerId)!;
 			}
 			if (!account) {
 				throw new APIError("BAD_REQUEST", {
