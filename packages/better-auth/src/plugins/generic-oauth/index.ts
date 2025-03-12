@@ -262,14 +262,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						return refreshAccessToken({
+							refreshToken,
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 							},
-							refreshToken,
-							providerConfig: {
-								tokenEndpoint: finalTokenUrl,
-							},
+							tokenEndpoint: finalTokenUrl,
 						});
 					},
 
