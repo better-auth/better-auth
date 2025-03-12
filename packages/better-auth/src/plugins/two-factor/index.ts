@@ -37,10 +37,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z
-							.string({
-								description: "User password",
-							}),
+						password: z.string({
+							description: "User password",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
