@@ -184,7 +184,7 @@ export const refreshToken = createAuthEndpoint(
 		try {
 			if (accountId && !providerId) {
 				account = await ctx.context.internalAdapter.findAccount(accountId);
-			} else if (providerId) {
+			} else if (providerId && resolvedUserId) {
 				const accounts =
 					await ctx.context.internalAdapter.findAccounts(resolvedUserId);
 				account = accounts.find((acc) => acc.providerId === providerId)!;
