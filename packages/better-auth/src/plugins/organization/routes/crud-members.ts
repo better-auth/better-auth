@@ -29,7 +29,9 @@ export const addMember = <O extends OrganizationOptions>() =>
 						userId: string;
 						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
 						organizationId?: string;
-					},
+					} & (O extends { teams: { enabled: true } }
+						? { teamId?: string }
+						: {}),
 				},
 			},
 		},
@@ -49,6 +51,14 @@ export const addMember = <O extends OrganizationOptions>() =>
 					body: {
 						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 					},
+				});
+			}
+
+			const teamId = "teamId" in ctx.body ? ctx.body.teamId : undefined;
+			if (teamId && !ctx.context.orgOptions.teams?.enabled) {
+				ctx.context.logger.error("Teams are not enabled");
+				throw new APIError("BAD_REQUEST", {
+					message: "Teams are not enabled",
 				});
 			}
 
@@ -76,6 +86,18 @@ export const addMember = <O extends OrganizationOptions>() =>
 				});
 			}
 
+			if (teamId) {
+				const team = await adapter.findTeamById({
+					teamId,
+					organizationId: orgId,
+				});
+				if (!team || team.organizationId !== orgId) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					});
+				}
+			}
+
 			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
 			const members = await adapter.listMembers({ organizationId: orgId });
 
@@ -92,6 +114,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 				userId: user.id,
 				role: parseRoles(ctx.body.role as string | string[]),
 				createdAt: new Date(),
+				...(teamId ? { teamId: teamId } : {}),
 			});
 
 			return ctx.json(createdMember);
