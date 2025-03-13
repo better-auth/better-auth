@@ -1,3 +1,5 @@
+// https://github.com/nanostores/react/blob/main/index.js
+
 import { listenKeys } from "nanostores";
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { Store, StoreValue } from "nanostores";
@@ -22,49 +24,25 @@ export interface UseStoreOptions<SomeStore> {
 	keys?: StoreKeys<SomeStore>[];
 }
 
-/**
- * Subscribe to store changes and get store's value.
- *
- * Can be user with store builder too.
- *
- * ```js
- * import { useStore } from 'nanostores/react'
- *
- * import { router } from '../store/router'
- *
- * export const Layout = () => {
- *   let page = useStore(router)
- *   if (page.route === 'home') {
- *     return <HomePage />
- *   } else {
- *     return <Error404 />
- *   }
- * }
- * ```
- *
- * @param store Store instance.
- * @returns Store value.
- */
+let emit = (snapshotRef: any, onChange: any) => (value: any) => {
+	if (snapshotRef.current === value) return;
+	snapshotRef.current = value;
+	onChange();
+};
+
 export function useStore<SomeStore extends Store>(
 	store: SomeStore,
-	options: UseStoreOptions<SomeStore> = {},
+	{ keys, deps = [store, keys] }: UseStoreOptions<SomeStore> = {},
 ): StoreValue<SomeStore> {
 	let snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
-
-	const { keys, deps = [store, keys] } = options;
+	snapshotRef.current = store.get();
 
 	let subscribe = useCallback((onChange: () => void) => {
-		const emitChange = (value: StoreValue<SomeStore>) => {
-			if (snapshotRef.current === value) return;
-			snapshotRef.current = value;
-			onChange();
-		};
-
-		emitChange(store.value);
+		emit(snapshotRef, onChange)(store.value);
 		if (keys?.length) {
-			return listenKeys(store as any, keys, emitChange);
+			return listenKeys(store as any, keys, emit(snapshotRef, onChange));
 		}
-		return store.listen(emitChange);
+		return store.listen(emit(snapshotRef, onChange));
 	}, deps);
 
 	let get = () => snapshotRef.current as StoreValue<SomeStore>;
