@@ -71,6 +71,9 @@ export const roblox = (options: RobloxOptions) => {
 			if (error) {
 				return null;
 			}
+
+			const userMap = await options.mapProfileToUser?.(profile);
+
 			return {
 				user: {
 					id: profile.sub,
@@ -78,6 +81,7 @@ export const roblox = (options: RobloxOptions) => {
 					image: profile.picture,
 					email: profile.preferred_username || null, // Roblox does not provide email
 					emailVerified: true,
+					...userMap,
 				},
 				data: {
 					...profile,

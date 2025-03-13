@@ -169,10 +169,10 @@ await authClient.phoneNumber.forgetPassword({
 })
 ```
 
-Then, you can reset the password by calling `restPassword` on the client with the OTP code and the new password.
+Then, you can reset the password by calling `resetPassword` on the client with the OTP code and the new password.
 
 ```ts title="auth-client.ts"
-const isVerified = await authClient.phoneNumber.restPassword({
+const isVerified = await authClient.phoneNumber.resetPassword({
     otp: "123456", // OTP code sent to the user's phone number
     phoneNumber: "+1234567890",
     newPassword: "newPassword"
@@ -217,13 +217,15 @@ The plugin requires 2 fields to be added to the user table
             name: "phoneNumber", 
             type: "string", 
             description: "The phone number of the user",
-            isUnique: true
+            isUnique: true,
+            isOptional: true
         },
         { 
             name: "phoneNumberVerified", 
             type: "boolean", 
             description: "Whether the phone number is verified or not",
-            defaultValue: false
+            defaultValue: false,
+            isOptional: true
         },
     ]}
     />

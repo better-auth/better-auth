@@ -1,8 +1,8 @@
-import { source, changelogs } from "@/app/source";
 import {
 	DocsNavbarMobileBtn,
 	DocsNavbarMobileTitle,
 } from "@/components/nav-mobile";
+import { changelogs, source } from "@/lib/source";
 import { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
 export const baseOptions: BaseLayoutProps = {

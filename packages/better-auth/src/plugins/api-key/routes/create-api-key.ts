@@ -9,7 +9,6 @@ import type { AuthContext } from "../../../types";
 import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
-import { parseInputData } from "../../../db";
 import { safeJSONParse } from "../../../utils/json";
 
 export function createApiKey({

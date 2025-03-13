@@ -179,10 +179,7 @@ export const unlinkAccount = createAuthEndpoint(
 				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
 			});
 		}
-		await ctx.context.internalAdapter.deleteAccount(
-			ctx.body.providerId,
-			ctx.context.session.user.id,
-		);
+		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
 		return ctx.json({
 			status: true,
 		});
