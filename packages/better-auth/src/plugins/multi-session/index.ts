@@ -177,7 +177,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
+					const multiSessionCookieName = `${
+						ctx.context.authCookies.sessionToken.name
+					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,

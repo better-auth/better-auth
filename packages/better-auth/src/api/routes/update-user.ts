@@ -612,8 +612,8 @@ export const changeEmail = createAuthEndpoint(
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
-					ctx.context.session.user.email,
 					newEmail,
+					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${
