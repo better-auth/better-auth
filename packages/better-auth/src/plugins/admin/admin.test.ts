@@ -6,38 +6,37 @@ import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
 
 describe("Admin plugin", async () => {
-	const {
-		signInWithTestUser,
-		signInWithUser,
-		cookieSetter,
-		customFetchImpl,
-		updateOptions,
-	} = await getTestInstance(
-		{
-			plugins: [admin()],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
+	const { signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						bannedUserMessage: "Custom banned user message",
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return {
+										data: {
+											...user,
+											role: "admin",
+										},
+									};
+								}
+							},
 						},
 					},
 				},
 			},
-		},
-		{
-			testUser: {
-				name: "Admin",
+			{
+				testUser: {
+					name: "Admin",
+				},
 			},
-		},
-	);
+		);
 	const client = createAuthClient({
 		fetchOptions: {
 			customFetchImpl,
@@ -270,13 +269,6 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should change banned user message", async () => {
-		updateOptions({
-			plugins: [
-				admin({
-					bannedUserMessage: "Custom banned user message",
-				}),
-			],
-		});
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
 			password: "test",
