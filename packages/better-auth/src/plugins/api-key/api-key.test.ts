@@ -489,6 +489,18 @@ describe("api-key", async () => {
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.metadata).toEqual(metadata);
+
+		const res = await auth.api.getApiKey({
+			query: {
+				id: apiKey.id,
+			},
+			headers,
+		});
+
+		expect(res).not.toBeNull();
+		if (res) {
+			expect(res.metadata).toEqual(metadata);
+		}
 	});
 
 	it("create API key's returned metadata should be an object", async () => {
@@ -1506,6 +1518,34 @@ describe("api-key", async () => {
 		expect(apiKey.permissions).toEqual({
 			files: ["read"],
 		});
+	});
+
+	it("should have valid metadata from key verification results", async () => {
+		const metadata = {
+			test: "hello-world-123",
+		};
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				metadata: metadata,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		if (apiKey) {
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: apiKey.key,
+					metadata: metadata,
+				},
+				headers,
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.error).toBeNull();
+			expect(result.key?.metadata).toEqual(metadata);
+		}
 	});
 
 	it("should verify an API key with matching permissions", async () => {

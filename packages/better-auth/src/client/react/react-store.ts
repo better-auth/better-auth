@@ -7,11 +7,6 @@ type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	? K
 	: never;
 
-let emit = (snapshotRef: any, onChange: any) => (value: any) => {
-	snapshotRef.current = value;
-	onChange();
-};
-
 export interface UseStoreOptions<SomeStore> {
 	/**
 	 * @default
@@ -27,21 +22,52 @@ export interface UseStoreOptions<SomeStore> {
 	keys?: StoreKeys<SomeStore>[];
 }
 
+/**
+ * Subscribe to store changes and get store's value.
+ *
+ * Can be user with store builder too.
+ *
+ * ```js
+ * import { useStore } from 'nanostores/react'
+ *
+ * import { router } from '../store/router'
+ *
+ * export const Layout = () => {
+ *   let page = useStore(router)
+ *   if (page.route === 'home') {
+ *     return <HomePage />
+ *   } else {
+ *     return <Error404 />
+ *   }
+ * }
+ * ```
+ *
+ * @param store Store instance.
+ * @returns Store value.
+ */
 export function useStore<SomeStore extends Store>(
 	store: SomeStore,
-	{ keys, deps = [store, keys] }: UseStoreOptions<SomeStore> = {},
+	options: UseStoreOptions<SomeStore> = {},
 ): StoreValue<SomeStore> {
-	let snapshotRef = useRef();
-	snapshotRef.current = store.get();
+	let snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
 
-	let subscribe = useCallback(
-		(onChange: any) =>
-			(keys?.length || 0) > 0
-				? listenKeys(store as any, keys as any, emit(snapshotRef, onChange))
-				: store.listen(emit(snapshotRef, onChange)),
-		deps,
-	);
-	let get = () => snapshotRef.current;
+	const { keys, deps = [store, keys] } = options;
 
-	return useSyncExternalStore(subscribe, get, get) as StoreValue<SomeStore>;
+	let subscribe = useCallback((onChange: () => void) => {
+		const emitChange = (value: StoreValue<SomeStore>) => {
+			if (snapshotRef.current === value) return;
+			snapshotRef.current = value;
+			onChange();
+		};
+
+		emitChange(store.value);
+		if (keys?.length) {
+			return listenKeys(store as any, keys, emitChange);
+		}
+		return store.listen(emitChange);
+	}, deps);
+
+	let get = () => snapshotRef.current as StoreValue<SomeStore>;
+
+	return useSyncExternalStore(subscribe, get, get);
 }

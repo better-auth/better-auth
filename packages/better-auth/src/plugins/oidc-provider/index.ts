@@ -695,48 +695,156 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						name: z.string(),
-						icon: z.string().optional(),
+						redirect_uris: z.array(z.string()),
+						token_endpoint_auth_method: z
+							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.default("client_secret_basic")
+							.optional(),
+						grant_types: z
+							.array(
+								z.enum([
+									"authorization_code",
+									"implicit",
+									"password",
+									"client_credentials",
+									"refresh_token",
+									"urn:ietf:params:oauth:grant-type:jwt-bearer",
+									"urn:ietf:params:oauth:grant-type:saml2-bearer",
+								]),
+							)
+							.default(["authorization_code"])
+							.optional(),
+						response_types: z
+							.array(z.enum(["code", "token"]))
+							.default(["code"])
+							.optional(),
+						client_name: z.string().optional(),
+						client_uri: z.string().optional(),
+						logo_uri: z.string().optional(),
+						scope: z.string().optional(),
+						contacts: z.array(z.string()).optional(),
+						tos_uri: z.string().optional(),
+						policy_uri: z.string().optional(),
+						jwks_uri: z.string().optional(),
+						jwks: z.record(z.any()).optional(),
 						metadata: z.record(z.any()).optional(),
-						redirectURLs: z.array(z.string()),
+						software_id: z.string().optional(),
+						software_version: z.string().optional(),
+						software_statement: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
 					const body = ctx.body;
 					const session = await getSessionFromCtx(ctx);
+
+					// Check authorization
 					if (!session && !options.allowDynamicClientRegistration) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Unauthorized",
+							error: "invalid_token",
+							error_description:
+								"Authentication required for client registration",
 						});
 					}
+
+					// Validate redirect URIs for redirect-based flows
+					if (
+						(!body.grant_types ||
+							body.grant_types.includes("authorization_code") ||
+							body.grant_types.includes("implicit")) &&
+						(!body.redirect_uris || body.redirect_uris.length === 0)
+					) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_redirect_uri",
+							error_description:
+								"Redirect URIs are required for authorization_code and implicit grant types",
+						});
+					}
+
+					// Validate correlation between grant_types and response_types
+					if (body.grant_types && body.response_types) {
+						if (
+							body.grant_types.includes("authorization_code") &&
+							!body.response_types.includes("code")
+						) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_client_metadata",
+								error_description:
+									"When 'authorization_code' grant type is used, 'code' response type must be included",
+							});
+						}
+						if (
+							body.grant_types.includes("implicit") &&
+							!body.response_types.includes("token")
+						) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_client_metadata",
+								error_description:
+									"When 'implicit' grant type is used, 'token' response type must be included",
+							});
+						}
+					}
+
 					const clientId =
 						options.generateClientId?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 					const clientSecret =
 						options.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
-					const client = await ctx.context.adapter.create<Record<string, any>>({
+
+					// Create the client with the existing schema
+					const client: Client = await ctx.context.adapter.create({
 						model: modelName.oauthClient,
 						data: {
-							name: body.name,
-							icon: body.icon,
+							name: body.client_name,
+							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: clientSecret,
-							redirectURLs: body.redirectURLs.join(","),
+							redirectURLs: body.redirect_uris.join(","),
 							type: "web",
-							authenticationScheme: "client_secret",
+							authenticationScheme:
+								body.token_endpoint_auth_method || "client_secret_basic",
 							disabled: false,
 							userId: session?.session.userId,
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
 					});
-					return ctx.json({
-						...client,
-						redirectURLs: client.redirectURLs.split(","),
-						metadata: client.metadata ? JSON.parse(client.metadata) : null,
-					} as Client);
+
+					// Format the response according to RFC7591
+					return ctx.json(
+						{
+							client_id: clientId,
+							client_secret: clientSecret,
+							client_id_issued_at: Math.floor(Date.now() / 1000),
+							client_secret_expires_at: 0, // 0 means it doesn't expire
+							redirect_uris: body.redirect_uris,
+							token_endpoint_auth_method:
+								body.token_endpoint_auth_method || "client_secret_basic",
+							grant_types: body.grant_types || ["authorization_code"],
+							response_types: body.response_types || ["code"],
+							client_name: body.client_name,
+							client_uri: body.client_uri,
+							logo_uri: body.logo_uri,
+							scope: body.scope,
+							contacts: body.contacts,
+							tos_uri: body.tos_uri,
+							policy_uri: body.policy_uri,
+							jwks_uri: body.jwks_uri,
+							jwks: body.jwks,
+							software_id: body.software_id,
+							software_version: body.software_version,
+							software_statement: body.software_statement,
+							metadata: body.metadata,
+						},
+						{
+							status: 201,
+							headers: {
+								"Cache-Control": "no-store",
+								Pragma: "no-cache",
+							},
+						},
+					);
 				},
 			),
 			getOAuthClient: createAuthEndpoint(

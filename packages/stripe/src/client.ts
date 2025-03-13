@@ -15,7 +15,7 @@ export const stripeClient = <
 				O["subscription"] extends true
 					? {
 							stripeClient: any;
-							stripeWebhookSecret: "";
+							stripeWebhookSecret: string;
 							subscription: {
 								enabled: true;
 								plans: [];
@@ -23,7 +23,7 @@ export const stripeClient = <
 						}
 					: {
 							stripeClient: any;
-							stripeWebhookSecret: "";
+							stripeWebhookSecret: string;
 						}
 			>
 		>,

@@ -48,6 +48,16 @@ describe("Admin plugin", async () => {
 
 	const { headers: adminHeaders } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
+	const testNonAdminUser = {
+		email: "user@test.com",
+		password: "password",
+		name: "Test User",
+	};
+	await client.signUp.email(testNonAdminUser);
+	const { headers: userHeaders } = await signInWithUser(
+		testNonAdminUser.email,
+		testNonAdminUser.password,
+	);
 
 	it("should allow admin to create users", async () => {
 		const res = await client.admin.createUser(
@@ -65,6 +75,21 @@ describe("Admin plugin", async () => {
 		expect(newUser?.role).toBe("user");
 	});
 
+	it("should not allow non-admin to create users", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Test User",
+				email: "test2@test.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
@@ -77,6 +102,18 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users.length).toBe(2);
 	});
 
+	it("should not allow non-admin to list users", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow admin to count users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
@@ -86,7 +123,8 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(res.data?.total).toBe(2);
+		expect(res.data?.users.length).toBe(2);
+		expect(res.data?.total).toBe(3);
 	});
 
 	it("should allow to sort users by name", async () => {
@@ -169,6 +207,19 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.role).toBe("admin");
 	});
 
+	it("should not allow non-admin to set user role", async () => {
+		const res = await client.admin.setRole(
+			{
+				userId: newUser?.id || "",
+				role: "admin",
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow to ban user", async () => {
 		const res = await client.admin.banUser(
 			{
@@ -179,6 +230,18 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.user?.banned).toBe(true);
+	});
+
+	it("should not allow non-admin to ban user", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: newUser?.id || "",
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow to ban user with reason and expiration", async () => {
@@ -246,6 +309,18 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.banReason).toBeNull();
 	});
 
+	it("should not allow non-admin to unban user", async () => {
+		const res = await client.admin.unbanUser(
+			{
+				userId: newUser?.id || "",
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow admin to list user sessions", async () => {
 		const res = await client.admin.listUserSessions(
 			{
@@ -256,6 +331,18 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.sessions.length).toBe(1);
+	});
+
+	it("should not allow non-admin to list user sessions", async () => {
+		const res = await client.admin.listUserSessions(
+			{
+				userId: newUser?.id || "",
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
 	});
 
 	const data = {
@@ -289,6 +376,18 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.id).toBe(session.data?.user.id);
 	});
 
+	it("should not allow non-admin to impersonate user", async () => {
+		const res = await client.admin.impersonateUser(
+			{
+				userId: newUser?.id || "",
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should filter impersonated sessions", async () => {
 		const { headers } = await signInWithUser(data.email, data.password);
 		const res = await client.listSessions({
@@ -300,18 +399,6 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should allow admin to stop impersonating", async () => {
-		const impersonatedUserRes = await client.admin.listUsers({
-			fetchOptions: {
-				headers: impersonateHeaders,
-			},
-			query: {
-				filterField: "role",
-				filterOperator: "eq",
-				filterValue: "admin",
-			},
-		});
-		//should reject cause the user is not admin
-		expect(impersonatedUserRes.error?.status).toBe(401);
 		const res = await client.admin.stopImpersonating(
 			{},
 			{
@@ -359,6 +446,14 @@ describe("Admin plugin", async () => {
 			{ headers: adminHeaders },
 		);
 		expect(sessions2.data?.sessions.length).toBe(3);
+	});
+
+	it("should not allow non-admin to revoke user sessions", async () => {
+		const res = await client.admin.revokeUserSessions(
+			{ userId: newUser?.id || "" },
+			{ headers: userHeaders },
+		);
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow admin to revoke user sessions", async () => {
@@ -410,6 +505,19 @@ describe("Admin plugin", async () => {
 		expect(res2.data?.user).toBeDefined();
 	});
 
+	it("should not allow non-admin to set user password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow admin to delete user", async () => {
 		const res = await client.admin.removeUser(
 			{
@@ -422,16 +530,24 @@ describe("Admin plugin", async () => {
 
 		expect(res.data?.success).toBe(true);
 	});
+
+	it("should not allow non-admin to delete user", async () => {
+		const res = await client.admin.removeUser(
+			{ userId: newUser?.id || "" },
+			{ headers: userHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+	});
 });
 
 describe("access control", async (it) => {
 	const ac = createAccessControl({
-		user: ["create", "read", "update", "delete"],
+		user: ["create", "read", "update", "delete", "list"],
 		order: ["create", "read", "update", "delete", "update-many"],
 	});
 
 	const adminAc = ac.newRole({
-		user: ["create", "read", "update", "delete"],
+		user: ["create", "read", "update", "delete", "list"],
 		order: ["create", "read", "update", "delete"],
 	});
 	const userAc = ac.newRole({
@@ -439,41 +555,46 @@ describe("access control", async (it) => {
 		order: ["read"],
 	});
 
-	const { signInWithTestUser, signInWithUser, cookieSetter, auth } =
-		await getTestInstance(
-			{
-				plugins: [
-					admin({
-						ac,
-						roles: {
-							admin: adminAc,
-							user: userAc,
-						},
-					}),
-				],
-				databaseHooks: {
-					user: {
-						create: {
-							before: async (user) => {
-								if (user.name === "Admin") {
-									return {
-										data: {
-											...user,
-											role: "admin",
-										},
-									};
-								}
-							},
+	const {
+		signInWithTestUser,
+		signInWithUser,
+		cookieSetter,
+		auth,
+		customFetchImpl,
+	} = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					ac,
+					roles: {
+						admin: adminAc,
+						user: userAc,
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
 						},
 					},
 				},
 			},
-			{
-				testUser: {
-					name: "Admin",
-				},
+		},
+		{
+			testUser: {
+				name: "Admin",
 			},
-		);
+		},
+	);
 
 	const client = createAuthClient({
 		plugins: [
@@ -485,6 +606,10 @@ describe("access control", async (it) => {
 				},
 			}),
 		],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
 	});
 
 	const { headers, user } = await signInWithTestUser();
@@ -547,5 +672,38 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(canUpdateOrder.success).toBe(false);
+	});
+
+	it("shouldn't allow to list users", async () => {
+		const { headers } = await signInWithTestUser();
+		const adminRes = await client.admin.listUsers({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(adminRes.data?.users.length).toBe(1);
+		const userHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "test2@test.com",
+				password: "password",
+				name: "Test User",
+			},
+			{
+				onSuccess: cookieSetter(userHeaders),
+			},
+		);
+		const userRes = await client.admin.listUsers({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(userRes.error?.status).toBe(403);
 	});
 });

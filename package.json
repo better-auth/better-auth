@@ -29,7 +29,7 @@
         "simple-git-hooks": "^2.11.1",
         "taze": "^0.18.0",
         "tinyglobby": "^0.2.10",
-        "turbo": "^2.3.3",
+        "turbo": "^2.4.4",
         "typescript": "^5.7.2"
     },
     "pnpm": {
