@@ -103,10 +103,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
-		if (
-			(!session?.session || !opts.adminRoles.includes(session.user.role)) &&
-			!opts.adminUserIds?.includes(session?.user.id || "")
-		) {
+		if (!session) {
 			throw new APIError("UNAUTHORIZED");
 		}
 		return {

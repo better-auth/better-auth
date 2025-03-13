@@ -5,7 +5,7 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { InferRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
 import { generateId } from "../../../utils";
-import type { OrganizationOptions } from "../organization";
+import { parseRoles, type OrganizationOptions } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "../../../error/codes";
@@ -16,14 +16,18 @@ export const addMember = <O extends OrganizationOptions>() =>
 		"/organization/add-member",
 		{
 			method: "POST",
-			body: z.record(z.string()),
+			body: z.object({
+				userId: z.string(),
+				role: z.union([z.string(), z.array(z.string())]),
+				organizationId: z.string().optional(),
+			}),
 			use: [orgMiddleware],
 			metadata: {
 				SERVER_ONLY: true,
 				$Infer: {
 					body: {} as {
 						userId: string;
-						role: InferRolesFromOption<O>;
+						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
 						organizationId?: string;
 					} & (O extends { teams: { enabled: true } }
 						? { teamId?: string }
@@ -108,7 +112,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 				id: generateId(),
 				organizationId: orgId,
 				userId: user.id,
-				role: ctx.body.role as string,
+				role: parseRoles(ctx.body.role as string | string[]),
 				createdAt: new Date(),
 				...(teamId ? { teamId: teamId } : {}),
 			});
@@ -280,7 +284,11 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		"/organization/update-member-role",
 		{
 			method: "POST",
-			body: z.record(z.any()),
+			body: z.object({
+				role: z.union([z.string(), z.array(z.string())]),
+				memberId: z.string(),
+				organizationId: z.string().optional(),
+			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				$Infer: {
@@ -403,9 +411,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
-				Array.isArray(ctx.body.role)
-					? ctx.body.role?.join(",")
-					: (ctx.body.role as string),
+				parseRoles(ctx.body.role as string | string[]),
 			);
 			if (!updatedMember) {
 				throw new APIError("BAD_REQUEST", {

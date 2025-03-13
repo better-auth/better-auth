@@ -240,7 +240,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								customer: customerId,
 								status: "active",
 							})
-							.then((res) => res.data[0])
+							.then((res) =>
+								res.data.find(
+									(subscription) => subscription.id === ctx.body.subscriptionId,
+								),
+							)
 							.catch((e) => null)
 					: null;
 
