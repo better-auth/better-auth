@@ -101,7 +101,7 @@
     "dotenv-cli": "^7.4.4",
     "eslint-config-next": "15.0.0-canary.149",
     "postcss": "^8.4.49",
-    "tailwindcss": "3.4.16",
+    "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2"
   },
   "overrides": {

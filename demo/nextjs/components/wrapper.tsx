@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ThemeToggle } from "./theme-toggle";
 import { Logo } from "./logo";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { UserAvatar } from "@/app/client-test/_session";
 
 export function Wrapper(props: { children: React.ReactNode }) {
 	return (
@@ -17,6 +18,7 @@ export function Wrapper(props: { children: React.ReactNode }) {
 					</div>
 				</Link>
 				<div className="z-50 flex items-center">
+					<UserAvatar />
 					<ThemeToggle />
 				</div>
 			</div>
