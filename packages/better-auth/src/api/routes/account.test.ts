@@ -67,7 +67,7 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(accounts.data?.length).toBe(1); // Initially, the user has one account
+		expect(accounts.data?.length).toBe(1);
 	});
 
 	it("should link first account", async () => {
@@ -115,11 +115,10 @@ describe("account", async () => {
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers2 },
 		});
-		expect(accounts.data?.length).toBe(2); // After linking the first Google account, there are 2 accounts
+		expect(accounts.data?.length).toBe(2);
 	});
 
 	it("should link second account from the same provider", async () => {
-		// Assuming user is already signed in
 		const { headers: headers2 } = await signInWithTestUser();
 		const linkAccountRes = await client.linkSocial(
 			{
@@ -145,7 +144,7 @@ describe("account", async () => {
 		});
 		const state =
 			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
-		email = "test2@test.com"; // Different email for second account
+		email = "test2@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
@@ -165,7 +164,7 @@ describe("account", async () => {
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers3 },
 		});
-		expect(accounts.data?.length).toBe(3); // After linking the second Google account, there are 3 accounts
+		expect(accounts.data?.length).toBe(3);
 	});
 	it("should unlink account", async () => {
 		const { headers } = await signInWithTestUser();
@@ -174,11 +173,10 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(previousAccounts.data?.length).toBe(3); // There should be 3 accounts
-		// unlinking the second account from the list -which is not the primary one
+		expect(previousAccounts.data?.length).toBe(3);
 		const unlinkAccountId = previousAccounts.data![1].accountId;
 		const unlinkRes = await client.unlinkAccount({
-			providerId: "google", // unlink a Google account
+			providerId: "google",
 			accountId: unlinkAccountId!,
 			fetchOptions: {
 				headers,
@@ -190,7 +188,7 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(accounts.data?.length).toBe(2); // After unlinking one account, there should be 2 left
+		expect(accounts.data?.length).toBe(2);
 	});
 
 	it("should fail to unlink the last account of a provider", async () => {
