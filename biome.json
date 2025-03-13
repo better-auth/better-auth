@@ -30,6 +30,7 @@
 	"files": {
 		"ignore": [
 			"dist",
+			"build",
 			".next",
 			".svelte-kit",
 			"package.json",
