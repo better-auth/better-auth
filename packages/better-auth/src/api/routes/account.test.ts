@@ -52,19 +52,25 @@ describe("account", async () => {
 				enabled: true,
 			},
 		},
+		account: {
+			accountLinking: {
+				allowDifferentEmails: true,
+			},
+		},
 	});
 
 	const { headers } = await signInWithTestUser();
+
 	it("should list all accounts", async () => {
 		const accounts = await client.listAccounts({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(accounts.data?.length).toBe(1);
+		expect(accounts.data?.length).toBe(1); // Initially, the user has one account
 	});
 
-	it("should link account", async () => {
+	it("should link first account", async () => {
 		const linkAccountRes = await client.linkSocial(
 			{
 				provider: "google",
@@ -104,14 +110,16 @@ describe("account", async () => {
 				expect(location).toContain("/callback");
 			},
 		});
+
 		const { headers: headers2 } = await signInWithTestUser();
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers2 },
 		});
-		expect(accounts.data?.length).toBe(2);
+		expect(accounts.data?.length).toBe(2); // After linking the first Google account, there are 2 accounts
 	});
 
-	it("shouldn't link existing account", async () => {
+	it("should link second account from the same provider", async () => {
+		// Assuming user is already signed in
 		const { headers: headers2 } = await signInWithTestUser();
 		const linkAccountRes = await client.linkSocial(
 			{
@@ -131,9 +139,34 @@ describe("account", async () => {
 				},
 			},
 		);
-		expect(linkAccountRes.error?.status).toBe(400);
-	});
+		expect(linkAccountRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		const state =
+			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+		email = "test2@test.com"; // Different email for second account
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			headers,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
+			},
+		});
 
+		const { headers: headers3 } = await signInWithTestUser();
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: headers3 },
+		});
+		expect(accounts.data?.length).toBe(3); // After linking the second Google account, there are 3 accounts
+	});
 	it("should unlink account", async () => {
 		const { headers } = await signInWithTestUser();
 		const previousAccounts = await client.listAccounts({
@@ -141,9 +174,12 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(previousAccounts.data?.length).toBe(2);
+		expect(previousAccounts.data?.length).toBe(3); // There should be 3 accounts
+		// unlinking the second account from the list -which is not the primary one
+		const unlinkAccountId = previousAccounts.data![1].accountId;
 		const unlinkRes = await client.unlinkAccount({
-			providerId: "google",
+			providerId: "google", // unlink a Google account
+			accountId: unlinkAccountId!,
 			fetchOptions: {
 				headers,
 			},
@@ -154,13 +190,20 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(accounts.data?.length).toBe(1);
+		expect(accounts.data?.length).toBe(2); // After unlinking one account, there should be 2 left
 	});
 
-	it("should fail to unlink a user last account", async () => {
+	it("should fail to unlink the last account of a provider", async () => {
 		const { headers } = await signInWithTestUser();
+		const previousAccounts = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const unlinkAccountId = previousAccounts.data![0].accountId;
 		const unlinkRes = await client.unlinkAccount({
 			providerId: "credential",
+			accountId: unlinkAccountId,
 			fetchOptions: {
 				headers,
 			},
