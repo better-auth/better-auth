@@ -5,7 +5,6 @@ import { NavbarProvider } from "@/components/nav-mobile";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { baseUrl, createMetadata } from "@/lib/metadata";
-import Loglib from "@loglib/tracker/react";
 import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -60,12 +59,7 @@ export default function Layout({
 						</NavbarProvider>
 					</ThemeProvider>
 				</RootProvider>
-				<Loglib
-					config={{
-						id: "better-auth",
-						consent: "granted",
-					}}
-				/>
+
 				<Analytics />
 			</body>
 		</html>
