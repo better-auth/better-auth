@@ -115,7 +115,7 @@ export const refreshToken = createAuthEndpoint(
 				});
 			}
 			const tokens: OAuth2Tokens = await resolvedProvider.refreshAccessToken(
-				account.refreshToken,
+				account.refreshToken as string,
 			);
 			return ctx.json({
 				...tokens,
