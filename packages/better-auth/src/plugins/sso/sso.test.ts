@@ -396,7 +396,6 @@ describe("provisioning", async (ctx) => {
 		token.payload.name = "Test User";
 		token.payload.picture = "https://test.com/picture.png";
 	});
-
 	it("should provision user", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await auth.api.createOrganization({
