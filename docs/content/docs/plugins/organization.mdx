@@ -597,7 +597,9 @@ auth.api.addMember({
   body: {
       userId: "user-id",
       organizationId: "organization-id",
-      role: "admin"
+      role: "admin",
+      // Optionally specify a teamId to add the member to a team. (requires teams to be enabled)
+      teamId: "team-id"
   }
 })
 ```

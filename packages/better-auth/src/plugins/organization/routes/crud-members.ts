@@ -86,7 +86,6 @@ export const addMember = <O extends OrganizationOptions>() =>
 				const team = await adapter.findTeamById({
 					teamId,
 					organizationId: orgId,
-					includeTeamMembers: true,
 				});
 				if (!team || team.organizationId !== orgId) {
 					throw new APIError("BAD_REQUEST", {
