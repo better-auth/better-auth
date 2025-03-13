@@ -147,7 +147,9 @@ describe("mssql", async () => {
 		getAdapter: async (customOptions = {}) => {
 			return adapter;
 		},
-		skipGenerateIdTest: true,
+		testSkips: {
+			generateId: true,
+		},
 	});
 
 	describe("simple flow", async () => {
