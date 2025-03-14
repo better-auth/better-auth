@@ -184,17 +184,14 @@ export const unlinkAccount = createAuthEndpoint(
 				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
 			});
 		}
-
-		const remainingAccounts = accounts.filter(
-			(account) => account.providerId === ctx.body.providerId,
-		);
-
-		if (remainingAccounts.length === 1) {
+		if (
+			accounts.length === 1 &&
+			!ctx.context.options.account?.accountLinking?.allowUnlinkingAll
+		) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
 			});
 		}
-
 		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
 		return ctx.json({
 			status: true,

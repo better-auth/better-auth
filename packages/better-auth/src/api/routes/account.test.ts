@@ -59,6 +59,8 @@ describe("account", async () => {
 		},
 	});
 
+	const ctx = await auth.$context;
+
 	const { headers } = await signInWithTestUser();
 
 	it("should list all accounts", async () => {
@@ -197,6 +199,15 @@ describe("account", async () => {
 			fetchOptions: {
 				headers,
 			},
+		});
+		await ctx.adapter.delete({
+			model: "account",
+			where: [
+				{
+					field: "providerId",
+					value: "google",
+				},
+			],
 		});
 		const unlinkAccountId = previousAccounts.data![0].accountId;
 		const unlinkRes = await client.unlinkAccount({
