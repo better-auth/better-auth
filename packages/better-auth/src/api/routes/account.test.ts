@@ -214,7 +214,6 @@ describe("account", async () => {
 				headers,
 			},
 		});
-
 		expect(unlinkRes1.data?.status).toBe(true);
 		const accounts = await client.listAccounts({
 			fetchOptions: {
