@@ -422,7 +422,7 @@ If you want to use the server instead to check if a user has a permission, you c
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
     userId: 'id', //the user id
     permission: {
@@ -432,7 +432,7 @@ auth.api.adminHasPermission({
 });
 
 //you can also just pass the role directly
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
    role: "admin",
     permission: {
