@@ -8,6 +8,7 @@ import { signJWT } from "../../crypto/jwt";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
 let email = "";
+let provider = "google";
 vi.mock("../../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
@@ -47,6 +48,12 @@ describe("account", async () => {
 	const { auth, client, signInWithTestUser } = await getTestInstance({
 		socialProviders: {
 			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+
+			github: {
 				clientId: "test",
 				clientSecret: "test",
 				enabled: true,
@@ -166,6 +173,7 @@ describe("account", async () => {
 		});
 		expect(accounts.data?.length).toBe(3);
 	});
+
 	it("should unlink account", async () => {
 		const { headers } = await signInWithTestUser();
 		const previousAccounts = await client.listAccounts({
@@ -198,15 +206,31 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		const unlinkAccountId = previousAccounts.data![0].accountId;
-		const unlinkRes = await client.unlinkAccount({
-			providerId: "credential",
-			accountId: unlinkAccountId,
+		const unlinkAccountId1 = previousAccounts.data![1].accountId;
+		const unlinkRes1 = await client.unlinkAccount({
+			providerId: "google",
+			accountId: unlinkAccountId1!,
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(unlinkRes.error?.message).toBe(
+
+		expect(unlinkRes1.data?.status).toBe(true);
+		const accounts = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(accounts.data?.length).toBe(1);
+		const unlinkAccountId2 = previousAccounts.data![0].accountId;
+		const unlinkRes2 = await client.unlinkAccount({
+			providerId: "credential",
+			accountId: unlinkAccountId2,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(unlinkRes2.error?.message).toBe(
 			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
 		);
 	});

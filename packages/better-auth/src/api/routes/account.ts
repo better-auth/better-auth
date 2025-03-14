@@ -125,7 +125,6 @@ export const linkSocialAccount = createAuthEndpoint(
 		const accounts = await c.context.internalAdapter.findAccounts(
 			session.user.id,
 		);
-
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.body.provider,
 		);
@@ -185,16 +184,14 @@ export const unlinkAccount = createAuthEndpoint(
 			});
 		}
 
-		const remainingAccounts = accounts.filter(
-			(account) => account.providerId === ctx.body.providerId,
+		const remainingAccountsTotal = accounts.filter(
+			(account) => account.id !== accountExist.id,
 		);
-
-		if (remainingAccounts.length === 1) {
+		if (remainingAccountsTotal.length === 0) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
 			});
 		}
-
 		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
 		return ctx.json({
 			status: true,
