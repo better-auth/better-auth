@@ -87,18 +87,29 @@ export const refreshToken = createAuthEndpoint(
 		const provider = providerId
 			? ctx.context.socialProviders.find((p) => p.id === providerId)
 			: undefined;
-		if (providerId && (!provider || !provider.refreshAccessToken)) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} does not support token refreshing.`,
-			});
+		if (providerId) {
+			if (!provider) {
+				throw new APIError("BAD_REQUEST", {
+					message: `Provider ${providerId} not found.`,
+				});
+			} else if (!provider.refreshAccessToken) {
+				throw new APIError("BAD_REQUEST", {
+					message: `Provider ${providerId} does not support token refreshing.`,
+				});
+			}
 		}
 		try {
-			if (accountId && !providerId) {
+			if (accountId) {
 				account = await ctx.context.internalAdapter.findAccount(accountId);
-			} else if (providerId && resolvedUserId) {
-				const accounts =
+			} else if (resolvedUserId) {
+				let accounts: Account[] = [];
+				accounts =
 					await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-				account = accounts.find((acc) => acc.providerId === providerId)!;
+				if (providerId) {
+					account = accounts.find((acc) => acc.providerId === providerId)!;
+				} else {
+					account = accounts[0];
+				}
 			}
 			if (!account) {
 				throw new APIError("BAD_REQUEST", {
