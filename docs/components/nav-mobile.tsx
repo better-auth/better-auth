@@ -8,7 +8,6 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
-import { AnimatePresence, FadeIn } from "@/components/ui/fade-in";
 import { contents, examples } from "./sidebar-content";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -79,70 +78,67 @@ export const NavbarMobile = () => {
 	return (
 		<div
 			className={cn(
-				"fixed top-[50px] left-0 mx-auto w-full md:hidden transform-gpu z-[100] bg-background",
-				isOpen && "shadow-lg border-b border-[rgba(255,255,255,.1)]",
+				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all md:hidden",
+				isOpen &&
+					"shadow-lg border-b border-[rgba(255,255,255,.1)] grid-rows-[1fr]",
 			)}
 		>
-			<AnimatePresence>
-				{isOpen && (
-					<FadeIn
-						fromTopToBottom
-						className={cn(
-							"px-9 py-5 max-h-[80vh] overflow-y-auto bg-transparent divide-y [mask-image:linear-gradient(to_top,transparent,white_40px)]",
-							isDocs && "px-4",
-						)}
-					>
-						{navMenu.map((menu) => (
-							<Fragment key={menu.name}>
-								{menu.child ? (
-									<Accordion type="single" collapsible>
-										<AccordionItem value={menu.name}>
-											<AccordionTrigger
-												className={cn(
-													"font-normal text-foreground",
-													!isDocs && "text-2xl",
-												)}
-											>
-												{menu.name}
-											</AccordionTrigger>
-											<AccordionContent className="pl-5 divide-y">
-												{menu.child.map((child, j) => (
-													<Link
-														href={child.path}
-														key={child.name}
-														className={cn(
-															"block py-2 border-b first:pt-0 last:pb-0 last:border-0 text-muted-foreground",
-															!isDocs && "text-xl",
-														)}
-														onClick={toggleNavbar}
-													>
-														{child.name}
-													</Link>
-												))}
-											</AccordionContent>
-										</AccordionItem>
-									</Accordion>
-								) : (
-									<Link
-										href={menu.path}
-										className={cn(
-											"group flex items-center gap-2.5 first:pt-0 last:pb-0 text-2xl py-4",
-											isDocs && "text-base py-2",
-										)}
-										onClick={toggleNavbar}
-									>
-										{isDocs && (
-											<ChevronRight className="ml-0.5 size-4 text-muted-foreground md:hidden" />
-										)}
-										{menu.name}
-									</Link>
-								)}
-							</Fragment>
-						))}
-						<DocsNavBarContent />
-					</FadeIn>
+			<div
+				className={cn(
+					"px-9 min-h-0 overflow-y-auto max-h-[80vh] divide-y [mask-image:linear-gradient(to_top,transparent,white_40px)] transition-all duration-300",
+					isOpen ? "py-5" : "invisible",
+					isDocs && "px-4",
 				)}
-			</AnimatePresence>
+			>
+				{navMenu.map((menu) => (
+					<Fragment key={menu.name}>
+						{menu.child ? (
+							<Accordion type="single" collapsible>
+								<AccordionItem value={menu.name}>
+									<AccordionTrigger
+										className={cn(
+											"font-normal text-foreground",
+											!isDocs && "text-2xl",
+										)}
+									>
+										{menu.name}
+									</AccordionTrigger>
+									<AccordionContent className="pl-5 divide-y">
+										{menu.child.map((child, j) => (
+											<Link
+												href={child.path}
+												key={child.name}
+												className={cn(
+													"block py-2 border-b first:pt-0 last:pb-0 last:border-0 text-muted-foreground",
+													!isDocs && "text-xl",
+												)}
+												onClick={toggleNavbar}
+											>
+												{child.name}
+											</Link>
+										))}
+									</AccordionContent>
+								</AccordionItem>
+							</Accordion>
+						) : (
+							<Link
+								href={menu.path}
+								className={cn(
+									"group flex items-center gap-2.5 first:pt-0 last:pb-0 text-2xl py-4",
+									isDocs && "text-base py-2",
+								)}
+								onClick={toggleNavbar}
+							>
+								{isDocs && (
+									<ChevronRight className="ml-0.5 size-4 text-muted-foreground md:hidden" />
+								)}
+								{menu.name}
+							</Link>
+						)}
+					</Fragment>
+				))}
+				<DocsNavBarContent />
+			</div>
 		</div>
 	);
 };
