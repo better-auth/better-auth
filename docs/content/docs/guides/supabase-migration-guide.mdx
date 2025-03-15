@@ -114,7 +114,7 @@ npx @better-auth/cli migrate
 ```
 </Step>
 <Step>
-### Run migration script
+### Copy the migration script
 
 Now that we have the necessary tables in our database, we can run the migration script to migrate the users and accounts from supabase to better auth.
 
@@ -244,8 +244,10 @@ migrateFromSupabase();
 <Step>
 ### Customize the migration script (Optional)
 
-- name: the migration script will use the user's email as the name. You might want to customize it if you have the user display name in your database.
-- socialProviderList: the migration script will use the social providers you have enabled in your auth config. You might want to customize it if you have additional social providers that you haven't enabled in your auth config.
+- `name`: the migration script will use the user's email as the name. You might want to customize it if you have the user display name in your database.
+- `socialProviderList`: the migration script will use the social providers you have enabled in your auth config. You might want to customize it if you have additional social providers that you haven't enabled in your auth config.
+- `role`: remove `role` if you're not using the `admin` plugin 
+- `isAnonymous`: remove `isAnonymous` if you're not using the `anonymous` plugin.
 </Step>
 <Step>
 ### Run the migration script
@@ -253,7 +255,39 @@ migrateFromSupabase();
 Run the migration script to migrate the users and accounts from supabase to better auth.
 
 ```bash title="Terminal"
-bun migration.ts # or node migration.ts (if you're using node v22 or above)
+bun migration.ts # or use node, ts-node, etc.
 ```
 </Step>
+<Step>
+### Update your code
+
+Update your codebase from supabase auth calls to better auth api.
+
+Here's a list of the supabase auth api calls and their better auth counterparts.
+
+- `supabase.auth.signUp` -> `authClient.signUp.email`
+- `supabase.auth.signInWithPassword` -> `authClient.signIn.email`
+- `supabase.auth.signInWithOAuth` -> `authClient.signIn.social`
+- `supabase.auth.signInAnonymously` -> `authClient.signIn.anonymous`
+- `supabase.auth.signOut` -> `authClient.signOut`
+- `supabase.auth.getSession` -> `authClient.getSession` // you can also use `authClient.useSession` for reactive state
+
+Learn more:
+- [Basic Usage](/docs/basic-usage)
+- [Email and Password](/docs/authentication/email-and-password)
+- [Anonymous](/docs/plugins/anonymous)
+- [Admin](/docs/plugins/admin)
+- [Email OTP](/docs/authentication/email-otp)
+- [Hooks](/docs/concepts/hooks)
+</Step>
 </Steps>
+
+### Middleware
+
+To protect routes with middleware, refer to the [Next.js middleware guide](/docs/integrations/next#middleware) or your framework's documentation.
+
+## Wrapping Up
+
+Congratulations! You’ve successfully migrated from Supabase Auth to Better Auth.
+
+Better Auth offers greater flexibility and more features—be sure to explore the [documentation](/docs) to unlock its full potential.
