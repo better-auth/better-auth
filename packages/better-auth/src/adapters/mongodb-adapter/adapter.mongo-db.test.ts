@@ -44,7 +44,9 @@ describe("adapter test", async () => {
 				...customOptions,
 			});
 		},
-		skipGenerateIdTest: true,
+		testSkips: {
+			generateId: true,
+		},
 	});
 });
 
