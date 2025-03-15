@@ -243,6 +243,13 @@ export const getSessionCookie = (
 		path?: string;
 	},
 ) => {
+	if (config?.cookiePrefix) {
+		if (config.cookieName) {
+			config.cookiePrefix = `${config.cookiePrefix}-`;
+		} else {
+			config.cookiePrefix = `${config.cookiePrefix}.`;
+		}
+	}
 	const headers = request instanceof Headers ? request : request.headers;
 	const req = request instanceof Request ? request : undefined;
 	const url = getBaseURL(req?.url, config?.path, req);
@@ -252,19 +259,20 @@ export const getSessionCookie = (
 	}
 	const {
 		cookieName = "session_token",
-		cookiePrefix = "better-auth",
+		cookiePrefix = "better-auth.",
 		useSecureCookies = isProduction || url?.startsWith("https://")
 			? true
 			: false,
 	} = config || {};
 	const name = useSecureCookies
-		? `__Secure-${cookiePrefix}.${cookieName}`
-		: `${cookiePrefix}.${cookieName}`;
+		? `__Secure-${cookiePrefix}${cookieName}`
+		: `${cookiePrefix}${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionToken = parsedCookie.get(name);
 	if (sessionToken) {
 		return sessionToken;
 	}
+	console.log(name, parsedCookie, sessionToken);
 	return null;
 };
 
