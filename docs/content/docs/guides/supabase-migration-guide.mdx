@@ -248,6 +248,7 @@ migrateFromSupabase();
 - `socialProviderList`: the migration script will use the social providers you have enabled in your auth config. You might want to customize it if you have additional social providers that you haven't enabled in your auth config.
 - `role`: remove `role` if you're not using the `admin` plugin 
 - `isAnonymous`: remove `isAnonymous` if you're not using the `anonymous` plugin.
+- update other tables that reference the `users` table to use the `id` field.
 </Step>
 <Step>
 ### Run the migration script
