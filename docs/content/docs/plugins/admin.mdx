@@ -422,7 +422,7 @@ If you want to use the server instead to check if a user has a permission, you c
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
     userId: 'id', //the user id
     permission: {
@@ -432,7 +432,7 @@ auth.api.adminHasPermission({
 });
 
 //you can also just pass the role directly
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
    role: "admin",
     permission: {
@@ -570,3 +570,14 @@ admin({
   defaultBanExpiresIn: 60 * 60 * 24, // 1 day
 });
 ```
+
+### bannedUserMessage
+
+The message to show when a banned user tries to sign in. Defaults to "You have been banned from this application. Please contact support if you believe this is an error."
+
+```ts title="auth.ts"
+admin({
+  bannedUserMessage: "Custom banned user message",
+});
+```
+

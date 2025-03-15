@@ -440,6 +440,12 @@ export type BetterAuthOptions = {
 			 * ⚠️ Warning: enabling this might lead to account takeovers, so proceed with caution.
 			 */
 			allowDifferentEmails?: boolean;
+			/**
+			 * If enabled (true), this will allow users to unlink all accounts.
+			 *
+			 * @default false
+			 */
+			allowUnlinkingAll?: boolean;
 		};
 	};
 	/**

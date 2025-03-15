@@ -9,7 +9,11 @@ describe("Admin plugin", async () => {
 	const { signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl } =
 		await getTestInstance(
 			{
-				plugins: [admin()],
+				plugins: [
+					admin({
+						bannedUserMessage: "Custom banned user message",
+					}),
+				],
 				databaseHooks: {
 					user: {
 						create: {
@@ -260,7 +264,16 @@ describe("Admin plugin", async () => {
 			email: newUser?.email || "",
 			password: "test",
 		});
-		expect(res.error?.status).toBe(401);
+		expect(res.error?.code).toBe("BANNED_USER");
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should change banned user message", async () => {
+		const res = await client.signIn.email({
+			email: newUser?.email || "",
+			password: "test",
+		});
+		expect(res.error?.message).toBe("Custom banned user message");
 	});
 
 	it("should allow banned user to sign in if ban expired", async () => {

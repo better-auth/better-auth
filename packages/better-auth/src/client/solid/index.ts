@@ -93,3 +93,5 @@ export function createAuthClient<Option extends ClientOptions>(
 			>;
 		};
 }
+
+export type * from "@better-fetch/fetch";

@@ -88,12 +88,20 @@ export interface AdminOptions {
 	 * If this is set, the `adminRole` option is ignored
 	 */
 	adminUserIds?: string[];
+	/**
+	 * Message to show when a user is banned
+	 *
+	 * By default, the message is "You have been banned from this application"
+	 */
+	bannedUserMessage?: string;
 }
 
 export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
 		defaultRole: "user",
 		adminRoles: ["admin"],
+		bannedUserMessage:
+			"You have been banned from this application. Please contact support if you believe this is an error.",
 		...options,
 	};
 	type DefaultStatements = typeof defaultStatements;
@@ -153,7 +161,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 											});
 											return;
 										}
-										return false;
+
+										throw new APIError("FORBIDDEN", {
+											message: opts.bannedUserMessage,
+											code: "BANNED_USER",
+										});
 									}
 								},
 							},
