@@ -1,2 +1,3 @@
 export { cloudflareTurnstile } from "./cloudflare-turnstile";
-export { googleReCAPTCHA } from "./google-recaptcha";
+export { googleRecaptcha } from "./google-recaptcha";
+export { hCaptcha } from "./h-captcha";
