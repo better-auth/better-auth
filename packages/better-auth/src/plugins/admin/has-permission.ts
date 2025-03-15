@@ -9,7 +9,7 @@ export const hasPermission = (input: {
 		[key: string]: string[];
 	};
 }) => {
-	if (input.options?.adminUserIds?.includes(input.userId)) {
+	if (input.options?.adminUserIds?.includes(input.userId) || input.options?.adminRoles?.includes(input.role)) {
 		return true;
 	}
 	const roles = (input.role || input.options?.defaultRole || "user").split(",");
