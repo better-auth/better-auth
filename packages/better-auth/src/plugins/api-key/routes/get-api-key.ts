@@ -5,6 +5,7 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { safeJSONParse } from "../../../utils/json";
 
 export function getApiKey({
 	opts,
@@ -63,7 +64,17 @@ export function getApiKey({
 
 			const { key, ...returningApiKey } = apiKey;
 
-			return ctx.json(returningApiKey);
+			return ctx.json({
+				...returningApiKey,
+				permissions: returningApiKey.permissions
+					? safeJSONParse<{
+							[key: string]: string[];
+						}>(
+							//@ts-ignore - From DB this is always a string
+							returningApiKey.permissions,
+						)
+					: null,
+			});
 		},
 	);
 }

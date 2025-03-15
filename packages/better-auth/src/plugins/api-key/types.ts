@@ -268,5 +268,7 @@ export type ApiKey = {
 	/**
 	 * Permissions for the api key
 	 */
-	permissions?: string;
+	permissions?: {
+		[key: string]: string[];
+	} | null;
 };
