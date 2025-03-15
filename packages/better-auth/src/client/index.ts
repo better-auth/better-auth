@@ -11,6 +11,6 @@ export const InferPlugin = <T extends BetterAuthPlugin>() => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "@better-fetch/fetch";
 //@ts-expect-error
-export type * from "zod";
+export type * from "nanostores";
+export type * from "@better-fetch/fetch";
