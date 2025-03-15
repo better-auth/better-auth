@@ -112,6 +112,15 @@ Run the migration to create the necessary tables in your database.
 ```bash title="Terminal"
 npx @better-auth/cli migrate
 ```
+
+This will create the following tables in your database:
+
+- [`user`](/docs/concepts/database#user)
+- [`account`](/docs/concepts/database#account)
+- [`session`](/docs/concepts/database#session)
+- [`verification`](/docs/concepts/database#verification)
+
+This tables will be created on the `public` schema.
 </Step>
 <Step>
 ### Copy the migration script
