@@ -7,6 +7,8 @@
 @source '../../node_modules/fumadocs-ui/dist/**/*.js';
 @source '../node_modules/fumadocs-ui/dist/**/*.js';
 :root {
+	--fd-nav-height: 57px;
+
 	--background: oklch(1 0 0);
 
 	--foreground: oklch(0.147 0.004 49.25);

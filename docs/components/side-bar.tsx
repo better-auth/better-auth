@@ -7,13 +7,7 @@ import { useSearchContext } from "fumadocs-ui/provider";
 import { usePathname, useRouter } from "next/navigation";
 import { contents, examples } from "./sidebar-content";
 import { ChevronDownIcon, Search } from "lucide-react";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "./ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { cn } from "@/lib/utils";
 import { Badge } from "./ui/badge";
 
@@ -45,18 +39,18 @@ export default function ArticleLayout() {
 			<aside
 				className={cn(
 					"md:transition-all",
-					"border-r border-lines md:flex hidden  md:w-[268px] lg:w-[286px] overflow-y-auto absolute top-[58px] h-[92dvh] flex-col justify-between w-[var(--fd-sidebar-width)]",
+					"border-r border-lines md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute top-[58px] h-[92dvh] flex-col justify-between w-[var(--fd-sidebar-width)]",
 				)}
 			>
 				<div>
 					<SidebarTab group={group} setGroup={setGroup} />
 					<div
-						className="flex items-center gap-2 p-2 px-4 border-b bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
+						className="flex items-center gap-2 px-5 py-2 border-b bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
 						onClick={() => {
 							setOpenSearch(true);
 						}}
 					>
-						<Search className="w-4 h-4" />
+						<Search className="size-4" />
 						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-500 to-stone-400 bg-clip-text">
 							Search documentation...
 						</p>
@@ -78,7 +72,7 @@ export default function ArticleLayout() {
 											}
 										}}
 									>
-										<item.Icon className="w-5 h-5" />
+										<item.Icon className="size-5" />
 										<span className="grow">{item.title}</span>
 										{item.isNew && <NewBadge />}
 										<motion.div
@@ -235,17 +229,17 @@ function SidebarTab({
 				}
 			}}
 		>
-			<SelectTrigger className="flex flex-col items-start gap-1 h-16 border border-b border-none rounded-none">
+			<SelectTrigger className="h-16 border border-b border-none rounded-none px-5">
 				{selected ? (
-					<>
-						<div className="flex items-center gap-1">
+					<div className="flex flex-col gap-1 items-start">
+						<div className="flex items-center gap-1 -ml-0.5">
 							{selected.icon}
 							{selected.title}
 						</div>
 						<p className="text-xs text-muted-foreground">
 							{selected.description}
 						</p>
-					</>
+					</div>
 				) : null}
 			</SelectTrigger>
 			<SelectContent>
