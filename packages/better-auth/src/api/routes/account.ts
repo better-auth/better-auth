@@ -5,6 +5,7 @@ import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
 import { freshSessionMiddleware, sessionMiddleware } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -91,6 +92,21 @@ export const linkSocialAccount = createAuthEndpoint(
 			provider: z.enum(socialProviderList, {
 				description: "The OAuth2 provider to use",
 			}),
+			/**
+			 * ID Token for direct authentication without redirect
+			 */
+			idToken: z
+				.object({
+					token: z.string(),
+					nonce: z.string().optional(),
+					accessToken: z.string().optional(),
+					refreshToken: z.string().optional(),
+				})
+				.optional(),
+			/**
+			 * Whether to allow sign up for new users
+			 */
+			requestSignUp: z.boolean().optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -110,8 +126,11 @@ export const linkSocialAccount = createAuthEndpoint(
 										redirect: {
 											type: "boolean",
 										},
+										status: {
+											type: "boolean",
+										},
 									},
-									required: ["url", "redirect"],
+									required: ["redirect"],
 								},
 							},
 						},
@@ -122,10 +141,6 @@ export const linkSocialAccount = createAuthEndpoint(
 	},
 	async (c) => {
 		const session = c.context.session;
-		const accounts = await c.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
-
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.body.provider,
 		);
@@ -142,6 +157,86 @@ export const linkSocialAccount = createAuthEndpoint(
 			});
 		}
 
+		// Handle ID Token flow if provided
+		if (c.body.idToken) {
+			if (!provider.verifyIdToken) {
+				c.context.logger.error(
+					"Provider does not support id token verification",
+					{
+						provider: c.body.provider,
+					},
+				);
+				throw new APIError("NOT_FOUND", {
+					message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
+				});
+			}
+
+			const { token, nonce } = c.body.idToken;
+			const valid = await provider.verifyIdToken(token, nonce);
+			if (!valid) {
+				c.context.logger.error("Invalid id token", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: BASE_ERROR_CODES.INVALID_TOKEN,
+				});
+			}
+
+			const userInfo = await provider.getUserInfo({
+				idToken: token,
+				accessToken: c.body.idToken.accessToken,
+				refreshToken: c.body.idToken.refreshToken,
+			});
+
+			if (!userInfo || !userInfo?.user) {
+				c.context.logger.error("Failed to get user info", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+				});
+			}
+
+			if (!userInfo.user.email) {
+				c.context.logger.error("User email not found", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
+				});
+			}
+
+			const data = await handleOAuthUserInfo(c, {
+				userInfo: {
+					email: userInfo.user.email,
+					id: userInfo.user.id,
+					name: userInfo.user.name || "",
+					image: userInfo.user.image,
+					emailVerified: userInfo.user.emailVerified || false,
+				},
+				account: {
+					providerId: provider.id,
+					accountId: userInfo.user.id,
+					accessToken: c.body.idToken.accessToken,
+					refreshToken: c.body.idToken.refreshToken,
+					idToken: token,
+				},
+				disableSignUp: true, // Always disable signup for linking
+			});
+
+			if (data.error) {
+				throw new APIError("BAD_REQUEST", {
+					message: data.error,
+				});
+			}
+
+			return c.json({
+				redirect: false,
+				status: true,
+			});
+		}
+
+		// Handle OAuth flow
 		const state = await generateState(c, {
 			userId: session.user.id,
 			email: session.user.email,
