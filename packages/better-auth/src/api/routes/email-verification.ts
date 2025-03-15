@@ -174,6 +174,7 @@ export const verifyEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",

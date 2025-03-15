@@ -61,6 +61,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										properties: {
 											user: {
 												type: "object",
+												ref: "#/components/schemas/User",
 											},
 										},
 									},
@@ -547,6 +548,7 @@ export const changeEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",
