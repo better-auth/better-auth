@@ -53,14 +53,14 @@ const session = authClient.useSession()
 
 <template>
     <div>
-        <button v-if="!session?.data" @click="() => client.signIn.social({
+        <button v-if="!session?.data" @click="() => authClient.signIn.social({
             provider: 'github'
         })">
             Continue with github
         </button>
         <div>
             <pre>{{ session.data }}</pre>
-            <button v-if="session.data" @click="client.signOut()">
+            <button v-if="session.data" @click="authClient.signOut()">
                 Sign out
             </button>
         </div>
