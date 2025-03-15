@@ -1,7 +1,6 @@
 import { Navbar } from "@/components/nav-bar";
 import "./global.css";
 import { RootProvider } from "fumadocs-ui/provider";
-import type { ReactNode } from "react";
 import { NavbarProvider } from "@/components/nav-mobile";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
@@ -18,7 +17,11 @@ export const metadata = createMetadata({
 	metadataBase: baseUrl,
 });
 
-export default function Layout({ children }: { children: ReactNode }) {
+export default function Layout({
+	children,
+}: Readonly<{
+	children: React.ReactNode;
+}>) {
 	return (
 		<html lang="en" suppressHydrationWarning>
 			<head>
@@ -36,27 +39,28 @@ export default function Layout({ children }: { children: ReactNode }) {
 				/>
 			</head>
 			<body
-				className={`${GeistSans.variable} ${GeistMono.variable} bg-background font-sans relative `}
+				className={`${GeistSans.variable} ${GeistMono.variable} bg-background font-sans relative md:[--fd-sidebar-width:268px] lg:[--fd-sidebar-width:286px]`}
 			>
-				<ThemeProvider
-					attribute="class"
-					defaultTheme="dark"
-					enableSystem
-					disableTransitionOnChange
+				<RootProvider
+					theme={{
+						enableSystem: true,
+						defaultTheme: "dark",
+					}}
 				>
-					<RootProvider
-						theme={{
-							enableSystem: true,
-							defaultTheme: "dark",
-						}}
+					<ThemeProvider
+						attribute="class"
+						defaultTheme="dark"
+						enableSystem
+						disableTransitionOnChange
 					>
 						<NavbarProvider>
 							<Navbar />
 							{children}
 						</NavbarProvider>
-					</RootProvider>
-					<Analytics />
-				</ThemeProvider>
+					</ThemeProvider>
+				</RootProvider>
+
+				<Analytics />
 			</body>
 		</html>
 	);
