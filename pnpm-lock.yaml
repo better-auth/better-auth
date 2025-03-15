@@ -29729,7 +29729,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.12':
     dependencies:
-      '@types/node': 22.13.8
+      '@types/node': 20.17.24
 
   '@types/braces@3.0.4': {}
 
