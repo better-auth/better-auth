@@ -272,7 +272,6 @@ export const getSessionCookie = (
 	if (sessionToken) {
 		return sessionToken;
 	}
-	console.log(name, parsedCookie, sessionToken);
 	return null;
 };
 
