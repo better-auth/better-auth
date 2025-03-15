@@ -418,7 +418,7 @@ const canCreateProject = await authClient.admin.hasPermission({
 });
 ```
 
-If you want to use the server instead to check if a user has a permission, you can use `adminHasPermission` action provided by the `api` to check the permission of the user.
+If you want to use the server instead to check if a user has a permission, you can use `userHasPermission` action provided by the `api` to check the permission of the user.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
