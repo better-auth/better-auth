@@ -82,11 +82,13 @@ const createTransform = (
 				useDatabaseGeneratedId || action === "update"
 					? {}
 					: {
-							id: options.advanced?.generateId
-								? options.advanced.generateId({
-										model,
-									})
-								: data.id || generateId(),
+							id: data.id
+								? data.id
+								: options.advanced?.generateId
+									? options.advanced.generateId({
+											model,
+										})
+									: generateId(),
 						};
 			const fields = schema[model].fields;
 			for (const field in fields) {

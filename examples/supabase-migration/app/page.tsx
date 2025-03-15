@@ -4,12 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 import { Session } from "@supabase/supabase-js";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 
 const useSession = () => {
 	const [session, setSession] = useState<Session | null>(null);
-
 	useEffect(() => {
 		supabase.auth.getSession().then(({ data }) => setSession(data.session));
 	}, []);
@@ -57,6 +55,15 @@ export default function Home() {
 							}}
 						>
 							Sign Up
+						</Button>
+						<Button
+							onClick={async () => {
+								await supabase.auth.signInWithOAuth({
+									provider: "github",
+								});
+							}}
+						>
+							Continue with Github
 						</Button>
 					</CardContent>
 				</Card>
