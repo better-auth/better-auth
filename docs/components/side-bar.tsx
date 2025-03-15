@@ -44,17 +44,15 @@ export default function ArticleLayout() {
 			>
 				<div>
 					<SidebarTab group={group} setGroup={setGroup} />
-					<div
-						className="flex items-center gap-2 px-5 py-2 border-b bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
+					<button
+						className="flex w-full items-center gap-2 px-5 py-2.5 border-b text-muted-foreground bg-gradient-to-b dark:from-stone-900 dark:to-stone/10"
 						onClick={() => {
 							setOpenSearch(true);
 						}}
 					>
-						<Search className="size-4" />
-						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-500 to-stone-400 bg-clip-text">
-							Search documentation...
-						</p>
-					</div>
+						<Search className="size-4 mx-0.5" />
+						<p className="text-sm">Search documentation...</p>
+					</button>
 
 					<MotionConfig
 						transition={{ duration: 0.4, type: "spring", bounce: 0 }}
