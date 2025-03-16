@@ -9,6 +9,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createTime } from "../utils/time";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
+import { getBaseURL } from "../utils/url";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -238,18 +239,34 @@ export const getSessionCookie = (
 	config?: {
 		cookiePrefix?: string;
 		cookieName?: string;
+		useSecureCookies?: boolean;
+		path?: string;
 	},
 ) => {
+	if (config?.cookiePrefix) {
+		if (config.cookieName) {
+			config.cookiePrefix = `${config.cookiePrefix}-`;
+		} else {
+			config.cookiePrefix = `${config.cookiePrefix}.`;
+		}
+	}
 	const headers = request instanceof Headers ? request : request.headers;
+	const req = request instanceof Request ? request : undefined;
+	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;
 	}
-	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
-		config || {};
-	const name = isProduction
-		? `__Secure-${cookiePrefix}.${cookieName}`
-		: `${cookiePrefix}.${cookieName}`;
+	const {
+		cookieName = "session_token",
+		cookiePrefix = "better-auth.",
+		useSecureCookies = isProduction || url?.startsWith("https://")
+			? true
+			: false,
+	} = config || {};
+	const name = useSecureCookies
+		? `__Secure-${cookiePrefix}${cookieName}`
+		: `${cookiePrefix}${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionToken = parsedCookie.get(name);
 	if (sessionToken) {

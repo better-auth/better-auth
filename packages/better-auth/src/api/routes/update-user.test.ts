@@ -89,6 +89,25 @@ describe("updateUser", async () => {
 			},
 		});
 		expect(session.user.email).toBe(newEmail);
+		expect(session.user.emailVerified).toBe(false);
+	});
+
+	it("should verify email", async () => {
+		await client.verifyEmail({
+			query: {
+				token: emailVerificationToken,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session.user.emailVerified).toBe(true);
 	});
 
 	it("should send email verification before update", async () => {

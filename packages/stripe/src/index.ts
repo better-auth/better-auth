@@ -240,7 +240,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								customer: customerId,
 								status: "active",
 							})
-							.then((res) => res.data[0])
+							.then((res) =>
+								res.data.find(
+									(subscription) => subscription.id === ctx.body.subscriptionId,
+								),
+							)
 							.catch((e) => null)
 					: null;
 
@@ -687,12 +691,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				) {
 					return ctx.redirect(getUrl(ctx, callbackURL));
 				}
+				const customerId =
+					subscription?.stripeCustomerId || user.stripeCustomerId;
 
-				if (user?.stripeCustomerId) {
+				if (customerId) {
 					try {
 						const stripeSubscription = await client.subscriptions
 							.list({
-								customer: user.stripeCustomerId,
+								customer: customerId,
 								status: "active",
 							})
 							.then((res) => res.data[0]);

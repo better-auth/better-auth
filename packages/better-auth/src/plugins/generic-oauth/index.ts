@@ -116,6 +116,11 @@ interface GenericOAuthConfig {
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	/**
+	 * Allows to use basic authentication for the token endpoint.
+	 * Default is "post".
+	 */
+	authentication?: "basic" | "post";
 }
 
 interface GenericOAuthOptions {
@@ -234,6 +239,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authentication: c.authentication,
 						});
 					},
 					async getUserInfo(tokens) {
@@ -547,6 +553,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authentication: provider.authentication,
 						});
 					} catch (e) {
 						ctx.context.logger.error(

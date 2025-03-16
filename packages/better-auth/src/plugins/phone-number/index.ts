@@ -335,14 +335,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						},
 						ctx.request,
 					);
-					return ctx.json(
-						{ code },
-						{
-							body: {
-								message: "Code sent",
-							},
-						},
-					);
+					return ctx.json({ message: "code sent" });
 				},
 			),
 			verifyPhoneNumber: createAuthEndpoint(

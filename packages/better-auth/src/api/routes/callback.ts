@@ -119,23 +119,18 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("No callback URL found");
 			throw redirectOnError("no_callback_url");
 		}
+
 		if (link) {
-			if (
-				c.context.options.account?.accountLinking?.allowDifferentEmails !==
-					true &&
-				link.email !== userInfo.email.toLowerCase()
-			) {
-				return redirectOnError("email_doesn't_match");
-			}
 			const existingAccount = await c.context.internalAdapter.findAccount(
 				userInfo.id,
 			);
+
 			if (existingAccount) {
-				if (existingAccount && existingAccount.userId !== link.userId) {
+				if (existingAccount.userId !== link.userId) {
 					return redirectOnError("account_already_linked_to_different_user");
 				}
-				return redirectOnError("account_already_linked");
 			}
+
 			const newAccount = await c.context.internalAdapter.createAccount(
 				{
 					userId: link.userId,
@@ -146,9 +141,11 @@ export const callbackOAuth = createAuthEndpoint(
 				},
 				c,
 			);
+
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
 			}
+
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;

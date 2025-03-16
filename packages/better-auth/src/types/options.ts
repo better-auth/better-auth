@@ -440,6 +440,12 @@ export type BetterAuthOptions = {
 			 * ⚠️ Warning: enabling this might lead to account takeovers, so proceed with caution.
 			 */
 			allowDifferentEmails?: boolean;
+			/**
+			 * If enabled (true), this will allow users to unlink all accounts.
+			 *
+			 * @default false
+			 */
+			allowUnlinkingAll?: boolean;
 		};
 	};
 	/**
@@ -463,7 +469,9 @@ export type BetterAuthOptions = {
 	/**
 	 * List of trusted origins.
 	 */
-	trustedOrigins?: string[] | ((request: Request) => string[]);
+	trustedOrigins?:
+		| string[]
+		| ((request: Request) => string[] | Promise<string[]>);
 	/**
 	 * Rate limiting configuration
 	 */

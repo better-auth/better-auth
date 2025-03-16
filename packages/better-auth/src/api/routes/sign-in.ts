@@ -144,11 +144,12 @@ export const signInSocial = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
-										session: {
+										token: {
 											type: "string",
 										},
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",
@@ -157,7 +158,7 @@ export const signInSocial = createAuthEndpoint(
 											type: "boolean",
 										},
 									},
-									required: ["session", "user", "url", "redirect"],
+									required: ["redirect"],
 								},
 							},
 						},
@@ -329,8 +330,12 @@ export const signInEmail = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
+										token: {
+											type: "string",
+										},
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",
@@ -339,7 +344,7 @@ export const signInEmail = createAuthEndpoint(
 											type: "boolean",
 										},
 									},
-									required: ["session", "user", "url", "redirect"],
+									required: ["token", "user", "redirect"],
 								},
 							},
 						},

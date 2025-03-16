@@ -5,7 +5,7 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { type InferRolesFromOption } from "../schema";
 import { APIError } from "better-call";
-import type { OrganizationOptions } from "../organization";
+import { parseRoles, type OrganizationOptions } from "../organization";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 
@@ -21,9 +21,16 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				email: z.string({
 					description: "The email address of the user to invite",
 				}),
-				role: z.string({
-					description: "The role to assign to the user",
-				}),
+				role: z.union([
+					z.string({
+						description: "The role to assign to the user",
+					}),
+					z.array(
+						z.string({
+							description: "The roles to assign to the user",
+						}),
+					),
+				]),
 				organizationId: z
 					.string({
 						description: "The organization ID to invite the user to",
@@ -52,7 +59,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						/**
 						 * The role to assign to the user
 						 */
-						role: InferRolesFromOption<O>;
+						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
 						/**
 						 * The organization ID to invite
 						 * the user to
@@ -166,7 +173,12 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
-			if (member.role !== creatorRole && ctx.body.role === creatorRole) {
+			const roles = parseRoles(ctx.body.role as string | string[]);
+
+			if (
+				member.role !== creatorRole &&
+				roles.split(",").includes(creatorRole)
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
@@ -195,9 +207,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			}
 			const invitation = await adapter.createInvitation({
 				invitation: {
-					role: Array.isArray(ctx.body.role)
-						? ctx.body.role.join(",")
-						: (ctx.body.role as string),
+					role: roles,
 					email: ctx.body.email,
 					organizationId: organizationId,
 					...("teamId" in ctx.body

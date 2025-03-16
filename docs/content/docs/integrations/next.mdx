@@ -131,15 +131,26 @@ In Next.js middleware, it's recommended to only check for the existence of a ses
 
 You can use the `getSessionCookie` helper from Better Auth for this purpose:
 
+<Callout type="warn">
+The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
+</Callout>
+
 ```ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 export async function middleware(request: NextRequest) {
-	const sessionCookie = getSessionCookie(request); // Optionally pass config as the second argument if cookie name or prefix is customized.
+	const sessionCookie = getSessionCookie(request, {
+        // Optionally pass config if cookie name, prefix or useSecureCookies option is customized in auth config.
+		cookieName: "session_token",
+		cookiePrefix: "better-auth",
+		useSecureCookies: true,
+    });
+
 	if (!sessionCookie) {
 		return NextResponse.redirect(new URL("/", request.url));
 	}
+
 	return NextResponse.next();
 }
 
@@ -147,6 +158,8 @@ export const config = {
 	matcher: ["/dashboard"], // Specify the routes the middleware applies to
 };
 ```
+
+### For Next.js release `15.1.7` and below
 
 If you need the full session object, you'll have to fetch it from the `/get-session` API route. Since Next.js middleware doesn't support running Node.js APIs directly, you must make an HTTP request.
 
@@ -178,5 +191,36 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
 	matcher: ["/dashboard"], // Apply middleware to specific routes
+};
+```
+
+### For Next.js release `15.2.0` and above
+
+From the version 15.2.0, Next.js allows you to use the `Node.js` runtime in middleware. This means you can use the `auth.api` object directly in middleware.
+
+<Callout type="warn">
+You may refer to the [Next.js documentation](https://nextjs.org/docs/app/building-your-application/routing/middleware#runtime) for more information about runtime configuration, and how to enable it.
+Be careful when using the new runtime. It's an experimental feature and it may be subject to breaking changes.
+</Callout>
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+
+export async function middleware(request: NextRequest) {
+    const session = await auth.api.getSession({
+        headers: await headers()
+    })
+
+    if(!session) {
+        return NextResponse.redirect(new URL("/sign-in", request.url));
+    }
+
+    return NextResponse.next();
+}
+
+export const config = {
+  runtime: "nodejs",
+  matcher: ["/dashboard"], // Apply middleware to specific routes
 };
 ```
