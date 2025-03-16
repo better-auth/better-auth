@@ -250,7 +250,7 @@ export const getSessionCookie = (
 			config.cookiePrefix = `${config.cookiePrefix}.`;
 		}
 	}
-	const headers = request instanceof Headers ? request : request.headers;
+	const headers = 'headers' in request ? request.headers : request;
 	const req = request instanceof Request ? request : undefined;
 	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
