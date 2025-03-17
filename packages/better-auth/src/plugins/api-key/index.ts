@@ -9,6 +9,7 @@ import { getDate } from "../../utils/date";
 import type { ApiKey, ApiKeyOptions } from "./types";
 import { createApiKeyRoutes } from "./routes";
 import type { User } from "../../types";
+export * from "./types";
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
