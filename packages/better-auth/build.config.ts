@@ -1,12 +1,12 @@
 import { defineBuildConfig } from "unbuild";
-import {dependencies} from './package.json'
+import { dependencies } from "./package.json";
 export default defineBuildConfig({
 	rollup: {
 		emitCJS: true,
 		output: {
 			preserveModules: true,
-			preserveModulesRoot: "./src"
-		}
+			preserveModulesRoot: "./src",
+		},
 	},
 	declaration: "node16",
 	outDir: "dist",
@@ -55,7 +55,7 @@ export default defineBuildConfig({
 		"@babel/parser",
 		"punycode",
 		"csstype",
-		...Object.keys(dependencies)
+		...Object.keys(dependencies),
 	],
 	entries: [
 		"./src/index.ts",
