@@ -3,14 +3,15 @@ import { defineBuildConfig } from "unbuild";
 export default defineBuildConfig({
 	rollup: {
 		emitCJS: true,
-		esbuild: {
-			treeShaking: true,
-		},
+		output: {
+			preserveModules: true,
+			preserveModulesRoot: "./src"
+		}
 	},
-	declaration: true,
+	declaration: "node16",
 	outDir: "dist",
-	clean: false,
-	failOnWarn: false,
+	clean: true,
+	// failOnWarn: false,
 	externals: [
 		"prisma",
 		"@prisma/client",
