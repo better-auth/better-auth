@@ -178,6 +178,12 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
+					return path.startsWith("/organization/set-active");
+				},
+				signal: "$sessionSignal",
+			},
+			{
+				matcher(path) {
 					return path.includes("/organization/update-member-role");
 				},
 				signal: "$activeMemberSignal",
