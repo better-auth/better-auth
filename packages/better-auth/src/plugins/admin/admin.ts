@@ -461,12 +461,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 														type: "number",
 													},
 													limit: {
-														type: ["number", "undefined"],
+														type: "number",
 													},
 													offset: {
-														type: ["number", "undefined"],
+														type: "number",
 													},
 												},
+												required: ["users", "total"]
 											},
 										},
 									},
