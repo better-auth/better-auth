@@ -11,7 +11,6 @@ export default defineBuildConfig({
 	declaration: "node16",
 	outDir: "dist",
 	clean: true,
-	// failOnWarn: false,
 	externals: [
 		"prisma",
 		"@prisma/client",
