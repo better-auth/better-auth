@@ -157,6 +157,12 @@ export type BetterAuthOptions = {
 		 * @default 3600 seconds (1 hour)
 		 */
 		expiresIn?: number;
+		/**
+		 * A function that is called when a user verifies their email
+		 * @param user the user that verified their email
+		 * @param request the request object
+		 */
+		onEmailVerification?: (user: User, request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
