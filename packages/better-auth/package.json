@@ -214,14 +214,54 @@
         "default": "./dist/integrations/node.cjs"
       }
     },
-    "./adapters/*": {
+    "./adapters/prisma": {
       "import": {
-        "types": "./dist/adapters/*/index.d.mts",
-        "default": "./dist/adapters/*/index.mjs"
+        "types": "./dist/adapters/prisma-adapter/index.d.mts",
+        "default": "./dist/adapters/prisma-adapter/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/*/index.d.cts",
-        "default": "./dist/adapters/*/index.cjs"
+        "types": "./dist/adapters/prisma-adapter/index.d.cts",
+        "default": "./dist/adapters/prisma-adapter/index.cjs"
+      }
+    },
+    "./adapters/drizzle": {
+      "import": {
+        "types": "./dist/adapters/drizzle-adapter/index.d.mts",
+        "default": "./dist/adapters/drizzle-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/drizzle-adapter/index.d.cts",
+        "default": "./dist/adapters/drizzle-adapter/index.cjs"
+      }
+    },
+    "./adapters/mongodb": {
+      "import": {
+        "types": "./dist/adapters/mongodb-adapter/index.d.mts",
+        "default": "./dist/adapters/mongodb-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/mongodb-adapter/index.d.cts",
+        "default": "./dist/adapters/mongodb-adapter/index.cjs"
+      }
+    },
+    "./adapters/memory": {
+      "import": {
+        "types": "./dist/adapters/memory-adapter/index.d.mts",
+        "default": "./dist/adapters/memory-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/memory-adapter/index.d.cts",
+        "default": "./dist/adapters/memory-adapter/index.cjs"
+      }
+    },
+    "./adapters/test": {
+      "import": {
+        "types": "./dist/adapters/test.d.mts",
+        "default": "./dist/adapters/test.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/test.d.cts",
+        "default": "./dist/adapters/test.cjs"
       }
     },
     "./plugins/*": {
