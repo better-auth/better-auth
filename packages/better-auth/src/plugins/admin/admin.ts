@@ -467,7 +467,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 														type: "number",
 													},
 												},
-												required: ["users", "total"]
+												required: ["users", "total"],
 											},
 										},
 									},
