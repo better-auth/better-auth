@@ -592,9 +592,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const sessions = await ctx.context.internalAdapter.listSessions(
-						ctx.body.userId,
-					);
+					const sessions: SessionWithImpersonatedBy[] =
+						await ctx.context.internalAdapter.listSessions(ctx.body.userId);
 					return {
 						sessions: sessions,
 					};
