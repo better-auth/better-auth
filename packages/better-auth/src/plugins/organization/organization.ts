@@ -33,6 +33,7 @@ import {
 	updateOrganization,
 } from "./routes/crud-org";
 import {
+	checkTeamSlug,
 	createTeam,
 	listOrganizationTeams,
 	removeTeam,
@@ -246,7 +247,6 @@ export interface OrganizationOptions {
 				[key in keyof Omit<Invitation, "id">]?: string;
 			};
 		};
-
 		team?: {
 			modelName?: string;
 			fields?: {
@@ -356,6 +356,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		listOrganizationTeams,
 		removeTeam,
 		updateTeam,
+		checkTeamSlug,
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -396,6 +397,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							type: "date",
 							required: false,
 							fieldName: options?.schema?.team?.fields?.updatedAt,
+						},
+						slug: {
+							type: "string",
+							required: false,
+							fieldName: options?.schema?.team?.fields?.slug,
 						},
 					},
 				},

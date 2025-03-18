@@ -510,7 +510,22 @@ export const getOrgAdapter = (
 			});
 			return teams;
 		},
-
+		findTeamBySlug: async (organizationId: string, teamSlug: string) => {
+			const teams = await adapter.findOne({
+				model: "team",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationId,
+					},
+					{
+						field: "slug",
+						value: teamSlug,
+					},
+				],
+			});
+			return teams;
+		},
 		createTeamInvitation: async ({
 			email,
 			role,

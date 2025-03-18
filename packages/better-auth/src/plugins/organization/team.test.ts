@@ -43,7 +43,8 @@ describe("team", async (it) => {
 	let organizationId: string;
 	let teamId: string;
 	let secondTeamId: string;
-
+	let teamSlug: string;
+	let teamOrgId: string;
 	const invitedUser = {
 		email: "invited@email.com",
 		password: "password",
@@ -74,6 +75,7 @@ describe("team", async (it) => {
 			{
 				name: "Development Team",
 				organizationId,
+				slug: "dev-team-slug",
 			},
 			{
 				headers,
@@ -83,7 +85,9 @@ describe("team", async (it) => {
 		teamId = createTeamResponse.data?.id as string;
 		expect(createTeamResponse.data?.name).toBe("Development Team");
 		expect(createTeamResponse.data?.organizationId).toBe(organizationId);
-
+		expect(createTeamResponse.data?.slug).toBe("dev-team-slug");
+		teamOrgId = createTeamResponse.data?.organizationId;
+		teamSlug = createTeamResponse.data?.slug;
 		const createSecondTeamResponse = await client.organization.createTeam(
 			{
 				name: "Marketing Team",
@@ -178,6 +182,16 @@ describe("team", async (it) => {
 
 		expect(updateTeamResponse.data?.name).toBe("Updated Development Team");
 		expect(updateTeamResponse.data?.id).toBe(teamId);
+	});
+
+	it("should find a team by slug", async () => {
+		const teamBySlug = await client.organization.checkTeamSlug({
+			slug: teamSlug,
+			organizationId: teamOrgId,
+			fetchOptions: { headers },
+		});
+		expect(teamBySlug).toBeDefined();
+		expect(teamBySlug.data?.slug).toBe(teamSlug);
 	});
 
 	it("should remove a team", async () => {
