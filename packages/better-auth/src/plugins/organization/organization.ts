@@ -84,6 +84,7 @@ export interface OrganizationOptions {
 	 * @default 100
 	 */
 	membershipLimit?: number;
+
 	/**
 	 * Configure the roles and permissions for the
 	 * organization plugin.

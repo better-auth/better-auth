@@ -33,9 +33,7 @@ export const getOrgAdapter = (
 			});
 			return organization;
 		},
-		createOrganization: async (data: {
-			organization: OrganizationInput;
-		}) => {
+		createOrganization: async (data: { organization: OrganizationInput }) => {
 			const organization = await adapter.create<
 				OrganizationInput,
 				Organization
@@ -98,9 +96,7 @@ export const getOrgAdapter = (
 				},
 			};
 		},
-		listMembers: async (data: {
-			organizationId: string;
-		}) => {
+		listMembers: async (data: { organizationId: string }) => {
 			const members = await adapter.findMany<Member>({
 				model: "member",
 				where: [
@@ -382,7 +378,7 @@ export const getOrgAdapter = (
 				teams,
 			};
 		},
-		listOrganizations: async (userId: string) => {
+		listOrganizations: async (userId: string, limit?: number) => {
 			const members = await adapter.findMany<Member>({
 				model: "member",
 				where: [
@@ -391,7 +387,7 @@ export const getOrgAdapter = (
 						value: userId,
 					},
 				],
-				limit: options?.membershipLimit || 100,
+				limit: limit || options?.membershipLimit || 100,
 			});
 
 			if (!members || members.length === 0) {

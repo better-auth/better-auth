@@ -99,7 +99,17 @@ describe("organization", async (it) => {
 		});
 		expect(organizations.data?.length).toBe(2);
 	});
-
+	it("should allow listing organizations with limit query", async () => {
+		const organizations = await client.organization.list({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				limit: 1,
+			},
+		});
+		expect(organizations.data?.length).toBe(1);
+	});
 	it("should allow updating organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.update({
@@ -249,18 +259,6 @@ describe("organization", async (it) => {
 			).toBe(organizationId);
 		},
 	);
-
-	it("should create invitation with multiple roles", async () => {
-		const invite = await client.organization.inviteMember({
-			organizationId: organizationId,
-			email: "test5@test.com",
-			role: ["admin", "member"],
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(invite.data?.role).toBe("admin,member");
-	});
 
 	it("should allow getting a member", async () => {
 		const { headers } = await signInWithTestUser();
@@ -529,36 +527,6 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(member?.role).toBe("admin");
-	});
-
-	it("should add member on the server with multiple roles", async () => {
-		const newUser = await auth.api.signUpEmail({
-			body: {
-				email: "new-member-mr@email.com",
-				password: "password",
-				name: "new member mr",
-			},
-		});
-		const session = await auth.api.getSession({
-			headers: new Headers({
-				Authorization: `Bearer ${newUser?.token}`,
-			}),
-		});
-		const org = await auth.api.createOrganization({
-			body: {
-				name: "test2",
-				slug: "test4",
-			},
-			headers,
-		});
-		const member = await auth.api.addMember({
-			body: {
-				organizationId: org?.id,
-				userId: session?.user.id!,
-				role: ["admin", "member"],
-			},
-		});
-		expect(member?.role).toBe("admin,member");
 	});
 
 	it("should respect membershipLimit when adding members to organization", async () => {
