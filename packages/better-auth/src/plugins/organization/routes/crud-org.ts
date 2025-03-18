@@ -648,11 +648,6 @@ export const listOrganizations = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],
-		query: z.optional(
-			z.object({
-				limit: z.string().optional(),
-			}),
-		),
 		metadata: {
 			openapi: {
 				description: "List all organizations",
@@ -678,7 +673,6 @@ export const listOrganizations = createAuthEndpoint(
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const organizations = await adapter.listOrganizations(
 			ctx.context.session.user.id,
-			ctx.query?.limit,
 		);
 		return ctx.json(organizations);
 	},
