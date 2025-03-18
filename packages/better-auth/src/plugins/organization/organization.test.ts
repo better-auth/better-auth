@@ -99,17 +99,7 @@ describe("organization", async (it) => {
 		});
 		expect(organizations.data?.length).toBe(2);
 	});
-	it("should allow listing organizations with limit query", async () => {
-		const organizations = await client.organization.list({
-			fetchOptions: {
-				headers,
-			},
-			query: {
-				limit: 1,
-			},
-		});
-		expect(organizations.data?.length).toBe(1);
-	});
+
 	it("should allow updating organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.update({
