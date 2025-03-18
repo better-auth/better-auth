@@ -66,7 +66,18 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);
-					const uniqueUserSessions = validSessions.reduce(
+					const validSessionsWithCurrentFlag = validSessions.map((session) => {
+						const isCurrent = session.token === ctx.context.session.session.token;
+
+						return {
+							...session,
+							session: {
+								...session.session,
+								isCurrent,
+							},
+						}
+					});
+					const uniqueUserSessions = validSessionsWithCurrentFlag.reduce(
 						(acc, session) => {
 							if (!acc.find((s) => s.user.id === session.user.id)) {
 								acc.push(session);

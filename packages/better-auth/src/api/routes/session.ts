@@ -351,14 +351,34 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 										items: {
 											type: "object",
 											properties: {
-												token: {
+												id: {
 													type: "string",
 												},
 												userId: {
 													type: "string",
 												},
+												token: {
+													type: "string",
+												},
 												expiresAt: {
 													type: "string",
+												},
+												createdAt: {
+													type: "string",
+												},
+												updatedAt: {
+													type: "string",
+												},
+												ipAddress: {
+													type: ["string", "null"],
+													nullable: true,
+												},
+												userAgent: {
+													type: ["string", "null"],
+													nullable: true,
+												},
+												isCurrent: {
+													type: "boolean",
 												},
 											},
 										},
@@ -378,8 +398,15 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 				const activeSessions = sessions.filter((session) => {
 					return session.expiresAt > new Date();
 				});
+				const activeSessionsWithCurrentFlag = activeSessions.map((session) => {
+					const isCurrent = session.token === ctx.context.session.session.token;
+					return {
+						...session,
+						isCurrent,
+					}
+				});
 				return ctx.json(
-					activeSessions as unknown as Prettify<InferSession<Option>>[],
+					activeSessionsWithCurrentFlag as unknown as Prettify<InferSession<Option>>[],
 				);
 			} catch (e: any) {
 				ctx.context.logger.error(e);
