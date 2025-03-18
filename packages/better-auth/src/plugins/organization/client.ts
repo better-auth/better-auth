@@ -77,7 +77,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
 				Invitation: {} as InferInvitation<O>,
-				Member: {} as InferInvitation<O>,
+				Member: {} as InferMember<O>,
 				Team: {} as Team,
 			},
 			organization: {
