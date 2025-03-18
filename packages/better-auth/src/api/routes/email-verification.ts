@@ -296,6 +296,10 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
+		await ctx.context.options.emailVerification?.onEmailVerification?.(
+			user.user,
+			ctx.request,
+		);
 		await ctx.context.internalAdapter.updateUserByEmail(
 			parsed.email,
 			{

@@ -6,7 +6,7 @@ description: A step-by-step guide to transitioning from Supabase Auth to Better 
 In this guide, we'll walk through the steps to migrate a project from Supabase Auth to Better Auth. 
 
 <Callout type="warn">
-This migration will invalidate all active sessions. While this guide doesn't currently cover migrating two-factor authentication (2FA) or Row Level Security (RLS) configurations, both should be possible with additional steps.
+This migration will invalidate all active sessions. While this guide doesn't currently cover migrating two-factor (2FA) or Row Level Security (RLS) configurations, both should be possible with additional steps.
 </Callout>
 
 
@@ -31,7 +31,7 @@ And then you can use the following code to connect to your database.
 import { Pool } from "pg";
 
 export const auth = betterAuth({
-    adapter: new Pool({ 
+    database: new Pool({ 
         connectionString: process.env.DATABASE_URL 
     }),
 })
@@ -46,7 +46,7 @@ Enable the email and password in your auth config.
 import { admin, anonymous } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    adapter: new Pool({ 
+    database: new Pool({ 
         connectionString: process.env.DATABASE_URL 
     }),
     emailAndPassword: { // [!code highlight]
@@ -64,7 +64,7 @@ Add social providers you have enabled in your Supabase project in your auth conf
 import { admin, anonymous } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    adapter: new Pool({ 
+    database: new Pool({ 
         connectionString: process.env.DATABASE_URL 
     }),
     emailAndPassword: { 
@@ -88,7 +88,7 @@ Add the [admin](/docs/plugins/admin) and [anonymous](/docs/plugins/anonymous) pl
 import { admin, anonymous } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    adapter: new Pool({ 
+    database: new Pool({ 
         connectionString: process.env.DATABASE_URL 
     }),
     emailAndPassword: { 
@@ -164,9 +164,6 @@ type User = SupabaseUser & {
 const migrateFromSupabase = async () => {
 	const ctx = await auth.$context;
 	const db = ctx.options.database as Pool;
-	if (!(db instanceof Pool)) {
-		throw new Error("You must use `pg` adapter to migrate from Supabase");
-	}
 	const users = await db
 		.query(`
 			SELECT 

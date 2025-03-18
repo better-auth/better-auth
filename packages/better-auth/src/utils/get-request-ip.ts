@@ -24,7 +24,7 @@ export function getIp(
 		"forwarded-for",
 		"forwarded",
 	];
-	const headers = req instanceof Request ? req.headers : req;
+	const headers = "headers" in req ? req.headers : req;
 	for (const key of keys) {
 		const value = headers.get(key);
 		if (typeof value === "string") {
