@@ -1,6 +1,5 @@
 import type { apiKey } from ".";
 import type { BetterAuthClientPlugin } from "../../types";
-import type { Organization } from "../organization";
 
 export const apiKeyClient = () => {
 	return {
@@ -13,5 +12,3 @@ export const apiKeyClient = () => {
 		},
 	} satisfies BetterAuthClientPlugin;
 };
-
-type d = Organization;
