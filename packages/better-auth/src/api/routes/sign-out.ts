@@ -1,23 +1,12 @@
 import { createAuthEndpoint } from "../call";
 import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
-import { z } from "zod";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
-		body: z.object({
-			/**
-			 * Callback URL to use as a redirect after sign-out
-			 */
-			callbackURL: z
-				.string({
-					description: "Callback URL to use as a redirect after sign-out",
-				})
-				.optional(),
-		}),
 		requireHeaders: true,
 		metadata: {
 			openapi: {
@@ -57,8 +46,6 @@ export const signOut = createAuthEndpoint(
 		deleteSessionCookie(ctx);
 		return ctx.json({
 			success: true,
-			redirect: !!ctx.body.callbackURL,
-			url: ctx.body.callbackURL,
 		});
 	},
 );
