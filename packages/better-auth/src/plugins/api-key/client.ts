@@ -14,5 +14,4 @@ export const apiKeyClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-
-type d = Organization
+type d = Organization;
