@@ -10,6 +10,7 @@ import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
+import { API_KEY_TABLE } from "../constant";
 
 export function verifyApiKey({
 	opts,
@@ -76,7 +77,7 @@ export function verifyApiKey({
 			});
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE,
 				where: [
 					{
 						field: "key",
@@ -116,7 +117,7 @@ export function verifyApiKey({
 				if (now > expiresAt) {
 					try {
 						ctx.context.adapter.delete({
-							model: schema.apikey.modelName,
+							model: API_KEY_TABLE,
 							where: [
 								{
 									field: "id",
@@ -179,7 +180,7 @@ export function verifyApiKey({
 				// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 				try {
 					ctx.context.adapter.delete({
-						model: schema.apikey.modelName,
+						model: API_KEY_TABLE,
 						where: [
 							{
 								field: "id",
@@ -239,7 +240,7 @@ export function verifyApiKey({
 				opts,
 			);
 			const newApiKey = await ctx.context.adapter.update<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE,
 				where: [
 					{
 						field: "id",

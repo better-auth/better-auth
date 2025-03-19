@@ -6,6 +6,7 @@ import type { ApiKey } from "../types";
 import { getDate } from "../../../utils/date";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { API_KEY_TABLE } from "../constant";
 
 export function updateApiKey({
 	opts,
@@ -134,7 +135,7 @@ export function updateApiKey({
 			}
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE,
 				where: [
 					{
 						field: "id",
@@ -244,7 +245,7 @@ export function updateApiKey({
 			let newApiKey: ApiKey = apiKey;
 			try {
 				let result = await ctx.context.adapter.update<ApiKey>({
-					model: schema.apikey.modelName,
+					model: API_KEY_TABLE,
 					where: [
 						{
 							field: "id",
