@@ -355,7 +355,6 @@ export async function initAction(this: Command) {
 	const opts = { cwd: baseOpts.cwd };
 
 	const configs = baseOpts.config as BetterAuthConfig;
-	console.log({ opts, configs });
 	console.log();
 	intro("👋 Initializing Better Auth");
 
