@@ -694,6 +694,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						discoveryUrl,
 						pkce,
 						scopes,
+						prompt,
+						accessType,
 					} = provider;
 
 					let finalAuthUrl = authorizationUrl;
@@ -743,6 +745,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						scopes: scopes || [],
 						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
 					});
+
+					if (prompt) {
+						url.searchParams.set("prompt", prompt);
+					}
+
+					if (accessType) {
+						url.searchParams.set("access_type", accessType);
+					}
 
 					return c.json({
 						url: url.toString(),
