@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 export { defineConfig } from "./define-config";
+export * from "./schema/cli";
 import { Command } from "commander";
 import { migrate } from "./commands/migrate";
 import { generate } from "./commands/generate";
