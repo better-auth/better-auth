@@ -120,10 +120,6 @@ export default function LogoContextMenu({
 					}}
 				>
 					<div className="">
-						<h3 className="flex items-center pt-3 pl-4 h-6 text-black dark:text-white text-xs font-normal">
-							Logo Assets
-						</h3>
-						<div className="border-b border-gray-200 dark:border-border my-2 mb-0"></div>
 						<div className="flex p-0 gap-1 flex-col text-xs">
 							<button
 								onClick={() =>
