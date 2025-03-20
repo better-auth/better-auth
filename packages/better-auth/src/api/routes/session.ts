@@ -66,17 +66,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 										properties: {
 											session: {
 												type: "object",
-												properties: {
-													token: {
-														type: "string",
-													},
-													userId: {
-														type: "string",
-													},
-													expiresAt: {
-														type: "string",
-													},
-												},
+												$ref: "#/components/schemas/Session",
 											},
 											user: {
 												type: "object",

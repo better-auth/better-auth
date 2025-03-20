@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.2.4-beta.10",
+  "version": "1.2.5-beta.5",
   "description": "",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -52,6 +52,7 @@
   },
   "dependencies": {
     "better-call": "catalog:",
+    "@better-fetch/fetch": "catalog:",
     "zod": "^3.23.8"
   },
   "files": [

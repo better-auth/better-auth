@@ -107,18 +107,6 @@ const {
 } = getTestInstance();
 ```
 
-Only create custom instances when needed
-
-```typescript
-import { getTestInstance } from "../test-utils";
-
-const { auth } = getTestInstance({
-  customConfig: {
-    // your custom configuration
-  },
-});
-```
-
 ## Best Practices
 
 ### Do's
@@ -136,8 +124,9 @@ const { auth } = getTestInstance({
 
 ```typescript
 describe("User Authentication", () => {
-  it("should reject invalid credentials", async () => {
     const { client } = getTestInstance();
+
+  it("should reject invalid credentials", async () => {
     const result = await client.signIn.email({
       email: "invalid@example.com",
       password: "wrong",
@@ -148,7 +137,6 @@ describe("User Authentication", () => {
   });
 
   it("should handle empty inputs appropriately", async () => {
-    const { client } = getTestInstance();
     const result = await client.signIn.email({
       email: "",
       password: "",
