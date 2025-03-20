@@ -8,9 +8,12 @@ description: Google provider setup and usage.
         ### Get your Google credentials
         To use Google as a social provider, you need to get your Google credentials. You can get them by creating a new project in the [Google Cloud Console](https://console.cloud.google.com/apis/dashboard).
 
-        In the Google Cloud Console > Credentials > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+        In the Google Cloud Console > Credentials > Clients > (Your client) > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+    <Callout type="warn">
+    If you do not correctly set the redirect URI then you will receive a Error 400: `redirect_uri_mismatch`
+    </Callout>
     </Step>
-
+    In Google Cloud Console > Credentials > Data Access click the "Add or Remove Scopes" button and add `userinfo.email`, `userinfo.profile`, and `openid`.
   <Step>
         ### Configure the provider
         To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
