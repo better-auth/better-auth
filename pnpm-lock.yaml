@@ -7,11 +7,11 @@ settings:
 catalogs:
   default:
     '@better-fetch/fetch':
-      specifier: ^1.1.15
-      version: 1.1.15
+      specifier: ^1.1.17
+      version: 1.1.17
     better-call:
-      specifier: ^1.0.3
-      version: 1.0.3
+      specifier: ^1.0.5
+      version: 1.0.5
     typescript:
       specifier: ^5.7.3
       version: 5.8.2
@@ -71,7 +71,7 @@ importers:
         version: link:../../packages/stripe
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.15
+        version: 1.1.17
       '@hookform/resolvers':
         specifier: ^3.9.1
         version: 3.10.0(react-hook-form@7.54.2(react@19.0.0))
@@ -191,7 +191,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.3
+        version: 1.0.5
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.8.1
@@ -1408,7 +1408,7 @@ importers:
         version: 0.2.4
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.15
+        version: 1.1.17
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
@@ -1423,7 +1423,7 @@ importers:
         version: 13.1.1
       better-call:
         specifier: 'catalog:'
-        version: 1.0.3
+        version: 1.0.5
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1617,10 +1617,10 @@ importers:
     dependencies:
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.15
+        version: 1.1.17
       better-call:
         specifier: 'catalog:'
-        version: 1.0.3
+        version: 1.0.5
       zod:
         specifier: ^3.23.8
         version: 3.24.2
@@ -1667,7 +1667,7 @@ importers:
         version: 7.6.12
       better-call:
         specifier: 'catalog:'
-        version: 1.0.3
+        version: 1.0.5
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.8.1
@@ -2717,6 +2717,9 @@ packages:
 
   '@better-fetch/fetch@1.1.15':
     resolution: {integrity: sha512-0Bl8YYj1f8qCTNHeSn5+1DWv2hy7rLBrQ8rS8Y9XYloiwZEfc3k4yspIG0llRxafxqhGCwlGRg+F8q1HZRCMXA==}
+
+  '@better-fetch/fetch@1.1.17':
+    resolution: {integrity: sha512-MQonMalbmEshb+amuLtCkVjYliyyWrYXZkiMnHLgFjNEBsNBbZSY3+lYsFK1/VxePSupVkUW6xinqhqB3uHE1g==}
 
   '@biomejs/biome@1.7.3':
     resolution: {integrity: sha512-ogFQI+fpXftr+tiahA6bIXwZ7CSikygASdqMtH07J2cUzrpjyTMVc9Y97v23c7/tL1xCZhM+W9k4hYIBm7Q6cQ==}
@@ -10040,8 +10043,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.3:
-    resolution: {integrity: sha512-DUKImKoDIy5UtCvQbHTg0wuBRse6gu1Yvznn7+1B3I5TeY8sclRPFce0HI+4WF2bcb+9PqmkET8nXZubrHQh9A==}
+  better-call@1.0.5:
+    resolution: {integrity: sha512-rAT73GWIJ8LbSP8Y3BdJnY1hwAiQPRRmUJ4R3YVhcVGS927l3eTXG5o5TD6Bv6je6ygjdx6iVq3/BU49eGUCHg==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -21589,6 +21592,8 @@ snapshots:
 
   '@better-fetch/fetch@1.1.15': {}
 
+  '@better-fetch/fetch@1.1.17': {}
+
   '@biomejs/biome@1.7.3':
     optionalDependencies:
       '@biomejs/cli-darwin-arm64': 1.7.3
@@ -32148,9 +32153,9 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.3:
+  better-call@1.0.5:
     dependencies:
-      '@better-fetch/fetch': 1.1.15
+      '@better-fetch/fetch': 1.1.17
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
