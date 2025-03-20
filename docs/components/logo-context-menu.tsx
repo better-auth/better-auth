@@ -195,10 +195,9 @@ export default function LogoContextMenu({
 							>
 								<div className="flex items-center">
 									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
-									<Download className="h-[13.8px] w-[13.8px] mx-1" />
+									<Download className="h-[13.8px] w-[13.8px] mx-[3px]" />
 									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
 								</div>
-								{/* <Download className="h-4 w-4" /> */}
 								<span>Brand Assets</span>
 							</button>
 						</div>
