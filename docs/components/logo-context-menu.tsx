@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState, useRef, useEffect } from "react";
-import { Code, Download, Type } from "lucide-react";
+import { Archive, Code, Download, Type } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import type { StaticImageData } from "next/image";
@@ -133,6 +133,7 @@ export default function LogoContextMenu({
 				>
 					<div className="">
 						<div className="flex p-0 gap-1 flex-col text-xs">
+							<hr className="border-border/[60%] mt-3" />
 							<button
 								onClick={() =>
 									copySvgToClipboard(
@@ -142,10 +143,15 @@ export default function LogoContextMenu({
 								}
 								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
 							>
-								<Code className="h-4 w-4" />
+								<div className="flex items-center">
+									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
+
+									<Code className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
+								</div>
 								<span>Copy Logo as SVG </span>
 							</button>
-
+							<hr className="border-border/[60%]" />
 							<button
 								onClick={() =>
 									copySvgToClipboard(
@@ -155,10 +161,16 @@ export default function LogoContextMenu({
 								}
 								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
 							>
-								<Type className="h-4 w-4" />
+								<div className="flex items-center">
+									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
+
+									<Type className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
+								</div>
 								<span>Copy Logo as Wordmark </span>
 							</button>
 
+							<hr className="border-border/[60%]" />
 							<button
 								onClick={() =>
 									downloadPng(
@@ -168,7 +180,12 @@ export default function LogoContextMenu({
 								}
 								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
 							>
-								<Download className="h-4 w-4" />
+								<div className="flex items-center">
+									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
+
+									<Archive className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
+								</div>
 								<span>Download Logo PNG</span>
 							</button>
 							<hr className="borde-border" />
@@ -176,7 +193,12 @@ export default function LogoContextMenu({
 								onClick={downloadAllAssets}
 								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
 							>
-								<Download className="h-4 w-4" />
+								<div className="flex items-center">
+									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
+									<Download className="h-[13.8px] w-[13.8px] mx-1" />
+									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
+								</div>
+								{/* <Download className="h-4 w-4" /> */}
 								<span>Brand Assets</span>
 							</button>
 						</div>
