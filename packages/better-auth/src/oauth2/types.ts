@@ -144,7 +144,12 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The prompt to use for the authorization code request
 	 */
-	prompt?: "select_account" | "consent" | "login" | "none";
+	prompt?:
+		| "select_account"
+		| "consent"
+		| "login"
+		| "none"
+		| "select_account+consent";
 	/**
 	 * The response mode to use for the authorization code request
 	 */
