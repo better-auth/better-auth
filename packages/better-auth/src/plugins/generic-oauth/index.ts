@@ -413,20 +413,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? [...ctx.body.scopes, ...(scopes || [])]
 							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						responseType,
 					});
-
-					if (responseType && responseType !== "code") {
-						authUrl.searchParams.set("response_type", responseType);
-					}
-
-					if (prompt) {
-						authUrl.searchParams.set("prompt", prompt);
-					}
-
-					if (accessType) {
-						authUrl.searchParams.set("access_type", accessType);
-					}
-
 					return ctx.json({
 						url: authUrl.toString(),
 						redirect: !ctx.body.disableRedirect,

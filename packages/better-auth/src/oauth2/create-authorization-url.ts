@@ -12,6 +12,8 @@ export async function createAuthorizationURL({
 	redirectURI,
 	duration,
 	prompt,
+	accessType,
+	responseType,
 }: {
 	id: string;
 	options: ProviderOptions;
@@ -22,15 +24,25 @@ export async function createAuthorizationURL({
 	scopes: string[];
 	claims?: string[];
 	duration?: string;
-	prompt?: boolean;
+	prompt?: string;
+	accessType?: string;
+	responseType?: string;
 }) {
 	const url = new URL(authorizationEndpoint);
-	url.searchParams.set("response_type", "code");
+	url.searchParams.set("response_type", responseType || "code");
 	url.searchParams.set("client_id", options.clientId);
 	url.searchParams.set("state", state);
 	url.searchParams.set("scope", scopes.join(" "));
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
-
+	if (duration) {
+		url.searchParams.set("duration", duration);
+	}
+	if (prompt) {
+		url.searchParams.set("prompt", prompt);
+	}
+	if (accessType) {
+		url.searchParams.set("access_type", accessType);
+	}
 	if (codeVerifier) {
 		const codeChallenge = await generateCodeChallenge(codeVerifier);
 		url.searchParams.set("code_challenge_method", "S256");
@@ -51,12 +63,5 @@ export async function createAuthorizationURL({
 			}),
 		);
 	}
-	if (duration) {
-		url.searchParams.set("duration", duration);
-	}
-	if (prompt) {
-		url.searchParams.set("prompt", "select_account");
-	}
-
 	return url;
 }
