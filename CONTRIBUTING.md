@@ -34,3 +34,62 @@ Read more about development in the [getting-started documentation](https://bette
 ## Testing
 
 Read more about testing in the [testing guide](https://better-auth.com/docs/contribute/testing).
+
+
+## Architecture
+
+```mermaid
+graph TD
+    Request["Incoming HTTP Request"]:::api
+
+    subgraph "External API Interface"
+        AR["Authentication Routes"]:::api
+    end
+
+    subgraph "Middlewares"
+        OC["Origin Check Middleware"]:::api
+        RL["Rate Limiter Middleware"]:::api
+        OC --> RL
+    end
+
+    subgraph "Core Library"
+        Core["Core Authentication Engine"]:::core
+    end
+
+    subgraph "Persistence / Adapters"
+        Drizzle["Drizzle Adapter"]:::adapter
+        Kysely["Kysely Adapter"]:::adapter
+        Memory["Memory Adapter"]:::adapter
+        MongoDB["MongoDB Adapter"]:::adapter
+        Prisma["Prisma Adapter"]:::adapter
+    end
+
+    Plugins["Plugin Ecosystem"]:::plugin
+
+    Request --> AR
+    AR --> OC
+    RL --> Core
+    Core --> Drizzle
+    Core --> Kysely
+    Core --> Memory
+    Core --> MongoDB
+    Core --> Prisma
+    Core --> Plugins
+
+    click AR "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/api/routes"
+    click OC "https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/api/middlewares/origin-check.ts"
+    click RL "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/api/rate-limiter"
+    click Core "https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/auth.ts"
+    click Core "https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/index.ts"
+    click Drizzle "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/adapters/drizzle-adapter"
+    click Kysely "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/adapters/kysely-adapter"
+    click Memory "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/adapters/memory-adapter"
+    click MongoDB "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/adapters/mongodb-adapter"
+    click Prisma "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/adapters/prisma-adapter"
+    click Plugins "https://github.com/better-auth/better-auth/tree/main/packages/better-auth/src/plugins"
+
+    classDef api fill:#ADD8E6,stroke:#000,stroke-width:2px;
+    classDef core fill:#90EE90,stroke:#000,stroke-width:2px;
+    classDef adapter fill:#FFD700,stroke:#000,stroke-width:2px;
+    classDef plugin fill:#DA70D6,stroke:#000,stroke-width:2px;
+```
