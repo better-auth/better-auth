@@ -418,7 +418,7 @@ export type BetterAuthOptions = {
 		 *
 		 * If set to 0, the session will be considered fresh every time. (⚠︎ not recommended)
 		 *
-		 * @default 5 minutes (5 * 60)
+		 * @default 1 day (60 * 60 * 24)
 		 */
 		freshAge?: number;
 	};
