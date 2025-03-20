@@ -8,174 +8,181 @@ import { useTheme } from "next-themes";
 import type { StaticImageData } from "next/image";
 
 interface LogoAssets {
-	darkSvg: string;
-	whiteSvg: string;
-	darkWordmark: string;
-	whiteWordmark: string;
-	darkPng: StaticImageData;
-	whitePng: StaticImageData;
+  darkSvg: string;
+  whiteSvg: string;
+  darkWordmark: string;
+  whiteWordmark: string;
+  darkPng: StaticImageData;
+  whitePng: StaticImageData;
 }
 
 interface Product {
-	icon: React.ReactNode;
-	name: string;
-	onClick: () => void;
+  icon: React.ReactNode;
+  name: string;
+  onClick: () => void;
 }
 
 interface ContextMenuProps {
-	logo: React.ReactNode;
-	logoAssets: LogoAssets;
+  logo: React.ReactNode;
+  logoAssets: LogoAssets;
 }
 
 export default function LogoContextMenu({
-	logo,
-	logoAssets,
+  logo,
+  logoAssets,
 }: ContextMenuProps) {
-	const [showMenu, setShowMenu] = useState<boolean>(false);
-	const [position, setPosition] = useState<{ x: number; y: number }>({
-		x: 0,
-		y: 0,
-	});
-	const menuRef = useRef<HTMLDivElement>(null);
-	const logoRef = useRef<HTMLDivElement>(null);
-	const { theme } = useTheme();
+  const [showMenu, setShowMenu] = useState<boolean>(false);
+  const [position, setPosition] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+  const menuRef = useRef<HTMLDivElement>(null);
+  const logoRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
 
-	const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-		e.preventDefault();
-		const rect = logoRef.current?.getBoundingClientRect();
-		if (rect) {
-			setPosition({
-				x: e.clientX,
-				y: e.clientY,
-			});
-			setShowMenu(true);
-		}
-	};
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const rect = logoRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPosition({
+        x: e.clientX,
+        y: e.clientY,
+      });
+      setShowMenu(true);
+    }
+  };
 
-	const copySvgToClipboard = (svgContent: string, type: string) => {
-		navigator.clipboard
-			.writeText(svgContent)
-			.then(() => {
-				toast.success("", {
-					description: `${type} copied to clipboard`,
-				});
-			})
-			.catch((err) => {
-				toast.error("", {
-					description: `Failed to copy ${type} to clipboard`,
-				});
-			});
-		setShowMenu(false);
-	};
+  const copySvgToClipboard = (svgContent: string, type: string) => {
+    navigator.clipboard
+      .writeText(svgContent)
+      .then(() => {
+        toast.success("", {
+          description: `${type} copied to clipboard`,
+        });
+      })
+      .catch((err) => {
+        toast.error("", {
+          description: `Failed to copy ${type} to clipboard`,
+        });
+      });
+    setShowMenu(false);
+  };
 
-	const downloadPng = (pngData: StaticImageData, fileName: string) => {
-		const link = document.createElement("a");
-		link.href = pngData.src;
-		link.download = fileName;
+  const downloadPng = (pngData: StaticImageData, fileName: string) => {
+    const link = document.createElement("a");
+    link.href = pngData.src;
+    link.download = fileName;
 
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-		toast.success(`Downloading the asset...`);
+    toast.success(`Downloading the asset...`);
 
-		setShowMenu(false);
-	};
+    setShowMenu(false);
+  };
 
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-				setShowMenu(false);
-			}
-		};
+  const downloadAllAssets = () => {
+    const link = document.createElement("a");
+    link.href = "/branding/better-auth-brand-assets.zip";
+    link.download = "better-auth-branding-assets.zip";
 
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => {
-			document.removeEventListener("mousedown", handleClickOutside);
-		};
-	}, []);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-	const getAsset = <T,>(darkAsset: T, lightAsset: T): T => {
-		return theme === "dark" ? darkAsset : lightAsset;
-	};
+    toast.success("Downloading all assets...");
+    setShowMenu(false);
+  };
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
 
-	return (
-		<div className="relative">
-			<div
-				ref={logoRef}
-				onContextMenu={handleContextMenu}
-				className="cursor-pointer"
-			>
-				{logo}
-			</div>
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
-			{showMenu && (
-				<div
-					ref={menuRef}
-					className="fixed ml-20 z-50 bg-white dark:bg-black border border-gray-200 dark:border-border p-1 rounded-sm shadow-xl w-56 overflow-hidden"
-					style={{
-						top: `${position.y}px`,
-						left: `${position.x}px`,
-						transform: "translate(-50%, 10px)",
-					}}
-				>
-					<div className="">
-						<div className="flex p-0 gap-1 flex-col text-xs">
-							<button
-								onClick={() =>
-									copySvgToClipboard(
-										getAsset(logoAssets.darkSvg, logoAssets.whiteSvg),
-										"Logo SVG",
-									)
-								}
-								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
-							>
-								<Code className="h-4 w-4" />
-								<span>Copy Logo as SVG </span>
-							</button>
+  const getAsset = <T,>(darkAsset: T, lightAsset: T): T => {
+    return theme === "dark" ? darkAsset : lightAsset;
+  };
 
-							<button
-								onClick={() =>
-									copySvgToClipboard(
-										getAsset(logoAssets.darkWordmark, logoAssets.whiteWordmark),
-										"Logo Wordmark",
-									)
-								}
-								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
-							>
-								<Type className="h-4 w-4" />
-								<span>Copy Logo as Wordmark </span>
-							</button>
+  return (
+    <div className="relative">
+      <div
+        ref={logoRef}
+        onContextMenu={handleContextMenu}
+        className="cursor-pointer"
+      >
+        {logo}
+      </div>
 
-							<button
-								onClick={() =>
-									downloadPng(
-										getAsset(logoAssets.darkPng, logoAssets.whitePng),
-										`better-auth-logo-${theme}.png`,
-									)
-								}
-								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
-							>
-								<Download className="h-4 w-4" />
-								<span>Download Logo PNG</span>
-							</button>
-							<hr className="borde-border" />
-							<button
-								onClick={() =>
-									downloadPng(
-										getAsset(logoAssets.darkPng, logoAssets.whitePng),
-										`better-auth-logo-${theme}.png`,
-									)
-								}
-								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
-							>
-								<Download className="h-4 w-4" />
-								<span>Brand Assets</span>
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
-		</div>
-	);
+      {showMenu && (
+        <div
+          ref={menuRef}
+          className="fixed ml-20 z-50 bg-white dark:bg-black border border-gray-200 dark:border-border p-1 rounded-sm shadow-xl w-56 overflow-hidden"
+          style={{
+            top: `${position.y}px`,
+            left: `${position.x}px`,
+            transform: "translate(-50%, 10px)",
+          }}
+        >
+          <div className="">
+            <div className="flex p-0 gap-1 flex-col text-xs">
+              <button
+                onClick={() =>
+                  copySvgToClipboard(
+                    getAsset(logoAssets.darkSvg, logoAssets.whiteSvg),
+                    "Logo SVG",
+                  )
+                }
+                className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
+              >
+                <Code className="h-4 w-4" />
+                <span>Copy Logo as SVG </span>
+              </button>
+
+              <button
+                onClick={() =>
+                  copySvgToClipboard(
+                    getAsset(logoAssets.darkWordmark, logoAssets.whiteWordmark),
+                    "Logo Wordmark",
+                  )
+                }
+                className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
+              >
+                <Type className="h-4 w-4" />
+                <span>Copy Logo as Wordmark </span>
+              </button>
+
+              <button
+                onClick={() =>
+                  downloadPng(
+                    getAsset(logoAssets.darkPng, logoAssets.whitePng),
+                    `better-auth-logo-${theme}.png`,
+                  )
+                }
+                className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                <span>Download Logo PNG</span>
+              </button>
+              <hr className="borde-border" />
+              <button
+                onClick={downloadAllAssets}
+                className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                <span>Brand Assets</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
