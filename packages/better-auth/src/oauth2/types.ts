@@ -19,6 +19,8 @@ export interface OAuthProvider<
 		codeVerifier: string;
 		scopes?: string[];
 		redirectURI: string;
+		display?: string;
+		loginHint?: string;
 	}) => Promise<URL> | URL;
 	name: string;
 	validateAuthorizationCode: (data: {
@@ -139,4 +141,12 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	/**
+	 * The prompt to use for the authorization code request
+	 */
+	prompt?: "select_account" | "consent" | "login" | "none";
+	/**
+	 * The response mode to use for the authorization code request
+	 */
+	responseMode?: "query" | "form_post";
 };

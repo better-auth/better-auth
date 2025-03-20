@@ -61,6 +61,11 @@ interface GenericOAuthConfig {
 	 */
 	responseType?: string;
 	/**
+	 * The response mode to use for the authorization code request.
+
+	 */
+	responseMode?: "query" | "form_post";
+	/**
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
@@ -364,6 +369,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						prompt,
 						accessType,
 						authorizationUrlParams,
+						responseMode,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -416,6 +422,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						prompt,
 						accessType,
 						responseType,
+						responseMode,
+						additionalParams: authorizationUrlParams,
 					});
 					return ctx.json({
 						url: authUrl.toString(),
@@ -686,6 +694,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						scopes,
 						prompt,
 						accessType,
+						authorizationUrlParams,
 					} = provider;
 
 					let finalAuthUrl = authorizationUrl;
@@ -734,15 +743,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						codeVerifier: pkce ? state.codeVerifier : undefined,
 						scopes: scopes || [],
 						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						additionalParams: authorizationUrlParams,
 					});
-
-					if (prompt) {
-						url.searchParams.set("prompt", prompt);
-					}
-
-					if (accessType) {
-						url.searchParams.set("access_type", accessType);
-					}
 
 					return c.json({
 						url: url.toString(),
