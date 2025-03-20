@@ -1,23 +1,24 @@
 import {
-	type GenericEndpointContext,
 	type BetterAuthPlugin,
+	type GenericEndpointContext,
 	logger,
 } from "better-auth";
+import {
+	APIError,
+	getSessionFromCtx,
+	originCheck,
+	sessionMiddleware,
+} from "better-auth/api";
+import { generateRandomString } from "better-auth/crypto";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
 import { z } from "zod";
-import {
-	sessionMiddleware,
-	APIError,
-	originCheck,
-	getSessionFromCtx,
-} from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
+import { getSchema } from "./schema";
 import type {
 	Customer,
 	InputSubscription,
@@ -25,7 +26,6 @@ import type {
 	Subscription,
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
-import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -752,6 +752,45 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 				throw ctx.redirect(getUrl(ctx, callbackURL));
+			},
+		),
+		customerPortal: createAuthEndpoint(
+			"/subscription/portal",
+			{
+				method: "POST",
+				body: z.object({
+					returnUrl: z.string().default("/"),
+				}),
+				use: [
+					sessionMiddleware,
+					originCheck((ctx) => ctx.body.returnUrl),
+				],
+			},
+			async (ctx) => {
+				const { user } = ctx.context.session;
+				
+				if (!user.stripeCustomerId) {
+					throw new APIError("BAD_REQUEST", {
+						message: "No Stripe customer found for this user",
+					});
+				}
+
+				try {
+					const { url } = await client.billingPortal.sessions.create({
+						customer: user.stripeCustomerId,
+						return_url: getUrl(ctx, ctx.body.returnUrl),
+					});
+
+					return ctx.json({
+						url,
+						redirect: true,
+					});
+				} catch (error) {
+					ctx.context.logger.error("Error creating portal session", error);
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Failed to create customer portal session",
+					});
+				}
 			},
 		),
 	} as const;
