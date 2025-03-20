@@ -112,7 +112,7 @@ export default function LogoContextMenu({
 			{showMenu && (
 				<div
 					ref={menuRef}
-					className="fixed ml-20 z-50 bg-white dark:bg-black border border-gray-200 dark:border-gray-700 rounded-sm shadow-xl w-fit overflow-hidden"
+					className="fixed ml-20 z-50 bg-white dark:bg-black border border-gray-200 dark:border-border rounded-sm shadow-xl w-fit overflow-hidden"
 					style={{
 						top: `${position.y}px`,
 						left: `${position.x}px`,
@@ -123,7 +123,7 @@ export default function LogoContextMenu({
 						<h3 className="flex items-center pt-3 pl-4 h-6 text-black dark:text-white text-xs font-normal">
 							Logo Assets
 						</h3>
-						<div className="border-b border-gray-200 dark:border-gray-700 my-2 mb-0"></div>
+						<div className="border-b border-gray-200 dark:border-border my-2 mb-0"></div>
 						<div className="flex p-0 gap-1 flex-col text-sm">
 							<button
 								onClick={() =>
@@ -132,7 +132,7 @@ export default function LogoContextMenu({
 										"Logo SVG",
 									)
 								}
-								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
 							>
 								<Code className="h-4 w-4" />
 								<span>Copy Logo as SVG </span>
@@ -145,7 +145,7 @@ export default function LogoContextMenu({
 										"Logo Wordmark",
 									)
 								}
-								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
 							>
 								<Type className="h-4 w-4" />
 								<span>Copy Logo as Wordmark </span>
@@ -158,7 +158,7 @@ export default function LogoContextMenu({
 										`better-auth-logo-${theme}.png`,
 									)
 								}
-								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors"
 							>
 								<Download className="h-4 w-4" />
 								<span>Download Logo PNG</span>
