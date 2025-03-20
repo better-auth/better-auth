@@ -5,9 +5,9 @@ import { type BetterAuthConfig, BetterAuthConfigSchema } from "./schema/cli";
  * @returns The validated configuration object.
  */
 export function defineConfig(config: BetterAuthConfig): BetterAuthConfig {
-  const result = BetterAuthConfigSchema.safeParse(config);
-  if (!result.success) {
-    throw new Error(`Invalid configuration: ${result.error.message}`);
-  }
-  return result.data;
+	const result = BetterAuthConfigSchema.safeParse(config);
+	if (!result.success) {
+		throw new Error(`Invalid configuration: ${result.error.message}`);
+	}
+	return result.data;
 }
