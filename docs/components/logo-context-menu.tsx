@@ -112,7 +112,7 @@ export default function LogoContextMenu({
 			{showMenu && (
 				<div
 					ref={menuRef}
-					className="fixed ml-20 z-50 bg-white dark:bg-black border border-gray-200 dark:border-border rounded-sm shadow-xl w-fit overflow-hidden"
+					className="fixed ml-20 z-50 bg-white dark:bg-black border border-gray-200 dark:border-border rounded-sm shadow-xl w-56 overflow-hidden"
 					style={{
 						top: `${position.y}px`,
 						left: `${position.x}px`,
@@ -124,7 +124,7 @@ export default function LogoContextMenu({
 							Logo Assets
 						</h3>
 						<div className="border-b border-gray-200 dark:border-border my-2 mb-0"></div>
-						<div className="flex p-0 gap-1 flex-col text-sm">
+						<div className="flex p-0 gap-1 flex-col text-xs">
 							<button
 								onClick={() =>
 									copySvgToClipboard(
