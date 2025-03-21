@@ -31,6 +31,7 @@ import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import {patreon} from "./patreon";
 
 export const socialProviders = {
 	apple,
@@ -65,6 +66,7 @@ export const socialProviders = {
 	paybin,
 	paypal,
 	polar,
+	patreon,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -107,6 +109,7 @@ export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";
 export * from "./notion";
+export * from "./patreon";
 export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
