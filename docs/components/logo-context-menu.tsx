@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState, useRef, useEffect } from "react";
-import { Archive, Code, Download, Type } from "lucide-react";
+import { Code, Image, Type, Shapes } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import type { StaticImageData } from "next/image";
@@ -183,7 +183,7 @@ export default function LogoContextMenu({
 								<div className="flex items-center">
 									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
 
-									<Download className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<Image className="h-[13.8px] w-[13.8px] mx-[3px]" />
 									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
 								</div>
 								<span>Download Logo PNG</span>
@@ -196,7 +196,7 @@ export default function LogoContextMenu({
 								<div className="flex items-center">
 									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
 
-									<Archive className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<Shapes className="h-[13.8px] w-[13.8px] mx-[3px]" />
 									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
 								</div>
 								<span>Brand Assets</span>
