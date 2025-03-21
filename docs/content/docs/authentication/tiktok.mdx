@@ -39,9 +39,9 @@ description: TikTok provider setup and usage.
         export const auth = betterAuth({
             socialProviders: {
                 tiktok: { // [!code highlight]
-                    clientId: process.env.TIKTOK_CLIENT_ID, // [!code highlight]
-                    clientSecret: process.env.TIKTOK_CLIENT_SECRET, // [!code highlight]
-                    clientKey: process.env.TIKTOK_CLIENT_KEY, // [!code highlight]
+                    clientId: process.env.TIKTOK_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.TIKTOK_CLIENT_SECRET as string, // [!code highlight]
+                    clientKey: process.env.TIKTOK_CLIENT_KEY as string, // [!code highlight]
                 }, // [!code highlight]
             },
         })
