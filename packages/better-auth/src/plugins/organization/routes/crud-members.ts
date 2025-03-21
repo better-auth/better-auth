@@ -17,7 +17,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 		{
 			method: "POST",
 			body: z.object({
-				userId: z.string(),
+				userId: z.coerce.string(),
 				role: z.union([z.string(), z.array(z.string())]),
 				organizationId: z.string().optional(),
 			}),
