@@ -32,7 +32,7 @@ import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
-import { type BetterAuthPlugin } from "../plugins";
+import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
@@ -151,7 +151,6 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			if (disabledPaths.includes(path)) {
 				return new Response("Not Found", { status: 404 });
 			}
-
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await plugin.onRequest(req, ctx);
