@@ -16,12 +16,12 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     import { captcha } from "better-auth/plugins";
 
     export const auth = betterAuth({
-        plugins: [ // [!code highlight]
-            captcha({ // [!code highlight]
-                provider: "cloudflare-turnstile", // or "google-recaptcha" // [!code highlight]
-                secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
-            }), // [!code highlight]
-        ], // [!code highlight]
+      plugins: [ // [!code highlight]
+        captcha({ // [!code highlight]
+          provider: "cloudflare-turnstile", // or "google-recaptcha" // [!code highlight]
+          secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
+        }), // [!code highlight]
+      ], // [!code highlight]
     });
     ```
 
@@ -33,13 +33,13 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
     ```ts
     await authClient.signIn.email({
-        email: "user@example.com",
-        password: "secure-password",
-        fetchOptions: { // [!code highlight]
-            headers: { // [!code highlight]
-                "x-captcha-response": turnstileToken, // [!code highlight]
-            }, // [!code highlight]
-        },
+      email: "user@example.com",
+      password: "secure-password",
+      fetchOptions: { // [!code highlight]
+        headers: { // [!code highlight]
+          "x-captcha-response": turnstileToken, // [!code highlight]
+        }, // [!code highlight]
+      },
     });
     ```
 

@@ -16,7 +16,7 @@ import { auth } from "~/auth";
 import type { APIRoute } from "astro";
 
 export const ALL: APIRoute = async (ctx) => {
-	return auth.handler(ctx.request);
+  return auth.handler(ctx.request);
 };
 ```
 
@@ -35,32 +35,32 @@ If you're not using a frontend framework, you can still import the vanilla clien
  ]} defaultValue="react">
     <Tab value="vanilla">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/client"
-            export const authClient =  createAuthClient()
+            import { createAuthClient } from "better-auth/client";
+            export const authClient = createAuthClient();
             ```
     </Tab>
     <Tab value="react" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/react"
-            export const authClient =  createAuthClient()
+            import { createAuthClient } from "better-auth/react";
+            export const authClient = createAuthClient();
             ```
     </Tab>
     <Tab value="vue" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/vue"
-            export const authClient =  createAuthClient()
+            import { createAuthClient } from "better-auth/vue";
+            export const authClient = createAuthClient();
             ```
     </Tab>
     <Tab value="svelte" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/svelte"
-            export const authClient =  createAuthClient()
+            import { createAuthClient } from "better-auth/svelte";
+            export const authClient = createAuthClient();
             ```
     </Tab>
     <Tab value="solid" title="lib/auth-client.ts">
             ```ts title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/solid"
-            export const authClient =  createAuthClient()
+            import { createAuthClient } from "better-auth/solid";
+            export const authClient = createAuthClient();
             ```
     </Tab>
 </Tabs>
@@ -76,11 +76,11 @@ To have types for your Astro locals, you need to set it inside the `env.d.ts` fi
 /// <reference path="../.astro/types.d.ts" />
 
 declare namespace App {
-    // Note: 'import {} from ""' syntax does not work in .d.ts files.
-    interface Locals {
-        user: import("better-auth").User | null;
-        session: import("better-auth").Session | null;
-    }
+  // Note: 'import {} from ""' syntax does not work in .d.ts files.
+  interface Locals {
+    user: import("better-auth").User | null;
+    session: import("better-auth").Session | null;
+  }
 }
 ```
 
@@ -93,20 +93,20 @@ import { auth } from "@/auth";
 import { defineMiddleware } from "astro:middleware";
 
 export const onRequest = defineMiddleware(async (context, next) => {
-    const isAuthed = await auth.api
-        .getSession({
-            headers: context.request.headers,
-        })
+  const isAuthed = await auth.api
+    .getSession({
+      headers: context.request.headers,
+    });
 
-    if (isAuthed) {
-        context.locals.user = isAuthed.user;
-        context.locals.session = isAuthed.session;
-    } else {
-        context.locals.user = null;
-        context.locals.session = null;
-    }
+  if (isAuthed) {
+    context.locals.user = isAuthed.user;
+    context.locals.session = isAuthed.session;
+  } else {
+    context.locals.user = null;
+    context.locals.session = null;
+  }
 
-    return next();
+  return next();
 });
 ```
 
@@ -119,12 +119,12 @@ You can use `Astro.locals` to check if the user has session and get the user dat
 import { UserCard } from "@/components/user-card";
 
 const session = () => {
-    if (Astro.locals.session) {
-        return Astro.locals.session;
-    } else {
-        // Redirect to login page if the user is not authenticated
-        return Astro.redirect("/login");
-    }
+  if (Astro.locals.session) {
+    return Astro.locals.session;
+  } else {
+    // Redirect to login page if the user is not authenticated
+    return Astro.redirect("/login");
+  }
 }
 
 ---

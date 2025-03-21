@@ -18,7 +18,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
 
         ```ts title="app/api/auth/[...auth]+api.ts"
         import { auth } from "@/lib/auth"; // import Better Auth handler
-        
+
         const handler = auth.handler;
         export { handler as GET, handler as POST }; // export handler for both GET and POST requests
         ```
@@ -36,7 +36,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         better-auth
         ```
     </Step>
-    
+
     <Step>
         ## Add the Expo Plugin on Your Server
 
@@ -47,16 +47,16 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { expo } from "@better-auth/expo";
 
         export const auth = betterAuth({
-            plugins: [
-                expo()
-            ]
+          plugins: [
+            expo(),
+          ],
         });
         ```
     </Step>
 
     <Step>
         ## Initialize Better Auth Client
-        
+
         To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
 
         You need to also import client plugin from `@better-auth/expo/client` and pass it to the `plugins` array when initializing the auth client.
@@ -74,12 +74,12 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         export const authClient = createAuthClient({
             baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
             plugins: [
-                expoClient({
-                    scheme: "myapp",
-                    storagePrefix: "myapp",
-                    storage: SecureStore,
-                })
-            ]
+              expoClient({
+                scheme: "myapp",
+                storagePrefix: "myapp",
+                storage: SecureStore,
+              }),
+            ],
         });
         ```
         <Callout>
@@ -90,15 +90,15 @@ Expo is a popular framework for building cross-platform apps with React Native. 
      <Step>
         ## Scheme and Trusted Origins
 
-        Better Auth uses deep links to redirect users back to your app after authentication. To enable this, you need to add your app's scheme to the `trustedOrigins` list in your Better Auth config. 
+        Better Auth uses deep links to redirect users back to your app after authentication. To enable this, you need to add your app's scheme to the `trustedOrigins` list in your Better Auth config.
 
         First, make sure you have a scheme defined in your `app.json` file.
 
         ```json title="app.json"
         {
-            "expo": {
-                "scheme": "myapp"
-            }
+          "expo": {
+            "scheme": "myapp"
+          }
         }
         ```
 
@@ -106,20 +106,20 @@ Expo is a popular framework for building cross-platform apps with React Native. 
 
         ```ts title="auth.ts"
         export const auth = betterAuth({
-            trustedOrigins: ["myapp://"]
-        })
+          trustedOrigins: ["myapp://"],
+        });
         ```
     </Step>
- 
+
     <Step>
         ## Configure Metro Bundler
 
-        To resolve better auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
+        To resolve better auth exports you'll need to enable `unstable_enablePackageExports` in your metro config.
 
         ```js title="metro.config.js"
         const { getDefaultConfig } = require("expo/metro-config");
 
-        const config = getDefaultConfig(__dirname)
+        const config = getDefaultConfig(__dirname);
 
         config.resolver.unstable_enablePackageExports = true; // [!code highlight]
 
@@ -130,21 +130,21 @@ Expo is a popular framework for building cross-platform apps with React Native. 
 
         ```ts title="babel.config.js"
         module.exports = function (api) {
-            return {
-                plugins: [
-                    [
-                        "module-resolver",
-                        {
-                            alias: {
-                                "better-auth/react": "path/to/node_modules/better-auth/dist/client/react/index.cjs",
-                                "@better-auth/expo/client": "path/to/node_modules/@better-auth/expo/dist/client.cjs"
-                            },
-                            extensions: [".cjs", ".js", ".jsx", ".ts", ".tsx"],
-                        },
-                    ],
-                ],
-            }
-        }
+          return {
+              plugins: [
+                  [
+                      "module-resolver",
+                      {
+                          alias: {
+                              "better-auth/react": "path/to/node_modules/better-auth/dist/client/react/index.cjs",
+                              "@better-auth/expo/client": "path/to/node_modules/@better-auth/expo/dist/client.cjs",
+                          },
+                          extensions: [".cjs", ".js", ".jsx", ".ts", ".tsx"],
+                      },
+                  ],
+              ],
+          };
+        };
         ```
 
         Don't forget to clear the cache after making changes.
@@ -166,7 +166,7 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
 <Tabs items={["sign-in", "sign-up"]}>
     <Tab value="sign-in">
         ```tsx title="app/sign-in.tsx"
-        import { useState } from "react"; 
+        import { useState } from "react";
         import { View, TextInput, Button } from "react-native";
         import { authClient } from "./auth-client";
 
@@ -206,38 +206,38 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
         import { authClient } from "./auth-client";
 
         export default function App() {
-            const [email, setEmail] = useState("");
-            const [name, setName] = useState("");
-            const [password, setPassword] = useState("");
+          const [email, setEmail] = useState("");
+          const [name, setName] = useState("");
+          const [password, setPassword] = useState("");
 
-            const handleLogin = async () => {
-                await authClient.signUp.email({
-                        email,
-                        password,
-                        name
-                })
-            };
+          const handleLogin = async () => {
+            await authClient.signUp.email({
+              email,
+              password,
+              name
+            });
+          }
 
-            return (
-                <View>
-                    <TextInput
-                        placeholder="Name"
-                        value={name}
-                        onChangeText={setName}
-                    />
-                    <TextInput
-                        placeholder="Email"
-                        value={email}
-                        onChangeText={setEmail}
-                    />
-                    <TextInput
-                        placeholder="Password"
-                        value={password}
-                        onChangeText={setPassword}
-                    />
-                    <Button title="Login" onPress={handleLogin} />
-                </View>
-            );
+          return (
+            <View>
+              <TextInput
+                placeholder="Name"
+                value={name}
+                onChangeText={setName}
+              />
+              <TextInput
+                placeholder="Email"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextInput
+                placeholder="Password"
+                value={password}
+                onChangeText={setPassword}
+              />
+              <Button title="Login" onPress={handleLogin} />
+            </View>
+          );
         }
         ```
     </Tab>
@@ -250,13 +250,13 @@ For social sign-in, you can use the `authClient.signIn.social` method with the p
 import { Button } from "react-native";
 
 export default function App() {
-    const handleLogin = async () => {
-        await authClient.signIn.social({
-            provider: "google",
-            callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
-        })
-    };
-    return <Button title="Login with Google" onPress={handleLogin} />;
+  const handleLogin = async () => {
+    await authClient.signIn.social({
+      provider: "google",
+      callbackURL: "/dashboard", // this will be converted to a deep link (eg. `myapp://dashboard`) on native
+    });
+  };
+  return <Button title="Login with Google" onPress={handleLogin} />;
 }
 ```
 
@@ -269,9 +269,9 @@ Better Auth provides a `useSession` hook to access the current user's session in
 import { authClient } from "@/lib/auth-client";
 
 export default function App() {
-    const { data: session } = authClient.useSession();
+  const { data: session } = authClient.useSession();
 
-    return <Text>Welcome, {session.user.name}</Text>;
+  return <Text>Welcome, {session.user.name}</Text>;
 }
 ```
 
@@ -323,7 +323,7 @@ const makeAuthenticatedRequest = async () => {
 ```
 
 **Example: Usage With TRPC**
-    
+
 ```tsx title="lib/trpc-provider.tsx"
 //...other imports
 import { authClient } from "@/lib/auth-client"; // [!code highlight]
@@ -336,7 +336,7 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
     api.createClient({
       links: [
         httpBatchLink({
-          //...your other options
+          // ...your other options
           headers() {
             const headers = new Map<string, string>(); // [!code highlight]
             const cookies = authClient.getCookie(); // [!code highlight]
@@ -372,8 +372,8 @@ import { createAuthClient } from "better-auth/react";
 import SecureStorage from "expo-secure-store";
 
 const authClient = createAuthClient({
-    baseURL: "http://localhost:8081",
-    storage: SecureStorage
+  baseURL: "http://localhost:8081",
+  storage: SecureStorage,
 });
 ```
 
@@ -383,8 +383,8 @@ const authClient = createAuthClient({
 import { createAuthClient } from "better-auth/react";
 
 const authClient = createAuthClient({
-    baseURL: "http://localhost:8081",
-    scheme: "myapp"
+  baseURL: "http://localhost:8081",
+  scheme: "myapp",
 });
 ```
 
@@ -394,8 +394,8 @@ const authClient = createAuthClient({
 import { createAuthClient } from "better-auth/react";
 
 const authClient = createAuthClient({
-    baseURL: "http://localhost:8081",
-    disableCache: true
+  baseURL: "http://localhost:8081",
+  disableCache: true,
 });
 ```
 

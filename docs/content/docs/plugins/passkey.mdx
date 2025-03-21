@@ -37,17 +37,17 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
                 - `preferred`: Verification encouraged but not mandatory
                 - `discouraged`: No verification required (fastest experience)
                 - Default: `preferred`
-            
-           
+
+
         ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { passkey } from "better-auth/plugins/passkey" // [!code highlight]
+        import { betterAuth } from "better-auth";
+        import { passkey } from "better-auth/plugins/passkey"; // [!code highlight]
 
         export const auth = betterAuth({
-            plugins: [ // [!code highlight]
-                passkey(), // [!code highlight]
-            ], // [!code highlight]
-        })
+          plugins: [ // [!code highlight]
+            passkey(), // [!code highlight]
+          ], // [!code highlight]
+        });
         ```
     </Step>
       <Step>
@@ -73,14 +73,14 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
         ### Add the client plugin
 
          ```ts title="auth-client.ts"
-            import { createAuthClient } from "better-auth/client"
-            import { passkeyClient } from "better-auth/client/plugins"
+            import { createAuthClient } from "better-auth/client";
+            import { passkeyClient } from "better-auth/client/plugins";
 
-            const authClient =  createAuthClient({
-                plugins: [ // [!code highlight]
-                    passkeyClient() // [!code highlight]
-                ] // [!code highlight]
-            })
+            const authClient = createAuthClient({
+              plugins: [ // [!code highlight]
+                passkeyClient(), // [!code highlight]
+              ] // [!code highlight]
+            });
             ```
     </Step>
 
@@ -115,7 +115,7 @@ You can also specify the type of authenticator you want to register. The authent
 // Register a cross-platform passkey showing only a QR code
 // for the user to scan as well as the option to plug in a security key
 const { data, error } = await authClient.passkey.addPasskey({
-  authenticatorAttachment: 'cross-platform'
+  authenticatorAttachment: "cross-platform",
 });
 ```
 
@@ -205,9 +205,9 @@ Table Name: `passkey`
 
 <DatabaseTable
     fields={[
-        { 
-            name: "id", 
-            type: "string", 
+        {
+            name: "id",
+            type: "string",
             description: "Unique identifier for each passkey",
             isPrimaryKey: true
         },
@@ -217,14 +217,14 @@ Table Name: `passkey`
             description: "The name of the passkey",
             isOptional: true
         },
-        { 
-            name: "publicKey", 
-            type: "string", 
+        {
+            name: "publicKey",
+            type: "string",
             description: "The public key of the passkey",
         },
-        { 
-            name: "userId", 
-            type: "string", 
+        {
+            name: "userId",
+            type: "string",
             description: "The id of the user",
             isForeignKey: true
         },
@@ -233,9 +233,9 @@ Table Name: `passkey`
             type: "string",
             description: "The unique identifier of the registered credential",
         },
-        { 
-            name: "counter", 
-            type: "number", 
+        {
+            name: "counter",
+            type: "number",
             description: "The counter of the passkey",
         },
         {
@@ -253,9 +253,9 @@ Table Name: `passkey`
             type: "string",
             description: "The transports used to register the passkey",
         },
-        { 
-            name: "createdAt", 
-            type: "Date", 
+        {
+            name: "createdAt",
+            type: "Date",
             description: "The time when the passkey was created",
         },
     ]}

@@ -32,13 +32,13 @@ Map the following fields in the session schema:
 
 ```typescript title="auth.ts"
 export const auth = betterAuth({
-    // Other configs
-    session: {
-        fields: {
-            expiresAt: "expires", // e.g., "expires_at" or your existing field name
-            token: "sessionToken" // e.g., "session_token" or your existing field name
-        }
+  // Other configs
+  session: {
+    fields: {
+      expiresAt: "expires", // e.g., "expires_at" or your existing field name
+      token: "sessionToken", // e.g., "session_token" or your existing field name
     },
+  },
 });
 ```
 
@@ -56,16 +56,16 @@ Remove the `session_state`, `type`, and `token_type` fields, as they are not req
 
 ```typescript title="auth.ts"
 export const auth = betterAuth({
-    // Other configs
-    accounts: {
-        fields: {
-            accountId: "providerAccountId",
-            refreshToken: "refresh_token",
-            accessToken: "access_token",
-            accessTokenExpiresAt: "access_token_expires",
-            idToken: "id_token",
-        }
+  // Other configs
+  accounts: {
+    fields: {
+      accountId: "providerAccountId",
+      refreshToken: "refresh_token",
+      accessToken: "access_token",
+      accessTokenExpiresAt: "access_token_expires",
+      idToken: "id_token",
     },
+  },
 });
 ```
 
@@ -106,7 +106,7 @@ Create a file named `auth-client.ts` in the `lib` folder. Add the following code
 import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
-    baseURL: process.env.BASE_URL! // Optional if the API base URL matches the frontend
+  baseURL: process.env.BASE_URL!, // Optional if the API base URL matches the frontend
 });
 
 export const { signIn, signOut, useSession } = authClient;
@@ -120,10 +120,10 @@ Update your social login functions to use Better Auth. For example, for Discord:
 import { signIn } from "~/lib/auth-client";
 
 export const signInDiscord = async () => {
-    const data = await signIn.social({
-        provider: "discord"
-    });
-    return data;
+  const data = await signIn.social({
+    provider: "discord",
+  });
+  return data;
 };
 ```
 
@@ -135,14 +135,14 @@ Replace `useSession` calls with Better Auth’s version. Example:
 import { useSession } from "~/lib/auth-client";
 
 export const Profile = () => {
-    const { data } = useSession();
-    return (
-        <div>
-            <pre>
-                {JSON.stringify(data, null, 2)}
-            </pre>
-        </div>
-    );
+  const { data } = useSession();
+  return (
+    <div>
+      <pre>
+        {JSON.stringify(data, null, 2)}
+      </pre>
+    </div>
+  );
 };
 ```
 </Step>
@@ -160,9 +160,9 @@ import { auth } from "~/server/auth";
 import { headers } from "next/headers";
 
 export const protectedAction = async () => {
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
 };
 ```
 </Step>
