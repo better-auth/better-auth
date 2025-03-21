@@ -82,7 +82,7 @@ export const patreon = (options: PatreonOptions) => {
             });
 
             console.log(data)
-            
+
             if (error) {
                 return null;
             }
@@ -93,7 +93,7 @@ export const patreon = (options: PatreonOptions) => {
 
             return {
                 user: {
-                    id: profile.id,
+                    id: profile.id.toString(),
                     name: profile.attributes.full_name,
                     email: profile.attributes.email,
                     image: profile.attributes.image_url,
