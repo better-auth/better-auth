@@ -92,6 +92,7 @@ export type Passkey = {
 	backedUp: boolean;
 	transports?: string;
 	createdAt: Date;
+	updatedAt: Date;
 };
 
 export const passkey = (options?: PasskeyOptions) => {
