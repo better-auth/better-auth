@@ -43,6 +43,8 @@ export const patreon = (options: PatreonOptions) => {
             options.scope && _scopes.push(...options.scope);
             scopes && _scopes.push(...scopes);
 
+            console.log('createAuthorizationURL',_scopes)
+
             return createAuthorizationURL({
                 id: "patreon",
                 redirectURI,
@@ -54,6 +56,8 @@ export const patreon = (options: PatreonOptions) => {
             });
         },
         async validateAuthorizationCode({ code, redirectURI, codeVerifier }) {
+            console.log('Validate')
+
             return validateAuthorizationCode({
                 code,
                 redirectURI,
@@ -67,6 +71,7 @@ export const patreon = (options: PatreonOptions) => {
                 return options.getUserInfo(token);
             }
 
+            console.log('Call profile')
             const { data, error } = await betterFetch<{
                 data: PatreonProfile;
             }>("https://www.patreon.com/api/oauth2/v2/identity?fields[user]=email,full_name,image_url,is_email_verified", {
@@ -76,6 +81,8 @@ export const patreon = (options: PatreonOptions) => {
                 },
             });
 
+            console.log(data)
+            
             if (error) {
                 return null;
             }
