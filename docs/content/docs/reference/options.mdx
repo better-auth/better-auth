@@ -488,7 +488,7 @@ Disable specific auth paths.
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	disabledPaths: ["/api/auth/signup", "/api/auth/signin/email"],
+	disabledPaths: ["/sign-up/email", "/sign-in/email"],
 })
 ```
 
