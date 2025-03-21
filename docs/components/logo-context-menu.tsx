@@ -16,12 +16,6 @@ interface LogoAssets {
 	whitePng: StaticImageData;
 }
 
-interface Product {
-	icon: React.ReactNode;
-	name: string;
-	onClick: () => void;
-}
-
 interface ContextMenuProps {
 	logo: React.ReactNode;
 	logoAssets: LogoAssets;
