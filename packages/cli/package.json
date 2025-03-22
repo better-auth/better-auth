@@ -21,7 +21,9 @@
     ]
   },
   "exports": "./dist/index.mjs",
-  "bin": "./dist/index.mjs",
+  "bin": {
+    "better-auth": "dist/index.mjs"
+  },
   "devDependencies": {
     "@types/diff": "^7.0.1",
     "@types/fs-extra": "^11.0.4",
