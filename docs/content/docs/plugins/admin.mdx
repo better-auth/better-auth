@@ -362,7 +362,7 @@ the plugin providers easy way to define your own set of permission for each role
         Once you have created the roles you can pass them to the organization plugin both on the client and the server.
 
         ```ts title="auth.ts"
-        import { ac, admin, user } from "@/auth/permissions"
+        import { ac, admin as adminRole, user } from "@/auth/permissions"
         import { betterAuth } from "better-auth"
         import { admin } from "better-auth/plugins"
 
@@ -371,7 +371,7 @@ the plugin providers easy way to define your own set of permission for each role
                 admin({
                     ac: ac,
                     roles: {
-                        admin,
+                        admin: adminRole,
                         user,
                         myCustomRole
                     }
