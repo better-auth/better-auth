@@ -213,6 +213,16 @@
         "default": "./dist/integrations/node.cjs"
       }
     },
+    "./nestjs": {
+      "import": {
+        "types": "./dist/integrations/nestjs/index.d.ts",
+        "default": "./dist/integrations/nestjs/index.mjs"
+      },
+      "require": {
+        "types": "./dist/integrations/nestjs/index.d.cts",
+        "default": "./dist/integrations/nestjs/index.cjs"
+      }
+    },
     "./adapters/prisma": {
       "import": {
         "types": "./dist/adapters/prisma-adapter/index.d.ts",
@@ -520,6 +530,9 @@
       "next-js": [
         "./dist/integrations/next-js.d.ts"
       ],
+      "nestjs": [
+        "./dist/integrations/nestjs/index.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"
       ],
@@ -592,12 +605,15 @@
     }
   },
   "devDependencies": {
+    "@nestjs/common": "^11.0.10",
+    "@nestjs/core": "^11.0.1",
     "@prisma/client": "^5.22.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.14",
     "better-sqlite3": "^11.6.0",
+    "concurrently": "^9.1.2",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
