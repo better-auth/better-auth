@@ -5,8 +5,8 @@ import { adminAc, defaultStatements, userAc } from "./access";
 import type { admin } from "./admin";
 
 interface AdminClientOptions {
-	ac: AccessControl;
-	roles: {
+	ac?: AccessControl;
+	roles?: {
 		[key in string]: Role;
 	};
 }
@@ -23,7 +23,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 	};
 
 	return {
-		id: "better-auth-client",
+		id: "admin-client",
 		$InferServerPlugin: {} as ReturnType<
 			typeof admin<{
 				ac: O["ac"] extends AccessControl
