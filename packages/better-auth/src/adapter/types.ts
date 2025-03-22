@@ -148,7 +148,7 @@ export interface CustomAdapter {
 	/**
 	 * Your adapter's options.
 	 */
-	options: Record<string, any> | undefined;
+	options?: Record<string, any> | undefined;
 }
 
 export type CreateCustomAdapter = ({

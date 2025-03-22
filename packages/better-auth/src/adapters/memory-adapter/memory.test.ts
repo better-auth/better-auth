@@ -1,5 +1,5 @@
 import { describe } from "vitest";
-import { memoryAdapter } from "./memory-adapter";
+import { memoryAdapter } from "./old-memory-adapter";
 import { runAdapterTest } from "../test";
 
 describe("adapter test", async () => {
