@@ -35,6 +35,19 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		user.id = res.id;
 	});
 
+	test("create model should always return an id", async () => {
+		const res = await adapter.create({
+			model: "user",
+			data: {
+				name: "test-name-without-id",
+				email: "test-email-without-id@email.com",
+			},
+		});
+		expect(res).toHaveProperty("id");
+		//@ts-ignore
+		expect(typeof res?.id).toEqual("string");
+	});
+
 	test("find model", async () => {
 		const res = await adapter.findOne<User>({
 			model: "user",
@@ -112,7 +125,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		const res = await adapter.findMany({
 			model: "user",
 		});
-		expect(res.length).toBe(1);
+		expect(res.length).toBe(2);
 	});
 
 	test("should find many with where", async () => {
@@ -260,7 +273,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			model: "user",
 			offset: 2,
 		});
-		expect(res.length).toBe(3);
+		expect(res.length).toBe(4);
 	});
 
 	test("should update with multiple where", async () => {
