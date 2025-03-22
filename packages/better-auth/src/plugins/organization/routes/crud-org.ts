@@ -28,7 +28,7 @@ export const createOrganization = createAuthEndpoint(
 			slug: z.string({
 				description: "The slug of the organization",
 			}),
-			userId: z
+			userId: z.coerce
 				.string({
 					description:
 						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",

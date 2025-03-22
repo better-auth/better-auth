@@ -73,7 +73,7 @@ export async function parseState(c: GenericEndpointContext) {
 			link: z
 				.object({
 					email: z.string(),
-					userId: z.string(),
+					userId: z.coerce.string(),
 				})
 				.optional(),
 			requestSignUp: z.boolean().optional(),

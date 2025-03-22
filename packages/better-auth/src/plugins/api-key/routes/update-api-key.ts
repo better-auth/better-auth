@@ -27,7 +27,7 @@ export function updateApiKey({
 				keyId: z.string({
 					description: "The id of the Api Key",
 				}),
-				userId: z.string().optional(),
+				userId: z.coerce.string().optional(),
 				name: z
 					.string({
 						description: "The name of the key",

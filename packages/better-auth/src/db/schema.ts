@@ -9,7 +9,7 @@ export const accountSchema = z.object({
 	id: z.string(),
 	providerId: z.string(),
 	accountId: z.string(),
-	userId: z.string(),
+	userId: z.coerce.string(),
 	accessToken: z.string().nullish(),
 	refreshToken: z.string().nullish(),
 	idToken: z.string().nullish(),
@@ -45,7 +45,7 @@ export const userSchema = z.object({
 
 export const sessionSchema = z.object({
 	id: z.string(),
-	userId: z.string(),
+	userId: z.coerce.string(),
 	expiresAt: z.date(),
 	createdAt: z.date().default(() => new Date()),
 	updatedAt: z.date().default(() => new Date()),

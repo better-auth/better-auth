@@ -126,7 +126,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 
 			if (existingAccount) {
-				if (existingAccount.userId !== link.userId) {
+				if (existingAccount.userId.toString() !== link.userId.toString()) {
 					return redirectOnError("account_already_linked_to_different_user");
 				}
 			}

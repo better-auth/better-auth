@@ -23,7 +23,7 @@ export const organizationSchema = z.object({
 export const memberSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
-	userId: z.string(),
+	userId: z.coerce.string(),
 	role,
 	createdAt: z.date().default(() => new Date()),
 	teamId: z.string().optional(),

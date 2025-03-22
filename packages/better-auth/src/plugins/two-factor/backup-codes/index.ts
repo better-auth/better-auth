@@ -224,7 +224,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "GET",
 					body: z.object({
-						userId: z.string(),
+						userId: z.coerce.string(),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
