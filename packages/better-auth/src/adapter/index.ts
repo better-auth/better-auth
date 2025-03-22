@@ -196,8 +196,12 @@ export const createAdapter =
 						newValue = JSON.stringify(newValue);
 					}
 
-					if (config.supportsDates === false && newValue instanceof Date) {
-						newValue = value.toISOString();
+					if (
+						config.supportsDates === false &&
+						newValue instanceof Date &&
+						fieldAttributes.type === "date"
+					) {
+						newValue = newValue.toISOString();
 					}
 
 					if (
