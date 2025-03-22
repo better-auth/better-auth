@@ -12,7 +12,6 @@ export const mongodbAdapter = (db: Db) =>
 			supportsJSON: true,
 			supportsDates: true,
 			supportsBooleans: true,
-			disableIdGeneration: true,
 			mapKeysTransformInput: (data: Record<string, any>, model: string) => {
 				return {
 					id: "_id",
