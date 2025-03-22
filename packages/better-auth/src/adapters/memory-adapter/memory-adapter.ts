@@ -1,106 +1,9 @@
 import { createAdapter } from "../../adapter";
-import { getAuthTables } from "../../db";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
-import { generateId } from "../../utils";
-import { withApplyDefault } from "../utils";
+import type { Where } from "../../types";
 
 export interface MemoryDB {
 	[key: string]: any[];
 }
-
-const createTransform = (options: BetterAuthOptions) => {
-	const schema = getAuthTables(options);
-
-	function getField(model: string, field: string) {
-		if (field === "id") {
-			return field;
-		}
-		const f = schema[model].fields[field];
-		return f.fieldName || field;
-	}
-	return {
-		transformInput(
-			data: Record<string, any>,
-			model: string,
-			action: "update" | "create",
-		) {
-			const transformedData: Record<string, any> =
-				action === "update"
-					? {}
-					: {
-							id: options.advanced?.generateId
-								? options.advanced.generateId({
-										model,
-									})
-								: data.id || generateId(),
-						};
-
-			const fields = schema[model].fields;
-			for (const field in fields) {
-				const value = data[field];
-				if (value === undefined && !fields[field].defaultValue) {
-					continue;
-				}
-				transformedData[fields[field].fieldName || field] = withApplyDefault(
-					value,
-					fields[field],
-					action,
-				);
-			}
-			return transformedData;
-		},
-		transformOutput(
-			data: Record<string, any>,
-			model: string,
-			select: string[] = [],
-		) {
-			if (!data) return null;
-			const transformedData: Record<string, any> =
-				data.id || data._id
-					? select.length === 0 || select.includes("id")
-						? {
-								id: data.id,
-							}
-						: {}
-					: {};
-			const tableSchema = schema[model].fields;
-			for (const key in tableSchema) {
-				if (select.length && !select.includes(key)) {
-					continue;
-				}
-				const field = tableSchema[key];
-				if (field) {
-					transformedData[key] = data[field.fieldName || key];
-				}
-			}
-			return transformedData as any;
-		},
-		convertWhereClause(where: Where[], table: any[], model: string) {
-			return table.filter((record) => {
-				return where.every((clause) => {
-					const { field: _field, value, operator } = clause;
-					const field = getField(model, _field);
-					if (operator === "in") {
-						if (!Array.isArray(value)) {
-							throw new Error("Value must be an array");
-						}
-						// @ts-ignore
-						return value.includes(record[field]);
-					} else if (operator === "contains") {
-						return record[field].includes(value);
-					} else if (operator === "starts_with") {
-						return record[field].startsWith(value);
-					} else if (operator === "ends_with") {
-						return record[field].endsWith(value);
-					} else {
-						return record[field] === value;
-					}
-				});
-			});
-		},
-		getField,
-	};
-};
 
 export const memoryAdapter = (db: MemoryDB) =>
 	createAdapter({
@@ -211,4 +114,3 @@ export const memoryAdapter = (db: MemoryDB) =>
 			};
 		},
 	});
-
