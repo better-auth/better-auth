@@ -1,1 +1,1 @@
-export * from "./new-mongodb-adapter";
+export * from "./mongodb-adapter";
