@@ -13,8 +13,7 @@ export async function getPlanByPriceId(
 	return await getPlans(options).then((res) =>
 		res?.find(
 			(plan) =>
-				plan.priceId === priceId ||
-				plan.annualDiscountPriceId === priceId,
+				plan.priceId === priceId || plan.annualDiscountPriceId === priceId,
 		),
 	);
 }
