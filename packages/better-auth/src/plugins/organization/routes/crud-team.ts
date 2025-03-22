@@ -20,6 +20,7 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			body: z.object({
 				organizationId: z.string().optional(),
 				name: z.string(),
+				slug: z.string().optional(),
 			}),
 			use: [orgMiddleware],
 		},
@@ -86,6 +87,7 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				id: generateId(),
 				name: ctx.body.name,
 				organizationId,
+				slug: ctx.body?.slug ?? "",
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			});
@@ -275,5 +277,31 @@ export const listOrganizationTeams = createAuthEndpoint(
 		const teams = await adapter.listTeams(organizationId);
 
 		return ctx.json(teams);
+	},
+);
+export const checkTeamSlug = createAuthEndpoint(
+	"/organization/check-team-slug",
+	{
+		method: "POST",
+		body: z.object({
+			slug: z.string(),
+			organizationId: z.string().optional(),
+		}),
+		use: [orgMiddleware, orgSessionMiddleware],
+	},
+	async (ctx) => {
+		const orgAdapter = getOrgAdapter(ctx.context);
+
+		const session = ctx.context.session;
+		const organizationId =
+			session.session.activeOrganizationId || ctx.query?.organizationId;
+
+		const team = await orgAdapter.findTeamBySlug(organizationId, ctx.body.slug);
+		if (!team) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+			});
+		}
+		return ctx.json(team);
 	},
 );
