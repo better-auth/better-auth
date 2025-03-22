@@ -1,1 +1,1 @@
-export * from "./prisma-adapter";
+export * from "./new-prisma-adapter";

@@ -16,7 +16,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			adapterId: "kysely",
 			adapterName: "Kysely Adapter",
 			usePlural: false,
-			debugLogs: true,
+			debugLogs: false,
 			supportsJSON: true,
 			supportsDates: true,
 			supportsBooleans: true,

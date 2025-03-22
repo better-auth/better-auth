@@ -11,7 +11,7 @@ export const memoryAdapter = (db: MemoryDB) =>
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
 			usePlural: false,
-			debugLogs: true,
+			debugLogs: false,
 			supportsJSON: true,
 			supportsDates: true,
 			supportsBooleans: true,
@@ -21,7 +21,7 @@ export const memoryAdapter = (db: MemoryDB) =>
 				return table.filter((record) => {
 					return where.every((clause) => {
 						const { field: _field, value, operator } = clause;
-						const field = getField(model, _field);
+						const field = getField({ model, field: _field });
 						if (operator === "in") {
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
@@ -58,7 +58,7 @@ export const memoryAdapter = (db: MemoryDB) =>
 					}
 					if (sortBy) {
 						table = table.sort((a, b) => {
-							const field = getField(model, sortBy.field);
+							const field = getField({ model, field: sortBy.field });
 							if (sortBy.direction === "asc") {
 								return a[field] > b[field] ? 1 : -1;
 							} else {

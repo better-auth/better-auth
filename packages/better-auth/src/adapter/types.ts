@@ -15,15 +15,14 @@ export interface AdapterConfig {
 	debugLogs:
 		| boolean
 		| {
-				_enabled: boolean;
-				create: boolean;
-				update: boolean;
-				updateMany: boolean;
-				findOne: boolean;
-				findMany: boolean;
-				delete: boolean;
-				deleteMany: boolean;
-				count: boolean;
+				create?: boolean;
+				update?: boolean;
+				updateMany?: boolean;
+				findOne?: boolean;
+				findMany?: boolean;
+				delete?: boolean;
+				deleteMany?: boolean;
+				count?: boolean;
 		  };
 	/**
 	 * Name of the adapter.
@@ -178,9 +177,11 @@ export interface CustomAdapter {
 	create: <T extends Record<string, any>>({
 		data,
 		model,
+		select,
 	}: {
 		model: string;
 		data: T;
+		select?: string[];
 	}) => Promise<T>;
 	update: <T>(data: {
 		model: string;

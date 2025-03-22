@@ -42,7 +42,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			adapterId: "drizzle",
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
-			debugLogs: true,
+			debugLogs: false,
 			supportsJSON: true,
 			supportsDates: true,
 			supportsBooleans: true,

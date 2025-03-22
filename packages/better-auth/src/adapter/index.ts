@@ -23,7 +23,10 @@ export const createAdapter =
 		 *
 		 * This function helps us get the actual field name from the schema.
 		 */
-		function getField({ model: model_name, field }: { model: string, field: string }) {
+		function getField({
+			model: model_name,
+			field,
+		}: { model: string; field: string }) {
 			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
@@ -83,10 +86,7 @@ export const createAdapter =
 		};
 
 		const debugLog = (...args: any[]) => {
-			if (
-				config.debugLogs === true ||
-				(typeof config.debugLogs === "object" && config.debugLogs._enabled)
-			) {
+			if (config.debugLogs === true || typeof config.debugLogs === "object") {
 				if (typeof args[0] === "object" && "method" in args[0]) {
 					const method = args.shift().method;
 					if (typeof config.debugLogs === "object") {
@@ -151,8 +151,9 @@ export const createAdapter =
 					newMappedKeys[field] || fields[field].fieldName || field;
 				if (
 					value === undefined &&
-					!fieldAttributes.defaultValue &&
-					!fieldAttributes.transform?.input
+					((!fieldAttributes.defaultValue &&
+						!fieldAttributes.transform?.input) ||
+						action === "update")
 				) {
 					continue;
 				}
@@ -576,22 +577,18 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
-				debugLog(
-					{ method: "count" },
-					`#${thisTransactionId} (1/2)`,
-					"Count:",
-					{ model, where },
-				);
+				debugLog({ method: "count" }, `#${thisTransactionId} (1/2)`, "Count:", {
+					model,
+					where,
+				});
 				const res = await adapterInstance.count({
 					model,
 					where,
 				});
-				debugLog(
-					{ method: "count" },
-					`#${thisTransactionId} (2/2)`,
-					"Count:",
-					{ model, data: res },
-				);
+				debugLog({ method: "count" }, `#${thisTransactionId} (2/2)`, "Count:", {
+					model,
+					data: res,
+				});
 				return res;
 			},
 			createSchema: adapterInstance.createSchema
