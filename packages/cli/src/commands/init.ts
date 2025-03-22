@@ -26,10 +26,8 @@ import { formatMilliseconds } from "../utils/format-ms";
 import { generateSecretHash } from "./secret";
 import { generateAuthConfig } from "../generators/auth-config";
 import { getTsconfigInfo } from "../utils/get-tsconfig-info";
+import type { BetterAuthConfig } from "../schema/cli";
 
-/**
- * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
- */
 const supportedDatabases = [
 	// Built-in kysely
 	"sqlite",
@@ -201,11 +199,7 @@ const defaultFormatOptions = {
 	tabWidth: 4,
 };
 
-const getDefaultAuthConfig = async ({
-	appName,
-}: {
-	appName?: string;
-}) =>
+const getDefaultAuthConfig = async ({ appName }: { appName?: string }) =>
 	await prettierFormat(
 		[
 			"import { betterAuth } from 'better-auth';",
@@ -356,7 +350,11 @@ const optionsSchema = z.object({
 
 const outroText = `🥳 All Done, Happy Hacking!`;
 
-export async function initAction(opts: any) {
+export async function initAction(this: Command) {
+	const baseOpts = this.opts();
+	const opts = { cwd: baseOpts.cwd };
+
+	const configs = baseOpts.config as BetterAuthConfig;
 	console.log();
 	intro("👋 Initializing Better Auth");
 
@@ -388,7 +386,7 @@ export async function initAction(opts: any) {
 	// ===== ENV files =====
 	const envFiles = await getEnvFiles(cwd);
 	if (!envFiles.length) {
-		outro("❌ No .env files found. Please create an env file first.");
+		outro("❌ No .env file found. Please create an .env file first.");
 		process.exit(0);
 	}
 	let targetEnvFile: string;
@@ -401,10 +399,19 @@ export async function initAction(opts: any) {
 
 	// ===== tsconfig.json =====
 	let tsconfigInfo: Record<string, any>;
+	const tsconfigPath = configs?.tsConfig?.path;
 	try {
-		tsconfigInfo = await getTsconfigInfo(cwd);
+		if (tsconfigPath) {
+			tsconfigInfo = await getTsconfigInfo(cwd, tsconfigPath);
+		} else {
+			tsconfigInfo = await getTsconfigInfo(cwd);
+		}
 	} catch (error) {
-		log.error(`❌ Couldn't read your tsconfig.json file. (dir: ${cwd})`);
+		log.error(
+			`❌ Couldn't read your tsconfig.json file. (dir: ${
+				tsconfigPath ? tsconfigPath : cwd
+			})`,
+		);
 		console.error(error);
 		process.exit(1);
 	}
@@ -430,16 +437,20 @@ export async function initAction(opts: any) {
 		if (shouldAdd) {
 			try {
 				await fs.writeFile(
-					path.join(cwd, "tsconfig.json"),
+					tsconfigPath ? tsconfigPath : path.join(cwd, "tsconfig.json"),
 					await prettierFormat(
 						JSON.stringify(
 							Object.assign(tsconfigInfo, {
 								compilerOptions: {
 									strict: true,
+									...tsconfigInfo.compilerOptions,
 								},
 							}),
 						),
-						{ filepath: "tsconfig.json", ...defaultFormatOptions },
+						{
+							filepath: tsconfigPath ? tsconfigPath : "tsconfig.json",
+							...defaultFormatOptions,
+						},
 					),
 					"utf-8",
 				);
