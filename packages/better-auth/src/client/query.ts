@@ -34,7 +34,6 @@ export const useAuthQuery = <T>(
 			return fn();
 		},
 	});
-
 	const fn = () => {
 		const opts =
 			typeof options === "function"
@@ -55,7 +54,7 @@ export const useAuthQuery = <T>(
 						error: null,
 						isPending: false,
 						isRefetching: false,
-						refetch: value.value.refetch,
+						refetch: value.get().refetch,
 					});
 				}
 				await opts?.onSuccess?.(context);
@@ -73,7 +72,7 @@ export const useAuthQuery = <T>(
 					data: null,
 					isPending: false,
 					isRefetching: false,
-					refetch: value.value.refetch,
+					refetch: value.get().refetch,
 				});
 				await opts?.onError?.(context);
 			},
@@ -84,7 +83,7 @@ export const useAuthQuery = <T>(
 					data: currentValue.data,
 					error: null,
 					isRefetching: true,
-					refetch: value.value.refetch,
+					refetch: value.get().refetch,
 				});
 				await opts?.onRequest?.(context);
 			},
