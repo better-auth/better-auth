@@ -5,6 +5,61 @@ description: Built in CLI for managing your project.
 
 Better Auth comes with a built-in CLI to help you manage the database schemas, initialize your project, and generate a secret key for your application.
 
+## Init
+
+The `init` command allows you to initialize Better Auth in your project.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest init
+```
+
+### Features
+
+- Set up the auth API route endpoint for your framework.
+- Create a secret key for your application.
+- Set up a database of your choice.
+- Select the plugins you want to use.
+- Set up social providers.
+- Set up email & password authentication.
+- Generates `auth.ts` file with the configurations you choose.
+- Generates `auth-client.ts` file with the configuration you choose.
+
+### Supported Frameworks
+
+- Next.js
+- Astro
+- Remix
+- Solid
+- Nuxt
+- Svelte
+- Tanstack Start
+
+### Options
+
+<DividerText>Base Options</DividerText>
+
+- `-c, --cwd <cwd>` - The directory where the project is located. Defaults to the current working directory.
+- `--config <config>` - The path to the auth.ts config file. 
+
+<DividerText>Configuration</DividerText>
+
+- `--framework <framework>` - The framework your codebase is using.
+- `--app-name <appName>` - The name of your application. Useful for social providers or 2fa issuer name. (Defaults to your `package.json`'s `name` property.)
+- `--db, --database <database>` - The database you want to use.
+- `--social-providers <socialProviders...>` - The social providers you want to use. You can specify multiple social providers by adding a space between them.
+- `--plugins <plugins...>` - The plugins you want to use. You can specify multiple plugins by adding a space between them.
+
+<DividerText>Disable Prompts</DividerText>
+
+- `--email-password` - Whether to enable email & password authentication.
+- `--skip-db` - Skip the database setup.
+- `--skip-plugins` - Skip the plugins setup.
+- `--skip-app-name` - Skip the app name setup.
+- `--skip-social-providers` - Skip the social providers setup.
+- `--skip-email-password` - Skip the email & password authentication setup.
+
+---
+
 ## Generate
 
 The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
@@ -19,6 +74,7 @@ npx @better-auth/cli@latest generate
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
 - `--y` - Skip the confirmation prompt and generate the schema directly.
 
+---
 
 ## Migrate
 
@@ -33,21 +89,7 @@ npx @better-auth/cli@latest migrate
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
 - `--y` - Skip the confirmation prompt and apply the schema directly.
 
-## Init
-
-The `init` command allows you to initialize Better Auth in your project.
-
-```bash title="Terminal"
-npx @better-auth/cli@latest init
-```
-
-### Options
-
-- `--name` - The name of your application. (Defaults to your `package.json`'s `name` property.)
-- `--framework` - The framework your codebase is using. Currently, the only supported framework is `nextjs`.
-- `--plugins` - The plugins you want to use. You can specify multiple plugins by separating them with a comma.
-- `--database` - The database you want to use. Currently, the only supported database is `sqlite`.
-- `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun`. (Defaults to the manager you used to initialize the CLI.)
+---
 
 ## Secret
 
