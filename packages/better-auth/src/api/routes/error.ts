@@ -1,8 +1,9 @@
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
+import DOMPurify from "isomorphic-dompurify";
 
 function sanitize(input: string): string {
-	return input
+	return DOMPurify.sanitize(input)
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")

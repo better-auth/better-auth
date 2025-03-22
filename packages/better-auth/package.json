@@ -627,6 +627,7 @@
     "@simplewebauthn/server": "^13.0.0",
     "better-call": "catalog:",
     "defu": "^6.1.4",
+    "isomorphic-dompurify": "^2.22.0",
     "jose": "^5.9.6",
     "kysely": "^0.27.6",
     "nanostores": "^0.11.3",
