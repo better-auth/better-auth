@@ -12,7 +12,19 @@ export interface AdapterConfig {
 	/**
 	 * Enable debug logs.
 	 */
-	debugLogs: boolean;
+	debugLogs:
+		| boolean
+		| {
+				_enabled: boolean;
+				create: boolean;
+				update: boolean;
+				updateMany: boolean;
+				findOne: boolean;
+				findMany: boolean;
+				delete: boolean;
+				deleteMany: boolean;
+				count: boolean;
+		  };
 	/**
 	 * Name of the adapter.
 	 *
@@ -42,6 +54,61 @@ export interface AdapterConfig {
 	 */
 	supportsBooleans: boolean;
 	/**
+	 * Disable id generation.
+	 */
+	disableIdGeneration?: boolean;
+	/**
+	 * Map the keys of the input data.
+	 *
+	 * This is useful for databases that expect a different key name for a given situation.
+	 *
+	 * For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+	 *
+	 *
+	 * @example
+	 * Each key in the returned object represents the old key to replace.
+	 * The value represents the new key
+	 *
+	 * This can be a partial object that only transforms some keys.
+	 *
+	 * ```ts
+	 * mapKeysTransformInput: (data, model) => {
+	 * 	return {
+	 *		id: "_id" // We want to replace `id` to `_id` to save into MongoDB
+	 * 	};
+	 * }
+	 * ```
+	 */
+	mapKeysTransformInput?: (
+		data: Record<string, any>,
+		model: string,
+	) => Record<string, any>;
+	/**
+	 * Map the keys of the output data.
+	 *
+	 * This is useful for databases that expect a different key name for a given situation.
+	 *
+	 * For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+	 *
+	 * @example
+	 * Each key in the returned object represents the old key to replace.
+	 * The value represents the new key
+	 *
+	 * This can be a partial object that only transforms some keys.
+	 *
+	 * ```ts
+	 * mapKeysTransformOutput: (data, model) => {
+	 * 	return {
+	 * 		_id: "id" // In MongoDB, we save `id` as `_id`. So we want to replace `_id` with `id` when we get the data back.
+	 * 	};
+	 * }
+	 * ```
+	 */
+	mapKeysTransformOutput?: (
+		data: Record<string, any>,
+		model: string,
+	) => Record<string, any>;
+	/**
 	 * Custom transform input function.
 	 *
 	 * This function is used to transform the input data before it is saved to the database.
@@ -60,6 +127,18 @@ export interface AdapterConfig {
 		 * The action to perform.
 		 */
 		action: "create" | "update";
+		/**
+		 * The model name.
+		 */
+		model: string;
+		/**
+		 * The schema of the user's Better-Auth instance.
+		 */
+		schema: BetterAuthDbSchema;
+		/**
+		 * The options of the user's Better-Auth instance.
+		 */
+		options: BetterAuthOptions;
 	}) => any;
 	/**
 	 * Custom transform output function.
@@ -80,6 +159,18 @@ export interface AdapterConfig {
 		 * The fields to select.
 		 */
 		select: string[];
+		/**
+		 * The model name.
+		 */
+		model: string;
+		/**
+		 * The schema of the user's Better-Auth instance.
+		 */
+		schema: BetterAuthDbSchema;
+		/**
+		 * The options of the user's Better-Auth instance.
+		 */
+		options: BetterAuthOptions;
 	}) => any;
 }
 
@@ -155,6 +246,7 @@ export type CreateCustomAdapter = ({
 	options,
 	debugLog,
 	schema,
+	getDefaultModelName,
 }: {
 	options: BetterAuthOptions;
 	/**
@@ -170,5 +262,18 @@ export type CreateCustomAdapter = ({
 	/**
 	 * Get the actual field name from the schema.
 	 */
-	getField: (model: string, field: string) => string;
+	getField: ({ model, field }: { model: string; field: string }) => string;
+	/**
+	 * This function helps us get the default model name from the schema defined by devs.
+	 * Often times, the user will be using the `modelName` which could had been customized by the users.
+	 * This function helps us get the actual model name useful to match against the schema. (eg: schema[model])
+	 *
+	 * If it's still unclear what this does:
+	 *
+	 * 1. User can define a custom modelName.
+	 * 2. When using a custom modelName, doing something like `schema[model]` will not work.
+	 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
+	 * 4. Thus allowing us to use `schema[model]`.
+	 */
+	getDefaultModelName: (model: string) => string;
 }) => CustomAdapter;

@@ -106,7 +106,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					if (!w) {
 						return [];
 					}
-					const field = getField(model, w.field);
+					const field = getField({ model, field: w.field });
 					if (!schemaModel[field]) {
 						throw new BetterAuthError(
 							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
@@ -150,7 +150,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 
 				const andClause = and(
 					...andGroup.map((w) => {
-						const field = getField(model, w.field);
+						const field = getField({ model, field: w.field });
 						if (w.operator === "in") {
 							if (!Array.isArray(w.value)) {
 								throw new BetterAuthError(
@@ -164,7 +164,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
-						const field = getField(model, w.field);
+						const field = getField({ model, field: w.field });
 						return eq(schemaModel[field], w.value);
 					}),
 				);
@@ -223,7 +223,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						.offset(offset || 0);
 					if (sortBy?.field) {
 						builder.orderBy(
-							sortFn(schemaModel[getField(model, sortBy?.field)]),
+							sortFn(schemaModel[getField({ model, field: sortBy?.field })]),
 						);
 					}
 					return (await builder.where(...clause)) as any[];

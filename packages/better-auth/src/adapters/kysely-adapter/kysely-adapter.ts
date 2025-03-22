@@ -39,7 +39,6 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				return value;
 			},
 			customTransformOutput({ data: value, fields: f }) {
-				console.log(`transforming`, { data: value, fields: f });
 				const { type = "sqlite" } = config || {};
 
 				if (
@@ -65,7 +64,6 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				where: Where[],
 			) => {
 				let res: any;
-				console.log(config?.type);
 				if (config?.type === "mysql") {
 					//this isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id. Change this if there is a better way.
 					await builder.execute();
@@ -78,7 +76,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					res = await db
 						.selectFrom(model)
 						.selectAll()
-						.where(getField(model, field), "=", value)
+						.where(getField({ model, field }), "=", value)
 						.executeTakeFirst();
 					return res;
 				}
@@ -86,9 +84,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					res = await builder.outputAll("inserted").executeTakeFirst();
 					return res;
 				}
-				console.log("returning");
 				res = await builder.returningAll().executeTakeFirst();
-				console.log("returned", res);
 				return res;
 			};
 			function transformValueToDB(value: any, model: string, field: string) {
@@ -134,7 +130,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						operator = "=",
 						connector = "AND",
 					} = condition;
-					const field = getField(model, _field);
+					const field = getField({ model, field: _field });
 					value = transformValueToDB(value, model, _field);
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {
@@ -228,14 +224,14 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					}
 					if (sortBy) {
 						query = query.orderBy(
-							getField(model, sortBy.field),
+							getField({ model, field: sortBy.field }),
 							sortBy.direction,
 						);
 					}
 					if (offset) {
 						if (config?.type === "mssql") {
 							if (!sortBy) {
-								query = query.orderBy(getField(model, "id"));
+								query = query.orderBy(getField({ model, field: "id" }));
 							}
 							query = query.offset(offset).fetch(limit || 100);
 						} else {
