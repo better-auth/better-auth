@@ -74,25 +74,55 @@ const createTransform = (options: BetterAuthOptions) => {
 			}
 			return transformedData as any;
 		},
-		convertWhereClause(where: Where[], table: any[], model: string) {
+		convertWhereClause({
+			model,
+			table,
+			where,
+		}: {
+			model: string;
+			table: any[];
+			where: Where[];
+		}) {
 			return table.filter((record) => {
 				return where.every((clause) => {
-					const { field: _field, value, operator } = clause;
+					// if no operator is provided, set it to "eq" by default
+					const { field: _field, value, operator = "eq" } = clause;
 					const field = getField(model, _field);
-					if (operator === "in") {
-						if (!Array.isArray(value)) {
-							throw new Error("Value must be an array");
-						}
-						// @ts-ignore
-						return value.includes(record[field]);
-					} else if (operator === "contains") {
-						return record[field].includes(value);
-					} else if (operator === "starts_with") {
-						return record[field].startsWith(value);
-					} else if (operator === "ends_with") {
-						return record[field].endsWith(value);
-					} else {
-						return record[field] === value;
+					switch (operator) {
+						case "eq":
+							return record[field] === value;
+						case "ne":
+							return record[field] !== value;
+						case "lt":
+							if (value === null) return false;
+							return record[field] < value;
+						case "lte":
+							if (value === null) return false;
+							return record[field] <= value;
+						case "gt":
+							if (value === null) return false;
+							return record[field] > value;
+						case "gte":
+							if (value === null) return false;
+							return record[field] >= value;
+						case "in":
+							if (!Array.isArray(value)) {
+								throw new Error(
+									`[# Memory Adapter]: The value for the field "${field}" must be an array when using the "in" operator.`,
+								);
+							}
+							return (value as (string | number)[]).includes(record[field]);
+						case "contains":
+							return record[field].includes(value);
+						case "starts_with":
+							return record[field].startsWith(value);
+						case "ends_with":
+							return record[field].endsWith(value);
+						default:
+							// throw an error if unknown operator is provided
+							throw new Error(
+								`[# Memory Adapter]: Unsupported operator: ${operator}`,
+							);
 					}
 				});
 			});
@@ -114,14 +144,14 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 		},
 		findOne: async ({ model, where, select }) => {
 			const table = db[model];
-			const res = convertWhereClause(where, table, model);
+			const res = convertWhereClause({ model, table, where });
 			const record = res[0] || null;
 			return transformOutput(record, model, select);
 		},
 		findMany: async ({ model, where, sortBy, limit, offset }) => {
 			let table = db[model];
 			if (where) {
-				table = convertWhereClause(where, table, model);
+				table = convertWhereClause({ model, table, where });
 			}
 			if (sortBy) {
 				table = table.sort((a, b) => {
@@ -141,12 +171,14 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 			}
 			return table.map((record) => transformOutput(record, model));
 		},
-		count: async ({ model }) => {
-			return db[model].length;
+		count: async ({ model, where }) => {
+			const table = db[model];
+			const res = where ? convertWhereClause({ model, table, where }) : table;
+			return res.length;
 		},
 		update: async ({ model, where, update }) => {
 			const table = db[model];
-			const res = convertWhereClause(where, table, model);
+			const res = convertWhereClause({ model, table, where });
 			res.forEach((record) => {
 				Object.assign(record, transformInput(update, model, "update"));
 			});
@@ -154,12 +186,12 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 		},
 		delete: async ({ model, where }) => {
 			const table = db[model];
-			const res = convertWhereClause(where, table, model);
+			const res = convertWhereClause({ model, table, where });
 			db[model] = table.filter((record) => !res.includes(record));
 		},
 		deleteMany: async ({ model, where }) => {
 			const table = db[model];
-			const res = convertWhereClause(where, table, model);
+			const res = convertWhereClause({ model, table, where });
 			let count = 0;
 			db[model] = table.filter((record) => {
 				if (res.includes(record)) {
@@ -173,7 +205,7 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 		updateMany(data) {
 			const { model, where, update } = data;
 			const table = db[model];
-			const res = convertWhereClause(where, table, model);
+			const res = convertWhereClause({ model, table, where });
 			res.forEach((record) => {
 				Object.assign(record, update);
 			});
