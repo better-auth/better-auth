@@ -58,7 +58,7 @@ export const Navbar = () => {
 			<nav className="md:grid grid-cols-12 md:border-b top-0 flex items-center justify-between ">
 				<Link
 					href="/"
-					className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-2 shrink-0 transition-colors md:w-[--fd-sidebar-width]"
+					className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-2 shrink-0 transition-colors md:w-[268px] lg:w-[286px]"
 				>
 					<div className="flex flex-col gap-2 w-full">
 						<LogoContextMenu
