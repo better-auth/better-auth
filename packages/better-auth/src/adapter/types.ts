@@ -53,7 +53,10 @@ export interface AdapterConfig {
 	 */
 	supportsBooleans: boolean;
 	/**
-	 * Disable id generation.
+	 * Disable id generation for the `create` method.
+	 *
+	 * This is useful for databases that don't support custom id generation.
+	 *
 	 */
 	disableIdGeneration?: boolean;
 	/**

@@ -140,16 +140,19 @@ export const createAdapter =
 			const fields = schema[unsafe_model].fields;
 			const newMappedKeys =
 				config.mapKeysTransformInput?.(data, unsafe_model) ?? {};
-			fields.id = {
-				type: "string",
-				defaultValue() {
-					if (options.advanced?.generateId === false) return undefined;
-					return (
-						options.advanced?.generateId?.({ model: unsafe_model }) ??
-						defaultGenerateId()
-					);
-				},
-			};
+			if (!config.disableIdGeneration) {
+				fields.id = {
+					type: "string",
+					defaultValue() {
+						if (config.disableIdGeneration) return undefined;
+						if (options.advanced?.generateId === false) return undefined;
+						return (
+							options.advanced?.generateId?.({ model: unsafe_model }) ??
+							defaultGenerateId()
+						);
+					},
+				};
+			}
 			for (const field in fields) {
 				const value = data[field];
 				const fieldAttributes = fields[field];
