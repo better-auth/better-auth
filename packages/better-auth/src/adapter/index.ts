@@ -142,6 +142,13 @@ export const createAdapter =
 				config.mapKeysTransformInput?.(data, unsafe_model) ?? {};
 			fields.id = {
 				type: "string",
+				defaultValue() {
+					if (options.advanced?.generateId === false) return undefined;
+					return (
+						options.advanced?.generateId?.({ model: unsafe_model }) ??
+						defaultGenerateId()
+					);
+				},
 			};
 			for (const field in fields) {
 				const value = data[field];
