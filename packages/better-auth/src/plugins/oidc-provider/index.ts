@@ -181,7 +181,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					if (!storedCode) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "No consent prompt found",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 					const verification =
@@ -189,20 +189,20 @@ export const oidcProvider = (options: OIDCOptions) => {
 					if (!verification) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Invalid code",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 					if (verification.expiresAt < new Date()) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Code expired",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
 					if (!value.requireConsent || !value.state) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Consent not required",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 

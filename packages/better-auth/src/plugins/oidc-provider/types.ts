@@ -120,7 +120,7 @@ export interface OIDCOptions {
 	getAdditionalUserInfoClaim?: (
 		user: User & Record<string, any>,
 		scopes: string[],
-	) => Record<string, any>;
+	) => Record<string, any> | Promise<Record<string, any>>;
 }
 
 export interface AuthorizationQuery {
