@@ -45,6 +45,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			debugLogs: true,
 			supportsJSON: true,
 			supportsDates: true,
+			supportsBooleans: true,
 		},
 		adapter: ({ getField, debugLog }) => {
 			function getSchema(model: string) {

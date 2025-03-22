@@ -1,3 +1,4 @@
+import type { FieldAttribute } from "../db";
 import type { BetterAuthDbSchema } from "../db/get-tables";
 import type { AdapterSchemaCreation, BetterAuthOptions, Where } from "../types";
 
@@ -35,37 +36,51 @@ export interface AdapterConfig {
 	 */
 	supportsDates: boolean;
 	/**
+	 * If the database doesn't support booleans, set this to `false`.
+	 *
+	 * We will handle the translation between using `boolean`s, and saving `0`s and `1`s to the database.
+	 */
+	supportsBooleans: boolean;
+	/**
 	 * Custom transform input function.
 	 *
 	 * This function is used to transform the input data before it is saved to the database.
 	 */
-	customTransformInput?: (
-		data: Record<string, any>,
+	customTransformInput?: (props: {
+		data: any;
 		/**
 		 * The fields of the model.
 		 */
-		fields: Record<string, any>,
+		fields: FieldAttribute;
+		/**
+		 * The field to transform.
+		 */
+		field: string;
 		/**
 		 * The action to perform.
 		 */
-		action: "create" | "update",
-	) => Record<string, any>;
+		action: "create" | "update";
+	}) => any;
 	/**
 	 * Custom transform output function.
 	 *
 	 * This function is used to transform the output data before it is returned to the user.
 	 */
-	customTransformOutput?: (
-		data: Record<string, any>,
+	customTransformOutput?: (props: {
+		data: any;
 		/**
 		 * The fields of the model.
 		 */
-		fields: Record<string, any>,
+		fields: FieldAttribute;
+		/**
+		 * The field to transform.
+		 */
+		field: string;
 		/**
 		 * The fields to select.
 		 */
-		select: string[],
-	) => Record<string, any>;
+		select: string[];
+	}) => any;
 }
 
 export interface CustomAdapter {
@@ -133,7 +148,7 @@ export interface CustomAdapter {
 	/**
 	 * Your adapter's options.
 	 */
-	options: Record<string, any>;
+	options: Record<string, any> | undefined;
 }
 
 export type CreateCustomAdapter = ({

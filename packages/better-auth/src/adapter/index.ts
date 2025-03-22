@@ -17,7 +17,6 @@ export const createAdapter =
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
 
-	
 		function getField(model: string, field: string) {
 			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 			// Given this, we can't just check if the `model` (that being `id`) is within the schema's fields, since it is never defined.
@@ -89,16 +88,33 @@ export const createAdapter =
 					newValue = await fieldAttributes.transform.input(newValue);
 				}
 
-				if (config.supportsJSON === false && typeof newValue === "object") {
-					newValue = JSON.stringify(newValue);
-				}
-
-				if (config.supportsDates === false && newValue instanceof Date) {
-					newValue = value.toISOString();
-				}
-
 				if (config.customTransformInput) {
-					newValue = config.customTransformInput(newValue, fields, action);
+					newValue = config.customTransformInput({
+						data: newValue,
+						action,
+						field,
+						fields: fieldAttributes,
+					});
+				} else {
+					if (
+						config.supportsJSON === false &&
+						typeof newValue === "object" &&
+						//@ts-expect-error -Future proofing
+						fieldAttributes.type === "json"
+					) {
+						newValue = JSON.stringify(newValue);
+					}
+
+					if (config.supportsDates === false && newValue instanceof Date) {
+						newValue = value.toISOString();
+					}
+
+					if (
+						config.supportsBooleans === false &&
+						typeof newValue === "boolean"
+					) {
+						newValue = newValue ? 1 : 0;
+					}
 				}
 				transformedData[fields[field].fieldName || field] = newValue;
 			}
@@ -135,20 +151,38 @@ export const createAdapter =
 						newValue = await field.transform.output(newValue);
 					}
 
-					if (config.supportsJSON === false && typeof newValue === "object") {
-						newValue = safeJSONParse(newValue);
-					}
-
-					if (config.supportsDates === false && typeof newValue === "string") {
-						newValue = new Date(newValue);
-					}
-
 					if (config.customTransformOutput) {
-						newValue = config.customTransformOutput(
-							newValue,
-							tableSchema,
+						newValue = config.customTransformOutput({
+							data: newValue,
+							field: key,
+							fields: field,
 							select,
-						);
+						});
+					} else {
+						if (
+							config.supportsJSON === false &&
+							typeof newValue === "string" &&
+							//@ts-expect-error  -Future proofing
+							field.type === "json"
+						) {
+							newValue = safeJSONParse(newValue);
+						}
+
+						if (
+							config.supportsDates === false &&
+							typeof newValue === "string" &&
+							field.type === "date"
+						) {
+							newValue = new Date(newValue);
+						}
+
+						if (
+							config.supportsBooleans === false &&
+							typeof newValue === "number" &&
+							field.type === "boolean"
+						) {
+							newValue = newValue === 1;
+						}
 					}
 					transformedData[key] = newValue;
 				}
@@ -170,7 +204,10 @@ export const createAdapter =
 				if (options.advanced?.generateId) {
 					//@ts-ignore
 					unsafeData.id = options.advanced.generateId({ model });
-				} else if (!("id" in unsafeData) && options.advanced?.generateId !== false) {
+				} else if (
+					!("id" in unsafeData) &&
+					options.advanced?.generateId !== false
+				) {
 					//@ts-ignore
 					unsafeData.id = defaultGenerateId();
 				}
@@ -326,7 +363,10 @@ export const createAdapter =
 						return adapterInstance.createSchema!(file);
 					}
 				: undefined,
-			options: { adapterConfig: config, ...adapterInstance.options },
+			options: {
+				adapterConfig: config,
+				...(adapterInstance.options ? adapterInstance.options : {}),
+			},
 			id: config.adapterId,
 		};
 	};
