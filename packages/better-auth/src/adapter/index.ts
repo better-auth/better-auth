@@ -138,8 +138,7 @@ export const createAdapter =
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model].fields;
-			const newMappedKeys =
-				config.mapKeysTransformInput?.(data, unsafe_model) ?? {};
+			const newMappedKeys = config.mapKeysTransformInput?.() ?? {};
 			if (!config.disableIdGeneration) {
 				fields.id = {
 					type: "string",
@@ -222,8 +221,7 @@ export const createAdapter =
 			select: string[] = [],
 		) => {
 			if (!data) return null;
-			const newMappedKeys =
-				config.mapKeysTransformOutput?.(data, unsafe_model) ?? {};
+			const newMappedKeys = config.mapKeysTransformOutput?.() ?? {};
 			const transformedData: Record<string, any> = {};
 			const tableSchema = schema[unsafe_model].fields;
 			const idKey = Object.entries(newMappedKeys).find(
@@ -238,7 +236,14 @@ export const createAdapter =
 				}
 				const field = tableSchema[key];
 				if (field) {
-					let newValue = data[field.fieldName || key];
+					const originalKey = field.fieldName || key;
+					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
+					let newValue =
+						data[
+							Object.entries(newMappedKeys).find(
+								([_, v]) => v === originalKey,
+							)?.[0] || originalKey
+						];
 
 					if (field.transform?.output) {
 						newValue = await field.transform.output(newValue);

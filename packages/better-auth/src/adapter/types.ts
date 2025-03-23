@@ -74,17 +74,14 @@ export interface AdapterConfig {
 	 * This can be a partial object that only transforms some keys.
 	 *
 	 * ```ts
-	 * mapKeysTransformInput: (data, model) => {
+	 * mapKeysTransformInput: () => {
 	 * 	return {
 	 *		id: "_id" // We want to replace `id` to `_id` to save into MongoDB
 	 * 	};
 	 * }
 	 * ```
 	 */
-	mapKeysTransformInput?: (
-		data: Record<string, any>,
-		model: string,
-	) => Record<string, any>;
+	mapKeysTransformInput?: () => Record<string, string>;
 	/**
 	 * Map the keys of the output data.
 	 *
@@ -99,17 +96,14 @@ export interface AdapterConfig {
 	 * This can be a partial object that only transforms some keys.
 	 *
 	 * ```ts
-	 * mapKeysTransformOutput: (data, model) => {
+	 * mapKeysTransformOutput: () => {
 	 * 	return {
 	 * 		_id: "id" // In MongoDB, we save `id` as `_id`. So we want to replace `_id` with `id` when we get the data back.
 	 * 	};
 	 * }
 	 * ```
 	 */
-	mapKeysTransformOutput?: (
-		data: Record<string, any>,
-		model: string,
-	) => Record<string, any>;
+	mapKeysTransformOutput?: () => Record<string, string>;
 	/**
 	 * Custom transform input function.
 	 *
