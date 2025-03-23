@@ -119,7 +119,11 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	);
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
-	const key = getIp(req, ctx.options) + path;
+	const ip = getIp(req, ctx.options);
+	if (!ip) {
+		return;
+	}
+	const key = ip + path;
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
