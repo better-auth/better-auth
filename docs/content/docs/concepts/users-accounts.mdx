@@ -356,6 +356,22 @@ You can unlink a user account by providing a `providerId`.
 await authClient.unlinkAccount({
     providerId: "google"
 });
+
+// Unlink a specific account
+await authClient.unlinkAccount({
+    providerId: "google",
+    accountId: "123"
+});
 ```
 
-If the `providerId` doesn't exist, it will throw an error. Additionally, if the user only has one account, the unlinking process will fail to prevent account lockout.
+If the account doesn't exist, it will throw an error. Additionally, if the user only has one account, the unlinking process will fail to prevent account lockout unless `allowUnlinkingAll` is set to `true`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    account: {
+        accountLinking: {
+            allowUnlinkingAll: true
+        }
+    },
+});
+```
