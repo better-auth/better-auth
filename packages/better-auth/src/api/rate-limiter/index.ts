@@ -55,7 +55,7 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 			try {
 				if (_update) {
 					await db.updateMany({
-						model: modelName ?? "rateLimit",
+						model: "rateLimit",
 						where: [{ field: "key", value: key }],
 						update: {
 							count: value.count,
@@ -64,7 +64,7 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 					});
 				} else {
 					await db.create({
-						model: modelName ?? "rateLimit",
+						model: "rateLimit",
 						data: {
 							key,
 							count: value.count,
