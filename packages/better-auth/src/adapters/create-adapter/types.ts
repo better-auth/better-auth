@@ -38,25 +38,32 @@ export interface AdapterConfig {
 	 * If the database doesn't support JSON columns, set this to `false`.
 	 *
 	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
+	 * 
+	 * @default true
 	 */
-	supportsJSON: boolean;
+	supportsJSON?: boolean;
 	/**
 	 * If the database doesn't support dates, set this to `false`.
 	 *
 	 * We will handle the translation between using `Date` objects, and saving `string`s to the database.
+	 *
+	 * @default true
 	 */
-	supportsDates: boolean;
+	supportsDates?: boolean;
 	/**
 	 * If the database doesn't support booleans, set this to `false`.
 	 *
 	 * We will handle the translation between using `boolean`s, and saving `0`s and `1`s to the database.
+	 *
+	 * @default true
 	 */
-	supportsBooleans: boolean;
+	supportsBooleans?: boolean;
 	/**
 	 * Disable id generation for the `create` method.
 	 *
 	 * This is useful for databases that don't support custom id generation.
 	 *
+	 * @default false
 	 */
 	disableIdGeneration?: boolean;
 	/**
