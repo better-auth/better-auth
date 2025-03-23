@@ -1,4 +1,4 @@
-import { createAdapter } from "../../adapter";
+import { createAdapter } from "../create-adapter";
 import { BetterAuthError } from "../../error";
 import type { Where } from "../../types";
 

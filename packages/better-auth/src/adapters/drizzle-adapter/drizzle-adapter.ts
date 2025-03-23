@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm";
 import { BetterAuthError } from "../../error";
 import type { Where } from "../../types";
-import { createAdapter } from "../../adapter";
+import { createAdapter } from "../create-adapter";
 
 export interface DB {
 	[key: string]: any;

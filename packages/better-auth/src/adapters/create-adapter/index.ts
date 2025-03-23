@@ -1,9 +1,10 @@
-import { withApplyDefault } from "../adapters/utils";
-import { getAuthTables } from "../db/get-tables";
-import type { Adapter, BetterAuthOptions, Where } from "../types";
-import { generateId as defaultGenerateId, logger } from "../utils";
-import { safeJSONParse } from "../utils/json";
+import { safeJSONParse } from "../../utils/json";
+import { withApplyDefault } from "../../adapters/utils";
+import { getAuthTables } from "../../db/get-tables";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId as defaultGenerateId, logger } from "../../utils";
 import type { AdapterConfig, CreateCustomAdapter } from "./types";
+export * from "./types";
 
 export const createAdapter =
 	({

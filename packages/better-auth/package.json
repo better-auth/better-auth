@@ -263,6 +263,16 @@
         "default": "./dist/adapters/test.cjs"
       }
     },
+    "./adapters": {
+      "import": {
+        "types": "./dist/adapters/index.d.ts",
+        "default": "./dist/adapters/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/index.d.cts",
+        "default": "./dist/adapters/index.cjs"
+      }
+    },
     "./plugins/access": {
       "import": {
         "types": "./dist/plugins/access/index.d.ts",

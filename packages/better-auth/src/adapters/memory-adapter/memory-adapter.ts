@@ -1,4 +1,4 @@
-import { createAdapter } from "../../adapter";
+import { createAdapter } from "../create-adapter";
 import type { Where } from "../../types";
 
 export interface MemoryDB {

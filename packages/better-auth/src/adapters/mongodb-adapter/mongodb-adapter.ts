@@ -1,6 +1,6 @@
 import { ObjectId, type Db } from "mongodb";
 import type { Where } from "../../types";
-import { createAdapter } from "../../adapter";
+import { createAdapter } from "../create-adapter";
 
 export const mongodbAdapter = (db: Db) =>
 	createAdapter({
@@ -12,12 +12,12 @@ export const mongodbAdapter = (db: Db) =>
 			supportsJSON: true,
 			supportsDates: true,
 			supportsBooleans: true,
-			mapKeysTransformInput: (data: Record<string, any>, model: string) => {
+			mapKeysTransformInput: () => {
 				return {
 					id: "_id",
 				};
 			},
-			mapKeysTransformOutput: (data: Record<string, any>, model: string) => {
+			mapKeysTransformOutput: () => {
 				return {
 					_id: "id",
 				};

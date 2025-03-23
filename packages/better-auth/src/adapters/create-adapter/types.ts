@@ -1,6 +1,6 @@
-import type { FieldAttribute } from "../db";
-import type { BetterAuthDbSchema } from "../db/get-tables";
-import type { AdapterSchemaCreation, BetterAuthOptions, Where } from "../types";
+import type { FieldAttribute } from "../../db";
+import type { BetterAuthDbSchema } from "../../db/get-tables";
+import type { AdapterSchemaCreation, BetterAuthOptions, Where } from "../../types";
 
 export interface AdapterConfig {
 	/**
