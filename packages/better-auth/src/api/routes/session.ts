@@ -376,7 +376,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 					ctx.context.session.user.id,
 				);
 				const activeSessions = sessions.filter((session) => {
-					return session.expiresAt > new Date();
+					return new Date(session.expiresAt) > new Date();
 				});
 				return ctx.json(
 					activeSessions as unknown as Prettify<InferSession<Option>>[],
@@ -542,7 +542,7 @@ export const revokeOtherSessions = createAuthEndpoint(
 			session.user.id,
 		);
 		const activeSessions = sessions.filter((session) => {
-			return session.expiresAt > new Date();
+			return new Date(session.expiresAt) > new Date();
 		});
 		const otherSessions = activeSessions.filter(
 			(session) => session.token !== ctx.context.session.session.token,

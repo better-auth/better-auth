@@ -64,7 +64,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionTokens);
 					const validSessions = sessions.filter(
-						(session) => session && session.session.expiresAt > new Date(),
+						(session) => session && new Date(session.session.expiresAt) > new Date(),
 					);
 					const uniqueUserSessions = validSessions.reduce(
 						(acc, session) => {
@@ -218,7 +218,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							const sessions =
 								await internalAdapter.findSessions(sessionTokens);
 							const validSessions = sessions.filter(
-								(session) => session && session.session.expiresAt > new Date(),
+								(session) => session && new Date(session.session.expiresAt) > new Date(),
 							);
 
 							if (validSessions.length > 0) {
