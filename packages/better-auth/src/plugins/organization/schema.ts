@@ -43,6 +43,7 @@ export const teamSchema = z.object({
 	id: z.string().default(generateId),
 	name: z.string().min(1),
 	organizationId: z.string(),
+	slug: z.string().optional(),
 	createdAt: z.date(),
 	updatedAt: z.date().optional(),
 });
