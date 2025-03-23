@@ -393,10 +393,10 @@ export async function generateAuthConfig({
 			} else if (
 				opts.database === "prisma:mysql" ||
 				opts.database === "prisma:sqlite" ||
-				opts.database === "prisma:pg"
+				opts.database === "prisma:postgresql"
 			) {
 				await add_db({
-					db_code: `new PrismaAdapter(client, {\nprovider: "${opts.database.replace(
+					db_code: `prismaAdapter(client, {\nprovider: "${opts.database.replace(
 						"prisma:",
 						"",
 					)}",\n})`,
@@ -408,7 +408,7 @@ export async function generateAuthConfig({
 							path: "better-auth/adapters/prisma",
 							variables: [
 								{
-									name: "PrismaAdapter",
+									name: "prismaAdapter",
 								},
 							],
 						},
