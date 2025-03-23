@@ -183,9 +183,10 @@ export const unlinkAccount = createAuthEndpoint(
 				message: BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
 			});
 		}
-		const accountExist = accounts.find(
-			(account) =>
-				account.providerId === providerId || account.accountId === accountId,
+		const accountExist = accounts.find((account) =>
+			accountId
+				? account.accountId === accountId && account.providerId === providerId
+				: account.providerId === providerId,
 		);
 		if (!accountExist) {
 			throw new APIError("BAD_REQUEST", {
