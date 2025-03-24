@@ -33,7 +33,7 @@ export type UsernameOptions = {
 };
 
 function defaultUsernameValidator(username: string) {
-	return /^[a-zA-Z0-9_]+$/.test(username);
+	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
 export const username = (options?: UsernameOptions) => {

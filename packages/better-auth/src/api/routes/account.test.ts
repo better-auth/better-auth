@@ -221,4 +221,105 @@ describe("account", async () => {
 			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
 		);
 	});
+
+	it("should unlink account with specific accountId", async () => {
+		const { headers } = await signInWithTestUser();
+		const previousAccounts = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(previousAccounts.data?.length).toBeGreaterThan(0);
+
+		const accountToUnlink = previousAccounts.data![0];
+		const unlinkAccountId = accountToUnlink.accountId;
+		const providerId = accountToUnlink.provider;
+		const accountsWithSameProvider = previousAccounts.data!.filter(
+			(account) => account.provider === providerId,
+		);
+		if (accountsWithSameProvider.length <= 1) {
+			return;
+		}
+
+		const unlinkRes = await client.unlinkAccount({
+			providerId,
+			accountId: unlinkAccountId!,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(unlinkRes.data?.status).toBe(true);
+
+		const accountsAfterUnlink = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(accountsAfterUnlink.data?.length).toBe(
+			previousAccounts.data!.length - 1,
+		);
+		expect(
+			accountsAfterUnlink.data?.find((a) => a.accountId === unlinkAccountId),
+		).toBeUndefined();
+	});
+
+	it("should unlink all accounts with specific providerId", async () => {
+		const { headers, user } = await signInWithTestUser();
+		await ctx.adapter.create({
+			model: "account",
+			data: {
+				providerId: "google",
+				accountId: "123",
+				userId: user.id,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await ctx.adapter.create({
+			model: "account",
+			data: {
+				providerId: "google",
+				accountId: "345",
+				userId: user.id,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const previousAccounts = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const googleAccounts = previousAccounts.data!.filter(
+			(account) => account.provider === "google",
+		);
+		expect(googleAccounts.length).toBeGreaterThan(1);
+
+		for (let i = 0; i < googleAccounts.length - 1; i++) {
+			const unlinkRes = await client.unlinkAccount({
+				providerId: "google",
+				accountId: googleAccounts[i].accountId!,
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(unlinkRes.data?.status).toBe(true);
+		}
+
+		const accountsAfterUnlink = await client.listAccounts({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const remainingGoogleAccounts = accountsAfterUnlink.data!.filter(
+			(account) => account.provider === "google",
+		);
+		expect(remainingGoogleAccounts.length).toBe(1);
+	});
 });

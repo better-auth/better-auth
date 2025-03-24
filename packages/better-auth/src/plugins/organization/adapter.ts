@@ -391,7 +391,6 @@ export const getOrgAdapter = (
 						value: userId,
 					},
 				],
-				limit: options?.membershipLimit || 100,
 			});
 
 			if (!members || members.length === 0) {
