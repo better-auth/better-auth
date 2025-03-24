@@ -431,7 +431,7 @@ export const createAdapter =
 					"UpdateMany (Parsed Input):",
 					{ model, data },
 				);
-				const res = await adapterInstance.updateMany({
+				const updatedCount = await adapterInstance.updateMany({
 					model,
 					where,
 					update: data,
@@ -440,16 +440,15 @@ export const createAdapter =
 					{ method: "updateMany" },
 					`#${thisTransactionId} (3/4)`,
 					"UpdateMany (DB Result):",
-					{ model, data: res },
+					{ model, data:  updatedCount },
 				);
-				const transformed = await transformOutput(res as any, unsafeModel);
 				debugLog(
 					{ method: "updateMany" },
 					`#${thisTransactionId} (4/4)`,
 					"UpdateMany (Parsed Result):",
-					{ model, data: transformed },
+					{ model, data: updatedCount },
 				);
-				return transformed;
+				return updatedCount;
 			},
 			findOne: async <T>({
 				model: unsafeModel,
