@@ -6,6 +6,9 @@ export function withApplyDefault(
 	action: "create" | "update",
 	useNumberId: boolean = false,
 ) {
+	if (useNumberId && field.references && field.references.field === "id") {
+		return Number(value);
+	}
 	if (action === "update") {
 		return value;
 	}
@@ -17,5 +20,9 @@ export function withApplyDefault(
 			return field.defaultValue;
 		}
 	}
-	return value;
+	return field.type === "string"
+		? String(value)
+		: field.type === "number"
+			? Number(value)
+			: value;
 }
