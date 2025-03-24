@@ -83,6 +83,7 @@ export const gitlab = (options: GitlabOptions) => {
 			state,
 			scopes,
 			codeVerifier,
+			loginHint,
 			redirectURI,
 		}) => {
 			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
@@ -96,6 +97,7 @@ export const gitlab = (options: GitlabOptions) => {
 				state,
 				redirectURI,
 				codeVerifier,
+				loginHint,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {

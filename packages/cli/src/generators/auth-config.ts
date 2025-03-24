@@ -365,7 +365,7 @@ export async function generateAuthConfig({
 				opts.database === "drizzle:pg"
 			) {
 				await add_db({
-					db_code: `new DrizzleAdapter(db, {\nprovider: "${opts.database.replace(
+					db_code: `drizzleAdapter(db, {\nprovider: "${opts.database.replace(
 						"drizzle:",
 						"",
 					)}",\n})`,
@@ -376,7 +376,7 @@ export async function generateAuthConfig({
 							path: "better-auth/adapters/drizzle",
 							variables: [
 								{
-									name: "DrizzleAdapter",
+									name: "drizzleAdapter",
 								},
 							],
 						},

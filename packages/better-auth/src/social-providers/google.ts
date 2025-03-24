@@ -34,9 +34,17 @@ export interface GoogleProfile {
 }
 
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
+	/**
+	 * The access type to use for the authorization code request
+	 */
 	accessType?: "offline" | "online";
-	prompt?: "none" | "consent" | "select_account";
+	/**
+	 * The display mode to use for the authorization code request
+	 */
 	display?: "page" | "popup" | "touch" | "wap";
+	/**
+	 * The hosted domain of the user
+	 */
 	hd?: string;
 }
 
@@ -44,7 +52,14 @@ export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			loginHint,
+			display,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
@@ -67,14 +82,12 @@ export const google = (options: GoogleOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				prompt: options.prompt,
+				accessType: options.accessType,
+				display: display || options.display,
+				loginHint,
+				hd: options.hd,
 			});
-
-			options.accessType &&
-				url.searchParams.set("access_type", options.accessType);
-			options.prompt && url.searchParams.set("prompt", options.prompt);
-			options.display && url.searchParams.set("display", options.display);
-			options.hd && url.searchParams.set("hd", options.hd);
-
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

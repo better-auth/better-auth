@@ -1470,6 +1470,25 @@ describe("api-key", async () => {
 		expect(apiKey.success).toEqual(true);
 	});
 
+	it("should delete an API key by ID with headers using auth-client", async () => {
+		const newApiKey = await client.apiKey.create({}, { headers: headers });
+		if (!newApiKey.data) return;
+
+		const apiKey = await client.apiKey.delete(
+			{
+				keyId: newApiKey.data.id,
+			},
+			{ headers },
+		);
+
+		if (!apiKey.data?.success) {
+			console.log(apiKey.error);
+		}
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.data?.success).toEqual(true);
+	});
+
 	it("should fail to delete an API key by ID that doesn't exist", async () => {
 		let result: { data: { success: boolean } | null; error: Err | null } = {
 			data: null,

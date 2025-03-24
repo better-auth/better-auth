@@ -30,7 +30,12 @@ export const linkedin = (options: LinkedInOptions) => {
 	return {
 		id: "linkedin",
 		name: "Linkedin",
-		createAuthorizationURL: async ({ state, scopes, redirectURI }) => {
+		createAuthorizationURL: async ({
+			state,
+			scopes,
+			redirectURI,
+			loginHint,
+		}) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["profile", "email", "openid"];
@@ -42,6 +47,7 @@ export const linkedin = (options: LinkedInOptions) => {
 				authorizationEndpoint,
 				scopes: _scopes,
 				state,
+				loginHint,
 				redirectURI,
 			});
 		},
@@ -67,6 +73,9 @@ export const linkedin = (options: LinkedInOptions) => {
 					});
 				},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<LinkedInProfile>(
 				"https://api.linkedin.com/v2/userinfo",
 				{

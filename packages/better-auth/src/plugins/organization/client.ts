@@ -34,9 +34,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
-		? S extends Record<string, Array<any>>
-			? S & DefaultStatements
-			: DefaultStatements
+		? S
 		: DefaultStatements;
 	const roles = {
 		admin: adminAc,
@@ -79,7 +77,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
 				Invitation: {} as InferInvitation<O>,
-				Member: {} as InferInvitation<O>,
+				Member: {} as InferMember<O>,
 				Team: {} as Team,
 			},
 			organization: {
@@ -177,6 +175,12 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					return path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
+			},
+			{
+				matcher(path) {
+					return path.startsWith("/organization/set-active");
+				},
+				signal: "$sessionSignal",
 			},
 			{
 				matcher(path) {

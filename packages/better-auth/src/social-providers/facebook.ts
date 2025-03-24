@@ -31,7 +31,7 @@ export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
+		async createAuthorizationURL({ state, scopes, redirectURI, loginHint }) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "public_profile"];
@@ -44,6 +44,7 @@ export const facebook = (options: FacebookOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
+				loginHint,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

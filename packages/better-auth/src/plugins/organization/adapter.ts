@@ -391,7 +391,6 @@ export const getOrgAdapter = (
 						value: userId,
 					},
 				],
-				limit: options?.membershipLimit || 100,
 			});
 
 			if (!members || members.length === 0) {
@@ -419,7 +418,17 @@ export const getOrgAdapter = (
 			});
 			return team;
 		},
-		findTeamById: async (teamId: string) => {
+		findTeamById: async <IncludeMembers extends boolean>({
+			teamId,
+			organizationId,
+			includeTeamMembers,
+		}: {
+			teamId: string;
+			organizationId?: string;
+			includeTeamMembers?: IncludeMembers;
+		}): Promise<
+			(Team & (IncludeMembers extends true ? { members: Member[] } : {})) | null
+		> => {
 			const team = await adapter.findOne<Team>({
 				model: "team",
 				where: [
@@ -427,25 +436,38 @@ export const getOrgAdapter = (
 						field: "id",
 						value: teamId,
 					},
+					...(organizationId
+						? [
+								{
+									field: "organizationId",
+									value: organizationId,
+								},
+							]
+						: []),
 				],
-			});
-			const members = await adapter.findMany<Member>({
-				model: "member",
-				where: [
-					{
-						field: "teamId",
-						value: teamId,
-					},
-				],
-				limit: options?.membershipLimit || 100,
 			});
 			if (!team) {
 				return null;
 			}
-			return {
-				...team,
-				members,
-			};
+			let members: Member[] = [];
+			if (includeTeamMembers) {
+				members = await adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{
+							field: "teamId",
+							value: teamId,
+						},
+					],
+					limit: options?.membershipLimit || 100,
+				});
+				return {
+					...team,
+					members,
+				};
+			}
+			return team as Team &
+				(IncludeMembers extends true ? { members: Member[] } : {});
 		},
 		updateTeam: async (
 			teamId: string,

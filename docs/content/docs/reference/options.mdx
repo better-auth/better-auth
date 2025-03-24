@@ -316,7 +316,15 @@ export const auth = betterAuth({
 
 - `modelName`: The model name for the account
 - `fields`: Map fields to different column names
-- `accountLinking`: Configuration for account linking
+
+### `accountLinking`
+
+Configuration for account linking.
+
+- `enabled`: Enable account linking (default: `false`)
+- `trustedProviders`: List of trusted providers
+- `allowDifferentEmails`: Allow users to link accounts with different email addresses
+- `allowUnlinkingAll`: Allow users to unlink all accounts
 
 ## `verification`
 
@@ -371,7 +379,14 @@ export const auth = betterAuth({
 			httpOnly: true,
 			secure: true
 		},
-		cookiePrefix: "myapp"
+		cookiePrefix: "myapp",
+		generateId: ((options: {
+			model: LiteralUnion<Models, string>;
+			size?: number;
+		}) => {
+			// Generate a unique ID for the model
+			return "my-id";
+		}) 
 	},
 })
 ```
@@ -383,6 +398,7 @@ export const auth = betterAuth({
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
+- `generateId`: Function to generate a unique ID for a model
 
 ## `databaseHooks`
 
@@ -472,7 +488,7 @@ Disable specific auth paths.
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	disabledPaths: ["/api/auth/signup", "/api/auth/signin/email"],
+	disabledPaths: ["/sign-up/email", "/sign-in/email"],
 })
 ```
 
