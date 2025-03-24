@@ -6,11 +6,6 @@ export function withApplyDefault(
 	action: "create" | "update",
 	useNumberId: boolean = false,
 ) {
-	if (field.references && field.references.field === "id") {
-		if (useNumberId && value) {
-			return Number(value);
-		}
-	}
 	if (action === "update") {
 		return value;
 	}
