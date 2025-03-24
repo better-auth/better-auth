@@ -11,12 +11,16 @@ export interface AdapterConfig {
 	 * Use plural table names.
 	 *
 	 * All tables will be named with an `s` at the end.
+	 *
+	 * @default false
 	 */
-	usePlural: boolean;
+	usePlural?: boolean;
 	/**
 	 * Enable debug logs.
+	 *
+	 * @default false
 	 */
-	debugLogs:
+	debugLogs?:
 		| boolean
 		| {
 				create?: boolean;
@@ -32,8 +36,10 @@ export interface AdapterConfig {
 	 * Name of the adapter.
 	 *
 	 * This is used to identify the adapter in the debug logs.
+	 *
+	 * @default `adapterId`
 	 */
-	adapterName: string;
+	adapterName?: string;
 	/**
 	 * Adapter id
 	 */

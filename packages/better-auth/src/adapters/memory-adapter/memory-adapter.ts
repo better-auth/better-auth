@@ -12,9 +12,6 @@ export const memoryAdapter = (db: MemoryDB) =>
 			adapterName: "Memory Adapter",
 			usePlural: false,
 			debugLogs: false,
-			supportsJSON: true,
-			supportsDates: true,
-			supportsBooleans: true,
 		},
 		adapter: ({ getField }) => {
 			function convertWhereClause(where: Where[], table: any[], model: string) {

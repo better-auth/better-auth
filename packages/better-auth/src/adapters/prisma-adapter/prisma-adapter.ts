@@ -13,6 +13,20 @@ export interface PrismaConfig {
 		| "postgresql"
 		| "sqlserver"
 		| "mongodb";
+
+	/**
+	 * Enable debug logs for the adapter
+	 *
+	 * @default false
+	 */
+	debugLogs?: boolean;
+
+	/**
+	 * Use plural table names
+	 *
+	 * @default false
+	 */
+	usePlural?: boolean;
 }
 
 interface PrismaClient {}
@@ -33,17 +47,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 		config: {
 			adapterId: "prisma",
 			adapterName: "Prisma",
-			usePlural: false,
-			debugLogs: {},
-			supportsJSON: true,
-			supportsBooleans: true,
-			supportsDates: true,
+			usePlural: config.usePlural ?? false,
+			debugLogs: config.debugLogs ?? false,
 		},
-		adapter: ({ options, getField, schema }) => {
+		adapter: ({ getField }) => {
 			const db = prisma as PrismaClientInternal;
-			// function (model: string) {
-			// 	return schema[model].modelName;
-			// }
+
 			const convertSelect = (select?: string[], model?: string) => {
 				if (!select || !model) return undefined;
 				return select.reduce((prev, cur) => {

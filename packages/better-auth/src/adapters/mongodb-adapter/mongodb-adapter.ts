@@ -2,16 +2,28 @@ import { ObjectId, type Db } from "mongodb";
 import type { Where } from "../../types";
 import { createAdapter } from "../create-adapter";
 
-export const mongodbAdapter = (db: Db) =>
+export interface MongoDBAdapterConfig {
+	/**
+	 * Enable debug logs for the adapter
+	 *
+	 * @default false
+	 */
+	debugLogs?: boolean;
+	/**
+	 * Use plural table names
+	 *
+	 * @default false
+	 */
+	usePlural?: boolean;
+}
+
+export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 	createAdapter({
 		config: {
 			adapterId: "mongodb-adapter",
 			adapterName: "MongoDB Adapter",
-			usePlural: false,
-			debugLogs: false,
-			supportsJSON: true,
-			supportsDates: true,
-			supportsBooleans: true,
+			usePlural: config?.usePlural ?? false,
+			debugLogs: config?.debugLogs ?? false,
 			mapKeysTransformInput: {
 				id: "_id",
 			},

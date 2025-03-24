@@ -18,6 +18,7 @@ export const createAdapter =
 		config.supportsBooleans = config.supportsBooleans ?? true;
 		config.supportsDates = config.supportsDates ?? true;
 		config.supportsJSON = config.supportsJSON ?? true;
+		config.adapterName = config.adapterName ?? config.adapterId;
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);

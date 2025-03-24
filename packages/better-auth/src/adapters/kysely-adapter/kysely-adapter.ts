@@ -8,6 +8,12 @@ interface KyselyAdapterConfig {
 	 * Database type.
 	 */
 	type?: KyselyDatabaseType;
+	/**
+	 * Enable debug logs for the adapter
+	 *
+	 * @default false
+	 */
+	debugLogs?: boolean;
 }
 
 export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
@@ -16,10 +22,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			adapterId: "kysely",
 			adapterName: "Kysely Adapter",
 			usePlural: false,
-			debugLogs: false,
-			supportsJSON: true,
-			supportsDates: true,
-			supportsBooleans: true,
+			debugLogs: config?.debugLogs ?? false,
 			customTransformInput({ data: value, field, fields: f }) {
 				if (field === "id") {
 					return value;

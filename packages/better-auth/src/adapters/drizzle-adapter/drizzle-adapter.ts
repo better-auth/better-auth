@@ -34,6 +34,12 @@ export interface DrizzleAdapterConfig {
 	 * has an object with a key "users" instead of "user"
 	 */
 	usePlural?: boolean;
+	/**
+	 * Enable debug logs for the adapter
+	 *
+	 * @default false
+	 */
+	debugLogs?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
@@ -42,10 +48,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			adapterId: "drizzle",
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
-			debugLogs: false,
-			supportsJSON: true,
-			supportsDates: true,
-			supportsBooleans: true,
+			debugLogs: config.debugLogs ?? false,
 		},
 		adapter: ({ getField, debugLog }) => {
 			function getSchema(model: string) {
