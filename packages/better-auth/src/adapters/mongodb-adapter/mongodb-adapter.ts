@@ -30,7 +30,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 			mapKeysTransformOutput: {
 				_id: "id",
 			},
-			customTransformInput({ action, data, field, fieldAttributes, schema, model }) {
+			customTransformInput({
+				action,
+				data,
+				field,
+				fieldAttributes,
+				schema,
+				model,
+			}) {
 				// Given the key transformation, we know that `id` is already mapped to `_id`
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
 					if (action === "update") {
