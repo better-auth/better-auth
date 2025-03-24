@@ -4,6 +4,7 @@ import { createHash } from "@better-auth/utils/hash"
 import { betterFetch } from '@better-fetch/fetch';
 
 async function checkPasswordCompromise(password: string) {
+    if (!password) return
     const sha1Hash = (await createHash('SHA-1', 'hex').digest(password)).toUpperCase()
     const prefix = sha1Hash.substring(0, 5)
     const suffix = sha1Hash.substring(5)
@@ -42,38 +43,20 @@ async function checkPasswordCompromise(password: string) {
 
 export const haveIBeenPwnd = () =>
   ({
-    id: "betterPassword",
+    id: "haveIBeenPwnd",
     options: {
         databaseHooks: {
             account: {
               create: {
                 async before(user, ctx) {
-                  if (!ctx?.body) {
-                    throw new APIError('BAD_REQUEST', { message: 'No data provided' })
-                  }
-        
                   const password = ctx.body.newPassword || ctx.body.password
-        
-                  if (!password) {
-                    throw new APIError('BAD_REQUEST', { message: 'Password is required' })
-                  }
-        
                   await checkPasswordCompromise(password)
                 }
               },
               update: {
                 async before(user, ctx) {
-                  if (!ctx?.body) {
-                    throw new APIError('BAD_REQUEST', { message: 'No data provided' })
-                  }
-        
-                  const password = ctx.body.newPassword || ctx.body.password
-        
-                  if (!password) {
-                    throw new APIError('BAD_REQUEST', { message: 'Password is required' })
-                  }
-        
-                  await checkPasswordCompromise(password)
+                    const password = ctx.body.newPassword || ctx.body.password
+                    await checkPasswordCompromise(password)
                 }
               }
             }
