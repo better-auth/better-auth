@@ -144,7 +144,7 @@ export const createAdapter =
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model].fields;
-			const newMappedKeys = config.mapKeysTransformInput?.() ?? {};
+			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (!config.disableIdGeneration) {
 				fields.id = {
 					type: "string",
@@ -227,7 +227,7 @@ export const createAdapter =
 			select: string[] = [],
 		) => {
 			if (!data) return null;
-			const newMappedKeys = config.mapKeysTransformOutput?.() ?? {};
+			const newMappedKeys = config.mapKeysTransformOutput ?? {};
 			const transformedData: Record<string, any> = {};
 			const tableSchema = schema[unsafe_model].fields;
 			const idKey = Object.entries(newMappedKeys).find(

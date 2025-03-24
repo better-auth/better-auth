@@ -12,15 +12,11 @@ export const mongodbAdapter = (db: Db) =>
 			supportsJSON: true,
 			supportsDates: true,
 			supportsBooleans: true,
-			mapKeysTransformInput: () => {
-				return {
-					id: "_id",
-				};
+			mapKeysTransformInput: {
+				id: "_id",
 			},
-			mapKeysTransformOutput: () => {
-				return {
-					_id: "id",
-				};
+			mapKeysTransformOutput: {
+				_id: "id",
 			},
 			customTransformInput({ action, data, field, fields, schema, model }) {
 				// Given the key transformation, we know that `id` is already mapped to `_id`

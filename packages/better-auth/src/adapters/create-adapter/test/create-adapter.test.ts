@@ -526,10 +526,8 @@ describe("Create Adapter Helper", async () => {
 					const adapter = await createTestAdapter({
 						config: {
 							debugLogs: {},
-							mapKeysTransformInput() {
-								return {
-									email: "email_address",
-								};
+							mapKeysTransformInput: {
+								email: "email_address",
 							},
 						},
 						adapter(args_0) {
@@ -561,10 +559,8 @@ describe("Create Adapter Helper", async () => {
 					const adapter = await createTestAdapter({
 						config: {
 							debugLogs: {},
-							mapKeysTransformOutput() {
-								return {
-									wrong_email_key: "email",
-								};
+							mapKeysTransformOutput: {
+								email: "wrong_email_key",
 							},
 						},
 
@@ -572,12 +568,7 @@ describe("Create Adapter Helper", async () => {
 							return {
 								async create(data) {
 									r(data as any);
-									const new_data = { ...data.data };
-									//@ts-ignore
-									new_data["wrong_email_key"] = new_data["email"];
-									// biome-ignore lint/performance/noDelete: <explanation>
-									delete new_data["email"];
-									return new_data;
+									return data.data;
 								},
 							};
 						},
@@ -585,12 +576,12 @@ describe("Create Adapter Helper", async () => {
 					const res = (await adapter.create({
 						model: "user",
 						data: { email: "test@test.com" },
-					})) as { email: string };
+					})) as { wrong_email_key: string };
 					// Even though we're using the output key transformation, we still don't actually get the key transformation we want.
 					// This is because the output is also parsed against the schema, and the `wrong_email_key` key is not in the schema.
-					expect(res).toHaveProperty("email");
-					expect(res).not.toHaveProperty("wrong_email_key");
-					expect(res.email).toEqual("test@test.com");
+					expect(res).toHaveProperty("wrong_email_key");
+					expect(res).not.toHaveProperty("email");
+					expect(res.wrong_email_key).toEqual("test@test.com");
 				});
 
 				expect(parameters.data).toHaveProperty("email");
@@ -604,15 +595,11 @@ describe("Create Adapter Helper", async () => {
 					const adapter = await createTestAdapter({
 						config: {
 							debugLogs: {},
-							mapKeysTransformInput() {
-								return {
-									email: "email_address",
-								};
+							mapKeysTransformInput: {
+								email: "email_address",
 							},
-							mapKeysTransformOutput() {
-								return {
-									email_address: "email",
-								};
+							mapKeysTransformOutput: {
+								email_address: "email",
 							},
 						},
 						adapter(args_0) {
@@ -1106,10 +1093,8 @@ describe("Create Adapter Helper", async () => {
 					const adapter = await createTestAdapter({
 						config: {
 							debugLogs: {},
-							mapKeysTransformInput() {
-								return {
-									email: "email_address",
-								};
+							mapKeysTransformInput: {
+								email: "email_address",
 							},
 						},
 						adapter(args_0) {
@@ -1147,10 +1132,8 @@ describe("Create Adapter Helper", async () => {
 					const adapter = await createTestAdapter({
 						config: {
 							debugLogs: {},
-							mapKeysTransformOutput() {
-								return {
-									email: "email_address",
-								};
+							mapKeysTransformOutput: {
+								email: "email_address",
 							},
 						},
 						adapter(args_0) {
@@ -1189,15 +1172,11 @@ describe("Create Adapter Helper", async () => {
 					const adapter = await createTestAdapter({
 						config: {
 							debugLogs: {},
-							mapKeysTransformInput() {
-								return {
-									email: "email_address",
-								};
+							mapKeysTransformInput: {
+								email: "email_address",
 							},
-							mapKeysTransformOutput() {
-								return {
-									email_address: "email",
-								};
+							mapKeysTransformOutput: {
+								email_address: "email",
 							},
 						},
 						adapter(args_0) {
