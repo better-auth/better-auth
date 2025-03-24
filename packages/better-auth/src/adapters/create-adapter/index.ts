@@ -136,6 +136,7 @@ export const createAdapter =
 			getField,
 			getDefaultModelName,
 		});
+		adapterInstance.options = options;
 
 		const transformInput = async (
 			data: Record<string, any>,
