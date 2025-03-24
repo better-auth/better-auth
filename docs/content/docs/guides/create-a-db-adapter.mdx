@@ -396,9 +396,20 @@ update: async ({ model, where, update }) => {
 
 The `updateMany` method is used to update multiple records in the database.
 
+parameters:
+
+- `model`: The model/table name that the records will be updated in.
+- `where`: The `where` clause to update the records by.
+- `update`: The data to update the records with.
+
+<Callout>
+Make sure to return the number of records that were updated.
+</Callout>
+
 ```ts title="Example"
-updateMany: async ({ data, model, select }) => {
-  // ...
+updateMany: async ({ model, where, update }) => {
+  // Example of updating multiple records in the database.
+  return await db.update(model).set(update).where(where);
 }
 ```
 
@@ -406,9 +417,15 @@ updateMany: async ({ data, model, select }) => {
 
 The `delete` method is used to delete a record from the database.
 
+parameters:
+
+- `model`: The model/table name that the record will be deleted from.
+- `where`: The `where` clause to delete the record by.
+
 ```ts title="Example"
-delete: async ({ data, model, select }) => {
-  // ...
+delete: async ({ model, where }) => {
+  // Example of deleting a record from the database.
+  await db.delete(model).where(where);
 }
 ```
 
@@ -417,8 +434,9 @@ delete: async ({ data, model, select }) => {
 The `deleteMany` method is used to delete multiple records from the database.
 
 ```ts title="Example"
-deleteMany: async ({ data, model, select }) => {
-  // ...
+deleteMany: async ({ model, where }) => {
+  // Example of deleting multiple records from the database.
+  return await db.delete(model).where(where);
 }
 ```
 

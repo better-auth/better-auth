@@ -136,7 +136,6 @@ export const createAdapter =
 			getField,
 			getDefaultModelName,
 		});
-		adapterInstance.options = options;
 
 		const transformInput = async (
 			data: Record<string, any>,
@@ -624,7 +623,7 @@ export const createAdapter =
 				: undefined,
 			options: {
 				adapterConfig: config,
-				...(adapterInstance.options ? adapterInstance.options : {}),
+				...(adapterInstance.options ?? {}),
 			},
 			id: config.adapterId,
 		};
