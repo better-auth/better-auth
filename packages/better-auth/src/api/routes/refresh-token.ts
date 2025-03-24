@@ -3,21 +3,18 @@ import { z } from "zod";
 import { APIError } from "better-call";
 import type { OAuth2Tokens } from "../../oauth2";
 import { getSessionFromCtx } from "./session";
-import type { Account } from "../../types";
 
 export const refreshToken = createAuthEndpoint(
 	"/refresh-token",
 	{
 		method: "POST",
 		body: z.object({
+			providerId: z.string({
+				description: "The provider ID for the OAuth provider",
+			}),
 			accountId: z
 				.string({
 					description: "The account ID associated with the refresh token",
-				})
-				.optional(),
-			providerId: z
-				.string({
-					description: "The provider ID for the OAuth provider",
 				})
 				.optional(),
 			userId: z
@@ -73,66 +70,51 @@ export const refreshToken = createAuthEndpoint(
 		const { providerId, accountId, userId } = ctx.body;
 		const req = ctx.request;
 		const session = await getSessionFromCtx(ctx);
-
-		let resolvedUserId = session?.user?.id;
-		if (req) {
-			resolvedUserId = userId;
+		if (req && !session) {
+			throw ctx.error("UNAUTHORIZED");
 		}
-		if (!resolvedUserId && accountId && providerId) {
+		let resolvedUserId = session?.user?.id || userId;
+		if (!resolvedUserId) {
 			throw new APIError("BAD_REQUEST", {
-				message: `Either userId , accountId or providerId is required`,
+				message: `Either userId or session is required`,
 			});
 		}
-		let account: Account | null = null;
-		const provider = providerId
-			? ctx.context.socialProviders.find((p) => p.id === providerId)
-			: undefined;
-		if (providerId) {
-			if (!provider) {
-				throw new APIError("BAD_REQUEST", {
-					message: `Provider ${providerId} not found.`,
-				});
-			} else if (!provider.refreshAccessToken) {
-				throw new APIError("BAD_REQUEST", {
-					message: `Provider ${providerId} does not support token refreshing.`,
-				});
-			}
+		const accounts =
+			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+		const account = accounts.find((acc) =>
+			accountId
+				? acc.id === accountId && acc.providerId === providerId
+				: acc.providerId === providerId,
+		);
+		if (!account) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
+		}
+		const provider = ctx.context.socialProviders.find(
+			(p) => p.id === providerId,
+		);
+		if (!provider) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Provider ${providerId} not found.`,
+			});
+		}
+		if (!provider.refreshAccessToken) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Provider ${providerId} does not support token refreshing.`,
+			});
 		}
 		try {
-			if (accountId) {
-				account = await ctx.context.internalAdapter.findAccount(accountId);
-			} else if (resolvedUserId) {
-				let accounts: Account[] = [];
-				accounts =
-					await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-				if (providerId) {
-					let accounts = accounts.filter(
-						(acc) => acc.providerId === providerId,
-					);
-				} else {
-					account = accounts[0];
-				}
-			}
-			if (!account) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Account not found",
-				});
-			}
-			const resolvedProvider =
-				provider ||
-				ctx.context.socialProviders.find((p) => p.id === account?.providerId);
-
-			if (!resolvedProvider || !resolvedProvider.refreshAccessToken) {
-				throw new APIError("BAD_REQUEST", {
-					message: `Provider ${account.providerId} does not support token refreshing.`,
-				});
-			}
-			const tokens: OAuth2Tokens = await resolvedProvider.refreshAccessToken(
+			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
 				account.refreshToken as string,
 			);
-			return ctx.json({
-				...tokens,
+			await ctx.context.internalAdapter.updateAccount(account.id, {
+				accessToken: tokens.accessToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshToken: tokens.refreshToken,
+				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
+			return ctx.json(tokens);
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Failed to refresh access token",
