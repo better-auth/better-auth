@@ -4,7 +4,7 @@ export function withApplyDefault(
 	value: any,
 	field: FieldAttribute,
 	action: "create" | "update",
-	useNumberId: boolean,
+	useNumberId: boolean = false,
 ) {
 	if (field.references && field.references.field === "id") {
 		if (useNumberId && value) {
