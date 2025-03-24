@@ -4,7 +4,13 @@ export function withApplyDefault(
 	value: any,
 	field: FieldAttribute,
 	action: "create" | "update",
+	useNumberId: boolean,
 ) {
+	if (field.references && field.references.field === "id") {
+		if (useNumberId && value) {
+			return Number(value);
+		}
+	}
 	if (action === "update") {
 		return value;
 	}

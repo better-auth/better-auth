@@ -1,4 +1,4 @@
-import { getAuthTables } from "../../db";
+import { getAuthTables, type FieldAttribute } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
@@ -56,6 +56,26 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 		return schema[model].modelName;
 	}
 
+	function getValue(value: any, model: string, field: string) {
+		if (field === "id" && options.advanced?.useNumberId) {
+			if (Array.isArray(value)) {
+				return value.map((v) => Number(v));
+			}
+			return Number(value);
+		}
+		const fieldSchema: FieldAttribute | undefined = schema[model].fields[field];
+		if (fieldSchema?.references && fieldSchema.references.field === "id") {
+			if (options.advanced?.useNumberId) {
+				if (Array.isArray(value)) {
+					return value.map((v) => Number(v));
+				}
+				return Number(value);
+			}
+			return value;
+		}
+		return value;
+	}
+
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
 		transformInput(
@@ -86,6 +106,7 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 					value,
 					fields[field],
 					action,
+					options.advanced?.useNumberId || false,
 				);
 			}
 			return transformedData;
@@ -126,9 +147,13 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 				return {
 					[getField(model, w.field)]:
 						w.operator === "eq" || !w.operator
-							? w.value
+							? getValue(w.value, model, w.field)
 							: {
-									[operatorToPrismaOperator(w.operator)]: w.value,
+									[operatorToPrismaOperator(w.operator)]: getValue(
+										w.value,
+										model,
+										w.field,
+									),
 								},
 				};
 			}
@@ -138,16 +163,20 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 				return {
 					[getField(model, w.field)]:
 						w.operator === "eq" || !w.operator
-							? w.value
+							? getValue(w.value, model, w.field)
 							: {
-									[operatorToPrismaOperator(w.operator)]: w.value,
+									[operatorToPrismaOperator(w.operator)]: getValue(
+										w.value,
+										model,
+										w.field,
+									),
 								},
 				};
 			});
 			const orClause = or.map((w) => {
 				return {
 					[getField(model, w.field)]: {
-						[w.operator || "eq"]: w.value,
+						[w.operator || "eq"]: getValue(w.value, model, w.field),
 					},
 				};
 			});

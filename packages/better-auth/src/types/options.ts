@@ -652,6 +652,15 @@ export type BetterAuthOptions = {
 					size?: number;
 			  }) => string)
 			| false;
+		/**
+		 * Use number id instead of string id
+		 *
+		 * This would be useful if you are using a
+		 * database that auto generates number ids.
+		 *
+		 * @default false
+		 */
+		useNumberId?: boolean;
 	};
 	logger?: Logger;
 	/**
