@@ -127,7 +127,7 @@ export interface AdapterConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fields: FieldAttribute;
+		fieldAttributes: FieldAttribute;
 		/**
 		 * The field to transform.
 		 */
@@ -159,7 +159,7 @@ export interface AdapterConfig {
 		/**
 		 * The fields of the model.
 		 */
-		fields: FieldAttribute;
+		fieldAttributes: FieldAttribute;
 		/**
 		 * The field to transform.
 		 */

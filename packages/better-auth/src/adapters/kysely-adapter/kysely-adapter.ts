@@ -23,7 +23,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			adapterName: "Kysely Adapter",
 			usePlural: false,
 			debugLogs: config?.debugLogs ?? false,
-			customTransformInput({ data: value, field, fields: f }) {
+			customTransformInput({ data: value, field, fieldAttributes: f }) {
 				if (field === "id") {
 					return value;
 				}
@@ -41,7 +41,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				}
 				return value;
 			},
-			customTransformOutput({ data: value, fields: f }) {
+			customTransformOutput({ data: value, fieldAttributes: f }) {
 				const { type = "sqlite" } = config || {};
 
 				if (

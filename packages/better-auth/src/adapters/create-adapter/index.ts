@@ -180,42 +180,42 @@ export const createAdapter =
 				if (fieldAttributes.transform?.input) {
 					newValue = await fieldAttributes.transform.input(newValue);
 				}
+				if (
+					config.supportsJSON === false &&
+					typeof newValue === "object" &&
+					//@ts-expect-error -Future proofing
+					fieldAttributes.type === "json"
+				) {
+					newValue = JSON.stringify(newValue);
+				}
+
+				if (
+					config.supportsDates === false &&
+					newValue instanceof Date &&
+					fieldAttributes.type === "date"
+				) {
+					newValue = newValue.toISOString();
+				}
+
+				if (
+					config.supportsBooleans === false &&
+					typeof newValue === "boolean"
+				) {
+					newValue = newValue ? 1 : 0;
+				}
 
 				if (config.customTransformInput) {
 					newValue = config.customTransformInput({
 						data: newValue,
 						action,
 						field: newFieldName,
-						fields: fieldAttributes,
+						fieldAttributes: fieldAttributes,
 						model: unsafe_model,
 						schema,
 						options,
 					});
-				} else {
-					if (
-						config.supportsJSON === false &&
-						typeof newValue === "object" &&
-						//@ts-expect-error -Future proofing
-						fieldAttributes.type === "json"
-					) {
-						newValue = JSON.stringify(newValue);
-					}
-
-					if (
-						config.supportsDates === false &&
-						newValue instanceof Date &&
-						fieldAttributes.type === "date"
-					) {
-						newValue = newValue.toISOString();
-					}
-
-					if (
-						config.supportsBooleans === false &&
-						typeof newValue === "boolean"
-					) {
-						newValue = newValue ? 1 : 0;
-					}
 				}
+
 				transformedData[newFieldName] = newValue;
 			}
 			return transformedData;
@@ -256,42 +256,43 @@ export const createAdapter =
 					}
 
 					let newFieldName: string = newMappedKeys[key] || key;
+					if (
+						config.supportsJSON === false &&
+						typeof newValue === "string" &&
+						//@ts-expect-error  -Future proofing
+						field.type === "json"
+					) {
+						newValue = safeJSONParse(newValue);
+					}
+
+					if (
+						config.supportsDates === false &&
+						typeof newValue === "string" &&
+						field.type === "date"
+					) {
+						newValue = new Date(newValue);
+					}
+
+					if (
+						config.supportsBooleans === false &&
+						typeof newValue === "number" &&
+						field.type === "boolean"
+					) {
+						newValue = newValue === 1;
+					}
+
 					if (config.customTransformOutput) {
 						newValue = config.customTransformOutput({
 							data: newValue,
 							field: newFieldName,
-							fields: field,
+							fieldAttributes: field,
 							select,
 							model: unsafe_model,
 							schema,
 							options,
 						});
-					} else {
-						if (
-							config.supportsJSON === false &&
-							typeof newValue === "string" &&
-							//@ts-expect-error  -Future proofing
-							field.type === "json"
-						) {
-							newValue = safeJSONParse(newValue);
-						}
-
-						if (
-							config.supportsDates === false &&
-							typeof newValue === "string" &&
-							field.type === "date"
-						) {
-							newValue = new Date(newValue);
-						}
-
-						if (
-							config.supportsBooleans === false &&
-							typeof newValue === "number" &&
-							field.type === "boolean"
-						) {
-							newValue = newValue === 1;
-						}
 					}
+
 					transformedData[newFieldName] = newValue;
 				}
 			}
