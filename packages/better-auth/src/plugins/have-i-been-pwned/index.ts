@@ -49,14 +49,18 @@ export const haveIBeenPwnd = () =>
             account: {
               create: {
                 async before(user, ctx) {
-                  const password = ctx.body.newPassword || ctx.body.password
-                  await checkPasswordCompromise(password)
+                    if(ctx && ctx.body){
+                        const password = ctx.body.newPassword || ctx.body.password
+                        await checkPasswordCompromise(password)
+                    }
                 }
               },
               update: {
                 async before(user, ctx) {
+                    if(ctx && ctx.body){
                     const password = ctx.body.newPassword || ctx.body.password
                     await checkPasswordCompromise(password)
+                }
                 }
               }
             }
