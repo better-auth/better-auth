@@ -46,7 +46,7 @@ export interface HaveIBeenPwnedOptions {
 
 export const haveIBeenPwned = (options: HaveIBeenPwnedOptions) =>
   ({
-    id: "haveIBeenPwnd",
+    id: "haveIBeenPwned",
     options: {
         databaseHooks: {
             account: {
