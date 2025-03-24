@@ -40,11 +40,11 @@ async function checkPasswordCompromise(password: string, customMessage?: string)
         })
     }
 }
-export interface HaveIBeenPwndOptions {
+export interface HaveIBeenPwnedOptions {
     customPasswordCompromisedMessage?: string
 }
 
-export const haveIBeenPwnd = (options: HaveIBeenPwndOptions) =>
+export const haveIBeenPwned = (options: HaveIBeenPwnedOptions) =>
   ({
     id: "haveIBeenPwnd",
     options: {
