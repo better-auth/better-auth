@@ -4,7 +4,6 @@ import type { AdapterConfig, CreateCustomAdapter } from "../types";
 import type { BetterAuthOptions } from "../../../types";
 import { betterAuth } from "../../../auth";
 import { generateId } from "../../../utils";
-import { TextEncoderStream } from "node:stream/web";
 
 /*
 
