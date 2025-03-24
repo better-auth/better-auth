@@ -71,7 +71,7 @@ export interface AdapterConfig {
 	/**
 	 * Disable id generation for the `create` method.
 	 *
-	 * This is useful for databases that don't support custom id generation.
+	 * This is useful for databases that don't support custom id values and would auto-generate them for you.
 	 *
 	 * @default false
 	 */

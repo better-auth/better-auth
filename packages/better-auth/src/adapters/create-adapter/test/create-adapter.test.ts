@@ -4,6 +4,7 @@ import type { AdapterConfig, CreateCustomAdapter } from "../types";
 import type { BetterAuthOptions } from "../../../types";
 import { betterAuth } from "../../../auth";
 import { generateId } from "../../../utils";
+import { TextEncoderStream } from "node:stream/web";
 
 /*
 
@@ -1248,6 +1249,36 @@ describe("Create Adapter Helper", async () => {
 				expect(parameters.update).toHaveProperty("email_address");
 				expect(parameters.update).not.toHaveProperty("email");
 				expect(parameters.update.email_address).toEqual("test2@test.com");
+			});
+
+			test("Should expect not to receive an id even if disableIdGeneration is false in an update call", async () => {
+				const parameters: {
+					update: { id: string };
+				} = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						config: {
+							disableIdGeneration: true,
+						},
+						adapter(args_0) {
+							return {
+								async update(data) {
+									r(data as any);
+									return data.update;
+								},
+							};
+						},
+					});
+					const user: { email: string; id: string } = await adapter.create({
+						model: "user",
+						data: { email: "test@test.com" },
+					});
+					await adapter.update({
+						model: "user",
+						update: { email: "test2@test.com" },
+						where: [{ field: "id", value: user.id }],
+					});
+				});
+				expect(parameters.update).not.toHaveProperty("id");
 			});
 		});
 	});
