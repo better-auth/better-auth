@@ -8,11 +8,11 @@ The Have I Been Pwned plugin helps protect user accounts by preventing the use o
 
 ```ts
 import { betterAuth } from "better-auth"
-import { haveIBeenPwnd } from "./have-i-been-pwnd"
+import { haveIBeenPwned } from "better-auth/plugins" // [!code highlight]
 
 export const auth = betterAuth({
     plugins: [
-        haveIBeenPwnd()
+        haveIBeenPwned()
     ]
 })
 ```
