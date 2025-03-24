@@ -440,7 +440,7 @@ export const createAdapter =
 					{ method: "updateMany" },
 					`#${thisTransactionId} (3/4)`,
 					"UpdateMany (DB Result):",
-					{ model, data:  updatedCount },
+					{ model, data: updatedCount },
 				);
 				debugLog(
 					{ method: "updateMany" },
