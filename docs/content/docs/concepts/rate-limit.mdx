@@ -15,9 +15,19 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     rateLimit: {
-	enabled: true,
         window: 10, // time window in seconds
         max: 100, // max requests in the window
+    },
+})
+```
+
+Rate limiting is disabled in development mode by default. In order to enable it, set `enabled` to `true`:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    rateLimit: {
+        enabled: true,
+        //...other options
     },
 })
 ```
@@ -40,7 +50,6 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
     //...other options
     rateLimit: {
-	enabled: true,
         window: 60, // time window in seconds
         max: 100, // max requests in the window
     },
@@ -55,7 +64,6 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
     //...other options
     rateLimit: {
-	enabled: true,
         window: 60, // time window in seconds
         max: 100, // max requests in the window
         customRules: {
@@ -89,7 +97,6 @@ export const auth = betterAuth({
     rateLimit: {
         storage: "database",
         modelName: "rateLimit", //optional by default "rateLimit" is used
-	enabled: true
     },
 })
 ```
