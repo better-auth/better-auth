@@ -3,7 +3,7 @@ import { APIError } from "better-auth/api";
 import { createHash } from "@better-auth/utils/hash"
 import { betterFetch } from '@better-fetch/fetch';
 
-async function checkPasswordCompromise(password: string) {
+async function checkPasswordCompromise(password: string, customMessage?: string) {
     if (!password) return
     const sha1Hash = (await createHash('SHA-1', 'hex').digest(password)).toUpperCase()
     const prefix = sha1Hash.substring(0, 5)
@@ -30,7 +30,7 @@ async function checkPasswordCompromise(password: string) {
     
         if (found) {
             throw new APIError('BAD_REQUEST', { 
-                message: 'Password has been compromised. Choose another one.' 
+                message: customMessage || 'The password you entered has been compromised. Please choose a different password.'
             })
         }
     } catch (error) {
@@ -40,8 +40,11 @@ async function checkPasswordCompromise(password: string) {
         })
     }
 }
+export interface HaveIBeenPwndOptions {
+    customPasswordCompromisedMessage?: string
+}
 
-export const haveIBeenPwnd = () =>
+export const haveIBeenPwnd = (options: HaveIBeenPwndOptions) =>
   ({
     id: "haveIBeenPwnd",
     options: {
@@ -51,7 +54,7 @@ export const haveIBeenPwnd = () =>
                 async before(user, ctx) {
                     if(ctx && ctx.body){
                         const password = ctx.body.newPassword || ctx.body.password
-                        await checkPasswordCompromise(password)
+                        await checkPasswordCompromise(password, options.customPasswordCompromisedMessage)
                     }
                 }
               },
@@ -59,7 +62,7 @@ export const haveIBeenPwnd = () =>
                 async before(user, ctx) {
                     if(ctx && ctx.body){
                     const password = ctx.body.newPassword || ctx.body.password
-                    await checkPasswordCompromise(password)
+                    await checkPasswordCompromise(password, options.customPasswordCompromisedMessage)
                 }
                 }
               }
