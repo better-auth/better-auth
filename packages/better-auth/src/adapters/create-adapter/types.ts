@@ -1,6 +1,10 @@
 import type { FieldAttribute } from "../../db";
 import type { BetterAuthDbSchema } from "../../db/get-tables";
-import type { AdapterSchemaCreation, BetterAuthOptions, Where } from "../../types";
+import type {
+	AdapterSchemaCreation,
+	BetterAuthOptions,
+	Where,
+} from "../../types";
 
 export interface AdapterConfig {
 	/**
@@ -38,7 +42,7 @@ export interface AdapterConfig {
 	 * If the database doesn't support JSON columns, set this to `false`.
 	 *
 	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
-	 * 
+	 *
 	 * @default true
 	 */
 	supportsJSON?: boolean;
@@ -86,7 +90,7 @@ export interface AdapterConfig {
 	 * }
 	 * ```
 	 */
-	mapKeysTransformInput?:Record<string, string>;
+	mapKeysTransformInput?: Record<string, string>;
 	/**
 	 * Map the keys of the output data.
 	 *
@@ -173,7 +177,6 @@ export interface AdapterConfig {
 	}) => any;
 }
 
-
 export type CreateCustomAdapter = ({
 	options,
 	debugLog,
@@ -209,7 +212,6 @@ export type CreateCustomAdapter = ({
 	 */
 	getDefaultModelName: (model: string) => string;
 }) => CustomAdapter;
-
 
 export interface CustomAdapter {
 	create: <T extends Record<string, any>>({
