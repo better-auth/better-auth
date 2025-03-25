@@ -7,7 +7,6 @@ export type EnvObject = Record<string, string | undefined>;
 const _getEnv = (useShim?: boolean) =>
 	globalThis.process?.env ||
 	//@ts-expect-error
-
 	import.meta?.env ||
 	//@ts-expect-error
 	globalThis.Deno?.env.toObject() ||
