@@ -341,16 +341,16 @@ adapter: ({
 
 ### Adapter Methods
 
-<Callout>
 Some notes before we get into the methods:
 
 - All `model` values are already transformed into the correct model name for the database based on the end-user's schema configuration.
-  - This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options.
+  - This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options to convert the `model` to the `schema` version.
 - We will automatically fill in any missing fields you return based on the user's `schema` configuration. 
 - Any method that includes a `select` parameter, is only for the purpose of getting data from your database more efficiently. You do not need to worry about only returning what the `select` parameter states, as we will handle that for you.
-</Callout>
 
-#### `create` method
+---
+
+### `create` method
 
 The `create` method is used to create a new record in the database.
 
@@ -371,7 +371,7 @@ create: async ({ model, data }) => {
 ```
 
 
-#### `update` method
+### `update` method
 
 The `update` method is used to update a record in the database.
 
@@ -392,7 +392,7 @@ update: async ({ model, where, update }) => {
 }
 ```
 
-#### `updateMany` method
+### `updateMany` method
 
 The `updateMany` method is used to update multiple records in the database.
 
@@ -413,7 +413,7 @@ updateMany: async ({ model, where, update }) => {
 }
 ```
 
-#### `delete` method
+### `delete` method
 
 The `delete` method is used to delete a record from the database.
 
@@ -429,9 +429,18 @@ delete: async ({ model, where }) => {
 }
 ```
 
-#### `deleteMany` method
+### `deleteMany` method
 
 The `deleteMany` method is used to delete multiple records from the database.
+
+parameters:
+
+- `model`: The model/table name that the records will be deleted from.
+- `where`: The `where` clause to delete the records by.
+
+<Callout>
+Make sure to return the number of records that were deleted.
+</Callout>
 
 ```ts title="Example"
 deleteMany: async ({ model, where }) => {
@@ -440,37 +449,71 @@ deleteMany: async ({ model, where }) => {
 }
 ```
 
-#### `findOne` method
+### `findOne` method
 
 The `findOne` method is used to find a single record in the database.
 
+parameters:
+
+- `model`: The model/table name that the record will be found in.
+- `where`: The `where` clause to find the record by.
+- `select`: The `select` clause to return.
+
+<Callout>
+Make sure to return the data that is found in the database.
+</Callout>
+
 ```ts title="Example"
-findOne: async ({ data, model, select }) => {
-  // ...
+findOne: async ({ model, where, select }) => {
+  // Example of finding a single record in the database.
+  return await db.select().from(model).where(where).limit(1);
 }
 ```
 
-#### `findMany` method
+### `findMany` method
 
 The `findMany` method is used to find multiple records in the database.
 
+parameters:
+
+- `model`: The model/table name that the records will be found in.
+- `where`: The `where` clause to find the records by.
+- `limit`: The limit of records to return.
+- `sortBy`: The `sortBy` clause to sort the records by.
+- `offset`: The offset of records to return.
+
+<Callout>
+Make sure to return the array of data that is found in the database.
+</Callout>
+
 ```ts title="Example"
-findMany: async ({ data, model, select }) => {
-  // ...
+findMany: async ({ model, where, limit, sortBy, offset }) => {
+  // Example of finding multiple records in the database.
+  return await db.select().from(model).where(where).limit(limit).offset(offset).orderBy(sortBy);
 }
 ```
 
-#### `count` method
+### `count` method
 
 The `count` method is used to count the number of records in the database.
 
+parameters:
+
+- `model`: The model/table name that the records will be counted in.
+- `where`: The `where` clause to count the records by.
+
+<Callout>
+Make sure to return the number of records that were counted.
+</Callout>
+
 ```ts title="Example"
-count: async ({ data, model, select }) => {
-  // ...
+count: async ({ model, where }) => {
+  // Example of counting the number of records in the database.
+  return await db.select().from(model).where(where).count();
 }
 ```
 
-#### `options` (optional)
+### `options` (optional)
 
 The `options` object is for any potential config that you got from your custom adapter options.
 
