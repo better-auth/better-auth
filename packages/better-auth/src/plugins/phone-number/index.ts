@@ -13,6 +13,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import type { User } from "../../types";
+import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -123,16 +124,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		createdAt: "createdAt",
 	};
 
-	const ERROR_CODES = {
-		INVALID_PHONE_NUMBER: "Invalid phone number",
-		PHONE_NUMBER_EXIST: "Phone number already exist",
-		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
-		UNEXPECTED_ERROR: "Unexpected error",
-		OTP_NOT_FOUND: "OTP not found",
-		OTP_EXPIRED: "OTP expired",
-		INVALID_OTP: "Invalid OTP",
-		PHONE_NUMBER_NOT_VERIFIED: "Phone number not verified",
-	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
