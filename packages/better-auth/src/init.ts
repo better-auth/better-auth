@@ -154,7 +154,7 @@ export const init = async (options: BetterAuthOptions) => {
 	};
 	let { context } = runPluginInit(ctx);
 	context;
-	if (!context.baseURL) {
+	if (!context.baseURL || !context.options.baseURL) {
 		throw new BetterAuthError(
 			"Base URL is not provided. Please set `BETTER_AUTH_URL` in your environment variables or pass `baseURL` in your auth config.",
 		);
