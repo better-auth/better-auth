@@ -81,21 +81,7 @@ export default function SignIn() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							setLoading(true);
-							await signIn.email(
-								{
-									email,
-									password,
-								},
-								{
-									onSuccess: () => {
-										setLoading(false);
-									},
-									onResponse: () => {
-										setLoading(false);
-									},
-								},
-							);
+							await signIn.email({ email, password });
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
