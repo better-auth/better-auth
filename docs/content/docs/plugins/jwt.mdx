@@ -138,7 +138,7 @@ const token = 'your.jwt.token' // this is the token you get from the /api/auth/t
 const payload = await validateToken(token)
 ```
 
-### Example with local JWKS
+#### Example with local JWKS
 
 ```ts
 import { jwtVerify, createLocalJWKSet } from 'jose'
