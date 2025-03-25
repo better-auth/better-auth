@@ -134,31 +134,60 @@ describe("Create Adapter Helper", async () => {
 		},
 	});
 
-	describe("Edge cases", () => {
-		test("Should have the correct adapter id", () => {
-			expect(adapter.id).toBe(adapterId);
-		});
-		test("Should use the id generator if passed into the betterAuth config", async () => {
-			const adapter = await createTestAdapter({
-				config: {
-					debugLogs: {},
-				},
-				options: {
-					advanced: {
-						generateId(options) {
-							return "HARD-CODED-ID";
-						},
+	test("Should have the correct adapter id", () => {
+		expect(adapter.id).toBe(adapterId);
+	});
+	test("Should use the id generator if passed into the betterAuth config", async () => {
+		const adapter = await createTestAdapter({
+			config: {
+				debugLogs: {},
+			},
+			options: {
+				advanced: {
+					generateId(options) {
+						return "HARD-CODED-ID";
 					},
 				},
-			});
-			const res = await adapter.create({
-				model: "user",
-				data: { name: "test-name" },
-			});
-			expect(res).toHaveProperty("id");
-			//@ts-ignore
-			expect(res.id).toBe("HARD-CODED-ID");
+			},
 		});
+		const res = await adapter.create({
+			model: "user",
+			data: { name: "test-name" },
+		});
+		expect(res).toHaveProperty("id");
+		//@ts-ignore
+		expect(res.id).toBe("HARD-CODED-ID");
+	});
+
+	test("Should not recieve an id during creation if options.advanced.useNumberId is true, however still return string id during output", async () => {
+		const parameters: { data: { id: number } } = await new Promise(
+			async (resolve) => {
+				const adapter = await createTestAdapter({
+					options: {
+						advanced: {
+							useNumberId: true,
+						},
+					},
+					adapter(args_0) {
+						return {
+							async create(data) {
+								resolve(data as any);
+								return data.data;
+							},
+						};
+					},
+				});
+				const res: { id: string } = await adapter.create({
+					model: "user",
+					data: { name: "test-name" },
+				});
+				expect(res).toHaveProperty("id");
+				expect(typeof res.id).toBe("string");
+			},
+		);
+		expect(parameters).toHaveProperty("data");
+		expect(parameters.data).toHaveProperty("id");
+		expect(typeof parameters.data.id).toBe("number");
 	});
 
 	describe("Checking for the results of an adapter call, as well as the parameters passed into the adapter call", () => {
@@ -755,7 +784,6 @@ describe("Create Adapter Helper", async () => {
 						name: "test-name",
 						emailVerified: false,
 						image: "test-image",
-						id: "test-id",
 					},
 					select: ["email", "id"],
 				});
@@ -770,10 +798,9 @@ describe("Create Adapter Helper", async () => {
 
 		describe("update", () => {
 			test("Should fill in the missing fields in the result", async () => {
-				const id = generateId();
-				const user = await adapter.create({
+				const user: { id: string; name: string } = await adapter.create({
 					model: "user",
-					data: { name: "test-name", id },
+					data: { name: "test-name" },
 				});
 				const res = await adapter.update({
 					model: "user",
@@ -790,10 +817,9 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test(`Should include an "id" in the result in all cases`, async () => {
-				const id = generateId();
-				const user = await adapter.create({
+				const user: { id: string; name: string } = await adapter.create({
 					model: "user",
-					data: { name: "test-name", id },
+					data: { name: "test-name" },
 				});
 				const res: { id: string } | null = await adapter.update({
 					model: "user",
@@ -820,10 +846,11 @@ describe("Create Adapter Helper", async () => {
 								};
 							},
 						});
-						const user = await adapter.create({
-							model: "user",
-							data: { emailVerified: false, id: "test-bool-user-update" },
-						});
+						const user: { emailVerified: boolean; id: string } =
+							await adapter.create({
+								model: "user",
+								data: { emailVerified: false },
+							});
 						const res = await adapter.update({
 							model: "user",
 							where: [{ field: "id", value: user.id }],
@@ -853,10 +880,11 @@ describe("Create Adapter Helper", async () => {
 								};
 							},
 						});
-						const user = await adapter.create({
-							model: "user",
-							data: { emailVerified: true, id: "test-bool-user-update-2" },
-						});
+						const user: { emailVerified: boolean; id: string } =
+							await adapter.create({
+								model: "user",
+								data: { emailVerified: true },
+							});
 						const res = await adapter.update({
 							model: "user",
 							where: [{ field: "id", value: user.id }],
@@ -898,9 +926,9 @@ describe("Create Adapter Helper", async () => {
 							},
 						});
 						const obj = { preferences: { color: "blue", size: "large" } };
-						const user = await adapter.create({
+						const user: { email: string; id: string } = await adapter.create({
 							model: "user",
-							data: { email: "test@test.com", id: "test-json-user-update" },
+							data: { email: "test@test.com" },
 						});
 						const res: typeof obj | null = await adapter.update({
 							model: "user",
@@ -933,9 +961,9 @@ describe("Create Adapter Helper", async () => {
 								};
 							},
 						});
-						const user = await adapter.create({
+						const user: { email: string; id: string } = await adapter.create({
 							model: "user",
-							data: { id: "test-date-user-update" },
+							data: { email: "test@test.com" },
 						});
 						const res: { createdAt: Date } | null = await adapter.update({
 							model: "user",
@@ -973,10 +1001,9 @@ describe("Create Adapter Helper", async () => {
 							};
 						},
 					});
-					const id = generateId();
-					const user = await adapter.create({
+					const user: { id: string; name: string } = await adapter.create({
 						model: "user",
-						data: { name: "test-name", id },
+						data: { name: "test-name" },
 					});
 					const res: { name: string } | null = await adapter.update({
 						model: "user",
@@ -1016,10 +1043,9 @@ describe("Create Adapter Helper", async () => {
 							};
 						},
 					});
-					const id = generateId();
-					const user = await adapter.create({
+					const user: { id: string; name: string } = await adapter.create({
 						model: "user",
-						data: { name: "TEST-NAME", id },
+						data: { name: "TEST-NAME" },
 					});
 					const res: { name: string } | null = await adapter.update({
 						model: "user",
@@ -1065,10 +1091,9 @@ describe("Create Adapter Helper", async () => {
 							};
 						},
 					});
-					const id = generateId();
-					const user = await adapter.create({
+					const user: { id: string; name: string } = await adapter.create({
 						model: "user",
-						data: { name: "test-name", id },
+						data: { name: "test-name" },
 					});
 					const res: { name: string } | null = await adapter.update({
 						model: "user",

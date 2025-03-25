@@ -46,7 +46,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 	createAdapter({
 		config: {
 			adapterId: "prisma",
-			adapterName: "Prisma",
+			adapterName: "Prisma Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 		},

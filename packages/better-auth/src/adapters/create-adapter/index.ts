@@ -149,10 +149,14 @@ export const createAdapter =
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (!config.disableIdGeneration) {
 				fields.id = {
-					type: "string",
+					type: options.advanced?.useNumberId ? "number" : "string",
 					defaultValue() {
 						if (config.disableIdGeneration) return undefined;
-						if (options.advanced?.generateId === false) return undefined;
+						if (
+							options.advanced?.generateId === false ||
+							options.advanced?.useNumberId
+						)
+							return undefined;
 						return (
 							options.advanced?.generateId?.({ model: unsafe_model }) ??
 							defaultGenerateId()
@@ -314,13 +318,30 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+
+				if ("id" in unsafeData) {
+					logger.warn(
+						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you. The id will be ignored.`,
+					);
+					const err = new Error();
+					const stack = err.stack
+						?.split("\n")
+						.filter((_, i) => i !== 1)
+						.join("\n")
+						.replace("Error:", "Create method with `id` being called at:");
+					console.log(stack);
+					//@ts-ignore
+					unsafeData.id = undefined;
+				}
+
 				if (options.advanced?.generateId) {
 					//@ts-ignore
 					unsafeData.id = options.advanced.generateId({ model });
 				} else if (
 					!("id" in unsafeData) &&
 					options.advanced?.generateId !== false &&
-					config.disableIdGeneration !== true
+					config.disableIdGeneration !== true &&
+					options.advanced?.useNumberId !== true
 				) {
 					//@ts-ignore
 					unsafeData.id = defaultGenerateId();
