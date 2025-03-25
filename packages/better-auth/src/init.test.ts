@@ -147,4 +147,10 @@ describe("init", async () => {
 		});
 		expect(ctx.options.emailAndPassword?.enabled).toBe(false);
 	});
+
+	it("should throw an error if baseURL is not provided", async () => {
+		await expect(init({ database })).rejects.toThrow(
+			"Base URL is not provided. Please set `BETTER_AUTH_URL` in your environment variables or pass `baseURL` in your auth config.",
+		);
+	});
 });
