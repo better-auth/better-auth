@@ -271,12 +271,14 @@ export const resetPassword = createAuthEndpoint(
 				},
 				ctx,
 			);
-			await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verification.id,
+			);
 			return ctx.json({
 				status: true,
 			});
 		}
-	 	await ctx.context.internalAdapter.updatePassword(
+		await ctx.context.internalAdapter.updatePassword(
 			userId,
 			hashedPassword,
 			ctx,
