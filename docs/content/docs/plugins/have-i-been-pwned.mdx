@@ -29,19 +29,19 @@ export const auth = betterAuth({
 You can customize the error message:
 
 ```ts
-haveIBeenPwnd({
+haveIBeenPwned({
     customPasswordCompromisedMessage: "Please choose a more secure password."
 })
 ```
 
 ## User Experience
 
-When a user attempts to create an account or update their password with a compromised password, they'll receive an error:
+When a user attempts to create an account or update their password with a compromised password, they'll receive the following default error:
 
 ```json
 {
   "error": "BAD_REQUEST",
-  "message": "For your security, please choose a different password."
+  "message": "The password you entered has been compromised. Please choose a different password."
 }
 ```
 
