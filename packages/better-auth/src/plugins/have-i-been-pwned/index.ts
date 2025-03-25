@@ -36,7 +36,7 @@ async function checkPasswordCompromise(password: string, customMessage?: string)
     } catch (error) {
         if (error instanceof APIError) throw error
         throw new APIError('INTERNAL_SERVER_ERROR', { 
-            message: 'Network error while checking password compromise'
+            message: 'Failed to check password. Please try again later.'
         })
     }
 }
@@ -44,7 +44,7 @@ export interface HaveIBeenPwnedOptions {
     customPasswordCompromisedMessage?: string
 }
 
-export const haveIBeenPwned = (options: HaveIBeenPwnedOptions) =>
+export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
   ({
     id: "haveIBeenPwned",
     options: {
