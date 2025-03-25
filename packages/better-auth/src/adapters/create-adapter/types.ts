@@ -257,7 +257,7 @@ export interface CustomAdapter {
 	}: {
 		model: string;
 		where?: Where[];
-		limit?: number;
+		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" };
 		offset?: number;
 	}) => Promise<T[]>;

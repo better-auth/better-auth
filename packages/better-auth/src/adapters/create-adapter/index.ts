@@ -516,7 +516,7 @@ export const createAdapter =
 				const res = await adapterInstance.findMany<T>({
 					model,
 					where,
-					limit,
+					limit: limit ?? 100,
 					sortBy,
 					offset,
 				});
