@@ -1,0 +1,48 @@
+{
+  "name": "saml",
+  "version": "1.0.0",
+  "description": "SAML 2.0 authentication plugin for Better Auth",
+  "main": "dist/index.cjs",
+  "license": "MIT",
+  "keywords": [
+    "saml",
+    "auth"
+  ],
+  "scripts": {
+    "test": "vitest",
+    "build": "unbuild",
+    "dev": "unbuild --watch"
+  },
+  "module": "dist/index.mjs",
+  "author": "KinfeMichael Tariku",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.mjs",
+      "require": "./dist/client.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
+    }
+  },
+  "dependencies": {
+    "better-auth": "workspace:^",
+    "samlify": "^2.9.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0"
+  }
+}
