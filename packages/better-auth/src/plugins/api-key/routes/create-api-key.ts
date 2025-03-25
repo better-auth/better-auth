@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
-import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -278,13 +277,16 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
-			const apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+			const apiKey = await ctx.context.adapter.create<
+				Omit<ApiKey, "id">,
+				ApiKey
+			>({
 				model: schema.apikey.modelName,
 				data: data,
 			});
 
 			return ctx.json({
-				...apiKey as ApiKey,
+				...(apiKey as ApiKey),
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
