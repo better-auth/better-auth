@@ -32,9 +32,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	for (const table in tables) {
 		const modelName = usePlural
-			? `${tables[table].modelName}s`
-			: tables[table].modelName;
-		const fields = tables[table].fields;
+			? `${tables[table]?.modelName}s`
+			: tables[table]?.modelName;
+
+		if (typeof modelName === "undefined") {
+			throw new Error(`Unexpected model name is undefined for table ${table}`);
+		}
+
+		const fields = tables[table]?.fields;
+
+		if (typeof fields === "undefined") {
+			throw new Error(`Unexpected fields are undefined for table ${table}`);
+		}
+
 		function getType(name: string, field: FieldAttribute) {
 			name = convertToSnakeCase(name);
 			const type = field.type;
@@ -80,7 +90,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					id: ${id},
 					${Object.keys(fields)
 						.map((field) => {
-							const attr = fields[field];
+							const attr = fields[field]!;
 							return `${field}: ${getType(field, attr)}${
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
