@@ -282,7 +282,16 @@ export interface CustomAdapter {
 		model: string;
 		where?: Where[];
 	}) => Promise<number>;
-	createSchema?: (file?: string) => Promise<AdapterSchemaCreation>;
+	createSchema?: (props: {
+		/**
+		 * The file the user may have passed in to the `generate` command as the expected schema file output path.
+		 */
+		file?: string;
+		/**
+		 * The tables from the user's Better-Auth instance schema.
+		 */
+		tables: BetterAuthDbSchema;
+	}) => Promise<AdapterSchemaCreation>;
 	/**
 	 * Your adapter's options.
 	 */

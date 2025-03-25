@@ -620,7 +620,8 @@ export const createAdapter =
 			},
 			createSchema: adapterInstance.createSchema
 				? async (_, file) => {
-						return adapterInstance.createSchema!(file);
+						const tables = getAuthTables(options);
+						return adapterInstance.createSchema!({ file, tables });
 					}
 				: undefined,
 			options: {

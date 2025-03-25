@@ -547,6 +547,20 @@ const myAdapter = (config: CustomAdapterConfig) => createAdapter({
 })
 ```
 
+### `createSchema` (optional)
+
+The `createSchema` method allows the [Better Auth CLI](/docs/concepts/cli) to [generate](/docs/concepts/cli/#generate) a schema for the database.
+
+parameters:
+
+- `tables`: The tables from the user's Better-Auth instance schema; which is expected to be generated into the schema file.
+- `file`: The file the user may have passed in to the `generate` command as the expected schema file output path.
+
+```ts title="Example"
+createSchema: async ({ file, tables }) => {
+  // ... Custom logic to create a schema for the database.
+}
+```
 ## Test your adapter
 
 We've provided a test suite that you can use to test your adapter. It requires you to use `vitest`.
