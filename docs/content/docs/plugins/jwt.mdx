@@ -150,6 +150,11 @@ async function validateToken(token: string) {
     const JWKS = createLocalJWKSet({
       keys: jwks.data?.keys!,
     })
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: 'http://localhost:3000', // Should match your JWT issuer which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience which is the BASE_URL by default
+    })
+    return payload
   } catch (error) {
     console.error('Token validation failed:', error)
     throw error
