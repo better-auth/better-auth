@@ -153,7 +153,6 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 	};
 	let { context } = runPluginInit(ctx);
-	context;
 	return context;
 };
 
