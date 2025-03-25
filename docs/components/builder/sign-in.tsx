@@ -284,8 +284,24 @@ export default function SignIn() {
               disabled={loading}
               onClick={async () => {
                 setLoading(true)
-                await signIn.email({ email, password });
-                setLoading(false)
+                await signIn.email(
+                {
+                    email,
+                    password
+                },
+                {
+                    onSuccess: () => {
+                      setLoading(false);
+                    },
+                    onError: (ctx) => {
+                      alert(ctx.error.message);
+                    },
+                    onResponse: () => {
+                     setLoading(false);
+                   },
+                 },
+
+                );
               }}
             >
               {loading ? (
