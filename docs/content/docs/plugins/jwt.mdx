@@ -146,9 +146,17 @@ import { jwtVerify, createLocalJWKSet } from 'jose'
 
 async function validateToken(token: string) {
   try {
-    const jwks = await client.jwks(); // make sure to cache this so you don't have to make a new request for every token
+    /**
+     * This is the JWKS that you get from the /api/auth/
+     * jwks endpoint
+     */
+    const storedJWKS = {
+      keys: [{
+        //...
+      }]
+    };
     const JWKS = createLocalJWKSet({
-      keys: jwks.data?.keys!,
+      keys: storedJWKS.data?.keys!,
     })
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: 'http://localhost:3000', // Should match your JWT issuer which is the BASE_URL
