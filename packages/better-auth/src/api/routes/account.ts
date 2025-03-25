@@ -122,9 +122,6 @@ export const linkSocialAccount = createAuthEndpoint(
 	},
 	async (c) => {
 		const session = c.context.session;
-		const accounts = await c.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
 
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.body.provider,
