@@ -91,9 +91,6 @@ export default function SignIn() {
 									onSuccess: () => {
 										setLoading(false);
 									},
-									onError: (ctx) => {
-										alert(ctx.error.message);
-									},
 									onResponse: () => {
 										setLoading(false);
 									},
