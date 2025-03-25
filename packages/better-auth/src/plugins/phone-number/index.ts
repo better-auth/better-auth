@@ -63,6 +63,12 @@ export interface PhoneNumberOptions {
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean | Promise<boolean>;
 	/**
+	 * Require a phone number verification before signing in
+	 *
+	 * @default false
+	 */
+	requireVerification?: boolean;
+	/**
 	 * Callback when phone number is verified
 	 */
 	callbackOnVerification?: (
@@ -125,6 +131,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		OTP_NOT_FOUND: "OTP not found",
 		OTP_EXPIRED: "OTP expired",
 		INVALID_OTP: "Invalid OTP",
+		PHONE_NUMBER_NOT_VERIFIED: "Phone number not verified",
 	} as const;
 	return {
 		id: "phone-number",
@@ -203,6 +210,23 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
+					}
+					if (opts.requireVerification) {
+						if (!user.phoneNumberVerified) {
+							const otp = generateOTP(opts.otpLength);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: otp,
+								identifier: phoneNumber,
+								expiresAt: getDate(opts.expiresIn, "sec"),
+							});
+							await opts.sendOTP?.({
+								phoneNumber,
+								code: otp,
+							});
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+							});
+						}
 					}
 					const accounts =
 						await ctx.context.internalAdapter.findAccountByUserId(user.id);
