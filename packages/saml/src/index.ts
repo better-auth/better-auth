@@ -25,6 +25,108 @@ export const ssoSAML = (options?: SSOOptions) => {
   return {
     id: "sso-saml",
     endpoints: {
+      idpMetadata: createAuthEndpoint(
+        "/sso/saml2/idp/metadata",
+        {
+          method: "GET",
+          query: z.object({
+            providerId: z.string(),
+            format: z.enum(['xml', 'json']).default('xml')
+          }),
+          metadata: {
+            openapi: {
+              summary: "Get Identity Provider metadata",
+              description: "Returns the SAML metadata for the Identity Provider",
+              responses: {
+                "200": {
+                  description: "SAML metadata in XML format",
+                  
+                }
+              }
+            }
+          }
+        },
+        async (ctx) => {
+          const provider = await ctx.context.adapter.findOne<SSOProvider>({
+            model: "ssoProvider",
+            where: [
+              {
+                field: "providerId",
+                value: ctx.query.providerId,
+              }
+            ]
+          });
+          if (!provider) {
+            throw new APIError("NOT_FOUND", {
+              message: "No provider found for the given providerId"
+            });
+          }
+          const parsedSamlConfig = JSON.parse(provider.samlConfig);
+          console.log(parsedSamlConfig) 
+          const idp = saml.IdentityProvider({
+            ...parsedSamlConfig,
+            metadata: parsedSamlConfig.idpMetadata
+          });
+          console.log({idp})
+          return new Response(idp.getMetadata(), {
+            headers: {
+              "Content-Type": "application/xml"
+            }
+          });
+        }
+      ),
+      spMetadata: createAuthEndpoint(
+        "/sso/saml2/sp/metadata",
+        {
+          method: "GET",
+          query: z.object({
+            providerId: z.string(),
+            format: z.enum(['xml', 'json']).default('xml')
+          }),
+          metadata: {
+            openapi: {
+              summary: "Get Service Provider metadata",
+              description: "Returns the SAML metadata for the Service Provider",
+              responses: {
+                "200": {
+                  description: "SAML metadata in XML format",
+                  
+                }
+              }
+            }
+          }
+        },
+        async (ctx) => {
+          const provider = await ctx.context.adapter.findOne<SSOProvider>({
+            model: "ssoProvider",
+            where: [
+              {
+                field: "providerId",
+                value: ctx.query.providerId
+              }
+            ]
+          });
+          if (!provider) {
+            throw new APIError("NOT_FOUND", {
+              message: "No provider found for the given providerId"
+            });
+          }
+
+          const parsedSamlConfig = JSON.parse(provider.samlConfig);
+          const sp = saml.ServiceProvider({
+            metadata: parsedSamlConfig.spMetadata,
+            ...parsedSamlConfig,
+          });
+          const result = sp.getMetadata()
+          console.log({result})
+          console.log("ParsedConfig: " , sp)
+          return new Response(sp.getMetadata(), {
+            headers: {
+              "Content-Type": "application/xml"
+            }
+          });
+        }
+      ),
       createSAMLProvider: createAuthEndpoint(
         "/sso/register-saml",
         {
