@@ -130,5 +130,6 @@ export const github = (options: GithubOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<GithubProfile>;
 };

@@ -169,5 +169,6 @@ export const facebook = (options: FacebookOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<FacebookProfile>;
 };

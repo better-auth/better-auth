@@ -143,5 +143,6 @@ export const discord = (options: DiscordOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<DiscordProfile>;
 };

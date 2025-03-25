@@ -129,5 +129,6 @@ export const gitlab = (options: GitlabOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<GitlabProfile>;
 };

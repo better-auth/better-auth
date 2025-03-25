@@ -150,6 +150,7 @@ export const apple = (options: AppleOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<AppleProfile>;
 };
 

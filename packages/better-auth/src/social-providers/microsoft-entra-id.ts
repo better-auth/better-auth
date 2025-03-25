@@ -112,5 +112,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 				data: user,
 			};
 		},
+		options,
 	} satisfies OAuthProvider;
 };

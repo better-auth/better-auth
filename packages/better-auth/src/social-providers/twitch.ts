@@ -81,5 +81,6 @@ export const twitch = (options: TwitchOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<TwitchProfile>;
 };

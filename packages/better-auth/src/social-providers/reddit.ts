@@ -97,5 +97,6 @@ export const reddit = (options: RedditOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<RedditProfile>;
 };

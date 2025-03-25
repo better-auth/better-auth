@@ -86,5 +86,6 @@ export const linkedin = (options: LinkedInOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<LinkedInProfile>;
 };
