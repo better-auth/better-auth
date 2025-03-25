@@ -8,6 +8,7 @@ import { GeistSans } from "geist/font/sans";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata = createMetadata({
 	title: {
@@ -53,6 +54,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 						<NavbarProvider>
 							<Navbar />
 							{children}
+							<Toaster />
 						</NavbarProvider>
 					</RootProvider>
 					<Analytics />

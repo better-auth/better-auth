@@ -145,6 +145,12 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		async onRequest(req) {
+			//handle disabled paths
+			const disabledPaths = ctx.options.disabledPaths || [];
+			const path = new URL(req.url).pathname.replace(basePath, "");
+			if (disabledPaths.includes(path)) {
+				return new Response("Not Found", { status: 404 });
+			}
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await plugin.onRequest(req, ctx);
