@@ -352,6 +352,7 @@ describe("Disable implicit signup", async () => {
 		});
 	});
 });
+
 describe("Disable signup", async () => {
 	it("Should not create user when sign up is disabled", async () => {
 		const { client } = await getTestInstance({
