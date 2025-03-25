@@ -42,7 +42,7 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
                       className={lineProps.className}
                       style={lineProps.style}
                     >
-                      <span className="inline-block w-4 mr-3 text-gray-500 select-none">
+                      <span className="sticky dark:bg-black bg-white top-0 left-0 mr-4 mx-auto pr-2 text-gray-500 select-none">
                         {i + 1}
                       </span>
                       {line.map((token, key) => {
