@@ -1,7 +1,7 @@
-import type { BetterAuthPlugin } from "better-auth";
 import { APIError } from "../../api";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
+import type { BetterAuthPlugin } from "../../types";
 
 async function checkPasswordCompromise(
 	password: string,
@@ -58,32 +58,20 @@ export interface HaveIBeenPwnedOptions {
 export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 	({
 		id: "haveIBeenPwned",
-		options: {
-			databaseHooks: {
-				account: {
-					create: {
-						async before(user, ctx) {
-							if (ctx && ctx.body) {
-								const password = ctx.body.newPassword || ctx.body.password;
-								await checkPasswordCompromise(
-									password,
-									options?.customPasswordCompromisedMessage,
-								);
-							}
-						},
-					},
-					update: {
-						async before(user, ctx) {
-							if (ctx && ctx.body) {
-								const password = ctx.body.newPassword || ctx.body.password;
-								await checkPasswordCompromise(
-									password,
-									options?.customPasswordCompromisedMessage,
-								);
-							}
+		init(ctx) {
+			return {
+				context: {
+					password: {
+						...ctx.password,
+						async hash(password) {
+							await checkPasswordCompromise(
+								password,
+								options?.customPasswordCompromisedMessage,
+							);
+							return ctx.password.hash(password);
 						},
 					},
 				},
-			},
+			};
 		},
 	}) satisfies BetterAuthPlugin;

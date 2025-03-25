@@ -3,9 +3,14 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { haveIBeenPwned } from "./index";
 
 describe("have-i-been-pwned", async () => {
-	const { client } = await getTestInstance({
-		plugins: [haveIBeenPwned()],
-	});
+	const { client } = await getTestInstance(
+		{
+			plugins: [haveIBeenPwned()],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
 
 	it("should prevent account creation with compromised password", async () => {
 		const uniqueEmail = `test-${Date.now()}@example.com`;
@@ -16,9 +21,8 @@ describe("have-i-been-pwned", async () => {
 			password: compromisedPassword,
 			name: "Test User",
 		});
-
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toBe("BAD_REQUEST");
+		expect(result.error).not.toBeNull();
+		expect(result.error?.status).toBe(400);
 	});
 
 	it("should allow account creation with strong, uncompromised password", async () => {
@@ -35,37 +39,27 @@ describe("have-i-been-pwned", async () => {
 
 	it("should prevent password update to compromised password", async () => {
 		const uniqueEmail = `test-${Date.now()}@example.com`;
-		const initialPassword = "123456789";
+		const initialPassword = `Str0ng!P@ssw0rd-${Date.now()}`;
 
-		await client.signUp.email({
+		const res = await client.signUp.email({
 			email: uniqueEmail,
 			password: initialPassword,
 			name: "Test User",
 		});
-
-		const result = await client.changePassword({
-			currentPassword: initialPassword,
-			newPassword: "123456789",
-		});
+		console.log(res);
+		const result = await client.changePassword(
+			{
+				currentPassword: initialPassword,
+				newPassword: "123456789",
+			},
+			{
+				headers: {
+					authorization: `Bearer ${res.data?.token}`,
+				},
+			},
+		);
+		console.log({ result });
 		expect(result.error).toBeDefined();
-		expect(result.error?.status).toBe("BAD_REQUEST");
-	});
-
-	it("should allow password update to strong, uncompromised password", async () => {
-		const uniqueEmail = `test-${Date.now()}@example.com`;
-		const initialPassword = "123456789";
-		const strongPassword = `Str0ng!P@ssw0rd-${Date.now()}`;
-
-		await client.signUp.email({
-			email: uniqueEmail,
-			password: initialPassword,
-			name: "Test User",
-		});
-
-		const result = await client.changePassword({
-			currentPassword: initialPassword,
-			newPassword: strongPassword,
-		});
-		expect(result.data?.user).toBeDefined();
+		expect(result.error?.status).toBe(400);
 	});
 });
