@@ -59,24 +59,24 @@ export const init = async (options: BetterAuthOptions) => {
 	};
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers = Object.keys(options.socialProviders || {})
-		.map((key) => {
-			const value = options.socialProviders?.[key as "github"]!;
-			if (!value || value.enabled === false) {
+	const providers = Object.entries(options.socialProviders || {})
+		.map(([key_, value]) => {
+			const key = key_ as (typeof socialProviderList)[number];
+			
+			if (value.enabled === false) {
 				return null;
 			}
-			if (!value.clientId) {
+			if (!value.clientId || !value.clientSecret) {
 				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			const provider = socialProviders[
-				key as (typeof socialProviderList)[number]
-			](
-				value as any, // TODO: fix this
-			);
-			(provider as OAuthProvider).disableImplicitSignUp =
-				value.disableImplicitSignUp;
+
+			//@ts-expect-error - We know the value is right for the provider
+			const provider = socialProviders[key](value) satisfies OAuthProvider;
+
+			//@ts-expect-error - Forcefully add the disableImplicitSignUp property
+			provider.disableImplicitSignUp = value.disableImplicitSignUp;
 			return provider;
 		})
 		.filter((x) => x !== null);
