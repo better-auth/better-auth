@@ -191,6 +191,23 @@ You can pass in a boolean, or an object with the following keys:
 
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
+```ts title="Example"
+// Will log debug logs for all methods.
+const adapter = myAdapter({
+  debugLogs: true
+});
+```
+
+```ts title="Example"
+// Will only log debug logs for the `create` and `update` methods.
+const adapter = myAdapter({
+  debugLogs: {
+    create: true,
+    update: true,
+  },
+});
+```
+
 Default: `false`
 
 </Accordion>

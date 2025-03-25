@@ -9,16 +9,19 @@ export * from "./types";
 export const createAdapter =
 	({
 		adapter,
-		config,
+		config: cfg,
 	}: {
 		config: AdapterConfig;
 		adapter: CreateCustomAdapter;
 	}) =>
 	(options: BetterAuthOptions): Adapter => {
-		config.supportsBooleans = config.supportsBooleans ?? true;
-		config.supportsDates = config.supportsDates ?? true;
-		config.supportsJSON = config.supportsJSON ?? true;
-		config.adapterName = config.adapterName ?? config.adapterId;
+		const config = {
+			...cfg,
+			supportsBooleans: cfg.supportsBooleans ?? true,
+			supportsDates: cfg.supportsDates ?? true,
+			supportsJSON: cfg.supportsJSON ?? true,
+			adapterName: cfg.adapterName ?? cfg.adapterId,
+		};
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
@@ -51,7 +54,7 @@ export const createAdapter =
 				debugLog(`Schema:`, schema);
 				throw new Error(`Field ${field} not found in model ${model}`);
 			}
-			return f?.fieldName || field;
+			return f.fieldName || field;
 		}
 
 		/**
@@ -95,6 +98,7 @@ export const createAdapter =
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
 				if (typeof args[0] === "object" && "method" in args[0]) {
 					const method = args.shift().method;
+					// Make sure the method is enabled in the config.
 					if (typeof config.debugLogs === "object") {
 						if (method === "create" && !config.debugLogs.create) {
 							return;
@@ -119,10 +123,8 @@ export const createAdapter =
 						} else if (method === "count" && !config.debugLogs.count) {
 							return;
 						}
-						logger.info(`[${config.adapterName}]`, ...args);
-					} else {
-						logger.info(`[${config.adapterName}]`, ...args);
 					}
+					logger.info(`[${config.adapterName}]`, ...args);
 				} else {
 					logger.info(`[${config.adapterName}]`, ...args);
 				}
