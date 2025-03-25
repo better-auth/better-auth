@@ -39,6 +39,8 @@
   },
   "dependencies": {
     "better-auth": "workspace:^",
+    "body-parser": "^1.20.3",
+    "express": "^4.21.2",
     "samlify": "^2.9.0",
     "zod": "^3.24.1"
   },
