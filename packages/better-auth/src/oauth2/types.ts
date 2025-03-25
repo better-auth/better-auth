@@ -57,6 +57,7 @@ export interface OAuthProvider<
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	options?: ProviderOptions;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {

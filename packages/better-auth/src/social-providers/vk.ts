@@ -109,5 +109,6 @@ export const vk = (options: VkOption) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<VkProfile>;
 };

@@ -183,5 +183,6 @@ export const tiktok = (options: TiktokOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<TiktokProfile>;
 };

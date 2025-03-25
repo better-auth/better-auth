@@ -145,5 +145,6 @@ export const google = (options: GoogleOptions) => {
 				data: user,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<GoogleProfile>;
 };

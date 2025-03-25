@@ -352,3 +352,44 @@ describe("Disable implicit signup", async () => {
 		});
 	});
 });
+describe("Disable signup", async () => {
+	it("Should not create user when sign up is disabled", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain(
+					"http://localhost:3000/api/auth/error?error=signup_disabled",
+				);
+			},
+		});
+	});
+});
