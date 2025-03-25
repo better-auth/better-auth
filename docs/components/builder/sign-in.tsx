@@ -266,7 +266,11 @@ export default function SignIn() {
                   await signIn.magicLink({ email });
                   setLoading(false)
                  }}>
-                Sign-in with Magic Link
+                  {loading ? (
+                     <Loader2 size={16} className="animate-spin" />
+                     ):(
+                         Sign-in with Magic Link
+                   )}
               </Button>
             </div>`
               : ""
@@ -287,7 +291,7 @@ export default function SignIn() {
               {loading ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
-                "Login"
+                Login
               )}
             </Button>`
               : ""
@@ -335,9 +339,10 @@ export default function SignIn() {
                         : '"w-full gap-2"'
                     }
                   )}
+                  disabled={loading}
                   onClick={async () => {
-                  setLoading(true)
-                  await signIn.social({
+                    setLoading(true)
+                    await signIn.social({
                       provider: "${provider}",
                       callbackURL: "/dashboard"
                     });
