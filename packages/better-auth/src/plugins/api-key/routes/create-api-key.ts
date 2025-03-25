@@ -244,8 +244,8 @@ export function createApiKey({
 				: defaultPermissions
 					? JSON.stringify(defaultPermissions)
 					: undefined;
-			let data: ApiKey = {
-				id: generateId(),
+
+			let data: Omit<ApiKey, "id"> = {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -278,12 +278,13 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
-			const apiKey = await ctx.context.adapter.create<ApiKey>({
+			const apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 				model: schema.apikey.modelName,
 				data: data,
 			});
+
 			return ctx.json({
-				...apiKey,
+				...apiKey as ApiKey,
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
