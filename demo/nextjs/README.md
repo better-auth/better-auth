@@ -57,16 +57,16 @@ Feel free to jump in and edit the app by modifying `app/page.tsx`. Any changes y
 
 Here’s what this app supports out of the box:
 
-- **Email & Password**: Simple and secure authentication.
-- **Organization / Teams**: Manage users within organizations or teams.
-- **Passkeys**: Passwordless login using modern authentication standards.
-- **Multi-Factor Authentication (MFA)**: Add an extra layer of security.
-- **Password Reset**: Let users reset their passwords if they forget them.
-- **Email Verification**: Make sure users verify their email addresses.
-- **Roles & Permissions**: Define and manage who can do what.
-- **Rate Limiting**: Protect your app from abuse with smart limits.
-- **Session Management**: Handle user sessions seamlessly.
-- **Stripe Plugin**: Integrate Stripe for customer management, subscriptions, and webhooks.
+- **[Email & Password](https://www.better-auth.com/docs/basic-usage#email-password)**: Simple and secure authentication.
+- **[Organization / Teams](https://www.better-auth.com/docs/plugins/organization)**: Manage users within organizations or teams.
+- **[Passkeys](https://www.better-auth.com/docs/plugins/passkey)**: Passwordless login using modern authentication standards.
+- **[Multi-Factor Authentication (MFA)](https://www.better-auth.com/docs/plugins/2fa)**: Add an extra layer of security.
+- **[Password Reset](https://www.better-auth.com/docs/concepts/email#password-reset-email)**: Let users reset their passwords if they forget them.
+- **[Email Verification](https://www.better-auth.com/docs/concepts/email#email-verification)**: Ensure users verify their email addresses.
+- **[Roles & Permissions](https://www.better-auth.com/docs/plugins/roles-permissions)**: Define and manage who can do what.
+- **[Rate Limiting](https://www.better-auth.com/docs/concepts/rate-limit)**: Protect your app from abuse with smart limits.
+- **[Session Management](https://www.better-auth.com/docs/concepts/session-management)**: Handle user sessions seamlessly.
+- **[Stripe Plugin](https://www.better-auth.com/docs/plugins/stripe)**: Integrate Stripe for customer management, subscriptions, and webhooks.
 
 ## Learn More
 
