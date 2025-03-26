@@ -42,44 +42,48 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("Social Providers", async () => {
-	const { auth, customFetchImpl, client, cookieSetter } = await getTestInstance(
-		{
-			user: {
-				additionalFields: {
-					firstName: {
-						type: "string",
+	const { auth, customFetchImpl, client, cookieSetter, sessionSetter } =
+		await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						firstName: {
+							type: "string",
+						},
+						lastName: {
+							type: "string",
+						},
+						isOAuth: {
+							type: "boolean",
+						},
 					},
-					lastName: {
-						type: "string",
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						mapProfileToUser(profile) {
+							return {
+								firstName: profile.given_name,
+								lastName: profile.family_name,
+								isOAuth: true,
+							};
+						},
+						verifyIdToken: async (token) => {
+							return true;
+						},
 					},
-					isOAuth: {
-						type: "boolean",
+					apple: {
+						clientId: "test",
+						clientSecret: "test",
 					},
 				},
 			},
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					enabled: true,
-					mapProfileToUser(profile) {
-						return {
-							firstName: profile.given_name,
-							lastName: profile.family_name,
-							isOAuth: true,
-						};
-					},
-				},
-				apple: {
-					clientId: "test",
-					clientSecret: "test",
-				},
+			{
+				disableTestUser: true,
 			},
-		},
-		{
-			disableTestUser: true,
-		},
-	);
+		);
 	let state = "";
 
 	const headers = new Headers();
@@ -179,6 +183,54 @@ describe("Social Providers", async () => {
 				headers,
 			},
 		});
+		expect(session.data?.user).toMatchObject({
+			isOAuth: true,
+			firstName: "First",
+			lastName: "Last",
+		});
+	});
+
+	it("should be able to map profile to user logging in via id token", async () => {
+		const headers = new Headers();
+
+		const data: GoogleProfile = {
+			email: "user2@email.com",
+			email_verified: true,
+			name: "First Last",
+			picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+			exp: 1234567890,
+			sub: "1234567890",
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "test",
+			given_name: "First",
+			family_name: "Last",
+		};
+		const testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+		await client.signIn.social(
+			{
+				provider: "google",
+				idToken: {
+					token: testIdToken,
+					accessToken: "test",
+				},
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
 		expect(session.data?.user).toMatchObject({
 			isOAuth: true,
 			firstName: "First",

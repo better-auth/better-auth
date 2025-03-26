@@ -237,6 +237,7 @@ export const signInSocial = createAuthEndpoint(
 			}
 			const data = await handleOAuthUserInfo(c, {
 				userInfo: {
+					...userInfo.user,
 					email: userInfo.user.email,
 					id: userInfo.user.id,
 					name: userInfo.user.name || "",
@@ -263,6 +264,7 @@ export const signInSocial = createAuthEndpoint(
 				token: data.data!.session.token,
 				url: undefined,
 				user: {
+					...data.data!.user,
 					id: data.data!.user.id,
 					email: data.data!.user.email,
 					name: data.data!.user.name,
