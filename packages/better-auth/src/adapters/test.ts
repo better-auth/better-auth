@@ -11,8 +11,15 @@ interface AdapterTestOptions {
 
 export async function runAdapterTest(opts: AdapterTestOptions) {
 	const adapter = await opts.getAdapter();
-	const user = {
-		id: "1",
+	//@ts-expect-error - intentionally omitting id
+	const user: {
+		name: string;
+		email: string;
+		emailVerified: boolean;
+		createdAt: Date;
+		updatedAt: Date;
+		id: string;
+	} = {
 		name: "user",
 		email: "user@email.com",
 		emailVerified: true,
@@ -132,7 +139,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		const user = await adapter.create<User>({
 			model: "user",
 			data: {
-				id: "2",
 				name: "user2",
 				email: "test@email.com",
 				emailVerified: true,
@@ -156,7 +162,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		const newUser = await adapter.create<User>({
 			model: "user",
 			data: {
-				id: "3",
 				name: "user",
 				email: "test-email2@email.com",
 				emailVerified: true,
@@ -179,10 +184,9 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 
 	test("should work with reference fields", async () => {
 		let token = null;
-		const user = await adapter.create<{ id: string } & Record<string, any>>({
+		const user = await adapter.create<Record<string, any>>({
 			model: "user",
 			data: {
-				id: "4",
 				name: "user",
 				email: "my-email@email.com",
 				emailVerified: true,
@@ -193,7 +197,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		const session = await adapter.create({
 			model: "session",
 			data: {
-				id: "1",
 				token: generateId(),
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -232,7 +235,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		await adapter.create({
 			model: "user",
 			data: {
-				id: "5",
 				name: "a",
 				email: "a@email.com",
 				emailVerified: true,
@@ -335,7 +337,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			await adapter.create({
 				model: "user",
 				data: {
-					id,
 					name: "to-be-deleted",
 					email: `email@test-${id}.com`,
 					emailVerified: true,
@@ -454,7 +455,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			const res = await customAdapter.create({
 				model: "user",
 				data: {
-					id: "1",
 					name: "user4",
 					email: "user4@email.com",
 					emailVerified: true,

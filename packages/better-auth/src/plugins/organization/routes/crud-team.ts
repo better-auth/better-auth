@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
-import { generateId } from "../../../utils";
 import { getSessionFromCtx } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import type { OrganizationOptions } from "../organization";
@@ -83,7 +82,6 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				});
 			}
 			const createdTeam = await adapter.createTeam({
-				id: generateId(),
 				name: ctx.body.name,
 				organizationId,
 				createdAt: new Date(),
