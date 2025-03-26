@@ -1693,6 +1693,9 @@ importers:
 
   packages/saml:
     dependencies:
+      '@authenio/samlify-xsd-schema-validator':
+        specifier: ^1.0.5
+        version: 1.0.5(samlify@2.9.0)
       better-auth:
         specifier: workspace:^
         version: link:../better-auth
@@ -1876,9 +1879,17 @@ packages:
   '@astrojs/yaml2ts@0.2.2':
     resolution: {integrity: sha512-GOfvSr5Nqy2z5XiwqTouBBpy5FyI6DEe+/g/Mk5am9SjILN1S5fOEvYK0GuWHg98yS/dobP4m8qyqw/URW35fQ==}
 
+  '@authenio/samlify-xsd-schema-validator@1.0.5':
+    resolution: {integrity: sha512-HJjmjM1WbeB/z4nVbYEcmtIWTLPKqjrqRGEpC9lu7s03Usc4nxxfrJGjHgh3M8MvBJy4neVUoeM9rP4ym3GLgg==}
+    peerDependencies:
+      samlify: '>= 2.6.0'
+
   '@authenio/xml-encryption@2.0.2':
     resolution: {integrity: sha512-cTlrKttbrRHEw3W+0/I609A2Matj5JQaRvfLtEIGZvlN0RaPi+3ANsMeqAyCAVlH/lUIW2tmtBlSMni74lcXeg==}
     engines: {node: '>=12'}
+
+  '@authenio/xsd-schema-validator@0.7.3':
+    resolution: {integrity: sha512-Jhc/Hxv90bacZr0Fv+u+PEb440zPh4mO6rw+bzEAIBiFLKCtRa/BvKGRxPdCAwsGRPuwl2hFqQGF+Lfz6Q8kFg==}
 
   '@azure/abort-controller@2.1.2':
     resolution: {integrity: sha512-nBrLsEWm4J2u5LpAPjxADTlq3trDgVZZXHNKabeXZtpq3d3AbN/KGO82R87rdDz5/lYB024rtEf10/q0urNgsA==}
@@ -21049,11 +21060,18 @@ snapshots:
     dependencies:
       yaml: 2.7.0
 
+  '@authenio/samlify-xsd-schema-validator@1.0.5(samlify@2.9.0)':
+    dependencies:
+      '@authenio/xsd-schema-validator': 0.7.3
+      samlify: 2.9.0
+
   '@authenio/xml-encryption@2.0.2':
     dependencies:
       '@xmldom/xmldom': 0.8.10
       escape-html: 1.0.3
       xpath: 0.0.32
+
+  '@authenio/xsd-schema-validator@0.7.3': {}
 
   '@azure/abort-controller@2.1.2':
     dependencies:
