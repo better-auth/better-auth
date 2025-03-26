@@ -261,10 +261,13 @@ export default function SignIn() {
               />
               <Button
                 disabled={loading}
-                className="gap-2" onClick={async () => {
+                className="gap-2"
+                onClick={async () => {
                   setLoading(true)
-                  await signIn.magicLink({ email });
-                  setLoading(false)
+                  await signIn.magicLink({ email }, {
+                      onRequest: (ctx)=> setLoading(true),
+                      onResponse: (ctx)=> setLoading(false)
+                  });
                  }}>
                   {loading ? (
                      <Loader2 size={16} className="animate-spin" />
@@ -290,7 +293,7 @@ export default function SignIn() {
                     password
                 },
                 {
-                  onSuccess: () => {
+                  onRequest: () => {
                     setLoading(false);
                   },
                   onResponse: () => {
@@ -316,9 +319,16 @@ export default function SignIn() {
               disabled={loading}
               className="gap-2"
               onClick={async () => {
-                setLoading(true)
-                await signIn.passkey();
-                setLoading(false)
+                await signIn.passkey(
+                {
+                  onRequest: () => {
+                    setLoading(false);
+                  },
+                  onResponse: () => {
+                    setLoading(false);
+                  },
+                },
+                )
               }}
             >
               <Key size={16} />
@@ -354,11 +364,20 @@ export default function SignIn() {
                   disabled={loading}
                   onClick={async () => {
                     setLoading(true)
-                    await signIn.social({
+                    await signIn.social(
+                    {
                       provider: "${provider}",
                       callbackURL: "/dashboard"
-                    });
-                    setLoading(false)
+                    },
+                    {
+                      onRequest: () => {
+                         setLoading(false);
+                      },
+                      onResponse: () => {
+                         setLoading(false);
+                      },
+                     },
+                    );
                   }}
                 >
                   ${icon}
