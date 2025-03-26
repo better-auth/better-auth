@@ -31,20 +31,20 @@ export const ssoSAML = (options?: SSOOptions) => {
           method: "GET",
           query: z.object({
             providerId: z.string(),
-            format: z.enum(['xml', 'json']).default('xml')
+            format: z.enum(["xml", "json"]).default("xml"),
           }),
           metadata: {
             openapi: {
               summary: "Get Identity Provider metadata",
-              description: "Returns the SAML metadata for the Identity Provider",
+              description:
+                "Returns the SAML metadata for the Identity Provider",
               responses: {
                 "200": {
                   description: "SAML metadata in XML format",
-                  
-                }
-              }
-            }
-          }
+                },
+              },
+            },
+          },
         },
         async (ctx) => {
           const provider = await ctx.context.adapter.findOne<SSOProvider>({
@@ -53,25 +53,23 @@ export const ssoSAML = (options?: SSOOptions) => {
               {
                 field: "providerId",
                 value: ctx.query.providerId,
-              }
-            ]
+              },
+            ],
           });
           if (!provider) {
             throw new APIError("NOT_FOUND", {
-              message: "No provider found for the given providerId"
+              message: "No provider found for the given providerId",
             });
           }
           const parsedSamlConfig = JSON.parse(provider.samlConfig);
-          console.log(parsedSamlConfig) 
           const idp = saml.IdentityProvider({
             ...parsedSamlConfig,
-            metadata: parsedSamlConfig.idpMetadata
+            metadata: parsedSamlConfig.idpMetadata,
           });
-          console.log({idp})
           return new Response(idp.getMetadata(), {
             headers: {
-              "Content-Type": "application/xml"
-            }
+              "Content-Type": "application/xml",
+            },
           });
         }
       ),
@@ -81,7 +79,7 @@ export const ssoSAML = (options?: SSOOptions) => {
           method: "GET",
           query: z.object({
             providerId: z.string(),
-            format: z.enum(['xml', 'json']).default('xml')
+            format: z.enum(["xml", "json"]).default("xml"),
           }),
           metadata: {
             openapi: {
@@ -90,11 +88,10 @@ export const ssoSAML = (options?: SSOOptions) => {
               responses: {
                 "200": {
                   description: "SAML metadata in XML format",
-                  
-                }
-              }
-            }
-          }
+                },
+              },
+            },
+          },
         },
         async (ctx) => {
           const provider = await ctx.context.adapter.findOne<SSOProvider>({
@@ -102,13 +99,13 @@ export const ssoSAML = (options?: SSOOptions) => {
             where: [
               {
                 field: "providerId",
-                value: ctx.query.providerId
-              }
-            ]
+                value: ctx.query.providerId,
+              },
+            ],
           });
           if (!provider) {
             throw new APIError("NOT_FOUND", {
-              message: "No provider found for the given providerId"
+              message: "No provider found for the given providerId",
             });
           }
 
@@ -117,13 +114,10 @@ export const ssoSAML = (options?: SSOOptions) => {
             metadata: parsedSamlConfig.spMetadata,
             ...parsedSamlConfig,
           });
-          const result = sp.getMetadata()
-          console.log({result})
-          console.log("ParsedConfig: " , sp)
           return new Response(sp.getMetadata(), {
             headers: {
-              "Content-Type": "application/xml"
-            }
+              "Content-Type": "application/xml",
+            },
           });
         }
       ),
@@ -160,7 +154,7 @@ export const ssoSAML = (options?: SSOOptions) => {
             ...provider,
             samlConfig: JSON.parse(provider.samlConfig) as SAMLConfig,
           });
-        },
+        }
       ),
 
       signInSSOSAML: createAuthEndpoint(
@@ -203,23 +197,181 @@ export const ssoSAML = (options?: SSOOptions) => {
           }
 
           const parsedSamlConfig = JSON.parse(provider.samlConfig);
-          
+
           const samlSp = saml.ServiceProvider({
-            metadata:parsedSamlConfig.spMetadata,
+            metadata: parsedSamlConfig.spMetadata,
           });
           const samlClient = saml.IdentityProvider({
             metadata: parsedSamlConfig.idpMetadata,
-            ...parsedSamlConfig
+            ...parsedSamlConfig,
           });
-          const loginRequest = await samlSp.createLoginRequest(samlClient , "redirect");
+          const loginRequest = await samlSp.createLoginRequest(
+            samlClient,
+            "redirect"
+          );
           return ctx.json({
             url: loginRequest.context,
             redirect: true,
           });
-        },
+        }
       ),
-
       callbackSSOSAML: createAuthEndpoint(
+        "/sso/callback-saml/:providerId",
+        {
+          method: "POST",
+          body: z.object({
+            SAMLResponse: z.string(),
+            RelayState: z.string().optional(),
+          }),
+          metadata: {
+            isAction: false,
+            openapi: {
+              summary: "Callback URL for SAML provider",
+              description:
+                "This endpoint is used as the callback URL for SAML providers.",
+              responses: {
+                "302": {
+                  description: "Redirects to the callback URL",
+                },
+                "400": {
+                  description: "Invalid SAML response",
+                },
+                "401": {
+                  description: "Unauthorized - SAML authentication failed",
+                },
+              },
+            },
+          },
+        },
+        async (ctx) => {
+          const { SAMLResponse, RelayState } = ctx.body;
+          const { providerId } = ctx.params;
+
+          const provider = await ctx.context.adapter.findOne<SSOProvider>({
+            model: "ssoProvider",
+            where: [{ field: "providerId", value: providerId }],
+          });
+
+          if (!provider) {
+            throw new APIError("NOT_FOUND", {
+              message: "No provider found for the given providerId",
+            });
+          }
+
+          const parsedSamlConfig = JSON.parse(
+            provider.samlConfig
+          );
+          const idp = saml.IdentityProvider({
+            ...parsedSamlConfig,
+            metadata: parsedSamlConfig.idpMetadata,
+          });
+          // const idp = saml.IdentityProvider({
+          //   metadata: parsedSamlConfig,
+          //   privateKey: parsedSamlConfig.privateKey,
+          //   privateKeyPass: parsedSamlConfig.privateKeyPass,
+          //   isAssertionEncrypted: parsedSamlConfig.isAssertionEncrypted,
+          //   loginResponseTemplate: {
+          //     context: parsedSamlConfig.loginResponseTemplate?.context,
+          //     attributes: parsedSamlConfig.loginResponseTemplate?.attributes,
+          //   },
+          // });
+
+          const sp = saml.ServiceProvider({
+            metadata: parsedSamlConfig.spMetadata,
+            entityID: parsedSamlConfig.issuer,
+            authnRequestsSigned: parsedSamlConfig.authnRequestsSigned,
+            wantAssertionsSigned: parsedSamlConfig.wantAssertionsSigned,
+            wantMessageSigned: parsedSamlConfig.wantMessageSigned,
+            signingCert: parsedSamlConfig.signingCert,
+            privateKey: parsedSamlConfig.privateKey,
+            encryptCert: parsedSamlConfig.encryptCert,
+            assertionConsumerService: [
+              {
+                Binding: saml.Constants.namespace.post,
+                Location: `${parsedSamlConfig.issuer}/sso/callback-saml/${providerId}`,
+              },
+            ],
+          });
+
+          // 3. Parse and validate the SAML response
+          let parsedResponse: saml.LoginResponse;
+          try {
+            parsedResponse = await sp.parseLoginResponse(idp, "post", {
+              body: { SAMLResponse, RelayState },
+            });
+
+            if (!parsedResponse) {
+              throw new Error("Empty SAML response");
+            }
+          } catch (error) {
+            logger.error("SAML response validation failed", error);
+            throw new APIError("BAD_REQUEST", {
+              message: "Invalid SAML response",
+              details: error instanceof Error ? error.message : String(error),
+            });
+          }
+
+          // 4. Extract user information
+          const userInfo = {
+            id: parsedResponse.extract.nameID,
+            email:
+              parsedResponse.extract.attributes?.email ||
+              parsedResponse.extract.nameID,
+            name:
+              [
+                parsedResponse.extract.attributes?.givenName,
+                parsedResponse.extract.attributes?.surname,
+              ]
+                .filter(Boolean)
+                .join(" ") || parsedResponse.extract.attributes?.displayName,
+            attributes: parsedResponse.extract.attributes,
+          };
+
+          // 5. Handle user provisioning
+          let session, user;
+          if (options?.provisionUser && false) {
+            const provisionResult = await options.provisionUser({
+              user: null, // No existing user
+              userInfo,
+              token: {
+                nameID: parsedResponse.extract.nameID,
+                sessionIndex: parsedResponse.extract.sessionIndex,
+                attributes: parsedResponse.extract.attributes,
+              },
+              provider,
+            });
+
+            session = provisionResult.session;
+            user = provisionResult.user;
+          } else {
+            // Fallback to default user creation if no provisionUser callback provided
+            user = await ctx.context.adapter.create({
+              model: "user",
+              data: {
+                email: userInfo.email,
+                name: userInfo.name,
+                emailVerified: true,
+              },
+            });
+
+            session = await ctx.context.adapter.create({
+              model: "session",
+              data: {
+                userId: user.id,
+                expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
+              },
+            });
+          }
+
+          console.log({session , user}) 
+          await setSessionCookie(ctx, { session, user });
+
+          return ctx.redirect(
+            RelayState || `${parsedSamlConfig.issuer}/dashboard`
+          );
+        }
+      ),
+      callbackSSOSAMLO: createAuthEndpoint(
         "/sso/callback-saml/:providerId",
         {
           method: "GET",
@@ -258,20 +410,20 @@ export const ssoSAML = (options?: SSOOptions) => {
             });
           }
           const parsedSamlConfig = JSON.parse(provider.samlConfig);
-          
+
           const samlClient = saml.IdentityProvider({
             ...parsedSamlConfig,
-            metadata: parsedSamlConfig.idpMetadata
+            metadata: parsedSamlConfig.idpMetadata,
           });
           const samlSp = saml.ServiceProvider({
-            metadata:parsedSamlConfig.spMetadata,
+            metadata: parsedSamlConfig.spMetadata,
           });
           const parsedResponse = await samlSp.parseLoginResponse(
-            samlClient, 
+            samlClient,
             "redirect",
             ctx.request
           );
-          console.log({parsedResponse})
+          console.log({ parsedResponse });
           if (!parsedResponse) {
             throw new APIError("BAD_REQUEST", {
               message: "Invalid SAML response",
@@ -307,7 +459,7 @@ export const ssoSAML = (options?: SSOOptions) => {
           });
 
           return ctx.redirect(RelayState);
-        },
+        }
       ),
     },
     schema: {
