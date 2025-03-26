@@ -576,7 +576,10 @@ export const getOrgAdapter = (
 			const expiresAt = getDate(
 				options?.invitationExpiresIn || defaultExpiration,
 			);
-			const invite = await adapter.create<Omit<InvitationInput, "id">, Invitation>({
+			const invite = await adapter.create<
+				Omit<InvitationInput, "id">,
+				Invitation
+			>({
 				model: "invitation",
 				data: {
 					status: "pending",

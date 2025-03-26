@@ -55,6 +55,23 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(typeof res?.id).toEqual("string");
 	});
 
+	test("create model with numeric id enabled, and expect the output `id` to still be string", async () => {
+		const adapter = await opts.getAdapter({
+			advanced: {
+				useNumberId: true,
+			},
+		});
+		const res: { id: string } = await adapter.create({
+			model: "user",
+			data: {
+				name: "test-name",
+				email: "test-email-with-numeric-id@email.com",
+			},
+		});
+		expect(res).toHaveProperty("id");
+		expect(typeof res.id).toEqual("string");
+	});
+
 	test("find model", async () => {
 		const res = await adapter.findOne<User>({
 			model: "user",
@@ -132,7 +149,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		const res = await adapter.findMany({
 			model: "user",
 		});
-		expect(res.length).toBe(2);
+		expect(res.length).toBe(3);
 	});
 
 	test("should find many with where", async () => {
@@ -275,7 +292,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			model: "user",
 			offset: 2,
 		});
-		expect(res.length).toBe(4);
+		expect(res.length).toBe(5);
 	});
 
 	test("should update with multiple where", async () => {

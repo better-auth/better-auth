@@ -135,7 +135,6 @@ The `supportsJSON` option is used to indicate if the database supports JSON.
 If the database doesn't support JSON, we will use a `string` to save the JSON data.
 And when we retrieve the data, we will safely parse the `string` back into a JSON object.
 
-
 Default: `true`
 
 </Accordion>
@@ -194,7 +193,7 @@ If any of the keys are `true`, the debug logs will be enabled for that method.
 ```ts title="Example"
 // Will log debug logs for all methods.
 const adapter = myAdapter({
-  debugLogs: true
+  debugLogs: true,
 });
 ```
 
@@ -267,10 +266,12 @@ Default: `undefined`
 </Accordion>
 
 <Accordion title="customTransformInput">
-The `customTransformInput` option is used to transform the input data 
+The `customTransformInput` option is used to transform the input data
 
 <Callout type="warn">
-If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then the transformations will be applied before your `customTransformInput` function is called.
+  If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then
+  the transformations will be applied before your `customTransformInput`
+  function is called.
 </Callout>
 
 Default: `undefined`
@@ -289,14 +290,14 @@ The `customTransformInput` function runs at every key in the data object of a gi
 
 ```ts title="Example"
 customTransformInput: ({ field, data }) => {
-
-  if(field === "id"){
+  if (field === "id") {
     return "123"; // Force the id to be "123"
   }
 
-  return data
-}
+  return data;
+};
 ```
+
 </Accordion>
 
 <Accordion title="customTransformOutput">
@@ -306,27 +307,28 @@ Similar to the `customTransformInput` function, it runs at every key in the data
 
 ```ts title="Example"
 customTransformOutput: ({ field, data }) => {
-  if(field === "name"){
+  if (field === "name") {
     return "Bob"; // Force the name to be "Bob"
   }
 
-  return data
-}
+  return data;
+};
 ```
+
 ```ts
 const some_data = await adapter.create({
   model: "user",
   data: {
     name: "John",
-  }
-})
+  },
+});
 
 // The name will be "Bob"
-console.log(some_data.name)
+console.log(some_data.name);
 ```
+
 </Accordion>
 </Accordions>
-
 
 ## Adapter
 
@@ -343,17 +345,11 @@ Before we get into the adapter function, let's go over the options that are avai
 - `getDefaultModelName`: The default model name function.
 
 ```ts title="Example"
-adapter: ({
-  options,
-  schema,
-  debugLog,
-  getField,
-  getDefaultModelName,
-}) => {
+adapter: ({ options, schema, debugLog, getField, getDefaultModelName }) => {
   return {
     // ...
-  }
-}
+  };
+};
 ```
 
 ### Adapter Methods
@@ -362,7 +358,7 @@ Some notes before we get into the methods:
 
 - All `model` values are already transformed into the correct model name for the database based on the end-user's schema configuration.
   - This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options to convert the `model` to the `schema` version.
-- We will automatically fill in any missing fields you return based on the user's `schema` configuration. 
+- We will automatically fill in any missing fields you return based on the user's `schema` configuration.
 - Any method that includes a `select` parameter, is only for the purpose of getting data from your database more efficiently. You do not need to worry about only returning what the `select` parameter states, as we will handle that for you.
 
 ---
@@ -371,22 +367,28 @@ Some notes before we get into the methods:
 
 The `create` method is used to create a new record in the database.
 
+<Callout>
+Note:
+In all cases, the `id` field is automatically generated inside of the `data` object unless the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better-Auth config.
+
+In these cases, it's expected that the users database will handle the id generation.
+</Callout>
+
 parameters:
 
 - `model`: The model/table name that new data will be inserted into.
 - `data`: The data to insert into the database.
 
 <Callout>
-Make sure to return the data that is inserted into the database.
+  Make sure to return the data that is inserted into the database.
 </Callout>
 
 ```ts title="Example"
 create: async ({ model, data }) => {
   // Example of inserting data into the database.
   return await db.insert(model).values(data);
-}
+};
 ```
-
 
 ### `update` method
 
@@ -399,14 +401,15 @@ parameters:
 - `update`: The data to update the record with.
 
 <Callout>
-Make sure to return the data in the row which is updated. This includes any fields that were not updated.
+  Make sure to return the data in the row which is updated. This includes any
+  fields that were not updated.
 </Callout>
 
 ```ts title="Example"
 update: async ({ model, where, update }) => {
   // Example of updating data in the database.
   return await db.update(model).set(update).where(where);
-}
+};
 ```
 
 ### `updateMany` method
@@ -419,15 +422,13 @@ parameters:
 - `where`: The `where` clause to update the records by.
 - `update`: The data to update the records with.
 
-<Callout>
-Make sure to return the number of records that were updated.
-</Callout>
+<Callout>Make sure to return the number of records that were updated.</Callout>
 
 ```ts title="Example"
 updateMany: async ({ model, where, update }) => {
   // Example of updating multiple records in the database.
   return await db.update(model).set(update).where(where);
-}
+};
 ```
 
 ### `delete` method
@@ -455,15 +456,13 @@ parameters:
 - `model`: The model/table name that the records will be deleted from.
 - `where`: The `where` clause to delete the records by.
 
-<Callout>
-Make sure to return the number of records that were deleted.
-</Callout>
+<Callout>Make sure to return the number of records that were deleted.</Callout>
 
 ```ts title="Example"
 deleteMany: async ({ model, where }) => {
   // Example of deleting multiple records from the database.
   return await db.delete(model).where(where);
-}
+};
 ```
 
 ### `findOne` method
@@ -476,15 +475,13 @@ parameters:
 - `where`: The `where` clause to find the record by.
 - `select`: The `select` clause to return.
 
-<Callout>
-Make sure to return the data that is found in the database.
-</Callout>
+<Callout>Make sure to return the data that is found in the database.</Callout>
 
 ```ts title="Example"
 findOne: async ({ model, where, select }) => {
   // Example of finding a single record in the database.
   return await db.select().from(model).where(where).limit(1);
-}
+};
 ```
 
 ### `findMany` method
@@ -500,14 +497,20 @@ parameters:
 - `offset`: The offset of records to return.
 
 <Callout>
-Make sure to return the array of data that is found in the database.
+  Make sure to return the array of data that is found in the database.
 </Callout>
 
 ```ts title="Example"
 findMany: async ({ model, where, limit, sortBy, offset }) => {
   // Example of finding multiple records in the database.
-  return await db.select().from(model).where(where).limit(limit).offset(offset).orderBy(sortBy);
-}
+  return await db
+    .select()
+    .from(model)
+    .where(where)
+    .limit(limit)
+    .offset(offset)
+    .orderBy(sortBy);
+};
 ```
 
 ### `count` method
@@ -519,15 +522,13 @@ parameters:
 - `model`: The model/table name that the records will be counted in.
 - `where`: The `where` clause to count the records by.
 
-<Callout>
-Make sure to return the number of records that were counted.
-</Callout>
+<Callout>Make sure to return the number of records that were counted.</Callout>
 
 ```ts title="Example"
 count: async ({ model, where }) => {
   // Example of counting the number of records in the database.
   return await db.select().from(model).where(where).count();
-}
+};
 ```
 
 ### `options` (optional)
@@ -535,16 +536,17 @@ count: async ({ model, where }) => {
 The `options` object is for any potential config that you got from your custom adapter options.
 
 ```ts title="Example"
-const myAdapter = (config: CustomAdapterConfig) => createAdapter({
-  config: {
-    // ...
-  },
-  adapter: ({ options }) => {
-    return {
-      options: config
-    }
-  }
-})
+const myAdapter = (config: CustomAdapterConfig) =>
+  createAdapter({
+    config: {
+      // ...
+    },
+    adapter: ({ options }) => {
+      return {
+        options: config,
+      };
+    },
+  });
 ```
 
 ### `createSchema` (optional)
@@ -559,8 +561,9 @@ parameters:
 ```ts title="Example"
 createSchema: async ({ file, tables }) => {
   // ... Custom logic to create a schema for the database.
-}
+};
 ```
+
 ## Test your adapter
 
 We've provided a test suite that you can use to test your adapter. It requires you to use `vitest`.

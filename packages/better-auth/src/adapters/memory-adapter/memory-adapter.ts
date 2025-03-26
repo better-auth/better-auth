@@ -13,7 +13,7 @@ export const memoryAdapter = (db: MemoryDB) =>
 			usePlural: false,
 			debugLogs: false,
 		},
-		adapter: ({ getField }) => {
+		adapter: ({ getField, options }) => {
 			function convertWhereClause(where: Where[], table: any[], model: string) {
 				return table.filter((record) => {
 					return where.every((clause) => {
@@ -39,6 +39,10 @@ export const memoryAdapter = (db: MemoryDB) =>
 			}
 			return {
 				create: async ({ model, data }) => {
+					if (options.advanced?.useNumberId) {
+						// @ts-ignore
+						data.id = db[model].length + 1;
+					}
 					db[model].push(data);
 					return data;
 				},

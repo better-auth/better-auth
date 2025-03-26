@@ -158,38 +158,6 @@ describe("Create Adapter Helper", async () => {
 		expect(res.id).toBe("HARD-CODED-ID");
 	});
 
-	//todo:
-	// test("Should not recieve an id during creation if options.advanced.useNumberId is true, however still return string id during output", async () => {
-	// 	const parameters: { data: { id: number } } = await new Promise(
-	// 		async (resolve) => {
-	// 			const adapter = await createTestAdapter({
-	// 				options: {
-	// 					advanced: {
-	// 						useNumberId: true,
-	// 					},
-	// 				},
-	// 				adapter(args_0) {
-	// 					return {
-	// 						async create(data) {
-	// 							resolve(data as any);
-	// 							return data.data;
-	// 						},
-	// 					};
-	// 				},
-	// 			});
-	// 			const res: { id: string } = await adapter.create({
-	// 				model: "user",
-	// 				data: { name: "test-name" },
-	// 			});
-	// 			expect(res).toHaveProperty("id");
-	// 			expect(typeof res.id).toBe("string");
-	// 		},
-	// 	);
-	// 	expect(parameters).toHaveProperty("data");
-	// 	expect(parameters.data).toHaveProperty("id");
-	// 	expect(typeof parameters.data.id).toBe("number");
-	// });
-
 	describe("Checking for the results of an adapter call, as well as the parameters passed into the adapter call", () => {
 		describe("create", () => {
 			test("Should fill in the missing fields in the result", async () => {

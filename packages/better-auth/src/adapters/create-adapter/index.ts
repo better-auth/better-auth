@@ -262,6 +262,11 @@ export const createAdapter =
 					}
 
 					let newFieldName: string = newMappedKeys[key] || key;
+
+					if (originalKey === "id" || field.references?.field === "id") {
+						if (typeof newValue !== "undefined") newValue = String(newValue);
+					}
+
 					if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
