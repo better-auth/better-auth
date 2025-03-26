@@ -263,14 +263,13 @@ export default function SignIn() {
                 disabled={loading}
                 className="gap-2"
                 onClick={async () => {
-                  setLoading(true)
                   await signIn.magicLink(
                   {
                     email
                   },
                   {
                      onRequest: (ctx) => {
-                        setLoading(false);
+                        setLoading(true);
                       },
                      onResponse: (ctx) => {
                          setLoading(false);
@@ -295,7 +294,6 @@ export default function SignIn() {
               className="w-full"
               disabled={loading}
               onClick={async () => {
-                setLoading(true)
                 await signIn.email(
                 {
                     email,
@@ -303,7 +301,7 @@ export default function SignIn() {
                 },
                 {
                   onRequest: (ctx) => {
-                    setLoading(false);
+                    setLoading(true);
                   },
                   onResponse: (ctx) => {
                     setLoading(false);
@@ -328,10 +326,10 @@ export default function SignIn() {
               disabled={loading}
               className="gap-2"
               onClick={async () => {
-                await signIn.passkey(
+              await signIn.passkey(
                 {
                   onRequest: (ctx) => {
-                    setLoading(false);
+                    setLoading(true);
                   },
                   onResponse: (ctx) => {
                     setLoading(false);
@@ -380,7 +378,7 @@ export default function SignIn() {
                     },
                     {
                       onRequest: (ctx) => {
-                         setLoading(false);
+                         setLoading(true);
                       },
                       onResponse: (ctx) => {
                          setLoading(false);
