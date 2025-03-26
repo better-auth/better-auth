@@ -2,7 +2,11 @@ import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	refreshAccessToken,
+	createAuthorizationURL,
+	validateAuthorizationCode,
+} from "../oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -124,6 +128,19 @@ export const apple = (options: AppleOptions) => {
 			}
 			return !!jwtClaims;
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://appleid.apple.com/auth/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
