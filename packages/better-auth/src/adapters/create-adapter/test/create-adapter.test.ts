@@ -158,6 +158,25 @@ describe("Create Adapter Helper", async () => {
 		expect(res.id).toBe("HARD-CODED-ID");
 	});
 
+	test("Should throw an error if the database doesn't support numeric ids and the user has enabled `useNumberId`", async () => {
+		let error: any | null = null;
+		try {
+			await createTestAdapter({
+				config: {
+					supportsNumericIds: false,
+				},
+				options: {
+					advanced: {
+						useNumberId: true,
+					},
+				},
+			});
+		} catch (err) {
+			error = err;
+		}
+		expect(error).not.toBeNull();
+	});
+
 	describe("Checking for the results of an adapter call, as well as the parameters passed into the adapter call", () => {
 		describe("create", () => {
 			test("Should fill in the missing fields in the result", async () => {

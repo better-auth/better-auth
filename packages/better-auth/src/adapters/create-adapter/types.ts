@@ -45,6 +45,12 @@ export interface AdapterConfig {
 	 */
 	adapterId: string;
 	/**
+	 * If the database supports numeric ids, set this to `true`.
+	 *
+	 * @default true
+	 */
+	supportsNumericIds?: boolean;
+	/**
 	 * If the database doesn't support JSON columns, set this to `false`.
 	 *
 	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.

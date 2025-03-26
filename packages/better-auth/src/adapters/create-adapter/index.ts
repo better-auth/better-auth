@@ -21,7 +21,17 @@ export const createAdapter =
 			supportsDates: cfg.supportsDates ?? true,
 			supportsJSON: cfg.supportsJSON ?? true,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
+			supportsNumericIds: cfg.supportsNumericIds ?? true,
 		};
+
+		if (
+			options.advanced?.useNumberId === true &&
+			config.supportsNumericIds === false
+		) {
+			throw new Error(
+				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
+			);
+		}
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
