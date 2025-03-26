@@ -27,13 +27,13 @@ Here’s how you can get the app running locally:
 
 3. **Set up your environment variables**:
 
-   - Rename the `.env.example` file to `.env.local`:
+   - Rename the `.env.example` file to `.env`:
 
      ```bash
-     mv .env.example .env.local
+     mv .env.example .env
      ```
 
-   - Open `.env.local` and fill in the required details. These will include things like API URLs, client IDs, and secrets needed to connect to the Better Auth service.
+   - Open `.env` and fill in the required details. These will include things like API URLs, client IDs, and secrets needed to connect to the Better Auth service.
 
 ### Start the Development Server
 
