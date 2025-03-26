@@ -624,6 +624,26 @@ export const getOrgAdapter = (
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
+		findPendingInvitations: async (data: {
+			organizationId: string;
+		}) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+					{
+						field: "status",
+						value: "pending",
+					},
+				],
+			});
+			return invitations.filter(
+				(invite) => new Date(invite.expiresAt) > new Date(),
+			);
+		},
 		updateInvitation: async (data: {
 			invitationId: string;
 			status: "accepted" | "canceled" | "rejected";
