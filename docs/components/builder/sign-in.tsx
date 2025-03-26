@@ -370,7 +370,6 @@ export default function SignIn() {
                   )}
                   disabled={loading}
                   onClick={async () => {
-                    setLoading(true)
                     await signIn.social(
                     {
                       provider: "${provider}",
