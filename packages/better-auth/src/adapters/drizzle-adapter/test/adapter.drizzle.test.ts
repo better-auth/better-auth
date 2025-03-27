@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "./schema";
-import { runAdapterTest } from "../../test";
+import { runAdapterTest, runNumberIdAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
 import { getMigrations } from "../../../db/get-migration";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -25,7 +25,7 @@ const cleanupDatabase = async (postgres: Kysely<any>) => {
 	await postgres.destroy();
 };
 
-const createTestOptions = (pg: Pool): BetterAuthOptions => ({
+const createTestOptions = (pg: Pool, useNumberId = false): BetterAuthOptions => ({
 	database: pg,
 	user: {
 		fields: { email: "email_address" },
@@ -39,6 +39,9 @@ const createTestOptions = (pg: Pool): BetterAuthOptions => ({
 	session: {
 		modelName: "sessions",
 	},
+	advanced: {
+		useNumberId
+	}
 });
 
 describe("Drizzle Adapter Tests", async () => {
@@ -102,3 +105,28 @@ describe("Authentication Flow Tests", async () => {
 		expect(user.user).toBeDefined();
 	});
 });
+
+
+describe("Number Id Adapter Test", async () => {
+	let pg: Pool;
+	let postgres: Kysely<any>;
+	let opts: BetterAuthOptions;
+	pg = createTestPool();
+	postgres = createKyselyInstance(pg);
+	opts = createTestOptions(pg, true);
+	const { runMigrations } = await getMigrations(opts);
+	await runMigrations();
+
+	afterAll(async () => {
+		await cleanupDatabase(postgres);
+	});
+	const db = drizzle(pg);
+	const adapter = drizzleAdapter(db, { provider: "pg", schema , debugLogs: true});
+
+	await runNumberIdAdapterTest({
+		getAdapter: async (customOptions = {}) => {
+			console.log(customOptions);
+			return adapter({ ...opts, ...customOptions });
+		},
+	});
+})

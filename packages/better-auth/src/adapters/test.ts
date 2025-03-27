@@ -594,7 +594,7 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 			{
 				predefinedOptions: {
 					advanced: {
-						useNumberId: false,
+						useNumberId: true,
 					},
 				},
 			},
