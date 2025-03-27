@@ -25,7 +25,10 @@ const cleanupDatabase = async (postgres: Kysely<any>) => {
 	await postgres.destroy();
 };
 
-const createTestOptions = (pg: Pool, useNumberId = false): BetterAuthOptions => ({
+const createTestOptions = (
+	pg: Pool,
+	useNumberId = false,
+): BetterAuthOptions => ({
 	database: pg,
 	user: {
 		fields: { email: "email_address" },
@@ -40,8 +43,8 @@ const createTestOptions = (pg: Pool, useNumberId = false): BetterAuthOptions => 
 		modelName: "sessions",
 	},
 	advanced: {
-		useNumberId
-	}
+		useNumberId,
+	},
 });
 
 describe("Drizzle Adapter Tests", async () => {
@@ -106,7 +109,6 @@ describe("Authentication Flow Tests", async () => {
 	});
 });
 
-
 describe("Number Id Adapter Test", async () => {
 	let pg: Pool;
 	let postgres: Kysely<any>;
@@ -121,12 +123,15 @@ describe("Number Id Adapter Test", async () => {
 		await cleanupDatabase(postgres);
 	});
 	const db = drizzle(pg);
-	const adapter = drizzleAdapter(db, { provider: "pg", schema , debugLogs: true});
+	const adapter = drizzleAdapter(db, {
+		provider: "pg",
+		schema,
+		debugLogs: false,
+	});
 
 	await runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			console.log(customOptions);
 			return adapter({ ...opts, ...customOptions });
 		},
 	});
-})
+});
