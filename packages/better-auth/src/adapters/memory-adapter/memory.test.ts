@@ -1,6 +1,6 @@
 import { describe } from "vitest";
 import { memoryAdapter } from "./memory-adapter";
-import { runAdapterTest } from "../test";
+import { runAdapterTest, runNumberIdAdapterTest } from "../test";
 
 describe("adapter test", async () => {
 	const db = {
@@ -17,6 +17,22 @@ describe("adapter test", async () => {
 						email: "email_address",
 					},
 				},
+				...customOptions,
+			});
+		},
+	});
+});
+
+describe("Number Id Adapter Test", async () => {
+	const db = {
+		user: [],
+		session: [],
+		account: [],
+	};
+	const adapter = memoryAdapter(db);
+	await runNumberIdAdapterTest({
+		getAdapter: async (customOptions = {}) => {
+			return adapter({
 				...customOptions,
 			});
 		},
