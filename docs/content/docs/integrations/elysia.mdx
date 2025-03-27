@@ -90,3 +90,40 @@ console.log(
 ```
 
 This will allow you to access the `user` and `session` object in all of your routes.
+
+---
+
+## Troubleshooting
+
+### Error: NOT_FOUND when visiting a non-existent route
+
+If you encounter an error similar to the following **when making a request to a path that is not defined in your Elysia application** (resulting in a 404 Not Found scenario), and the error seems to originate from within Better Auth's routing logic:
+
+```log
+ERROR [Better Auth]: Error 4807 |       continue;
+4808 |     }
+4809 |     if (endpoint.options?.metadata?.SERVER_ONLY) continue;
+4810 |     const methods = Array.isArray(endpoint.options?.method) ? endpoint.options.method : [endpoint.options?.method];
+4811 |     for (const method of methods) {
+4812 |       addRoute(router, method, endpoint.path, endpoint);
+                              ^
+error: NOT_FOUND
+```
+
+**Solution:**
+
+```ts
+// ... import your adapter and other necessary modules
+
+export const auth = new BetterAuth({
+  // --- Your existing config ---
+  // --- Add this section ---
+  onAPIError: {
+    /**
+     * Set to true to potentially resolve NOT_FOUND errors when accessing
+     */
+    throw: true,
+  },
+  // -------------------------
+});
+```
