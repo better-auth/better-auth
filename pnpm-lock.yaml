@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@better-fetch/fetch':
-      specifier: ^1.1.17
-      version: 1.1.17
+      specifier: ^1.1.18
+      version: 1.1.18
     better-call:
       specifier: ^1.0.5
       version: 1.0.5
@@ -68,7 +68,7 @@ importers:
         version: link:../../packages/stripe
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.17
+        version: 1.1.18
       '@hookform/resolvers':
         specifier: ^3.9.1
         version: 3.10.0(react-hook-form@7.54.2(react@19.0.0))
@@ -1405,7 +1405,7 @@ importers:
         version: 0.2.4
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.17
+        version: 1.1.18
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
@@ -1608,7 +1608,7 @@ importers:
     dependencies:
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.17
+        version: 1.1.18
       better-call:
         specifier: 'catalog:'
         version: 1.0.5
@@ -2787,8 +2787,8 @@ packages:
   '@better-fetch/fetch@1.1.15':
     resolution: {integrity: sha512-0Bl8YYj1f8qCTNHeSn5+1DWv2hy7rLBrQ8rS8Y9XYloiwZEfc3k4yspIG0llRxafxqhGCwlGRg+F8q1HZRCMXA==}
 
-  '@better-fetch/fetch@1.1.17':
-    resolution: {integrity: sha512-MQonMalbmEshb+amuLtCkVjYliyyWrYXZkiMnHLgFjNEBsNBbZSY3+lYsFK1/VxePSupVkUW6xinqhqB3uHE1g==}
+  '@better-fetch/fetch@1.1.18':
+    resolution: {integrity: sha512-rEFOE1MYIsBmoMJtQbl32PGHHXuG2hDxvEd7rUHE0vCBoFQVSDqaVs9hkZEtHCxRoY+CljXKFCOuJ8uxqw1LcA==}
 
   '@biomejs/biome@1.7.3':
     resolution: {integrity: sha512-ogFQI+fpXftr+tiahA6bIXwZ7CSikygASdqMtH07J2cUzrpjyTMVc9Y97v23c7/tL1xCZhM+W9k4hYIBm7Q6cQ==}
@@ -22827,7 +22827,7 @@ snapshots:
 
   '@better-fetch/fetch@1.1.15': {}
 
-  '@better-fetch/fetch@1.1.17': {}
+  '@better-fetch/fetch@1.1.18': {}
 
   '@biomejs/biome@1.7.3':
     optionalDependencies:
@@ -33779,7 +33779,7 @@ snapshots:
 
   better-call@1.0.5:
     dependencies:
-      '@better-fetch/fetch': 1.1.17
+      '@better-fetch/fetch': 1.1.18
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
