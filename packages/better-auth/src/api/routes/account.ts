@@ -122,9 +122,6 @@ export const linkSocialAccount = createAuthEndpoint(
 	},
 	async (c) => {
 		const session = c.context.session;
-		const accounts = await c.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
 
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.body.provider,
@@ -166,7 +163,7 @@ export const unlinkAccount = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			providerId: z.string(),
-			accountId: z.string(), // Add account ID to identify which account to unlink
+			accountId: z.string().optional(),
 		}),
 		use: [freshSessionMiddleware],
 	},
@@ -175,21 +172,22 @@ export const unlinkAccount = createAuthEndpoint(
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			ctx.context.session.user.id,
 		);
-		const accountExist = accounts.find(
-			(account) =>
-				account.providerId === providerId && account.accountId === accountId,
-		);
-		if (!accountExist) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
-			});
-		}
 		if (
 			accounts.length === 1 &&
 			!ctx.context.options.account?.accountLinking?.allowUnlinkingAll
 		) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+			});
+		}
+		const accountExist = accounts.find((account) =>
+			accountId
+				? account.accountId === accountId && account.providerId === providerId
+				: account.providerId === providerId,
+		);
+		if (!accountExist) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
 			});
 		}
 		await ctx.context.internalAdapter.deleteAccount(accountExist.id);

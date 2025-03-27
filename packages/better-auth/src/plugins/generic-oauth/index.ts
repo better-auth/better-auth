@@ -14,6 +14,7 @@ import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
 import { decodeJwt } from "jose";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -122,8 +123,8 @@ interface GenericOAuthConfig {
 	 */
 	disableSignUp?: boolean;
 	/**
-	 * Allows to use basic authentication for the token endpoint.
-	 * Default is "post".
+	 * Authentication method for token requests.
+	 * @default "post"
 	 */
 	authentication?: "basic" | "post";
 }
@@ -244,9 +245,37 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
-							authentication: c.authentication,
 						});
 					},
+					async refreshAccessToken(
+						refreshToken: string,
+					): Promise<OAuth2Tokens> {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return refreshAccessToken({
+							refreshToken,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
+
 					async getUserInfo(tokens) {
 						if (!finalUserInfoUrl) {
 							return null;
@@ -370,6 +399,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						accessType,
 						authorizationUrlParams,
 						responseMode,
+						authentication,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
