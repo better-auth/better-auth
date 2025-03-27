@@ -421,7 +421,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_DELETE_MANY)(
 		adapterTests.SHOULD_DELETE_MANY,
 		async () => {
-			for (const i of ["to-be-delete", "to-be-delete", "to-be-delete"]) {
+			for (const i of ["to-be-delete-1", "to-be-delete-2", "to-be-delete-3"]) {
 				await adapter.create({
 					model: "user",
 					data: {
