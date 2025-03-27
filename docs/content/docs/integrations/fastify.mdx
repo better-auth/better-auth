@@ -3,13 +3,11 @@ title: Better Auth Fastify Integration Guide
 description: Learn how to seamlessly integrate Better Auth with your Fastify application.
 ---
 
-Implement a robust authentication system in your Fastify application using Better Auth. This guide provides step-by-step instructions for configuring both essential handlers and CORS settings.
+This guide provides step-by-step instructions for configuring both essential handlers and CORS settings.
 
 <Callout type="important">
 A configured Better Auth instance is required before proceeding. If you haven't set this up yet, please consult our [Installation Guide](/docs/installation).
 </Callout>
-
----
 
 ### Prerequisites
 
@@ -24,8 +22,7 @@ Verify the following requirements before integration:
   fastify @fastify/cors
   ```
 
-<Callout type="tip"> For TypeScript users: Ensure your `tsconfig.json` includes `"esModuleInterop": true` for optimal compatibility. </Callout>
-___
+<Callout type="tip"> For TypeScript: Ensure your `tsconfig.json` includes `"esModuleInterop": true` for optimal compatibility. </Callout>
 
 ### Authentication Handler Setup
 
@@ -87,6 +84,15 @@ fastify.listen({ port: 4000 }, (err) => {
 });
 ```
 
+### Trusted origins
+
+When a request is made from a different origin, the request will be blocked by default. You can add trusted origins to the `auth` instance.
+
+```ts
+export const auth = betterAuth({
+  trustedOrigins: ["http://localhost:3000", "https://example.com"],
+});
+```
 
 ### Configuring CORS
 
