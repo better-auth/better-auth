@@ -105,22 +105,30 @@ export class AuthModule implements NestModule, OnModuleInit {
 		if (!this.options.disableBodyParser)
 			consumer.apply(SkipBodyParsingMiddleware).forRoutes("*");
 
+		// Get basePath from options or use default
+		let basePath = this.auth.options.basePath ?? "/api/auth";
+
+		// Ensure basePath starts with /
+		if (!basePath.startsWith("/")) {
+			basePath = "/" + basePath;
+		}
+
+		// Ensure basePath doesn't end with /
+		if (basePath.endsWith("/")) {
+			basePath = basePath.slice(0, -1);
+		}
+
 		const handler = toNodeHandler(this.auth);
 		this.adapter.httpAdapter
 			.getInstance()
 			// little hack to ignore any global prefix
 			// for now i'll just not support a global prefix
-			.use(
-				`${this.auth.options.basePath}/*path`,
-				(req: Request, res: Response) => {
-					req.url = req.baseUrl;
+			.use(`${basePath}/*path`, (req: Request, res: Response) => {
+				req.url = req.baseUrl;
 
-					return handler(req, res);
-				},
-			);
-		this.logger.log(
-			`AuthModule initialized BetterAuth on '${this.auth.options.basePath}/*'`,
-		);
+				return handler(req, res);
+			});
+		this.logger.log(`AuthModule initialized BetterAuth on '${basePath}/*'`);
 	}
 
 	private setupHooks(providerMethod: Function) {
