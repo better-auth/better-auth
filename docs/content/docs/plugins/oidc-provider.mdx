@@ -122,6 +122,8 @@ The UserInfo endpoint returns different claims based on the scopes that were gra
 - With `profile` scope: Returns name, picture, given_name, family_name
 - With `email` scope: Returns email and email_verified
 
+The `getAdditionalUserInfoClaim` function receives the user object and the requested scopes array, allowing you to conditionally include claims based on the scopes granted during authorization. These additional claims will be included in both the UserInfo endpoint response and the ID token.
+
 ### Consent Screen
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.
@@ -414,3 +416,4 @@ Table Name: `oauthConsent`
 
 **consentPage**: `string` - Path to the custom consent page.
 
+**getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.

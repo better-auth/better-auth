@@ -160,6 +160,16 @@ const response = await auth.api.signInEmail({
 })
 ```
 
+### Disabling 2FA
+
+To disable two-factor authentication, call `twoFactor.disable` with the user's password:
+
+```ts title="two-factor.ts"
+const { data } = await authClient.twoFactor.disable({
+    password: "password" // user password required
+})
+```
+
 ### TOTP
 
 TOTP (Time-Based One-Time Password) is an algorithm that generates a unique password for each login attempt using time as a counter. Every fixed interval (Better Auth defaults to 30 seconds), a new password is generated. This addresses several issues with traditional passwords: they can be forgotten, stolen, or guessed. OTPs solve some of these problems, but their delivery via SMS or email can be unreliable (or even risky, considering it opens new attack vectors).

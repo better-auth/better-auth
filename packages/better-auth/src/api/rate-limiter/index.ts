@@ -55,7 +55,7 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 			try {
 				if (_update) {
 					await db.updateMany({
-						model: modelName ?? "rateLimit",
+						model: "rateLimit",
 						where: [{ field: "key", value: key }],
 						update: {
 							count: value.count,
@@ -64,7 +64,7 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 					});
 				} else {
 					await db.create({
-						model: modelName ?? "rateLimit",
+						model: "rateLimit",
 						data: {
 							key,
 							count: value.count,
@@ -119,7 +119,11 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	);
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
-	const key = getIp(req, ctx.options) + path;
+	const ip = getIp(req, ctx.options);
+	if (!ip) {
+		return;
+	}
+	const key = ip + path;
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 

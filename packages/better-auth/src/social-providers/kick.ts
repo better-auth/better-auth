@@ -89,5 +89,6 @@ export const kick = (options: KickOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<KickProfile>;
 };
