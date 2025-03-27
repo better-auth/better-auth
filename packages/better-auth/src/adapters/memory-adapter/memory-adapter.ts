@@ -1,24 +1,45 @@
-import { createAdapter } from "../create-adapter";
+import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 import type { Where } from "../../types";
 
 export interface MemoryDB {
 	[key: string]: any[];
 }
 
-export const memoryAdapter = (db: MemoryDB) =>
+export interface MemoryAdapterConfig {
+	debugLogs?: AdapterDebugLogs;
+}
+
+export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 	createAdapter({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
 			usePlural: false,
-			debugLogs: false,
+			debugLogs: config?.debugLogs || false,
+			customTransformInput(props) {
+				if (
+					props.options.advanced?.useNumberId &&
+					props.field === "id" &&
+					props.action === "create"
+				) {
+					return db[props.model].length + 1;
+				}
+				return props.data;
+			},
 		},
 		adapter: ({ getField, options }) => {
 			function convertWhereClause(where: Where[], table: any[], model: string) {
 				return table.filter((record) => {
 					return where.every((clause) => {
-						const { field: _field, value, operator } = clause;
+						let { field: _field, value, operator } = clause;
 						const field = getField({ model, field: _field });
+						if (field === "id" && options.advanced?.useNumberId) {
+							if (typeof value === "string") {
+								value = Number(value);
+							} else if (Array.isArray(value)) {
+								value = value.map(Number);
+							}
+						}
 						if (operator === "in") {
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");

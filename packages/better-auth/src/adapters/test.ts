@@ -421,12 +421,12 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_DELETE_MANY)(
 		adapterTests.SHOULD_DELETE_MANY,
 		async () => {
-			for (const id of ["to-be-delete1", "to-be-delete2", "to-be-delete3"]) {
+			for (const i of ["to-be-delete", "to-be-delete", "to-be-delete"]) {
 				await adapter.create({
 					model: "user",
 					data: {
 						name: "to-be-deleted",
-						email: `email@test-${id}.com`,
+						email: `email@test-${i}.com`,
 						emailVerified: true,
 						createdAt: new Date(),
 						updatedAt: new Date(),
@@ -473,7 +473,7 @@ async function adapterTest(
 				where: [
 					{
 						field: "id",
-						value: "5",
+						value: "SOME_RANDOM_ID_THAT_DOES_NOT_EXIST",
 					},
 				],
 			});
@@ -488,7 +488,7 @@ async function adapterTest(
 				where: [
 					{
 						field: "id",
-						value: "5",
+						value: "SOME_RANDOM_ID_THAT_DOES_NOT_EXIST",
 					},
 				],
 			});

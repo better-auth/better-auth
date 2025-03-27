@@ -6,6 +6,23 @@ import type {
 	Where,
 } from "../../types";
 
+export type AdapterDebugLogs =
+	| boolean
+	| {
+			/**
+			 * Useful when you want to log only certain conditions.
+			 */
+			logCondition?: (() => boolean) | undefined;
+			create?: boolean;
+			update?: boolean;
+			updateMany?: boolean;
+			findOne?: boolean;
+			findMany?: boolean;
+			delete?: boolean;
+			deleteMany?: boolean;
+			count?: boolean;
+	  };
+
 export interface AdapterConfig {
 	/**
 	 * Use plural table names.
@@ -20,18 +37,8 @@ export interface AdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?:
-		| boolean
-		| {
-				create?: boolean;
-				update?: boolean;
-				updateMany?: boolean;
-				findOne?: boolean;
-				findMany?: boolean;
-				delete?: boolean;
-				deleteMany?: boolean;
-				count?: boolean;
-		  };
+	debugLogs?: AdapterDebugLogs;
+
 	/**
 	 * Name of the adapter.
 	 *
@@ -139,7 +146,7 @@ export interface AdapterConfig {
 		 */
 		field: string;
 		/**
-		 * The action to perform.
+		 * The action which was called from the adapter.
 		 */
 		action: "create" | "update";
 		/**

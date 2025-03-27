@@ -106,6 +106,13 @@ export const createAdapter =
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
+				if (
+					typeof config.debugLogs === "object" &&
+					config.debugLogs.logCondition &&
+					!config.debugLogs.logCondition?.()
+				) {
+					return;
+				}
 				if (typeof args[0] === "object" && "method" in args[0]) {
 					const method = args.shift().method;
 					// Make sure the method is enabled in the config.
