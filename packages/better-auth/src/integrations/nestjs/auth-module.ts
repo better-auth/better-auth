@@ -1,4 +1,4 @@
-import { Inject, Module, RequestMethod } from "@nestjs/common";
+import { Inject, Logger, Module } from "@nestjs/common";
 import type {
 	MiddlewareConsumer,
 	NestModule,
@@ -25,6 +25,7 @@ import {
 } from "./symbols";
 import { APIErrorExceptionFilter } from "./api-error-exception-filter";
 import { SkipBodyParsingMiddleware } from "./middlewares";
+import type { Request, Response } from "express";
 
 /**
  * Configuration options for the AuthModule
@@ -48,6 +49,7 @@ const HOOKS = [
 	imports: [DiscoveryModule],
 })
 export class AuthModule implements NestModule, OnModuleInit {
+	private logger = new Logger(AuthModule.name);
 	constructor(
 		@Inject(AUTH_INSTANCE_KEY) private readonly auth: Auth,
 		@Inject(DiscoveryService)
@@ -104,10 +106,21 @@ export class AuthModule implements NestModule, OnModuleInit {
 			consumer.apply(SkipBodyParsingMiddleware).forRoutes("*");
 
 		const handler = toNodeHandler(this.auth);
-		consumer.apply(handler).forRoutes({
-			path: "/api/auth/*path",
-			method: RequestMethod.ALL,
-		});
+		this.adapter.httpAdapter
+			.getInstance()
+			// little hack to ignore any global prefix
+			// for now i'll just not support a global prefix
+			.use(
+				`${this.auth.options.basePath}/*path`,
+				(req: Request, res: Response) => {
+					req.url = req.baseUrl;
+
+					return handler(req, res);
+				},
+			);
+		this.logger.log(
+			`AuthModule initialized BetterAuth on '${this.auth.options.basePath}/*'`,
+		);
 	}
 
 	private setupHooks(providerMethod: Function) {
