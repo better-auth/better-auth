@@ -250,7 +250,7 @@ export const createAdapter =
 				([_, v]) => v === "id",
 			)?.[0];
 			tableSchema[idKey ?? "id"] = {
-				type: "string",
+				type: options.advanced?.useNumberId ? "number" : "string",
 			};
 			for (const key in tableSchema) {
 				if (select.length && !select.includes(key)) {
@@ -274,27 +274,22 @@ export const createAdapter =
 					let newFieldName: string = newMappedKeys[key] || key;
 
 					if (originalKey === "id" || field.references?.field === "id") {
+						// Even if `useNumberId` is true, we must always return a string `id` output.
 						if (typeof newValue !== "undefined") newValue = String(newValue);
-					}
-
-					if (
+					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
-						//@ts-expect-error  -Future proofing
+						//@ts-expect-error - Future proofing
 						field.type === "json"
 					) {
 						newValue = safeJSONParse(newValue);
-					}
-
-					if (
+					} else if (
 						config.supportsDates === false &&
 						typeof newValue === "string" &&
 						field.type === "date"
 					) {
 						newValue = new Date(newValue);
-					}
-
-					if (
+					} else if (
 						config.supportsBooleans === false &&
 						typeof newValue === "number" &&
 						field.type === "boolean"
