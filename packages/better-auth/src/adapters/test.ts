@@ -588,7 +588,7 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				...opts,
 				disableTests: {
 					...opts.disableTests,
-					SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true
+					SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
 				},
 			},
 			{

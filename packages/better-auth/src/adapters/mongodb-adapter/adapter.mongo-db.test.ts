@@ -46,7 +46,7 @@ describe("adapter test", async () => {
 		},
 		disableTests: {
 			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
-		}
+		},
 	});
 });
 
