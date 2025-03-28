@@ -2,13 +2,13 @@
 
 Thanks for taking the time to improve Better Auth! This is a small document to get you started.
 
-Please refer to the [getting-started documentation](https://better-auth.com/docs/contribute/getting-started) specific to contributing for more information.
+Please refer to the [contributing documentation](https://www.better-auth.com/docs/reference/contributing) for more information.
 
 ## Security Issues
 
 If you see any security issue we prefer you to disclose it via an email (security@better-auth.com). All reports will be promptly addressed, and you'll be credited accordingly.
 
-Learn more about our [security issues documentation](https://better-auth.com/docs/contribute/security-issues).
+Learn more in our [security documentation](https://www.better-auth.com/docs/reference/security).
 
 ## A Few Guidelines to keep in mind
 
@@ -18,7 +18,7 @@ Learn more about our [security issues documentation](https://better-auth.com/doc
 
 ## Development
 
-Read more about development in the [getting-started documentation](https://better-auth.com/docs/contribute/getting-started#development-setup).
+Read more about development in the [contributing documentation](https://www.better-auth.com/docs/reference/contributing#development-setup).
 
 1. Fork the repo
 2. clone your fork.
@@ -33,4 +33,4 @@ Read more about development in the [getting-started documentation](https://bette
 
 ## Testing
 
-Read more about testing in the [testing guide](https://better-auth.com/docs/contribute/testing).
+Read more about testing in the [testing guide](https://www.better-auth.com/docs/reference/contributing#testing).
