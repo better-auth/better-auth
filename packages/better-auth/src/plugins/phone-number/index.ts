@@ -227,6 +227,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					const validPassword = await ctx.context.password.verify({
 						hash: currentPassword,
 						password,
+						account: credentialAccount
 					});
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
