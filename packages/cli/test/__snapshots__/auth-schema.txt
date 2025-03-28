@@ -1,5 +1,17 @@
 import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
-			
+		
+// Custom user-defined table
+export const products = pgTable("products", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  price: integer("price").notNull(),
+});
+
+export type Product = typeof products.$inferSelect;
+
+// Auth table that should be replaced
+
+
 export const user = pgTable("user", {
 					id: text("id").primaryKey(),
 					name: text('name').notNull(),
