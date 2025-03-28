@@ -2,13 +2,11 @@
 
 Thanks for taking the time to improve Better Auth! This is a small document to get you started.
 
-Please refer to the [contributing documentation](https://www.better-auth.com/docs/reference/contributing) for more information.
-
 ## Security Issues
 
 If you see any security issue we prefer you to disclose it via an email (security@better-auth.com). All reports will be promptly addressed, and you'll be credited accordingly.
 
-Learn more in our [security documentation](https://www.better-auth.com/docs/reference/security).
+Learn more in our [security documentation](/docs/reference/security).
 
 ## A Few Guidelines to keep in mind
 
@@ -17,8 +15,6 @@ Learn more in our [security documentation](https://www.better-auth.com/docs/refe
 - Everything should be type-safe and embrace typescript magic when necessary.
 
 ## Development
-
-Read more about development in the [contributing documentation](https://www.better-auth.com/docs/reference/contributing#development-setup).
 
 1. Fork the repo
 2. clone your fork.
@@ -32,5 +28,3 @@ Read more about development in the [contributing documentation](https://www.bett
 10. implement your changes.
 
 ## Testing
-
-Read more about testing in the [testing guide](https://www.better-auth.com/docs/reference/contributing#testing).
