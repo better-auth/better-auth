@@ -60,6 +60,14 @@ drizzle-kit migrate
 
 The Drizzle adapter expects the schema you define to match the table names. For example, if your Drizzle schema maps the `user` table to `users`, you need to manually pass the schema and map it to the user table.
 
+```ts title="schema.ts"
+export const users = createTable("user", {
+  // ...
+});
+
+// other tables...
+```
+
 ```ts
 import { betterAuth } from "better-auth";
 import { db } from "./drizzle";
