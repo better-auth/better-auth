@@ -29,12 +29,6 @@ export interface MicrosoftOptions
 	 * Disable profile photo
 	 */
 	disableProfilePhoto?: boolean;
-
-	/**
-	 * Require user to select their account even if only one account is logged in
-	 * @default false
-	 */
-	requireSelectAccount?: boolean;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {
@@ -58,7 +52,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				codeVerifier: data.codeVerifier,
 				scopes,
 				redirectURI: data.redirectURI,
-				prompt: options.requireSelectAccount || false,
+				prompt: options.prompt,
 			});
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {
@@ -118,5 +112,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 				data: user,
 			};
 		},
+		options,
 	} satisfies OAuthProvider;
 };

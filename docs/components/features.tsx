@@ -20,7 +20,7 @@ const features = [
 	{
 		id: 1,
 		label: "Framework Agnostic",
-		title: "Supports for popular <strong>frameworks</strong>.",
+		title: "Support for popular <strong>frameworks</strong>.",
 		description:
 			"Supports popular frameworks, including React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, Tanstack Start, Hono, and more.",
 		icon: PlugZap2Icon,

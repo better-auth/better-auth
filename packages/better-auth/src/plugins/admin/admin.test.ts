@@ -6,37 +6,42 @@ import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
 
 describe("Admin plugin", async () => {
-	const { signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl } =
-		await getTestInstance(
-			{
-				plugins: [
-					admin({
-						bannedUserMessage: "Custom banned user message",
-					}),
-				],
-				databaseHooks: {
-					user: {
-						create: {
-							before: async (user) => {
-								if (user.name === "Admin") {
-									return {
-										data: {
-											...user,
-											role: "admin",
-										},
-									};
-								}
-							},
+	const {
+		auth,
+		signInWithTestUser,
+		signInWithUser,
+		cookieSetter,
+		customFetchImpl,
+	} = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					bannedUserMessage: "Custom banned user message",
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
 						},
 					},
 				},
 			},
-			{
-				testUser: {
-					name: "Admin",
-				},
+		},
+		{
+			testUser: {
+				name: "Admin",
 			},
-		);
+		},
+	);
 	const client = createAuthClient({
 		fetchOptions: {
 			customFetchImpl,
@@ -529,6 +534,21 @@ describe("Admin plugin", async () => {
 			{ headers: userHeaders },
 		);
 		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow creating users from server", async () => {
+		const res = await auth.api.createUser({
+			body: {
+				email: "test2@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+		expect(res.user).toMatchObject({
+			email: "test2@test.com",
+			name: "Test User",
+			role: "user",
+		});
 	});
 });
 

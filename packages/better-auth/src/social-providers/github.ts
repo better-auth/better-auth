@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface GithubProfile {
 	login: string;
@@ -55,7 +59,7 @@ export const github = (options: GithubOptions) => {
 	return {
 		id: "github",
 		name: "GitHub",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["read:user", "user:email"];
@@ -68,6 +72,7 @@ export const github = (options: GithubOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
+				loginHint,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -78,6 +83,19 @@ export const github = (options: GithubOptions) => {
 				tokenEndpoint,
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://github.com/login/oauth/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -129,5 +147,6 @@ export const github = (options: GithubOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<GithubProfile>;
 };

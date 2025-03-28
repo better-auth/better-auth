@@ -94,3 +94,4 @@ export function createAuthClient<Option extends ClientOptions>(
 }
 
 export type * from "@better-fetch/fetch";
+export type * from "nanostores";

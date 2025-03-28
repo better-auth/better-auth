@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface DropboxProfile {
 	account_id: string;
@@ -52,6 +56,19 @@ export const dropbox = (options: DropboxOptions) => {
 				tokenEndpoint,
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://api.dropbox.com/oauth2/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -82,5 +99,6 @@ export const dropbox = (options: DropboxOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<DropboxProfile>;
 };

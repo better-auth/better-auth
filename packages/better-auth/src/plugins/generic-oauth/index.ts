@@ -14,6 +14,7 @@ import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
 import { decodeJwt } from "jose";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -60,6 +61,11 @@ interface GenericOAuthConfig {
 	 * @default "code"
 	 */
 	responseType?: string;
+	/**
+	 * The response mode to use for the authorization code request.
+
+	 */
+	responseMode?: "query" | "form_post";
 	/**
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
@@ -117,8 +123,8 @@ interface GenericOAuthConfig {
 	 */
 	disableSignUp?: boolean;
 	/**
-	 * Allows to use basic authentication for the token endpoint.
-	 * Default is "post".
+	 * Authentication method for token requests.
+	 * @default "post"
 	 */
 	authentication?: "basic" | "post";
 }
@@ -239,9 +245,37 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
-							authentication: c.authentication,
 						});
 					},
+					async refreshAccessToken(
+						refreshToken: string,
+					): Promise<OAuth2Tokens> {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return refreshAccessToken({
+							refreshToken,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
+
 					async getUserInfo(tokens) {
 						if (!finalUserInfoUrl) {
 							return null;
@@ -364,6 +398,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						prompt,
 						accessType,
 						authorizationUrlParams,
+						responseMode,
+						authentication,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -413,20 +449,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? [...ctx.body.scopes, ...(scopes || [])]
 							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						responseType,
+						responseMode,
+						additionalParams: authorizationUrlParams,
 					});
-
-					if (responseType && responseType !== "code") {
-						authUrl.searchParams.set("response_type", responseType);
-					}
-
-					if (prompt) {
-						authUrl.searchParams.set("prompt", prompt);
-					}
-
-					if (accessType) {
-						authUrl.searchParams.set("access_type", accessType);
-					}
-
 					return ctx.json({
 						url: authUrl.toString(),
 						redirect: !ctx.body.disableRedirect,
@@ -694,6 +722,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						discoveryUrl,
 						pkce,
 						scopes,
+						prompt,
+						accessType,
+						authorizationUrlParams,
 					} = provider;
 
 					let finalAuthUrl = authorizationUrl;
@@ -742,6 +773,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						codeVerifier: pkce ? state.codeVerifier : undefined,
 						scopes: scopes || [],
 						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						additionalParams: authorizationUrlParams,
 					});
 
 					return c.json({
