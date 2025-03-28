@@ -21,6 +21,7 @@ exports[`init > should match config 1`] = `
         "supportsBooleans": true,
         "supportsDates": true,
         "supportsJSON": true,
+        "supportsNumericIds": true,
         "usePlural": false,
       },
       "type": "sqlite",
