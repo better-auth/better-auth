@@ -38,6 +38,7 @@
     }
   },
   "dependencies": {
+    "@authenio/samlify-xsd-schema-validator": "^1.0.5",
     "better-auth": "workspace:^",
     "body-parser": "^1.20.3",
     "express": "^4.21.2",

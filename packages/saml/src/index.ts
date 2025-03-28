@@ -63,8 +63,7 @@ export const ssoSAML = (options?: SSOOptions) => {
           }
           const parsedSamlConfig = JSON.parse(provider.samlConfig);
           const idp = saml.IdentityProvider({
-            ...parsedSamlConfig,
-            metadata: parsedSamlConfig.idpMetadata,
+            metadata: parsedSamlConfig.idpMetadata.metadata,
           });
           return new Response(idp.getMetadata(), {
             headers: {
@@ -94,6 +93,7 @@ export const ssoSAML = (options?: SSOOptions) => {
           },
         },
         async (ctx) => {
+          console.log("From meta fetch: " , ctx) 
           const provider = await ctx.context.adapter.findOne<SSOProvider>({
             model: "ssoProvider",
             where: [
@@ -111,8 +111,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 
           const parsedSamlConfig = JSON.parse(provider.samlConfig);
           const sp = saml.ServiceProvider({
-            metadata: parsedSamlConfig.spMetadata,
-            ...parsedSamlConfig,
+            metadata: parsedSamlConfig.spMetadata.metadata,
           });
           return new Response(sp.getMetadata(), {
             headers: {
@@ -197,14 +196,12 @@ export const ssoSAML = (options?: SSOOptions) => {
           }
 
           const parsedSamlConfig = JSON.parse(provider.samlConfig);
-
           const samlSp = saml.ServiceProvider({
-            metadata: parsedSamlConfig.spMetadata,
+            metadata: parsedSamlConfig.spMetadata.metadata
           });
           const samlClient = saml.IdentityProvider({
-            metadata: parsedSamlConfig.idpMetadata,
-            ...parsedSamlConfig,
-          });
+            ...parsedSamlConfig.idpMetadata,
+           });
           const loginRequest = await samlSp.createLoginRequest(
             samlClient,
             "redirect"
@@ -363,7 +360,7 @@ export const ssoSAML = (options?: SSOOptions) => {
             });
           }
 
-          console.log({session , user}) 
+          
           await setSessionCookie(ctx, { session, user });
 
           return ctx.redirect(
