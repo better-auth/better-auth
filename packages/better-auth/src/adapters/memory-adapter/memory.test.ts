@@ -36,5 +36,8 @@ describe("Number Id Adapter Test", async () => {
 				...customOptions,
 			});
 		},
+		cleanUp() {
+			return Promise.resolve();
+		},
 	});
 });
