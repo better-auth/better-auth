@@ -37,6 +37,9 @@ describe("Number Id Adapter Test", async () => {
 			});
 		},
 		cleanUp() {
+			db.user = [];
+			db.session = [];
+			db.account = [];
 			return Promise.resolve();
 		},
 	});
