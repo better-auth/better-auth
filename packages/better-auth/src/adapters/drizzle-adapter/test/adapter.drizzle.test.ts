@@ -73,44 +73,44 @@ describe("Drizzle Adapter Tests", async () => {
 	});
 });
 
-// describe("Authentication Flow Tests", async () => {
-// 	const pg = createTestPool();
-// 	let postgres: Kysely<any>;
-// 	const opts = createTestOptions(pg);
-// 	const testUser = {
-// 		email: "test-email@email.com",
-// 		password: "password",
-// 		name: "Test Name",
-// 	};
-// 	beforeAll(async () => {
-// 		postgres = createKyselyInstance(pg);
+describe("Authentication Flow Tests", async () => {
+	const pg = createTestPool();
+	let postgres: Kysely<any>;
+	const opts = createTestOptions(pg);
+	const testUser = {
+		email: "test-email@email.com",
+		password: "password",
+		name: "Test Name",
+	};
+	beforeAll(async () => {
+		postgres = createKyselyInstance(pg);
 
-// 		const { runMigrations } = await getMigrations(opts);
-// 		await runMigrations();
-// 	});
+		const { runMigrations } = await getMigrations(opts);
+		await runMigrations();
+	});
 
-// 	const auth = betterAuth({
-// 		...opts,
-// 		database: drizzleAdapter(drizzle(pg), { provider: "pg", schema }),
-// 		emailAndPassword: {
-// 			enabled: true,
-// 		},
-// 	});
+	const auth = betterAuth({
+		...opts,
+		database: drizzleAdapter(drizzle(pg), { provider: "pg", schema }),
+		emailAndPassword: {
+			enabled: true,
+		},
+	});
 
-// 	afterAll(async () => {
-// 		await cleanupDatabase(postgres);
-// 	});
+	afterAll(async () => {
+		await cleanupDatabase(postgres);
+	});
 
-// 	it("should successfully sign up a new user", async () => {
-// 		const user = await auth.api.signUpEmail({ body: testUser });
-// 		expect(user).toBeDefined();
-// 	});
+	it("should successfully sign up a new user", async () => {
+		const user = await auth.api.signUpEmail({ body: testUser });
+		expect(user).toBeDefined();
+	});
 
-// 	it("should successfully sign in an existing user", async () => {
-// 		const user = await auth.api.signInEmail({ body: testUser });
-// 		expect(user.user).toBeDefined();
-// 	});
-// });
+	it("should successfully sign in an existing user", async () => {
+		const user = await auth.api.signInEmail({ body: testUser });
+		expect(user.user).toBeDefined();
+	});
+});
 
 describe("Number Id Adapter Test", async () => {
 	let pg: Pool;
@@ -119,7 +119,6 @@ describe("Number Id Adapter Test", async () => {
 	pg = createTestPool();
 	postgres = createKyselyInstance(pg);
 	opts = createTestOptions(pg, true);
-	console.log("----");
 	beforeAll(async () => {
 		await cleanupDatabase(postgres, false);
 		const { runMigrations } = await getMigrations(opts);
