@@ -41,8 +41,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 				);
 			}
-
 			name = convertToSnakeCase(name);
+
+			if (field.references?.field === "id") {
+				if (options.advanced?.useNumberId) {
+					if (databaseType === "pg") {
+						return `serial('${name}').primaryKey()`;
+					} else if (databaseType === "mysql") {
+						return `int('${name}').autoIncrement().primaryKey()`;
+					} else {
+						// using sqlite
+						return `integer({ mode: 'number' }).primaryKey({ autoIncrement: true })`;
+					}
+				}
+				return databaseType === "pg" ? `uuid('${name}')` : `text('${name}')`;
+			}
+
 			const type = field.type as
 				| "string"
 				| "number"
@@ -106,11 +120,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			id = `int("id").autoincrement.primaryKey()`;
 		} else {
 			if (databaseType === "mysql") {
-				id = `varchar("id", { length: 36 }).primaryKey()`;
+				id = `varchar('id', { length: 36 }).primaryKey()`;
 			} else if (databaseType === "pg") {
-				id = `uuid("id").primaryKey()`;
+				id = `uuid('id').primaryKey()`;
 			} else {
-				id = `text("id").primaryKey()`;
+				id = `text('id').primaryKey()`;
 			}
 		}
 
@@ -121,7 +135,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field]!;
-							attr.references?.onDelete;
 							return `${field}: ${getType(field, attr)}${
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
