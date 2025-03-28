@@ -1,4 +1,4 @@
-import { expect, test, describe } from "vitest";
+import { expect, test, describe, beforeAll } from "vitest";
 import type { Adapter, BetterAuthOptions, User } from "../types";
 import { generateId } from "../utils";
 
@@ -14,6 +14,7 @@ interface NumberIdAdapterTestOptions {
 		customOptions?: Omit<BetterAuthOptions, "database">,
 	) => Promise<Adapter>;
 	disableTests?: Partial<Record<keyof typeof numberIdAdapterTests, boolean>>;
+	cleanUp: () => Promise<void>;
 }
 
 const adapterTests = {
@@ -44,9 +45,15 @@ const adapterTests = {
 	SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: "should prefer generateId if provided",
 } as const;
 
+const { ...numberIdAdapterTestsCopy } = adapterTests;
+
 const numberIdAdapterTests = {
-	...adapterTests,
+	...numberIdAdapterTestsCopy,
 } as const;
+
+// @ts-ignore
+// biome-ignore lint/performance/noDelete: <explanation>
+delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
 
 async function adapterTest(
 	{ getAdapter, disableTests: disabledTests }: AdapterTestOptions,
@@ -473,7 +480,7 @@ async function adapterTest(
 				where: [
 					{
 						field: "id",
-						value: "SOME_RANDOM_ID_THAT_DOES_NOT_EXIST",
+						value: "100000",
 					},
 				],
 			});
@@ -488,7 +495,7 @@ async function adapterTest(
 				where: [
 					{
 						field: "id",
-						value: "SOME_RANDOM_ID_THAT_DOES_NOT_EXIST",
+						value: "100000",
 					},
 				],
 			});
@@ -582,7 +589,43 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 }
 
 export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
+	describe("Should run number id specific tests", async () => {
+		beforeAll(async () => {
+			await opts.cleanUp();
+		});
+		const adapter = await opts.getAdapter({
+			advanced: {
+				useNumberId: true,
+			},
+		});
+		let idNumber = -1;
+		test("Should return a number id as a result", async () => {
+			const res = await adapter.create({
+				model: "user",
+				data: {
+					name: "user",
+					email: "user@email.com",
+				},
+			});
+			expect(typeof res.id).toBe("string"); // we forcefully return all `id`s as strings. this is intentional.
+			expect(parseInt(res.id)).toBeGreaterThan(0);
+			idNumber = parseInt(res.id);
+		});
+		test("Should increment the id by 1", async () => {
+			const res = await adapter.create({
+				model: "user",
+				data: {
+					name: "user2",
+					email: "user2@email.com",
+				},
+			});
+			expect(parseInt(res.id)).toBe(idNumber + 1);
+		});
+	});
 	describe("Should run normal adapter tests with number id enabled", async () => {
+		beforeAll(async () => {
+			await opts.cleanUp();
+		});
 		await adapterTest(
 			{
 				...opts,

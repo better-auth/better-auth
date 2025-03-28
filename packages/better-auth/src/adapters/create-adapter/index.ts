@@ -164,7 +164,7 @@ export const createAdapter =
 			const transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model].fields;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			if (!config.disableIdGeneration) {
+			if (!config.disableIdGeneration && !options.advanced?.useNumberId) {
 				fields.id = {
 					type: options.advanced?.useNumberId ? "number" : "string",
 					defaultValue() {
