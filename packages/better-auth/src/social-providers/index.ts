@@ -50,9 +50,7 @@ export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
 	[K in SocialProviderList[number]]?: Prettify<
-		Parameters<(typeof socialProviders)[K]>[0] & {
-			enabled?: boolean;
-		}
+		Parameters<(typeof socialProviders)[K]>[0]
 	>;
 };
 
