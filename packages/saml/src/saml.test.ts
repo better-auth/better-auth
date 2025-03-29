@@ -553,7 +553,6 @@ class MockSAMLIdP {
 				user,
 				createTemplateCallback(this.idp, this.sp, user.emailAddress),
 			);
-			console.log({ context, entityEndpoint });
 			res.status(200).send({ samlResponse: context, entityEndpoint });
 		});
 		this.app.get("/api/sso/saml2/idp/redirect", async (req, res) => {
@@ -566,7 +565,6 @@ class MockSAMLIdP {
 				user,
 				createTemplateCallback(this.idp, this.sp, user.emailAddress),
 			);
-			console.log({ context, entityEndpoint });
 			res.status(200).send({ samlResponse: context, entityEndpoint });
 		});
 		this.app.post("/api/sso/saml2/sp/acs", async (req, res) => {
@@ -580,7 +578,6 @@ class MockSAMLIdP {
 				const { extract } = parseResult;
 				const { attributes } = extract;
 				const relayState = req.body.RelayState;
-				console.log({ extract });
 				if (relayState) {
 					return res.status(200).send({ relayState, attributes });
 				} else {
