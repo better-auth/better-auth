@@ -18,7 +18,7 @@ const createTransform = (options: BetterAuthOptions) => {
 		return f.fieldName || field;
 	}
 	return {
-		transformInput(
+		async transformInput(
 			data: Record<string, any>,
 			model: string,
 			action: "update" | "create",
@@ -28,7 +28,7 @@ const createTransform = (options: BetterAuthOptions) => {
 					? {}
 					: {
 							id: options.advanced?.generateId
-								? options.advanced.generateId({
+								? await options.advanced.generateId({
 										model,
 									})
 								: data.id || generateId(),
@@ -108,7 +108,7 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 	return {
 		id: "memory",
 		create: async ({ model, data }) => {
-			const transformed = transformInput(data, model, "create");
+			const transformed = await transformInput(data, model, "create");
 			db[model].push(transformed);
 			return transformOutput(transformed, model);
 		},
@@ -147,9 +147,9 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 		update: async ({ model, where, update }) => {
 			const table = db[model];
 			const res = convertWhereClause(where, table, model);
-			res.forEach((record) => {
-				Object.assign(record, transformInput(update, model, "update"));
-			});
+			for (const record of res) {
+				Object.assign(record, await transformInput(update, model, "update"));
+			}
 			return transformOutput(res[0], model);
 		},
 		delete: async ({ model, where }) => {

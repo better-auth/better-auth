@@ -85,7 +85,7 @@ const createTransform = (options: BetterAuthOptions) => {
 	}
 
 	return {
-		transformInput(
+		async transformInput(
 			data: Record<string, any>,
 			model: string,
 			action: "create" | "update",
@@ -95,7 +95,7 @@ const createTransform = (options: BetterAuthOptions) => {
 					? {}
 					: customIdGen
 						? {
-								id: customIdGen({ model }),
+								id: await customIdGen({ model }),
 							}
 						: {
 								_id: new ObjectId(),
@@ -231,7 +231,11 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		id: "mongodb-adapter",
 		async create(data) {
 			const { model, data: values, select } = data;
-			const transformedData = transform.transformInput(values, model, "create");
+			const transformedData = await transform.transformInput(
+				values,
+				model,
+				"create",
+			);
 			if (transformedData.id && !hasCustomId) {
 				// biome-ignore lint/performance/noDelete: setting id to undefined will cause the id to be null in the database which is not what we want
 				delete transformedData.id;
@@ -279,7 +283,11 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 			const { model, where, update: values } = data;
 			const clause = transform.convertWhereClause(where, model);
 
-			const transformedData = transform.transformInput(values, model, "update");
+			const transformedData = await transform.transformInput(
+				values,
+				model,
+				"update",
+			);
 
 			const res = await db
 				.collection(transform.getModelName(model))
@@ -296,7 +304,11 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		async updateMany(data) {
 			const { model, where, update: values } = data;
 			const clause = transform.convertWhereClause(where, model);
-			const transformedData = transform.transformInput(values, model, "update");
+			const transformedData = await transform.transformInput(
+				values,
+				model,
+				"update",
+			);
 			const res = await db
 				.collection(transform.getModelName(model))
 				.updateMany(clause, { $set: transformedData });
