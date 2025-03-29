@@ -130,15 +130,6 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			},
 		},
 		async (ctx) => {
-			if (!ctx.context.orgOptions.sendInvitationEmail) {
-				ctx.context.logger.warn(
-					"Invitation email is not enabled. Pass `sendInvitationEmail` to the plugin options to enable it.",
-				);
-				throw new APIError("BAD_REQUEST", {
-					message: "Invitation email is not enabled",
-				});
-			}
-
 			const session = ctx.context.session;
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
@@ -205,6 +196,35 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const invitationLimit =
+				typeof ctx.context.orgOptions.invitationLimit === "function"
+					? await ctx.context.orgOptions.invitationLimit(
+							{
+								user: session.user,
+								organization,
+								member: member,
+							},
+							ctx.context,
+						)
+					: ctx.context.orgOptions.invitationLimit ?? 100;
+
+			const pendingInvitations = await adapter.findPendingInvitations({
+				organizationId: organizationId,
+			});
+
+			if (pendingInvitations.length >= invitationLimit) {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+				});
+			}
+
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					role: roles,
@@ -218,14 +238,6 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				},
 				user: session.user,
 			});
-
-			const organization = await adapter.findOrganizationById(organizationId);
-
-			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
-			}
 
 			await ctx.context.orgOptions.sendInvitationEmail?.(
 				{

@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
@@ -26,6 +26,7 @@ describe("organization", async (it) => {
 							modelName: "teamMembers",
 						},
 					},
+					invitationLimit: 3,
 				}),
 			],
 			logger: {
@@ -191,64 +192,61 @@ describe("organization", async (it) => {
 				name: "test4",
 			},
 		},
-	])(
-		"invites user to organization with $role role",
-		async ({ role, newUser }) => {
-			const { headers } = await signInWithTestUser();
-			const invite = await client.organization.inviteMember({
-				organizationId: organizationId,
-				email: newUser.email,
-				role: role as "owner",
-				fetchOptions: {
-					headers,
-				},
-			});
-			if (!invite.data) throw new Error("Invitation not created");
-			expect(invite.data.email).toBe(newUser.email);
-			expect(invite.data.role).toBe(role);
-			await client.signUp.email({
-				email: newUser.email,
-				password: newUser.password,
-				name: newUser.name,
-			});
-			const { headers: headers2 } = await signInWithUser(
-				newUser.email,
-				newUser.password,
-			);
+	])("invites user to organization with role", async ({ role, newUser }) => {
+		const { headers } = await signInWithTestUser();
+		const invite = await client.organization.inviteMember({
+			organizationId: organizationId,
+			email: newUser.email,
+			role: role as "owner",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data) throw new Error("Invitation not created");
+		expect(invite.data.email).toBe(newUser.email);
+		expect(invite.data.role).toBe(role);
+		await client.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+		const { headers: headers2 } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
 
-			const wrongInvitation = await client.organization.acceptInvitation({
-				invitationId: "123",
-				fetchOptions: {
-					headers: headers2,
-				},
-			});
-			expect(wrongInvitation.error?.status).toBe(400);
+		const wrongInvitation = await client.organization.acceptInvitation({
+			invitationId: "123",
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(wrongInvitation.error?.status).toBe(400);
 
-			const wrongPerson = await client.organization.acceptInvitation({
-				invitationId: invite.data.id,
-				fetchOptions: {
-					headers,
-				},
-			});
-			expect(wrongPerson.error?.status).toBe(403);
+		const wrongPerson = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(wrongPerson.error?.status).toBe(403);
 
-			const invitation = await client.organization.acceptInvitation({
-				invitationId: invite.data.id,
-				fetchOptions: {
-					headers: headers2,
-				},
-			});
-			expect(invitation.data?.invitation.status).toBe("accepted");
-			const invitedUserSession = await client.getSession({
-				fetchOptions: {
-					headers: headers2,
-				},
-			});
-			expect(
-				(invitedUserSession.data?.session as any).activeOrganizationId,
-			).toBe(organizationId);
-		},
-	);
+		const invitation = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(invitation.data?.invitation.status).toBe("accepted");
+		const invitedUserSession = await client.getSession({
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		);
+	});
 
 	it("should create invitation with multiple roles", async () => {
 		const invite = await client.organization.inviteMember({
@@ -801,5 +799,94 @@ describe("access control", async (it) => {
 			}
 		}
 		expect(error).toBeInstanceOf(BetterAuthError);
+	});
+});
+
+describe("invitation limit", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				invitationLimit: 1,
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("should invite member to organization", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data?.id as string,
+			email: "test6@test.com",
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invite.data?.status).toBe("pending");
+	});
+
+	it("should throw error when invitation limit is reached", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data?.id as string,
+			email: "test7@test.com",
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invite.error?.status).toBe(403);
+		expect(invite.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+		);
+	});
+
+	it("should throw error with custom invitation limit", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					invitationLimit: async (data, ctx) => {
+						return 0;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		await auth.api
+			.createInvitation({
+				body: {
+					email: "test8@test.com",
+					role: "member",
+					organizationId: org?.id as string,
+				},
+				headers,
+			})
+			.catch((e: APIError) => {
+				expect(e.message).toBe(
+					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+				);
+			});
 	});
 });
