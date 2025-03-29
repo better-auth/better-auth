@@ -4,14 +4,12 @@ import { sso } from ".";
 import { betterFetch } from "@better-fetch/fetch";
 import { organization } from "../organization";
 
-
 describe("SSO SAML", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [sso(), organization()],
 	});
 
-	beforeAll(async () => {
-	});
+	beforeAll(async () => {});
 
 	afterAll(async () => {
 		await server.stop().catch(() => {});

@@ -2,7 +2,6 @@ import {
   afterAll,
   beforeAll,
   beforeEach,
-  afterEach,
   describe,
   expect,
   it,
@@ -11,7 +10,7 @@ import {
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
-import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
+import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { IdentityProvider, ServiceProvider } from "samlify";
 import { ssoSAML } from ".";
@@ -25,8 +24,8 @@ import * as validator from "@authenio/samlify-xsd-schema-validator";
 let idp: ReturnType<typeof IdentityProvider>;
 // Inline metadata XML for the IdP
 saml.setSchemaValidator(validator);
- const spMetadata = `
- <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
+const spMetadata = `
+ <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/sp/metadata">
    <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
     <md:KeyDescriptor use="signing">
        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
@@ -62,7 +61,7 @@ saml.setSchemaValidator(validator);
  </md:EntityDescriptor>
  `;
 const idpMetadata = `
-<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3000/api/sso/saml2/idp/metadata">
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/idp/metadata">
   <md:IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
     <md:KeyDescriptor use="signing">
       <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
@@ -78,14 +77,14 @@ const idpMetadata = `
         </ds:X509Data>
       </ds:KeyInfo>
     </md:KeyDescriptor>
-    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3000/api/sso/saml2/idp/slo"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/slo"/>
     <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
     <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/redirect"/>
   </md:IDPSSODescriptor>
   <md:Organization>
     <md:OrganizationName xml:lang="en-US">Your Organization Name</md:OrganizationName>
     <md:OrganizationDisplayName xml:lang="en-US">Your Organization DisplayName</md:OrganizationDisplayName>
-    <md:OrganizationURL xml:lang="en-US">http://localhost:3000</md:OrganizationURL>
+    <md:OrganizationURL xml:lang="en-US">http://localhost:8081</md:OrganizationURL>
   </md:Organization>
   <md:ContactPerson contactType="technical">
     <md:GivenName>Technical Contact Name</md:GivenName>
@@ -149,7 +148,7 @@ E4M8UYGzTY69G1+sMbUm8K3yVBjyBi5aDGEsG08bcQxvHWbWFlfFzkzToQ0wy+pg
 n7UQxoGoEikO8arkuuKLjB7Mh5IyBoQcLBkvou80NWaZK9OehqrJjGOlNRprj+OW
 eF6Z7EwL/o638deS1pCpjQ879zSJlmm8ushk+K8DtidmZZhuI2P0XoWKZg==
 -----END RSA PRIVATE KEY-----
-`
+`;
 const idPk = `
 -----BEGIN RSA PRIVATE KEY-----
 MIIJKgIBAAKCAgEA+YIi6C8hA+NSB7dEcQf5OseCtL8wCohnnD8nnUTUdaMor9zm
@@ -203,7 +202,7 @@ yY9+uVNb1eu6MLU5R5U9GdvOFZZjShIhOlpZVR1K21dg5frBCWBZ0pvu4fZf2FAV
 lX6+ORENSjqJsQWTaeiMoAPOj8QxQuOwUCajbVkrCZV6D49E0D9XxmZcuKCAXg==
 -----END RSA PRIVATE KEY-----
 
-`
+`;
 const idpCert = `
 -----BEGIN CERTIFICATE-----
 MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJV
@@ -236,7 +235,7 @@ TtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhT
 SsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==
 -----END CERTIFICATE-----
 
-`
+`;
 const spCert = `
 -----BEGIN CERTIFICATE-----
 MIIE3jCCAsYCCQDE5FzoAkixzzANBgkqhkiG9w0BAQsFADAxMQswCQYDVQQGEwJV
@@ -267,7 +266,7 @@ DO3CS7mimAnTCjetERRQ3mgY/2hRiuCDFj3Cy7QMjFs3vBsbWrjNWlqyveFmHDRk
 q34Om7eA2jl3LZ5u7vSm0/ylp/vtoysMjwEmw/0NA3hZPTG3OJxcvFcXBsz0SiFc
 d1U=
 -----END CERTIFICATE-----
-`
+`;
 const spPrivateKey = `
 -----BEGIN RSA PRIVATE KEY-----
 Proc-Type: 4,ENCRYPTED
@@ -488,7 +487,7 @@ const createTemplateCallback = (idp, sp, email) => (template) => {
     AuthnStatement: "",
     attrFirstName: "Test",
     attrLastName: "User",
-    attrEmail: "test@email.com"
+    attrEmail: "test@email.com",
   };
 
   return {
@@ -496,7 +495,6 @@ const createTemplateCallback = (idp, sp, email) => (template) => {
     context: saml.SamlLib.replaceTagsByValue(template, tagValues),
   };
 };
-// Mock SAML IdP Server
 class MockSAMLIdP {
   private app: express.Application;
   private server: ReturnType<typeof createServer>;
@@ -509,47 +507,54 @@ class MockSAMLIdP {
     this.app.use(bodyParser.urlencoded({ extended: true }));
     this.app.use(bodyParser.json());
 
-    // Initialize mock IdP
     this.idp = IdentityProvider({
       metadata: idpMetadata,
       privateKey: idPk,
       isAssertionEncrypted: false,
       privateKeyPass: "jXmKf9By6ruLnUdRo90G",
       loginResponseTemplate: {
-        context: '<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" InResponseTo="{InResponseTo}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value="{StatusCode}"/></samlp:Status><saml:Assertion ID="{AssertionID}" Version="2.0" IssueInstant="{IssueInstant}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>{Issuer}</saml:Issuer><saml:Subject><saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="{SubjectConfirmationDataNotOnOrAfter}" Recipient="{SubjectRecipient}" InResponseTo="{InResponseTo}"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="{ConditionsNotBefore}" NotOnOrAfter="{ConditionsNotOnOrAfter}"><saml:AudienceRestriction><saml:Audience>{Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>{AttributeStatement}</saml:Assertion></samlp:Response>',
+        context:
+          '<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" InResponseTo="{InResponseTo}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value="{StatusCode}"/></samlp:Status><saml:Assertion ID="{AssertionID}" Version="2.0" IssueInstant="{IssueInstant}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>{Issuer}</saml:Issuer><saml:Subject><saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="{SubjectConfirmationDataNotOnOrAfter}" Recipient="{SubjectRecipient}" InResponseTo="{InResponseTo}"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="{ConditionsNotBefore}" NotOnOrAfter="{ConditionsNotOnOrAfter}"><saml:AudienceRestriction><saml:Audience>{Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>{AttributeStatement}</saml:Assertion></samlp:Response>',
         attributes: [
-            { name: 'firstName', valueTag: 'firstName', nameFormat: 'urn:oasis:names:tc:SAML:2.0:attrname-format:basic', valueXsiType: 'xs:string' },
-            { name: 'lastName', valueTag: 'lastName', nameFormat: 'urn:oasis:names:tc:SAML:2.0:attrname-format:basic', valueXsiType: 'xs:string' },
-            { name: 'email', valueTag: 'email', nameFormat: 'urn:oasis:names:tc:SAML:2.0:attrname-format:basic', valueXsiType: 'xs:string' },
+          {
+            name: "firstName",
+            valueTag: "firstName",
+            nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+            valueXsiType: "xs:string",
+          },
+          {
+            name: "lastName",
+            valueTag: "lastName",
+            nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+            valueXsiType: "xs:string",
+          },
+          {
+            name: "email",
+            valueTag: "email",
+            nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+            valueXsiType: "xs:string",
+          },
         ],
-    }
+      },
     });
     this.sp = ServiceProvider({
       metadata: spMetadata,
-      // privateKey: spPrivateKey,
-      // isAssertionEncrypted: true,
-      // encPrivateKey: privateKey,
-      // encryptCert: certificate,
-      // encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
-      // privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
     });
 
-    this.app.get("/idp/metadata", (req, res) => {
-      res.header("Content-Type", "text/xml").send(this.idp.getMetadata());
-    });
     this.app.get("/api/sso/saml2/idp/redirect", async (req, res) => {
       const samlRequest = req.query;
-      const user = { emailAddress: "test@email.com" };
+      const user = { emailAddress: "test@email.com", famName: "hello world" };
       const { context, entityEndpoint } = await this.idp.createLoginResponse(
         this.sp,
         null,
         saml.Constants.wording.binding.post,
         user,
-        createTemplateCallback(this.idp, this.sp, null)
+        createTemplateCallback(this.idp, this.sp, user.emailAddress)
       );
       res.status(200).send({ samlResponse: context, entityEndpoint });
     });
     this.app.post("/api/sso/saml2/sp/acs", async (req, res) => {
+      console.log({req}) 
       try {
         const parseResult = await this.sp.parseLoginResponse(
           this.idp,
@@ -559,11 +564,13 @@ class MockSAMLIdP {
         const { extract } = parseResult;
         const { attributes } = extract;
         const relayState = req.body.RelayState;
-    
+        console.log({extract})
         if (relayState) {
-          return res.status(200).send({relayState , attributes});
+          return res.status(200).send({ relayState, attributes });
         } else {
-          return res.status(200).send({ extract, message: "RelayState is missing." });
+          return res
+            .status(200)
+            .send({ extract, message: "RelayState is missing." });
         }
       } catch (error) {
         console.error("Error handling SAML ACS endpoint:", error);
@@ -576,8 +583,12 @@ class MockSAMLIdP {
           <body>
             <h1>Mock IdP Login</h1>
             <form action="/idp/sso" method="POST">
-              <input type="hidden" name="SAMLRequest" value="${req.query.SAMLRequest}">
-              <input type="hidden" name="RelayState" value="${req.query.RelayState || ""}">
+              <input type="hidden" name="SAMLRequest" value="${
+                req.query.SAMLRequest
+              }">
+              <input type="hidden" name="RelayState" value="${
+                req.query.RelayState || ""
+              }">
               <button type="submit">Login</button>
             </form>
           </body>
@@ -601,7 +612,9 @@ class MockSAMLIdP {
         <html>
           <body>
             <h1>Mock SAML Response</h1>
-            <form action="${RelayState || "http://localhost:3000/api/sso/saml2/sp/acs"}" method="POST">
+            <form action="${
+              RelayState || "http://localhost:3000/api/sso/saml2/sp/acs"
+            }" method="POST">
               <input type="hidden" name="SAMLResponse" value="mock-saml-response">
               <input type="hidden" name="RelayState" value="${RelayState || ""}">
               <button type="submit">Continue to Service Provider</button>
@@ -739,9 +752,9 @@ describe("SAML SSO", async () => {
       body: {
         providerId: "saml-provider-1",
         entryPoint: mockIdP.metadataUrl,
-        issuer: "http://localhost:3000",
+        issuer: "http://localhost:8081",
         cert: certificate,
-        callbackUrl: "http://localhost:3000/api/sso/saml2/sp/acs",
+        callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
         wantAssertionsSigned: false,
         signatureAlgorithm: "sha256",
         digestAlgorithm: "sha256",
@@ -768,35 +781,32 @@ describe("SAML SSO", async () => {
     });
     expect(provider).toMatchObject({
       id: expect.any(String),
-      issuer: "http://localhost:3000",
+      issuer: "http://localhost:8081",
       samlConfig: {
         entryPoint: mockIdP.metadataUrl,
-        issuer: "http://localhost:3000",
         cert: expect.any(String),
-        callbackUrl: "http://localhost:3000/api/sso/saml2/sp/acs",
+        callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
         wantAssertionsSigned: false,
         signatureAlgorithm: "sha256",
         digestAlgorithm: "sha256",
         identifierFormat:
           "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
       },
-      userId: expect.any(String),
     });
   });
-  it("Should fetch idp metadata" , async () => {
+  it("Should fetch sp metadata", async () => {
     const headers = await getAuthHeaders();
     const res = await authClient.signIn.email(testUser, {
       throw: true,
       onSuccess: setCookieToHeader(headers),
     });
-    
     const provider = await auth.api.createSAMLProvider({
       body: {
         providerId: "saml-provider-1",
         entryPoint: mockIdP.metadataUrl,
-        issuer: "http://localhost:3000",
+        issuer: "http://localhost:8081",
         cert: certificate,
-        callbackUrl: "http://localhost:3000/api/sso/saml2/sp/acs",
+        callbackUrl: "http://localhost:8081/api/sso/saml2/sp/acs",
         wantAssertionsSigned: false,
         signatureAlgorithm: "sha256",
         digestAlgorithm: "sha256",
@@ -815,70 +825,22 @@ describe("SAML SSO", async () => {
           isAssertionEncrypted: true,
           encPrivateKey: spEncyptionKey,
           encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
+        },
+        identifierFormat:
+          "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+      },
+      headers,
+    });
 
-        },
-        identifierFormat:
-          "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-      },
-      headers,
-    });
-    console.log({provider})
-      const idpMetadataRes = await auth.api.idpMetadata({
-       query: {
-        providerId: provider.providerId
-       }
-    })
-    const idpMetadataResValue = await idpMetadataRes.text()
-    expect(idpMetadataRes.status).toBe(200)
-    expect(idpMetadataResValue).toBe(idpMetadata)
-  })
-  it("Should fetch sp metadata" , async () => {
-    const headers = await getAuthHeaders();
-    const res = await authClient.signIn.email(testUser, {
-      throw: true,
-      onSuccess: setCookieToHeader(headers),
-    });
-    const provider = await auth.api.createSAMLProvider({
-      body: {
-        providerId: "saml-provider-1",
-        entryPoint: mockIdP.metadataUrl,
-        issuer: "http://localhost:3000",
-        cert: certificate,
-        callbackUrl: "http://localhost:3000/api/sso/saml2/sp/acs",
-        wantAssertionsSigned: false,
-        signatureAlgorithm: "sha256",
-        digestAlgorithm: "sha256",
-        idpMetadata: {
-          metadata: idpMetadata,
-          privateKey: idpPrivateKey,
-          privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
-          isAssertionEncrypted: true,
-          encPrivateKey: idpEncyptionKey,
-          encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
-        },
-        spMetadata: {
-          metadata: spMetadata,
-          privateKey: spPrivateKey,
-          privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
-          isAssertionEncrypted: true,
-          encPrivateKey: spEncyptionKey,
-          encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
-        },
-        identifierFormat:
-          "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-      },
-      headers,
-    });
- 
     const spMetadataRes = await auth.api.spMetadata({
-       query: {
-          providerId: provider.providerId
-       }
-    })
-    const spMetadataResResValue = await spMetadataRes.text()
-    expect(spMetadataRes.status).toBe(200)
-    expect(spMetadataResResValue).toBe(spMetadata)
-  })
+      query: {
+        providerId: provider.providerId,
+      },
+    });
+    const spMetadataResResValue = await spMetadataRes.text();
+    expect(spMetadataRes.status).toBe(200);
+    expect(spMetadataResResValue).toBe(spMetadata);
+  });
   it("should initiate SAML login and handle response", async () => {
     const headers = await getAuthHeaders();
     const res = await authClient.signIn.email(testUser, {
@@ -889,9 +851,9 @@ describe("SAML SSO", async () => {
       body: {
         providerId: "saml-provider-1",
         entryPoint: mockIdP.metadataUrl,
-        issuer: "http://localhost:3000",
+        issuer: "http://localhost:8081",
         cert: certificate,
-        callbackUrl: "http://localhost:3000/api/sso/saml2/sp/acs",
+        callbackUrl: "http://localhost:8081/api/sso/saml2/sp/acs",
         wantAssertionsSigned: false,
         signatureAlgorithm: "sha256",
         digestAlgorithm: "sha256",
@@ -905,6 +867,7 @@ describe("SAML SSO", async () => {
         },
         spMetadata: {
           metadata: idpMetadata,
+          // we can do a mapping of property here
           privateKey: spPrivateKey,
           privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
           isAssertionEncrypted: true,
@@ -931,19 +894,21 @@ describe("SAML SSO", async () => {
     const mockLoginResponse = await fetch(signInResponse.url);
     expect(mockLoginResponse.status).toBe(200);
     const samlResponse = await mockLoginResponse.json();
-    const formData = new URLSearchParams();
-    formData.append("SAMLResponse", samlResponse.samlResponse);
-    formData.append("RelayState", "http://localhost:3000/dashboard");
-    const mockSamlResponse = await fetch(samlResponse.entityEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+     
+    const result = await auth.api.callbackSSOSAML({
+      body: {
+        SAMLResponse: samlResponse.samlResponse,
+        RelayState: "http://localhost:8081/dashboard",
       },
-      body: formData.toString(),
+      params: {
+        providerId: provider.providerId,
+      },
     });
-    expect(mockSamlResponse.status).toBe(200);
-    const responseBody = await mockSamlResponse.json();
-    expect(responseBody.relayState).toBe("http://localhost:3000/dashboard")
-
+    
+    expect(result).toEqual({
+      redirect: true,
+      url: "http://localhost:8081/dashboard",
+    });
+    
   });
 });
