@@ -61,7 +61,7 @@ async function adapterTest(
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
 	},
 ) {
-	const adapter = await getAdapter(internalOptions?.predefinedOptions);
+	const adapter = async () => await getAdapter(internalOptions?.predefinedOptions);
 	//@ts-expect-error - intentionally omitting id
 	const user: {
 		name: string;
@@ -81,7 +81,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.CREATE_MODEL)(
 		adapterTests.CREATE_MODEL,
 		async () => {
-			const res = await adapter.create({
+			const res = await (await adapter()).create({
 				model: "user",
 				data: user,
 			});
@@ -99,7 +99,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.CREATE_MODEL_SHOULD_ALWAYS_RETURN_AN_ID)(
 		adapterTests.CREATE_MODEL_SHOULD_ALWAYS_RETURN_AN_ID,
 		async () => {
-			const res = await adapter.create({
+			const res = await (await adapter()).create({
 				model: "user",
 				data: {
 					name: "test-name-without-id",
@@ -113,7 +113,7 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.FIND_MODEL)(adapterTests.FIND_MODEL, async () => {
-		const res = await adapter.findOne<User>({
+		const res = await (await adapter()).findOne<User>({
 			model: "user",
 			where: [
 				{
@@ -134,7 +134,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.FIND_MODEL_WITHOUT_ID)(
 		adapterTests.FIND_MODEL_WITHOUT_ID,
 		async () => {
-			const res = await adapter.findOne<User>({
+			const res = await (await adapter()).findOne<User>({
 				model: "user",
 				where: [
 					{
@@ -156,7 +156,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.FIND_MODEL_WITH_SELECT)(
 		adapterTests.FIND_MODEL_WITH_SELECT,
 		async () => {
-			const res = await adapter.findOne({
+			const res = await (await adapter()).findOne({
 				model: "user",
 				where: [
 					{
@@ -175,7 +175,7 @@ async function adapterTest(
 		async () => {
 			const newEmail = "updated@email.com";
 
-			const res = await adapter.update<User>({
+			const res = await (await adapter()).update<User>({
 				model: "user",
 				where: [
 					{
@@ -197,7 +197,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY)(
 		adapterTests.SHOULD_FIND_MANY,
 		async () => {
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 			});
 			expect(res.length).toBe(2);
@@ -207,7 +207,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_WHERE)(
 		adapterTests.SHOULD_FIND_MANY_WITH_WHERE,
 		async () => {
-			const user = await adapter.create<User>({
+			const user = await (await adapter()).create<User>({
 				model: "user",
 				data: {
 					name: "user2",
@@ -217,7 +217,7 @@ async function adapterTest(
 					updatedAt: new Date(),
 				},
 			});
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
@@ -233,7 +233,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_OPERATORS)(
 		adapterTests.SHOULD_FIND_MANY_WITH_OPERATORS,
 		async () => {
-			const newUser = await adapter.create<User>({
+			const newUser = await (await adapter()).create<User>({
 				model: "user",
 				data: {
 					name: "user",
@@ -243,7 +243,7 @@ async function adapterTest(
 					updatedAt: new Date(),
 				},
 			});
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
@@ -261,7 +261,7 @@ async function adapterTest(
 		adapterTests.SHOULD_WORK_WITH_REFERENCE_FIELDS,
 		async () => {
 			let token = null;
-			const user = await adapter.create<Record<string, any>>({
+			const user = await (await adapter()).create<Record<string, any>>({
 				model: "user",
 				data: {
 					name: "user",
@@ -271,7 +271,7 @@ async function adapterTest(
 					updatedAt: new Date(),
 				},
 			});
-			const session = await adapter.create({
+			const session = await (await adapter()).create({
 				model: "session",
 				data: {
 					token: generateId(),
@@ -282,7 +282,7 @@ async function adapterTest(
 				},
 			});
 			token = session.token;
-			const res = await adapter.findOne({
+			const res = await (await adapter()).findOne({
 				model: "session",
 				where: [
 					{
@@ -291,7 +291,7 @@ async function adapterTest(
 					},
 				],
 			});
-			const resToken = await adapter.findOne({
+			const resToken = await (await adapter()).findOne({
 				model: "session",
 				where: [
 					{
@@ -312,7 +312,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_SORT_BY)(
 		adapterTests.SHOULD_FIND_MANY_WITH_SORT_BY,
 		async () => {
-			await adapter.create({
+			await (await adapter()).create({
 				model: "user",
 				data: {
 					name: "a",
@@ -322,7 +322,7 @@ async function adapterTest(
 					updatedAt: new Date(),
 				},
 			});
-			const res = await adapter.findMany<User>({
+			const res = await (await adapter()).findMany<User>({
 				model: "user",
 				sortBy: {
 					field: "name",
@@ -331,7 +331,7 @@ async function adapterTest(
 			});
 			expect(res[0].name).toBe("a");
 
-			const res2 = await adapter.findMany<User>({
+			const res2 = await (await adapter()).findMany<User>({
 				model: "user",
 				sortBy: {
 					field: "name",
@@ -346,7 +346,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_LIMIT)(
 		adapterTests.SHOULD_FIND_MANY_WITH_LIMIT,
 		async () => {
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 				limit: 1,
 			});
@@ -357,7 +357,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_OFFSET)(
 		adapterTests.SHOULD_FIND_MANY_WITH_OFFSET,
 		async () => {
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 				offset: 2,
 			});
@@ -368,7 +368,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_UPDATE_WITH_MULTIPLE_WHERE)(
 		adapterTests.SHOULD_UPDATE_WITH_MULTIPLE_WHERE,
 		async () => {
-			await adapter.updateMany({
+			await (await adapter()).updateMany({
 				model: "user",
 				where: [
 					{
@@ -384,7 +384,7 @@ async function adapterTest(
 					email: "updated@email.com",
 				},
 			});
-			const updatedUser = await adapter.findOne<User>({
+			const updatedUser = await (await adapter()).findOne<User>({
 				model: "user",
 				where: [
 					{
@@ -403,7 +403,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.DELETE_MODEL)(
 		adapterTests.DELETE_MODEL,
 		async () => {
-			await adapter.delete({
+			await (await adapter()).delete({
 				model: "user",
 				where: [
 					{
@@ -412,7 +412,7 @@ async function adapterTest(
 					},
 				],
 			});
-			const findRes = await adapter.findOne({
+			const findRes = await (await adapter()).findOne({
 				model: "user",
 				where: [
 					{
@@ -429,7 +429,7 @@ async function adapterTest(
 		adapterTests.SHOULD_DELETE_MANY,
 		async () => {
 			for (const i of ["to-be-delete-1", "to-be-delete-2", "to-be-delete-3"]) {
-				await adapter.create({
+				await (await adapter()).create({
 					model: "user",
 					data: {
 						name: "to-be-deleted",
@@ -440,7 +440,7 @@ async function adapterTest(
 					},
 				});
 			}
-			const findResFirst = await adapter.findMany({
+			const findResFirst = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
@@ -450,7 +450,7 @@ async function adapterTest(
 				],
 			});
 			expect(findResFirst.length).toBe(3);
-			await adapter.deleteMany({
+			await (await adapter()).deleteMany({
 				model: "user",
 				where: [
 					{
@@ -459,7 +459,7 @@ async function adapterTest(
 					},
 				],
 			});
-			const findRes = await adapter.findMany({
+			const findRes = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
@@ -475,7 +475,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND)(
 		adapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND,
 		async () => {
-			await adapter.delete({
+			await (await adapter()).delete({
 				model: "user",
 				where: [
 					{
@@ -490,7 +490,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_NOT_THROW_ON_RECORD_NOT_FOUND)(
 		adapterTests.SHOULD_NOT_THROW_ON_RECORD_NOT_FOUND,
 		async () => {
-			const res = await adapter.findOne({
+			const res = await (await adapter()).findOne({
 				model: "user",
 				where: [
 					{
@@ -506,7 +506,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_CONTAINS_OPERATOR)(
 		adapterTests.SHOULD_FIND_MANY_WITH_CONTAINS_OPERATOR,
 		async () => {
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
@@ -523,7 +523,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_SEARCH_USERS_WITH_STARTS_WITH)(
 		adapterTests.SHOULD_SEARCH_USERS_WITH_STARTS_WITH,
 		async () => {
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
@@ -540,7 +540,7 @@ async function adapterTest(
 	test.skipIf(disabledTests?.SHOULD_SEARCH_USERS_WITH_ENDS_WITH)(
 		adapterTests.SHOULD_SEARCH_USERS_WITH_ENDS_WITH,
 		async () => {
-			const res = await adapter.findMany({
+			const res = await (await adapter()).findMany({
 				model: "user",
 				where: [
 					{
@@ -593,14 +593,14 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 		beforeAll(async () => {
 			await opts.cleanUp();
 		});
-		const adapter = await opts.getAdapter({
+		const adapter = async () => await opts.getAdapter({
 			advanced: {
 				useNumberId: true,
 			},
 		});
 		let idNumber = -1;
 		test("Should return a number id as a result", async () => {
-			const res = await adapter.create({
+			const res = await (await adapter()).create({
 				model: "user",
 				data: {
 					name: "user",
@@ -612,7 +612,7 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 			idNumber = parseInt(res.id);
 		});
 		test("Should increment the id by 1", async () => {
-			const res = await adapter.create({
+			const res = await (await adapter()).create({
 				model: "user",
 				data: {
 					name: "user2",

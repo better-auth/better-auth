@@ -14,9 +14,10 @@
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",
     "stub": "unbuild --stub",
-    "test": "pnpm prisma:push && vitest",
-    "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
-    "test:adapters": "pnpm prisma:push && vitest adapters",
+    "test": "vitest",
+    "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
+    "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
+    "test:adapters": "vitest adapter",
     "bump": "bumpp",
     "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
   },
