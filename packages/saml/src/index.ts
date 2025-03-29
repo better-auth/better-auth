@@ -154,7 +154,6 @@ export const ssoSAML = (options?: SSOOptions) => {
 						"post",
 						ctx.request,
 					);
-					console.log({ loginRequest });
 					const { samlContent, extract } = await idp.parseLoginRequest(
 						sp,
 						"post",
