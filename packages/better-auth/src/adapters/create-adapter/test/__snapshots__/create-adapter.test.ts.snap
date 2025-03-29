@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Create Adapter Helper > Checking for the results of an adapter call, as well as the parameters passed into the adapter call > create > Should expect the result to respect the select fields 1`] = `
+{
+  "email": "test@test.com",
+}
+`;

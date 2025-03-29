@@ -1,4 +1,8 @@
-import { getAuthTables, type FieldAttribute } from "better-auth/db";
+import {
+	getAuthTables,
+	type BetterAuthDbSchema,
+	type FieldAttribute,
+} from "better-auth/db";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
 
@@ -13,32 +17,57 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 }) => {
 	const tables = getAuthTables(options);
 	const filePath = file || "./auth-schema.ts";
-	const databaseType = adapter.options?.provider;
-	const usePlural = adapter.options?.usePlural;
-	const timestampAndBoolean =
-		databaseType !== "sqlite" ? "timestamp, boolean" : "";
-	const int = databaseType === "mysql" ? "int" : "integer";
-	const hasBigint = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.bigint),
-	);
-	const bigint = databaseType !== "sqlite" ? "bigint" : "";
-	const text = databaseType === "mysql" ? "varchar, text" : "text";
-	let code = `import { ${databaseType}Table, ${text}, ${int}${
-		hasBigint ? `, ${bigint}` : ""
-	}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
-			`;
+	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
+		adapter.options?.provider;
 
+	if (!databaseType) {
+		throw new Error(
+			`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
+		);
+	}
 	const fileExist = existsSync(filePath);
 
-	for (const table in tables) {
-		const modelName = usePlural
-			? `${tables[table].modelName}s`
-			: tables[table].modelName;
-		const fields = tables[table].fields;
+	let code: string = generateImport({ databaseType, tables });
+
+	for (const tableKey in tables) {
+		const table = tables[tableKey]!;
+		const modelName = getModelName(table.modelName, adapter.options);
+		const fields = table.fields;
+
 		function getType(name: string, field: FieldAttribute) {
+			// Not possible to reach, it's here to make typescript happy
+			if (!databaseType) {
+				throw new Error(
+					`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
+				);
+			}
 			name = convertToSnakeCase(name);
-			const type = field.type;
-			const typeMap = {
+
+			if (field.references?.field === "id") {
+				if (options.advanced?.database?.useNumberId) {
+					if (databaseType === "pg") {
+						return `serial('${name}').primaryKey()`;
+					} else if (databaseType === "mysql") {
+						return `int('${name}').autoIncrement().primaryKey()`;
+					} else {
+						// using sqlite
+						return `integer({ mode: 'number' }).primaryKey({ autoIncrement: true })`;
+					}
+				}
+				return databaseType === "pg" ? `uuid('${name}')` : `text('${name}')`;
+			}
+
+			const type = field.type as
+				| "string"
+				| "number"
+				| "boolean"
+				| "date"
+				| `${"string" | "number"}[]`;
+
+			const typeMap: Record<
+				typeof type,
+				Record<typeof databaseType, string>
+			> = {
 				string: {
 					sqlite: `text('${name}')`,
 					pg: `text('${name}')`,
@@ -67,29 +96,55 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					pg: `timestamp('${name}')`,
 					mysql: `timestamp('${name}')`,
 				},
+				"number[]": {
+					sqlite: `integer('${name}').array()`,
+					pg: field.bigint
+						? `bigint('${name}', { mode: 'number' }).array()`
+						: `integer('${name}').array()`,
+					mysql: field.bigint
+						? `bigint('${name}', { mode: 'number' }).array()`
+						: `int('${name}').array()`,
+				},
+				"string[]": {
+					sqlite: `text('${name}').array()`,
+					pg: `text('${name}').array()`,
+					mysql: `text('${name}').array()`,
+				},
 			} as const;
-			return typeMap[type as "boolean"][(databaseType as "sqlite") || "sqlite"];
+			return typeMap[type][databaseType];
 		}
-		const id =
-			databaseType === "mysql"
-				? `varchar("id", { length: 36 }).primaryKey()`
-				: `text("id").primaryKey()`;
+
+		let id: string = "";
+
+		if (options.advanced?.database?.useNumberId) {
+			id = `int("id").autoincrement.primaryKey()`;
+		} else {
+			if (databaseType === "mysql") {
+				id = `varchar('id', { length: 36 }).primaryKey()`;
+			} else if (databaseType === "pg") {
+				id = `uuid('id').primaryKey()`;
+			} else {
+				id = `text('id').primaryKey()`;
+			}
+		}
+
 		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
 			modelName,
 		)}", {
 					id: ${id},
 					${Object.keys(fields)
 						.map((field) => {
-							const attr = fields[field];
+							const attr = fields[field]!;
 							return `${field}: ${getType(field, attr)}${
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
 								attr.references
-									? `.references(()=> ${
-											usePlural
-												? `${attr.references.model}s`
-												: attr.references.model
-										}.${attr.references.field}, { onDelete: 'cascade' })`
+									? `.references(()=> ${getModelName(
+											attr.references.model,
+											adapter.options,
+										)}.${attr.references.field}, { onDelete: '${
+											attr.references.onDelete || "cascade"
+										}' })`
 									: ""
 							}`;
 						})
@@ -104,3 +159,38 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		overwrite: fileExist,
 	};
 };
+
+function generateImport({
+	databaseType,
+	tables,
+}: { databaseType: "sqlite" | "mysql" | "pg"; tables: BetterAuthDbSchema }) {
+	let imports: string[] = [];
+
+	const hasBigint = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.bigint),
+	);
+
+	imports.push(`${databaseType}Table`);
+	imports.push(
+		databaseType === "mysql"
+			? "varchar, text"
+			: databaseType === "pg"
+				? "uuid, text"
+				: "text",
+	);
+	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
+	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
+	imports.push(databaseType === "mysql" ? "int" : "integer");
+
+	return `import { ${imports
+		.map((x) => x.trim())
+		.filter((x) => x !== "")
+		.join(", ")} } from "drizzle-orm/${databaseType}-core";\n`;
+}
+
+function getModelName(
+	modelName: string,
+	options: Record<string, any> | undefined,
+) {
+	return options?.usePlural ? `${modelName}s` : modelName;
+}

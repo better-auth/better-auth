@@ -1,0 +1,28 @@
+generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["strictUndefinedChecks"]
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = "file:.db/dev.db"
+}
+
+model User {
+    id            Int      @id @default(autoincrement())
+    email_address String   @unique
+    test          String
+    emailVerified Boolean  @default(false)
+    name          String
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @default(now()) @updatedAt
+}
+
+model Sessions {
+    id        Int      @id @default(autoincrement())
+    userId    Int
+    token     String   @unique
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now()) @updatedAt
+}

@@ -27,7 +27,7 @@ export type Adapter = {
 	id: string;
 	create: <T extends Record<string, any>, R = T>(data: {
 		model: string;
-		data: T;
+		data: Omit<T, "id">;
 		select?: string[];
 	}) => Promise<R>;
 	findOne: <T>(data: {
