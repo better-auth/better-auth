@@ -50,7 +50,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 		},
-		adapter: ({ getField }) => {
+		adapter: ({ getFieldName }) => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (select?: string[], model?: string) => {
@@ -58,7 +58,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 				return select.reduce((prev, cur) => {
 					return {
 						...prev,
-						[getField({ model, field: cur })]: true,
+						[getFieldName({ model, field: cur })]: true,
 					};
 				}, {});
 			};
@@ -80,7 +80,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						return;
 					}
 					return {
-						[getField({ model, field: w.field })]:
+						[getFieldName({ model, field: w.field })]:
 							w.operator === "eq" || !w.operator
 								? w.value
 								: {
@@ -92,7 +92,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 				const or = where.filter((w) => w.connector === "OR");
 				const andClause = and.map((w) => {
 					return {
-						[getField({ model, field: w.field })]:
+						[getFieldName({ model, field: w.field })]:
 							w.operator === "eq" || !w.operator
 								? w.value
 								: {
@@ -102,7 +102,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 				});
 				const orClause = or.map((w) => {
 					return {
-						[getField({ model, field: w.field })]: {
+						[getFieldName({ model, field: w.field })]: {
 							[w.operator || "eq"]: w.value,
 						},
 					};
@@ -153,7 +153,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						...(sortBy?.field
 							? {
 									orderBy: {
-										[getField({ model, field: sortBy.field })]:
+										[getFieldName({ model, field: sortBy.field })]:
 											sortBy.direction === "desc" ? "desc" : "asc",
 									},
 								}

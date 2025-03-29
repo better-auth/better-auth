@@ -75,7 +75,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 				return data;
 			},
 		},
-		adapter: ({ options, getField, schema, getDefaultModelName }) => {
+		adapter: ({ options, getFieldName, schema, getDefaultModelName }) => {
 			/**
 			 * if custom id gen is provided we don't want to override with object id
 			 */
@@ -133,7 +133,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 				const conditions = where.map((w) => {
 					let { field: field_, value, operator = "eq", connector = "AND" } = w;
 					let condition: any;
-					let field = getField({ model, field: field_ });
+					let field = getFieldName({ model, field: field_ });
 					if (field === "id") field = "_id";
 					switch (operator.toLowerCase()) {
 						case "eq":
@@ -223,7 +223,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 					if (offset) cursor.skip(offset);
 					if (sortBy)
 						cursor.sort(
-							getField({ field: sortBy.field, model }),
+							getFieldName({ field: sortBy.field, model }),
 							sortBy.direction === "desc" ? -1 : 1,
 						);
 					const res = await cursor.toArray();

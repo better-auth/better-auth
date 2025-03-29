@@ -57,7 +57,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				return value;
 			},
 		},
-		adapter: ({ getField, schema }) => {
+		adapter: ({ getFieldName, schema }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -79,7 +79,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					res = await db
 						.selectFrom(model)
 						.selectAll()
-						.where(getField({ model, field }), "=", value)
+						.where(getFieldName({ model, field }), "=", value)
 						.executeTakeFirst();
 					return res;
 				}
@@ -133,7 +133,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						operator = "=",
 						connector = "AND",
 					} = condition;
-					const field = getField({ model, field: _field });
+					const field = getFieldName({ model, field: _field });
 					value = transformValueToDB(value, model, _field);
 					const expr = (eb: any) => {
 						if (operator.toLowerCase() === "in") {
@@ -227,14 +227,14 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					}
 					if (sortBy) {
 						query = query.orderBy(
-							getField({ model, field: sortBy.field }),
+							getFieldName({ model, field: sortBy.field }),
 							sortBy.direction,
 						);
 					}
 					if (offset) {
 						if (config?.type === "mssql") {
 							if (!sortBy) {
-								query = query.orderBy(getField({ model, field: "id" }));
+								query = query.orderBy(getFieldName({ model, field: "id" }));
 							}
 							query = query.offset(offset).fetch(limit || 100);
 						} else {

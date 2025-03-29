@@ -27,12 +27,12 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				return props.data;
 			},
 		},
-		adapter: ({ getField, options }) => {
+		adapter: ({ getFieldName, options }) => {
 			function convertWhereClause(where: Where[], table: any[], model: string) {
 				return table.filter((record) => {
 					return where.every((clause) => {
 						let { field: _field, value, operator } = clause;
-						const field = getField({ model, field: _field });
+						const field = getFieldName({ model, field: _field });
 						if (field === "id" && options.advanced?.useNumberId) {
 							if (typeof value === "string") {
 								value = Number(value);
@@ -80,7 +80,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					}
 					if (sortBy) {
 						table = table.sort((a, b) => {
-							const field = getField({ model, field: sortBy.field });
+							const field = getFieldName({ model, field: sortBy.field });
 							if (sortBy.direction === "asc") {
 								return a[field] > b[field] ? 1 : -1;
 							} else {
