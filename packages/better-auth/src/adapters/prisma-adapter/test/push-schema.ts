@@ -26,11 +26,10 @@ async function executeCommandLine(command: string): Promise<string> {
 	});
 }
 
-
 export async function pushPrismaSchema(schema: "normal" | "number-id") {
-    if (schema === "normal") {
-        await executeCommandLine("pnpm prisma:normal:push");
-    } else {
-        await executeCommandLine("pnpm prisma:number-id:push");
-    }
+	if (schema === "normal") {
+		await executeCommandLine("pnpm prisma:normal:push");
+	} else {
+		await executeCommandLine("pnpm prisma:number-id:push");
+	}
 }

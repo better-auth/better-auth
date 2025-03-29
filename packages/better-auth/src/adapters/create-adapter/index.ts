@@ -68,7 +68,7 @@ export const createAdapter =
 				debugLog(`Schema:`, schema);
 				throw new Error(`Field ${field} not found in model ${model}`);
 			}
-			return f.fieldName || field;
+			return field;
 		};
 
 		/**
@@ -109,9 +109,9 @@ export const createAdapter =
 		};
 		/**
 		 * Get the field name which is expected to be saved in the database based on the user's schema.
-		 * 
+		 *
 		 * This function is useful if you need to save the field name to the database.
-		 * 
+		 *
 		 * For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
 		 */
 		function getFieldName({
@@ -121,7 +121,7 @@ export const createAdapter =
 			const model = getDefaultModelName(model_name);
 			const field = getDefaultFieldName({ model, field: field_name });
 
-			return schema[model].fields[field].fieldName || field;
+			return schema[model]?.fields[field]?.fieldName || field;
 		}
 
 		const debugLog = (...args: any[]) => {
@@ -359,16 +359,12 @@ export const createAdapter =
 					field: defaultFieldName,
 					model: defaultModelName,
 				});
+				const fieldAttr = schema[defaultModelName].fields[defaultFieldName];
 
-				const fieldAttributes =
-					schema[defaultModelName].fields[defaultFieldName];
-
-				if (
-					defaultFieldName === "id" ||
-					fieldAttributes.references?.field === "id"
-				) {
+				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
 					if (options.advanced?.useNumberId) {
 						return {
+							...w,
 							field: fieldName,
 							value: Number(w.value),
 						};
@@ -376,8 +372,8 @@ export const createAdapter =
 				}
 
 				return {
+					...w,
 					field: fieldName,
-					value: w.value,
 				};
 			}) as W;
 		};

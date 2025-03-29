@@ -221,10 +221,7 @@ export type CreateCustomAdapter = ({
 	/**
 	 * Get the field name which is expected to be saved in the database based on the user's schema.
 	 */
-	getFieldName: ({
-		model,
-		field,
-	}: { model: string; field: string }) => string;
+	getFieldName: ({ model, field }: { model: string; field: string }) => string;
 	/**
 	 * This function helps us get the default model name from the schema defined by devs.
 	 * Often times, the user will be using the `modelName` which could had been customized by the users.

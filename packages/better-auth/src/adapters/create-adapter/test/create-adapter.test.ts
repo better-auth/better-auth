@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { createAdapter } from "..";
 import type { AdapterConfig, CreateCustomAdapter } from "../types";
-import type { BetterAuthOptions } from "../../../types";
+import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
 
 /*
@@ -136,6 +136,7 @@ describe("Create Adapter Helper", async () => {
 	test("Should have the correct adapter id", () => {
 		expect(adapter.id).toBe(adapterId);
 	});
+
 	test("Should use the id generator if passed into the betterAuth config", async () => {
 		const adapter = await createTestAdapter({
 			config: {
@@ -1288,6 +1289,170 @@ describe("Create Adapter Helper", async () => {
 					});
 				});
 				expect(parameters.update).not.toHaveProperty("id");
+			});
+		});
+
+		describe("find", () => {
+			test("findOne: Should transform the where clause according to the schema", async () => {
+				const parameters: { where: Where[]; model: string; select?: string[] } =
+					await new Promise(async (r) => {
+						const adapter = await createTestAdapter({
+							options: {
+								user: {
+									fields: {
+										email: "email_address",
+									},
+								},
+							},
+							adapter(args_0) {
+								return {
+									async findOne({ model, where, select }) {
+										const fakeResult: Omit<User, "email"> & {
+											email_address: string;
+										} = {
+											id: "random-id-oudwduwbdouwbdu123b",
+											email_address: "test@test.com",
+											emailVerified: false,
+											createdAt: new Date(),
+											updatedAt: new Date(),
+											name: "test-name",
+										};
+										r({ model, where, select });
+										return fakeResult as any;
+									},
+								};
+							},
+						});
+						const res = await adapter.findOne<User>({
+							model: "user",
+							where: [{ field: "email", value: "test@test.com" }],
+						});
+						expect(res).not.toHaveProperty("email_address");
+						expect(res).toHaveProperty("email");
+						expect(res?.email).toEqual("test@test.com");
+					});
+				expect(parameters.where[0].field).toEqual("email_address");
+			});
+			test("findMany: Should transform the where clause according to the schema", async () => {
+				const parameters: { where: Where[] | undefined; model: string } =
+					await new Promise(async (r) => {
+						const adapter = await createTestAdapter({
+							options: {
+								user: {
+									fields: {
+										email: "email_address",
+									},
+								},
+							},
+							adapter(args_0) {
+								return {
+									async findMany({ model, where }) {
+										const fakeResult: (Omit<User, "email"> & {
+											email_address: string;
+										})[] = [
+											{
+												id: "random-id-eio1d1u12h33123ed",
+												email_address: "test@test.com",
+												emailVerified: false,
+												createdAt: new Date(),
+												updatedAt: new Date(),
+												name: "test-name",
+											},
+										];
+										r({ model, where });
+										return fakeResult as any;
+									},
+								};
+							},
+						});
+						const res = await adapter.findMany<User>({
+							model: "user",
+							where: [{ field: "email", value: "test@test.com" }],
+						});
+						expect(res[0]).not.toHaveProperty("email_address");
+						expect(res[0]).toHaveProperty("email");
+						expect(res[0]?.email).toEqual("test@test.com");
+					});
+				expect(parameters.where?.[0].field).toEqual("email_address");
+			});
+
+			test("findOne: Should recieve an integer id in where clause if the user has enabled `useNumberId`", async () => {
+				const parameters: { where: Where[]; model: string; select?: string[] } =
+					await new Promise(async (r) => {
+						const adapter = await createTestAdapter({
+							options: {
+								advanced: {
+									useNumberId: true,
+								},
+							},
+							adapter(args_0) {
+								return {
+									async findOne({ model, where, select }) {
+										const fakeResult: Omit<User, "id"> & { id: number } = {
+											id: 1,
+											email: "test@test.com",
+											emailVerified: false,
+											createdAt: new Date(),
+											updatedAt: new Date(),
+											name: "test-name",
+										};
+										r({ model, where, select });
+										return fakeResult as any;
+									},
+								};
+							},
+						});
+						const res = await adapter.findOne<User>({
+							model: "user",
+							where: [{ field: "id", value: "1" }],
+						});
+
+						expect(res).toHaveProperty("id");
+						//@ts-ignore
+						expect(res?.id).toEqual("1");
+					});
+				// The where clause should conver the string id value of `"1"` to an int since `useNumberId` is true
+				expect(parameters.where[0].value).toEqual(1);
+			});
+			test("findMany: Should recieve an integer id in where clause if the user has enabled `useNumberId`", async () => {
+				const parameters: { where: Where[] | undefined; model: string } =
+					await new Promise(async (r) => {
+						const adapter = await createTestAdapter({
+							options: {
+								advanced: {
+									useNumberId: true,
+								},
+							},
+							adapter(args_0) {
+								return {
+									async findMany({ model, where }) {
+										const fakeResult: (Omit<User, "id"> & { id: number })[] = [
+											{
+												id: 1,
+												email: "test@test.com",
+												emailVerified: false,
+												createdAt: new Date(),
+												updatedAt: new Date(),
+												name: "test-name",
+											},
+										];
+										r({ model, where });
+										return fakeResult as any;
+									},
+								};
+							},
+						});
+						const res = await adapter.findMany<User>({
+							model: "user",
+							where: [{ field: "id", value: "1" }],
+						});
+
+						expect(res[0]).toHaveProperty("id");
+						//@ts-ignore
+						expect(res[0].id).toEqual("1");
+					});
+				// The where clause should conver the string id value of `"1"` to an int since `useNumberId` is true
+				expect(parameters.where?.[0].value).toEqual(1);
 			});
 		});
 	});

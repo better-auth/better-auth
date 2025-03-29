@@ -226,7 +226,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						.offset(offset || 0);
 					if (sortBy?.field) {
 						builder.orderBy(
-							sortFn(schemaModel[getFieldName({ model, field: sortBy?.field })]),
+							sortFn(
+								schemaModel[getFieldName({ model, field: sortBy?.field })],
+							),
 						);
 					}
 					return (await builder.where(...clause)) as any[];
