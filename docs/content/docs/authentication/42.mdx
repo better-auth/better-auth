@@ -1,0 +1,40 @@
+---
+title: 42 (Forty Two)
+description: 42 (Forty Two) ID Provider
+---
+<Steps>
+    <Step>
+        ### Get your 42 credentials
+        To use 42 (Forty Two) sign in, you need a client ID and client secret. You can get them from the [42 API Applications Dashboard](https://profile.intra.42.fr/oauth/applications).
+        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/42` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+    </Step>
+    <Step>
+        ### Configure the provider
+        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        export const auth = betterAuth({
+          socialProviders: {
+            fortyTwo: { // [!code highlight]
+              clientId: process.env.FORTY_TWO_CLIENT_ID as string, // [!code highlight]
+              clientSecret: process.env.FORTY_TWO_CLIENT_SECRET as string, // [!code highlight]
+            },
+          },
+        });
+        ```
+    </Step>
+    <Step>
+        ### Sign In with 42 (Forty Two)
+        To sign in with 42 (Forty Two), you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        - `provider`: The provider to use. It should be set to `42`.
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client";
+        const authClient = createAuthClient();
+        const signIn = async () => {
+          const data = await authClient.signIn.social({
+            provider: "42",
+          });
+        };
+        ```
+    </Step>
+</Steps>
