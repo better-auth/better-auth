@@ -21,9 +21,10 @@ import express from "express";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";
 import * as validator from "@authenio/samlify-xsd-schema-validator";
-let idp: ReturnType<typeof IdentityProvider>;
-// Inline metadata XML for the IdP
 saml.setSchemaValidator(validator);
+
+let idp: ReturnType<typeof IdentityProvider>;
+
 const spMetadata = `
  <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/sp/metadata">
    <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">

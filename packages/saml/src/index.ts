@@ -283,13 +283,6 @@ export const ssoSAML = (options?: SSOOptions) => {
             type: "string",
             required: true,
           },
-          userId: {
-            type: "string",
-            references: {
-              model: "user",
-              field: "id",
-            },
-          },
           providerId: {
             type: "string",
             required: true,
