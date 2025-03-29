@@ -201,7 +201,7 @@ export type CreateCustomAdapter = ({
 	debugLog,
 	schema,
 	getDefaultModelName,
-	getDefaultFieldName
+	getDefaultFieldName,
 }: {
 	options: BetterAuthOptions;
 	/**
@@ -215,9 +215,16 @@ export type CreateCustomAdapter = ({
 	 */
 	debugLog: (...args: any[]) => void;
 	/**
-	 * Get the actual field name from the schema.
+	 * Get the model name which is expected to be saved in the database based on the user's schema.
 	 */
-	getField: ({ model, field }: { model: string; field: string }) => string;
+	getModelName: (model: string) => string;
+	/**
+	 * Get the field name which is expected to be saved in the database based on the user's schema.
+	 */
+	getFieldName: ({
+		model,
+		field,
+	}: { model: string; field: string }) => string;
 	/**
 	 * This function helps us get the default model name from the schema defined by devs.
 	 * Often times, the user will be using the `modelName` which could had been customized by the users.
@@ -240,9 +247,12 @@ export type CreateCustomAdapter = ({
 	 *
 	 * 1. User can define a custom fieldName.
 	 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
-	 * 
+	 *
 	 */
-	getDefaultFieldName: (model: string, field: string) => string;
+	getDefaultFieldName: ({
+		model,
+		field,
+	}: { model: string; field: string }) => string;
 }) => CustomAdapter;
 
 export interface CustomAdapter {

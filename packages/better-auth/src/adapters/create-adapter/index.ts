@@ -37,22 +37,26 @@ export const createAdapter =
 		const schema = getAuthTables(options);
 
 		/**
-		 * Get the actual field name from the schema.
-		 * The adapter is used by developers, not the users. Meaning the devs do not know if the user customizes the model names or field names.
+		 * This function helps us get the default field name from the schema defined by devs.
+		 * Often times, the user will be using the `fieldName` which could had been customized by the users.
+		 * This function helps us get the actual field name useful to match against the schema. (eg: schema[model].fields[field])
 		 *
-		 * This function helps us get the actual field name from the schema.
+		 * If it's still unclear what this does:
+		 *
+		 * 1. User can define a custom fieldName.
+		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
 		 */
-		function getField({
-			model: model_name,
+		const getDefaultFieldName = ({
 			field,
-		}: { model: string; field: string }) {
+			model: unsafe_model,
+		}: { model: string; field: string }) => {
 			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
 			if (field === "id") {
 				return field;
 			}
-			const model = getDefaultModelName(model_name); // Just to make sure the model name is correct.
+			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
@@ -65,31 +69,6 @@ export const createAdapter =
 				throw new Error(`Field ${field} not found in model ${model}`);
 			}
 			return f.fieldName || field;
-		}
-
-		/**
-		 * This function helps us get the default field name from the schema defined by devs.
-		 * Often times, the user will be using the `fieldName` which could had been customized by the users.
-		 * This function helps us get the actual field name useful to match against the schema. (eg: schema[model].fields[field])
-		 *
-		 * If it's still unclear what this does:
-		 *
-		 * 1. User can define a custom fieldName.
-		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
-		 */
-		const getDefaultFieldName = (model: string, field: string) => {
-			const f = schema[model].fields[field];
-			if(f){
-				return field;
-			}
-			const f2 = Object.entries(schema[model].fields).find(([_, f]) => f.fieldName === field);
-			if (f2) {
-				return f2[0];
-			}
-			debugLog(`Field ${field} not found in model ${model}`);
-			debugLog(`Model:`, schema[model]);
-			debugLog(`Schema:`, schema);
-			throw new Error(`Field ${field} not found in model ${model}`);
 		};
 
 		/**
@@ -128,6 +107,22 @@ export const createAdapter =
 					? `${model}s`
 					: model;
 		};
+		/**
+		 * Get the field name which is expected to be saved in the database based on the user's schema.
+		 * 
+		 * This function is useful if you need to save the field name to the database.
+		 * 
+		 * For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
+		 */
+		function getFieldName({
+			model: model_name,
+			field: field_name,
+		}: { model: string; field: string }) {
+			const model = getDefaultModelName(model_name);
+			const field = getDefaultFieldName({ model, field: field_name });
+
+			return schema[model].fields[field].fieldName || field;
+		}
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
@@ -177,9 +172,10 @@ export const createAdapter =
 			options,
 			schema,
 			debugLog,
-			getField,
+			getFieldName,
+			getModelName,
 			getDefaultModelName,
-			getDefaultFieldName
+			getDefaultFieldName,
 		});
 
 		const transformInput = async (
@@ -348,22 +344,42 @@ export const createAdapter =
 			return transformedData as any;
 		};
 
-		const transformWhereClause = (where: Where[], model: string) => {
+		const transformWhereClause = <W extends Where[] | undefined>({
+			model,
+			where,
+		}: { where: W; model: string }) => {
+			if (!where) return undefined as W;
 			return where.map((w) => {
-
-				const field = getField({
+				const defaultModelName = getDefaultModelName(model);
+				const defaultFieldName = getDefaultFieldName({
 					field: w.field,
-					model
+					model: model,
+				});
+				const fieldName = getFieldName({
+					field: defaultFieldName,
+					model: defaultModelName,
 				});
 
-				const fieldAttributes = schema[model].fields[field];
-				
+				const fieldAttributes =
+					schema[defaultModelName].fields[defaultFieldName];
+
+				if (
+					defaultFieldName === "id" ||
+					fieldAttributes.references?.field === "id"
+				) {
+					if (options.advanced?.useNumberId) {
+						return {
+							field: fieldName,
+							value: Number(w.value),
+						};
+					}
+				}
 
 				return {
-					field: field,
+					field: fieldName,
 					value: w.value,
 				};
-			});
+			}) as W;
 		};
 		let transactionId = -1;
 		return {
@@ -535,7 +551,7 @@ export const createAdapter =
 			},
 			findOne: async <T>({
 				model: unsafeModel,
-				where,
+				where: unsafeWhere,
 				select,
 			}: {
 				model: string;
@@ -545,6 +561,10 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				debugLog(
 					{ method: "findOne" },
 					`#${thisTransactionId} (1/3)`,
@@ -577,7 +597,7 @@ export const createAdapter =
 			},
 			findMany: async <T>({
 				model: unsafeModel,
-				where,
+				where: unsafeWhere,
 				limit,
 				sortBy,
 				offset,
@@ -591,6 +611,10 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				debugLog(
 					{ method: "findMany" },
 					`#${thisTransactionId} (1/3)`,
@@ -623,7 +647,7 @@ export const createAdapter =
 			},
 			delete: async ({
 				model: unsafeModel,
-				where,
+				where: unsafeWhere,
 			}: {
 				model: string;
 				where: Where[];
@@ -631,6 +655,10 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				debugLog(
 					{ method: "delete" },
 					`#${thisTransactionId} (1/2)`,
@@ -650,7 +678,7 @@ export const createAdapter =
 			},
 			deleteMany: async ({
 				model: unsafeModel,
-				where,
+				where: unsafeWhere,
 			}: {
 				model: string;
 				where: Where[];
@@ -658,6 +686,10 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				debugLog(
 					{ method: "deleteMany" },
 					`#${thisTransactionId} (1/2)`,
@@ -678,7 +710,7 @@ export const createAdapter =
 			},
 			count: async ({
 				model: unsafeModel,
-				where,
+				where: unsafeWhere,
 			}: {
 				model: string;
 				where?: Where[];
@@ -686,6 +718,10 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				debugLog({ method: "count" }, `#${thisTransactionId} (1/2)`, "Count:", {
 					model,
 					where,

@@ -339,9 +339,20 @@ console.log(some_data.name);
 
 ## Adapter
 
+### Terminology
+
+The following terms are used to differentiate between default and user-defined model and field names:
+
+* "Default Model Name": The model name defined internally by Better Auth or its plugins.
+* "Model Name": The custom model name specified by the user in their schema via Better Auth or plugin configuration.
+* "Default Field Name": The field name defined internally by Better Auth or its plugins.
+* "Field Name": The custom field name specified by the user.
+
+### Adapter Function
+
 The `adapter` function is where you write the code that interacts with your database.
 
-If you haven't already, check out the `options` object in the [config section](/docs/adapters/custom-adapter#config), as it can be useful for your adapter.
+If you haven't already, check out the `options` object in the [config section](#config), as it can be useful for your adapter.
 
 Before we get into the adapter function, let's go over the options that are available to you.
 
@@ -350,7 +361,7 @@ Before we get into the adapter function, let's go over the options that are avai
   The `options` object is the Better Auth options.
 </Accordion>
 <Accordion title="schema">
-  The `schema` object is the schema that is being used.
+  The `schema` object from the user's Better-Auth instance.
 </Accordion>
 <Accordion title="debugLog">
   The `debugLog` function is used to help during debug development.
@@ -369,15 +380,19 @@ Before we get into the adapter function, let's go over the options that are avai
   }
   ```
 </Accordion>
-<Accordion title="getField">
-  The `getField` function is used to get the field name from the schema.
+<Accordion title="getFieldName">
+  Get the field name which is expected to be saved in the database based on the user's schema.
 
-  This is useful if the user has defined a custom field name for a given field.
+  This is useful if you need to save the field name to the database.
 
-  You would then use this function to get the actual field name from the schema, then save the data with this field name to the database.
+  For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
+</Accordion>
+<Accordion title="getModelName">
+  Get the model name which is expected to be saved in the database based on the user's schema.
 
-  Just a note: By default we already transform the field names to the correct field names for the database.
-  So it's unlikely you'll need to use this function.
+  This is useful if you need to save the model name to the database.
+
+  For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
 </Accordion>
 <Accordion title="getDefaultModelName">
   The `getDefaultModelName` function is used to get the default model name from the schema.
@@ -409,7 +424,9 @@ adapter: ({ options, schema, debugLog, getField, getDefaultModelName, getDefault
 
 ### Adapter Methods
 
-Some notes before we get into the methods:
+#### Good to know
+
+Here are some things that we handle for you, and that you don't need to worry about:
 
 - All `model` values are already transformed into the correct model name for the database based on the end-user's schema configuration.
   - This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options to convert the `model` to the `schema` version.
