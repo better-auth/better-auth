@@ -154,7 +154,6 @@ export const ssoSAML = (options?: SSOOptions) => {
 						"post",
 						ctx.request,
 					);
-          console.log({loginRequest})
 					const { samlContent, extract } = await idp.parseLoginRequest(
 						sp,
 						"post",
@@ -247,7 +246,6 @@ export const ssoSAML = (options?: SSOOptions) => {
 						});
 					}
 					const { extract } = parsedResponse;
-
 					const userInfo = {
 						id: parsedResponse.extract.nameID,
 						email:
@@ -290,6 +288,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 							user.id,
 							ctx.request,
 						);
+          console.log({session,user})
 					await setSessionCookie(ctx, { session, user });
 					return ctx.json({
 						redirect: true,
