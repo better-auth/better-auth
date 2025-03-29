@@ -5,6 +5,7 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { API_KEY_TABLE } from "../constant";
 
 export function getApiKey({
 	opts,
@@ -35,7 +36,7 @@ export function getApiKey({
 			const session = ctx.context.session;
 
 			let apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE,
 				where: [
 					{
 						field: "id",

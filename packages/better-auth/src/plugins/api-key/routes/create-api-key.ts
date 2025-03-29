@@ -10,6 +10,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
+import { API_KEY_TABLE } from "../constant";
 
 export function createApiKey({
 	keyGenerator,
@@ -279,7 +280,7 @@ export function createApiKey({
 			}
 
 			const apiKey = await ctx.context.adapter.create<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE,
 				data: data,
 			});
 			return ctx.json({
