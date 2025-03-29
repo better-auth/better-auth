@@ -25,8 +25,8 @@ description: Roblox provider setup and usage.
         export const auth = betterAuth({
             socialProviders: {
                 roblox: { // [!code highlight]
-                    clientId: process.env.ROBLOX_CLIENT_ID, // [!code highlight]
-                    clientSecret: process.env.ROBLOX_CLIENT_SECRET, // [!code highlight]
+                    clientId: process.env.ROBLOX_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.ROBLOX_CLIENT_SECRET as string, // [!code highlight]
                 }, // [!code highlight]
             },
         })
