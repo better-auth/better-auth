@@ -389,10 +389,17 @@ export const createAdapter =
 		}: { where: W; model: string }) => {
 			if (!where) return undefined as W;
 			return where.map((w) => {
+				const { field, value, operator = "=", connector = "AND" } = w;
+				if (operator === "in") {
+					if (!Array.isArray(value)) {
+						throw new Error("Value must be an array");
+					}
+				}
+
 				const defaultModelName = getDefaultModelName(model);
 				const defaultFieldName = getDefaultFieldName({
-					field: w.field,
-					model: model,
+					field,
+					model,
 				});
 
 				const fieldName = getFieldName({
@@ -400,8 +407,8 @@ export const createAdapter =
 					model: defaultModelName,
 				});
 				const fieldAttr = getFieldAttributes({
-					field: w.field,
-					model: model,
+					field: defaultFieldName,
+					model: defaultModelName,
 				});
 
 				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
@@ -505,7 +512,7 @@ export const createAdapter =
 			},
 			update: async <T>({
 				model: unsafeModel,
-				where,
+				where: unsafeWhere,
 				update: unsafeData,
 			}: {
 				model: string;
@@ -532,6 +539,10 @@ export const createAdapter =
 					"Update (Parsed Input):",
 					{ model, data },
 				);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				const res = await adapterInstance.update<T>({
 					model,
 					where,
