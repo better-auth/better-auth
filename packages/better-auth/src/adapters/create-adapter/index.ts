@@ -406,10 +406,6 @@ export const createAdapter =
 
 				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
 					if (options.advanced?.useNumberId) {
-						console.log(fieldAttr);
-						if (fieldAttr.references?.field) {
-							console.log(fieldAttr);
-						}
 						if (Array.isArray(w.value)) {
 							return {
 								...w,
