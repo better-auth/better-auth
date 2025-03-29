@@ -21,6 +21,17 @@ export const auth = betterAuth({
 })
 ```
 
+Rate limiting is disabled in development mode by default. In order to enable it, set `enabled` to `true`:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    rateLimit: {
+        enabled: true,
+        //...other options
+    },
+})
+```
+
 In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
 - `/sign-in/email`: Is limited to 3 requests within 10 seconds.
 
