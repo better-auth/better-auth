@@ -79,7 +79,7 @@ const newUser = await authClient.admin.createUser({
   name: "Test User",
   email: "test@example.com",
   password: "password123",
-  role: "user",
+  role: "user", // this can also be an array for multiple roles (e.g. ["user", "sale"])
   data: {
     // any additional on the user table including plugin fields and custom fields
     customField: "customValue",
@@ -176,7 +176,7 @@ Changes the role of a user.
 ```ts title="admin.ts"
 const updatedUser = await authClient.admin.setRole({
   userId: "user_id_here",
-  role: "admin",
+  role: "admin", // this can also be an array for multiple roles (e.g. ["admin", "sale"])
 });
 ```
 
@@ -271,6 +271,10 @@ By default, there are two roles:
 `admin`: Users with the admin role have full control over other users.
 
 `user`: Users with the user role have no control over other users.
+
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
 
 ### Permissions
 
