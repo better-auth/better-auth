@@ -345,14 +345,62 @@ If you haven't already, check out the `options` object in the [config section](/
 
 Before we get into the adapter function, let's go over the options that are available to you.
 
-- `options`: Better Auth options.
-- `schema`: The schema that is being used.
-- `debugLog`: The debug log function.
-- `getField`: The get field function.
-- `getDefaultModelName`: The default model name function.
+<Accordions>
+<Accordion title="options">
+  The `options` object is the Better Auth options.
+</Accordion>
+<Accordion title="schema">
+  The `schema` object is the schema that is being used.
+</Accordion>
+<Accordion title="debugLog">
+  The `debugLog` function is used to help during debug development.
+
+  We recommend allowing end-users of your adapter to configure the debug logs.
+  
+  By default, the debug logs are disabled.
+
+  However, you can pass `true` to enable all debug logs, or an object to enable specific debug logs.
+
+  ```ts title="Example"
+  debugLog: {
+    create: true,
+    update: true,
+    // etc...
+  }
+  ```
+</Accordion>
+<Accordion title="getField">
+  The `getField` function is used to get the field name from the schema.
+
+  This is useful if the user has defined a custom field name for a given field.
+
+  You would then use this function to get the actual field name from the schema, then save the data with this field name to the database.
+
+  Just a note: By default we already transform the field names to the correct field names for the database.
+  So it's unlikely you'll need to use this function.
+</Accordion>
+<Accordion title="getDefaultModelName">
+  The `getDefaultModelName` function is used to get the default model name from the schema.
+
+  This is useful if the user has defined a custom model name for a given model.
+
+  For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
+
+  Note: If you're unsure if your currrent `modelName` data is from the schema's modelName value or the actual default model name, you can pass it through this function anyway, and it will always return the actualy model name.
+</Accordion>
+<Accordion title="getDefaultFieldName">
+  The `getDefaultFieldName` function is used to get the default field name from the schema.
+
+  This is useful if the user has defined a custom field name for a given field.
+
+  You would then use this function to get the actual field name from the schema, then save the data with this field name to the database. 
+
+  Note: If you're unsure if your currrent `fieldName` data is from the schema's fieldName value or the actual default field name, you can pass it through this function anyway, and it will always return the actualy field name.
+</Accordion>
+</Accordions>
 
 ```ts title="Example"
-adapter: ({ options, schema, debugLog, getField, getDefaultModelName }) => {
+adapter: ({ options, schema, debugLog, getField, getDefaultModelName, getDefaultFieldName }) => {
   return {
     // ...
   };
