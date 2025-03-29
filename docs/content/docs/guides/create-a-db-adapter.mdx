@@ -135,6 +135,7 @@ The `supportsNumericIds` option is used to indicate if the database supports num
 If this is set to `false` and the users config has enabled `useNumberId`, then we will throw an error.
 
 Default: `true`
+
 </Accordion>
 <Accordion title="supportsJSON">
 The `supportsJSON` option is used to indicate if the database supports JSON.
@@ -343,10 +344,10 @@ console.log(some_data.name);
 
 The following terms are used to differentiate between default and user-defined model and field names:
 
-* "Default Model Name": The model name defined internally by Better Auth or its plugins.
-* "Model Name": The custom model name specified by the user in their schema via Better Auth or plugin configuration.
-* "Default Field Name": The field name defined internally by Better Auth or its plugins.
-* "Field Name": The custom field name specified by the user.
+- "Default Model Name": The model name defined internally by Better Auth or its plugins.
+- "Model Name": The custom model name specified by the user in their schema via Better Auth or plugin configuration.
+- "Default Field Name": The field name defined internally by Better Auth or its plugins.
+- "Field Name": The custom field name specified by the user.
 
 ### Adapter Function
 
@@ -366,56 +367,77 @@ Before we get into the adapter function, let's go over the options that are avai
 <Accordion title="debugLog">
   The `debugLog` function is used to help during debug development.
 
-  We recommend allowing end-users of your adapter to configure the debug logs.
-  
-  By default, the debug logs are disabled.
+We recommend allowing end-users of your adapter to configure the debug logs.
 
-  However, you can pass `true` to enable all debug logs, or an object to enable specific debug logs.
+By default, the debug logs are disabled.
 
-  ```ts title="Example"
-  debugLog: {
-    create: true,
-    update: true,
-    // etc...
-  }
-  ```
+However, you can pass `true` to enable all debug logs, or an object to enable specific debug logs.
+
+```ts title="Example"
+debugLog: {
+  create: true,
+  update: true,
+  // etc...
+}
+```
+
 </Accordion>
 <Accordion title="getFieldName">
   Get the field name which is expected to be saved in the database based on the user's schema.
 
-  This is useful if you need to save the field name to the database.
+This is useful if you need to save the field name to the database.
 
-  For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
+For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
+
 </Accordion>
 <Accordion title="getModelName">
   Get the model name which is expected to be saved in the database based on the user's schema.
 
-  This is useful if you need to save the model name to the database.
+This is useful if you need to save the model name to the database.
 
-  For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
+For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
+
 </Accordion>
 <Accordion title="getDefaultModelName">
   The `getDefaultModelName` function is used to get the default model name from the schema.
 
-  This is useful if the user has defined a custom model name for a given model.
+This is useful if the user has defined a custom model name for a given model.
 
-  For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
+For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
 
-  Note: If you're unsure if your currrent `modelName` data is from the schema's modelName value or the actual default model name, you can pass it through this function anyway, and it will always return the actualy model name.
+Note: If you're unsure if your currrent `modelName` data is from the schema's modelName value or the actual default model name, you can pass it through this function anyway, and it will always return the actualy model name.
+
 </Accordion>
 <Accordion title="getDefaultFieldName">
   The `getDefaultFieldName` function is used to get the default field name from the schema.
 
-  This is useful if the user has defined a custom field name for a given field.
+This is useful if the user has defined a custom field name for a given field.
 
-  You would then use this function to get the actual field name from the schema, then save the data with this field name to the database. 
+You would then use this function to get the actual field name from the schema, then save the data with this field name to the database.
 
-  Note: If you're unsure if your currrent `fieldName` data is from the schema's fieldName value or the actual default field name, you can pass it through this function anyway, and it will always return the actualy field name.
+Note: If you're unsure if your currrent `fieldName` data is from the schema's fieldName value or the actual default field name, you can pass it through this function anyway, and it will always return the actualy field name.
+
+</Accordion>
+<Accordion title="getFieldAttributes">
+  The `getFieldAttributes` function is used to get the field attributes for a given field.
+
+  We recommend not using `schema[model].fields[field]` directly, as it doesn't account of things such as `id`s.
+
+  Instead, we recommend using this function to get the field attributes.
+
+  Note: any model name or field name is allowed, whether default to schema or not.
 </Accordion>
 </Accordions>
 
 ```ts title="Example"
-adapter: ({ options, schema, debugLog, getField, getDefaultModelName, getDefaultFieldName }) => {
+adapter: ({
+  options,
+  schema,
+  debugLog,
+  getField,
+  getDefaultModelName,
+  getDefaultFieldName,
+}) => {
   return {
     // ...
   };
@@ -444,6 +466,7 @@ Note:
 In all cases, the `id` field is automatically generated inside of the `data` object unless the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better-Auth config.
 
 In these cases, it's expected that the users database will handle the id generation.
+
 </Callout>
 
 parameters:

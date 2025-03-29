@@ -168,6 +168,44 @@ export const createAdapter =
 			}
 		};
 
+		const getFieldAttributes = ({
+			model,
+			field,
+		}: { model: string; field: string }) => {
+			const defaultModelName = getDefaultModelName(model);
+			const defaultFieldName = getDefaultFieldName({
+				field: field,
+				model: model,
+			});
+
+			const fields = schema[defaultModelName].fields;
+			const shouldGenerateId =
+				!config.disableIdGeneration && !options.advanced?.useNumberId;
+
+			fields.id = {
+				type: options.advanced?.useNumberId ? "number" : "string",
+				required: shouldGenerateId ? true : false,
+				...(shouldGenerateId
+					? {
+							defaultValue() {
+								if (config.disableIdGeneration) return undefined;
+								if (
+									options.advanced?.generateId === false ||
+									options.advanced?.useNumberId
+								)
+									return undefined;
+								return (
+									options.advanced?.generateId?.({ model: defaultModelName }) ??
+									defaultGenerateId()
+								);
+							},
+						}
+					: {}),
+			};
+
+			return fields[defaultFieldName];
+		};
+
 		const adapterInstance = adapter({
 			options,
 			schema,
@@ -176,6 +214,7 @@ export const createAdapter =
 			getModelName,
 			getDefaultModelName,
 			getDefaultFieldName,
+			getFieldAttributes,
 		});
 
 		const transformInput = async (
@@ -355,14 +394,29 @@ export const createAdapter =
 					field: w.field,
 					model: model,
 				});
+
 				const fieldName = getFieldName({
 					field: defaultFieldName,
 					model: defaultModelName,
 				});
-				const fieldAttr = schema[defaultModelName].fields[defaultFieldName];
+				const fieldAttr = getFieldAttributes({
+					field: w.field,
+					model: model,
+				});
 
 				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
 					if (options.advanced?.useNumberId) {
+						console.log(fieldAttr);
+						if (fieldAttr.references?.field) {
+							console.log(fieldAttr);
+						}
+						if (Array.isArray(w.value)) {
+							return {
+								...w,
+								field: fieldName,
+								value: w.value.map(Number),
+							};
+						}
 						return {
 							...w,
 							field: fieldName,
@@ -377,6 +431,7 @@ export const createAdapter =
 				};
 			}) as W;
 		};
+
 		let transactionId = -1;
 		return {
 			create: async <T extends Record<string, any>, R = T>({

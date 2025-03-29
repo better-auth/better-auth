@@ -250,6 +250,15 @@ export type CreateCustomAdapter = ({
 		model,
 		field,
 	}: { model: string; field: string }) => string;
+	/**
+	 * Get the field attributes for a given model and field.
+	 *
+	 * Note: any model name or field name is allowed, whether default to schema or not.
+	 */
+	getFieldAttributes: ({
+		model,
+		field,
+	}: { model: string; field: string }) => FieldAttribute;
 }) => CustomAdapter;
 
 export interface CustomAdapter {
