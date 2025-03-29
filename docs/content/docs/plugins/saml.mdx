@@ -1,0 +1,129 @@
+---
+title: SAML Single Sign-On (SSO)
+description: Integrate SAML-based Single Sign-On with your application.
+---
+
+`SAML` `SSO`
+
+SAML (Security Assertion Markup Language) is an XML-based standard for exchanging authentication and authorization data between parties. This plugin allows you to integrate SAML-based identity providers with your application.
+
+<Callout>
+    Make sure your Identity Provider (IdP) is properly configured before setting up SAML integration. You'll need metadata from both your Service Provider (SP) and Identity Provider (IdP).
+</Callout>
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add Plugin to the server
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { ssoSAML } from "better-auth/plugins/sso-saml";
+
+        const auth = betterAuth({
+            plugins: [ // [!code highlight]
+                ssoSAML() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+</Steps>
+
+## Usage
+
+### Register a SAML Provider
+
+To register a SAML provider, you'll need to configure both Service Provider (SP) and Identity Provider (IdP) metadata.
+
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
+```ts title="register-provider.ts"
+import { authClient } from "@/lib/auth-client";
+
+await authClient.saml.register({
+    providerId: "example-saml-provider",
+    issuer: "https://your-app.example.com",
+    cert: "your-public-cert"
+    callbackURL: "https://your-app.example.com/sso/saml/callback,
+    identifierFormat: "your identifier format",
+    signatureAlgorithm: "sha256",
+    digestAlgorithm: "sha256",
+    spMetadata: {
+         metadata: "your xml metadata" 
+         entityID: "https://your-app.example.com/metadata",
+         privateKey: "-----BEGIN PRIVATE KEY-----...",
+         isAssertionEncrypted: false, 
+    },
+    idpMetadata: {
+       metadata: "your idp metadata" 
+    }
+});
+</Tab>
+
+<Tab value="server">
+ await auth.api.createSAMLProvider({
+    body: {
+        providerId: "example-saml-provider",
+        issuer: "https://your-app.example.com",
+        cert: "your-public-cert"
+        callbackURL: "https://your-app.example.com/sso/saml/callback,
+        identifierFormat: "your identifier format",
+        signatureAlgorithm: "sha256",
+        digestAlgorithm: "sha256",
+        spMetadata: {
+            metadata: "your xml metadata" 
+            entityID: "https://your-app.example.com/metadata",
+            privateKey: "-----BEGIN PRIVATE KEY-----...",
+            isAssertionEncrypted: false, 
+        },
+        idpMetadata: {
+            metadata: "your idp metadata" 
+        }
+    }
+});
+</Tab>
+
+
+### Get Service Provider Metadata
+ 
+You can retrieve the metadata for your service provider to share with your Identity Provider:
+
+```ts
+const spMetadataRes = await auth.api.spMetadata({
+     query: {
+        providerId: provider.providerId,
+    },
+ });
+```
+
+
+### Sign In with SAML Provider
+
+To initiate a SAML login flow:
+
+```ts 
+const { url , redirect } = await authClient.saml.signIn({
+    providerId: "example-saml-provider",
+    callbackURL: "/dashboard" // Where to redirect after auth
+}); 
+```
