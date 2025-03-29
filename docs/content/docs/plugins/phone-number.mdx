@@ -204,8 +204,9 @@ export const auth = betterAuth({
 - `signUpOnVerification`: An object with the following properties:
     - `getTempEmail`: A function that generates a temporary email for the user. It takes the phone number as an argument and returns the temporary email.
     - `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
-    
 
+- `requireVerification`: When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE_NUMBER_NOT_VERIFIED) and automatically trigger an OTP send to start the verification process.
+    
 ## Schema
 
 The plugin requires 2 fields to be added to the user table 
