@@ -27,7 +27,7 @@ export const auth = betterAuth({
 })
 ```
 
-If not explicitly set, the system will check for the environment variable `process.env.BETTER_AUTH_URL`. If not set, it will throw an error.
+If not explicitly set, the system will check for the environment variable `process.env.BETTER_AUTH_URL`
 
 ## `basePath`
 
@@ -347,6 +347,37 @@ export const auth = betterAuth({
 - `fields`: Map fields to different column names
 - `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
 
+## `rateLimit`
+
+Rate limiting configuration.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	rateLimit: {
+		enabled: true,
+		window: 10,
+		max: 100,
+		customRules: {
+			"/example/path": {
+				window: 10,
+				max: 100
+			}
+		},
+		storage: "memory",
+		modelName: "rateLimit"
+	}
+})
+```
+
+- `enabled`: Enable rate limiting (defaults: `true` in production, `false` in development)
+- `window`: Time window to use for rate limiting. The value should be in seconds. (default: `10`)
+- `max`: The default maximum number of requests allowed within the window. (default: `100`)
+- `customRules`: Custom rate limit rules to apply to specific paths.
+- `storage`: Storage configuration. If you passed a secondary storage, rate limiting will be stored in the secondary storage. (options: `"memory", "database", "secondary-storage"`, default: `"memory"`)
+- `modelName`: The name of the table to use for rate limiting if database is used as storage. (default: `"rateLimit"`)
+
+
 ## `advanced`
 
 Advanced configuration options.
@@ -488,7 +519,7 @@ Disable specific auth paths.
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	disabledPaths: ["/api/auth/signup", "/api/auth/signin/email"],
+	disabledPaths: ["/sign-up/email", "/sign-in/email"],
 })
 ```
 

@@ -32,7 +32,7 @@ BETTER_AUTH_SECRET=
 ```
 <GenerateSecret/>
 
-2. **Set Base URL (optional)**
+2. **Set Base URL**
 
 ```txt title=".env"
 BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
@@ -359,9 +359,9 @@ Better Auth supports any backend framework with standard Request and Response ob
     ```
     </Tab>
     <Tab value="tanstack-start">
-    ```ts title="app/routes/api/auth/$.ts"
+    ```ts title="src/routes/api/auth/$.ts"
     import { auth } from '~/lib/server/auth'
-    import { createAPIFileRoute } from '@tanstack/start/api'
+    import { createAPIFileRoute } from '@tanstack/react-start/api'
 
     export const APIRoute = createAPIFileRoute('/api/auth/$')({
         GET: ({ request }) => {
@@ -374,7 +374,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     ```
     </Tab>
     <Tab value="expo">
-    ```ts title="app/api/auth/[..all]+api.ts"
+    ```ts title="app/api/auth/[...all]+api.ts"
     import { auth } from '@/lib/server/auth'; // path to your auth file
 
     const handler = auth.handler;
@@ -403,7 +403,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/client"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -411,7 +412,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/react"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -419,7 +421,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/vue"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -427,7 +430,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/svelte"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -435,7 +439,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/solid"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>

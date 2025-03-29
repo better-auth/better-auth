@@ -4,6 +4,7 @@ import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { logger } from "../utils/logger";
+import { refreshAccessToken } from "../oauth2/refresh-access-token";
 
 export interface GoogleProfile {
 	aud: string;
@@ -98,6 +99,19 @@ export const google = (options: GoogleOptions) => {
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
+					});
+				},
 		async verifyIdToken(token, nonce) {
 			if (options.disableIdTokenSignIn) {
 				return false;
@@ -145,5 +159,6 @@ export const google = (options: GoogleOptions) => {
 				data: user,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<GoogleProfile>;
 };

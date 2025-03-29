@@ -88,7 +88,7 @@ When the phone number is verified, the `phoneNumberVerified` field in the user t
 
 ### Allow Sign-Up with Phone Number
 
-to allow users to sign up using their phone number, you can pass `signUpOnVerification` option to your plugin configuration. It requires you to pass `getTempEmail` function to generate a temporary email for the user.
+To allow users to sign up using their phone number, you can pass `signUpOnVerification` option to your plugin configuration. It requires you to pass `getTempEmail` function to generate a temporary email for the user.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -144,7 +144,7 @@ const isVerified = await authClient.phoneNumber.verify({
 })
 ```
 
-if user session exist the phone number will be updated automatically
+If a user session exist the phone number will be updated automatically.
 
 
 ### Disable Session Creation

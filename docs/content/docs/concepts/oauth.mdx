@@ -2,28 +2,29 @@
 title: OAuth
 description: How Better Auth handles OAuth
 ---
-Better Auth comes with built-in support for OAuth 2.0 and OpenID Connect. This allows you to authenticate users via popular OAuth providers like Google, Facebook, GitHub, and more. 
+
+Better Auth comes with built-in support for OAuth 2.0 and OpenID Connect. This allows you to authenticate users via popular OAuth providers like Google, Facebook, GitHub, and more.
 
 If your desired provider isn’t directly supported, you can use the [Generic OAuth Plugin](/docs/plugins/generic-oauth) for custom integrations.
 
 ## Configuring Social Providers
 
-To enable a social provider, you need to provide `clientId` and `clientSecret` for the provider. 
+To enable a social provider, you need to provide `clientId` and `clientSecret` for the provider.
 
 Here’s an example of how to configure Google as a provider:
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    // Other configurations...
-    socialProviders: {
-        google: {
-            clientId: 'YOUR_GOOGLE_CLIENT_ID',
-            clientSecret: 'YOUR_GOOGLE_CLIENT_SECRET',
-        }
-    }
-})
+  // Other configurations...
+  socialProviders: {
+    google: {
+      clientId: "YOUR_GOOGLE_CLIENT_ID",
+      clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+    },
+  },
+});
 ```
 
 ### Other Provider Configurations
@@ -44,26 +45,28 @@ export const auth = betterAuth({
 
 **mapProfileToUser** A custom function to map the user profile returned from the provider to the user object in your database.
 
+**refreshAccessToken**: A custom function to refresh the token. Given the default implementation, you can provide a custom function to refresh the token.
+
 Useful, if you have additional fields in your user object you want to populate from the provider’s profile. Or if you want to change how by default the user object is mapped.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    // Other configurations...
-    socialProviders: {
-        google: {
-            clientId: 'YOUR_GOOGLE_CLIENT_ID',
-            clientSecret: 'YOUR_GOOGLE_CLIENT_SECRET',
-            mapProfileToUser: (profile) => {
-                return {
-                   firstName: profile.given_name,
-                   lastName: profile.family_name,
-                }
-            }
-        }
-    }
-})
+  // Other configurations...
+  socialProviders: {
+    google: {
+      clientId: "YOUR_GOOGLE_CLIENT_ID",
+      clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+      mapProfileToUser: (profile) => {
+        return {
+          firstName: profile.given_name,
+          lastName: profile.family_name,
+        };
+      },
+    },
+  },
+});
 ```
 
 ## How OAuth Works in Better Auth
@@ -74,7 +77,7 @@ Here’s what happens when a user selects a provider to authenticate with:
 2. **State Generation:** Generate and save a state token in your database for CSRF protection.
 3. **PKCE Support:** If applicable, create a PKCE code challenge and verifier for secure exchanges.
 4. **Authorization URL Construction:** Build the provider’s authorization URL with parameters like client ID, redirect URI, state, etc. The callback URL usually follows the pattern `/api/auth/callback/${providerName}`.
-5. **User Redirection:** 
+5. **User Redirection:**
    - If redirection is enabled, users are redirected to the provider’s login page.
    - If redirection is disabled, the authorization URL is returned for the client to handle the redirection.
 
@@ -83,7 +86,7 @@ Here’s what happens when a user selects a provider to authenticate with:
 After the user completes the login process, the provider redirects them back to the callback URL with a code and state. Better Auth handles the rest:
 
 1. **Token Exchange:** The code is exchanged for an access token and user information.
-2. **User Handling:** 
+2. **User Handling:**
    - If the user doesn’t exist, a new account is created.
    - If the user exists, they are logged in.
    - If the user has multiple accounts across providers, Better Auth links them based on your configuration. Learn more about [account linking](/docs/concepts/users-accounts#account-linking).

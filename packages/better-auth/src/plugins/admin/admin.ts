@@ -211,7 +211,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 						role: z.union([
@@ -584,7 +584,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -646,7 +646,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -710,7 +710,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 						/**
@@ -803,7 +803,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1015,7 +1015,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1073,7 +1073,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1133,7 +1133,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						newPassword: z.string({
 							description: "The new password",
 						}),
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1196,7 +1196,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					body: z.object({
 						permission: z.record(z.string(), z.array(z.string())),
-						userId: z.string().optional(),
+						userId: z.coerce.string().optional(),
 						role: z.string().optional(),
 					}),
 					metadata: {

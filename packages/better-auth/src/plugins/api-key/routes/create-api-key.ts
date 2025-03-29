@@ -42,7 +42,7 @@ export function createApiKey({
 					.nullable()
 					.default(null),
 
-				userId: z
+				userId: z.coerce
 					.string({
 						description:
 							"User Id of the user that the Api Key belongs to. Useful for server-side only.",

@@ -39,6 +39,9 @@ export interface OAuthProvider<
 		};
 		data: T;
 	} | null>;
+	/**
+	 * Custom function to refresh a token
+	 */
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
 	/**
@@ -57,6 +60,7 @@ export interface OAuthProvider<
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	options?: ProviderOptions;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
@@ -111,6 +115,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 		};
 		data: any;
 	}>;
+	/**
+	 * Custom function to refresh a token
+	 */
+	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	/**
 	 * Custom function to map the provider profile to a
 	 * user.

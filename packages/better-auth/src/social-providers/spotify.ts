@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+	refreshAccessToken,
+} from "../oauth2";
 
 export interface SpotifyProfile {
 	id: string;
@@ -40,6 +44,19 @@ export const spotify = (options: SpotifyOptions) => {
 				tokenEndpoint: "https://accounts.spotify.com/api/token",
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://accounts.spotify.com/api/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -69,5 +86,6 @@ export const spotify = (options: SpotifyOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<SpotifyProfile>;
 };
