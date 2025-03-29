@@ -653,7 +653,7 @@ export type BetterAuthOptions = {
 			defaultFindManyLimit?: number;
 			/**
 			 * If your database auto increments number ids, set this to `true`.
-			 * 
+			 *
 			 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
 			 *
 			 * @default false
