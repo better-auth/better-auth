@@ -154,6 +154,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 						"post",
 						ctx.request,
 					);
+          console.log({loginRequest})
 					const { samlContent, extract } = await idp.parseLoginRequest(
 						sp,
 						"post",
@@ -168,11 +169,12 @@ export const ssoSAML = (options?: SSOOptions) => {
 							message: "Invalid SAML request",
 						});
 					}
-					return ctx.json({
-						url: loginRequest.entityEndpoint,
-						samlContent: samlContent,
-						context: loginRequest.context,
-						redirect: true,
+          const responseResult = await fetch(loginRequest.entityEndpoint)
+          const responseResultValues = await responseResult.json()
+          return ctx.json({
+						url: responseResultValues.entityEndpoint,
+					  samlResponse: responseResultValues.samlResponse,
+            
 					});
 				},
 			),
