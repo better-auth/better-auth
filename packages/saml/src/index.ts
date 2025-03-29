@@ -91,7 +91,6 @@ export const ssoSAML = (options?: SSOOptions) => {
               providerId: body.providerId,
             },
           });
-          console.log({ provider });
           return ctx.json({
             ...provider,
             samlConfig: JSON.parse(provider.samlConfig) as SAMLConfig,
@@ -141,13 +140,35 @@ export const ssoSAML = (options?: SSOOptions) => {
           const parsedSamlConfig = JSON.parse(provider.samlConfig);
           const sp = saml.ServiceProvider({
             metadata: parsedSamlConfig.spMetadata.metadata,
+            allowCreate: "true",
+            loginRequestTemplate: {
+              context:
+                '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" AssertionConsumerServiceURL="{AssertionConsumerServiceURL}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:NameIDPolicy Format="{NameIDFormat}" AllowCreate="{AllowCreate}"/></samlp:AuthnRequest>',
+            },
           });
           const idp = saml.IdentityProvider({
             metadata: parsedSamlConfig.idpMetadata.metadata,
           });
-          const loginRequest = await sp.createLoginRequest(idp, "redirect");
+          const loginRequest = await sp.createLoginRequest(idp, "post" , ctx.request);
+          console.log({ loginRequest }); 
+          const { samlContent, extract } = await idp.parseLoginRequest(
+            sp,
+            "post",
+            {
+              body: {
+                SAMLRequest: loginRequest.context,
+              },
+            }
+          );
+          if (!samlContent) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Invalid SAML request",
+            });
+          } 
           return ctx.json({
-            url: loginRequest.context,
+            url: loginRequest.entityEndpoint,
+            samlContent: samlContent,
+            context: loginRequest.context,
             redirect: true,
           });
         }

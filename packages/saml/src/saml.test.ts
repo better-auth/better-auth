@@ -45,7 +45,8 @@ const spMetadata = `
      <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/sp/sls"/>
      <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
      <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/sp/acs" index="1"/>
-   </md:SPSSODescriptor>
+     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/sp/acs" index="1"/>
+     </md:SPSSODescriptor>
    <md:Organization>
      <md:OrganizationName xml:lang="en-US">Organization Name</md:OrganizationName>
      <md:OrganizationDisplayName xml:lang="en-US">Organization DisplayName</md:OrganizationDisplayName>
@@ -81,7 +82,8 @@ const idpMetadata = `
     <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/slo"/>
     <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
     <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/redirect"/>
-  </md:IDPSSODescriptor>
+    <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/post"/>
+    </md:IDPSSODescriptor>
   <md:Organization>
     <md:OrganizationName xml:lang="en-US">Your Organization Name</md:OrganizationName>
     <md:OrganizationDisplayName xml:lang="en-US">Your Organization DisplayName</md:OrganizationDisplayName>
@@ -541,7 +543,19 @@ class MockSAMLIdP {
     this.sp = ServiceProvider({
       metadata: spMetadata,
     });
-
+    this.app.get("/api/sso/saml2/idp/post", async (req, res) => {
+      const samlRequest = req.query;
+      const user = { emailAddress: "test@email.com", famName: "hello world" };
+      const { context, entityEndpoint } = await this.idp.createLoginResponse(
+        this.sp,
+        null,
+        saml.Constants.wording.binding.post,
+        user,
+        createTemplateCallback(this.idp, this.sp, user.emailAddress)
+      );
+      console.log({context , entityEndpoint})
+      res.status(200).send({ samlResponse: context, entityEndpoint });
+    });
     this.app.get("/api/sso/saml2/idp/redirect", async (req, res) => {
       const samlRequest = req.query;
       const user = { emailAddress: "test@email.com", famName: "hello world" };
@@ -552,6 +566,7 @@ class MockSAMLIdP {
         user,
         createTemplateCallback(this.idp, this.sp, user.emailAddress)
       );
+      console.log({context , entityEndpoint})
       res.status(200).send({ samlResponse: context, entityEndpoint });
     });
     this.app.post("/api/sso/saml2/sp/acs", async (req, res) => {
@@ -697,7 +712,6 @@ describe("SAML SSO", async () => {
     },
   });
 
-  // Test user
   const testUser = {
     email: "test@email.com",
     password: "password",
@@ -738,7 +752,6 @@ describe("SAML SSO", async () => {
       throw: true,
       onSuccess: setCookieToHeader(headers),
     });
-    console.log(res);
     return headers;
   }
 
@@ -797,7 +810,7 @@ describe("SAML SSO", async () => {
   });
   it("Should fetch sp metadata", async () => {
     const headers = await getAuthHeaders();
-    const res = await authClient.signIn.email(testUser, {
+     await authClient.signIn.email(testUser, {
       throw: true,
       onSuccess: setCookieToHeader(headers),
     });
@@ -887,15 +900,15 @@ describe("SAML SSO", async () => {
         callbackURL: "http://localhost:3000/dashboard",
       },
     });
-
     expect(signInResponse).toEqual({
       url: expect.stringContaining("http://localhost:8081"),
+      samlContent: expect.any(String), 
+      context: expect.any(String), 
       redirect: true,
     });
     const mockLoginResponse = await fetch(signInResponse.url);
     expect(mockLoginResponse.status).toBe(200);
     const samlResponse = await mockLoginResponse.json();
-     
     const result = await auth.api.callbackSSOSAML({
       body: {
         SAMLResponse: samlResponse.samlResponse,
