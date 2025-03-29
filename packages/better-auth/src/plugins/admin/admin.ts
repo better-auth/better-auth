@@ -96,12 +96,12 @@ export interface AdminOptions {
 	bannedUserMessage?: string;
 }
 
-export type InferRolesFromOption<O extends AdminOptions | undefined> =
+export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
 	O extends { roles: Record<string, unknown> }
 		? keyof O["roles"]
 		: "user" | "admin";
 
-export function parseRoles(roles: string | string[]): string {
+function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
 
@@ -252,7 +252,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						$Infer: {
 							body: {} as {
 								userId: string;
-								role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
+								role:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
 							},
 						},
 					},
@@ -349,7 +351,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								email: string;
 								password: string;
 								name: string;
-								role?: InferRolesFromOption<O> | InferRolesFromOption<O>[];
+								role?:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
 								data?: Record<string, any>;
 							},
 						},
@@ -1247,7 +1251,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									[key in keyof Statements]?: Array<Statements[key][number]>;
 								};
 								userId?: string;
-								role?: InferRolesFromOption<O>;
+								role?: InferAdminRolesFromOption<O>;
 							},
 						},
 					},
