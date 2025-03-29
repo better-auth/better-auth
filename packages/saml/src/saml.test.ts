@@ -21,6 +21,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";
 import * as validator from "@authenio/samlify-xsd-schema-validator";
+import { binding } from "process";
 saml.setSchemaValidator(validator);
 
 let idp: ReturnType<typeof IdentityProvider>;
@@ -544,8 +545,9 @@ class MockSAMLIdP {
 			metadata: spMetadata,
 		});
 		this.app.get("/api/sso/saml2/idp/post", async (req, res) => {
-			const samlRequest = req.query;
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const samlRequest = req;
+      console.log({samlRequest})	
+      const user = { emailAddress: "test@email.com", famName: "hello world" };
 			const { context, entityEndpoint } = await this.idp.createLoginResponse(
 				this.sp,
 				null,
@@ -557,7 +559,8 @@ class MockSAMLIdP {
 		});
 		this.app.get("/api/sso/saml2/idp/redirect", async (req, res) => {
 			const samlRequest = req.query;
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+		  console.log(samlRequest)	
+      const user = { emailAddress: "test@email.com", famName: "hello world" };
 			const { context, entityEndpoint } = await this.idp.createLoginResponse(
 				this.sp,
 				null,
@@ -779,6 +782,7 @@ describe("SAML SSO", async () => {
 				},
 				spMetadata: {
 					metadata: idpMetadata,
+          binding: "post",
 					privateKey: spPrivateKey,
 					privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 					isAssertionEncrypted: true,
@@ -831,7 +835,8 @@ describe("SAML SSO", async () => {
 				},
 				spMetadata: {
 					metadata: spMetadata,
-					privateKey: spPrivateKey,
+				  binding: "post",	
+          privateKey: spPrivateKey,
 					privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 					isAssertionEncrypted: true,
 					encPrivateKey: spEncyptionKey,
@@ -878,7 +883,8 @@ describe("SAML SSO", async () => {
 				},
 				spMetadata: {
 					metadata: idpMetadata,
-					// we can do a mapping of property here
+          binding: "post",
+          // we can do a mapping of property here
 					privateKey: spPrivateKey,
 					privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 					isAssertionEncrypted: true,
@@ -899,16 +905,12 @@ describe("SAML SSO", async () => {
 		});
 		expect(signInResponse).toEqual({
 			url: expect.stringContaining("http://localhost:8081"),
-			samlContent: expect.any(String),
-			context: expect.any(String),
-			redirect: true,
+			samlResponse: expect.any(String),
 		});
-		const mockLoginResponse = await fetch(signInResponse.url);
-		expect(mockLoginResponse.status).toBe(200);
-		const samlResponse = await mockLoginResponse.json();
+		
 		const result = await auth.api.callbackSSOSAML({
 			body: {
-				SAMLResponse: samlResponse.samlResponse,
+				SAMLResponse: signInResponse.samlResponse,
 				RelayState: "http://localhost:8081/dashboard",
 			},
 			params: {

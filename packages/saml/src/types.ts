@@ -66,7 +66,8 @@ export const SAMLConfigSchema = z.object({
 	}),
 	spMetadata: z.object({
 		metadata: z.string(),
-		mapping: z
+	  binding: z.string().optional(),
+    mapping: z
 			.object({
 				id: z.string({
 					description:
