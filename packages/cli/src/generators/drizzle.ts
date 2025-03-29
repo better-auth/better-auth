@@ -44,7 +44,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			name = convertToSnakeCase(name);
 
 			if (field.references?.field === "id") {
-				if (options.advanced?.useNumberId) {
+				if (options.advanced?.database?.useNumberId) {
 					if (databaseType === "pg") {
 						return `serial('${name}').primaryKey()`;
 					} else if (databaseType === "mysql") {
@@ -116,7 +116,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		if (options.advanced?.useNumberId) {
+		if (options.advanced?.database?.useNumberId) {
 			id = `int("id").autoincrement.primaryKey()`;
 		} else {
 			if (databaseType === "mysql") {

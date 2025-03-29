@@ -3,7 +3,7 @@ import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
-import type { AdapterConfig, CreateCustomAdapter } from "./types";
+import type { AdapterConfig, CleanedWhere, CreateCustomAdapter } from "./types";
 export * from "./types";
 
 export const createAdapter =
@@ -25,7 +25,7 @@ export const createAdapter =
 		};
 
 		if (
-			options.advanced?.useNumberId === true &&
+			options.advanced?.database?.useNumberId === true &&
 			config.supportsNumericIds === false
 		) {
 			throw new Error(
@@ -180,23 +180,24 @@ export const createAdapter =
 
 			const fields = schema[defaultModelName].fields;
 			const shouldGenerateId =
-				!config.disableIdGeneration && !options.advanced?.useNumberId;
+				!config.disableIdGeneration && !options.advanced?.database?.useNumberId;
 
 			fields.id = {
-				type: options.advanced?.useNumberId ? "number" : "string",
+				type: options.advanced?.database?.useNumberId ? "number" : "string",
 				required: shouldGenerateId ? true : false,
 				...(shouldGenerateId
 					? {
 							defaultValue() {
 								if (config.disableIdGeneration) return undefined;
 								if (
-									options.advanced?.generateId === false ||
-									options.advanced?.useNumberId
+									options.advanced?.database?.generateId === false ||
+									options.advanced?.database?.useNumberId
 								)
 									return undefined;
 								return (
-									options.advanced?.generateId?.({ model: defaultModelName }) ??
-									defaultGenerateId()
+									options.advanced?.database?.generateId?.({
+										model: defaultModelName,
+									}) ?? defaultGenerateId()
 								);
 							},
 						}
@@ -225,19 +226,23 @@ export const createAdapter =
 			const transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model].fields;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			if (!config.disableIdGeneration && !options.advanced?.useNumberId) {
+			if (
+				!config.disableIdGeneration &&
+				!options.advanced?.database?.useNumberId
+			) {
 				fields.id = {
-					type: options.advanced?.useNumberId ? "number" : "string",
+					type: options.advanced?.database?.useNumberId ? "number" : "string",
 					defaultValue() {
 						if (config.disableIdGeneration) return undefined;
 						if (
-							options.advanced?.generateId === false ||
-							options.advanced?.useNumberId
+							options.advanced?.database?.generateId === false ||
+							options.advanced?.database?.useNumberId
 						)
 							return undefined;
 						return (
-							options.advanced?.generateId?.({ model: unsafe_model }) ??
-							defaultGenerateId()
+							options.advanced?.database?.generateId?.({
+								model: unsafe_model,
+							}) ?? defaultGenerateId()
 						);
 					},
 				};
@@ -318,7 +323,7 @@ export const createAdapter =
 				([_, v]) => v === "id",
 			)?.[0];
 			tableSchema[idKey ?? "id"] = {
-				type: options.advanced?.useNumberId ? "number" : "string",
+				type: options.advanced?.database?.useNumberId ? "number" : "string",
 			};
 			for (const key in tableSchema) {
 				if (select.length && !select.includes(key)) {
@@ -386,10 +391,17 @@ export const createAdapter =
 		const transformWhereClause = <W extends Where[] | undefined>({
 			model,
 			where,
-		}: { where: W; model: string }) => {
-			if (!where) return undefined as W;
+		}: { where: W; model: string }): W extends undefined
+			? undefined
+			: CleanedWhere[] => {
+			if (!where) return undefined as any;
 			return where.map((w) => {
-				const { field, value, operator = "=", connector = "AND" } = w;
+				const {
+					field: unsafe_field,
+					value,
+					operator = "eq",
+					connector = "AND",
+				} = w;
 				if (operator === "in") {
 					if (!Array.isArray(value)) {
 						throw new Error("Value must be an array");
@@ -398,7 +410,7 @@ export const createAdapter =
 
 				const defaultModelName = getDefaultModelName(model);
 				const defaultFieldName = getDefaultFieldName({
-					field,
+					field: unsafe_field,
 					model,
 				});
 
@@ -412,27 +424,31 @@ export const createAdapter =
 				});
 
 				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
-					if (options.advanced?.useNumberId) {
-						if (Array.isArray(w.value)) {
+					if (options.advanced?.database?.useNumberId) {
+						if (Array.isArray(value)) {
 							return {
-								...w,
+								operator,
+								connector,
 								field: fieldName,
-								value: w.value.map(Number),
-							};
+								value: value.map(Number),
+							} satisfies CleanedWhere;
 						}
 						return {
-							...w,
+							operator,
+							connector,
 							field: fieldName,
-							value: Number(w.value),
-						};
+							value: Number(value),
+						} satisfies CleanedWhere;
 					}
 				}
 
 				return {
-					...w,
+					operator,
+					connector,
 					field: fieldName,
-				};
-			}) as W;
+					value: value,
+				} satisfies CleanedWhere;
+			}) as any;
 		};
 
 		let transactionId = -1;
@@ -465,14 +481,16 @@ export const createAdapter =
 					unsafeData.id = undefined;
 				}
 
-				if (options.advanced?.generateId) {
+				if (options.advanced?.database?.generateId) {
 					//@ts-ignore
-					unsafeData.id = options.advanced.generateId({ model });
+					unsafeData.id =
+						// - Forces a new line, so that ts-ignore doesn't apply to this line:
+						options.advanced.database?.generateId({ model });
 				} else if (
 					!("id" in unsafeData) &&
-					options.advanced?.generateId !== false &&
+					options.advanced?.database?.generateId !== false &&
 					config.disableIdGeneration !== true &&
-					options.advanced?.useNumberId !== true
+					options.advanced?.database?.useNumberId !== true
 				) {
 					//@ts-ignore
 					unsafeData.id = defaultGenerateId();
@@ -522,6 +540,10 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				debugLog(
 					{ method: "update" },
 					`#${thisTransactionId} (1/4)`,
@@ -539,10 +561,6 @@ export const createAdapter =
 					"Update (Parsed Input):",
 					{ model, data },
 				);
-				const where = transformWhereClause({
-					model: unsafeModel,
-					where: unsafeWhere,
-				});
 				const res = await adapterInstance.update<T>({
 					model,
 					where,
@@ -565,7 +583,7 @@ export const createAdapter =
 			},
 			updateMany: async ({
 				model: unsafeModel,
-				where,
+				where: unsafeWhere,
 				update: unsafeData,
 			}: {
 				model: string;
@@ -575,6 +593,10 @@ export const createAdapter =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				debugLog(
 					{ method: "updateMany" },
 					`#${thisTransactionId} (1/4)`,
@@ -588,6 +610,7 @@ export const createAdapter =
 					"UpdateMany (Parsed Input):",
 					{ model, data },
 				);
+
 				const updatedCount = await adapterInstance.updateMany({
 					model,
 					where,
@@ -656,7 +679,7 @@ export const createAdapter =
 			findMany: async <T>({
 				model: unsafeModel,
 				where: unsafeWhere,
-				limit,
+				limit: unsafeLimit,
 				sortBy,
 				offset,
 			}: {
@@ -668,6 +691,10 @@ export const createAdapter =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				const limit =
+					unsafeLimit ??
+					options.advanced?.database?.defaultFindManyLimit ??
+					100;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -682,7 +709,7 @@ export const createAdapter =
 				const res = await adapterInstance.findMany<T>({
 					model,
 					where,
-					limit: limit ?? 100,
+					limit: limit,
 					sortBy,
 					offset,
 				});

@@ -201,10 +201,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: "datetime",
 			},
 			id: {
-				postgres: config.advanced?.useNumberId ? "serial" : "text",
-				mysql: config.advanced?.useNumberId ? "integer" : "text",
-				mssql: config.advanced?.useNumberId ? "integer" : "text",
-				sqlite: config.advanced?.useNumberId ? "integer" : "text",
+				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
+				mysql: config.advanced?.database?.useNumberId ? "integer" : "text",
+				mssql: config.advanced?.database?.useNumberId ? "integer" : "text",
+				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
@@ -249,7 +249,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				.createTable(table.table)
 				.addColumn(
 					"id",
-					config.advanced?.useNumberId
+					config.advanced?.database?.useNumberId
 						? dbType === "postgres"
 							? "serial"
 							: "integer"
@@ -257,7 +257,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							? "varchar(36)"
 							: "text",
 					(col) => {
-						if (config.advanced?.useNumberId) {
+						if (config.advanced?.database?.useNumberId) {
 							if (dbType === "postgres") {
 								return col.primaryKey().notNull();
 							}

@@ -1,5 +1,8 @@
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
-import type { Where } from "../../types";
+import {
+	createAdapter,
+	type AdapterDebugLogs,
+	type CleanedWhere,
+} from "../create-adapter";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -18,7 +21,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			debugLogs: config?.debugLogs || false,
 			customTransformInput(props) {
 				if (
-					props.options.advanced?.useNumberId &&
+					props.options.advanced?.database?.useNumberId &&
 					props.field === "id" &&
 					props.action === "create"
 				) {
@@ -28,18 +31,11 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			},
 		},
 		adapter: ({ getFieldName, options }) => {
-			function convertWhereClause(where: Where[], table: any[], model: string) {
+			function convertWhereClause(where: CleanedWhere[], table: any[]) {
 				return table.filter((record) => {
 					return where.every((clause) => {
-						let { field: _field, value, operator } = clause;
-						const field = getFieldName({ model, field: _field });
-						if (field === "id" && options.advanced?.useNumberId) {
-							if (typeof value === "string") {
-								value = Number(value);
-							} else if (Array.isArray(value)) {
-								value = value.map(Number);
-							}
-						}
+						let { field, value, operator } = clause;
+
 						if (operator === "in") {
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
@@ -60,23 +56,23 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			}
 			return {
 				create: async ({ model, data }) => {
-					if (options.advanced?.useNumberId) {
+					if (options.advanced?.database?.useNumberId) {
 						// @ts-ignore
 						data.id = db[model].length + 1;
 					}
 					db[model].push(data);
 					return data;
 				},
-				findOne: async ({ model, where, select }) => {
+				findOne: async ({ model, where }) => {
 					const table = db[model];
-					const res = convertWhereClause(where, table, model);
+					const res = convertWhereClause(where, table);
 					const record = res[0] || null;
 					return record;
 				},
 				findMany: async ({ model, where, sortBy, limit, offset }) => {
 					let table = db[model];
 					if (where) {
-						table = convertWhereClause(where, table, model);
+						table = convertWhereClause(where, table);
 					}
 					if (sortBy) {
 						table = table.sort((a, b) => {
@@ -101,7 +97,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				},
 				update: async ({ model, where, update }) => {
 					const table = db[model];
-					const res = convertWhereClause(where, table, model);
+					const res = convertWhereClause(where, table);
 					res.forEach((record) => {
 						Object.assign(record, update);
 					});
@@ -109,12 +105,12 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				},
 				delete: async ({ model, where }) => {
 					const table = db[model];
-					const res = convertWhereClause(where, table, model);
+					const res = convertWhereClause(where, table);
 					db[model] = table.filter((record) => !res.includes(record));
 				},
 				deleteMany: async ({ model, where }) => {
 					const table = db[model];
-					const res = convertWhereClause(where, table, model);
+					const res = convertWhereClause(where, table);
 					let count = 0;
 					db[model] = table.filter((record) => {
 						if (res.includes(record)) {
@@ -127,7 +123,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				},
 				updateMany({ model, where, update }) {
 					const table = db[model];
-					const res = convertWhereClause(where, table, model);
+					const res = convertWhereClause(where, table);
 					res.forEach((record) => {
 						Object.assign(record, update);
 					});

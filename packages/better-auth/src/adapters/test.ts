@@ -24,6 +24,7 @@ const adapterTests = {
 	FIND_MODEL: "find model",
 	FIND_MODEL_WITHOUT_ID: "find model without id",
 	FIND_MODEL_WITH_SELECT: "find model with select",
+	FIND_MODEL_WITH_MODIFIED_FIELD_NAME: "find model with modified field name",
 	UPDATE_MODEL: "update model",
 	SHOULD_FIND_MANY: "should find many",
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
@@ -49,6 +50,9 @@ const { ...numberIdAdapterTestsCopy } = adapterTests;
 
 const numberIdAdapterTests = {
 	...numberIdAdapterTestsCopy,
+	SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT:
+		"Should return a number id as a result",
+	SHOULD_INCREMENT_THE_ID_BY_1: "Should increment the id by 1",
 } as const;
 
 // @ts-ignore
@@ -61,7 +65,8 @@ async function adapterTest(
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
 	},
 ) {
-	const adapter = async () => await getAdapter(internalOptions?.predefinedOptions);
+	const adapter = async () =>
+		await getAdapter(internalOptions?.predefinedOptions);
 	//@ts-expect-error - intentionally omitting id
 	const user: {
 		name: string;
@@ -153,6 +158,41 @@ async function adapterTest(
 		},
 	);
 
+	test.skipIf(disabledTests?.FIND_MODEL_WITH_MODIFIED_FIELD_NAME)(
+		adapterTests.FIND_MODEL_WITH_MODIFIED_FIELD_NAME,
+		async () => {
+			const adapter = await getAdapter({
+				user: {
+					fields: {
+						email: "email_address",
+					},
+				},
+			});
+			const user = await adapter.create({
+				model: "user",
+				data: {
+					email: "test-email-with-modified-field@email.com",
+					name: "test-name-with-modified-field",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			expect(user.email).toBe("test-email-with-modified-field@email.com");
+			const res = await adapter.findOne<User>({
+				model: "user",
+				where: [
+					{
+						field: "email",
+						value: "test-email-with-modified-field@email.com",
+					},
+				],
+			});
+			expect(res).not.toBeNull();
+			expect(res?.email).toBe("test-email-with-modified-field@email.com");
+		},
+	);
+
 	test.skipIf(disabledTests?.FIND_MODEL_WITH_SELECT)(
 		adapterTests.FIND_MODEL_WITH_SELECT,
 		async () => {
@@ -200,7 +240,7 @@ async function adapterTest(
 			const res = await (await adapter()).findMany({
 				model: "user",
 			});
-			expect(res.length).toBe(2);
+			expect(res.length).toBe(3);
 		},
 	);
 
@@ -361,7 +401,7 @@ async function adapterTest(
 				model: "user",
 				offset: 2,
 			});
-			expect(res.length).toBe(4);
+			expect(res.length).toBe(5);
 		},
 	);
 
@@ -561,9 +601,11 @@ async function adapterTest(
 				Object.assign(
 					{
 						advanced: {
-							generateId: () => "mocked-id",
+							database: {
+								generateId: () => "mocked-id",
+							},
 						},
-					},
+					} satisfies BetterAuthOptions,
 					internalOptions?.predefinedOptions,
 				),
 			);
@@ -593,34 +635,44 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 		beforeAll(async () => {
 			await opts.cleanUp();
 		});
-		const adapter = async () => await opts.getAdapter({
-			advanced: {
-				useNumberId: true,
-			},
-		});
+		const adapter = async () =>
+			await opts.getAdapter({
+				advanced: {
+					database: {
+						useNumberId: true,
+					},
+				},
+			});
 		let idNumber = -1;
-		test("Should return a number id as a result", async () => {
-			const res = await (await adapter()).create({
-				model: "user",
-				data: {
-					name: "user",
-					email: "user@email.com",
-				},
-			});
-			expect(typeof res.id).toBe("string"); // we forcefully return all `id`s as strings. this is intentional.
-			expect(parseInt(res.id)).toBeGreaterThan(0);
-			idNumber = parseInt(res.id);
-		});
-		test("Should increment the id by 1", async () => {
-			const res = await (await adapter()).create({
-				model: "user",
-				data: {
-					name: "user2",
-					email: "user2@email.com",
-				},
-			});
-			expect(parseInt(res.id)).toBe(idNumber + 1);
-		});
+
+		test.skipIf(opts.disableTests?.SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT)(
+			numberIdAdapterTests.SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT,
+			async () => {
+				const res = await (await adapter()).create({
+					model: "user",
+					data: {
+						name: "user",
+						email: "user@email.com",
+					},
+				});
+				expect(typeof res.id).toBe("string"); // we forcefully return all `id`s as strings. this is intentional.
+				expect(parseInt(res.id)).toBeGreaterThan(0);
+				idNumber = parseInt(res.id);
+			},
+		);
+		test.skipIf(opts.disableTests?.SHOULD_INCREMENT_THE_ID_BY_1)(
+			numberIdAdapterTests.SHOULD_INCREMENT_THE_ID_BY_1,
+			async () => {
+				const res = await (await adapter()).create({
+					model: "user",
+					data: {
+						name: "user2",
+						email: "user2@email.com",
+					},
+				});
+				expect(parseInt(res.id)).toBe(idNumber + 1);
+			},
+		);
 	});
 	describe("Should run normal adapter tests with number id enabled", async () => {
 		beforeAll(async () => {
@@ -637,7 +689,9 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 			{
 				predefinedOptions: {
 					advanced: {
-						useNumberId: true,
+						database: {
+							useNumberId: true,
+						},
 					},
 				},
 			},

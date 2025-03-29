@@ -79,7 +79,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 			/**
 			 * if custom id gen is provided we don't want to override with object id
 			 */
-			const customIdGen = options.advanced?.generateId;
+			const customIdGen = options.advanced?.database?.generateId;
 
 			function serializeID({
 				field,

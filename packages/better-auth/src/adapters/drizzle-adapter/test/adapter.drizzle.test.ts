@@ -45,7 +45,9 @@ const createTestOptions = (
 		modelName: "sessions",
 	},
 	advanced: {
-		useNumberId,
+		database: {
+			useNumberId,
+		},
 	},
 });
 

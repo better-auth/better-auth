@@ -5,6 +5,7 @@ import type {
 	BetterAuthOptions,
 	Where,
 } from "../../types";
+import type { Prettify } from "../../types/helper";
 
 export type AdapterDebugLogs =
 	| boolean
@@ -273,12 +274,12 @@ export interface CustomAdapter {
 	}) => Promise<T>;
 	update: <T>(data: {
 		model: string;
-		where: Where[];
+		where: CleanedWhere[];
 		update: T;
 	}) => Promise<T | null>;
 	updateMany: (data: {
 		model: string;
-		where: Where[];
+		where: CleanedWhere[];
 		update: Record<string, any>;
 	}) => Promise<number>;
 	findOne: <T>({
@@ -287,7 +288,7 @@ export interface CustomAdapter {
 		select,
 	}: {
 		model: string;
-		where: Where[];
+		where: CleanedWhere[];
 		select?: string[];
 	}) => Promise<T | null>;
 	findMany: <T>({
@@ -298,7 +299,7 @@ export interface CustomAdapter {
 		offset,
 	}: {
 		model: string;
-		where?: Where[];
+		where?: CleanedWhere[];
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" };
 		offset?: number;
@@ -308,21 +309,21 @@ export interface CustomAdapter {
 		where,
 	}: {
 		model: string;
-		where: Where[];
+		where: CleanedWhere[];
 	}) => Promise<void>;
 	deleteMany: ({
 		model,
 		where,
 	}: {
 		model: string;
-		where: Where[];
+		where: CleanedWhere[];
 	}) => Promise<number>;
 	count: ({
 		model,
 		where,
 	}: {
 		model: string;
-		where?: Where[];
+		where?: CleanedWhere[];
 	}) => Promise<number>;
 	createSchema?: (props: {
 		/**
@@ -339,3 +340,5 @@ export interface CustomAdapter {
 	 */
 	options?: Record<string, any> | undefined;
 }
+
+export type CleanedWhere = Prettify<Required<Where>>;
