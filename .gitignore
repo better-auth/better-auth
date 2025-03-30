@@ -194,7 +194,3 @@ android/
 .vinxi
 # Turborepo
 .turbo
-
-
-# Specifically for prisma adapter tests
-state.txt
