@@ -291,7 +291,11 @@ export const createAdapter =
 					fieldAttributes.references?.field === "id" &&
 					options.advanced?.database?.useNumberId
 				) {
-					newValue = Number(newValue);
+					if(Array.isArray(newValue)){
+						newValue = newValue.map(Number)
+					}else{
+						newValue = Number(newValue)
+					}
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
