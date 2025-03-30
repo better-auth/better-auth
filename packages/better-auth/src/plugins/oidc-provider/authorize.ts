@@ -33,7 +33,7 @@ export async function authorize(
 		});
 	}
 	const session = await getSessionFromCtx(ctx);
-	if (!session) 	{
+	if (!session) {
 		/**
 		 * If the user is not logged in, we need to redirect them to the
 		 * login page.
