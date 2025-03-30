@@ -18,6 +18,9 @@ export function getAdapter() {
 
 	const adapter = prismaAdapter(db, {
 		provider: "sqlite",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
 	});
 
 	return { adapter, clearDb };

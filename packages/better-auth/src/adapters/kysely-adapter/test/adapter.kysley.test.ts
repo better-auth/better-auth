@@ -68,6 +68,9 @@ describe("adapter test", async () => {
 
 	const mysqlAdapter = kyselyAdapter(mysqlKy, {
 		type: "mysql",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		}
 	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
@@ -78,6 +81,9 @@ describe("adapter test", async () => {
 
 	const sqliteAdapter = kyselyAdapter(sqliteKy, {
 		type: "sqlite",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		}
 	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
@@ -130,6 +136,9 @@ describe("mssql", async () => {
 	});
 	const getAdapter = kyselyAdapter(mssql, {
 		type: "mssql",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		}
 	});
 
 	const adapter = getAdapter(opts);

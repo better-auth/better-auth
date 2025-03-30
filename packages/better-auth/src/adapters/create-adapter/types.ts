@@ -22,6 +22,14 @@ export type AdapterDebugLogs =
 			delete?: boolean;
 			deleteMany?: boolean;
 			count?: boolean;
+	  }
+	| {
+			/**
+			 * Only used for adapter tests to show debug logs if a test fails.
+			 *
+			 * @deprecated Not actually deprecated. Doing this for IDEs to show this option at the very bottom and stop end-users from using this.
+			 */
+			isRunningAdapterTests: boolean;
 	  };
 
 export interface AdapterConfig {
@@ -341,3 +349,8 @@ export interface CustomAdapter {
 }
 
 export type CleanedWhere = Prettify<Required<Where>>;
+
+export type AdapterTestDebugLogs = {
+	resetDebugLogs: () => void;
+	printDebugLogs: () => void;
+};

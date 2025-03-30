@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm";
 import { BetterAuthError } from "../../error";
 import type { Where } from "../../types";
-import { createAdapter } from "../create-adapter";
+import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface DB {
 	[key: string]: any;
@@ -39,7 +39,7 @@ export interface DrizzleAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: boolean;
+	debugLogs?: AdapterDebugLogs;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>

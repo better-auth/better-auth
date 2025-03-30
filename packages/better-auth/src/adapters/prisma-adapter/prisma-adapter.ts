@@ -1,4 +1,4 @@
-import { createAdapter } from "../create-adapter";
+import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 import { BetterAuthError } from "../../error";
 import type { Where } from "../../types";
 
@@ -19,7 +19,7 @@ export interface PrismaConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: boolean;
+	debugLogs?: AdapterDebugLogs;
 
 	/**
 	 * Use plural table names

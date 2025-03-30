@@ -146,7 +146,9 @@ describe("Number Id Adapter Test", async () => {
 	const adapter = drizzleAdapter(db, {
 		provider: "pg",
 		schema,
-		debugLogs: false,
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
 	});
 
 	await runNumberIdAdapterTest({

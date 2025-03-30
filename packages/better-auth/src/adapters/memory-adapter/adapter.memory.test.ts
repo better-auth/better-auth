@@ -8,7 +8,11 @@ describe("adapter test", async () => {
 		session: [],
 		account: [],
 	};
-	const adapter = memoryAdapter(db);
+	const adapter = memoryAdapter(db, {
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({
@@ -29,7 +33,11 @@ describe("Number Id Adapter Test", async () => {
 		session: [],
 		account: [],
 	};
-	const adapter = memoryAdapter(db);
+	const adapter = memoryAdapter(db, {
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
 	await runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({

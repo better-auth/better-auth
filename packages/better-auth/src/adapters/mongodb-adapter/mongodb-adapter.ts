@@ -1,6 +1,6 @@
 import { ObjectId, type Db } from "mongodb";
 import type { Where } from "../../types";
-import { createAdapter } from "../create-adapter";
+import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -8,7 +8,7 @@ export interface MongoDBAdapterConfig {
 	 *
 	 * @default false
 	 */
-	debugLogs?: boolean;
+	debugLogs?: AdapterDebugLogs;
 	/**
 	 * Use plural table names
 	 *

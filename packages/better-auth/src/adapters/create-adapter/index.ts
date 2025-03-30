@@ -6,6 +6,8 @@ import { generateId as defaultGenerateId, logger } from "../../utils";
 import type { AdapterConfig, CleanedWhere, CreateCustomAdapter } from "./types";
 export * from "./types";
 
+let debugLogs: any[] = [];
+
 export const createAdapter =
 	({
 		adapter,
@@ -143,6 +145,18 @@ export const createAdapter =
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
+				// If we're running adapter tests, we'll keep debug logs in memory, then print them out if a test fails.
+				if (
+					typeof config.debugLogs === "object" &&
+					"isRunningAdapterTests" in config.debugLogs
+				) {
+					if (config.debugLogs.isRunningAdapterTests) {
+						args.shift(); // Removes the {method: "..."} object from the args array.
+						debugLogs.push(args);
+					}
+					return;
+				}
+
 				if (
 					typeof config.debugLogs === "object" &&
 					config.debugLogs.logCondition &&
@@ -150,6 +164,7 @@ export const createAdapter =
 				) {
 					return;
 				}
+
 				if (typeof args[0] === "object" && "method" in args[0]) {
 					const method = args.shift().method;
 					// Make sure the method is enabled in the config.
@@ -855,5 +870,19 @@ export const createAdapter =
 				...(adapterInstance.options ?? {}),
 			},
 			id: config.adapterId,
+
+			// Secretly export values ONLY if this adapter has enabled adapter-test-debug-logs.
+			// This would then be used during our adapter-tests to help print debug logs if a test fails.
+			//@ts-expect-error - ^^
+			adapterTestDebugLogs: {
+				resetDebugLogs() {
+					debugLogs = [];
+				},
+				printDebugLogs() {
+					debugLogs.forEach((log) => {
+						logger.info(`[${config.adapterName}]`, ...log);
+					});
+				},
+			},
 		};
 	};
