@@ -202,8 +202,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			id: {
 				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
-				mysql: config.advanced?.database?.useNumberId ? "integer" : "text",
-				mssql: config.advanced?.database?.useNumberId ? "integer" : "text",
+				mysql: config.advanced?.database?.useNumberId ? "integer" : "varchar(36)",
+				mssql: config.advanced?.database?.useNumberId ? "integer" : "varchar(36)",
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
 			},
 		} as const;
@@ -287,6 +287,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 	async function runMigrations() {
 		for (const migration of migrations) {
+			console.log(migration.compile().sql)
 			await migration.execute();
 		}
 	}
