@@ -21,7 +21,6 @@ import express from "express";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";
 import * as validator from "@authenio/samlify-xsd-schema-validator";
-import { binding } from "process";
 saml.setSchemaValidator(validator);
 
 let idp: ReturnType<typeof IdentityProvider>;
