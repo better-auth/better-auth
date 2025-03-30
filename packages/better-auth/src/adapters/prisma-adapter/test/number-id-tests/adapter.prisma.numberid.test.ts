@@ -7,7 +7,8 @@ import { getState, stateFilePath } from "../state";
 
 describe("Number Id Adapter Test", async () => {
 	beforeAll(async () => {
-		await new Promise((resolve) => {
+		await new Promise(async (resolve) => {
+			await new Promise((r) => setTimeout(r, 500));
 			if (getState() === "IDLE") {
 				resolve(true);
 				return;
