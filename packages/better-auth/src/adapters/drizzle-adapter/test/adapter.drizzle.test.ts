@@ -27,37 +27,34 @@ const cleanupDatabase = async (postgres: Kysely<any>, shouldDestroy = true) => {
 	}
 };
 
-const createTestOptions = (
-	pg: Pool,
-	useNumberId = false,
-): BetterAuthOptions => ({
-	database: pg,
-	user: {
-		fields: { email: "email_address" },
-		additionalFields: {
-			test: {
-				type: "string",
-				defaultValue: "test",
+const createTestOptions = (pg: Pool, useNumberId = false) =>
+	({
+		database: pg,
+		user: {
+			fields: { email: "email_address" },
+			additionalFields: {
+				test: {
+					type: "string",
+					defaultValue: "test",
+				},
 			},
 		},
-	},
-	session: {
-		modelName: "sessions",
-	},
-	advanced: {
-		database: {
-			useNumberId,
+		session: {
+			modelName: "sessions",
 		},
-	},
-});
+		advanced: {
+			database: {
+				useNumberId,
+			},
+		},
+	}) satisfies BetterAuthOptions;
 
 describe("Drizzle Adapter Tests", async () => {
 	let pg: Pool;
 	let postgres: Kysely<any>;
-	let opts: BetterAuthOptions;
 	pg = createTestPool();
 	postgres = createKyselyInstance(pg);
-	opts = createTestOptions(pg);
+	const opts = createTestOptions(pg);
 	await cleanupDatabase(postgres, false);
 	const { runMigrations } = await getMigrations(opts);
 	await runMigrations();
@@ -70,7 +67,22 @@ describe("Drizzle Adapter Tests", async () => {
 
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return adapter({ ...opts, ...customOptions });
+			return adapter({
+				...customOptions,
+				user: {
+					...opts.user,
+					...customOptions.user,
+				},
+				session: {
+					...opts.session,
+					...customOptions.session,
+				},
+				advanced: {
+					...opts.advanced,
+					...customOptions.advanced,
+				},
+				database: opts.database,
+			});
 		},
 	});
 });
@@ -139,7 +151,22 @@ describe("Number Id Adapter Test", async () => {
 
 	await runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return adapter({ ...opts, ...customOptions });
+			return adapter({
+				...customOptions,
+				user: {
+					...opts.user,
+					...customOptions.user,
+				},
+				session: {
+					...opts.session,
+					...customOptions.session,
+				},
+				advanced: {
+					...opts.advanced,
+					...customOptions.advanced,
+				},
+				database: opts.database,
+			});
 		},
 		cleanUp: async () => {
 			await cleanupDatabase(postgres, false);
