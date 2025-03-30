@@ -3,11 +3,46 @@ import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
-import type { AdapterConfig, AdapterTestDebugLogs, CleanedWhere, CreateCustomAdapter } from "./types";
+import type {
+	AdapterConfig,
+	AdapterTestDebugLogs,
+	CleanedWhere,
+	CreateCustomAdapter,
+} from "./types";
 export * from "./types";
 
 let debugLogs: any[] = [];
 let transactionId = -1;
+
+const colors = {
+	reset: "\x1b[0m",
+	bright: "\x1b[1m",
+	dim: "\x1b[2m",
+	underscore: "\x1b[4m",
+	blink: "\x1b[5m",
+	reverse: "\x1b[7m",
+	hidden: "\x1b[8m",
+	fg: {
+		black: "\x1b[30m",
+		red: "\x1b[31m",
+		green: "\x1b[32m",
+		yellow: "\x1b[33m",
+		blue: "\x1b[34m",
+		magenta: "\x1b[35m",
+		cyan: "\x1b[36m",
+		white: "\x1b[37m",
+	},
+	bg: {
+		black: "\x1b[40m",
+		red: "\x1b[41m",
+		green: "\x1b[42m",
+		yellow: "\x1b[43m",
+		blue: "\x1b[44m",
+		magenta: "\x1b[45m",
+		cyan: "\x1b[46m",
+		white: "\x1b[47m",
+	},
+};
 
 export const createAdapter =
 	({
@@ -535,8 +570,8 @@ export const createAdapter =
 				}
 				debugLog(
 					{ method: "create" },
-					`#${thisTransactionId} (1/4)`,
-					"Create (Unsafe Input):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
+					`${formatMethod("create")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
 				const data = (await transformInput(
@@ -546,22 +581,22 @@ export const createAdapter =
 				)) as T;
 				debugLog(
 					{ method: "create" },
-					`#${thisTransactionId} (2/4)`,
-					"Create (Parsed Input):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
+					`${formatMethod("create")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
 				const res = await adapterInstance.create<T>({ data, model });
 				debugLog(
 					{ method: "create" },
-					`#${thisTransactionId} (3/4)`,
-					"Create (DB Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
+					`${formatMethod("create")} ${formatAction("DB Result")}:`,
 					{ model, res },
 				);
 				const transformed = await transformOutput(res, unsafeModel, select);
 				debugLog(
 					{ method: "create" },
-					`#${thisTransactionId} (4/4)`,
-					"Create (Parsed Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
+					`${formatMethod("create")} ${formatAction("Parsed Result")}:`,
 					{ model, data: transformed },
 				);
 				return transformed;
@@ -584,8 +619,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "update" },
-					`#${thisTransactionId} (1/4)`,
-					"Update (Unsafe Input):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
+					`${formatMethod("update")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
 				const data = (await transformInput(
@@ -595,8 +630,8 @@ export const createAdapter =
 				)) as T;
 				debugLog(
 					{ method: "update" },
-					`#${thisTransactionId} (2/4)`,
-					"Update (Parsed Input):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
+					`${formatMethod("update")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
 				const res = await adapterInstance.update<T>({
@@ -606,15 +641,15 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "update" },
-					`#${thisTransactionId} (3/4)`,
-					"Update (DB Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
+					`${formatMethod("update")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
 				const transformed = await transformOutput(res as any, unsafeModel);
 				debugLog(
 					{ method: "update" },
-					`#${thisTransactionId} (4/4)`,
-					"Update (Parsed Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
+					`${formatMethod("update")} ${formatAction("Parsed Result")}:`,
 					{ model, data: transformed },
 				);
 				return transformed;
@@ -637,15 +672,15 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "updateMany" },
-					`#${thisTransactionId} (1/4)`,
-					"UpdateMany (Unsafe Input):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
+					`${formatMethod("updateMany")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
 				const data = await transformInput(unsafeData, unsafeModel, "update");
 				debugLog(
 					{ method: "updateMany" },
-					`#${thisTransactionId} (2/4)`,
-					"UpdateMany (Parsed Input):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
+					`${formatMethod("updateMany")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
 
@@ -656,14 +691,14 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "updateMany" },
-					`#${thisTransactionId} (3/4)`,
-					"UpdateMany (DB Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
+					`${formatMethod("updateMany")} ${formatAction("DB Result")}:`,
 					{ model, data: updatedCount },
 				);
 				debugLog(
 					{ method: "updateMany" },
-					`#${thisTransactionId} (4/4)`,
-					"UpdateMany (Parsed Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
+					`${formatMethod("updateMany")} ${formatAction("Parsed Result")}:`,
 					{ model, data: updatedCount },
 				);
 				return updatedCount;
@@ -686,8 +721,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "findOne" },
-					`#${thisTransactionId} (1/3)`,
-					"FindOne:",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("findOne")}:`,
 					{ model, where, select },
 				);
 				const res = await adapterInstance.findOne<T>({
@@ -697,8 +732,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "findOne" },
-					`#${thisTransactionId} (2/3)`,
-					"FindOne (DB Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("findOne")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
 				const transformed = await transformOutput(
@@ -708,8 +743,8 @@ export const createAdapter =
 				);
 				debugLog(
 					{ method: "findOne" },
-					`#${thisTransactionId} (3/3)`,
-					"FindOne (Parsed Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("findOne")} ${formatAction("Parsed Result")}:`,
 					{ model, data: transformed },
 				);
 				return transformed;
@@ -740,8 +775,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "findMany" },
-					`#${thisTransactionId} (1/3)`,
-					"FindMany:",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("findMany")}:`,
 					{ model, where, limit, sortBy, offset },
 				);
 				const res = await adapterInstance.findMany<T>({
@@ -753,8 +788,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "findMany" },
-					`#${thisTransactionId} (2/3)`,
-					"FindMany (DB Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("findMany")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
 				const transformed = await Promise.all(
@@ -762,8 +797,8 @@ export const createAdapter =
 				);
 				debugLog(
 					{ method: "findMany" },
-					`#${thisTransactionId} (3/3)`,
-					"FindMany (Parsed Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("findMany")} ${formatAction("Parsed Result")}:`,
 					{ model, data: transformed },
 				);
 				return transformed;
@@ -784,8 +819,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "delete" },
-					`#${thisTransactionId} (1/2)`,
-					"Delete:",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
+					`${formatMethod("delete")}:`,
 					{ model, where },
 				);
 				await adapterInstance.delete({
@@ -794,8 +829,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "delete" },
-					`#${thisTransactionId} (2/2)`,
-					"Delete (DB Result):",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
+					`${formatMethod("delete")} ${formatAction("DB Result")}:`,
 					{ model },
 				);
 			},
@@ -815,8 +850,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "deleteMany" },
-					`#${thisTransactionId} (1/2)`,
-					"DeleteMany:",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
+					`${formatMethod("deleteMany")} ${formatAction("DeleteMany")}:`,
 					{ model, where },
 				);
 				const res = await adapterInstance.deleteMany({
@@ -825,8 +860,8 @@ export const createAdapter =
 				});
 				debugLog(
 					{ method: "deleteMany" },
-					`#${thisTransactionId} (2/2)`,
-					"DeleteMany:",
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
+					`${formatMethod("deleteMany")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
 				return res;
@@ -845,18 +880,28 @@ export const createAdapter =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
-				debugLog({ method: "count" }, `#${thisTransactionId} (1/2)`, "Count:", {
-					model,
-					where,
-				});
+				debugLog(
+					{ method: "count" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
+					`${formatMethod("count")}:`,
+					{
+						model,
+						where,
+					},
+				);
 				const res = await adapterInstance.count({
 					model,
 					where,
 				});
-				debugLog({ method: "count" }, `#${thisTransactionId} (2/2)`, "Count:", {
-					model,
-					data: res,
-				});
+				debugLog(
+					{ method: "count" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
+					`${formatMethod("count")}:`,
+					{
+						model,
+						data: res,
+					},
+				);
 				return res;
 			},
 			createSchema: adapterInstance.createSchema
@@ -881,12 +926,42 @@ export const createAdapter =
 								debugLogs = [];
 							},
 							printDebugLogs() {
-								debugLogs.forEach((log) => {
-									logger.info(`[${config.adapterName}]`, ...log);
-								});
+								const separator = `─`.repeat(80);
+
+								//`${colors.fg.blue}|${colors.reset} `,
+								let log: any[] = debugLogs
+									.reverse()
+									.map((log) => {
+										log[0] = `\n${log[0]}`;
+										return [...log, "\n"];
+									})
+									.reduce(
+										(prev, curr) => {
+											return [...curr, ...prev];
+										},
+										[`\n${separator}`],
+									);
+
+								console.log(...log);
 							},
 						} satisfies AdapterTestDebugLogs,
 					}
 				: {}),
 		};
 	};
+
+function formatTransactionId(transactionId: number) {
+	return `${colors.fg.magenta}#${transactionId}${colors.reset}`;
+}
+
+function formatStep(step: number, total: number) {
+	return `${colors.bg.black}${colors.fg.yellow}[${step}/${total}]${colors.reset}`;
+}
+
+function formatMethod(method: string) {
+	return `${colors.bright}${method}${colors.reset}`;
+}
+
+function formatAction(action: string) {
+	return `${colors.dim}(${action})${colors.reset}`;
+}
