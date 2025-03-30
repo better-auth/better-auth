@@ -83,22 +83,27 @@ export const createAdapter =
 		 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
 		 */
 		const getDefaultModelName = (model: string) => {
+			// It's possible this `model` could had applied `usePlural`.
+			// Thus we'll try the search but without the trailing `s`.
+			if (config.usePlural && model.charAt(model.length - 1) === "s") {
+				let pluralessModel = model.slice(0, -1);
+				let m = schema[pluralessModel] ? pluralessModel : undefined;
+				if (!m) {
+					m = Object.entries(schema).find(
+						([_, f]) => f.modelName === pluralessModel,
+					)?.[0];
+				}
+
+				if (m) {
+					return m;
+				}
+			}
+
 			let m = schema[model] ? model : undefined;
 			if (!m) {
 				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
 			}
-			if (!m) {
-				// if it still can't find it, it's possible this `model` could had applied `usePlural`. Thus we'll try the same search but without the `s` at the end.
-				if (config.usePlural) {
-					let pluralessModel = model.slice(0, -1);
-					m = schema[pluralessModel] ? pluralessModel : undefined;
-					if (!m) {
-						m = Object.entries(schema).find(
-							([_, f]) => f.modelName === pluralessModel,
-						)?.[0];
-					}
-				}
-			}
+
 			if (!m) {
 				debugLog(`Model "${model}" not found in schema`);
 				debugLog(`Schema:`, schema);
