@@ -5,7 +5,6 @@ import { createTestOptions } from "../test-options";
 import * as fs from "node:fs";
 import { getState, stateFilePath } from "../state";
 
-
 describe("Number Id Adapter Test", async () => {
 	beforeAll(async () => {
 		await new Promise((resolve) => {
@@ -13,6 +12,7 @@ describe("Number Id Adapter Test", async () => {
 				resolve(true);
 				return;
 			}
+			console.log(`Waiting for state to be IDLE...`);
 			fs.watch(stateFilePath, () => {
 				if (getState() === "IDLE") {
 					resolve(true);

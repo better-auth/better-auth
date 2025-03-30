@@ -13,9 +13,11 @@ describe("Adapter tests", async () => {
 		const { clearDb } = getAdapter();
 		await clearDb();
 		return () => {
-			console.log(`Normal Prisma adapter test finished. Now allowing number ID prisma tests to run.`);
+			console.log(
+				`Normal Prisma adapter test finished. Now allowing number ID prisma tests to run.`,
+			);
 			setState("IDLE");
-		}
+		};
 	});
 
 	await runAdapterTest({
