@@ -7,6 +7,7 @@ import type { AdapterConfig, AdapterTestDebugLogs, CleanedWhere, CreateCustomAda
 export * from "./types";
 
 let debugLogs: any[] = [];
+let transactionId = -1;
 
 export const createAdapter =
 	({
@@ -489,7 +490,6 @@ export const createAdapter =
 			}) as any;
 		};
 
-		let transactionId = -1;
 		return {
 			create: async <T extends Record<string, any>, R = T>({
 				data: unsafeData,
