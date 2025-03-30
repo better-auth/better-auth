@@ -15,8 +15,23 @@ describe("Number Id Adapter Test", async () => {
 		getAdapter: async (customOptions = {}) => {
 			const { getAdapter } = await import("./get-adapter");
 			const { adapter } = getAdapter();
-			const opts = createTestOptions(adapter);
-			return adapter({ ...opts, ...customOptions });
+			const { advanced, database, session, user } = createTestOptions(adapter);
+			return adapter({
+				...customOptions,
+				user: {
+					...user,
+					...customOptions.user,
+				},
+				session: {
+					...session,
+					...customOptions.session,
+				},
+				advanced: {
+					...advanced,
+					...customOptions.advanced,
+				},
+				database,
+			});
 		},
 		async cleanUp() {
 			const { getAdapter } = await import("./get-adapter");

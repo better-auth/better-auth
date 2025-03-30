@@ -4,23 +4,24 @@ import type { BetterAuthOptions } from "../../../types";
 export const createTestOptions = (
 	adapter: (options: BetterAuthOptions) => Adapter,
 	useNumberId = false,
-): BetterAuthOptions => ({
-	database: adapter,
-	user: {
-		fields: { email: "email_address" },
-		additionalFields: {
-			test: {
-				type: "string",
-				defaultValue: "test",
+) =>
+	({
+		database: adapter,
+		user: {
+			fields: { email: "email_address" },
+			additionalFields: {
+				test: {
+					type: "string",
+					defaultValue: "test",
+				},
 			},
 		},
-	},
-	session: {
-		modelName: "sessions",
-	},
-	advanced: {
-		database: {
-			useNumberId,
+		session: {
+			modelName: "sessions",
 		},
-	},
-});
+		advanced: {
+			database: {
+				useNumberId,
+			},
+		},
+	}) satisfies BetterAuthOptions;

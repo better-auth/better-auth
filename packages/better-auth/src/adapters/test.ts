@@ -161,13 +161,18 @@ async function adapterTest(
 	test.skipIf(disabledTests?.FIND_MODEL_WITH_MODIFIED_FIELD_NAME)(
 		adapterTests.FIND_MODEL_WITH_MODIFIED_FIELD_NAME,
 		async () => {
-			const adapter = await getAdapter({
-				user: {
-					fields: {
-						email: "email_address",
+			const adapter = await getAdapter(
+				Object.assign(
+					{
+						user: {
+							fields: {
+								email: "email_address",
+							},
+						},
 					},
-				},
-			});
+					internalOptions?.predefinedOptions,
+				),
+			);
 			const user = await adapter.create({
 				model: "user",
 				data: {

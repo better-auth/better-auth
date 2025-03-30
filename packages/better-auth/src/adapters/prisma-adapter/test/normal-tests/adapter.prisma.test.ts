@@ -6,7 +6,7 @@ import { runAdapterTest } from "../../../test";
 describe("Adapter tests", async () => {
 	beforeAll(async () => {
 		await pushPrismaSchema("normal");
-		console.log("Pushed normal Prisma Schema using pnpm...");
+		console.log("Successfully pushed normal Prisma Schema using pnpm...");
 		const { getAdapter } = await import("./get-adapter");
 		const { clearDb } = getAdapter();
 		await clearDb();
@@ -16,8 +16,23 @@ describe("Adapter tests", async () => {
 		getAdapter: async (customOptions = {}) => {
 			const { getAdapter } = await import("./get-adapter");
 			const { adapter } = getAdapter();
-			const opts = createTestOptions(adapter);
-			return adapter({ ...opts, ...customOptions });
+			const { advanced, database, session, user } = createTestOptions(adapter);
+			return adapter({
+				...customOptions,
+				user: {
+					...user,
+					...customOptions.user,
+				},
+				session: {
+					...session,
+					...customOptions.session,
+				},
+				advanced: {
+					...advanced,
+					...customOptions.advanced,
+				},
+				database,
+			});
 		},
 	});
 });
