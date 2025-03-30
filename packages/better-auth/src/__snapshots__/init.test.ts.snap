@@ -20,7 +20,7 @@ exports[`init > should match config 1`] = `
         "debugLogs": false,
         "supportsBooleans": true,
         "supportsDates": true,
-        "supportsJSON": true,
+        "supportsJSON": false,
         "supportsNumericIds": true,
         "usePlural": false,
       },
