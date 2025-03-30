@@ -630,7 +630,6 @@
     "jose": "^5.9.6",
     "kysely": "^0.27.6",
     "nanostores": "^0.11.3",
-    "valibot": "1.0.0-beta.15",
     "zod": "^3.24.1"
   },
   "overrides": {
