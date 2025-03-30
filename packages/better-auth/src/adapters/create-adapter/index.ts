@@ -286,24 +286,26 @@ export const createAdapter =
 				if (fieldAttributes.transform?.input) {
 					newValue = await fieldAttributes.transform.input(newValue);
 				}
+
 				if (
+					fieldAttributes.references?.field === "id" &&
+					options.advanced?.database?.useNumberId
+				) {
+					newValue = Number(newValue);
+				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
 					//@ts-expect-error -Future proofing
 					fieldAttributes.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
-				}
-
-				if (
+				} else if (
 					config.supportsDates === false &&
 					newValue instanceof Date &&
 					fieldAttributes.type === "date"
 				) {
 					newValue = newValue.toISOString();
-				}
-
-				if (
+				} else if (
 					config.supportsBooleans === false &&
 					typeof newValue === "boolean"
 				) {
@@ -483,6 +485,7 @@ export const createAdapter =
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 
+			
 				if ("id" in unsafeData) {
 					logger.warn(
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you. The id will be ignored.`,
