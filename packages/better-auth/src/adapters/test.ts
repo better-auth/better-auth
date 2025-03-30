@@ -203,6 +203,7 @@ async function adapterTest(
 			onTestFailed(() => {
 				printDebugLogs();
 			});
+			const email = "test-email-with-modified-field@email.com";
 			const adapter = await getAdapter(
 				Object.assign(
 					{
@@ -218,25 +219,25 @@ async function adapterTest(
 			const user = await adapter.create({
 				model: "user",
 				data: {
-					email: "test-email-with-modified-field@email.com",
+					email,
 					name: "test-name-with-modified-field",
 					emailVerified: true,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
 			});
-			expect(user.email).toBe("test-email-with-modified-field@email.com");
+			expect(user.email).toEqual(email);
 			const res = await adapter.findOne<User>({
 				model: "user",
 				where: [
 					{
 						field: "email",
-						value: "test-email-with-modified-field@email.com",
+						value: email,
 					},
 				],
 			});
 			expect(res).not.toBeNull();
-			expect(res?.email).toBe("test-email-with-modified-field@email.com");
+			expect(res?.email).toEqual(email);
 		},
 	);
 
