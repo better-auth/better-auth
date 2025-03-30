@@ -39,7 +39,6 @@ export interface AdapterConfig {
 	 * @default false
 	 */
 	debugLogs?: AdapterDebugLogs;
-
 	/**
 	 * Name of the adapter.
 	 *
@@ -63,7 +62,7 @@ export interface AdapterConfig {
 	 *
 	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
 	 *
-	 * @default true
+	 * @default false
 	 */
 	supportsJSON?: boolean;
 	/**

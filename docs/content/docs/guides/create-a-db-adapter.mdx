@@ -59,9 +59,10 @@ export const myAdapter = (config: CustomAdapterConfig = {}) =>
       adapterName: "Custom Adapter", // The name of the adapter.
       usePlural: config.usePlural ?? false, // Whether the table names in the schema are plural.
       debugLogs: config.debugLogs ?? false, // Whether to enable debug logs.
-      supportsJSON: true, // Whether the database supports JSON. (Default: true)
+      supportsJSON: false, // Whether the database supports JSON. (Default: false)
       supportsDates: true, // Whether the database supports dates. (Default: true)
       supportsBooleans: true, // Whether the database supports booleans. (Default: true)
+      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric ids. (Default: true)
     },
     // ...
   });

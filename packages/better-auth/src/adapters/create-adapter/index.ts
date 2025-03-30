@@ -19,7 +19,7 @@ export const createAdapter =
 			...cfg,
 			supportsBooleans: cfg.supportsBooleans ?? true,
 			supportsDates: cfg.supportsDates ?? true,
-			supportsJSON: cfg.supportsJSON ?? true,
+			supportsJSON: cfg.supportsJSON ?? false,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 		};
