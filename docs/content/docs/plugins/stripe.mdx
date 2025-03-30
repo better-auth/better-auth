@@ -307,7 +307,7 @@ subscription: {
     // ... other options
     authorizeReference: async ({ user, session, referenceId, action }) => {
         // Check if the user has permission to manage subscriptions for this reference
-        if (action === "upgrade-subscription" || action === "cancel-subscription") {
+        if (action === "upgrade-subscription" || action === "cancel-subscription" || action === "reactivate-subscription") {
             const org = await db.member.findFirst({
                 where: {
                     organizationId: referenceId,
@@ -542,7 +542,7 @@ stripe({
 
 **requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
 
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" }, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
+**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "reactivate-subscription" }, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
 
 ### Plan Configuration
 
@@ -679,3 +679,36 @@ stripe listen --forward-to localhost:3000/api/auth/stripe/webhook
 ```
 
 This will provide you with a webhook signing secret that you can use in your local environment.
+
+## Client API
+
+The Stripe plugin adds the following endpoints to your client:
+
+```ts
+// Upgrade to a paid plan
+await client.subscription.upgrade({
+    plan: "pro",
+    annual: true, // upgrade to an annual plan (optional)
+    successUrl: "/account/billing/success",
+    cancelUrl: "/account/billing/cancel"
+});
+
+// Cancel a subscription
+await client.subscription.cancel({
+    returnUrl: "/account/billing"
+});
+
+// Reactivate a cancelled subscription before its end date
+await client.subscription.reactivate({
+    returnUrl: "/account/billing"
+});
+
+// List active subscriptions
+const { data } = await client.subscription.list();
+```
+
+### Team/Organization Subscriptions
+
+For team or organization-based subscriptions, provide a reference ID:
+
+```ts
