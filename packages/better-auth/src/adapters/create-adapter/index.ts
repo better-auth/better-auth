@@ -3,7 +3,7 @@ import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
-import type { AdapterConfig, CleanedWhere, CreateCustomAdapter } from "./types";
+import type { AdapterConfig, AdapterTestDebugLogs, CleanedWhere, CreateCustomAdapter } from "./types";
 export * from "./types";
 
 let debugLogs: any[] = [];
@@ -874,15 +874,19 @@ export const createAdapter =
 			// Secretly export values ONLY if this adapter has enabled adapter-test-debug-logs.
 			// This would then be used during our adapter-tests to help print debug logs if a test fails.
 			//@ts-expect-error - ^^
-			adapterTestDebugLogs: {
-				resetDebugLogs() {
-					debugLogs = [];
-				},
-				printDebugLogs() {
-					debugLogs.forEach((log) => {
-						logger.info(`[${config.adapterName}]`, ...log);
-					});
-				},
-			},
+			...(config.debugLogs?.isRunningAdapterTests
+				? {
+						adapterTestDebugLogs: {
+							resetDebugLogs() {
+								debugLogs = [];
+							},
+							printDebugLogs() {
+								debugLogs.forEach((log) => {
+									logger.info(`[${config.adapterName}]`, ...log);
+								});
+							},
+						} satisfies AdapterTestDebugLogs,
+					}
+				: {}),
 		};
 	};
