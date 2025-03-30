@@ -88,9 +88,19 @@ export const createAdapter =
 				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
 			}
 			if (!m) {
-				debugLog(`Model "${model}" not found in schema`);
-				debugLog(`Schema:`, schema);
-				throw new Error(`Model "${model}" not found in schema`);
+				// if it still can't find it, it's possible this `model` could had applied `usePlural`. Thus we'll try the same search but without the `s` at the end.
+				let pluralessModel = model.slice(0, -1);
+				m = schema[pluralessModel] ? pluralessModel : undefined;
+				if (config.usePlural) {
+					m = Object.entries(schema).find(
+						([_, f]) => f.modelName === pluralessModel,
+					)?.[0];
+				}
+				if (!m) {
+					debugLog(`Model "${model}" not found in schema`);
+					debugLog(`Schema:`, schema);
+					throw new Error(`Model "${model}" not found in schema`);
+				}
 			}
 			return m;
 		};
