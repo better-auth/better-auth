@@ -8,6 +8,10 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 - [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/)
 - [hCaptcha](https://www.hcaptcha.com/)
 
+<Callout type="info">
+  This plugin works out of the box with <Link href="/docs/authentication/email-password">Email & Password</Link> authentication. To use it with other authentication methods, you will need to configure the <Link href="/docs/plugins/captcha#plugin-options">endpoints</Link> array in the plugin options.
+</Callout>
+
 ## Installation
 
 <Steps>
@@ -75,7 +79,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
 - **`provider` (required)**: your captcha provider.
 - **`secretKey` (required)**: your provider's secret key used for the server-side validation.
-- `endpoints` (optional): an array of paths where captcha validation is enforced. Default is: `["/sign-up", "/sign-in", "/forget-password"]`.
+- `endpoints` (optional): overrides the default array of paths where captcha validation is enforced. Default is: `["/sign-up/email", "/sign-in/email", "/forget-password",]`.
 - `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
 - `siteKey` (optional - only *hCaptcha*): prevents tokens issued on one sitekey from being redeemed elsewhere.
 - `siteVerifyURLOverride` (optional): overrides endpoint URL for the captcha verification request.

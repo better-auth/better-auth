@@ -1,6 +1,10 @@
 import type { Provider } from "./types";
 
-export const defaultEndpoints = ["/sign-up", "/sign-in", "/forget-password"];
+export const defaultEndpoints = [
+	"/sign-up/email",
+	"/sign-in/email",
+	"/forget-password",
+];
 
 export const Providers = {
 	CLOUDFLARE_TURNSTILE: "cloudflare-turnstile",
