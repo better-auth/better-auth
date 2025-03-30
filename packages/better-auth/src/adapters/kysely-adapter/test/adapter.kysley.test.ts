@@ -73,6 +73,7 @@ describe("adapter test", async () => {
 		getAdapter: async (customOptions = {}) => {
 			return mysqlAdapter({ ...mysqlOptions, ...customOptions });
 		},
+		testPrefix: "mysql"
 	});
 
 	const sqliteAdapter = kyselyAdapter(sqliteKy, {
@@ -82,6 +83,7 @@ describe("adapter test", async () => {
 		getAdapter: async (customOptions = {}) => {
 			return sqliteAdapter({ ...sqliteOptions, ...customOptions });
 		},
+		testPrefix: "sqlite",
 	});
 });
 

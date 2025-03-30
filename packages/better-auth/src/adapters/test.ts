@@ -7,6 +7,7 @@ interface AdapterTestOptions {
 		customOptions?: Omit<BetterAuthOptions, "database">,
 	) => Promise<Adapter>;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
+	testPrefix?: string;
 }
 
 interface NumberIdAdapterTestOptions {
@@ -15,6 +16,7 @@ interface NumberIdAdapterTestOptions {
 	) => Promise<Adapter>;
 	disableTests?: Partial<Record<keyof typeof numberIdAdapterTests, boolean>>;
 	cleanUp: () => Promise<void>;
+	testPrefix?: string;
 }
 
 const adapterTests = {
@@ -60,7 +62,7 @@ const numberIdAdapterTests = {
 delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
 
 async function adapterTest(
-	{ getAdapter, disableTests: disabledTests }: AdapterTestOptions,
+	{ getAdapter, disableTests: disabledTests, testPrefix }: AdapterTestOptions,
 	internalOptions?: {
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
 	},
@@ -84,7 +86,7 @@ async function adapterTest(
 	};
 
 	test.skipIf(disabledTests?.CREATE_MODEL)(
-		adapterTests.CREATE_MODEL,
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.CREATE_MODEL}`,
 		async () => {
 			const res = await (await adapter()).create({
 				model: "user",
@@ -102,7 +104,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.CREATE_MODEL_SHOULD_ALWAYS_RETURN_AN_ID)(
-		adapterTests.CREATE_MODEL_SHOULD_ALWAYS_RETURN_AN_ID,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.CREATE_MODEL_SHOULD_ALWAYS_RETURN_AN_ID
+		}`,
 		async () => {
 			const res = await (await adapter()).create({
 				model: "user",
@@ -117,27 +121,32 @@ async function adapterTest(
 		},
 	);
 
-	test.skipIf(disabledTests?.FIND_MODEL)(adapterTests.FIND_MODEL, async () => {
-		const res = await (await adapter()).findOne<User>({
-			model: "user",
-			where: [
-				{
-					field: "id",
-					value: user.id,
-				},
-			],
-		});
-		expect({
-			name: res?.name,
-			email: res?.email,
-		}).toEqual({
-			name: user.name,
-			email: user.email,
-		});
-	});
+	test.skipIf(disabledTests?.FIND_MODEL)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.FIND_MODEL}`,
+		async () => {
+			const res = await (await adapter()).findOne<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: user.id,
+					},
+				],
+			});
+			expect({
+				name: res?.name,
+				email: res?.email,
+			}).toEqual({
+				name: user.name,
+				email: user.email,
+			});
+		},
+	);
 
 	test.skipIf(disabledTests?.FIND_MODEL_WITHOUT_ID)(
-		adapterTests.FIND_MODEL_WITHOUT_ID,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.FIND_MODEL_WITHOUT_ID
+		}`,
 		async () => {
 			const res = await (await adapter()).findOne<User>({
 				model: "user",
@@ -159,7 +168,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.FIND_MODEL_WITH_MODIFIED_FIELD_NAME)(
-		adapterTests.FIND_MODEL_WITH_MODIFIED_FIELD_NAME,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.FIND_MODEL_WITH_MODIFIED_FIELD_NAME
+		}`,
 		async () => {
 			const adapter = await getAdapter(
 				Object.assign(
@@ -199,7 +210,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.FIND_MODEL_WITH_SELECT)(
-		adapterTests.FIND_MODEL_WITH_SELECT,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.FIND_MODEL_WITH_SELECT
+		}`,
 		async () => {
 			const res = await (await adapter()).findOne({
 				model: "user",
@@ -216,7 +229,7 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.UPDATE_MODEL)(
-		adapterTests.UPDATE_MODEL,
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.UPDATE_MODEL}`,
 		async () => {
 			const newEmail = "updated@email.com";
 
@@ -240,7 +253,7 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY)(
-		adapterTests.SHOULD_FIND_MANY,
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_FIND_MANY}`,
 		async () => {
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -250,7 +263,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_WHERE)(
-		adapterTests.SHOULD_FIND_MANY_WITH_WHERE,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_WHERE
+		}`,
 		async () => {
 			const user = await (await adapter()).create<User>({
 				model: "user",
@@ -276,7 +291,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_OPERATORS)(
-		adapterTests.SHOULD_FIND_MANY_WITH_OPERATORS,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_OPERATORS
+		}`,
 		async () => {
 			const newUser = await (await adapter()).create<User>({
 				model: "user",
@@ -303,7 +320,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_WORK_WITH_REFERENCE_FIELDS)(
-		adapterTests.SHOULD_WORK_WITH_REFERENCE_FIELDS,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_WORK_WITH_REFERENCE_FIELDS
+		}`,
 		async () => {
 			let token = null;
 			const user = await (await adapter()).create<Record<string, any>>({
@@ -355,7 +374,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_SORT_BY)(
-		adapterTests.SHOULD_FIND_MANY_WITH_SORT_BY,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_SORT_BY
+		}`,
 		async () => {
 			await (await adapter()).create({
 				model: "user",
@@ -389,7 +410,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_LIMIT)(
-		adapterTests.SHOULD_FIND_MANY_WITH_LIMIT,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_LIMIT
+		}`,
 		async () => {
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -400,7 +423,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_OFFSET)(
-		adapterTests.SHOULD_FIND_MANY_WITH_OFFSET,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_OFFSET
+		}`,
 		async () => {
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -411,7 +436,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_UPDATE_WITH_MULTIPLE_WHERE)(
-		adapterTests.SHOULD_UPDATE_WITH_MULTIPLE_WHERE,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_UPDATE_WITH_MULTIPLE_WHERE
+		}`,
 		async () => {
 			await (await adapter()).updateMany({
 				model: "user",
@@ -446,7 +473,7 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.DELETE_MODEL)(
-		adapterTests.DELETE_MODEL,
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.DELETE_MODEL}`,
 		async () => {
 			await (await adapter()).delete({
 				model: "user",
@@ -471,7 +498,7 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_DELETE_MANY)(
-		adapterTests.SHOULD_DELETE_MANY,
+		`${testPrefix ? `${testPrefix} - ` : ""}${adapterTests.SHOULD_DELETE_MANY}`,
 		async () => {
 			for (const i of ["to-be-delete-1", "to-be-delete-2", "to-be-delete-3"]) {
 				await (await adapter()).create({
@@ -518,7 +545,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND)(
-		adapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND
+		}`,
 		async () => {
 			await (await adapter()).delete({
 				model: "user",
@@ -533,7 +562,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_NOT_THROW_ON_RECORD_NOT_FOUND)(
-		adapterTests.SHOULD_NOT_THROW_ON_RECORD_NOT_FOUND,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_NOT_THROW_ON_RECORD_NOT_FOUND
+		}`,
 		async () => {
 			const res = await (await adapter()).findOne({
 				model: "user",
@@ -549,7 +580,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_CONTAINS_OPERATOR)(
-		adapterTests.SHOULD_FIND_MANY_WITH_CONTAINS_OPERATOR,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_CONTAINS_OPERATOR
+		}`,
 		async () => {
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -566,7 +599,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_SEARCH_USERS_WITH_STARTS_WITH)(
-		adapterTests.SHOULD_SEARCH_USERS_WITH_STARTS_WITH,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_SEARCH_USERS_WITH_STARTS_WITH
+		}`,
 		async () => {
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -583,7 +618,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_SEARCH_USERS_WITH_ENDS_WITH)(
-		adapterTests.SHOULD_SEARCH_USERS_WITH_ENDS_WITH,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_SEARCH_USERS_WITH_ENDS_WITH
+		}`,
 		async () => {
 			const res = await (await adapter()).findMany({
 				model: "user",
@@ -600,7 +637,9 @@ async function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_PREFER_GENERATE_ID_IF_PROVIDED)(
-		adapterTests.SHOULD_PREFER_GENERATE_ID_IF_PROVIDED,
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_PREFER_GENERATE_ID_IF_PROVIDED
+		}`,
 		async () => {
 			const customAdapter = await getAdapter(
 				Object.assign(
@@ -651,7 +690,9 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 		let idNumber = -1;
 
 		test.skipIf(opts.disableTests?.SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT)(
-			numberIdAdapterTests.SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT,
+			`${opts.testPrefix ? `${opts.testPrefix} - ` : ""}${
+				numberIdAdapterTests.SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT
+			}`,
 			async () => {
 				const res = await (await adapter()).create({
 					model: "user",
@@ -666,7 +707,9 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 			},
 		);
 		test.skipIf(opts.disableTests?.SHOULD_INCREMENT_THE_ID_BY_1)(
-			numberIdAdapterTests.SHOULD_INCREMENT_THE_ID_BY_1,
+			`${opts.testPrefix ? `${opts.testPrefix} - ` : ""}${
+				numberIdAdapterTests.SHOULD_INCREMENT_THE_ID_BY_1
+			}`,
 			async () => {
 				const res = await (await adapter()).create({
 					model: "user",
