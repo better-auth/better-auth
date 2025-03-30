@@ -346,7 +346,6 @@ async function adapterTest(
 			expect(resToken).toMatchObject({
 				userId: user.id,
 			});
-
 		},
 	);
 

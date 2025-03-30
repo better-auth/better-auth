@@ -291,10 +291,10 @@ export const createAdapter =
 					fieldAttributes.references?.field === "id" &&
 					options.advanced?.database?.useNumberId
 				) {
-					if(Array.isArray(newValue)){
-						newValue = newValue.map(Number)
-					}else{
-						newValue = Number(newValue)
+					if (Array.isArray(newValue)) {
+						newValue = newValue.map(Number);
+					} else {
+						newValue = Number(newValue);
 					}
 				} else if (
 					config.supportsJSON === false &&
@@ -489,7 +489,6 @@ export const createAdapter =
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 
-			
 				if ("id" in unsafeData) {
 					logger.warn(
 						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you. The id will be ignored.`,
