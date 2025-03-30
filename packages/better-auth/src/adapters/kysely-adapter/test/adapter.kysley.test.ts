@@ -1,3 +1,4 @@
+import merge from "deepmerge";
 import fs from "fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runAdapterTest } from "../../test";
@@ -70,11 +71,11 @@ describe("adapter test", async () => {
 		type: "mysql",
 		debugLogs: {
 			isRunningAdapterTests: true,
-		}
+		},
 	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return mysqlAdapter({ ...mysqlOptions, ...customOptions });
+			return mysqlAdapter(merge(customOptions, mysqlOptions));
 		},
 		testPrefix: "mysql",
 	});
@@ -83,11 +84,11 @@ describe("adapter test", async () => {
 		type: "sqlite",
 		debugLogs: {
 			isRunningAdapterTests: true,
-		}
+		},
 	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return sqliteAdapter({ ...sqliteOptions, ...customOptions });
+			return sqliteAdapter(merge(customOptions, sqliteOptions));
 		},
 		testPrefix: "sqlite",
 	});
@@ -138,10 +139,8 @@ describe("mssql", async () => {
 		type: "mssql",
 		debugLogs: {
 			isRunningAdapterTests: true,
-		}
+		},
 	});
-
-	const adapter = getAdapter(opts);
 
 	async function resetDB() {
 		await sql`DROP TABLE dbo.session;`.execute(mssql);
@@ -156,7 +155,9 @@ describe("mssql", async () => {
 
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return adapter;
+			// const merged = merge( customOptions,opts);
+			// merged.database = opts.database;
+			return getAdapter(opts);
 		},
 		disableTests: {
 			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,

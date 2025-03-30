@@ -609,6 +609,7 @@
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.14",
     "better-sqlite3": "^11.6.0",
+    "deepmerge": "^4.3.1",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
