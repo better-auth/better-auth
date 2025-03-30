@@ -82,8 +82,8 @@ export const init = async (options: BetterAuthOptions) => {
 		.filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
-		if (typeof options?.advanced?.generateId === "function") {
-			return options.advanced.generateId({ model, size });
+		if (typeof options?.advanced?.database?.generateId === "function") {
+			return options.advanced.database.generateId({ model, size });
 		}
 		return generateId(size);
 	};
@@ -153,7 +153,6 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 	};
 	let { context } = runPluginInit(ctx);
-	context;
 	return context;
 };
 

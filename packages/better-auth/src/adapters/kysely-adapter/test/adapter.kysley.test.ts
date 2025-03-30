@@ -68,20 +68,28 @@ describe("adapter test", async () => {
 
 	const mysqlAdapter = kyselyAdapter(mysqlKy, {
 		type: "mysql",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		}
 	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return mysqlAdapter({ ...mysqlOptions, ...customOptions });
 		},
+		testPrefix: "mysql",
 	});
 
 	const sqliteAdapter = kyselyAdapter(sqliteKy, {
 		type: "sqlite",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		}
 	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return sqliteAdapter({ ...sqliteOptions, ...customOptions });
 		},
+		testPrefix: "sqlite",
 	});
 });
 
@@ -128,6 +136,9 @@ describe("mssql", async () => {
 	});
 	const getAdapter = kyselyAdapter(mssql, {
 		type: "mssql",
+		debugLogs: {
+			isRunningAdapterTests: true,
+		}
 	});
 
 	const adapter = getAdapter(opts);
@@ -147,7 +158,9 @@ describe("mssql", async () => {
 		getAdapter: async (customOptions = {}) => {
 			return adapter;
 		},
-		skipGenerateIdTest: true,
+		disableTests: {
+			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
+		},
 	});
 
 	describe("simple flow", async () => {

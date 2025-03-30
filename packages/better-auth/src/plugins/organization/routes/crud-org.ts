@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -156,7 +155,6 @@ export const createOrganization = createAuthEndpoint(
 
 		const organization = await adapter.createOrganization({
 			organization: {
-				id: generateId(),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
 				logo: ctx.body.logo,
@@ -176,7 +174,6 @@ export const createOrganization = createAuthEndpoint(
 					ctx.request,
 				)) ||
 				(await adapter.createTeam({
-					id: generateId(),
 					organizationId: organization.id,
 					name: `${organization.name}`,
 					createdAt: new Date(),

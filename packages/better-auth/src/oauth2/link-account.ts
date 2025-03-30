@@ -111,12 +111,12 @@ export async function handleOAuthUserInfo(
 			};
 		}
 		try {
+			const { id: _, ...restUserInfo } = userInfo;
 			user = await c.context.internalAdapter
 				.createOAuthUser(
 					{
-						...userInfo,
+						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
-						id: undefined,
 					},
 					{
 						accessToken: account.accessToken,

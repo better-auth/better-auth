@@ -4,7 +4,6 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { InferOrganizationRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
-import { generateId } from "../../../utils";
 import { parseRoles, type OrganizationOptions } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -111,7 +110,6 @@ export const addMember = <O extends OrganizationOptions>() =>
 			}
 
 			const createdMember = await adapter.createMember({
-				id: generateId(),
 				organizationId: orgId,
 				userId: user.id,
 				role: parseRoles(ctx.body.role as string | string[]),

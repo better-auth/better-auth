@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "./schema";
-import { runAdapterTest } from "../../test";
+import { runAdapterTest, runNumberIdAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
 import { getMigrations } from "../../../db/get-migration";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -18,36 +18,44 @@ const createKyselyInstance = (pool: Pool) =>
 		dialect: new PostgresDialect({ pool }),
 	});
 
-const cleanupDatabase = async (postgres: Kysely<any>) => {
+const cleanupDatabase = async (postgres: Kysely<any>, shouldDestroy = true) => {
 	await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
 		postgres,
 	);
-	await postgres.destroy();
+	if (shouldDestroy) {
+		await postgres.destroy();
+	}
 };
 
-const createTestOptions = (pg: Pool): BetterAuthOptions => ({
-	database: pg,
-	user: {
-		fields: { email: "email_address" },
-		additionalFields: {
-			test: {
-				type: "string",
-				defaultValue: "test",
+const createTestOptions = (pg: Pool, useNumberId = false) =>
+	({
+		database: pg,
+		user: {
+			fields: { email: "email_address" },
+			additionalFields: {
+				test: {
+					type: "string",
+					defaultValue: "test",
+				},
 			},
 		},
-	},
-	session: {
-		modelName: "sessions",
-	},
-});
+		session: {
+			modelName: "sessions",
+		},
+		advanced: {
+			database: {
+				useNumberId,
+			},
+		},
+	}) satisfies BetterAuthOptions;
 
 describe("Drizzle Adapter Tests", async () => {
 	let pg: Pool;
 	let postgres: Kysely<any>;
-	let opts: BetterAuthOptions;
 	pg = createTestPool();
 	postgres = createKyselyInstance(pg);
-	opts = createTestOptions(pg);
+	const opts = createTestOptions(pg);
+	await cleanupDatabase(postgres, false);
 	const { runMigrations } = await getMigrations(opts);
 	await runMigrations();
 
@@ -59,7 +67,22 @@ describe("Drizzle Adapter Tests", async () => {
 
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return adapter({ ...opts, ...customOptions });
+			return adapter({
+				...customOptions,
+				user: {
+					...opts.user,
+					...customOptions.user,
+				},
+				session: {
+					...opts.session,
+					...customOptions.session,
+				},
+				advanced: {
+					...opts.advanced,
+					...customOptions.advanced,
+				},
+				database: opts.database,
+			});
 		},
 	});
 });
@@ -100,5 +123,57 @@ describe("Authentication Flow Tests", async () => {
 	it("should successfully sign in an existing user", async () => {
 		const user = await auth.api.signInEmail({ body: testUser });
 		expect(user.user).toBeDefined();
+	});
+});
+
+describe("Number Id Adapter Test", async () => {
+	let pg: Pool;
+	let postgres: Kysely<any>;
+	let opts: BetterAuthOptions;
+	pg = createTestPool();
+	postgres = createKyselyInstance(pg);
+	opts = createTestOptions(pg, true);
+	beforeAll(async () => {
+		await cleanupDatabase(postgres, false);
+		const { runMigrations } = await getMigrations(opts);
+		await runMigrations();
+	});
+
+	afterAll(async () => {
+		await cleanupDatabase(postgres);
+	});
+	const db = drizzle(pg);
+	const adapter = drizzleAdapter(db, {
+		provider: "pg",
+		schema,
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
+
+	await runNumberIdAdapterTest({
+		getAdapter: async (customOptions = {}) => {
+			return adapter({
+				...customOptions,
+				user: {
+					...opts.user,
+					...customOptions.user,
+				},
+				session: {
+					...opts.session,
+					...customOptions.session,
+				},
+				advanced: {
+					...opts.advanced,
+					...customOptions.advanced,
+				},
+				database: opts.database,
+			});
+		},
+		cleanUp: async () => {
+			await cleanupDatabase(postgres, false);
+			const { runMigrations } = await getMigrations(opts);
+			await runMigrations();
+		},
 	});
 });

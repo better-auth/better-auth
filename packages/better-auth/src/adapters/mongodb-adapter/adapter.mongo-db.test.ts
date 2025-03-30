@@ -23,7 +23,11 @@ describe("adapter test", async () => {
 		await clearDb();
 	});
 
-	const adapter = mongodbAdapter(db);
+	const adapter = mongodbAdapter(db, {
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({
@@ -44,7 +48,9 @@ describe("adapter test", async () => {
 				...customOptions,
 			});
 		},
-		skipGenerateIdTest: true,
+		disableTests: {
+			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
+		},
 	});
 });
 
