@@ -1,7 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode } from "../oauth2";
-
+import { validateAuthorizationCode, refreshAccessToken } from "../oauth2";
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
 	id: string;
@@ -104,6 +103,19 @@ export const discord = (options: DiscordOptions) => {
 				tokenEndpoint: "https://discord.com/api/oauth2/token",
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://discord.com/api/oauth2/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -143,5 +155,6 @@ export const discord = (options: DiscordOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<DiscordProfile>;
 };

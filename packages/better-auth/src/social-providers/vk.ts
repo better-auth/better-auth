@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { type OAuthProvider, type ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+	refreshAccessToken,
+} from "../oauth2";
 
 export interface VkProfile {
 	user: {
@@ -67,6 +71,19 @@ export const vk = (options: VkOption) => {
 				tokenEndpoint: "https://id.vk.com/oauth2/auth",
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://id.vk.com/oauth2/auth",
+					});
+				},
 		async getUserInfo(data) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(data);
@@ -109,5 +126,6 @@ export const vk = (options: VkOption) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<VkProfile>;
 };

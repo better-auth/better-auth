@@ -112,6 +112,67 @@ In the case a JWT with a different kid is received it is recommended to fetch th
   }
 ```
 
+#### Example using jose with remote JWKS
+
+```ts
+import { jwtVerify, createRemoteJWKSet } from 'jose'
+
+async function validateToken(token: string) {
+  try {
+    const JWKS = createRemoteJWKSet(
+      new URL('http://localhost:3000/api/auth/jwks')
+    )
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: 'http://localhost:3000', // Should match your JWT issuer which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience which is the BASE_URL by default
+    })
+    return payload
+  } catch (error) {
+    console.error('Token validation failed:', error)
+    throw error
+  }
+}
+
+// Usage example
+const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
+const payload = await validateToken(token)
+```
+
+#### Example with local JWKS
+
+```ts
+import { jwtVerify, createLocalJWKSet } from 'jose'
+
+
+async function validateToken(token: string) {
+  try {
+    /**
+     * This is the JWKS that you get from the /api/auth/
+     * jwks endpoint
+     */
+    const storedJWKS = {
+      keys: [{
+        //...
+      }]
+    };
+    const JWKS = createLocalJWKSet({
+      keys: storedJWKS.data?.keys!,
+    })
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: 'http://localhost:3000', // Should match your JWT issuer which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience which is the BASE_URL by default
+    })
+    return payload
+  } catch (error) {
+    console.error('Token validation failed:', error)
+    throw error
+  }
+}
+
+// Usage example
+const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
+const payload = await validateToken(token)
+```
 
 ## Schema
 

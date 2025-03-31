@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { InferRolesFromOption, Member } from "../schema";
+import type { InferOrganizationRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
 import { generateId } from "../../../utils";
 import { parseRoles, type OrganizationOptions } from "../organization";
@@ -17,7 +17,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 		{
 			method: "POST",
 			body: z.object({
-				userId: z.string(),
+				userId: z.coerce.string(),
 				role: z.union([z.string(), z.array(z.string())]),
 				organizationId: z.string().optional(),
 			}),
@@ -27,7 +27,9 @@ export const addMember = <O extends OrganizationOptions>() =>
 				$Infer: {
 					body: {} as {
 						userId: string;
-						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
+						role:
+							| InferOrganizationRolesFromOption<O>
+							| InferOrganizationRolesFromOption<O>[];
 						organizationId?: string;
 					} & (O extends { teams: { enabled: true } }
 						? { teamId?: string }
@@ -293,7 +295,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			metadata: {
 				$Infer: {
 					body: {} as {
-						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
+						role:
+							| InferOrganizationRolesFromOption<O>
+							| InferOrganizationRolesFromOption<O>[];
 						memberId: string;
 						/**
 						 * If not provided, the active organization will be used
