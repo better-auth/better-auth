@@ -526,6 +526,8 @@ stripe({
 
 **stripeWebhookSecret**: `string` - The webhook signing secret from Stripe. Required.
 
+**allowPromotionCodes**: `boolean` - Whether to allow promotion codes in the checkout session. Default: `false`.
+
 **createCustomerOnSignUp**: `boolean` - Whether to automatically create a Stripe customer when a user signs up. Default: `false`.
 
 **onCustomerCreate**: `(data: { customer: Customer, stripeCustomer: Stripe.Customer, user: User }, request?: Request) => Promise<void>` - A function called after a customer is created.
