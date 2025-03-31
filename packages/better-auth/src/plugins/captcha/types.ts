@@ -6,6 +6,11 @@ export interface BaseCaptchaOptions {
 	secretKey: string;
 	endpoints?: string[];
 	siteVerifyURLOverride?: string;
+	/**
+	 * If true, captcha will not be required for OAuth routes
+	 * @default false
+	 */
+	skipOAuth?: boolean;
 }
 
 export interface GoogleRecaptchaOptions extends BaseCaptchaOptions {
