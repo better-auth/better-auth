@@ -3,6 +3,7 @@ import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
@@ -191,7 +192,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (isWeb) {
 						return {
 							url,
-							options,
+							options: options as BetterFetchOption,
 						};
 					}
 					options = options || {};
@@ -238,10 +239,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					return {
 						url,
-						options: {
-							...options,
-							signal: new AbortController().signal,
-						},
+						options: options as BetterFetchOption,
 					};
 				},
 			},

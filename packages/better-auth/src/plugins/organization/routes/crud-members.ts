@@ -2,10 +2,10 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { InferRolesFromOption, Member } from "../schema";
+import type { InferOrganizationRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
 import { generateId } from "../../../utils";
-import type { OrganizationOptions } from "../organization";
+import { parseRoles, type OrganizationOptions } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "../../../error/codes";
@@ -16,16 +16,24 @@ export const addMember = <O extends OrganizationOptions>() =>
 		"/organization/add-member",
 		{
 			method: "POST",
-			body: z.record(z.string()),
+			body: z.object({
+				userId: z.coerce.string(),
+				role: z.union([z.string(), z.array(z.string())]),
+				organizationId: z.string().optional(),
+			}),
 			use: [orgMiddleware],
 			metadata: {
 				SERVER_ONLY: true,
 				$Infer: {
 					body: {} as {
 						userId: string;
-						role: InferRolesFromOption<O>;
+						role:
+							| InferOrganizationRolesFromOption<O>
+							| InferOrganizationRolesFromOption<O>[];
 						organizationId?: string;
-					},
+					} & (O extends { teams: { enabled: true } }
+						? { teamId?: string }
+						: {}),
 				},
 			},
 		},
@@ -45,6 +53,14 @@ export const addMember = <O extends OrganizationOptions>() =>
 					body: {
 						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 					},
+				});
+			}
+
+			const teamId = "teamId" in ctx.body ? ctx.body.teamId : undefined;
+			if (teamId && !ctx.context.orgOptions.teams?.enabled) {
+				ctx.context.logger.error("Teams are not enabled");
+				throw new APIError("BAD_REQUEST", {
+					message: "Teams are not enabled",
 				});
 			}
 
@@ -72,6 +88,18 @@ export const addMember = <O extends OrganizationOptions>() =>
 				});
 			}
 
+			if (teamId) {
+				const team = await adapter.findTeamById({
+					teamId,
+					organizationId: orgId,
+				});
+				if (!team || team.organizationId !== orgId) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					});
+				}
+			}
+
 			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
 			const members = await adapter.listMembers({ organizationId: orgId });
 
@@ -86,8 +114,9 @@ export const addMember = <O extends OrganizationOptions>() =>
 				id: generateId(),
 				organizationId: orgId,
 				userId: user.id,
-				role: ctx.body.role as string,
+				role: parseRoles(ctx.body.role as string | string[]),
 				createdAt: new Date(),
+				...(teamId ? { teamId: teamId } : {}),
 			});
 
 			return ctx.json(createdMember);
@@ -257,12 +286,18 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		"/organization/update-member-role",
 		{
 			method: "POST",
-			body: z.record(z.any()),
+			body: z.object({
+				role: z.union([z.string(), z.array(z.string())]),
+				memberId: z.string(),
+				organizationId: z.string().optional(),
+			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				$Infer: {
 					body: {} as {
-						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
+						role:
+							| InferOrganizationRolesFromOption<O>
+							| InferOrganizationRolesFromOption<O>[];
 						memberId: string;
 						/**
 						 * If not provided, the active organization will be used
@@ -380,9 +415,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
-				Array.isArray(ctx.body.role)
-					? ctx.body.role?.join(",")
-					: (ctx.body.role as string),
+				parseRoles(ctx.body.role as string | string[]),
 			);
 			if (!updatedMember) {
 				throw new APIError("BAD_REQUEST", {

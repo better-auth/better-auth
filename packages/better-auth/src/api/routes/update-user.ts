@@ -61,6 +61,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										properties: {
 											user: {
 												type: "object",
+												ref: "#/components/schemas/User",
 											},
 										},
 									},
@@ -547,6 +548,7 @@ export const changeEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",
@@ -612,8 +614,8 @@ export const changeEmail = createAuthEndpoint(
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
-					ctx.context.session.user.email,
 					newEmail,
+					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${

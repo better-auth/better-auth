@@ -23,7 +23,7 @@ export const organizationSchema = z.object({
 export const memberSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
-	userId: z.string(),
+	userId: z.coerce.string(),
 	role,
 	createdAt: z.date().default(() => new Date()),
 	teamId: z.string().optional(),
@@ -55,18 +55,20 @@ export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
-export type InferZodRolesFromOption<O extends OrganizationOptions | undefined> =
-	ZodLiteral<
-		O extends {
-			roles: {
-				[key: string]: any;
-			};
-		}
-			? keyof O["roles"] | (keyof O["roles"])[]
-			: "admin" | "member" | "owner" | ("admin" | "member" | "owner")[]
-	>;
-export type InferRolesFromOption<O extends OrganizationOptions | undefined> =
-	O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+export type InferOrganizationZodRolesFromOption<
+	O extends OrganizationOptions | undefined,
+> = ZodLiteral<
+	O extends {
+		roles: {
+			[key: string]: any;
+		};
+	}
+		? keyof O["roles"] | (keyof O["roles"])[]
+		: "admin" | "member" | "owner" | ("admin" | "member" | "owner")[]
+>;
+export type InferOrganizationRolesFromOption<
+	O extends OrganizationOptions | undefined,
+> = O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
@@ -76,7 +78,7 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 	? {
 			id: string;
 			organizationId: string;
-			role: InferRolesFromOption<O>;
+			role: InferOrganizationRolesFromOption<O>;
 			createdAt: Date;
 			userId: string;
 			user: {
@@ -89,7 +91,7 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 			id: string;
 			organizationId: string;
 			createdAt: Date;
-			role: InferRolesFromOption<O>;
+			role: InferOrganizationRolesFromOption<O>;
 			teamId?: string;
 			userId: string;
 			user: {
@@ -107,7 +109,7 @@ export type InferInvitation<O extends OrganizationOptions> =
 				id: string;
 				organizationId: string;
 				email: string;
-				role: InferRolesFromOption<O>;
+				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
@@ -116,7 +118,7 @@ export type InferInvitation<O extends OrganizationOptions> =
 				id: string;
 				organizationId: string;
 				email: string;
-				role: InferRolesFromOption<O>;
+				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;

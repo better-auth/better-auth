@@ -77,7 +77,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
 				Invitation: {} as InferInvitation<O>,
-				Member: {} as InferInvitation<O>,
+				Member: {} as InferMember<O>,
 				Team: {} as Team,
 			},
 			organization: {
@@ -175,6 +175,12 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					return path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
+			},
+			{
+				matcher(path) {
+					return path.startsWith("/organization/set-active");
+				},
+				signal: "$sessionSignal",
 			},
 			{
 				matcher(path) {

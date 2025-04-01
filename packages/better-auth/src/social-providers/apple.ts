@@ -2,7 +2,11 @@ import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode } from "../oauth2";
+import {
+	refreshAccessToken,
+	createAuthorizationURL,
+	validateAuthorizationCode,
+} from "../oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -73,17 +77,20 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		async createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
 			options.scope && _scope.push(...options.scope);
 			scopes && _scope.push(...scopes);
-			return new URL(
-				`https://appleid.apple.com/auth/authorize?client_id=${
-					options.clientId
-				}&response_type=code&redirect_uri=${
-					options.redirectURI || redirectURI
-				}&scope=${_scope.join(" ")}&state=${state}&response_mode=form_post`,
-			);
+			const url = await createAuthorizationURL({
+				id: "apple",
+				options,
+				authorizationEndpoint: "https://appleid.apple.com/auth/authorize",
+				scopes: _scope,
+				state,
+				redirectURI,
+				responseMode: "form_post",
+			});
+			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -121,6 +128,19 @@ export const apple = (options: AppleOptions) => {
 			}
 			return !!jwtClaims;
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://appleid.apple.com/auth/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -147,6 +167,7 @@ export const apple = (options: AppleOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<AppleProfile>;
 };
 

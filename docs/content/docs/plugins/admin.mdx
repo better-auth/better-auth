@@ -362,14 +362,14 @@ the plugin providers easy way to define your own set of permission for each role
         Once you have created the roles you can pass them to the organization plugin both on the client and the server.
 
         ```ts title="auth.ts"
-        import { ac, admin, user } from "@/auth/permissions"
         import { betterAuth } from "better-auth"
-        import { admin } from "better-auth/plugins"
+        import { admin as adminPlugin } from "better-auth/plugins"
+        import { ac, admin, user } from "@/auth/permissions"
 
         export const auth = betterAuth({
             plugins: [
-                admin({
-                    ac: ac,
+                adminPlugin({
+                    ac,
                     roles: {
                         admin,
                         user,
@@ -390,7 +390,7 @@ the plugin providers easy way to define your own set of permission for each role
         export const client = createAuthClient({
             plugins: [
                 adminClient({
-                    ac: ac,
+                    ac,
                     roles: {
                         admin,
                         user,
@@ -418,11 +418,11 @@ const canCreateProject = await authClient.admin.hasPermission({
 });
 ```
 
-If you want to use the server instead to check if a user has a permission, you can use `adminHasPermission` action provided by the `api` to check the permission of the user.
+If you want to use the server instead to check if a user has a permission, you can use `userHasPermission` action provided by the `api` to check the permission of the user.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
     userId: 'id', //the user id
     permission: {
@@ -432,7 +432,7 @@ auth.api.adminHasPermission({
 });
 
 //you can also just pass the role directly
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
    role: "admin",
     permission: {
@@ -570,3 +570,14 @@ admin({
   defaultBanExpiresIn: 60 * 60 * 24, // 1 day
 });
 ```
+
+### bannedUserMessage
+
+The message to show when a banned user tries to sign in. Defaults to "You have been banned from this application. Please contact support if you believe this is an error."
+
+```ts title="auth.ts"
+admin({
+  bannedUserMessage: "Custom banned user message",
+});
+```
+

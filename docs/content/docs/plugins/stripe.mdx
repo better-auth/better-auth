@@ -278,7 +278,9 @@ await client.subscription.upgrade({
 
 // List subscriptions for an organization
 const { data: subscriptions } = await client.subscription.list({
-    referenceId: "org_123456"
+    query: {
+        referenceId: "org_123456"
+    }
 });
 ```
 

@@ -259,10 +259,29 @@ export default function SignIn() {
                 }}
                 value={email}
               />
-              <Button className="gap-2" onClick={async () => {
-                await signIn.magicLink({ email });
-              }}>
-                Sign-in with Magic Link
+              <Button
+                disabled={loading}
+                className="gap-2"
+                onClick={async () => {
+                  await signIn.magicLink(
+                  {
+                    email
+                  },
+                  {
+                     onRequest: (ctx) => {
+                        setLoading(true);
+                      },
+                     onResponse: (ctx) => {
+                         setLoading(false);
+                     },
+                   },
+                  );
+                 }}>
+                  {loading ? (
+                     <Loader2 size={16} className="animate-spin" />
+                     ):(
+                         Sign-in with Magic Link
+                   )}
               </Button>
             </div>`
 							: ""
@@ -275,15 +294,28 @@ export default function SignIn() {
               className="w-full"
               disabled={loading}
               onClick={async () => {
-                await signIn.email({ email, password });
+                await signIn.email(
+                {
+                    email,
+                    password
+                },
+                {
+                  onRequest: (ctx) => {
+                    setLoading(true);
+                  },
+                  onResponse: (ctx) => {
+                    setLoading(false);
+                  },
+                },
+                );
               }}
             >
               {loading ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
-                "Login"
+                Login
               )}
-            </Button>`
+              </Button>`
 							: ""
 					}
 
@@ -291,9 +323,19 @@ export default function SignIn() {
 						options.passkey
 							? `<Button
               variant="secondary"
+              disabled={loading}
               className="gap-2"
               onClick={async () => {
-                await signIn.passkey();
+              await signIn.passkey(
+                {
+                  onRequest: (ctx) => {
+                    setLoading(true);
+                  },
+                  onResponse: (ctx) => {
+                    setLoading(false);
+                  },
+                },
+                )
               }}
             >
               <Key size={16} />
@@ -317,7 +359,7 @@ export default function SignIn() {
 									const icon =
 										socialProviders[provider as keyof typeof socialProviders]
 											?.stringIcon || "";
-									return `<Button
+									return `\n\t\t\t\t<Button
                   variant="outline"
                   className={cn(
                     ${
@@ -326,11 +368,22 @@ export default function SignIn() {
 												: '"w-full gap-2"'
 										}
                   )}
+                  disabled={loading}
                   onClick={async () => {
-                    await signIn.social({
+                    await signIn.social(
+                    {
                       provider: "${provider}",
                       callbackURL: "/dashboard"
-                    });
+                    },
+                    {
+                      onRequest: (ctx) => {
+                         setLoading(true);
+                      },
+                      onResponse: (ctx) => {
+                         setLoading(false);
+                      },
+                     },
+                    );
                   }}
                 >
                   ${icon}
