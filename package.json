@@ -24,6 +24,7 @@
         "@biomejs/biome": "1.7.3",
         "@types/node": "^20.17.9",
         "bumpp": "^9.8.1",
+        "concurrently": "^9.1.2",
         "cross-env": "^7.0.3",
         "dotenv-cli": "^7.4.4",
         "simple-git-hooks": "^2.11.1",
