@@ -23,7 +23,7 @@ type Primitive =
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
 	 * If the field should be required on a new record.
-	 * @default false
+	 * @default true
 	 */
 	required?: boolean;
 	/**
@@ -188,7 +188,9 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 				? never
 				: Field[key]["required"] extends false
 					? key
-					: never]?: InferFieldInput<Field[key]> | undefined | null;
+					: Field[key]["defaultValue"] extends string | number | boolean | Date
+						? key
+						: never]?: InferFieldInput<Field[key]> | undefined | null;
 		}
 	: {};
 

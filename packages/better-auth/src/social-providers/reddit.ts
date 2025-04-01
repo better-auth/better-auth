@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, getOAuth2Tokens } from "../oauth2";
+import {
+	createAuthorizationURL,
+	getOAuth2Tokens,
+	refreshAccessToken,
+} from "../oauth2";
 import { base64 } from "@better-auth/utils/base64";
 
 export interface RedditProfile {
@@ -64,6 +68,20 @@ export const reddit = (options: RedditOptions) => {
 
 			return getOAuth2Tokens(data);
 		},
+
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://www.reddit.com/api/v1/access_token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -97,5 +115,6 @@ export const reddit = (options: RedditOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<RedditProfile>;
 };

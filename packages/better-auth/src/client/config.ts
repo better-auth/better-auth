@@ -64,7 +64,8 @@ export const getClientConfig = (options?: ClientOptions) => {
 					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
 					path.startsWith("/sign-up") ||
-					path === "/delete-user"
+					path === "/delete-user" ||
+					path === "/verify-email"
 				);
 			},
 		},

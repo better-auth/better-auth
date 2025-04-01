@@ -15,6 +15,7 @@ import {
 } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
+import { BetterAuthError } from "../../error";
 
 type JWKOptions =
 	| {
@@ -132,7 +133,7 @@ export async function getJwtToken(
 			privateKey: privateKeyEncryptionEnabled
 				? JSON.stringify(
 						await symmetricEncrypt({
-							key: ctx.context.options.secret!,
+							key: ctx.context.secret,
 							data: stringifiedPrivateWebKey,
 						}),
 					)
@@ -145,8 +146,12 @@ export async function getJwtToken(
 
 	let privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({
-				key: ctx.context.options.secret!,
+				key: ctx.context.secret,
 				data: JSON.parse(key.privateKey),
+			}).catch(() => {
+				throw new BetterAuthError(
+					"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
+				);
 			})
 		: key.privateKey;
 
@@ -159,15 +164,7 @@ export async function getJwtToken(
 		? ctx.context.session!.user
 		: await options?.jwt.definePayload(ctx.context.session!);
 
-	const jwt = await new SignJWT({
-		...payload,
-		// I am aware that this is not the best way to handle this, but this is the only way I know to get the impersonatedBy field
-		...((ctx.context.session!.session as any).impersonatedBy!
-			? {
-					impersonatedBy: (ctx.context.session!.session as any).impersonatedBy,
-				}
-			: {}),
-	})
+	const jwt = await new SignJWT(payload)
 		.setProtectedHeader({
 			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 			kid: key.id,
@@ -262,7 +259,7 @@ export const jwt = (options?: JwtOptions) => {
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(
 										await symmetricEncrypt({
-											key: ctx.context.options.secret!,
+											key: ctx.context.secret,
 											data: stringifiedPrivateWebKey,
 										}),
 									)
@@ -336,7 +333,7 @@ export const jwt = (options?: JwtOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const session = ctx.context.session;
+						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
 							ctx.setHeader("set-auth-jwt", jwt);

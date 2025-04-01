@@ -36,9 +36,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=invalid_callback_request`,
-			);
+			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
 		}
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
@@ -63,7 +61,7 @@ export const callbackOAuth = createAuthEndpoint(
 		} = await parseState(c);
 
 		function redirectOnError(error: string) {
-			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
+			let url = errorURL || callbackURL || defaultErrorURL;
 			if (url.includes("?")) {
 				url = `${url}&error=${error}`;
 			} else {
@@ -121,23 +119,18 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("No callback URL found");
 			throw redirectOnError("no_callback_url");
 		}
+
 		if (link) {
-			if (
-				c.context.options.account?.accountLinking?.allowDifferentEmails !==
-					true &&
-				link.email !== userInfo.email.toLowerCase()
-			) {
-				return redirectOnError("email_doesn't_match");
-			}
 			const existingAccount = await c.context.internalAdapter.findAccount(
 				userInfo.id,
 			);
+
 			if (existingAccount) {
-				if (existingAccount && existingAccount.userId !== link.userId) {
+				if (existingAccount.userId.toString() !== link.userId.toString()) {
 					return redirectOnError("account_already_linked_to_different_user");
 				}
-				return redirectOnError("account_already_linked");
 			}
+
 			const newAccount = await c.context.internalAdapter.createAccount(
 				{
 					userId: link.userId,
@@ -148,9 +141,11 @@ export const callbackOAuth = createAuthEndpoint(
 				},
 				c,
 			);
+
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
 			}
+
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
@@ -176,7 +171,7 @@ export const callbackOAuth = createAuthEndpoint(
 			callbackURL,
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
-				provider.disableSignUp,
+				provider.options?.disableSignUp,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

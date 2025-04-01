@@ -124,7 +124,7 @@ export function OrganizationCard(props: {
 					<Avatar className="rounded-none">
 						<AvatarImage
 							className="object-cover w-full h-full rounded-none"
-							src={optimisticOrg?.logo || ""}
+							src={optimisticOrg?.logo || undefined}
 						/>
 						<AvatarFallback className="rounded-none">
 							{optimisticOrg?.name?.charAt(0) || "P"}
@@ -153,7 +153,7 @@ export function OrganizationCard(props: {
 									<div className="flex items-center gap-2">
 										<Avatar className="sm:flex w-9 h-9">
 											<AvatarImage
-												src={member.user.image || ""}
+												src={member.user.image || undefined}
 												className="object-cover"
 											/>
 											<AvatarFallback>
@@ -188,7 +188,7 @@ export function OrganizationCard(props: {
 								<div>
 									<div className="flex items-center gap-2">
 										<Avatar>
-											<AvatarImage src={session?.user.image || ""} />
+											<AvatarImage src={session?.user.image || undefined} />
 											<AvatarFallback>
 												{session?.user.name?.charAt(0)}
 											</AvatarFallback>

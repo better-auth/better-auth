@@ -1,4 +1,16 @@
-import { and, asc, count, desc, eq, inArray, like, or, SQL } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	inArray,
+	like,
+	lt,
+	lte,
+	or,
+	SQL,
+} from "drizzle-orm";
 import { getAuthTables } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
@@ -82,6 +94,14 @@ const createTransform = (
 
 			if (w.operator === "ends_with") {
 				return [like(schemaModel[field], `%${w.value}`)];
+			}
+
+			if (w.operator === "lt") {
+				return [lt(schemaModel[field], w.value)];
+			}
+
+			if (w.operator === "lte") {
+				return [lte(schemaModel[field], w.value)];
 			}
 
 			return [eq(schemaModel[field], w.value)];

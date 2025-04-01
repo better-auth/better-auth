@@ -218,8 +218,7 @@ export async function getTestInstance<
 		url: string | URL | Request,
 		init?: RequestInit,
 	) => {
-		const req = new Request(url.toString(), init);
-		return auth.handler(req);
+		return auth.handler(new Request(url, init));
 	};
 
 	function sessionSetter(headers: Headers) {

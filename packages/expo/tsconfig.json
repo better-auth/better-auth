@@ -1,20 +1,25 @@
 {
 	"compilerOptions": {
-		"esModuleInterop": true,
-		"skipLibCheck": true,
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"declarationMap": true,
+		"outDir": "dist",
+		"noEmit": false,
+		"composite": false,
 		"target": "es2022",
-		"allowJs": true,
-		"resolveJsonModule": true,
-		"module": "ESNext",
-		"noEmit": true,
+		"incremental": true,
 		"moduleResolution": "Bundler",
-		"moduleDetection": "force",
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
 		"strict": true,
-		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true
+		"moduleDetection": "force",
+		"module": "Preserve",
+		"skipLibCheck": true,
+		"types": ["node"],
+		"isolatedModules": true,
+		"tsBuildInfoFile": ".tsbuildinfo",
+		"preserveSymlinks": true,
+		"noImplicitOverride": true
 	},
-	"exclude": ["node_modules"],
-	"include": ["src"]
+	"exclude": ["node_modules", "dist"],
+	"references": [],
+	"include": ["src/**/*"]
 }

@@ -2,9 +2,9 @@
 /node_modules
 
 # generated content
-.map.ts
 .contentlayer
 .content-collections
+.source
 
 # test & build
 /coverage
@@ -26,6 +26,3 @@ yarn-error.log*
 .env*.local
 .vercel
 next-env.d.ts
-certificates
-
-.source

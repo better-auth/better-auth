@@ -12,7 +12,7 @@ export function deleteAllExpiredApiKeysEndpoint({
 	return createAuthEndpoint(
 		"/api-key/delete-all-expired-api-keys",
 		{
-			method: "DELETE",
+			method: "POST",
 			metadata: {
 				SERVER_ONLY: true,
 			},

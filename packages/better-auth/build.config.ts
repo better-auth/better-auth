@@ -42,6 +42,7 @@ export default defineBuildConfig({
 		"@mongodb-js/saslprep",
 		"kerberos",
 		"@mongodb-js/zstd",
+		"nanostores",
 		"@aws-sdk/credential-providers",
 		"mongodb-client-encryption",
 		"@vue/runtime-dom",

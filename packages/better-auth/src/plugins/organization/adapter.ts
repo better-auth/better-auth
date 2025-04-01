@@ -353,6 +353,7 @@ export const getOrgAdapter = (
 			const users = await adapter.findMany<User>({
 				model: "user",
 				where: [{ field: "id", value: userIds, operator: "in" }],
+				limit: options?.membershipLimit || 100,
 			});
 
 			const userMap = new Map(users.map((user) => [user.id, user]));
@@ -390,7 +391,6 @@ export const getOrgAdapter = (
 						value: userId,
 					},
 				],
-				limit: options?.membershipLimit || 100,
 			});
 
 			if (!members || members.length === 0) {
@@ -418,7 +418,17 @@ export const getOrgAdapter = (
 			});
 			return team;
 		},
-		findTeamById: async (teamId: string) => {
+		findTeamById: async <IncludeMembers extends boolean>({
+			teamId,
+			organizationId,
+			includeTeamMembers,
+		}: {
+			teamId: string;
+			organizationId?: string;
+			includeTeamMembers?: IncludeMembers;
+		}): Promise<
+			(Team & (IncludeMembers extends true ? { members: Member[] } : {})) | null
+		> => {
 			const team = await adapter.findOne<Team>({
 				model: "team",
 				where: [
@@ -426,24 +436,38 @@ export const getOrgAdapter = (
 						field: "id",
 						value: teamId,
 					},
-				],
-			});
-			const members = await adapter.findMany<Member>({
-				model: "member",
-				where: [
-					{
-						field: "teamId",
-						value: teamId,
-					},
+					...(organizationId
+						? [
+								{
+									field: "organizationId",
+									value: organizationId,
+								},
+							]
+						: []),
 				],
 			});
 			if (!team) {
 				return null;
 			}
-			return {
-				...team,
-				members,
-			};
+			let members: Member[] = [];
+			if (includeTeamMembers) {
+				members = await adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{
+							field: "teamId",
+							value: teamId,
+						},
+					],
+					limit: options?.membershipLimit || 100,
+				});
+				return {
+					...team,
+					members,
+				};
+			}
+			return team as Team &
+				(IncludeMembers extends true ? { members: Member[] } : {});
 		},
 		updateTeam: async (
 			teamId: string,
@@ -547,9 +571,10 @@ export const getOrgAdapter = (
 			};
 			user: User;
 		}) => {
-			const defaultExpiration = 1000 * 60 * 60 * 48;
+			const defaultExpiration = 60 * 60 * 48;
 			const expiresAt = getDate(
 				options?.invitationExpiresIn || defaultExpiration,
+				"sec",
 			);
 			const invite = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",

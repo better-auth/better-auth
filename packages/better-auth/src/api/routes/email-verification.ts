@@ -174,6 +174,7 @@ export const verifyEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",
@@ -295,6 +296,10 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
+		await ctx.context.options.emailVerification?.onEmailVerification?.(
+			user.user,
+			ctx.request,
+		);
 		await ctx.context.internalAdapter.updateUserByEmail(
 			parsed.email,
 			{

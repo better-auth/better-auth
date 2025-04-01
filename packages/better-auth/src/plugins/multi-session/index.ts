@@ -3,7 +3,6 @@ import {
 	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
 import {
@@ -61,14 +60,22 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						)
 					).filter((v) => v !== null);
 
-					const s = await getSessionFromCtx(ctx);
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionTokens);
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);
-					return ctx.json(validSessions);
+					const uniqueUserSessions = validSessions.reduce(
+						(acc, session) => {
+							if (!acc.find((s) => s.user.id === session.user.id)) {
+								acc.push(session);
+							}
+							return acc;
+						},
+						[] as typeof validSessions,
+					);
+					return ctx.json(uniqueUserSessions);
 				},
 			),
 			setActiveSession: createAuthEndpoint(
@@ -107,7 +114,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
+					const multiSessionCookieName = `${
+						ctx.context.authCookies.sessionToken.name
+					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
@@ -168,7 +177,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
+					const multiSessionCookieName = `${
+						ctx.context.authCookies.sessionToken.name
+					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
@@ -240,10 +251,10 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						const sessionToken = ctx.context.newSession?.session.token;
 						if (!sessionToken) return;
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
-						if (!sessionToken) {
-							return;
-						}
-						const cookieName = `${sessionCookieConfig.name}_multi-${sessionToken}`;
+
+						const cookieName = `${
+							sessionCookieConfig.name
+						}_multi-${sessionToken.toLowerCase()}`;
 
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
 
@@ -252,7 +263,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								isMultiSessionCookie,
 							).length + (cookieString.includes("session_token") ? 1 : 0);
 
-						if (currentMultiSessions > opts.maximumSessions) {
+						if (currentMultiSessions >= opts.maximumSessions) {
 							return;
 						}
 
@@ -273,9 +284,12 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						const ids = Object.keys(cookies)
 							.map((key) => {
 								if (isMultiSessionCookie(key)) {
-									ctx.setCookie(key, "", { maxAge: 0 });
-									const id = key.split("_multi-")[1];
-									return id;
+									ctx.setCookie(key.toLowerCase(), "", {
+										...ctx.context.authCookies.sessionToken.options,
+										maxAge: 0,
+									});
+									const token = cookies[key].split(".")[0];
+									return token;
 								}
 								return null;
 							})
