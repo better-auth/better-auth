@@ -213,10 +213,10 @@ export const auth = betterAuth({
         enabled: true // [!code highlight]
     },// [!code highlight]
     socialProviders: { // [!code highlight]
-       github: { // [!code highlight]
-        clientId: process.env.GITHUB_CLIENT_ID, // [!code highlight]
-        clientSecret: process.env.GITHUB_CLIENT_SECRET, // [!code highlight]
-       } // [!code highlight]
+        github: { // [!code highlight]
+           clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
+           clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
+        }, // [!code highlight]
     }, // [!code highlight]
 });
 ```
