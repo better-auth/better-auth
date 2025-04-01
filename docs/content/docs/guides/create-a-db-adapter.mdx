@@ -22,14 +22,14 @@ All you need to do is provide the database logic, and the `createAdapter` functi
 3. Create the adapter!
 
 ```ts
-import { createAdapter } from "better-auth/adapters";
+import { createAdapter, type AdapterDebugLogs } from "better-auth/adapters";
 
 // Your custom adapter config options
 interface CustomAdapterConfig {
   /**
    * Helps you debug issues with the adapter.
    */
-  debugLogs?: boolean;
+  debugLogs?: AdapterDebugLogs;
   /**
    * If the table names in the schema are plural.
    */
@@ -695,9 +695,40 @@ describe("My Adapter Tests", async () => {
   afterAll(async () => {
     // Run DB cleanup here...
   });
-  const adapter = myAdapter();
+  const adapter = myAdapter({
+    debugLogs: { // If your adapter config allows passing in debug logs, then pass this here.
+			isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
+		}
+  });
 
   await runAdapterTest({
+    getAdapter: async (betterAuthOptions = {}) => {
+      return adapter(betterAuthOptions);
+    },
+  });
+});
+```
+
+### Numeric ID tests
+
+If your database supports numeric ids, then you should run this test as well:
+
+```ts title="my-adapter.number-id.test.ts"
+import { expect, test, describe } from "vitest";
+import { runNumberIdAdapterTest } from "better-auth/adapters/test";
+import { myAdapter } from "./my-adapter";
+
+describe("My Adapter Numeric ID Tests", async () => {
+  afterAll(async () => {
+    // Run DB cleanup here...
+  });
+  const adapter = myAdapter({
+    debugLogs: { // If your adapter config allows passing in debug logs, then pass this here.
+			isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
+		}
+  });
+
+  await runNumberIdAdapterTest({
     getAdapter: async (betterAuthOptions = {}) => {
       return adapter(betterAuthOptions);
     },
