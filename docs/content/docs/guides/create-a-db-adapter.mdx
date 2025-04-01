@@ -116,6 +116,9 @@ Learn more about the `adapter` function [here](/docs/adapters/custom-adapter#ada
 
 The `config` object is used to provide information about the adapter to Better-Auth.
 
+We **highly recommend** going through and reading each provided option below, as it will help you understand how to properly configure your adapter.
+
+
 Required Config:
 
 <Accordions>
@@ -144,7 +147,7 @@ The `supportsJSON` option is used to indicate if the database supports JSON.
 If the database doesn't support JSON, we will use a `string` to save the JSON data.
 And when we retrieve the data, we will safely parse the `string` back into a JSON object.
 
-Default: `true`
+Default: `false`
 
 </Accordion>
 <Accordion title="supportsDates">
