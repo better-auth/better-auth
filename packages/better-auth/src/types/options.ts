@@ -157,6 +157,12 @@ export type BetterAuthOptions = {
 		 * @default 3600 seconds (1 hour)
 		 */
 		expiresIn?: number;
+		/**
+		 * A function that is called when a user verifies their email
+		 * @param user the user that verified their email
+		 * @param request the request object
+		 */
+		onEmailVerification?: (user: User, request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -412,7 +418,7 @@ export type BetterAuthOptions = {
 		 *
 		 * If set to 0, the session will be considered fresh every time. (⚠︎ not recommended)
 		 *
-		 * @default 5 minutes (5 * 60)
+		 * @default 1 day (60 * 60 * 24)
 		 */
 		freshAge?: number;
 	};
@@ -440,6 +446,12 @@ export type BetterAuthOptions = {
 			 * ⚠️ Warning: enabling this might lead to account takeovers, so proceed with caution.
 			 */
 			allowDifferentEmails?: boolean;
+			/**
+			 * If enabled (true), this will allow users to unlink all accounts.
+			 *
+			 * @default false
+			 */
+			allowUnlinkingAll?: boolean;
 		};
 	};
 	/**
@@ -463,7 +475,9 @@ export type BetterAuthOptions = {
 	/**
 	 * List of trusted origins.
 	 */
-	trustedOrigins?: string[] | ((request: Request) => string[]);
+	trustedOrigins?:
+		| string[]
+		| ((request: Request) => string[] | Promise<string[]>);
 	/**
 	 * Rate limiting configuration
 	 */

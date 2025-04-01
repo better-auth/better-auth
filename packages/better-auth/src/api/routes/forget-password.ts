@@ -257,7 +257,6 @@ export const resetPassword = createAuthEndpoint(
 				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
@@ -272,6 +271,10 @@ export const resetPassword = createAuthEndpoint(
 				},
 				ctx,
 			);
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verification.id,
+			);
+
 			return ctx.json({
 				status: true,
 			});
@@ -281,6 +284,8 @@ export const resetPassword = createAuthEndpoint(
 			hashedPassword,
 			ctx,
 		);
+		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+
 		return ctx.json({
 			status: true,
 		});

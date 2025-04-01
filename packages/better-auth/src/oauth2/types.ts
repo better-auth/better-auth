@@ -19,6 +19,8 @@ export interface OAuthProvider<
 		codeVerifier: string;
 		scopes?: string[];
 		redirectURI: string;
+		display?: string;
+		loginHint?: string;
 	}) => Promise<URL> | URL;
 	name: string;
 	validateAuthorizationCode: (data: {
@@ -37,6 +39,9 @@ export interface OAuthProvider<
 		};
 		data: T;
 	} | null>;
+	/**
+	 * Custom function to refresh a token
+	 */
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
 	/**
@@ -55,6 +60,7 @@ export interface OAuthProvider<
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	options?: ProviderOptions;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
@@ -110,6 +116,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 		data: any;
 	}>;
 	/**
+	 * Custom function to refresh a token
+	 */
+	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
+	/**
 	 * Custom function to map the provider profile to a
 	 * user.
 	 */
@@ -139,4 +149,17 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	/**
+	 * The prompt to use for the authorization code request
+	 */
+	prompt?:
+		| "select_account"
+		| "consent"
+		| "login"
+		| "none"
+		| "select_account+consent";
+	/**
+	 * The response mode to use for the authorization code request
+	 */
+	responseMode?: "query" | "form_post";
 };

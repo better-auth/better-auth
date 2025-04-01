@@ -122,6 +122,41 @@ describe("Email Verification", async () => {
 		});
 		expect(res.error?.code).toBe("TOKEN_EXPIRED");
 	});
+
+	it("should call onEmailVerification callback when email is verified", async () => {
+		const onEmailVerificationMock = vi.fn();
+		const { auth, client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+					mockSendEmail(user.email, url);
+				},
+				onEmailVerification: onEmailVerificationMock,
+			},
+		});
+
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(onEmailVerificationMock).toHaveBeenCalledWith(
+			expect.objectContaining({ email: testUser.email }),
+			expect.any(Object),
+		);
+	});
 });
 
 describe("Email Verification Secondary Storage", async () => {

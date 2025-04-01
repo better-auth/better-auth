@@ -181,7 +181,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					if (!storedCode) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "No consent prompt found",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 					const verification =
@@ -189,20 +189,20 @@ export const oidcProvider = (options: OIDCOptions) => {
 					if (!verification) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Invalid code",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 					if (verification.expiresAt < new Date()) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Code expired",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
 					if (!value.requireConsent || !value.state) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Consent not required",
-							error: "invalid_grant",
+							error: "invalid_request",
 						});
 					}
 
@@ -576,6 +576,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...(requestedScopes.includes("email") ? email : {}),
 					};
 
+					const additionalUserClaims = options.getAdditionalUserInfoClaim
+						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+						: {};
+
 					const idToken = await new SignJWT({
 						sub: user.id,
 						aud: client_id.toString(),
@@ -584,6 +588,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
+						...additionalUserClaims,
 					})
 						.setProtectedHeader({ alg: secretKey.alg })
 						.setIssuedAt()
@@ -670,7 +675,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const requestedScopes = accessToken.scopes.split(" ");
-					const userClaims = {
+					const baseUserClaims = {
 						sub: user.id,
 						email: requestedScopes.includes("email") ? user.email : undefined,
 						name: requestedScopes.includes("profile") ? user.name : undefined,
@@ -687,7 +692,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.emailVerified
 							: undefined,
 					};
-					return ctx.json(userClaims);
+					const userClaims = options.getAdditionalUserInfoClaim
+						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+						: baseUserClaims;
+					return ctx.json({
+						...baseUserClaims,
+						...userClaims,
+					});
 				},
 			),
 			registerOAuthApplication: createAuthEndpoint(
