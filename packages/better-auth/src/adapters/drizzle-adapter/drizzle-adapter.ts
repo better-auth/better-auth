@@ -86,18 +86,37 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						.from(schemaModel)
 						.where(...clause);
 					return res[0];
-				} else if (builderVal) {
+				} else if (builderVal && builderVal[0]?.id?.value) {
 					const tId = builderVal[0]?.id.value;
 					const res = await db
 						.select()
 						.from(schemaModel)
-						.where(eq(schemaModel.id, tId));
+						.where(eq(schemaModel.id, tId))
+						.limit(1)
+						.execute();
 					return res[0];
 				} else if (data.id) {
 					const res = await db
 						.select()
 						.from(schemaModel)
-						.where(eq(schemaModel.id, data.id));
+						.where(eq(schemaModel.id, data.id))
+						.limit(1)
+						.execute();
+					return res[0];
+				} else{
+					// If the user doesn't have `id` as a field, then this will fail.
+					// We expect that they defined `id` in all of their models.
+					if(!("id" in schemaModel)) {
+						throw new BetterAuthError(
+							`The model "${model}" does not have an "id" field. Please use the "id" field as your primary key.`,
+						);
+					}
+					const res = await db
+						.select()
+						.from(schemaModel)
+						.orderBy(desc(schemaModel.id))
+						.limit(1)
+						.execute();
 					return res[0];
 				}
 			};

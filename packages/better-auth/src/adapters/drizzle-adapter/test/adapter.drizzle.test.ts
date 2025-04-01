@@ -78,7 +78,7 @@ describe("Drizzle Adapter Tests", async () => {
 	});
 });
 
-describe("Authentication Flow Tests", async () => {
+describe("Drizzle Adapter Authentication Flow Tests", async () => {
 	const pg = createTestPool();
 	let postgres: Kysely<any>;
 	const opts = createTestOptions(pg);
@@ -117,7 +117,7 @@ describe("Authentication Flow Tests", async () => {
 	});
 });
 
-describe("Number Id Adapter Test", async () => {
+describe("Drizzle Adapter Number Id Test", async () => {
 	let pg: Pool;
 	let postgres: Kysely<any>;
 	pg = createTestPool();

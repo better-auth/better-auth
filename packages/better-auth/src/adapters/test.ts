@@ -828,6 +828,7 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 			async ({ onTestFailed }) => {
 				resetDebugLogs();
 				onTestFailed(() => {
+					console.log(`ID number from last create: ${idNumber}`);
 					printDebugLogs();
 				});
 				const res = await (await adapter()).create({
