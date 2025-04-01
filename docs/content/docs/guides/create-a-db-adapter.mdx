@@ -227,6 +227,24 @@ Default: `false`
 
 </Accordion>
 
+<Accordion title="customIdGenerator">
+If your database only supports a specific custom id generation, then you can use this option to generate your own IDs.
+
+Notes:
+* If the user enabled `useNumberId`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
+* If `generateId` is `false` in the user's Better-Auth config, then this option will be ignored.
+* If `generateId` is a function, then it will override this option.
+
+```ts title="Example"
+customIdGenerator: ({ model }) => {
+  return "my-super-unique-id";
+};
+```
+
+Default: `undefined`
+
+</Accordion>
+
 <Accordion title="mapKeysTransformInput">
 The `mapKeysTransformInput` option is used to map the keys of the input data.
 
@@ -422,11 +440,12 @@ Note: If you're unsure if your currrent `fieldName` data is from the schema's fi
 <Accordion title="getFieldAttributes">
   The `getFieldAttributes` function is used to get the field attributes for a given field.
 
-  We recommend not using `schema[model].fields[field]` directly, as it doesn't account of things such as `id`s.
+We recommend not using `schema[model].fields[field]` directly, as it doesn't account of things such as `id`s.
 
-  Instead, we recommend using this function to get the field attributes.
+Instead, we recommend using this function to get the field attributes.
 
-  Note: any model name or field name is allowed, whether default to schema or not.
+Note: any model name or field name is allowed, whether default to schema or not.
+
 </Accordion>
 </Accordions>
 
@@ -447,7 +466,7 @@ adapter: ({
 
 ### Adapter Methods
 
-#### Good to know
+### Good to know
 
 Here are some things that we handle for you, and that you don't need to worry about:
 
@@ -467,6 +486,7 @@ Note:
 In all cases, the `id` field is automatically generated inside of the `data` object unless the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better-Auth config.
 
 In these cases, it's expected that the users database will handle the id generation.
+
 </Callout>
 
 parameters:

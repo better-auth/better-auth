@@ -202,6 +202,29 @@ export interface AdapterConfig {
 		 */
 		options: BetterAuthOptions;
 	}) => any;
+	/**
+	 * Custom ID generator function.
+	 *
+	 * By default, we can handle ID generation for you, however if the database your adapter is for only supports a specific custom id generation,
+	 * then you can use this function to generate your own IDs.
+	 *
+	 *
+	 * Notes:
+	 * - If the user enabled `useNumberId`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
+	 * - If `generateId` is `false` in the user's Better-Auth config, then this option will be ignored.
+	 * - If `generateId` is a function, then it will override this option.
+	 *
+	 * @example
+	 *
+	 * ```ts
+	 * customIdGenerator: ({ model }) => {
+	 * 	return "my-super-unique-id";
+	 * }
+	 * ```
+	 */
+	customIdGenerator?: (props: {
+		model: string;
+	}) => string;
 }
 
 export type CreateCustomAdapter = ({

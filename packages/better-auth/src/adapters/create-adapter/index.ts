@@ -307,11 +307,13 @@ export const createAdapter =
 							options.advanced?.database?.useNumberId
 						)
 							return undefined;
-						return (
-							options.advanced?.database?.generateId?.({
-								model: unsafe_model,
-							}) ?? defaultGenerateId()
-						);
+						if (options.advanced?.database?.generateId) {
+							return options.advanced?.database?.generateId({model: unsafe_model});
+						}
+						if (config.customIdGenerator) {
+							return config.customIdGenerator({ model: unsafe_model });
+						}
+						return defaultGenerateId();
 					},
 				};
 			}
