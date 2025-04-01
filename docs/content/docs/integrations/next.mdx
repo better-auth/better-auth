@@ -144,7 +144,6 @@ export async function middleware(request: NextRequest) {
         // Optionally pass config if cookie name or prefix is customized in auth config.
 		cookieName: "session_token",
 		cookiePrefix: "better-auth"
-
     });
 
 	if (!sessionCookie) {
