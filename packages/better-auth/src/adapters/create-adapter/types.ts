@@ -279,7 +279,7 @@ export interface CustomAdapter {
 		data: T;
 		select?: string[];
 	}) => Promise<T>;
-	update: <T extends Record<string, any>>(data: {
+	update: <T>(data: {
 		model: string;
 		where: CleanedWhere[];
 		update: T;
@@ -289,7 +289,7 @@ export interface CustomAdapter {
 		where: CleanedWhere[];
 		update: Record<string, any>;
 	}) => Promise<number>;
-	findOne: <T extends Record<string, any>>({
+	findOne: <T>({
 		model,
 		where,
 		select,
@@ -298,7 +298,7 @@ export interface CustomAdapter {
 		where: CleanedWhere[];
 		select?: string[];
 	}) => Promise<T | null>;
-	findMany: <T extends Record<string, any>>({
+	findMany: <T>({
 		model,
 		where,
 		limit,

@@ -703,7 +703,7 @@ export const createAdapter =
 				);
 				return updatedCount;
 			},
-			findOne: async <T>({
+			findOne: async <T extends Record<string, any>>({
 				model: unsafeModel,
 				where: unsafeWhere,
 				select,
@@ -749,7 +749,7 @@ export const createAdapter =
 				);
 				return transformed;
 			},
-			findMany: async <T>({
+			findMany: async <T extends Record<string, any>>({
 				model: unsafeModel,
 				where: unsafeWhere,
 				limit: unsafeLimit,
