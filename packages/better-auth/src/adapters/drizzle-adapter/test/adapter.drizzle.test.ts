@@ -1,3 +1,4 @@
+import merge from "deepmerge";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "./schema";
 import { runAdapterTest, runNumberIdAdapterTest } from "../../test";
@@ -67,22 +68,12 @@ describe("Drizzle Adapter Tests", async () => {
 
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return adapter({
-				...customOptions,
-				user: {
-					...opts.user,
-					...customOptions.user,
-				},
-				session: {
-					...opts.session,
-					...customOptions.session,
-				},
-				advanced: {
-					...opts.advanced,
-					...customOptions.advanced,
-				},
-				database: opts.database,
-			});
+			const db = opts.database;
+			//@ts-ignore
+			opts.database = undefined;
+			const merged = merge(opts, customOptions);
+			merged.database = db;
+			return adapter(merged);
 		},
 	});
 });
@@ -129,10 +120,9 @@ describe("Authentication Flow Tests", async () => {
 describe("Number Id Adapter Test", async () => {
 	let pg: Pool;
 	let postgres: Kysely<any>;
-	let opts: BetterAuthOptions;
 	pg = createTestPool();
 	postgres = createKyselyInstance(pg);
-	opts = createTestOptions(pg, true);
+	const opts = createTestOptions(pg, true);
 	beforeAll(async () => {
 		await cleanupDatabase(postgres, false);
 		const { runMigrations } = await getMigrations(opts);
@@ -153,22 +143,12 @@ describe("Number Id Adapter Test", async () => {
 
 	await runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return adapter({
-				...customOptions,
-				user: {
-					...opts.user,
-					...customOptions.user,
-				},
-				session: {
-					...opts.session,
-					...customOptions.session,
-				},
-				advanced: {
-					...opts.advanced,
-					...customOptions.advanced,
-				},
-				database: opts.database,
-			});
+			const db = opts.database;
+			//@ts-ignore
+			opts.database = undefined;
+			const merged = merge(opts, customOptions);
+			merged.database = db;
+			return adapter(merged);
 		},
 	});
 });
