@@ -8,6 +8,7 @@ import type { BetterAuthOptions } from "../../../types";
 import { createPool, type Pool } from "mysql2/promise";
 import { Kysely, MysqlDialect } from "kysely";
 import { betterAuth } from "../../../auth";
+import merge from "deepmerge";
 
 const TEST_DB_MYSQL_URL = "mysql://user:password@localhost:3306/better_auth";
 
@@ -24,30 +25,30 @@ const cleanupDatabase = async (mysql: Pool) => {
 	await mysql.end();
 };
 
-const createTestOptions = (pool: any): BetterAuthOptions => ({
-	database: pool,
-	user: {
-		fields: { email: "email_address" },
-		additionalFields: {
-			test: {
-				type: "string",
-				defaultValue: "test",
+const createTestOptions = (pool: any) =>
+	({
+		database: pool,
+		user: {
+			fields: { email: "email_address" },
+			additionalFields: {
+				test: {
+					type: "string",
+					defaultValue: "test",
+				},
 			},
 		},
-	},
-	session: {
-		modelName: "sessions",
-	},
-});
+		session: {
+			modelName: "sessions",
+		},
+	}) satisfies BetterAuthOptions;
 
 describe("Drizzle Adapter Tests (MySQL)", async () => {
 	let pool: any;
 	let mysql: Kysely<any>;
-	let opts: BetterAuthOptions;
 
 	pool = createTestPool();
 	mysql = createKyselyInstance(pool);
-	opts = createTestOptions(pool);
+	let opts = createTestOptions(pool);
 	const { runMigrations } = await getMigrations(opts);
 	await runMigrations();
 
@@ -58,19 +59,29 @@ describe("Drizzle Adapter Tests (MySQL)", async () => {
 	const db = drizzle({
 		client: pool,
 	});
-	const adapter = drizzleAdapter(db, { provider: "mysql", schema });
+	const adapter = drizzleAdapter(db, {
+		provider: "mysql",
+		schema,
+		debugLogs: {
+			isRunningAdapterTests: true,
+		},
+	});
 
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
-			return adapter({ ...opts, ...customOptions });
+			const db = opts.database;
+			opts.database = undefined;
+			const merged = merge(opts, customOptions);
+			merged.database = db;
+			return adapter(merged);
 		},
 	});
 });
 
 describe("Authentication Flow Tests (MySQL)", async () => {
 	const pool = createTestPool();
-	let mysql: Kysely<any>;
 	const opts = createTestOptions(pool);
+	let mysql: Kysely<any>;
 	const testUser = {
 		email: "test-email@email.com",
 		password: "password",
