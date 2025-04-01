@@ -152,7 +152,8 @@ Create custom hooks that integrate with NestJS's dependency injection:
 
 ```ts title="hooks/sign-up.hook.ts"
 import { Injectable } from "@nestjs/common";
-import { BeforeHook, Hook, AuthContext } from "better-auth/nestjs";
+import { BeforeHook, Hook } from "better-auth/nestjs";
+import type { AuthContext } from "better-auth";
 import { SignUpService } from "./sign-up.service";
 
 @Hook()
