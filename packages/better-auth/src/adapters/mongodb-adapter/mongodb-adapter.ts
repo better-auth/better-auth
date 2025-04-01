@@ -30,6 +30,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 			mapKeysTransformOutput: {
 				_id: "id",
 			},
+			supportsNumericIds: false,
 			customTransformInput({
 				action,
 				data,
