@@ -58,6 +58,17 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						: where.length > 0 && where[0].field
 							? where[0].field
 							: "id";
+
+					if (!values.id && where.length === 0) {
+						res = await db
+							.selectFrom(model)
+							.selectAll()
+							.orderBy(getFieldName({ model, field }), "desc")
+							.limit(1)
+							.executeTakeFirst();
+						return res;
+					}
+
 					const value = values[field] || where[0].value;
 					res = await db
 						.selectFrom(model)
