@@ -14,6 +14,12 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	debugLogs?: AdapterDebugLogs;
+	/**
+	 * Use plural for table names.
+	 *
+	 * @default false
+	 */
+	usePlural?: boolean;
 }
 
 export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
@@ -21,41 +27,17 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 		config: {
 			adapterId: "kysely",
 			adapterName: "Kysely Adapter",
-			usePlural: false,
-			debugLogs: config?.debugLogs ?? false,
-			customTransformInput({ data: value, field, fieldAttributes: f }) {
-				if (field === "id") {
-					return value;
-				}
-				const { type = "sqlite" } = config || {};
-				if (
-					f.type === "boolean" &&
-					(type === "sqlite" || type === "mssql") &&
-					value !== null &&
-					value !== undefined
-				) {
-					return value ? 1 : 0;
-				}
-				if (f.type === "date" && value && value instanceof Date) {
-					return type === "sqlite" ? value.toISOString() : value;
-				}
-				return value;
-			},
-			customTransformOutput({ data: value, fieldAttributes: f }) {
-				const { type = "sqlite" } = config || {};
-
-				if (
-					f.type === "boolean" &&
-					(type === "sqlite" || type === "mssql") &&
-					value !== null
-				) {
-					return value === 1;
-				}
-				if (f.type === "date" && value) {
-					return new Date(value);
-				}
-				return value;
-			},
+			usePlural: config?.usePlural,
+			debugLogs: config?.debugLogs,
+			supportsBooleans:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsDates:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsJSON: false,
 		},
 		adapter: ({ getFieldName, schema }) => {
 			const withReturning = async (
@@ -68,18 +50,21 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			) => {
 				let res: any;
 				if (config?.type === "mysql") {
-					//this isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id. Change this if there is a better way.
+					// This isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id.
+					// Change this if there is a better way.
 					await builder.execute();
 					const field = values.id
 						? "id"
-						: where[0].field
+						: where.length > 0 && where[0].field
 							? where[0].field
 							: "id";
 					const value = values[field] || where[0].value;
 					res = await db
 						.selectFrom(model)
 						.selectAll()
+						.orderBy(getFieldName({ model, field }), "desc")
 						.where(getFieldName({ model, field }), "=", value)
+						.limit(1)
 						.executeTakeFirst();
 					return res;
 				}
@@ -194,6 +179,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
+
 					return (await withReturning(data, builder, model, [])) as any;
 				},
 				async findOne({ model, where, select }) {

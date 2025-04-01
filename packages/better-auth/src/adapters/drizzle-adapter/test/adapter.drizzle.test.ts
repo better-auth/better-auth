@@ -170,10 +170,5 @@ describe("Number Id Adapter Test", async () => {
 				database: opts.database,
 			});
 		},
-		cleanUp: async () => {
-			await cleanupDatabase(postgres, false);
-			const { runMigrations } = await getMigrations(opts);
-			await runMigrations();
-		},
 	});
 });

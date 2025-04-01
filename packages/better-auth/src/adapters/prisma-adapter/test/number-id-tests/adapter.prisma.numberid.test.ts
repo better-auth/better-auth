@@ -51,10 +51,5 @@ describe("Number Id Adapter Test", async () => {
 				database,
 			});
 		},
-		async cleanUp() {
-			const { getAdapter } = await import("./get-adapter");
-			const { clearDb } = getAdapter();
-			await clearDb();
-		},
 	});
 });

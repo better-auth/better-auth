@@ -44,11 +44,5 @@ describe("Number Id Adapter Test", async () => {
 				...customOptions,
 			});
 		},
-		cleanUp() {
-			db.user = [];
-			db.session = [];
-			db.account = [];
-			return Promise.resolve();
-		},
 	});
 });

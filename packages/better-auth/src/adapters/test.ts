@@ -15,7 +15,6 @@ interface NumberIdAdapterTestOptions {
 		customOptions?: Omit<BetterAuthOptions, "database">,
 	) => Promise<Adapter>;
 	disableTests?: Partial<Record<keyof typeof numberIdAdapterTests, boolean>>;
-	cleanUp: () => Promise<void>;
 	testPrefix?: string;
 }
 
@@ -779,18 +778,16 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 }
 
 export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
-	describe("Should run number id specific tests", async () => {
-		beforeAll(async () => {
-			await opts.cleanUp();
-		});
-		const adapter = async () =>
-			await opts.getAdapter({
-				advanced: {
-					database: {
-						useNumberId: true,
-					},
+	const cleanup: { modelName: string; id: string }[] = [];
+	const adapter = async () =>
+		await opts.getAdapter({
+			advanced: {
+				database: {
+					useNumberId: true,
 				},
-			});
+			},
+		});
+	describe("Should run number id specific tests", async () => {
 		let idNumber = -1;
 
 		async function resetDebugLogs() {
@@ -818,6 +815,7 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 						email: "user@email.com",
 					},
 				});
+				cleanup.push({ modelName: "user", id: res.id });
 				expect(typeof res.id).toBe("string"); // we forcefully return all `id`s as strings. this is intentional.
 				expect(parseInt(res.id)).toBeGreaterThan(0);
 				idNumber = parseInt(res.id);
@@ -839,13 +837,20 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 						email: "user2@email.com",
 					},
 				});
+				cleanup.push({ modelName: "user", id: res.id });
 				expect(parseInt(res.id)).toBe(idNumber + 1);
 			},
 		);
 	});
+
 	describe("Should run normal adapter tests with number id enabled", async () => {
 		beforeAll(async () => {
-			await opts.cleanUp();
+			for (const { modelName, id } of cleanup) {
+				await (await adapter()).delete({
+					model: modelName,
+					where: [{ field: "id", value: id }],
+				});
+			}
 		});
 		await adapterTest(
 			{

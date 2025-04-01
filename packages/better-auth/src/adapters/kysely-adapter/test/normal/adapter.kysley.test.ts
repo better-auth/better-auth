@@ -1,70 +1,86 @@
 import merge from "deepmerge";
-import fs from "fs/promises";
+import fsPromises from "fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runAdapterTest } from "../../test";
-import { getMigrations } from "../../../db/get-migration";
+import { runAdapterTest } from "../../../test";
+import { getMigrations } from "../../../../db/get-migration";
 import path from "path";
 import Database from "better-sqlite3";
-import { kyselyAdapter } from "..";
+import { kyselyAdapter } from "../..";
 import { Kysely, MysqlDialect, sql, SqliteDialect } from "kysely";
-import type { BetterAuthOptions } from "../../../types";
+import type { BetterAuthOptions } from "../../../../types";
 import { createPool } from "mysql2/promise";
 
 import * as tedious from "tedious";
 import * as tarn from "tarn";
 import { MssqlDialect } from "kysely";
-import { getTestInstance } from "../../../test-utils/test-instance";
+import { getTestInstance } from "../../../../test-utils/test-instance";
+import { setState } from "../state";
+
+const sqlite = new Database(path.join(__dirname, "test.db"));
+const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
+const sqliteKy = new Kysely({
+	dialect: new SqliteDialect({
+		database: sqlite,
+	}),
+});
+const mysqlKy = new Kysely({
+	dialect: new MysqlDialect(mysql),
+});
+export const opts = ({
+	database,
+	isNumberIdTest,
+}: { database: BetterAuthOptions["database"]; isNumberIdTest: boolean }) =>
+	({
+		database: database,
+		user: {
+			fields: {
+				email: "email_address",
+			},
+			additionalFields: {
+				test: {
+					type: "string",
+					defaultValue: "test",
+				},
+			},
+		},
+		session: {
+			modelName: "sessions",
+		},
+		advanced: {
+			database: {
+				useNumberId: isNumberIdTest,
+			},
+		},
+	}) satisfies BetterAuthOptions;
 
 describe("adapter test", async () => {
-	const sqlite = new Database(path.join(__dirname, "test.db"));
-	const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
-	const sqliteKy = new Kysely({
-		dialect: new SqliteDialect({
-			database: sqlite,
-		}),
-	});
-	const mysqlKy = new Kysely({
-		dialect: new MysqlDialect(mysql),
-	});
-	const opts = (database: BetterAuthOptions["database"]) =>
-		({
-			database: database,
-			user: {
-				fields: {
-					email: "email_address",
-				},
-				additionalFields: {
-					test: {
-						type: "string",
-						defaultValue: "test",
-					},
-				},
-			},
-			session: {
-				modelName: "sessions",
-			},
-		}) satisfies BetterAuthOptions;
 	const mysqlOptions = opts({
-		db: mysqlKy,
-		type: "mysql",
+		database: {
+			db: mysqlKy,
+			type: "mysql",
+		},
+		isNumberIdTest: false,
 	});
+
 	const sqliteOptions = opts({
-		db: sqliteKy,
-		type: "sqlite",
+		database: {
+			db: sqliteKy,
+			type: "sqlite",
+		},
+		isNumberIdTest: false,
 	});
 	beforeAll(async () => {
-		const { runMigrations } = await getMigrations(mysqlOptions);
-		await runMigrations();
-		const { runMigrations: runMigrationsSqlite } =
-			await getMigrations(sqliteOptions);
-		await runMigrationsSqlite();
+		setState("RUNNING");
+		console.log(`Now running Number ID Kysely adapter test...`);
+		await (await getMigrations(mysqlOptions)).runMigrations();
+		await (await getMigrations(sqliteOptions)).runMigrations();
 	});
 
 	afterAll(async () => {
 		await mysql.query("DROP DATABASE IF EXISTS better_auth");
 		await mysql.query("CREATE DATABASE better_auth");
 		await mysql.end();
-		await fs.unlink(path.join(__dirname, "test.db"));
+		await fsPromises.unlink(path.join(__dirname, "test.db"));
 	});
 
 	const mysqlAdapter = kyselyAdapter(mysqlKy, {
@@ -131,6 +147,13 @@ describe("mssql", async () => {
 	beforeAll(async () => {
 		const { runMigrations, toBeAdded, toBeCreated } = await getMigrations(opts);
 		await runMigrations();
+		return async () => {
+			await resetDB();
+			console.log(
+				`Normal Kysely adapter test finished. Now allowing number ID Kysely tests to run.`,
+			);
+			setState("IDLE");
+		};
 	});
 	const mssql = new Kysely({
 		dialect: dialect,
@@ -148,10 +171,6 @@ describe("mssql", async () => {
 		await sql`DROP TABLE dbo.account;`.execute(mssql);
 		await sql`DROP TABLE dbo.users;`.execute(mssql);
 	}
-
-	afterAll(async () => {
-		await resetDB();
-	});
 
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
