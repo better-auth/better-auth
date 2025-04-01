@@ -7,11 +7,6 @@ const ogSchema = z.object({
   mode: z.string(),
   type: z.string(),
 });
-const val = {
-  heading: "Some headin",
-  mode: "dark",
-  type: "documentation",
-};
 export async function GET(req: Request) {
   try {
     const geist = await fetch(
@@ -22,7 +17,7 @@ export async function GET(req: Request) {
     ).then((res) => res.arrayBuffer());
     const url = new URL(req.url);
     const urlParamsValues = Object.fromEntries(url.searchParams);
-    const validParams = ogSchema.parse(val);
+    const validParams = ogSchema.parse(urlParamsValues);
     const { heading, type } = validParams;
     const trueHeading =
       heading.length > 140 ? `${heading.substring(0, 140)}...` : heading;
