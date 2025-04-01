@@ -120,6 +120,30 @@ describe("account", async () => {
 		expect(accounts.data?.length).toBe(2);
 	});
 
+	it("should pass custom scopes to authorization URL", async () => {
+		const customScope = "https://www.googleapis.com/auth/drive.readonly";
+		const linkAccountRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				scopes: [customScope],
+			},
+			{
+				headers,
+			},
+		);
+		
+		expect(linkAccountRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		
+		// Verify the custom scope is included in the authorization URL
+		const url = new URL(linkAccountRes.data!.url);
+		const scopesParam = url.searchParams.get("scope");
+		expect(scopesParam).toContain(customScope);
+	});
+
 	it("should link second account from the same provider", async () => {
 		const { headers: headers2 } = await signInWithTestUser();
 		const linkAccountRes = await client.linkSocial(
