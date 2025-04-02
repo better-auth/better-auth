@@ -103,10 +103,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						.limit(1)
 						.execute();
 					return res[0];
-				} else{
+				} else {
 					// If the user doesn't have `id` as a field, then this will fail.
 					// We expect that they defined `id` in all of their models.
-					if(!("id" in schemaModel)) {
+					if (!("id" in schemaModel)) {
 						throw new BetterAuthError(
 							`The model "${model}" does not have an "id" field. Please use the "id" field as your primary key.`,
 						);

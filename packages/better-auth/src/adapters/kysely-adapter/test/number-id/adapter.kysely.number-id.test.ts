@@ -39,7 +39,6 @@ export const opts = ({
 		},
 	}) satisfies BetterAuthOptions;
 
-
 const sqlite = new Database(path.join(__dirname, "test.db"));
 const mysql = createPool("mysql://user:password@localhost:3306/better_auth");
 const sqliteKy = new Kysely({
