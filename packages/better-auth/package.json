@@ -14,10 +14,10 @@
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",
     "stub": "unbuild --stub",
-    "test": "vitest --exclude **/adapter.*",
+    "test": "vitest --exclude **/adapter.* && pnpm test:adapters",
+    "test:adapters": "vitest run create-adapter && vitest run adapter.drizzle.test adapter.drizzle.mysql.test && vitest run adapter.kysley.test && vitest run adapter.kysley.number-id.test && vitest run adapter.memory.test && vitest run adapter.mongo-db.test && vitest run adapter.prisma.test adapter.prisma.number-id.test",
     "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
     "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
-    "test:adapters": "vitest run create-adapter && vitest run adapter.drizzle.test adapter.drizzle.mysql.test && vitest run adapter.kysley.test && vitest run adapter.kysley.number-id.test && vitest run adapter.memory.test && vitest run adapter.mongo-db.test && vitest run adapter.prisma.test adapter.prisma.number-id.test",
     "bump": "bumpp",
     "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
   },
