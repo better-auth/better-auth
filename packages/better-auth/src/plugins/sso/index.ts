@@ -110,6 +110,13 @@ export const sso = (options?: SSOOptions) => {
 								description: "The user info endpoint",
 							})
 							.optional(),
+						getUserInfo: z
+							.boolean({
+								description:
+									"Whether to always fetch user info from the user info endpoint",
+							})
+							.default(false)
+							.optional(),
 						tokenEndpointAuthentication: z
 							.enum(["client_secret_post", "client_secret_basic"])
 							.optional(),
@@ -209,6 +216,7 @@ export const sso = (options?: SSOOptions) => {
 								mapping: body.mapping,
 								scopes: body.scopes,
 								userinfoEndpoint: body.userInfoEndpoint,
+								getUserInfo: body.getUserInfo,
 							}),
 							organizationId: body.organizationId,
 							userId: ctx.context.session.user.id,
@@ -545,7 +553,7 @@ export const sso = (options?: SSOOptions) => {
 						emailVerified?: boolean;
 						[key: string]: any;
 					} | null = null;
-					if (tokenResponse.idToken) {
+					if (tokenResponse.idToken && !config.getUserInfo) {
 						const idToken = decodeJwt(tokenResponse.idToken);
 						if (!config.jwksEndpoint) {
 							throw ctx.redirect(
@@ -783,6 +791,11 @@ interface OIDCConfig {
 	authorizationEndpoint?: string;
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string;
+	/**
+	 * Whether to always fetch user info from the user info endpoint
+	 * @default false
+	 */
+	getUserInfo?: boolean;
 	scopes?: string[];
 	tokenEndpoint?: string;
 	tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic";

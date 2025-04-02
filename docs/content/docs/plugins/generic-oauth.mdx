@@ -104,7 +104,7 @@ interface GenericOAuthConfig {
   prompt?: string;
   pkce?: boolean;
   accessType?: string;
-  getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+  getUserInfo?: boolean | ((tokens: OAuth2Tokens) => Promise<User | null>);
 }
 ```
 
@@ -122,7 +122,7 @@ interface GenericOAuthConfig {
 - `prompt`: Controls the authentication experience for the user.
 - `pkce`: Whether to use PKCE (Proof Key for Code Exchange, defaults to false).
 - `accessType`: Access type for the authorization request.
-- `getUserInfo`: Custom function to fetch user info (optional).
+- `getUserInfo`: A boolean to always fetch from the userInfoUrl or custom function to fetch user info (optional).
 
 ## Advanced Usage
 
@@ -146,6 +146,20 @@ genericOAuth({
           // ... map other fields as needed
         };
       }
+    }
+  ]
+})
+```
+
+Or a boolean to always fetch from the `userInfoUrl`.
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      // ... other config options
+      getUserInfo: true // Always fetch from userInfoUrl
     }
   ]
 })
