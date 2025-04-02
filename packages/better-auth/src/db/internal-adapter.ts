@@ -281,26 +281,27 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified) {
+				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
 					return null;
 				}
-
-				const s = JSON.parse(sessionStringified);
-				const parsedSession = parseSessionOutput(ctx.options, {
-					...s.session,
-					expiresAt: new Date(s.session.expiresAt),
-					createdAt: new Date(s.session.createdAt),
-					updatedAt: new Date(s.session.updatedAt),
-				});
-				const parsedUser = parseUserOutput(ctx.options, {
-					...s.user,
-					createdAt: new Date(s.user.createdAt),
-					updatedAt: new Date(s.user.updatedAt),
-				});
-				return {
-					session: parsedSession,
-					user: parsedUser,
-				};
+				if (sessionStringified) {
+					const s = JSON.parse(sessionStringified);
+					const parsedSession = parseSessionOutput(ctx.options, {
+						...s.session,
+						expiresAt: new Date(s.session.expiresAt),
+						createdAt: new Date(s.session.createdAt),
+						updatedAt: new Date(s.session.updatedAt),
+					});
+					const parsedUser = parseUserOutput(ctx.options, {
+						...s.user,
+						createdAt: new Date(s.user.createdAt),
+						updatedAt: new Date(s.user.updatedAt),
+					});
+					return {
+						session: parsedSession,
+						user: parsedUser,
+					};
+				}
 			}
 
 			const session = await adapter.findOne<Session>({

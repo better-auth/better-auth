@@ -115,8 +115,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						sessionDataPayload.signature,
 					);
 					if (!isValid) {
-						deleteSessionCookie(ctx);
-						return ctx.json(null);
+						const dataCookie = ctx.context.authCookies.sessionData.name;
+						ctx.setCookie(dataCookie, "", {
+							maxAge: 0,
+						});
 					}
 				}
 
