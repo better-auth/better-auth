@@ -9,6 +9,7 @@ import type {
 	CleanedWhere,
 	CreateCustomAdapter,
 } from "./types";
+import type { FieldAttribute } from "../../db";
 export * from "./types";
 
 let debugLogs: any[] = [];
@@ -236,6 +237,41 @@ export const createAdapter =
 			}
 		};
 
+		const idField = ({ customModelName }: { customModelName?: string }) => {
+			const shouldGenerateId =
+				!config.disableIdGeneration && !options.advanced?.database?.useNumberId;
+			const model = getDefaultModelName(customModelName ?? "id");
+			return {
+				type: options.advanced?.database?.useNumberId ? "number" : "string",
+				required: shouldGenerateId ? true : false,
+				...(shouldGenerateId
+					? {
+							defaultValue() {
+								if (config.disableIdGeneration) return undefined;
+								const useNumberId = options.advanced?.database?.useNumberId;
+								let generateId = options.advanced?.database?.generateId;
+								if (options.advanced?.generateId) {
+									logger.warn(
+										"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
+									);
+									generateId = options.advanced?.generateId;
+								}
+								if (generateId === false || useNumberId) return undefined;
+								if (generateId) {
+									return generateId({
+										model,
+									});
+								}
+								if (config.customIdGenerator) {
+									return config.customIdGenerator({ model });
+								}
+								return defaultGenerateId();
+							},
+						}
+					: {}),
+			} satisfies FieldAttribute;
+		};
+
 		const getFieldAttributes = ({
 			model,
 			field,
@@ -247,31 +283,7 @@ export const createAdapter =
 			});
 
 			const fields = schema[defaultModelName].fields;
-			const shouldGenerateId =
-				!config.disableIdGeneration && !options.advanced?.database?.useNumberId;
-
-			fields.id = {
-				type: options.advanced?.database?.useNumberId ? "number" : "string",
-				required: shouldGenerateId ? true : false,
-				...(shouldGenerateId
-					? {
-							defaultValue() {
-								if (config.disableIdGeneration) return undefined;
-								if (
-									options.advanced?.database?.generateId === false ||
-									options.advanced?.database?.useNumberId
-								)
-									return undefined;
-								return (
-									options.advanced?.database?.generateId?.({
-										model: defaultModelName,
-									}) ?? defaultGenerateId()
-								);
-							},
-						}
-					: {}),
-			};
-
+			fields.id = idField({ customModelName: defaultModelName });
 			return fields[defaultFieldName];
 		};
 
@@ -298,24 +310,7 @@ export const createAdapter =
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
-				fields.id = {
-					type: options.advanced?.database?.useNumberId ? "number" : "string",
-					defaultValue() {
-						if (config.disableIdGeneration) return undefined;
-						if (
-							options.advanced?.database?.generateId === false ||
-							options.advanced?.database?.useNumberId
-						)
-							return undefined;
-						if (options.advanced?.database?.generateId) {
-							return options.advanced?.database?.generateId({model: unsafe_model});
-						}
-						if (config.customIdGenerator) {
-							return config.customIdGenerator({ model: unsafe_model });
-						}
-						return defaultGenerateId();
-					},
-				};
+				fields.id = idField({ customModelName: unsafe_model });
 			}
 			for (const field in fields) {
 				const value = data[field];
@@ -554,21 +549,6 @@ export const createAdapter =
 					console.log(stack);
 					//@ts-ignore
 					unsafeData.id = undefined;
-				}
-
-				if (options.advanced?.database?.generateId) {
-					//@ts-ignore
-					unsafeData.id =
-						// - Forces a new line, so that ts-ignore doesn't apply to this line:
-						options.advanced.database?.generateId({ model });
-				} else if (
-					!("id" in unsafeData) &&
-					options.advanced?.database?.generateId !== false &&
-					config.disableIdGeneration !== true &&
-					options.advanced?.database?.useNumberId !== true
-				) {
-					//@ts-ignore
-					unsafeData.id = defaultGenerateId();
 				}
 				debugLog(
 					{ method: "create" },

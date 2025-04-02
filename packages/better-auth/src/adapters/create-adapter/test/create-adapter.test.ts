@@ -144,8 +144,10 @@ describe("Create Adapter Helper", async () => {
 			},
 			options: {
 				advanced: {
-					generateId(options) {
-						return "HARD-CODED-ID";
+					database: {
+						generateId(options) {
+							return "HARD-CODED-ID";
+						},
 					},
 				},
 			},
@@ -168,7 +170,9 @@ describe("Create Adapter Helper", async () => {
 				},
 				options: {
 					advanced: {
-						useNumberId: true,
+						database: {
+							useNumberId: true,
+						},
 					},
 				},
 			});
@@ -1382,7 +1386,9 @@ describe("Create Adapter Helper", async () => {
 						const adapter = await createTestAdapter({
 							options: {
 								advanced: {
-									useNumberId: true,
+									database: {
+										useNumberId: true,
+									},
 								},
 							},
 							adapter(args_0) {
@@ -1420,7 +1426,9 @@ describe("Create Adapter Helper", async () => {
 						const adapter = await createTestAdapter({
 							options: {
 								advanced: {
-									useNumberId: true,
+									database: {
+										useNumberId: true,
+									},
 								},
 							},
 							adapter(args_0) {

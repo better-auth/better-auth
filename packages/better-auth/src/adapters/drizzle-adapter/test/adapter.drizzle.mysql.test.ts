@@ -29,7 +29,7 @@ const cleanupDatabase = async (mysql: Pool, shouldDestroy = true) => {
 	}
 	if (shouldDestroy) {
 		await mysql.end();
-	}else{
+	} else {
 		await new Promise((resolve) => setTimeout(resolve, 1000));
 	}
 };
