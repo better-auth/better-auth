@@ -1198,7 +1198,7 @@ importers:
         specifier: ^5.7.2
         version: 5.8.2
       vite:
-        specifier: ^5.4.16
+        specifier: ^5.4.14
         version: 5.4.16(@types/node@22.13.10)(less@4.2.2)(lightningcss@1.29.2)(sass@1.85.1)(terser@5.39.0)
       vite-tsconfig-paths:
         specifier: ^4.3.2
@@ -1289,7 +1289,7 @@ importers:
         specifier: ^5.7.2
         version: 5.8.2
       vite:
-        specifier: ^5.4.16
+        specifier: ^5.4.14
         version: 5.4.16(@types/node@22.13.10)(less@4.2.2)(lightningcss@1.29.2)(sass@1.85.1)(terser@5.39.0)
 
   examples/tanstack-example:
