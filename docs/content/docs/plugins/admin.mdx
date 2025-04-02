@@ -412,7 +412,7 @@ The plugin provides an easy way to define your own set of permissions for each r
 
 **Has Permission**:
 
-To check a users permissions, you can use the `hasPermission` function provided by the client.
+To check a user's permissions, you can use the `hasPermission` function provided by the client.
 
 ```ts title="auth-client.ts"
 const canCreateProject = await authClient.admin.hasPermission({
@@ -422,7 +422,7 @@ const canCreateProject = await authClient.admin.hasPermission({
 });
 ```
 
-If you want to check a users permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the users permissions.
+If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
