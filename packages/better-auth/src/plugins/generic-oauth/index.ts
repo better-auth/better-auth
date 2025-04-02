@@ -84,7 +84,7 @@ interface GenericOAuthConfig {
 	/**
 	 * Custom function or flag to fetch user info.
 	 * If provided as a function, it will be used instead of the default user info fetching logic.
-	 * 
+	 *
 	 * If explicitly set to `true`, the `userInfo` endpoint will be used to retrieve user info regardless of the presence of an ID token.
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
@@ -283,9 +283,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (!finalUserInfoUrl) {
 							return null;
 						}
-						const userInfo = typeof c.getUserInfo === "function"
-							? await c.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl, c.getUserInfo === true);
+						const userInfo =
+							typeof c.getUserInfo === "function"
+								? await c.getUserInfo(tokens)
+								: await getUserInfo(
+										tokens,
+										finalUserInfoUrl,
+										c.getUserInfo === true,
+									);
 						if (!userInfo) {
 							return null;
 						}
@@ -604,7 +609,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const userInfo = (
 						typeof provider.getUserInfo === "function"
 							? await provider.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl, provider.getUserInfo === true)
+							: await getUserInfo(
+									tokens,
+									finalUserInfoUrl,
+									provider.getUserInfo === true,
+								)
 					) as User | null;
 
 					if (!userInfo?.email) {
