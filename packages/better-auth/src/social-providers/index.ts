@@ -17,6 +17,8 @@ import { roblox } from "./roblox";
 import { z } from "zod";
 import { vk } from "./vk";
 import { kick } from "./kick";
+import { anilist } from "./anilist";
+
 export const socialProviders = {
 	apple,
 	discord,
@@ -35,6 +37,7 @@ export const socialProviders = {
 	reddit,
 	roblox,
 	vk,
+	anilist,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -73,5 +76,6 @@ export * from "./reddit";
 export * from "./roblox";
 export * from "./vk";
 export * from "./kick";
+export * from "./anilist";
 
 export type SocialProviderList = typeof socialProviderList;
