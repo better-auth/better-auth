@@ -123,7 +123,7 @@ export const passkey = (options?: PasskeyOptions) => {
 		id: "passkey",
 		endpoints: {
 			generatePasskeyRegistrationOptions: createAuthEndpoint(
-				"/passkey/generate-registration-options",
+				"/passkey/generate-register-options",
 				{
 					method: "GET",
 					use: [freshSessionMiddleware],

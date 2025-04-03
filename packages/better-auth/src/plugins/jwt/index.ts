@@ -187,6 +187,7 @@ export const jwt = (options?: JwtOptions) => {
 					method: "GET",
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebKeySet",
 							description: "Get the JSON Web Key Set",
 							responses: {
 								200: {
@@ -297,6 +298,7 @@ export const jwt = (options?: JwtOptions) => {
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebToken",
 							description: "Get a JWT token",
 							responses: {
 								200: {

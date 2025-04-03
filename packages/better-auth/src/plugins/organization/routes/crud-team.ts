@@ -107,7 +107,7 @@ export const removeTeam = createAuthEndpoint(
 			teamId: z.string(),
 			organizationId: z.string().optional(),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware],
 		metadata: {
 			openapi: {
 				operationId: "removeOrganizationTeam",

@@ -453,7 +453,7 @@ export const deleteOrganization = createAuthEndpoint(
 
 export const getFullOrganization = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
-		"/organization/get",
+		"/organization/get-full-organization",
 		{
 			method: "GET",
 			query: z.optional(
