@@ -589,7 +589,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) =>
 	createAuthEndpoint(
-		"/organization/get",
+		"/organization/get-full-organization",
 		{
 			method: "GET",
 			query: z.optional(
