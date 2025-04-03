@@ -324,7 +324,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		plugins: [],
 	});
 
-	const tables = getAuthTables(options);
+	const tables = getAuthTables({
+		...options,
+		session: {
+			...options.session,
+			storeSessionInDatabase: true // Forcing this to true to return the session table schema
+		}
+	});
 	const models = Object.entries(tables).reduce((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
