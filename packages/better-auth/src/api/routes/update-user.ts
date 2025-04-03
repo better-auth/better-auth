@@ -408,6 +408,29 @@ export const deleteUser = createAuthEndpoint(
 		metadata: {
 			openapi: {
 				description: "Delete the user",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									callbackURL: {
+										type: "string",
+										description: "The callback URL to redirect to after the user is deleted"
+									},
+									password: {
+										type: "string",
+										description: "The user's password. Required if session is not fresh"
+									},
+									token: {
+										type: "string",
+										description: "The deletion verification token"
+									}
+								}
+							}
+						}
+					}
+				},
 				responses: {
 					"200": {
 						description: "User deletion processed successfully",
