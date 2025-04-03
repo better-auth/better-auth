@@ -26,8 +26,8 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
   "vanilla"]} defaultValue="react">
     <Tab value="vanilla">
             ```ts  title="lib/auth-client.ts" 
-            import { createAuthClient } from  "better-auth/client"
-            export const authClient =  createAuthClient({
+            import { createAuthClient } from "better-auth/client"
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -35,7 +35,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     <Tab value="react" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"  
             import { createAuthClient } from "better-auth/react"
-            export const authClient =  createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -43,7 +43,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     <Tab value="vue" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts" 
             import { createAuthClient } from "better-auth/vue"
-            export const authClient =  createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -51,7 +51,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     <Tab value="svelte" title="lib/auth-client.ts"> 
             ```ts  title="lib/auth-client.ts" 
             import { createAuthClient } from "better-auth/svelte"
-            export const authClient =  createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -59,7 +59,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     <Tab value="solid" title="lib/auth-client.ts">
             ```ts title="lib/auth-client.ts" 
             import { createAuthClient } from "better-auth/solid"
-            export const authClient =  createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -74,7 +74,7 @@ Once you've created your client instance, you can use the client to interact wit
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client"
-const authClient =  createAuthClient()
+const authClient = createAuthClient()
 
 await authClient.signIn.email({
     email: "test@user.com",
@@ -208,7 +208,7 @@ You can pass any default fetch options to the client by passing `fetchOptions` o
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client"
 
-const authClient =  createAuthClient({
+const authClient = createAuthClient({
     fetchOptions: {
         //any better-fetch options
     },
@@ -347,7 +347,7 @@ You can extend the client with plugins to add more functionality. Plugins can ad
 import { createAuthClient } from "better-auth/client"
 import { magicLinkClient } from "better-auth/client/plugins"
 
-const authClient =  createAuthClient({
+const authClient = createAuthClient({
     plugins: [
         magicLinkClient()
     ]
