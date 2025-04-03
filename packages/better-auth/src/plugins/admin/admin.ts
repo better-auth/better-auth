@@ -567,7 +567,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
-						const total = await ctx.context.internalAdapter.countTotalUsers();
+						const total = await ctx.context.internalAdapter.countTotalUsers(
+							where.length ? where : undefined,
+						);
 						return ctx.json({
 							users: users as UserWithRole[],
 							total: total,
