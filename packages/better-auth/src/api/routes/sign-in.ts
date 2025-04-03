@@ -151,6 +151,7 @@ export const signInSocial = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "signInSocial",
 				description: "Sign in with a social provider",
 				operationId: "socialSignIn",
 				responses: {
@@ -389,6 +390,7 @@ export const signInEmail = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "signInEmail",
 				description: "Sign in with email and password",
 				responses: {
 					"200": {

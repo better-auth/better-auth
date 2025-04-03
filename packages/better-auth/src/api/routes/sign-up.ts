@@ -31,6 +31,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
+					operationId: "signUpWithEmailAndPassword",
 					description: "Sign up a user using email and password",
 					requestBody: {
 						content: {

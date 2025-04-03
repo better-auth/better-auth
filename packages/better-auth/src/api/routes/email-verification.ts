@@ -81,6 +81,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "sendVerificationEmail",
 				description: "Send a verification email to the user",
 				requestBody: {
 					content: {

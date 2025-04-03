@@ -60,6 +60,7 @@ export const requestPasswordReset = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "forgetPassword",
 				description: "Send a password reset email to the user",
 				responses: {
 					"200": {
@@ -259,6 +260,7 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
+				operationId: "resetPasswordCallback",
 				description: "Redirects the user to the callback URL with the token",
 				parameters: [
 					{
@@ -350,6 +352,7 @@ export const resetPassword = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "resetPassword",
 				description: "Reset the password for a user",
 				responses: {
 					"200": {

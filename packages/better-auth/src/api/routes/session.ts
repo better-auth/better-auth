@@ -78,6 +78,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "getSession",
 					description: "Get the current session",
 					responses: {
 						"200": {
@@ -385,6 +386,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "listUserSessions",
 					description: "List all active sessions for the user",
 					responses: {
 						"200": {

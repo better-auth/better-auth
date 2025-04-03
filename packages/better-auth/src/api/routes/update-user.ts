@@ -27,6 +27,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					},
 				},
 				openapi: {
+					operationId: "updateUser",
 					description: "Update the current user",
 					requestBody: {
 						content: {
@@ -150,6 +151,7 @@ export const changePassword = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changePassword",
 				description: "Change the password of the user",
 				responses: {
 					"200": {
@@ -404,6 +406,7 @@ export const deleteUser = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "deleteUser",
 				description: "Delete the user",
 				requestBody: {
 					content: {
@@ -687,6 +690,7 @@ export const changeEmail = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changeEmail",
 				responses: {
 					"200": {
 						description: "Email change request processed successfully",

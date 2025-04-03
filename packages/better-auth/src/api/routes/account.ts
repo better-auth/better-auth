@@ -167,6 +167,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
+				operationId: "linkSocialAccount",
 				responses: {
 					"200": {
 						description: "Success",

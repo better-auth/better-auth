@@ -26,6 +26,7 @@ export const refreshToken = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "refreshToken",
 				description: "Refresh the access token using a refresh token",
 				responses: {
 					200: {
