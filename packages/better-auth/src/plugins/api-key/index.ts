@@ -291,7 +291,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				}),
 				metadata: {
 					openapi: {
-						operationId: "apiKeyCreate",
+						operationId: "createApiKey",
 						description: "Create an API key",
 						responses: {
 							200: {
@@ -327,7 +327,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				metadata: {
 					SERVER_ONLY: true,
 					openapi: {
-						operationId: "apiKeyVerify",
+						operationId: "verifyApiKey",
 						description: "Verify an API key",
 						responses: {
 							200: {
@@ -378,7 +378,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				use: [sessionMiddleware],
 				metadata: {
 					openapi: {
-						operationId: "apiKeyGet",
+						operationId: "getApiKey",
 						description: "Get an API key",
 						responses: {
 							200: {
@@ -417,7 +417,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				use: [sessionMiddleware],
 				metadata: {
 					openapi: {
-						operationId: "apiKeyUpdate",
+						operationId: "updateApiKey",
 						description: "Update an API key",
 						responses: {
 							200: {
@@ -449,7 +449,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				use: [sessionMiddleware],
 				metadata: {
 					openapi: {
-						operationId: "apiKeyDelete",
+						operationId: "deleteApiKey",
 						description: "Delete an API key",
 						responses: {
 							200: {
@@ -476,8 +476,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				use: [sessionMiddleware],
 				metadata: {
 					openapi: {
-						operationId: "apiKeyList",
-						description: "List API keys",
+						operationId: "listApiKeys",
+						description: "List all API keys",
 						responses: {
 							200: {
 								description: "Success",
@@ -508,7 +508,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
-							operationId: "apiKeyDeleteAllExpired",
+							operationId: "deleteAllExpiredApiKeys",
 							description: "Delete all expired API keys",
 							responses: {
 								200: {

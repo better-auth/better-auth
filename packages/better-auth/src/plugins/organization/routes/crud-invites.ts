@@ -13,7 +13,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 	option: O,
 ) =>
 	createAuthEndpoint(
-		"/organization/invite-member",
+		"/organization/create-invitation",
 		{
 			method: "POST",
 			use: [orgMiddleware, orgSessionMiddleware],
@@ -83,7 +83,8 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						: {}),
 				},
 				openapi: {
-					description: "Invite a user to an organization",
+					operationId: "createOrganizationInvitation",
+					description: "Create an invitation to an organization",
 					responses: {
 						"200": {
 							description: "Success",
@@ -259,6 +260,7 @@ export const acceptInvitation = createAuthEndpoint(
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "acceptOrganizationInvitation",
 				description: "Accept an invitation to an organization",
 				responses: {
 					"200": {
@@ -350,8 +352,9 @@ export const acceptInvitation = createAuthEndpoint(
 		});
 	},
 );
+
 export const rejectInvitation = createAuthEndpoint(
-	"/organization/reject-invitation",
+	"/organization/decline-invitation",
 	{
 		method: "POST",
 		body: z.object({
@@ -362,7 +365,8 @@ export const rejectInvitation = createAuthEndpoint(
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
-				description: "Reject an invitation to an organization",
+				operationId: "declineOrganizationInvitation",
+				description: "Decline an invitation to an organization",
 				responses: {
 					"200": {
 						description: "Success",
@@ -426,18 +430,21 @@ export const cancelInvitation = createAuthEndpoint(
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
-		openapi: {
-			description: "Cancel an invitation to an organization",
-			responses: {
-				"200": {
-					description: "Success",
-					content: {
-						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									invitation: {
-										type: "object",
+		metadata: {
+			openapi: {
+				operationId: "cancelOrganizationInvitation",
+				description: "Cancel an invitation to an organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										invitation: {
+											type: "object",
+										},
 									},
 								},
 							},
@@ -499,6 +506,7 @@ export const getInvitation = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "getOrganizationInvitation",
 				description: "Get an invitation by ID",
 				responses: {
 					"200": {
