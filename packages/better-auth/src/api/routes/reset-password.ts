@@ -35,6 +35,7 @@ export const requestPasswordReset = createAuthEndpoint(
 	"/request-password-reset",
 	{
 		method: "POST",
+		operationId: "forgetPassword",
 		body: z.object({
 			/**
 			 * The email address of the user to send a password reset email to.
@@ -249,6 +250,7 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	"/reset-password/:token",
 	{
 		method: "GET",
+		operationId: "forgetPasswordCallback",
 		query: z.object({
 			callbackURL: z.string().meta({
 				description: "The URL to redirect the user to reset their password",
@@ -329,6 +331,7 @@ export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
 		method: "POST",
+		operationId: "resetPassword",
 		query: z
 			.object({
 				token: z.string().optional(),

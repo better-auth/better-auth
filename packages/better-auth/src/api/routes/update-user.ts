@@ -16,12 +16,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
-			body: z.record(
-				z.string().meta({
-					description: "Field name must be a string",
-				}),
-				z.any(),
-			),
+			operationId: "updateUser",
+			body: z.record(z.string(), z.any()),
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
@@ -126,6 +122,7 @@ export const changePassword = createAuthEndpoint(
 	"/change-password",
 	{
 		method: "POST",
+		operationId: "changePassword",
 		body: z.object({
 			/**
 			 * The new password to set

@@ -49,7 +49,32 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		"/get-session",
 		{
 			method: "GET",
-			query: getSessionQuerySchema,
+			operationId: "getSession",
+			query: z.optional(
+				z.object({
+					/**
+					 * If cookie cache is enabled, it will disable the cache
+					 * and fetch the session from the database
+					 */
+					disableCookieCache: z
+						.optional(
+							z
+								.boolean({
+									description:
+										"Disable cookie cache and fetch session from database",
+								})
+								.or(z.string().transform((v) => v === "true")),
+						)
+						.optional(),
+					disableRefresh: z
+						.boolean({
+							description:
+								"Disable session refresh. Useful for checking session status, without updating the session",
+						})
+						.or(z.string().transform((v) => v === "true"))
+						.optional(),
+				}),
+			),
 			requireHeaders: true,
 			metadata: {
 				openapi: {
@@ -355,6 +380,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 		"/list-sessions",
 		{
 			method: "GET",
+			operationId: "listUserSessions",
 			use: [sessionMiddleware],
 			requireHeaders: true,
 			metadata: {
@@ -586,6 +612,57 @@ export const revokeOtherSessions = createAuthEndpoint(
 				ctx.context.internalAdapter.deleteSession(session.token),
 			),
 		);
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+export const signOut = createAuthEndpoint(
+	"/sign-out",
+	{
+		method: "POST",
+		operationId: "signOut",
+		use: [sessionMiddleware],
+		requireHeaders: true,
+		metadata: {
+			openapi: {
+				description: "Sign out the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+									required: ["status"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		try {
+			await ctx.context.internalAdapter.deleteSessions(
+				ctx.context.session.user.id,
+			);
+		} catch (error) {
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
+			throw new APIError("INTERNAL_SERVER_ERROR");
+		}
 		return ctx.json({
 			status: true,
 		});

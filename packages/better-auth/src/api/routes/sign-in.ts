@@ -12,6 +12,7 @@ export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
+		operationId: "signInSocial",
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user
@@ -348,6 +349,7 @@ export const signInEmail = createAuthEndpoint(
 	"/sign-in/email",
 	{
 		method: "POST",
+		operationId: "signInEmail",
 		body: z.object({
 			/**
 			 * Email of the user

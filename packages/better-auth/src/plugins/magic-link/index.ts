@@ -140,6 +140,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "signInMagicLink",
 							description: "Sign in with magic link",
 							responses: {
 								200: {
@@ -285,6 +286,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					requireHeaders: true,
 					metadata: {
 						openapi: {
+							operationId: "magicLinkVerify",
 							description: "Verify magic link",
 							responses: {
 								200: {
