@@ -145,6 +145,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					operationId: "getOpenIdConfig",
 					metadata: {
 						isAction: false,
 					},
@@ -158,6 +159,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
+					operationId: "oauth2Authorize",
 					query: z.record(z.string(), z.any()),
 				},
 				async (ctx) => {
@@ -168,6 +170,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/consent",
 				{
 					method: "POST",
+					operationId: "oauth2Consent",
 					body: z.object({
 						accept: z.boolean(),
 					}),
@@ -251,6 +254,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
+					operationId: "oauth2Token",
 					body: z.record(z.any()),
 					metadata: {
 						isAction: false,
@@ -623,6 +627,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
+					operationId: "oauth2Userinfo",
+					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 					},
@@ -701,48 +707,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 					});
 				},
 			),
-			registerOAuthApplication: createAuthEndpoint(
+			oAuth2register: createAuthEndpoint(
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(z.string()),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.default("client_secret_basic")
-							.optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"implicit",
-									"password",
-									"client_credentials",
-									"refresh_token",
-									"urn:ietf:params:oauth:grant-type:jwt-bearer",
-									"urn:ietf:params:oauth:grant-type:saml2-bearer",
-								]),
-							)
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code", "token"]))
-							.default(["code"])
-							.optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						scope: z.string().optional(),
-						contacts: z.array(z.string()).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						jwks_uri: z.string().optional(),
-						jwks: z.record(z.any()).optional(),
-						metadata: z.record(z.any()).optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
-					}),
+					operationId: "oauth2Register",
+					body: schema.client,
 				},
 				async (ctx) => {
 					const body = ctx.body;

@@ -86,6 +86,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "emailOtpSendVerification",
 							description: "Send verification OTP",
 							responses: {
 								200: {
@@ -182,6 +183,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
+							operationId: "emailOtpCreateVerification",
 							description: "Create verification OTP",
 							responses: {
 								200: {
@@ -225,6 +227,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
+							operationId: "emailOtpGetVerification",
 							description: "Get verification OTP",
 							responses: {
 								200: {
@@ -276,6 +279,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "emailOtpVerifyEmail",
 							description: "Verify email OTP",
 							responses: {
 								200: {
@@ -399,6 +403,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "signInEmailOtp",
 							description: "Sign in with email OTP",
 							responses: {
 								200: {
@@ -528,6 +533,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "forgetPasswordEmailOtp",
 							description: "Forget password with email OTP",
 							responses: {
 								200: {
@@ -596,6 +602,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "emailOtpResetPassword",
 							description: "Reset password with email OTP",
 							responses: {
 								200: {

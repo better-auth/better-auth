@@ -69,6 +69,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
+		operationId: "sendVerificationEmail",
 		body: z.object({
 			email: z
 				.string({
@@ -150,6 +151,7 @@ export const verifyEmail = createAuthEndpoint(
 	"/verify-email",
 	{
 		method: "GET",
+		operationId: "verifyEmail",
 		query: z.object({
 			token: z.string({
 				description: "The token to verify the email",

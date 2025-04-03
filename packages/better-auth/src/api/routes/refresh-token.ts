@@ -8,6 +8,7 @@ export const refreshToken = createAuthEndpoint(
 	"/refresh-token",
 	{
 		method: "POST",
+		operationId: "refreshToken",
 		body: z.object({
 			providerId: z.string({
 				description: "The provider ID for the OAuth provider",
