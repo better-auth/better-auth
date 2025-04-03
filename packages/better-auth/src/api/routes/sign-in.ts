@@ -12,7 +12,6 @@ export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		operationId: "signInSocial",
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user
@@ -145,6 +144,7 @@ export const signInSocial = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "signInSocial",
 				description: "Sign in with a social provider",
 				responses: {
 					"200": {
@@ -295,7 +295,6 @@ export const signInEmail = createAuthEndpoint(
 	"/sign-in/email",
 	{
 		method: "POST",
-		operationId: "signInEmail",
 		body: z.object({
 			/**
 			 * Email of the user
@@ -333,6 +332,7 @@ export const signInEmail = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "signInEmail",
 				description: "Sign in with email and password",
 				responses: {
 					"200": {

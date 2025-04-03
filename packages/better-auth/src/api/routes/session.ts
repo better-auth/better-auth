@@ -27,7 +27,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		"/get-session",
 		{
 			method: "GET",
-			operationId: "getSession",
 			query: z.optional(
 				z.object({
 					/**
@@ -56,6 +55,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "getSession",
 					description: "Get the current session",
 					responses: {
 						"200": {
@@ -339,11 +339,11 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 		"/list-sessions",
 		{
 			method: "GET",
-			operationId: "listUserSessions",
 			use: [sessionMiddleware],
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "listUserSessions",
 					description: "List all active sessions for the user",
 					responses: {
 						"200": {

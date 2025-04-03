@@ -51,7 +51,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				"/oauth-proxy-callback",
 				{
 					method: "GET",
-					operationId: "oauthProxyCallback",
 					query: z.object({
 						callbackURL: z.string({
 							description: "The URL to redirect to after the proxy",
@@ -63,6 +62,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
+							operationId: "oauthProxyCallback",
 							description: "OAuth Proxy Callback",
 							parameters: [
 								{

@@ -97,6 +97,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
+				operationId: "linkSocialAccount",
 				responses: {
 					"200": {
 						description: "Success",
@@ -167,6 +168,12 @@ export const unlinkAccount = createAuthEndpoint(
 			accountId: z.string().optional(),
 		}),
 		use: [freshSessionMiddleware],
+		metadata: {
+			openapi: {
+				operationId: "unlinkAccount",
+				description: "Unlink an account from the user",
+			},
+		},
 	},
 	async (ctx) => {
 		const { providerId, accountId } = ctx.body;

@@ -17,7 +17,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
-			operationId: "updateUser",
 			body: z.record(z.string(), z.any()),
 			use: [sessionMiddleware],
 			metadata: {
@@ -32,6 +31,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					>,
 				},
 				openapi: {
+					operationId: "updateUser",
 					description: "Update the current user",
 					requestBody: {
 						content: {
@@ -127,7 +127,6 @@ export const changePassword = createAuthEndpoint(
 	"/change-password",
 	{
 		method: "POST",
-		operationId: "changePassword",
 		body: z.object({
 			/**
 			 * The new password to set
@@ -154,6 +153,7 @@ export const changePassword = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changePassword",
 				description: "Change the password of the user",
 				responses: {
 					"200": {
@@ -340,6 +340,7 @@ export const deleteUser = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "deleteUser",
 				description: "Delete the user",
 				requestBody: {
 					content: {
@@ -565,6 +566,7 @@ export const changeEmail = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changeEmail",
 				responses: {
 					"200": {
 						description: "Success",
