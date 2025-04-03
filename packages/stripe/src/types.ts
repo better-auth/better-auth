@@ -1,5 +1,6 @@
-import type { Session, User } from "better-auth";
+import type { InferOptionSchema, Session, User } from "better-auth";
 import type Stripe from "stripe";
+import type { subscriptions, user } from "./schema";
 
 export type StripePlan = {
 	/**
@@ -312,6 +313,10 @@ export interface StripeOptions {
 		};
 	};
 	onEvent?: (event: Stripe.Event) => Promise<void>;
+	/**
+	 * Schema for the stripe plugin
+	 */
+	schema?: InferOptionSchema<typeof subscriptions & typeof user>;
 }
 
 export interface Customer {
