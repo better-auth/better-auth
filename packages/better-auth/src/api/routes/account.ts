@@ -22,6 +22,7 @@ export const listUserAccounts = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "listUserAccounts",
 				description: "List all accounts linked to the user",
 				responses: {
 					"200": {

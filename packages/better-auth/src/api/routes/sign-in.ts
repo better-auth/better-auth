@@ -163,6 +163,16 @@ export const signInSocial = createAuthEndpoint(
 									type: "object",
 									description: "Session response when idToken is provided",
 									properties: {
+										token: {
+											type: "string",
+										},
+										user: {
+											type: "object",
+											$ref: "#/components/schemas/User",
+										},
+										url: {
+											type: "string",
+										},
 										redirect: {
 											type: "boolean",
 											enum: [false],
@@ -403,36 +413,13 @@ export const signInEmail = createAuthEndpoint(
 										},
 										user: {
 											type: "object",
-											properties: {
-												id: { type: "string" },
-												email: { type: "string" },
-												name: {
-													type: "string",
-													nullable: true,
-												},
-												image: {
-													type: "string",
-													nullable: true,
-												},
-												emailVerified: {
-													type: "boolean",
-												},
-												createdAt: {
-													type: "string",
-													format: "date-time",
-												},
-												updatedAt: {
-													type: "string",
-													format: "date-time",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											$ref: "#/components/schemas/User",
+										},
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
 										},
 									},
 									required: ["redirect", "token", "user"],

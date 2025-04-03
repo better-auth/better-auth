@@ -234,46 +234,7 @@ export const verifyEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
-											properties: {
-												id: {
-													type: "string",
-													description: "User ID",
-												},
-												email: {
-													type: "string",
-													description: "User email",
-												},
-												name: {
-													type: "string",
-													description: "User name",
-												},
-												image: {
-													type: "string",
-													description: "User image URL",
-												},
-												emailVerified: {
-													type: "boolean",
-													description:
-														"Indicates if the user email is verified",
-												},
-												createdAt: {
-													type: "string",
-													description: "User creation date",
-												},
-												updatedAt: {
-													type: "string",
-													description: "User update date",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"name",
-												"image",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											$ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",

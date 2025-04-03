@@ -258,6 +258,26 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 		metadata: {
 			openapi: {
 				description: "Redirects the user to the callback URL with the token",
+				parameters: [
+					{
+						name: "token",
+						in: "path",
+						required: true,
+						description: "The token to reset the password",
+						schema: {
+							type: "string",
+						},
+					},
+					{
+						name: "callbackURL",
+						in: "query",
+						required: true,
+						description: "The URL to redirect the user to reset their password",
+						schema: {
+							type: "string",
+						},
+					},
+				],
 				responses: {
 					"200": {
 						description: "Success",

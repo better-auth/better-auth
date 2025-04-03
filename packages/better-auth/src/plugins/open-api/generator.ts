@@ -343,8 +343,22 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		// @ts-expect-error
 		acc[modelName] = {
 			type: "object",
-			properties,
-			...(required.length > 0 ? { required } : {}),
+			properties: Object.entries(value.fields).reduce(
+				(acc, [key, value]) => {
+					if (value.type === "date") {
+						acc[key] = {
+							type: "string",
+							format: "date-time",
+						};
+					} else {
+						acc[key] = {
+							type: value.type,
+						};
+					}
+					return acc;
+				},
+				{ id: { type: "string" } } as Record<string, any>,
+			),
 		};
 		return acc;
 	}, {});

@@ -59,9 +59,9 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 									schema: {
 										type: "object",
 										properties: {
-											status: {
-												type: "boolean",
-												description: "Indicates if the update was successful",
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
 											},
 										},
 									},
@@ -673,6 +673,10 @@ export const changeEmail = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
+										user: {
+											type: "object",
+											$ref: "#/components/schemas/User",
+										},
 										status: {
 											type: "boolean",
 											description: "Indicates if the request was successful",
