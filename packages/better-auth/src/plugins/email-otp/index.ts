@@ -178,8 +178,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							operationId: "emailOtpSendVerification",
-							description: "Send verification OTP",
+							operationId: "sendEmailVerificationOTP",
+							description: "Send a verification OTP to an email",
 							responses: {
 								200: {
 									description: "Success",
@@ -317,8 +317,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
-							operationId: "emailOtpCreateVerification",
-							description: "Create verification OTP",
+							operationId: "createEmailVerificationOTP",
+							description: "Create a verification OTP for an email",
 							responses: {
 								200: {
 									description: "Success",
@@ -380,8 +380,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
-							operationId: "emailOtpGetVerification",
-							description: "Get verification OTP",
+							operationId: "getEmailVerificationOTP",
+							description: "Get a verification OTP for an email",
 							responses: {
 								"200": {
 									description:
@@ -478,8 +478,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							operationId: "emailOtpVerifyEmail",
-							description: "Verify email OTP",
+							operationId: "verifyEmailWithOTP",
+							description: "Verify an email with an OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -764,8 +764,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							operationId: "signInEmailOtp",
-							description: "Sign in with email OTP",
+							operationId: "signInWithEmailOTP",
+							description: "Sign in with email and OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -930,8 +930,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							operationId: "forgetPasswordEmailOtp",
-							description: "Forget password with email OTP",
+							operationId: "forgetPasswordWithEmailOTP",
+							description: "Forget password with email and OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -1020,8 +1020,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							operationId: "emailOtpResetPassword",
-							description: "Reset password with email OTP",
+							operationId: "resetPasswordWithEmailOTP",
+							description: "Reset password with email and OTP",
 							responses: {
 								200: {
 									description: "Success",

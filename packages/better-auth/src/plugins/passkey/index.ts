@@ -124,7 +124,7 @@ export const passkey = (options?: PasskeyOptions) => {
 		id: "passkey",
 		endpoints: {
 			generatePasskeyRegistrationOptions: createAuthEndpoint(
-				"/passkey/generate-register-options",
+				"/passkey/generate-registration-options",
 				{
 					method: "GET",
 					use: [freshSessionMiddleware],
@@ -139,6 +139,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					metadata: {
 						client: false,
 						openapi: {
+							operationId: "generatePasskeyRegistrationOptions",
 							description: "Generate registration options for a new passkey",
 							responses: {
 								200: {
@@ -344,6 +345,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						.optional(),
 					metadata: {
 						openapi: {
+							operationId: "passkeyGenerateAuthenticateOptions",
 							description: "Generate authentication options for a passkey",
 							responses: {
 								200: {
@@ -509,6 +511,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					use: [freshSessionMiddleware],
 					metadata: {
 						openapi: {
+							operationId: "passkeyVerifyRegistration",
 							description: "Verify registration of a new passkey",
 							responses: {
 								200: {
@@ -632,6 +635,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "passkeyVerifyAuthentication",
 							description: "Verify authentication of a passkey",
 							responses: {
 								200: {
