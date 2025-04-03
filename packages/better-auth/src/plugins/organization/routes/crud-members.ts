@@ -68,39 +68,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				openapi: {
 					operationId: "addOrganizationMember",
 					description: "Add a member to an organization",
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											member: {
-												type: "object",
-												properties: {
-													id: {
-														type: "string",
-													},
-													userId: {
-														type: "string",
-													},
-													organizationId: {
-														type: "string",
-													},
-													role: {
-														type: "string",
-													},
-												},
-												required: ["id", "userId", "organizationId", "role"],
-											},
-										},
-										required: ["member"],
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
