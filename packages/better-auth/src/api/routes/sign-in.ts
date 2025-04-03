@@ -158,7 +158,7 @@ export const signInSocial = createAuthEndpoint(
 										},
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
+											$ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",
@@ -345,7 +345,7 @@ export const signInEmail = createAuthEndpoint(
 										},
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
+											$ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",

@@ -285,9 +285,16 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			type: "object",
 			properties: Object.entries(value.fields).reduce(
 				(acc, [key, value]) => {
-					acc[key] = {
-						type: value.type,
-					};
+					if (value.type === "date") {
+						acc[key] = {
+							type: "string",
+							format: "date-time",
+						};
+					} else {
+						acc[key] = {
+							type: value.type,
+						};
+					}
 					return acc;
 				},
 				{ id: { type: "string" } } as Record<string, any>,
