@@ -416,20 +416,22 @@ export const deleteUser = createAuthEndpoint(
 								properties: {
 									callbackURL: {
 										type: "string",
-										description: "The callback URL to redirect to after the user is deleted"
+										description:
+											"The callback URL to redirect to after the user is deleted",
 									},
 									password: {
 										type: "string",
-										description: "The user's password. Required if session is not fresh"
+										description:
+											"The user's password. Required if session is not fresh",
 									},
 									token: {
 										type: "string",
-										description: "The deletion verification token"
-									}
-								}
-							}
-						}
-					}
+										description: "The deletion verification token",
+									},
+								},
+							},
+						},
+					},
 				},
 				responses: {
 					"200": {
