@@ -234,9 +234,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					});
 				}
 				await setCookieCache(ctx, session);
-				await setSessionCookie(ctx, session, false, {
-					maxAge: (session.session.expiresAt.valueOf() - Date.now()) / 1000,
-				});
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;
