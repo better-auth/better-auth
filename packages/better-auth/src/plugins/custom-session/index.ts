@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAuthEndpoint, getSessionFromCtx } from "../../api";
+import { createAuthEndpoint, getSession } from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -48,13 +48,24 @@ export const customSession = <
 								.optional(),
 						}),
 					),
+					requireHeaders: true,
 				},
 				async (ctx) => {
-					const session = await getSessionFromCtx(ctx);
+					const session = await getSession()({
+						...ctx,
+						asResponse: false,
+						headers: ctx.headers,
+						returnHeaders: true,
+					}).catch((e) => {
+						return null;
+					});
 					if (!session) {
 						return ctx.json(null);
 					}
-					const fnResult = await fn(session as any);
+					const fnResult = await fn(session.response as any);
+					session.headers.forEach((value, key) => {
+						ctx.setHeader(key, value);
+					});
 					return ctx.json(fnResult);
 				},
 			),
