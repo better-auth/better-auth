@@ -19,7 +19,6 @@ describe("Custom Session Plugin Tests", async () => {
 					const newData = {
 						message: "Hello, World!",
 					};
-					//you fetched db
 					return {
 						user: {
 							firstName: user.name.split(" ")[0],
