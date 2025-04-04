@@ -198,6 +198,12 @@ Table Name: `rateLimit`
 <DatabaseTable
     fields={[
         { 
+        name: "id", 
+        type: "string", 
+        description: "Database ID",
+        isPrimaryKey: true
+        },
+        { 
         name: "key", 
         type: "string", 
         description: "Unique identifier for each rate limit key",
