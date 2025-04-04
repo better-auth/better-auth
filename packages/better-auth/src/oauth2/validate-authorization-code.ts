@@ -3,6 +3,8 @@ import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
 import { jwtVerify } from "jose";
 
+const formUrlEncode = (value: string) => encodeURIComponent(value).replace(/%20/g, '+');
+
 export async function validateAuthorizationCode({
 	code,
 	codeVerifier,
@@ -34,7 +36,7 @@ export async function validateAuthorizationCode({
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
 		const encodedCredentials = btoa(
-			`${options.clientId}:${options.clientSecret}`,
+			`${formUrlEncode(options.clientId)}:${formUrlEncode(options.clientSecret)}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
