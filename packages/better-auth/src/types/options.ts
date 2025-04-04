@@ -365,6 +365,13 @@ export type BetterAuthOptions = {
 		 */
 		updateAge?: number;
 		/**
+		 * Disable session refresh so that the session is not updated
+		 * regardless of the `updateAge` option.
+		 *
+		 * @default false
+		 */
+		disableSessionRefresh?: boolean;
+		/**
 		 * Additional fields for the session
 		 */
 		additionalFields?: {
