@@ -64,7 +64,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
 			if (ctx.body?.referenceId && !options.subscription?.authorizeReference) {
-				logger.error(`Passing referenceId into a subscription action isn't allowed if subscription.authorizedReference isn't defined in your stripe plugin config.`)
+				logger.error(`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`)
 				throw new APIError("BAD_REQUEST", {
 					message: "Reference id is not allowed. Read server logs for more details.",
 				});
