@@ -889,6 +889,51 @@ export const createAdapter =
 			createSchema: adapterInstance.createSchema
 				? async (_, file) => {
 						const tables = getAuthTables(options);
+
+						if (
+							options.secondaryStorage &&
+							!options.session?.storeSessionInDatabase
+						) {
+							// biome-ignore lint/performance/noDelete: If the user has enabled secondaryStorage, as well as not specifying to store session table in DB, then createSchema shouldn't generate schema table.
+							delete tables.session;
+						}
+
+						if (
+							options.rateLimit &&
+							options.rateLimit.storage === "database" &&
+							// rate-limit will default to enabled in production,
+							// and given storage is database, it will try to use the rate-limit table,
+							// so we should make sure to generate rate-limit table schema
+							(typeof options.rateLimit.enabled === "undefined" ||
+								// and of course if they forcefully set to true, then they want rate-limit,
+								// thus we should also generate rate-limit table schema
+								options.rateLimit.enabled === true)
+						) {
+							tables.ratelimit = {
+								modelName: options.rateLimit.modelName ?? "ratelimit",
+								fields: {
+									key: {
+										type: "string",
+										unique: true,
+										required: true,
+										fieldName: options.rateLimit.fields?.key ?? "key",
+									},
+									count: {
+										type: "number",
+										required: true,
+										fieldName: options.rateLimit.fields?.count ?? "count",
+									},
+									lastRequest: {
+										type: "number",
+										required: true,
+										bigint: true,
+										defaultValue: () => Date.now(),
+										fieldName:
+											options.rateLimit.fields?.lastRequest ?? "lastRequest",
+									},
+								},
+							};
+						}
 						return adapterInstance.createSchema!({ file, tables });
 					}
 				: undefined,
