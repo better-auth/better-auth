@@ -6,6 +6,7 @@ import type { ApiKey } from "../types";
 import { getDate } from "../../../utils/date";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { safeJSONParse } from "../../../utils/json";
 
 export function updateApiKey({
 	opts,
@@ -232,6 +233,7 @@ export function updateApiKey({
 			}
 
 			if (permissions !== undefined) {
+				//@ts-ignore - we need this to be a string to save into DB.
 				newValues.permissions = JSON.stringify(permissions);
 			}
 
@@ -274,11 +276,20 @@ export function updateApiKey({
 			newApiKey.metadata = schema.apikey.fields.metadata.transform.output(
 				newApiKey.metadata as never as string,
 			);
-			newApiKey.permissions = JSON.parse(newApiKey.permissions as string);
 
 			const { key, ...returningApiKey } = newApiKey;
 
-			return ctx.json(returningApiKey);
+			return ctx.json({
+				...returningApiKey,
+				permissions: returningApiKey.permissions
+					? safeJSONParse<{
+							[key: string]: string[];
+						}>(
+							//@ts-ignore - from DB, this value is always a string
+							returningApiKey.permissions,
+						)
+					: null,
+			});
 		},
 	);
 }
