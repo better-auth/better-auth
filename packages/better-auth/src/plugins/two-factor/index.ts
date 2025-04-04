@@ -40,6 +40,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						password: z.string({
 							description: "User password",
 						}),
+						issuer: z.string().optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -145,7 +146,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
-					}).url(options?.issuer || ctx.context.appName, user.email);
+					}).url(
+						ctx.body.issuer || options?.issuer || ctx.context.appName,
+						user.email,
+					);
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
