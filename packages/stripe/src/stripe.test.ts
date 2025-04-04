@@ -242,6 +242,41 @@ describe("stripe", async () => {
 		expect(listAfterRes.data?.length).toBeGreaterThan(0);
 	});
 
+	it("should create a customer portal session", async () => {
+		// Sign up a user with Stripe customer
+		const userRes = await authClient.signUp.email({
+			...testUser,
+			email: "portal-test@email.com",
+		}, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email({
+			...testUser,
+			email: "portal-test@email.com",
+		}, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		const portalRes = await authClient.subscription.portal({
+			returnUrl: "/account",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(portalRes.data?.url).toBeDefined();
+		expect(portalRes.data?.redirect).toBe(true);
+		
+		// Verify Stripe API was called
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: expect.any(String),
+			return_url: expect.stringContaining("/account"),
+		});
+	});
+
 	it("should handle subscription webhook events", async () => {
 		const testSubscriptionId = "sub_123456";
 		const testReferenceId = "user_123";
