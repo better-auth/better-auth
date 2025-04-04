@@ -17,6 +17,8 @@ import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createOTP } from "@better-auth/utils/otp";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -326,6 +328,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				max: 3,
 			},
 		],
+		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 
