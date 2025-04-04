@@ -2,8 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
 import { jwtVerify } from "jose";
-
-const formUrlEncode = (value: string) => encodeURIComponent(value).replace(/%20/g, '+');
+import { encodeOAuthParameter } from "./utils";
 
 export async function validateAuthorizationCode({
 	code,
@@ -36,7 +35,7 @@ export async function validateAuthorizationCode({
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
 		const encodedCredentials = btoa(
-			`${formUrlEncode(options.clientId)}:${formUrlEncode(options.clientSecret)}`,
+			`${encodeOAuthParameter(options.clientId)}:${encodeOAuthParameter(options.clientSecret)}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
