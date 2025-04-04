@@ -9,6 +9,7 @@ import { getDate } from "../../utils/date";
 import type { ApiKey, ApiKeyOptions } from "./types";
 import { createApiKeyRoutes } from "./routes";
 import type { User } from "../../types";
+import { API_KEY_TABLE } from "./constant";
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
@@ -153,7 +154,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 
 						const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-							model: schema.apikey.modelName,
+							model: API_KEY_TABLE,
 							where: [
 								{
 									field: "key",
