@@ -33,6 +33,21 @@ export const auth = betterAuth({
 })
 ```
 
+### Disable Session Refresh
+
+You can disable session refresh so that the session is not updated regardless of the `updateAge` option.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        disableSessionRefresh: true
+    }
+})
+```
+
 ## Session Freshness
 
 Some endpoints in Better Auth require the session to be **fresh**. A session is considered fresh if its `createdAt` is within the `freshAge` limit. By default, the `freshAge` is set to **1 day** (60 * 60 * 24).  
