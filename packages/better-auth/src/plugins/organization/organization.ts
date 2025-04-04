@@ -160,6 +160,21 @@ export interface OrganizationOptions {
 	 */
 	invitationExpiresIn?: number;
 	/**
+	 * The maximum invitation a user can send.
+	 *
+	 * @default 100
+	 */
+	invitationLimit?:
+		| number
+		| ((
+				data: {
+					user: User;
+					organization: Organization;
+					member: Member;
+				},
+				ctx: AuthContext,
+		  ) => Promise<number> | number);
+	/**
 	 * Send an email with the
 	 * invitation link to the user.
 	 *
