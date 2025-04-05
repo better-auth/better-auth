@@ -335,9 +335,7 @@ describe("organization", async (it) => {
 			},
 		});
 
-		const activeMember = org?.data?.members.find(
-			(m) => m.userId === user.id,
-		)
+		const activeMember = org?.data?.members.find((m) => m.userId === user.id);
 
 		expect(activeMember?.role).toBe("owner");
 
@@ -363,7 +361,6 @@ describe("organization", async (it) => {
 
 		expect(c2.data?.role).toBe("owner");
 	});
-
 
 	const adminUser = {
 		email: "test3@test.com",
@@ -844,6 +841,4 @@ describe("access control", async (it) => {
 		}
 		expect(error).toBeInstanceOf(BetterAuthError);
 	});
-
-	
 });
