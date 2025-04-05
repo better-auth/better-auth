@@ -144,6 +144,7 @@ export const signInSocial = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "signInSocial",
 				description: "Sign in with a social provider",
 				responses: {
 					"200": {
@@ -158,7 +159,7 @@ export const signInSocial = createAuthEndpoint(
 										},
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
+											$ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",
@@ -331,6 +332,7 @@ export const signInEmail = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "signInEmail",
 				description: "Sign in with email and password",
 				responses: {
 					"200": {
@@ -345,7 +347,7 @@ export const signInEmail = createAuthEndpoint(
 										},
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
+											$ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",

@@ -54,6 +54,7 @@ export const createOrganization = createAuthEndpoint(
 		use: [orgMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "createOrganization",
 				description: "Create an organization",
 				responses: {
 					"200": {
@@ -280,6 +281,7 @@ export const updateOrganization = createAuthEndpoint(
 		use: [orgMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "updateOrganization",
 				description: "Update an organization",
 				responses: {
 					"200": {
@@ -357,6 +359,7 @@ export const deleteOrganization = createAuthEndpoint(
 		use: [orgMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "deleteOrganization",
 				description: "Delete an organization",
 				responses: {
 					"200": {
@@ -471,6 +474,7 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "getOrganization",
 					description: "Get the full organization",
 					responses: {
 						"200": {
@@ -557,6 +561,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "setActiveOrganization",
 					description: "Set the active organization",
 					responses: {
 						"200": {
@@ -650,6 +655,7 @@ export const listOrganizations = createAuthEndpoint(
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "listOrganizations",
 				description: "List all organizations",
 				responses: {
 					"200": {

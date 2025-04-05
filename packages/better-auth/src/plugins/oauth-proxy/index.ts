@@ -62,6 +62,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
+							operationId: "oauthProxyCallback",
 							description: "OAuth Proxy Callback",
 							parameters: [
 								{

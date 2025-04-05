@@ -623,6 +623,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
+					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 					},

@@ -22,6 +22,12 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				name: z.string(),
 			}),
 			use: [orgMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "createOrganizationTeam",
+					description: "Create a team in an organization",
+				},
+			},
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
@@ -102,6 +108,12 @@ export const removeTeam = createAuthEndpoint(
 			organizationId: z.string().optional(),
 		}),
 		use: [orgMiddleware],
+		metadata: {
+			openapi: {
+				operationId: "removeOrganizationTeam",
+				description: "Remove a team from an organization",
+			},
+		},
 	},
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
@@ -179,6 +191,12 @@ export const updateTeam = createAuthEndpoint(
 			data: teamSchema.partial(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				operationId: "updateOrganizationTeam",
+				description: "Update a team in an organization",
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -248,6 +266,12 @@ export const listOrganizationTeams = createAuthEndpoint(
 			}),
 		),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				operationId: "listOrganizationTeams",
+				description: "List all teams in an organization",
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;

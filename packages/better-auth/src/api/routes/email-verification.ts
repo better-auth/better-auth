@@ -83,6 +83,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "sendVerificationEmail",
 				description: "Send a verification email to the user",
 				requestBody: {
 					content: {
@@ -163,6 +164,7 @@ export const verifyEmail = createAuthEndpoint(
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
+				operationId: "verifyEmail",
 				description: "Verify the email of the user",
 				responses: {
 					"200": {
@@ -174,7 +176,7 @@ export const verifyEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
+											$ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",
