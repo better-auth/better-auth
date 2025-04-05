@@ -36,6 +36,7 @@ export type InferSessionAPI<API> = API extends {
 								headers: Headers;
 								query?: {
 									disableCookieCache?: boolean;
+									disableRefresh?: boolean;
 								};
 								asResponse?: R;
 							}) => false extends R
