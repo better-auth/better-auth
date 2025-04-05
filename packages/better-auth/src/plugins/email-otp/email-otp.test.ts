@@ -343,6 +343,30 @@ describe("email-otp-verify", async () => {
 			type: "email-verification",
 		});
 	});
+
+	it("should block after exceeding allowed attempts", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.emailOtp.verifyEmail({
+				email: testUser.email,
+				otp: "wrong-otp",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		//Try one more time - should be blocked
+		const res = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: "000000",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
+	});
 });
 
 describe("custom rate limiting storage", async () => {
