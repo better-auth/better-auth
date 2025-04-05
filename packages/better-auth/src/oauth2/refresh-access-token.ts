@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens } from "./types";
 import type { ProviderOptions } from "./types";
-import { encodeOAuthParameter } from "./utils";
+import { base64Url } from "@better-auth/utils/base64";
 
 export async function refreshAccessToken({
 	refreshToken,
@@ -27,10 +27,8 @@ export async function refreshAccessToken({
 	body.set("grant_type", grantType);
 	body.set("refresh_token", refreshToken);
 	if (authentication === "basic") {
-		const encodedCredentials = btoa(
-			`${encodeOAuthParameter(options.clientId)}:${encodeOAuthParameter(
-				options.clientSecret,
-			)}`,
+		const encodedCredentials = base64Url.encode(
+			`${options.clientId}:${options.clientSecret}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
