@@ -35,6 +35,7 @@ export const socialProviders = {
 	reddit,
 	roblox,
 	vk,
+	zoom,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -72,6 +73,7 @@ export * from "./tiktok";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./vk";
+export * from "./zoom";
 export * from "./kick";
 
 export type SocialProviderList = typeof socialProviderList;
