@@ -116,12 +116,14 @@ Here are examples of how you can do caching in different frameworks and environm
 
 ## SSR Optimizations
 
-Server-side rendering (SSR) is a powerful technique that allows you to render your application on the server and deliver fully rendered HTML to the client,
-significantly enhancing performance, especially for data-intensive or complex applications.
-To optimize SSR, minimize client-side data fetching by offloading data gathering to the server,
-which reduces initial load times. Implement caching strategies for frequently accessed data to decrease server load and improve response times.
-Additionally, simplify your rendering logic to ensure efficient server-side processing, consider using streaming to send parts of the rendered HTML as they become available,
-and prioritize critical data for the initial render while loading less essential data asynchronously afterward.
+If you're using a framework that supports server-side rendering, it's usually best to pre-fetch user session on the server and use it as a fallback on the client.
+
+```ts
+const session = await auth.api.getSession({
+  headers: await headers(),
+});
+//then pass the session to the client
+```
 
 ## Database optimizations
 
@@ -144,29 +146,3 @@ Optimizing database performance is essential to get the best out of Better Auth.
 <Callout>
   We intend to add indexing support in our schema generation tool in the future.
 </Callout>
-
-### Using a connection pool
-
-A connection pool is a critical component for optimizing database interactions in Better Auth, particularly in high-traffic scenarios where multiple authentication requests occur simultaneously.
-
-Here are some benefits of using a connection pool and some configuration options to consider:
-
-1. **Benefits of Connection Pools**:
-
-   - Reduced Latency: By reusing existing database connections, Better Auth can minimize the time spent establishing new connections, leading to faster authentication responses.
-   - Efficient Resource Management: Connection pools help manage database connections, preventing resource exhaustion and ensuring that the database can handle multiple authentication requests concurrently.
-   - Improved Scalability: Connection pools allow Better Auth to scale effectively, accommodating a growing number of users without a corresponding increase in database connection overhead.
-
-2. **Configuration Options**:
-
-   - Maximum Pool Size: Set this based on expected traffic. A higher limit allows more simultaneous connections but may strain the database if set too high.
-   - Minimum Pool Size: Keep a baseline number of connections open to handle initial requests quickly.
-   - Connection Timeout: Define how long to wait for a connection to become available before timing out, ensuring that users don’t experience long delays.
-   - Idle Timeout: Specify how long a connection can remain idle before being closed, helping to manage resources effectively.
-
-3. **Best Practices**:
-
-Always close connections when they are no longer needed to return them to the pool, preventing connection leaks.
-Monitor the performance of the connection pool and adjust configurations based on application load and usage patterns to optimize performance.
-
-You can read more about connection pools in the <Link href="https://en.wikipedia.org/wiki/Connection_pool">connection pool wikipedia page</Link>.
