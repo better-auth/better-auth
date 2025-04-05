@@ -35,6 +35,10 @@ const STRIPE_ERROR_CODES = {
 	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
 	EMAIL_VERIFICATION_REQUIRED:
 		"Email verification is required before you can subscribe to a plan",
+	NO_SUBSCRIPTION_TO_REACTIVATE:
+		"No cancelled subscription found that can be reactivated",
+	SUBSCRIPTION_NOT_ELIGIBLE_FOR_REACTIVATION:
+		"Subscription is not eligible for reactivation. Only active or trialing subscriptions that are set to cancel can be reactivated.",
 } as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
@@ -53,7 +57,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		action:
 			| "upgrade-subscription"
 			| "list-subscription"
-			| "cancel-subscription",
+			| "cancel-subscription"
+			| "reactivate-subscription",
 	) =>
 		createAuthMiddleware(async (ctx) => {
 			const session = ctx.context.session;
@@ -752,6 +757,106 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 				throw ctx.redirect(getUrl(ctx, callbackURL));
+			},
+		),
+		reactivateSubscription: createAuthEndpoint(
+			"/subscription/reactivate",
+			{
+				method: "POST",
+				body: z.object({
+					referenceId: z.string().optional(),
+					subscriptionId: z.string().optional(),
+					returnUrl: z.string(),
+				}),
+				use: [
+					sessionMiddleware,
+					originCheck((ctx) => ctx.body.returnUrl),
+					referenceMiddleware("cancel-subscription"),
+				],
+			},
+			async (ctx) => {
+				const referenceId =
+					ctx.body?.referenceId || ctx.context.session.user.id;
+
+				const subscription = ctx.body.subscriptionId
+					? await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+								},
+							],
+						})
+					: await ctx.context.adapter
+							.findMany<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+							.then((subs) =>
+								subs.find(
+									(sub) =>
+										sub.cancelAtPeriodEnd === true &&
+										(sub.status === "active" || sub.status === "trialing"),
+								),
+							);
+
+				if (
+					!subscription ||
+					!subscription.stripeCustomerId ||
+					!subscription.stripeSubscriptionId
+				) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.NO_SUBSCRIPTION_TO_REACTIVATE,
+					});
+				}
+
+				if (
+					!subscription.cancelAtPeriodEnd ||
+					(subscription.status !== "active" &&
+						subscription.status !== "trialing")
+				) {
+					throw ctx.error("BAD_REQUEST", {
+						message:
+							STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ELIGIBLE_FOR_REACTIVATION,
+					});
+				}
+
+				try {
+					await client.subscriptions.update(subscription.stripeSubscriptionId, {
+						cancel_at_period_end: false,
+					});
+
+					await ctx.context.adapter.update({
+						model: "subscription",
+						update: {
+							cancelAtPeriodEnd: false,
+							updatedAt: new Date(),
+						},
+						where: [
+							{
+								field: "id",
+								value: subscription.id,
+							},
+						],
+					});
+
+					return ctx.json({
+						success: true,
+						message: "Subscription successfully reactivated",
+						subscription: {
+							id: subscription.id,
+							status: subscription.status,
+							cancelAtPeriodEnd: false,
+						},
+					});
+				} catch (e: any) {
+					ctx.context.logger.error("Error reactivating subscription", e);
+					throw ctx.error("BAD_REQUEST", {
+						message: e.message,
+						code: e.code,
+					});
+				}
 			},
 		),
 	} as const;
