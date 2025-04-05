@@ -1,0 +1,129 @@
+---
+title: Hono Example
+description: Better Auth Hono + D1 example.
+---
+
+This is an example of implementing an authentication API using Better Auth, Hono, and D1.
+
+**Implements the following features:**
+Social Sign-in with Google
+
+<ForkButton url="better-auth/better-auth/tree/main/examples/hono-d1-example"  />
+
+
+<iframe src="https://stackblitz.com/github/better-auth/better-auth/tree/main/examples/hono-d1-example?codemirror=1&fontsize=14&hidenavigation=1&runonclick=1&hidedevtools=1"
+   style={{
+      width: "100%",
+      height: "500px",
+      border: 0,
+      borderRadius: "4px",
+      overflow: "hidden"
+   }}
+   title="Better Auth Hono + D1 Example"
+   allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+   sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+   >
+</iframe>
+
+
+## Set Up
+
+### Install Dependencies
+```shell
+pnpm install
+```
+
+### Replace Placeholders
+Before using, replace any values marked with `example` with the correct ones.
+
+## Usage with Hono
+
+```typescript
+app.use(async (c, next) => {
+  const authClient = createAuthClient({
+    baseURL: 'https://auth.example.com',
+  })
+
+  const result = await authClient.getSession({
+    fetchOptions: {
+      headers: c.req.raw.headers,
+    },
+  })
+
+  if (!result.data) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  await next()
+})
+```
+
+## Usage with React
+
+```tsx
+// src/lib/auth.ts
+import { createAuthClient } from 'better-auth/react'
+import { env } from '@/lib/env.ts'
+
+export const authClient = createAuthClient({
+  baseURL: 'https://auth.example.com',
+})
+```
+
+```tsx
+// src/layouts/auth-layout.tsx
+import { Navigate, Outlet } from 'react-router-dom'
+import { authClient } from '@/lib/auth.ts'
+
+export const AuthLayout = () => {
+  const { data: session, isPending, error } = authClient.useSession()
+
+  if (isPending) {
+    return <div>Loading...</div>
+  }
+
+  if (error || !session) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <Outlet />
+}
+```
+
+## Commands
+
+### better-auth:generate
+
+Dump the DDL for better-auth.
+
+```shell
+pnpm run better-auth:generate
+```
+
+### wrangler:migrate:local:list
+Display a list of migrations for the local database.
+
+```shell
+pnpm run wrangler:migrate:local:list
+```
+
+### wrangler:migrate:local:apply
+Apply migrations to the local database.
+
+```shell
+pnpm run wrangler:migrate:local:apply
+```
+
+### wrangler:migrate:remote:list
+Display a list of migrations for the remote database.
+
+```shell
+pnpm run wrangler:migrate:remote:list
+```
+
+### wrangler:migrate:remote:apply
+Apply migrations to the remote database.
+
+```shell
+pnpm run wrangler:migrate:remote:apply
+```
