@@ -1,0 +1,27 @@
+{
+	"name": "hono-d1-example",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy --minify",
+		"check": "pnpm biome check --write src",
+		"better-auth:generate": "pnpm dlx @better-auth/cli@latest generate --output migrations/0000_betterauth_migration.sql --config ./better-auth/auth.ts --y",
+		"wrangler:migrate:local:list": "wrangler d1 migrations list example-database-name --local",
+		"wrangler:migrate:local:apply": "wrangler d1 migrations apply example-database-name --local",
+		"wrangler:migrate:remote:list": "wrangler d1 migrations list example-database-name --remote",
+		"wrangler:migrate:remote:apply": "wrangler d1 migrations apply example-database-name --remote"
+	},
+	"dependencies": {
+		"better-auth": "^1.2.5",
+		"hono": "^4.7.5",
+		"kysely-d1": "^0.3.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "1.9.4",
+		"@cloudflare/workers-types": "^4.20250214.0",
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/node": "^22.14.0",
+		"better-sqlite3": "^11.9.1",
+		"wrangler": "^4.4.0",
+		"zod": "^3.24.2"
+	}
+}
