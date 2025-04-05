@@ -613,7 +613,6 @@
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
-    "typeid-js": "^1.2.0",
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vitest": "^1.6.0",
