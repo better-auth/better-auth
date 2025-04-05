@@ -312,7 +312,7 @@ export const verifyEmail = createAuthEndpoint(
 			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
-					ctx.request,
+					ctx.headers,
 				);
 				if (!session) {
 					throw new APIError("INTERNAL_SERVER_ERROR", {

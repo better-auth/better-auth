@@ -108,7 +108,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx.request,
+							ctx.headers,
 							false,
 							ctx.context.session.session,
 						);
@@ -218,7 +218,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						ctx.request,
+						ctx.headers,
 						false,
 						ctx.context.session.session,
 					);
