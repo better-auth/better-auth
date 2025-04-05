@@ -1,6 +1,6 @@
 # Better Auth + Hono + D1 Example
 
-### 日本語版[こちら](https://github.com/shinaps/better-auth-hono-d1/blob/main/README_JP.md)を参照してください。
+### 日本語版は[こちら](https://github.com/shinaps/better-auth-hono-d1/blob/main/README_JP.md)を参照してください。
 
 ## Set Up
 

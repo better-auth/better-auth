@@ -21,7 +21,6 @@
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^22.14.0",
 		"better-sqlite3": "^11.9.1",
-		"wrangler": "^4.4.0",
-		"zod": "^3.24.2"
+		"wrangler": "^4.4.0"
 	}
 }
