@@ -14,6 +14,7 @@ import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import { BetterAuthError } from "../../error";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
+import { hasPermission } from "./has-permission";
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;
@@ -97,12 +98,15 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 							"you can only check one resource permission at a time.",
 						);
 					}
-					const role = roles[data.role as unknown as "admin"];
-					if (!role) {
-						return false;
-					}
-					const isAuthorized = role?.authorize(data.permission as any);
-					return isAuthorized.success;
+					const isAuthorized = hasPermission({
+						role: data.role as string,
+						options: {
+							ac: options?.ac,
+							roles: roles,
+						},
+						permission: data.permission as any,
+					});
+					return isAuthorized;
 				},
 			},
 		}),
