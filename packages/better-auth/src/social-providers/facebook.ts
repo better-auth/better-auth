@@ -25,6 +25,11 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	 * @default ["id", "name", "email", "picture"]
 	 */
 	fields?: string[];
+
+	/**
+	 * The config id to use when undergoing oauth
+	 */
+	configId?: string;
 }
 
 export const facebook = (options: FacebookOptions) => {
@@ -45,6 +50,11 @@ export const facebook = (options: FacebookOptions) => {
 				state,
 				redirectURI,
 				loginHint,
+				additionalParams: options.configId
+					? {
+							config_id: options.configId,
+						}
+					: {},
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
