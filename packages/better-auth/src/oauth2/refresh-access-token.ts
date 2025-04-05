@@ -28,7 +28,9 @@ export async function refreshAccessToken({
 	body.set("refresh_token", refreshToken);
 	if (authentication === "basic") {
 		const encodedCredentials = btoa(
-			`${encodeOAuthParameter(options.clientId)}:${encodeOAuthParameter(options.clientSecret)}`,
+			`${encodeOAuthParameter(options.clientId)}:${encodeOAuthParameter(
+				options.clientSecret,
+			)}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {

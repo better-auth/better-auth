@@ -35,7 +35,9 @@ export async function validateAuthorizationCode({
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
 		const encodedCredentials = btoa(
-			`${encodeOAuthParameter(options.clientId)}:${encodeOAuthParameter(options.clientSecret)}`,
+			`${encodeOAuthParameter(options.clientId)}:${encodeOAuthParameter(
+				options.clientSecret,
+			)}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
