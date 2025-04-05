@@ -196,7 +196,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					updateAge * 1000;
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
-				if (shouldBeUpdated) {
+				if (
+					shouldBeUpdated &&
+					(!ctx.query?.disableRefresh ||
+						!ctx.context.options.session?.disableSessionRefresh)
+				) {
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
 							session.session.token,
