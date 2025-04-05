@@ -1,5 +1,6 @@
 import { ObjectId, type Db } from "mongodb";
 import { getAuthTables } from "../../db";
+import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { withApplyDefault } from "../utils";
 
@@ -10,7 +11,7 @@ const createTransform = (options: BetterAuthOptions) => {
 	 */
 	const customIdGen = options.advanced?.generateId;
 
-	function serializeID(field: string, value: any, model: string) {
+	function serializeID(field: string, value: Where["value"], model: string) {
 		if (customIdGen) {
 			return value;
 		}
@@ -24,7 +25,8 @@ const createTransform = (options: BetterAuthOptions) => {
 					return value;
 				}
 				if (Array.isArray(value)) {
-					return value.map((v) => {
+					// ObjectId is added here as type because it will only be there if the field is an id field
+					return value.map((v: string | number | ObjectId) => {
 						if (typeof v === "string") {
 							try {
 								return new ObjectId(v);
@@ -35,10 +37,10 @@ const createTransform = (options: BetterAuthOptions) => {
 						if (v instanceof ObjectId) {
 							return v;
 						}
-						throw new Error("Invalid id value");
+						throw new BetterAuthError("[# Mongodb Adapter]: Invalid id value");
 					});
 				}
-				throw new Error("Invalid id value");
+				throw new BetterAuthError("[# Mongodb Adapter]: Invalid id value");
 			}
 			try {
 				return new ObjectId(value);
@@ -49,7 +51,7 @@ const createTransform = (options: BetterAuthOptions) => {
 		return value;
 	}
 
-	function deserializeID(field: string, value: any, model: string) {
+	function deserializeID(field: string, value: Where["value"], model: string) {
 		if (customIdGen) {
 			return value;
 		}
@@ -61,7 +63,8 @@ const createTransform = (options: BetterAuthOptions) => {
 				return value.toHexString();
 			}
 			if (Array.isArray(value)) {
-				return value.map((v) => {
+				// ObjectId is added here as type because it will only be there if the field is an id field
+				return value.map((v: string | number | ObjectId) => {
 					if (v instanceof ObjectId) {
 						return v.toHexString();
 					}
@@ -147,16 +150,30 @@ const createTransform = (options: BetterAuthOptions) => {
 			}
 			return transformedData as any;
 		},
-		convertWhereClause(where: Where[], model: string) {
+		convertWhereClause(model: string, where: Where[]) {
 			if (!where.length) return {};
 			const conditions = where.map((w) => {
+				// if no operator is provided, set it to "eq" by default
 				const { field: _field, value, operator = "eq", connector = "AND" } = w;
-				let condition: any;
+				let condition: {
+					[field: string]: {
+						[operator: string]:
+							| Where["value"]
+							// This is to satisfy the id properties in "eq" and "in" operators
+							| ObjectId
+							| (ObjectId | Where["value"] | (string | ObjectId)[])[];
+					};
+				};
 				const field = getField(_field, model);
+
+				function escapeRegex(value: string) {
+					return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+				}
+
 				switch (operator.toLowerCase()) {
 					case "eq":
 						condition = {
-							[field]: serializeID(_field, value, model),
+							[field]: { $eq: serializeID(_field, value, model) },
 						};
 						break;
 					case "in":
@@ -185,16 +202,34 @@ const createTransform = (options: BetterAuthOptions) => {
 						break;
 
 					case "contains":
-						condition = { [field]: { $regex: `.*${value}.*` } };
+						if (typeof value !== "string") {
+							throw new BetterAuthError(
+								`[# Mongodb Adapter]: contains operator requires a string but was provided ${typeof value}`,
+							);
+						}
+						condition = { [field]: { $regex: escapeRegex(value) } };
 						break;
 					case "starts_with":
-						condition = { [field]: { $regex: `${value}.*` } };
+						if (typeof value !== "string") {
+							throw new BetterAuthError(
+								`[# Mongodb Adapter]: starts_with operator requires a string but was provided ${typeof value}`,
+							);
+						}
+						condition = { [field]: { $regex: `^${escapeRegex(value)}` } };
 						break;
 					case "ends_with":
-						condition = { [field]: { $regex: `.*${value}` } };
+						if (typeof value !== "string") {
+							throw new BetterAuthError(
+								`[# Mongodb Adapter]: ends_with operator requires a string but was provided ${typeof value}`,
+							);
+						}
+						condition = { [field]: { $regex: `${escapeRegex(value)}$` } };
 						break;
 					default:
-						throw new Error(`Unsupported operator: ${operator}`);
+						// throw an error if unknown operator is provided
+						throw new BetterAuthError(
+							`[# Mongodb Adapter]: Unsupported operator: ${operator}`,
+						);
 				}
 				return { condition, connector };
 			});
@@ -246,7 +281,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async findOne(data) {
 			const { model, where, select } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOne(clause);
@@ -256,7 +291,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
-			const clause = where ? transform.convertWhereClause(where, model) : {};
+			const clause = where ? transform.convertWhereClause(model, where) : {};
 			const cursor = db.collection(transform.getModelName(model)).find(clause);
 			if (limit) cursor.limit(limit);
 			if (offset) cursor.skip(offset);
@@ -269,15 +304,16 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 			return res.map((r) => transform.transformOutput(r, model));
 		},
 		async count(data) {
-			const { model } = data;
+			const { model, where } = data;
+			const clause = where ? transform.convertWhereClause(model, where) : {};
 			const res = await db
 				.collection(transform.getModelName(model))
-				.countDocuments();
+				.countDocuments(clause);
 			return res;
 		},
 		async update(data) {
 			const { model, where, update: values } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 
 			const transformedData = transform.transformInput(values, model, "update");
 
@@ -295,7 +331,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async updateMany(data) {
 			const { model, where, update: values } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const transformedData = transform.transformInput(values, model, "update");
 			const res = await db
 				.collection(transform.getModelName(model))
@@ -304,7 +340,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async delete(data) {
 			const { model, where } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOneAndDelete(clause);
@@ -313,7 +349,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async deleteMany(data) {
 			const { model, where } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const res = await db
 				.collection(transform.getModelName(model))
 				.deleteMany(clause);
