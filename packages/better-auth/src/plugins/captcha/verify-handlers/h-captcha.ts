@@ -7,64 +7,57 @@ type Params = {
 	siteVerifyURL: string;
 	secretKey: string;
 	captchaResponse: string;
-	minScore?: number;
+	siteKey?: string;
 	remoteIP?: string;
 };
 
 type SiteVerifyResponse = {
 	success: boolean;
-	challenge_ts: string;
+	challenge_ts: number;
 	hostname: string;
+	credit: true | false | undefined;
 	"error-codes":
 		| Array<
 				| "missing-input-secret"
 				| "invalid-input-secret"
 				| "missing-input-response"
 				| "invalid-input-response"
+				| "expired-input-response"
+				| "already-seen-response"
 				| "bad-request"
-				| "timeout-or-duplicate"
+				| "missing-remoteip"
+				| "invalid-remoteip"
+				| "not-using-dummy-passcode"
+				| "sitekey-secret-mismatch"
 		  >
 		| undefined;
+	score: number | undefined; // ENTERPRISE feature: a score denoting malicious activity.
+	score_reason: Array<unknown> | undefined; // ENTERPRISE feature: reason(s) for score.
 };
 
-type SiteVerifyV3Response = SiteVerifyResponse & {
-	score: number;
-};
-
-const isV3 = (
-	response: SiteVerifyResponse | SiteVerifyV3Response,
-): response is SiteVerifyV3Response => {
-	return "score" in response && typeof response.score === "number";
-};
-
-export const googleRecaptcha = async ({
+export const hCaptcha = async ({
 	siteVerifyURL,
 	captchaResponse,
 	secretKey,
-	minScore = 0.5,
+	siteKey,
 	remoteIP,
 }: Params) => {
-	const response = await betterFetch<SiteVerifyResponse | SiteVerifyV3Response>(
-		siteVerifyURL,
-		{
-			method: "POST",
-			headers: { "Content-Type": "application/x-www-form-urlencoded" },
-			body: encodeToURLParams({
-				secret: secretKey,
-				response: captchaResponse,
-				...(remoteIP && { remoteip: remoteIP }),
-			}),
-		},
-	);
+	const response = await betterFetch<SiteVerifyResponse>(siteVerifyURL, {
+		method: "POST",
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: encodeToURLParams({
+			secret: secretKey,
+			response: captchaResponse,
+			...(siteKey && { sitekey: siteKey }),
+			...(remoteIP && { remoteip: remoteIP }),
+		}),
+	});
 
 	if (!response.data || response.error) {
 		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE);
 	}
 
-	if (
-		!response.data.success ||
-		(isV3(response.data) && response.data.score < minScore)
-	) {
+	if (!response.data.success) {
 		return middlewareResponse({
 			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED,
 			status: 403,
