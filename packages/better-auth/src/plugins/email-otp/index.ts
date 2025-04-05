@@ -349,7 +349,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					) {
 						const session = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx.request,
+							ctx.headers,
 						);
 						await setSessionCookie(ctx, {
 							session,
@@ -465,7 +465,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.id,
-							ctx.request,
+							ctx.headers,
 						);
 						await setSessionCookie(ctx, {
 							session,
@@ -497,7 +497,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						ctx.request,
+						ctx.headers,
 					);
 					await setSessionCookie(ctx, {
 						session,

@@ -178,7 +178,7 @@ export async function handleOAuthUserInfo(
 
 	const session = await c.context.internalAdapter.createSession(
 		user.id,
-		c.request,
+		c.headers,
 	);
 	if (!session) {
 		return {

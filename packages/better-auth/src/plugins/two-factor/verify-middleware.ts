@@ -46,7 +46,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 			);
 			const session = await ctx.context.internalAdapter.createSession(
 				userId,
-				ctx.request,
+				ctx.headers,
 				!!dontRememberMe,
 			);
 			if (!session) {
