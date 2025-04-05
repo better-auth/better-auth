@@ -73,7 +73,7 @@ const createTransform = (
 
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(
+		async transformInput(
 			data: Record<string, any>,
 			model: string,
 			action: "create" | "update",
@@ -83,7 +83,7 @@ const createTransform = (
 					? {}
 					: {
 							id: options.advanced?.generateId
-								? options.advanced.generateId({
+								? await options.advanced.generateId({
 										model,
 									})
 								: data.id || generateId(),
@@ -253,7 +253,7 @@ export const kyselyAdapter =
 			id: "kysely",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model, "create");
+				const transformed = await transformInput(values, model, "create");
 				const builder = db.insertInto(getModelName(model)).values(transformed);
 				return transformOutput(
 					await withReturning(transformed, builder, model, []),
@@ -316,7 +316,7 @@ export const kyselyAdapter =
 			async update(data) {
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
-				const transformedData = transformInput(values, model, "update");
+				const transformedData = await transformInput(values, model, "update");
 
 				let query = db.updateTable(getModelName(model)).set(transformedData);
 				if (and) {
@@ -334,7 +334,7 @@ export const kyselyAdapter =
 			async updateMany(data) {
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
-				const transformedData = transformInput(values, model, "update");
+				const transformedData = await transformInput(values, model, "update");
 				let query = db.updateTable(getModelName(model)).set(transformedData);
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
