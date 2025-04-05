@@ -53,6 +53,11 @@ export interface EmailOTPOptions {
 	 * @Default false
 	 */
 	disableSignUp?: boolean;
+	/**
+	 * Allowed attempts for the OTP code
+	 * @default 3
+	 */
+	allowedAttempts?: number;
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
@@ -65,9 +70,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 	} satisfies EmailOTPOptions;
 	const ERROR_CODES = {
 		OTP_EXPIRED: "otp expired",
-		INVALID_OTP: "invalid otp",
-		INVALID_EMAIL: "invalid email",
-		USER_NOT_FOUND: "user not found",
+		INVALID_OTP: "Invalid OTP",
+		INVALID_EMAIL: "Invalid email",
+		USER_NOT_FOUND: "User not found",
 	} as const;
 	return {
 		id: "email-otp",
@@ -320,8 +325,23 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const otp = ctx.body.otp;
-					if (verificationValue.value !== otp) {
+					const [otpValue, attempts] = verificationValue.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (ctx.body.otp !== otpValue) {
+						await ctx.context.internalAdapter.updateVerificationValue(
+							verificationValue.id,
+							{
+								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+							},
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
