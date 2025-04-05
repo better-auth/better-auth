@@ -207,10 +207,9 @@ const createTransform = (
 				const c = await builder.returning();
 				return c[0];
 			}
-			const r = await builder.execute();
+			await builder.execute();
 			const schemaModel = getSchema(model);
 			const builderVal = builder.config?.values;
-			console.log("builderVal", builderVal);
 			if (where?.length) {
 				const clause = convertWhereClause(where, model);
 				const res = await db
@@ -227,7 +226,6 @@ const createTransform = (
 						.from(schemaModel)
 						.orderBy(desc(schemaModel.id))
 						.limit(1);
-
 					tId = lastInsertId[0].id;
 				}
 				const res = await db
