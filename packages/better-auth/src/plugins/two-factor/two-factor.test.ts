@@ -78,6 +78,36 @@ describe("two factor", async () => {
 		expect(twoFactor?.backupCodes).toBeDefined();
 	});
 
+	it("should use custom issuer from request parameter", async () => {
+		const CUSTOM_ISSUER = "Custom App Name";
+		const res = await client.twoFactor.enable({
+			password: testUser.password,
+			issuer: CUSTOM_ISSUER,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totpURI = res.data?.totpURI;
+		expect(totpURI).toMatch(
+			new RegExp(`^otpauth://totp/${encodeURIComponent(CUSTOM_ISSUER)}:`),
+		);
+		expect(totpURI).toContain(`&issuer=Custom+App+Name&`);
+	});
+
+	it("should fallback to appName when no issuer provided", async () => {
+		const res = await client.twoFactor.enable({
+			password: testUser.password,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totpURI = res.data?.totpURI;
+		expect(totpURI).toMatch(/^otpauth:\/\/totp\/Better%20Auth:/);
+		expect(totpURI).toContain("&issuer=Better+Auth&");
+	});
+
 	it("should enable twoFactor", async () => {
 		const twoFactor = await db.findOne<TwoFactorTable>({
 			model: "twoFactor",

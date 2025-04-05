@@ -80,12 +80,13 @@ This plugin offers two main methods to do a second factor verification:
 
 ### Enabling 2FA
 
-To enable two-factor authentication, call `twoFactor.enable` with the user's password:
+To enable two-factor authentication, call `twoFactor.enable` with the user's password and issuer (optional):
 
 ```ts title="two-factor.ts"
 const { data } = await authClient.twoFactor.enable({
-    password: "password" // user password required
-})
+  password: "password", // user password required
+  issuer: "my-app-name", // Optional, defaults to the app name
+});
 ```
 
 When 2FA is enabled:

@@ -42,6 +42,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						password: z.string({
 							description: "User password",
 						}),
+						issuer: z
+							.string({
+								description: "Custom issuer for the TOTP URI",
+							})
+							.optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -79,7 +84,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password } = ctx.body;
+					const { password, issuer } = ctx.body;
 					const isPasswordValid = await validatePassword(ctx, {
 						password,
 						userId: user.id,
@@ -147,7 +152,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
-					}).url(options?.issuer || ctx.context.appName, user.email);
+					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
