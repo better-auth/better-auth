@@ -332,6 +332,12 @@ export type BetterAuthOptions = {
 			 * This is useful for cleaning up user data
 			 */
 			afterDelete?: (user: User, request?: Request) => Promise<void>;
+			/**
+			 * The expiration time for the delete token.
+			 *
+			 * @default 1 day (60 * 60 * 24) in seconds
+			 */
+			deleteTokenExpiresIn?: number;
 		};
 	};
 	session?: {
