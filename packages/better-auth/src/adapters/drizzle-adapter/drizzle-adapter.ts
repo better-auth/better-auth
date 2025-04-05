@@ -9,6 +9,7 @@ import {
 	lt,
 	lte,
 	or,
+	sql,
 	SQL,
 } from "drizzle-orm";
 import { getAuthTables } from "../../db";
@@ -206,9 +207,10 @@ const createTransform = (
 				const c = await builder.returning();
 				return c[0];
 			}
-			await builder.execute();
+			const r = await builder.execute();
 			const schemaModel = getSchema(model);
 			const builderVal = builder.config?.values;
+			console.log("builderVal", builderVal);
 			if (where?.length) {
 				const clause = convertWhereClause(where, model);
 				const res = await db
@@ -217,7 +219,17 @@ const createTransform = (
 					.where(...clause);
 				return res[0];
 			} else if (builderVal) {
-				const tId = builderVal[0]?.id.value;
+				let tId = builderVal[0]?.id?.value;
+				if (!tId) {
+					//get last inserted id
+					const lastInsertId = await db
+						.select({ id: sql`LAST_INSERT_ID()` })
+						.from(schemaModel)
+						.orderBy(desc(schemaModel.id))
+						.limit(1);
+
+					tId = lastInsertId[0].id;
+				}
 				const res = await db
 					.select()
 					.from(schemaModel)
