@@ -104,6 +104,11 @@ export interface PhoneNumberOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Allowed attempts for the OTP code
+	 * @default 3
+	 */
+	allowedAttempts?: number;
 }
 
 export const phoneNumber = (options?: PhoneNumberOptions) => {
@@ -421,7 +426,18 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.OTP_NOT_FOUND,
 						});
 					}
-					if (otp.value !== ctx.body.code) {
+					const [otpValue, attempts] = otp.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (otpValue !== ctx.body.code) {
+						await ctx.context.internalAdapter.updateVerificationValue(otp.id, {
+							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+						});
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid OTP",
 						});
@@ -683,6 +699,15 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path.startsWith("/phone-number");
+				},
+				window: 60 * 1000,
+				max: 10,
+			},
+		],
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

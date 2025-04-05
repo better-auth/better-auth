@@ -229,3 +229,33 @@ The plugin requires 2 fields to be added to the user table
         },
     ]}
     />
+
+### OTP Verification Attempts
+
+The phone number plugin includes a built-in protection against brute force attacks by limiting the number of verification attempts for each OTP code.
+
+```typescript
+phoneNumber({
+  allowedAttempts: 3, // default is 3
+  // ... other options
+})
+```
+
+When a user exceeds the allowed number of verification attempts:
+- The OTP code is automatically deleted
+- Further verification attempts will return a 403 (Forbidden) status with "Too many attempts" message
+- The user will need to request a new OTP code to continue
+
+Example error response after exceeding attempts:
+```json
+{
+  "error": {
+    "status": 403,
+    "message": "Too many attempts"
+  }
+}
+```
+
+<Callout type="warning">
+When receiving a 403 status, prompt the user to request a new OTP code
+</Callout>
