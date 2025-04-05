@@ -30,30 +30,17 @@ export const auth = betterAuth({
 The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
 your database schema based on your Better Auth configuration and plugins.
 
-<table>
-  <tr className="border-b">
-    <th>
-      <p className="font-bold text-[16px] mb-1">Drizzle Schema Generation</p>
-    </th>
-    <th>
-      <p className="font-bold text-[16px] mb-1">Drizzle Schema Migration</p>
-    </th>
-  </tr>
-  <tr className="h-10">
-    <td>✅ Supported</td>
-    <td>
-      ❌ Not Supported - Use Drizzle [migration
-      command](https://orm.drizzle.team/docs/migrations)
-    </td>
-  </tr>
-</table>
+To generate the schema required by Better Auth, run the following command:
 
 ```bash title="Schema Generation"
 npx @better-auth/cli@latest generate
 ```
 
+To generate and apply the migration, run the following commands:
+
 ```bash title="Schema Migration"
-drizzle-kit migrate
+npx drizzle-kit generate # generate the migration file
+npx drizzle-kit migrate # apply the migration
 ```
 
 ## Additional Information

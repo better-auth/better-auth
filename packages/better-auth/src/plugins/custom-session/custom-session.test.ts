@@ -44,4 +44,16 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(s.data?.newData).toEqual({ message: "Hello, World!" });
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
 	});
+
+	it("should return set cookie headers", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					expect(context.response.headers.get("set-cookie")).toBeDefined();
+				},
+			},
+		});
+	});
 });

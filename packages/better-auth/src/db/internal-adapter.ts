@@ -160,9 +160,10 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
-		countTotalUsers: async () => {
+		countTotalUsers: async (where?: Where[]) => {
 			const total = await adapter.count({
 				model: "user",
+				where,
 			});
 			return total;
 		},
