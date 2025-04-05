@@ -10,7 +10,6 @@ import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "../../../error/codes";
 import { hasPermission } from "../has-permission";
-import type { Role } from "../../access/types";
 
 export const addMember = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
@@ -220,12 +219,6 @@ export const removeMember = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
-		const role = ctx.context.roles[member.role];
-		if (!role) {
-			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-			});
-		}
 		const roles = toBeRemovedMember.role.split(",");
 		const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 		const isOwner = roles.includes(creatorRole);
@@ -382,23 +375,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				member.id !== ctx.body.memberId
 					? await adapter.findMemberById(ctx.body.memberId)
 					: member;
-					
+
 			if (!toBeUpdatedMember) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-
-			const memberRoleObjects: Role[] = [];
-			member.role.split(",").forEach((role) => {
-				const validRole = ctx.context.roles[role];
-				if (!validRole) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-					});
-				}
-				memberRoleObjects.push(validRole);
-			});
 
 			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
 			const updatingMemberRoles = member.role.split(",");
@@ -406,9 +388,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			if (
 				(toBeUpdatedMemberRoles.includes(creatorRole) &&
-					!updatingMemberRoles.includes(creatorRole)) 
-					||
-				(roleToSet.includes(creatorRole) && !updatingMemberRoles.includes(creatorRole))
+					!updatingMemberRoles.includes(creatorRole)) ||
+				(roleToSet.includes(creatorRole) &&
+					!updatingMemberRoles.includes(creatorRole))
 			) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -416,12 +398,14 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const canUpdateMember =
-			updatingMemberRoles.includes(creatorRole) || memberRoleObjects.some((role) =>
-					role.authorize({
-						member: ["update"],
-					}).success
-				) 
+			const canUpdateMember = hasPermission({
+				role: member.role,
+				options: ctx.context.orgOptions,
+				permission: {
+					member: ["update"],
+				},
+			});
+
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
 					message:
