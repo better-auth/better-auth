@@ -52,7 +52,7 @@
     "jotai": "^2.12.1",
     "lucide-react": "^0.477.0",
     "motion": "^12.4.10",
-    "next": "15.2.3",
+    "next": "15.2.4",
     "next-themes": "^0.3.0",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.0.0",
