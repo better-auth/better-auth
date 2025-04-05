@@ -203,6 +203,16 @@
         "default": "./dist/integrations/next-js.cjs"
       }
     },
+    "./react-start": {
+      "import": {
+        "types": "./dist/integrations/react-start.d.ts",
+        "default": "./dist/integrations/react-start.mjs"
+      },
+      "require": {
+        "types": "./dist/integrations/react-start.d.cts",
+        "default": "./dist/integrations/react-start.cjs"
+      }
+    },
     "./node": {
       "import": {
         "types": "./dist/integrations/node.d.ts",
@@ -520,6 +530,9 @@
       "next-js": [
         "./dist/integrations/next-js.d.ts"
       ],
+      "react-start": [
+        "./dist/integrations/react-start.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"
       ],
@@ -593,6 +606,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
+    "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
