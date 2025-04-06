@@ -61,7 +61,7 @@ export const callbackOAuth = createAuthEndpoint(
 		} = await parseState(c);
 
 		function redirectOnError(error: string) {
-			let url = errorURL || callbackURL || defaultErrorURL;
+			let url = errorURL || defaultErrorURL;
 			if (url.includes("?")) {
 				url = `${url}&error=${error}`;
 			} else {

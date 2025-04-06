@@ -544,11 +544,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const code = ctx.query.code;
 
 					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
+						const defaultErrorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.baseURL}/error`;
+						throw ctx.redirect(`${errorURL || defaultErrorURL}?error=${error}`);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;
