@@ -132,12 +132,12 @@ describe("account", async () => {
 				headers,
 			},
 		);
-		
+
 		expect(linkAccountRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		
+
 		// Verify the custom scope is included in the authorization URL
 		const url = new URL(linkAccountRes.data!.url);
 		const scopesParam = url.searchParams.get("scope");
