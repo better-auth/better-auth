@@ -320,7 +320,7 @@ subscription: {
     // ... other options
     authorizeReference: async ({ user, session, referenceId, action }) => {
         // Check if the user has permission to manage subscriptions for this reference
-        if (action === "upgrade-subscription" || action === "cancel-subscription") {
+        if (action === "upgrade-subscription" || action === "cancel-subscription" || action === "restore-subscription") {
             const org = await db.member.findFirst({
                 where: {
                     organizationId: referenceId,
@@ -556,7 +556,7 @@ stripe({
 
 **requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
 
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" }, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
+**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
 
 ### Plan Configuration
 

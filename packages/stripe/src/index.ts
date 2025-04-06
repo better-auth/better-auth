@@ -514,27 +514,42 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				method: "POST",
 				body: z.object({
 					referenceId: z.string().optional(),
+					subscriptionId: z.string().optional(),
 				}),
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
 			async (ctx) => {
 				const referenceId =
 					ctx.body?.referenceId || ctx.context.session.user.id;
-				const subscription = await ctx.context.adapter.findOne<Subscription>({
-					model: "subscription",
-					where: [
-						{
-							field: "referenceId",
-							value: referenceId,
-						},
-					],
-				});
+
+				const subscription = ctx.body.subscriptionId
+					? await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+								},
+							],
+						})
+					: await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: referenceId,
+								},
+							],
+						});
 				if (!subscription || !subscription.stripeCustomerId) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					});
 				}
-				if (subscription.status != "active") {
+				if (
+					subscription.status != "active" &&
+					subscription.status != "trialing"
+				) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 					});
@@ -545,6 +560,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 					});
 				}
+
 				const activeSubscription = await client.subscriptions
 					.list({
 						customer: subscription.stripeCustomerId,
@@ -556,6 +572,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					});
 				}
+
 				try {
 					const newSub = await client.subscriptions.update(
 						activeSubscription.id,
@@ -563,6 +580,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							cancel_at_period_end: false,
 						},
 					);
+
+					await ctx.context.adapter.update({
+						model: "subscription",
+						update: {
+							cancelAtPeriodEnd: false,
+							updatedAt: new Date(),
+						},
+						where: [
+							{
+								field: "id",
+								value: subscription.id,
+							},
+						],
+					});
+
 					return ctx.json(newSub);
 				} catch (error) {
 					ctx.context.logger.error("Error restoring subscription", error);
