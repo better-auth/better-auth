@@ -129,23 +129,35 @@ export const callbackOAuth = createAuthEndpoint(
 				if (existingAccount.userId.toString() !== link.userId.toString()) {
 					return redirectOnError("account_already_linked_to_different_user");
 				}
+				const updateData = Object.fromEntries(
+					Object.entries({
+						accessToken: tokens.accessToken,
+						idToken: tokens.idToken,
+						refreshToken: tokens.refreshToken,
+						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+						scope: tokens.scopes?.join(","),
+					}).filter(([_, value]) => value !== undefined),
+				);
+				await c.context.internalAdapter.updateAccount(
+					existingAccount.id,
+					updateData,
+				);
+			} else {
+				const newAccount = await c.context.internalAdapter.createAccount(
+					{
+						userId: link.userId,
+						providerId: provider.id,
+						accountId: userInfo.id,
+						...tokens,
+						scope: tokens.scopes?.join(","),
+					},
+					c,
+				);
+				if (!newAccount) {
+					return redirectOnError("unable_to_link_account");
+				}
 			}
-
-			const newAccount = await c.context.internalAdapter.createAccount(
-				{
-					userId: link.userId,
-					providerId: provider.id,
-					accountId: userInfo.id,
-					...tokens,
-					scope: tokens.scopes?.join(","),
-				},
-				c,
-			);
-
-			if (!newAccount) {
-				return redirectOnError("unable_to_link_account");
-			}
-
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;

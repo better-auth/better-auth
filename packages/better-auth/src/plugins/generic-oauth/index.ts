@@ -621,18 +621,42 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
-						const newAccount = await ctx.context.internalAdapter.createAccount({
-							userId: link.userId,
-							providerId: provider.providerId,
-							accountId: userInfo.id,
-							accessToken: tokens.accessToken,
-							refreshToken: tokens.refreshToken,
-							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-							scope: tokens.scopes?.join(","),
-						});
-						if (!newAccount) {
-							return redirectOnError("unable_to_link_account");
+						const existingAccount =
+							await ctx.context.internalAdapter.findAccount(userInfo.id);
+						if (existingAccount) {
+							if (existingAccount.userId !== link.userId) {
+								return redirectOnError(
+									"account_already_linked_to_different_user",
+								);
+							}
+							const updateData = Object.fromEntries(
+								Object.entries({
+									accessToken: tokens.accessToken,
+									idToken: tokens.idToken,
+									refreshToken: tokens.refreshToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								}).filter(([_, value]) => value !== undefined),
+							);
+							await ctx.context.internalAdapter.updateAccount(
+								existingAccount.id,
+								updateData,
+							);
+						} else {
+							const newAccount =
+								await ctx.context.internalAdapter.createAccount({
+									userId: link.userId,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									accessToken: tokens.accessToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								});
+							if (!newAccount) {
+								return redirectOnError("unable_to_link_account");
+							}
 						}
 						let toRedirectTo: string;
 						try {

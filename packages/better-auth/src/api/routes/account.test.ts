@@ -121,6 +121,7 @@ describe("account", async () => {
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {
+		const { headers: headers2 } = await signInWithTestUser();
 		const customScope = "https://www.googleapis.com/auth/drive.readonly";
 		const linkAccountRes = await client.linkSocial(
 			{
@@ -129,7 +130,7 @@ describe("account", async () => {
 				scopes: [customScope],
 			},
 			{
-				headers,
+				headers: headers2,
 			},
 		);
 
@@ -138,7 +139,6 @@ describe("account", async () => {
 			redirect: true,
 		});
 
-		// Verify the custom scope is included in the authorization URL
 		const url = new URL(linkAccountRes.data!.url);
 		const scopesParam = url.searchParams.get("scope");
 		expect(scopesParam).toContain(customScope);
@@ -190,7 +190,7 @@ describe("account", async () => {
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers3 },
 		});
-		expect(accounts.data?.length).toBe(3);
+		expect(accounts.data?.length).toBe(2);
 	});
 	it("should unlink account", async () => {
 		const { headers } = await signInWithTestUser();
@@ -199,7 +199,7 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(previousAccounts.data?.length).toBe(3);
+		expect(previousAccounts.data?.length).toBe(2);
 		const unlinkAccountId = previousAccounts.data![1].accountId;
 		const unlinkRes = await client.unlinkAccount({
 			providerId: "google",
@@ -214,7 +214,7 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(accounts.data?.length).toBe(2);
+		expect(accounts.data?.length).toBe(1);
 	});
 
 	it("should fail to unlink the last account of a provider", async () => {
