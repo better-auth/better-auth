@@ -35,6 +35,14 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context) => {
 			const authContext = await ctx;
+			if (authContext.options.disabledPaths?.includes(endpoint.path)) {
+				return {
+					response: new APIError("NOT_FOUND", {
+						message: BASE_ERROR_CODES.NOT_FOUND 
+					}),
+					headers: null
+				};
+			}
 			let internalContext: InternalContext = {
 				...context,
 				context: {
