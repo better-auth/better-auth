@@ -63,9 +63,14 @@ interface SSOOptions {
 	};
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
-	 * sign-in need to be calle dwith with requestSignUp as true to create new users.
+	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
 	disableImplicitSignUp?: boolean;
+	/**
+	 * Override user info with the provider info.
+	 * @default false
+	 */
+	defaultOverrideUserInfo?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -166,6 +171,13 @@ export const sso = (options?: SSOOptions) => {
 									"If organization plugin is enabled, the organization id to link the provider to",
 							})
 							.optional(),
+						overrideUserInfo: z
+							.boolean({
+								description:
+									"Override user info with the provider info. Defaults to false",
+							})
+							.default(false)
+							.optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -209,6 +221,8 @@ export const sso = (options?: SSOOptions) => {
 								mapping: body.mapping,
 								scopes: body.scopes,
 								userinfoEndpoint: body.userInfoEndpoint,
+								overrideUserInfo:
+									ctx.body.overrideUserInfo || options?.defaultOverrideUserInfo,
 							}),
 							organizationId: body.organizationId,
 							userId: ctx.context.session.user.id,
@@ -654,6 +668,8 @@ export const sso = (options?: SSOOptions) => {
 							scope: tokenResponse.scopes?.join(","),
 						},
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+						overrideUserInfo:
+							options?.defaultOverrideUserInfo || ctx.body.overrideUserInfo,
 					});
 					if (linked.error) {
 						throw ctx.redirect(

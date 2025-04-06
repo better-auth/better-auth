@@ -162,4 +162,11 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * The response mode to use for the authorization code request
 	 */
 	responseMode?: "query" | "form_post";
+	/**
+	 * If enabled, the user info will be overridden with the provider user info
+	 * This is useful if you want to use the provider user info to update the user info
+	 *
+	 * @default false
+	 */
+	overrideUserInfoOnSignIn?: boolean;
 };

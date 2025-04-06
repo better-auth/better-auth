@@ -127,6 +127,14 @@ interface GenericOAuthConfig {
 	 * @default "post"
 	 */
 	authentication?: "basic" | "post";
+	/**
+	 * Override user info with the provider info.
+	 *
+	 * This will update the user info with the provider info,
+	 * when the user signs in with the provider.
+	 * @default false
+	 */
+	overrideUserInfo?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -658,6 +666,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,
+						overrideUserInfo: provider.overrideUserInfo,
 					});
 
 					if (result.error) {
