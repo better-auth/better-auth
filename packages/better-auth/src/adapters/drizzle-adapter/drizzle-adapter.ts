@@ -38,30 +38,23 @@ const createTransform = (
 
 	function transformValueToDB(value: any, model: string, field: string) {
 		const { provider = "sqlite" } = config || {};
+		if (provider !== "sqlite") {
+			return value;
+		}
 		const f = schema[model].fields[field];
-		if (
-			f.type === "boolean" &&
-			(provider === "sqlite" ) &&
-			value !== null &&
-			value !== undefined
-		) {
+		if (f.type === "boolean" && value !== null && value !== undefined) {
 			return value ? 1 : 0;
 		}
 		if (f.type === "date" && value && value instanceof Date) {
-			return provider === "sqlite" ? value.toISOString() : value;
+			return value.toISOString();
 		}
 		return value;
 	}
 
 	function transformValueFromDB(value: any, model: string, field: string) {
 		const { provider = "sqlite" } = config || {};
-
 		const f = schema[model].fields[field];
-		if (
-			f.type === "boolean" &&
-			(provider === "sqlite") &&
-			value !== null
-		) {
+		if (f.type === "boolean" && provider === "sqlite" && value !== null) {
 			return value === 1;
 		}
 		if (f.type === "date" && value) {
