@@ -5,6 +5,7 @@ import {
 	type EndpointOptions,
 	type InputContext,
 } from "better-call";
+import { BASE_ERROR_CODES } from "../error/codes";
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import defu from "defu";
