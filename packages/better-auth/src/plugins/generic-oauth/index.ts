@@ -766,7 +766,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							clientId,
 							clientSecret,
 							redirectURI:
-								redirectURI || `${c.context.baseURL}/oauth2/callback`,
+								redirectURI ||
+								`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state: state.state,
