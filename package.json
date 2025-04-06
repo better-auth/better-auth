@@ -4,6 +4,7 @@
     "type": "module",
     "version": "0.0.2-beta.8",
     "packageManager": "pnpm@9.15.0",
+
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
         "build:docs": "turbo --filter \"./docs\" build",
