@@ -29,7 +29,7 @@ Generate a token using `auth.api.generateOneTimeToken` or `authClient.oneTimeTok
     <Tab value="Server">
         ```ts
         const response = await auth.api.generateOneTimeToken({
-            headers: await headers()
+            headers: await headers() // pass the request headers
         })
         ```
     </Tab>
@@ -49,17 +49,20 @@ When the user clicks the link or submits the token, use the `auth.api.verifyOneT
 <Tabs items={["Server", "Client"]}>
     <Tab value="Server">
         ```ts
+        const token = request.query.token as string; //retrieve a token
         const response = await auth.api.verifyOneTimeToken({
             body: {
-                token: response.token
+                token
             }
         })
         ```
     </Tab>
     <Tab value="Client">
         ```ts
+        const url = window.location.href;
+        const token = url.split("token=")[1]; //retrieve a token
         const response = await authClient.oneTimeToken.verify({
-            token: response.token
+            token
         })
         ```
     </Tab>
