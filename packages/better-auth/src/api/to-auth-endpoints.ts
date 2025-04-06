@@ -39,9 +39,9 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 			if (authContext.options.disabledPaths?.includes(endpoint.path)) {
 				return {
 					response: new APIError("NOT_FOUND", {
-						message: BASE_ERROR_CODES.NOT_FOUND 
+						message: BASE_ERROR_CODES.NOT_FOUND,
 					}),
-					headers: null
+					headers: null,
 				};
 			}
 			let internalContext: InternalContext = {
