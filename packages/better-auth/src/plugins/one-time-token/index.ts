@@ -27,6 +27,12 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 					use: [sessionMiddleware],
 				},
 				async (c) => {
+					//if request exist, it means it's a client request
+					if (options?.disableClientRequest && c.request) {
+						throw c.error("BAD_REQUEST", {
+							message: "Client requests are disabled",
+						});
+					}
 					const session = c.context.session;
 					const token = generateRandomString(32);
 					const expiresAt = new Date(
@@ -71,7 +77,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 						verificationValue.id,
 					);
 					const session = await c.context.internalAdapter.findSession(
-						verificationValue.value.replace("one-time-token:", ""),
+						verificationValue.value,
 					);
 					if (!session) {
 						throw c.error("BAD_REQUEST", {

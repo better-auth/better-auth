@@ -52,6 +52,7 @@ describe("One-time token", async () => {
 			})
 			.catch((e) => e);
 		expect(shouldFail).toBeInstanceOf(APIError);
+		vi.useRealTimers();
 	});
 
 	it("should work with client", async () => {
@@ -59,11 +60,12 @@ describe("One-time token", async () => {
 		const response = await client.oneTimeToken.generate({
 			fetchOptions: {
 				headers,
+				throw: true,
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expect(response.token).toBeDefined();
 		const session = await client.oneTimeToken.verify({
-			token: response.data?.token!,
+			token: response.token,
 		});
 		expect(session.data?.session).toBeDefined();
 	});

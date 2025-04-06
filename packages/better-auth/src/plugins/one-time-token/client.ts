@@ -1,9 +1,9 @@
 import type { oneTimeToken } from "./index";
-import type { BetterAuthClientPlugin } from "../../types";
+import type { BetterAuthClientPlugin } from "../../client/types";
 
 export const oneTimeTokenClient = () => {
 	return {
-		id: "better-auth-client",
+		id: "one-time-token",
 		$InferServerPlugin: {} as ReturnType<typeof oneTimeToken>,
 	} satisfies BetterAuthClientPlugin;
 };

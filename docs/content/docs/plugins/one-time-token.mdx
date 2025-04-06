@@ -40,7 +40,7 @@ Generate a token using `auth.api.generateOneTimeToken` or `authClient.oneTimeTok
     </Tab>
 </Tabs>
 
-This will return a token that is attached to the current session.
+This will return a `token` that is attached to the current session which can be used to verify the one-time token. By default, the token will expire in 3 minutes.
 
 ### 2. Verify the Token
 
@@ -72,4 +72,10 @@ This will return the session that was attached to the token.
 These options can be configured when adding the `oneTimeToken` plugin:
 
 *   **`disableClientRequest`** (boolean): Optional. If `true`, the token will only be generated on the server side. Default: `false`.
-*   **`expiresIn`** (string | number): Optional. The duration for which the token is valid in minutes. Default: `3`.
+*   **`expiresIn`** (number): Optional. The duration for which the token is valid in minutes. Default: `3`.
+
+```ts
+oneTimeToken({
+    expiresIn: 10 // 10 minutes
+})
+```
