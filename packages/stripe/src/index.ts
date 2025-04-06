@@ -515,10 +515,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					referenceId: z.string().optional(),
 				}),
-				use: [
-					sessionMiddleware,
-					referenceMiddleware("restore-subscription"),
-				],
+				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
 			async (ctx) => {
 				const referenceId =
@@ -544,7 +541,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 				if (!subscription.cancelAtPeriodEnd) {
 					throw ctx.error("BAD_REQUEST", {
-						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+						message:
+							STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 					});
 				}
 				const activeSubscription = await client.subscriptions
@@ -559,15 +557,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 				try {
-					const newSub = await client.subscriptions.update(activeSubscription.id, {
-						cancel_at_period_end: false,
-					});
+					const newSub = await client.subscriptions.update(
+						activeSubscription.id,
+						{
+							cancel_at_period_end: false,
+						},
+					);
 					return ctx.json(newSub);
 				} catch (error) {
-					ctx.context.logger.error(
-						"Error restoring subscription",
-						error,
-					);
+					ctx.context.logger.error("Error restoring subscription", error);
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
 					});

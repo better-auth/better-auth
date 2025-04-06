@@ -702,25 +702,28 @@ describe("stripe", async () => {
 	});
 
 	it("should restore a canceled subscription", async () => {
-		const userRes = await authClient.signUp.email({
-			...testUser,
-			email: "restore-test@email.com",
-		}, {
-			throw: true,
-		});
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "restore-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
 		const headers = new Headers();
 		const userId = userRes.user.id;
 
-		// 
-
-		
-		await authClient.signIn.email({
-			...testUser,
-			email: "restore-test@email.com",
-		}, {
-			throw: true,
-			onSuccess: setCookieToHeader(headers),
-		});
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "restore-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
 
 		const listRes = await authClient.subscription.list({
 			fetchOptions: {
@@ -748,22 +751,24 @@ describe("stripe", async () => {
 
 		// Mock the Stripe client response for subscription list and update
 		mockStripe.subscriptions.list.mockResolvedValueOnce({
-			data: [{
-				id: "sub_restore_test",
-				status: "active",
-				customer: "cus_restore_test",
-				items: {
-					data: [
-						{
-							price: { id: process.env.STRIPE_PRICE_ID_1 },
-							quantity: 1
-						}
-					]
+			data: [
+				{
+					id: "sub_restore_test",
+					status: "active",
+					customer: "cus_restore_test",
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+							},
+						],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+					cancel_at_period_end: true,
 				},
-				current_period_start: Math.floor(Date.now() / 1000),
-				current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-				cancel_at_period_end: true
-			}]
+			],
 		});
 
 		mockStripe.subscriptions.update.mockResolvedValueOnce({
@@ -775,12 +780,12 @@ describe("stripe", async () => {
 				data: [
 					{
 						price: { id: process.env.STRIPE_PRICE_ID_1 },
-						quantity: 1
-					}
-				]
+						quantity: 1,
+					},
+				],
 			},
 			current_period_start: Math.floor(Date.now() / 1000),
-			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
+			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
 		});
 
 		// Call the restore endpoint
@@ -789,21 +794,14 @@ describe("stripe", async () => {
 				headers,
 			},
 		});
-		console.log("restoreRes", restoreRes);
-		if (restoreRes.error) {
-			console.log("Error response:", {
-					status: restoreRes.error?.status,
-					statusText: restoreRes.error?.message,
-			});
-	}
+
 		expect(restoreRes.data?.cancel_at_period_end).toBe(false);
-		
 		// Verify that Stripe's update method was called with the correct parameters
 		expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
 			"sub_restore_test",
 			{
 				cancel_at_period_end: false,
-			}
+			},
 		);
 	});
 });
