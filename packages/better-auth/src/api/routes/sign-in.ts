@@ -132,6 +132,15 @@ export const signInSocial = createAuthEndpoint(
 						"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 				})
 				.optional(),
+			/**
+			 * The login hint to use for the authorization code request
+			 */
+			loginHint: z
+				.string({
+					description:
+						"The login hint to use for the authorization code request",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -144,11 +153,12 @@ export const signInSocial = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
-										session: {
+										token: {
 											type: "string",
 										},
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",
@@ -157,7 +167,7 @@ export const signInSocial = createAuthEndpoint(
 											type: "boolean",
 										},
 									},
-									required: ["session", "user", "url", "redirect"],
+									required: ["redirect"],
 								},
 							},
 						},
@@ -270,6 +280,7 @@ export const signInSocial = createAuthEndpoint(
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
 		});
 
 		return c.json({
@@ -329,8 +340,12 @@ export const signInEmail = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
+										token: {
+											type: "string",
+										},
 										user: {
 											type: "object",
+											ref: "#/components/schemas/User",
 										},
 										url: {
 											type: "string",
@@ -339,7 +354,7 @@ export const signInEmail = createAuthEndpoint(
 											type: "boolean",
 										},
 									},
-									required: ["session", "user", "url", "redirect"],
+									required: ["token", "user", "redirect"],
 								},
 							},
 						},

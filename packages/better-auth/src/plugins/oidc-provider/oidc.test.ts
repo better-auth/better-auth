@@ -23,6 +23,12 @@ describe("oidc", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
+				getAdditionalUserInfoClaim(user, scopes) {
+					return {
+						custom: "custom value",
+						userId: user.id,
+					};
+				},
 			}),
 			jwt(),
 		],

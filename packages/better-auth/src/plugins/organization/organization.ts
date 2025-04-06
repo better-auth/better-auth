@@ -44,6 +44,10 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 
+export function parseRoles(roles: string | string[]): string {
+	return Array.isArray(roles) ? roles.join(",") : roles;
+}
+
 export interface OrganizationOptions {
 	/**
 	 * Configure whether new users are able to create new organizations.
@@ -316,7 +320,7 @@ export interface OrganizationOptions {
  *
  * @example
  * ```ts
- * const auth = createAuth({
+ * const auth = betterAuth({
  * 	plugins: [
  * 		organization({
  * 			allowUserToCreateOrganization: true,

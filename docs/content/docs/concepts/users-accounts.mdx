@@ -5,16 +5,7 @@ description: User and account management.
 
 Beyond authenticating users, Better Auth also provides a set of methods to manage users. This includes, updating user information, changing passwords, and more.
 
-## User table
-
-The user table stores the user data. The user table has the following fields:
-
-- `id`: The user id.
-- `email`: The email of the user.
-- `name`: The name of the user.
-- `image`: The image of the user.
-- `createdAt`: The creation date of the user.
-- `updatedAt`: The last update date of the user.
+The user table stores the authentication data of the user [Click here to view the schema](/docs/concepts/database#user).
 
 The user table can be extended using [additional fields](/docs/concepts/database#extending-core-schema) or by plugins to store additional data.
 
@@ -259,18 +250,7 @@ Better Auth supports multiple authentication methods. Each authentication method
 
 When a user signs in using a provider, an account is created for the user. The account stores the authentication data returned by the provider. This data includes the access token, refresh token, and other information returned by the provider.
 
-### Account table
-
-The account table stores the authentication data of the user. The account table has the following fields:
-
-- `id`: The unique identifier of the account.
-- `userId`: The id of the user.
-- `accountId`: The id of the account provided by the OAuth provider. (optional)
-- `providerId`: The id of the provider. (optional)
-- `accessToken`: The access token of the account. Returned by the provider. (optional)
-- `refreshToken`: The refresh token of the account. Returned by the provider. (optional)
-- `expiresAt`: The time when the access token expires. (optional)
-- `password`: The password of the account. Mainly used for email and password authentication. (optional)
+The account table stores the authentication data of the user [Click here to view the schema](/docs/concepts/database#account)
 
 
 ### List User Accounts
@@ -356,6 +336,22 @@ You can unlink a user account by providing a `providerId`.
 await authClient.unlinkAccount({
     providerId: "google"
 });
+
+// Unlink a specific account
+await authClient.unlinkAccount({
+    providerId: "google",
+    accountId: "123"
+});
 ```
 
-If the `providerId` doesn't exist, it will throw an error. Additionally, if the user only has one account, the unlinking process will fail to prevent account lockout.
+If the account doesn't exist, it will throw an error. Additionally, if the user only has one account, the unlinking process will fail to prevent account lockout unless `allowUnlinkingAll` is set to `true`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    account: {
+        accountLinking: {
+            allowUnlinkingAll: true
+        }
+    },
+});
+```

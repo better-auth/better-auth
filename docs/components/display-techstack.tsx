@@ -30,7 +30,7 @@ export const TechStackDisplay = ({
 									{techStackIcons[icon].icon}
 								</span>
 							</TooltipTrigger>
-							<TooltipContent className="text-white/80 bg-gradient-to-tr from-stone-950/90 via-stone-900 to-stone-950/90 z-1">
+							<TooltipContent className="text-white/80 bg-gradient-to-tr from-stone-950/90 via-stone-900 to-stone-950/90">
 								{techStackIcons[icon].name}
 							</TooltipContent>
 						</Tooltip>

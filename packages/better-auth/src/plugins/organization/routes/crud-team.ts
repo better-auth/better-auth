@@ -146,7 +146,10 @@ export const removeTeam = createAuthEndpoint(
 				});
 			}
 		}
-		const team = await adapter.findTeamById(ctx.body.teamId);
+		const team = await adapter.findTeamById({
+			teamId: ctx.body.teamId,
+			organizationId,
+		});
 		if (!team || team.organizationId !== organizationId) {
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
@@ -216,7 +219,10 @@ export const updateTeam = createAuthEndpoint(
 			});
 		}
 
-		const team = await adapter.findTeamById(ctx.body.teamId);
+		const team = await adapter.findTeamById({
+			teamId: ctx.body.teamId,
+			organizationId,
+		});
 
 		if (!team || team.organizationId !== organizationId) {
 			throw new APIError("BAD_REQUEST", {

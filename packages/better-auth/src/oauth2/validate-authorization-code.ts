@@ -2,6 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
 import { jwtVerify } from "jose";
+import { base64Url } from "@better-auth/utils/base64";
 
 export async function validateAuthorizationCode({
 	code,
@@ -33,7 +34,7 @@ export async function validateAuthorizationCode({
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
-		const encodedCredentials = btoa(
+		const encodedCredentials = base64Url.encode(
 			`${options.clientId}:${options.clientSecret}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;

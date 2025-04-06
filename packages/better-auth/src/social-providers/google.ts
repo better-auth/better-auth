@@ -4,6 +4,7 @@ import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { logger } from "../utils/logger";
+import { refreshAccessToken } from "../oauth2/refresh-access-token";
 
 export interface GoogleProfile {
 	aud: string;
@@ -33,9 +34,17 @@ export interface GoogleProfile {
 }
 
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
+	/**
+	 * The access type to use for the authorization code request
+	 */
 	accessType?: "offline" | "online";
-	prompt?: "none" | "consent" | "select_account";
+	/**
+	 * The display mode to use for the authorization code request
+	 */
 	display?: "page" | "popup" | "touch" | "wap";
+	/**
+	 * The hosted domain of the user
+	 */
 	hd?: string;
 }
 
@@ -43,7 +52,14 @@ export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			loginHint,
+			display,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
@@ -66,14 +82,12 @@ export const google = (options: GoogleOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				prompt: options.prompt,
+				accessType: options.accessType,
+				display: display || options.display,
+				loginHint,
+				hd: options.hd,
 			});
-
-			options.accessType &&
-				url.searchParams.set("access_type", options.accessType);
-			options.prompt && url.searchParams.set("prompt", options.prompt);
-			options.display && url.searchParams.set("display", options.display);
-			options.hd && url.searchParams.set("hd", options.hd);
-
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -85,6 +99,19 @@ export const google = (options: GoogleOptions) => {
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
+					});
+				},
 		async verifyIdToken(token, nonce) {
 			if (options.disableIdTokenSignIn) {
 				return false;
@@ -132,5 +159,6 @@ export const google = (options: GoogleOptions) => {
 				data: user,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<GoogleProfile>;
 };
