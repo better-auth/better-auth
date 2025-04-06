@@ -5,7 +5,6 @@ import {
 	type EndpointOptions,
 	type InputContext,
 } from "better-call";
-import { BASE_ERROR_CODES } from "../error/codes";
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import defu from "defu";
@@ -37,12 +36,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 		api[key] = async (context) => {
 			const authContext = await ctx;
 			if (authContext.options.disabledPaths?.includes(endpoint.path)) {
-				return {
-					response: new APIError("NOT_FOUND", {
-						message: BASE_ERROR_CODES.NOT_FOUND,
-					}),
-					headers: null,
-				};
+				return new Response("Not Found", { status: 404 });
 			}
 			let internalContext: InternalContext = {
 				...context,
