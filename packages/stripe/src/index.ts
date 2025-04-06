@@ -521,7 +521,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				],
 			},
 			async (ctx) => {
-				console.log("calling restoreSubscription");
 				const referenceId =
 					ctx.body?.referenceId || ctx.context.session.user.id;
 				const subscription = await ctx.context.adapter.findOne<Subscription>({
@@ -587,7 +586,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
 			},
 			async (ctx) => {
-				console.log("calling listActiveSubscriptions");
 				const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 					model: "subscription",
 					where: [
