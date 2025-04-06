@@ -3,13 +3,13 @@ title: One-Time Token Plugin
 description: Generate and verify single-use token
 ---
 
-The One-Time Token (OTT) plugin provides functionality to generate and verify secure, single-use tokens. These are commonly used for processes like verifying user emails, resetting passwords, or other actions that require a temporary, secure link or even to initiate a websocket connection.
+The One-Time Token (OTT) plugin provides functionality to generate and verify secure, single-use session tokens. These are commonly used for across domains authentication.
 
 ## Installing the One-Time Token Plugin
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { oneTimeToken } from "better-auth/plugins";
+import { oneTimeToken } from "better-auth/plugins/one-time-token";
 
 export const auth = betterAuth({
     plugins: [
@@ -19,17 +19,26 @@ export const auth = betterAuth({
 });
 ```
 
-## How to Use One-Time Tokens
+## Usage
 
 ### 1. Generate a Token
 
 Generate a token using `auth.api.generateOneTimeToken` or `authClient.oneTimeToken.generate`
 
-```ts
-const response = await auth.api.generateOneTimeToken({
-    headers: await headers()
-})
-```
+<Tabs items={["Server", "Client"]}>
+    <Tab value="Server">
+        ```ts
+        const response = await auth.api.generateOneTimeToken({
+            headers: await headers()
+        })
+        ```
+    </Tab>
+    <Tab value="Client">
+        ```ts
+        const response = await authClient.oneTimeToken.generate()
+        ```
+    </Tab>
+</Tabs>
 
 This will return a token that is attached to the current session.
 
@@ -37,13 +46,24 @@ This will return a token that is attached to the current session.
 
 When the user clicks the link or submits the token, use the `auth.api.verifyOneTimeToken` or `authClient.oneTimeToken.verify` method in another API route to validate it.
 
-```ts
-const response = await auth.api.verifyOneTimeToken({
-    body: {
-        token: response.token
-    }
-})
-```
+<Tabs items={["Server", "Client"]}>
+    <Tab value="Server">
+        ```ts
+        const response = await auth.api.verifyOneTimeToken({
+            body: {
+                token: response.token
+            }
+        })
+        ```
+    </Tab>
+    <Tab value="Client">
+        ```ts
+        const response = await authClient.oneTimeToken.verify({
+            token: response.token
+        })
+        ```
+    </Tab>
+</Tabs>
 
 This will return the session that was attached to the token.
 
