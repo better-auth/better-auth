@@ -147,31 +147,31 @@ export const twitter = (options: TwitterOption) => {
 			}
 
 			// First, get the user profile
-			const { data: profile, error: profileError } = await betterFetch<TwitterProfile>(
-				"https://api.x.com/2/users/me?user.fields=profile_image_url",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			const { data: profile, error: profileError } =
+				await betterFetch<TwitterProfile>(
+					"https://api.x.com/2/users/me?user.fields=profile_image_url",
+					{
+						method: "GET",
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
+				);
 
 			if (profileError) {
 				return null;
 			}
 
 			// Then, get the user's email address
-			const { data: emailData, error: emailError } = await betterFetch<{ data: { email: string } }>(
-				"https://api.x.com/2/users/me?user.fields=email",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
-					},
+			const { data: emailData, error: emailError } = await betterFetch<{
+				data: { email: string };
+			}>("https://api.x.com/2/users/me?user.fields=email", {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token.accessToken}`,
 				},
-			);
-			console.log("Email data: " , emailData)
+			});
+			console.log("Email data: ", emailData);
 			if (!emailError && emailData?.data?.email) {
 				profile.data.email = emailData.data.email;
 			}
