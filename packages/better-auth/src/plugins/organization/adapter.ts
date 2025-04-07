@@ -644,6 +644,20 @@ export const getOrgAdapter = (
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
+		listInvitations: async (data: {
+			organizationId: string;
+		}) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+				],
+			});
+			return invitations;
+		},
 		updateInvitation: async (data: {
 			invitationId: string;
 			status: "accepted" | "canceled" | "rejected";

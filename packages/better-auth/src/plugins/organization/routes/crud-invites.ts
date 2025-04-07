@@ -196,6 +196,15 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
+			if (
+				alreadyInvited.length &&
+				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
+			) {
+				await adapter.updateInvitation({
+					invitationId: alreadyInvited[0].id,
+					status: "canceled",
+				});
+			}
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw new APIError("BAD_REQUEST", {
@@ -618,5 +627,31 @@ export const getInvitation = createAuthEndpoint(
 			organizationSlug: organization.slug,
 			inviterEmail: member.user.email,
 		});
+	},
+);
+
+export const listInvitations = createAuthEndpoint(
+	"/organization/list-invitations",
+	{
+		method: "GET",
+		use: [orgMiddleware, orgSessionMiddleware],
+		query: z.object({
+			organizationId: z.string({
+				description: "The ID of the organization to list invitations for",
+			}),
+		}),
+	},
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED", {
+				message: "Not authenticated",
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const invitations = await adapter.listInvitations({
+			organizationId: ctx.query.organizationId,
+		});
+		return ctx.json(invitations);
 	},
 );

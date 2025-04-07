@@ -671,7 +671,6 @@ describe("organization", async (it) => {
 				headers: headers2,
 			},
 		});
-		console.log(invitation);
 		expect(invitation.error?.message).toBe(
 			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 		);
@@ -888,5 +887,70 @@ describe("invitation limit", async () => {
 					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
 				);
 			});
+	});
+});
+
+describe("cancel pending invitations on re-invite", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				cancelPendingInvitationsOnReInvite: true,
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("should cancel pending invitations on re-invite", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9@test.com",
+				role: "member",
+				resend: true,
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.data?.status).toBe("pending");
+		const listInvitations = await client.organization.listInvitations({
+			query: {
+				organizationId: org.data?.id as string,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(
+			listInvitations.data?.filter((invite) => invite.status === "pending")
+				.length,
+		).toBe(1);
 	});
 });
