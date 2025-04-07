@@ -635,11 +635,15 @@ export const listInvitations = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],
-		query: z.object({
-			organizationId: z.string({
-				description: "The ID of the organization to list invitations for",
-			}),
-		}),
+		query: z
+			.object({
+				organizationId: z
+					.string({
+						description: "The ID of the organization to list invitations for",
+					})
+					.optional(),
+			})
+			.optional(),
 	},
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
@@ -648,9 +652,25 @@ export const listInvitations = createAuthEndpoint(
 				message: "Not authenticated",
 			});
 		}
+		const orgId =
+			ctx.query?.organizationId || session.session.activeOrganizationId;
+		if (!orgId) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Organization ID is required",
+			});
+		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const isMember = await adapter.findMemberByOrgId({
+			userId: session.user.id,
+			organizationId: orgId,
+		});
+		if (!isMember) {
+			throw new APIError("FORBIDDEN", {
+				message: "You are not a member of this organization",
+			});
+		}
 		const invitations = await adapter.listInvitations({
-			organizationId: ctx.query.organizationId,
+			organizationId: orgId,
 		});
 		return ctx.json(invitations);
 	},

@@ -511,6 +511,11 @@ await authClient.organization.inviteMember({
 })
 ```
 
+<Callout>
+  - If the user is already a member of the organization, the invitation will be canceled.
+  - If the user is already invited to the organization, unless `resend` is set to `true`, the invitation will not be sent again.
+  - If `cancelPendingInvitationsOnReInvite` is set to `true`, the invitation will be canceled if the user is already invited to the organization and a new invitation is sent.
+</Callout>
 
 ### Accept Invitation
 
@@ -549,6 +554,18 @@ To get an invitation you can use the `getInvitation` function provided by the cl
 client.organization.getInvitation({
     query: {
         id: params.id
+    }
+})
+```
+
+### List Invitations
+
+To list all invitations you can use the `listInvitations` function provided by the client.
+
+```ts title="auth-client.ts"
+const invitations = await authClient.organization.listInvitations({
+    query: {
+        organizationId: "organization-id" // optional, by default it will use the active organization
     }
 })
 ```

@@ -941,9 +941,6 @@ describe("cancel pending invitations on re-invite", async () => {
 		);
 		expect(invite2.data?.status).toBe("pending");
 		const listInvitations = await client.organization.listInvitations({
-			query: {
-				organizationId: org.data?.id as string,
-			},
 			fetchOptions: {
 				headers,
 			},
