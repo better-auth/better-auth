@@ -602,16 +602,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? await provider.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as User | null;
-
-					if (!userInfo?.email) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw redirectOnError("email_is_missing");
+					if (!userInfo) {
+						throw redirectOnError("user_info_is_missing");
 					}
-
 					const mapUser = provider.mapProfileToUser
 						? await provider.mapProfileToUser(userInfo)
 						: null;
-
+					if (!mapUser?.email) {
+						ctx.context.logger.error("Unable to get user info", userInfo);
+						throw redirectOnError("email_is_missing");
+					}
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
