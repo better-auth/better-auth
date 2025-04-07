@@ -324,6 +324,44 @@ describe("organization", async (it) => {
 		expect(c.data?.role).toBe("member,admin");
 	});
 
+	it("should allow setting multiple roles when you have multiple yourself", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const activeMember = org?.data?.members.find((m) => m.userId === user.id);
+
+		expect(activeMember?.role).toBe("owner");
+
+		const c1 = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["owner", "admin"],
+			memberId: activeMember?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(c1.data?.role).toBe("owner,admin");
+
+		const c2 = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["owner"],
+			memberId: activeMember!.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(c2.data?.role).toBe("owner");
+	});
+
 	const adminUser = {
 		email: "test3@test.com",
 		password: "test123456",
@@ -393,6 +431,7 @@ describe("organization", async (it) => {
 			adminUser.email,
 			adminUser.password,
 		);
+
 		const res = await client.organization.updateMemberRole({
 			organizationId: organizationId,
 			role: "admin",
