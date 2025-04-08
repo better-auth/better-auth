@@ -104,7 +104,7 @@ export const twitter = (options: TwitterOption) => {
 		createAuthorizationURL(data) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["users.read", "tweet.read", "offline.access", "email"];
+				: ["users.read", "tweet.read", "offline.access" , "users.email" ];
 			options.scope && _scopes.push(...options.scope);
 			data.scopes && _scopes.push(...data.scopes);
 			return createAuthorizationURL({
@@ -145,8 +145,6 @@ export const twitter = (options: TwitterOption) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-
-			// First, get the user profile
 			const { data: profile, error: profileError } =
 				await betterFetch<TwitterProfile>(
 					"https://api.x.com/2/users/me?user.fields=profile_image_url",
@@ -162,20 +160,17 @@ export const twitter = (options: TwitterOption) => {
 				return null;
 			}
 
-			// Then, get the user's email address
 			const { data: emailData, error: emailError } = await betterFetch<{
-				data: { email: string };
-			}>("https://api.x.com/2/users/me?user.fields=email", {
+				data: { confirmed_email: string };
+			}>("https://api.x.com/2/users/me?user.fields=confirmed_email", {
 				method: "GET",
 				headers: {
 					Authorization: `Bearer ${token.accessToken}`,
 				},
 			});
-			console.log("Email data: ", emailData);
-			if (!emailError && emailData?.data?.email) {
-				profile.data.email = emailData.data.email;
+			if (!emailError && emailData?.data?.confirmed_email) {
+				profile.data.email = emailData.data.confirmed_email;
 			}
-
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
