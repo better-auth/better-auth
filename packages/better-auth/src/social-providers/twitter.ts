@@ -15,7 +15,7 @@ export interface TwitterProfile {
 		id: string;
 		/** The friendly name of this user, as shown on their profile. */
 		name: string;
-		/** @note Email is currently unsupported by Twitter.  */
+		/** The email address of this user. */
 		email?: string;
 		/** The Twitter handle (screen name) of this user. */
 		username: string;
@@ -104,7 +104,7 @@ export const twitter = (options: TwitterOption) => {
 		createAuthorizationURL(data) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["users.read", "tweet.read", "offline.access"];
+				: ["users.read", "tweet.read", "offline.access", "users.email"];
 			options.scope && _scopes.push(...options.scope);
 			data.scopes && _scopes.push(...data.scopes);
 			return createAuthorizationURL({
@@ -145,24 +145,38 @@ export const twitter = (options: TwitterOption) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<TwitterProfile>(
-				"https://api.x.com/2/users/me?user.fields=profile_image_url",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			const { data: profile, error: profileError } =
+				await betterFetch<TwitterProfile>(
+					"https://api.x.com/2/users/me?user.fields=profile_image_url",
+					{
+						method: "GET",
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
-			if (error) {
+				);
+
+			if (profileError) {
 				return null;
+			}
+
+			const { data: emailData, error: emailError } = await betterFetch<{
+				data: { confirmed_email: string };
+			}>("https://api.x.com/2/users/me?user.fields=confirmed_email", {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token.accessToken}`,
+				},
+			});
+			if (!emailError && emailData?.data?.confirmed_email) {
+				profile.data.email = emailData.data.confirmed_email;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.data.id,
 					name: profile.data.name,
-					email: profile.data.username || null,
+					email: profile.data.email || profile.data.username || null,
 					image: profile.data.profile_image_url,
 					emailVerified: profile.data.verified || false,
 					...userMap,
