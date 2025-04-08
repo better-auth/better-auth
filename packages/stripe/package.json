@@ -46,7 +46,7 @@
     "@types/better-sqlite3": "^7.6.12",
     "better-sqlite3": "^11.6.0",
     "vitest": "^1.6.0",
-    "stripe": "^17.7.0",
+    "stripe": "^18.0.0",
     "better-call": "catalog:"
   }
 }
