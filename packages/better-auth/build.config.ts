@@ -1,16 +1,16 @@
 import { defineBuildConfig } from "unbuild";
-
+import { dependencies } from "./package.json";
 export default defineBuildConfig({
 	rollup: {
 		emitCJS: true,
-		esbuild: {
-			treeShaking: true,
+		output: {
+			preserveModules: true,
+			preserveModulesRoot: "./src",
 		},
 	},
-	declaration: true,
+	declaration: "node16",
 	outDir: "dist",
-	clean: false,
-	failOnWarn: false,
+	clean: true,
 	externals: [
 		"prisma",
 		"@prisma/client",
@@ -55,6 +55,7 @@ export default defineBuildConfig({
 		"@babel/parser",
 		"punycode",
 		"csstype",
+		...Object.keys(dependencies),
 	],
 	entries: [
 		"./src/index.ts",
