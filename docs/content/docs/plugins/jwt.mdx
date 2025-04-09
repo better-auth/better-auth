@@ -284,7 +284,7 @@ jwt({
 })
 ```
 
-### Modify Issuer, Audience or Expiration time
+### Modify Issuer, Audience, Subject or Expiration time
 If none is given, the BASE_URL is used as the issuer and the audience is set to the BASE_URL. The expiration time is set to 15 minutes.
 
 ```ts title="auth.ts"
@@ -292,7 +292,11 @@ jwt({
   jwt: {
     issuer: "https://example.com",
     audience: "https://example.com",
-    expirationTime: "1h"
+    expirationTime: "1h",
+    getSubject: (session) => {
+      // by default the subject is the user id
+      return session.user.email
+    }
   }
 })
 ```
