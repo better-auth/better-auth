@@ -65,7 +65,13 @@ export interface JwtOptions {
 	};
 
 	jwt?: {
+		/**
+		 * The issuer of the JWT
+		 */
 		issuer?: string;
+		/**
+		 * The audience of the JWT
+		 */
 		audience?: string;
 		/**
 		 * Set the "exp" (Expiration Time) Claim.
@@ -91,10 +97,22 @@ export interface JwtOptions {
 		 * @default 15m
 		 */
 		expirationTime?: number | string | Date;
+		/**
+		 * A function that is called to define the payload of the JWT
+		 */
 		definePayload?: (session: {
 			user: User & Record<string, any>;
 			session: Session & Record<string, any>;
 		}) => Promise<Record<string, any>> | Record<string, any>;
+		/**
+		 * A function that is called to get the subject of the JWT
+		 *
+		 * @default session.user.id
+		 */
+		getSubject?: (session: {
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
+		}) => Promise<string> | string;
 	};
 	/**
 	 * Custom schema for the admin plugin
@@ -173,7 +191,10 @@ export async function getJwtToken(
 		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
 		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
 		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
-		.setSubject(ctx.context.session!.user.id)
+		.setSubject(
+			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
+				ctx.context.session!.user.id,
+		)
 		.sign(privateKey);
 	return jwt;
 }
