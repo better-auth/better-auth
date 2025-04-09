@@ -1385,21 +1385,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							operationId: "listRolePermissions",
 							summary: "List role permissions",
 							description: "List role permissions",
-							requestBody: {
-								content: {
-									"application/json": {
-										schema: {
-											type: "object",
-											properties: {
-												role: {
-													type: "string",
-													description: "The role to list permissions for",
-												},
-											},
-										},
-									},
-								},
-							},
 							responses: {
 								200: {
 									description: "Success",
