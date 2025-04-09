@@ -402,14 +402,11 @@ describe("disabled paths", async () => {
 });
 
 describe("custom paths", async () => {
-	console.log("custom paths");
 	const { client } = await getTestInstance({
 		customPaths: {
 			"/ok": "/okay",
 		},
 	});
-
-	console.log();
 
 	it("should redirect to custom path", async () => {
 		const response = await client.$fetch("/okay");
