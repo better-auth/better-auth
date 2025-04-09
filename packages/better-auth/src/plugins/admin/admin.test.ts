@@ -620,6 +620,42 @@ describe("Admin plugin", async () => {
 			role: "user",
 		});
 	});
+
+	it("should list roles correctly", async () => {
+		const res = await client.admin.listRoles({
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.roles).toEqual(expect.arrayContaining(["user", "admin"]));
+		expect(res.data?.roles.length).toBe(2);
+	});
+
+	it("should list role permissions correctly", async () => {
+		const res = await client.admin.listRolePermissions({
+			query: {
+				role: "admin",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.permissions).toMatchObject({
+			user: [
+				"create",
+				"list",
+				"set-role",
+				"ban",
+				"impersonate",
+				"delete",
+				"set-password",
+			],
+			session: ["list", "revoke", "delete"],
+			role: ["list", "view"],
+		});
+	});
 });
 
 describe("access control", async (it) => {
