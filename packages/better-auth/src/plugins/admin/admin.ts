@@ -19,7 +19,7 @@ import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
 import { type AccessControl, type Role } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
-import { defaultStatements } from "./access";
+import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 
 export interface UserWithRole extends User {
@@ -1299,6 +1299,166 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					return ctx.json({
 						error: null,
 						success: result,
+					});
+				},
+			),
+			listRoles: createAuthEndpoint(
+				"/admin/list-roles",
+				{
+					method: "GET",
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "listRoles",
+							summary: "List all available roles",
+							description: "List all available roles",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													roles: {
+														type: "array",
+														items: {
+															type: "string",
+														},
+													},
+												},
+											},
+										},
+									},
+									required: ["roles"],
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const session = ctx.context.session;
+
+					const canListRoles = hasPermission({
+						userId: session.user.id,
+						role: session.user.role,
+						options: opts,
+						permission: {
+							role: ["list"],
+						},
+					});
+					if (!canListRoles) {
+						throw new APIError("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_ROLES,
+						});
+					}
+
+					const adminRoles = Array.isArray(opts.adminRoles)
+						? opts.adminRoles
+						: opts.adminRoles
+							? [opts.adminRoles]
+							: [];
+					const baseRoles = [opts.defaultRole, ...adminRoles].filter(Boolean);
+					const customRoles =
+						opts.roles && typeof opts.roles === "object"
+							? Object.keys(opts.roles)
+							: [];
+					const allRoles = [...new Set([...baseRoles, ...customRoles])];
+
+					return ctx.json({
+						roles: allRoles,
+					});
+				},
+			),
+			listRolePermissions: createAuthEndpoint(
+				"/admin/list-role-permissions",
+				{
+					method: "GET",
+					query: z.object({
+						role: z.string({
+							description: "The role to list permissions for",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "listRolePermissions",
+							summary: "List role permissions",
+							description: "List role permissions",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												role: {
+													type: "string",
+													description: "The role to list permissions for",
+												},
+											},
+										},
+									},
+								},
+							},
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													permissions: {
+														type: "object",
+														description: "The permissions for the role",
+													},
+												},
+											},
+										},
+									},
+									required: ["permissions"],
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const session = ctx.context.session;
+
+					const canListRoles = hasPermission({
+						userId: session.user.id,
+						role: session.user.role,
+						options: opts,
+						permission: {
+							role: ["view"],
+						},
+					});
+					if (!canListRoles) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_VIEW_ROLE_PERMISSIONS,
+						});
+					}
+
+					const role = ctx.query.role;
+					if (!role) {
+						throw new APIError("BAD_REQUEST", {
+							message: ADMIN_ERROR_CODES.ROLE_NOT_PROVIDED,
+						});
+					}
+
+					const roleData =
+						opts.roles?.[role] ||
+						defaultRoles[role as keyof typeof defaultRoles];
+
+					if (!roleData) {
+						throw new APIError("NOT_FOUND", {
+							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
+						});
+					}
+
+					return ctx.json({
+						permissions: roleData.statements,
 					});
 				},
 			),
