@@ -32,7 +32,7 @@ import type { Models, RateLimit } from "./types/models";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "./utils";
-import { username, type AuthMiddleware } from "./plugins";
+import { type AuthMiddleware } from "./plugins";
 import type { LiteralUnion } from "./types/helper";
 
 export type WithJsDoc<T, D> = Expand<T & D>;

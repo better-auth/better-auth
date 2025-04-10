@@ -19,7 +19,9 @@ export type BetterAuthOptions<
 	Plugins extends BetterAuthPlugin[] = BetterAuthPlugin[],
 	// User model inference
 	UserModelName extends LiteralString = LiteralString,
-	UserFields extends Partial<Record<keyof OmitId<User>, LiteralString>> = {},
+	UserFields extends Partial<
+		Record<keyof OmitId<User>, LiteralString>
+	> = Partial<Record<keyof OmitId<User>, LiteralString>>,
 	UserAdditionalFields extends {
 		[key: string]: FieldAttribute;
 	} = {},
@@ -27,7 +29,7 @@ export type BetterAuthOptions<
 	SessionModelName extends LiteralString = LiteralString,
 	SessionFields extends Partial<
 		Record<keyof OmitId<Session>, LiteralString>
-	> = {},
+	> = Partial<Record<keyof OmitId<Session>, LiteralString>>,
 	SessionAdditionalFields extends {
 		[key: string]: FieldAttribute;
 	} = {},
@@ -35,7 +37,7 @@ export type BetterAuthOptions<
 	AccountModelName extends LiteralString = LiteralString,
 	AccountFields extends Partial<
 		Record<keyof OmitId<Account>, LiteralString>
-	> = {},
+	> = Partial<Record<keyof OmitId<Account>, LiteralString>>,
 > = Parameters<
 	typeof betterAuth<
 		Plugins,
