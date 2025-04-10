@@ -30,6 +30,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	const fileExist = existsSync(filePath);
 
+	function getReferenceName({ model }: { model: string }) {
+		if (tables[model] && tables[model].modelName) {
+			return tables[model].modelName;
+		}
+		return usePlural ? `${model}s` : model;
+	}
+
 	for (const table in tables) {
 		const modelName = usePlural
 			? `${tables[table].modelName}s`
@@ -85,11 +92,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
 								attr.references
-									? `.references(()=> ${
-											usePlural
-												? `${attr.references.model}s`
-												: attr.references.model
-										}.${attr.references.field}, { onDelete: 'cascade' })`
+									? `.references(()=> ${getReferenceName({
+											model: attr.references.model,
+										})}.${attr.references.field}, { onDelete: 'cascade' })`
 									: ""
 							}`;
 						})
