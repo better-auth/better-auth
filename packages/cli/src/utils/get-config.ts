@@ -3,7 +3,7 @@ import type { BetterAuthOptions } from "better-auth";
 import { logger } from "better-auth";
 import path from "path";
 // @ts-ignore
-import babelPresetTypescript from "@babel/preset-typescript";
+import babelPresetTypeScript from "@babel/preset-typescript";
 // @ts-ignore
 import babelPresetReact from "@babel/preset-react";
 import fs, { existsSync } from "fs";
@@ -72,7 +72,7 @@ const jitiOptions = (cwd: string) => {
 			babel: {
 				presets: [
 					[
-						babelPresetTypescript,
+						babelPresetTypeScript,
 						{
 							isTSX: true,
 							allExtensions: true,
