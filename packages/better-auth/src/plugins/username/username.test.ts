@@ -19,7 +19,7 @@ describe("username", async (it) => {
 		},
 	);
 
-	it("should signup with username", async () => {
+	it("should sign up with username", async () => {
 		const headers = new Headers();
 		await client.signUp.email(
 			{
