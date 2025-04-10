@@ -208,6 +208,7 @@ await client.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
+    annual: true, // Optional: upgrade to an annual plan
     referenceId: "org_123" // Optional: defaults to the current logged in user id
     seats: 5 // Optional: for team plans
 });
@@ -262,6 +263,20 @@ const { data } = await client.subscription.cancel({
 
 This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
 
+#### Restoring a Canceled Subscription
+
+If a user changes their mind after canceling a subscription (but before the subscription period ends), you can restore the subscription:
+
+```ts title="client.ts"
+const { data } = await client.subscription.restore({
+    referenceId: "org_123" // optional, defaults to userId
+});
+```
+
+This will reactivate a subscription that was previously set to cancel at the end of the billing period (`cancelAtPeriodEnd: true`). The subscription will continue to renew automatically.
+
+> **Note:** This only works for subscriptions that are still active but marked to cancel at the end of the period. It cannot restore subscriptions that have already ended.
+
 ### Reference System
 
 By default, subscriptions are associated with the user ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
@@ -307,7 +322,7 @@ subscription: {
     // ... other options
     authorizeReference: async ({ user, session, referenceId, action }) => {
         // Check if the user has permission to manage subscriptions for this reference
-        if (action === "upgrade-subscription" || action === "cancel-subscription") {
+        if (action === "upgrade-subscription" || action === "cancel-subscription" || action === "restore-subscription") {
             const org = await db.member.findFirst({
                 where: {
                     organizationId: referenceId,
@@ -542,7 +557,7 @@ stripe({
 
 **requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
 
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" }, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
+**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
 
 ### Plan Configuration
 

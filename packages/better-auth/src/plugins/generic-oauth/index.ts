@@ -602,21 +602,21 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? await provider.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as User | null;
-
-					if (!userInfo?.email) {
+					if (!userInfo) {
+						throw redirectOnError("user_info_is_missing");
+					}
+					const mapUser = provider.mapProfileToUser
+						? await provider.mapProfileToUser(userInfo)
+						: userInfo;
+					if (!mapUser?.email) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
 						throw redirectOnError("email_is_missing");
 					}
-
-					const mapUser = provider.mapProfileToUser
-						? await provider.mapProfileToUser(userInfo)
-						: null;
-
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== userInfo.email.toLowerCase()
+							link.email !== mapUser.email.toLowerCase()
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
