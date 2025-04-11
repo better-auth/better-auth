@@ -480,7 +480,12 @@ export const deleteUser = createAuthEndpoint(
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: session.user.id,
 				identifier: `delete-account-${token}`,
-				expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+				expiresAt: new Date(
+					Date.now() +
+						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+							60 * 60 * 24) *
+							1000,
+				),
 			});
 			const url = `${
 				ctx.context.baseURL
