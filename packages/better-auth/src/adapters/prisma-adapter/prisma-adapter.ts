@@ -41,14 +41,29 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 		return f.fieldName || field;
 	}
 
-	function operatorToPrismaOperator(operator: string) {
+	function operatorToPrismaOperator(
+		operator: Exclude<Where["operator"], "eq" | undefined>,
+	): string {
 		switch (operator) {
+			case "ne":
+				return "not";
+			// lt, lte, gt, gte, in, contains operators have same name
+			case "lt":
+			case "lte":
+			case "gt":
+			case "gte":
+			case "in":
+			case "contains":
+				return operator;
 			case "starts_with":
 				return "startsWith";
 			case "ends_with":
 				return "endsWith";
 			default:
-				return operator;
+				// throw an error if unknown operator is provided
+				throw new BetterAuthError(
+					`[# Prisma Adapter]: Unsupported operator: ${operator}`,
+				);
 		}
 	}
 
@@ -117,40 +132,34 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 			return transformedData as any;
 		},
 		convertWhereClause(model: string, where?: Where[]) {
-			if (!where) return {};
-			if (where.length === 1) {
-				const w = where[0];
-				if (!w) {
-					return;
-				}
-				return {
+			if (!where || !where.length) return {};
+			// Map each where condition to a prisma query condition
+			const conditions = where.map((w) => ({
+				condition: {
 					[getField(model, w.field)]:
 						w.operator === "eq" || !w.operator
 							? w.value
 							: {
-									[operatorToPrismaOperator(w.operator)]: w.value,
+									[operatorToPrismaOperator(w.operator)]:
+										// If the operator is "in" and the value is not an array, wrap it in an array
+										w.operator === "in" && !Array.isArray(w.value)
+											? [w.value]
+											: w.value,
 								},
-				};
+				},
+				connector: w.connector,
+			}));
+			// If there is only one condition, return it as a single clause
+			if (conditions.length === 1) {
+				return conditions[0].condition;
 			}
-			const and = where.filter((w) => w.connector === "AND" || !w.connector);
-			const or = where.filter((w) => w.connector === "OR");
-			const andClause = and.map((w) => {
-				return {
-					[getField(model, w.field)]:
-						w.operator === "eq" || !w.operator
-							? w.value
-							: {
-									[operatorToPrismaOperator(w.operator)]: w.value,
-								},
-				};
-			});
-			const orClause = or.map((w) => {
-				return {
-					[getField(model, w.field)]: {
-						[w.operator || "eq"]: w.value,
-					},
-				};
-			});
+			// Separate the conditions into "AND" and "OR" connector clauses
+			const andClause = conditions
+				.filter((c) => c.connector === "AND" || !c.connector)
+				.map((c) => c.condition);
+			const orClause = conditions
+				.filter((c) => c.connector === "OR")
+				.map((c) => c.condition);
 
 			return {
 				...(andClause.length ? { AND: andClause } : {}),
@@ -183,16 +192,19 @@ export const prismaAdapter =
 			getModelName,
 			getField,
 		} = createTransform(config, options);
+		function checkModelExistsOrThrow(model: string): void {
+			if (!db[getModelName(model)]) {
+				throw new BetterAuthError(
+					`[# Prisma Adapter]: Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+				);
+			}
+		}
 		return {
 			id: "prisma",
 			async create(data) {
 				const { model, data: values, select } = data;
 				const transformed = transformInput(values, model, "create");
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const result = await db[getModelName(model)].create({
 					data: transformed,
 					select: convertSelect(select, model),
@@ -202,11 +214,7 @@ export const prismaAdapter =
 			async findOne(data) {
 				const { model, where, select } = data;
 				const whereClause = convertWhereClause(model, where);
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const result = await db[getModelName(model)].findFirst({
 					where: whereClause,
 					select: convertSelect(select, model),
@@ -216,11 +224,7 @@ export const prismaAdapter =
 			async findMany(data) {
 				const { model, where, limit, offset, sortBy } = data;
 				const whereClause = convertWhereClause(model, where);
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 
 				const result = (await db[getModelName(model)].findMany({
 					where: whereClause,
@@ -240,11 +244,7 @@ export const prismaAdapter =
 			async count(data) {
 				const { model, where } = data;
 				const whereClause = convertWhereClause(model, where);
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const result = await db[getModelName(model)].count({
 					where: whereClause,
 				});
@@ -252,11 +252,7 @@ export const prismaAdapter =
 			},
 			async update(data) {
 				const { model, where, update } = data;
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].update({
@@ -267,6 +263,7 @@ export const prismaAdapter =
 			},
 			async updateMany(data) {
 				const { model, where, update } = data;
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].updateMany({
@@ -277,6 +274,7 @@ export const prismaAdapter =
 			},
 			async delete(data) {
 				const { model, where } = data;
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				try {
 					await db[getModelName(model)].delete({
@@ -288,6 +286,7 @@ export const prismaAdapter =
 			},
 			async deleteMany(data) {
 				const { model, where } = data;
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				const result = await db[getModelName(model)].deleteMany({
 					where: whereClause,

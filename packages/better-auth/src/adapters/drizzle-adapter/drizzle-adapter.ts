@@ -4,10 +4,13 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
+	gte,
 	inArray,
 	like,
 	lt,
 	lte,
+	ne,
 	or,
 	SQL,
 } from "drizzle-orm";
@@ -40,7 +43,7 @@ const createTransform = (
 		const schema = config.schema || db._.fullSchema;
 		if (!schema) {
 			throw new BetterAuthError(
-				"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+				"[# Drizzle Adapter]: Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 			);
 		}
 		const model = getModelName(modelName);
@@ -61,79 +64,90 @@ const createTransform = (
 				: model;
 	};
 
-	function convertWhereClause(where: Where[], model: string) {
+	function convertWhereClause(model: string, where: Where[]): SQL[] {
+		if (!where || !where.length) return [];
 		const schemaModel = getSchema(model);
-		if (!where) return [];
-		if (where.length === 1) {
-			const w = where[0];
-			if (!w) {
-				return [];
-			}
+		// Map each where condition to a drizzle query condition
+		const conditions = where.map((w) => {
 			const field = getField(model, w.field);
 			if (!schemaModel[field]) {
 				throw new BetterAuthError(
-					`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+					`[# Drizzle Adapter]: The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 				);
 			}
-			if (w.operator === "in") {
-				if (!Array.isArray(w.value)) {
-					throw new BetterAuthError(
-						`The value for the field "${w.field}" must be an array when using the "in" operator.`,
-					);
-				}
-				return [inArray(schemaModel[field], w.value)];
-			}
-
-			if (w.operator === "contains") {
-				return [like(schemaModel[field], `%${w.value}%`)];
-			}
-
-			if (w.operator === "starts_with") {
-				return [like(schemaModel[field], `${w.value}%`)];
-			}
-
-			if (w.operator === "ends_with") {
-				return [like(schemaModel[field], `%${w.value}`)];
-			}
-
-			if (w.operator === "lt") {
-				return [lt(schemaModel[field], w.value)];
-			}
-
-			if (w.operator === "lte") {
-				return [lte(schemaModel[field], w.value)];
-			}
-
-			return [eq(schemaModel[field], w.value)];
-		}
-		const andGroup = where.filter((w) => w.connector === "AND" || !w.connector);
-		const orGroup = where.filter((w) => w.connector === "OR");
-
-		const andClause = and(
-			...andGroup.map((w) => {
-				const field = getField(model, w.field);
-				if (w.operator === "in") {
-					if (!Array.isArray(w.value)) {
+			// if no operator is provided, set it to "eq" by default
+			const { value, operator = "eq", connector } = w;
+			let condition: SQL;
+			switch (operator) {
+				case "eq":
+					condition = eq(schemaModel[field], value);
+					break;
+				case "ne":
+					condition = ne(schemaModel[field], value);
+					break;
+				case "lt":
+					condition = lt(schemaModel[field], value);
+					break;
+				case "lte":
+					condition = lte(schemaModel[field], value);
+					break;
+				case "gt":
+					condition = gt(schemaModel[field], value);
+					break;
+				case "gte":
+					condition = gte(schemaModel[field], value);
+					break;
+				case "in":
+					if (!Array.isArray(value)) {
 						throw new BetterAuthError(
-							`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+							`[# Drizzle Adapter]: The value for the field "${w.field}" must be an array when using the "in" operator.`,
 						);
 					}
-					return inArray(schemaModel[field], w.value);
-				}
-				return eq(schemaModel[field], w.value);
-			}),
-		);
-		const orClause = or(
-			...orGroup.map((w) => {
-				const field = getField(model, w.field);
-				return eq(schemaModel[field], w.value);
-			}),
-		);
+					condition = inArray(schemaModel[field], value);
+					break;
+				case "contains":
+					condition = like(schemaModel[field], `%${value}%`);
+					break;
+				case "starts_with":
+					condition = like(schemaModel[field], `${value}%`);
+					break;
+				case "ends_with":
+					condition = like(schemaModel[field], `%${value}`);
+					break;
+				default:
+					// throw an error if unknown operator is provided
+					throw new BetterAuthError(
+						`[# Drizzle Adapter]: Unsupported operator: ${operator}`,
+					);
+			}
+			return { condition, connector };
+		});
+		// If there is only one condition, return it as a single clause
+		if (conditions.length === 1) {
+			return [conditions[0].condition];
+		}
+		// Separate the conditions into "AND" and "OR" connector conditions
+		const andConditions = conditions
+			.filter((c) => c.connector === "AND" || !c.connector)
+			.map((c) => c.condition);
+		const orConditions = conditions
+			.filter((c) => c.connector === "OR")
+			.map((c) => c.condition);
 
-		const clause: SQL<unknown>[] = [];
-
-		if (andGroup.length) clause.push(andClause!);
-		if (orGroup.length) clause.push(orClause!);
+		// combine "AND and "OR" conditions into a single clause
+		const clause: SQL[] = [];
+		if (andConditions.length) {
+			const andClause = and(...andConditions);
+			if (andClause) {
+				clause.push(andClause);
+			}
+		}
+		if (orConditions.length) {
+			const orClause = or(...orConditions);
+			if (orClause) {
+				clause.push(orClause);
+			}
+		}
 		return clause;
 	}
 
@@ -210,7 +224,7 @@ const createTransform = (
 			const schemaModel = getSchema(model);
 			const builderVal = builder.config?.values;
 			if (where?.length) {
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const res = await db
 					.select()
 					.from(schemaModel)
@@ -260,13 +274,13 @@ function checkMissingFields(
 ) {
 	if (!schema) {
 		throw new BetterAuthError(
-			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+			"[# Drizzle Adapter]: Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 		);
 	}
 	for (const key in values) {
 		if (!schema[key]) {
 			throw new BetterAuthError(
-				`The field "${key}" does not exist in the "${model}" schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
+				`[# Drizzle Adapter]: The field "${key}" does not exist in the "${model}" schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
 			);
 		}
 	}
@@ -297,7 +311,7 @@ export const drizzleAdapter =
 			async findOne(data) {
 				const { model, where, select } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const res = await db
 					.select()
 					.from(schemaModel)
@@ -309,7 +323,7 @@ export const drizzleAdapter =
 			async findMany(data) {
 				const { model, where, sortBy, limit, offset } = data;
 				const schemaModel = getSchema(model);
-				const clause = where ? convertWhereClause(where, model) : [];
+				const clause = where ? convertWhereClause(model, where) : [];
 
 				const sortFn = sortBy?.direction === "desc" ? desc : asc;
 				const builder = db
@@ -326,17 +340,17 @@ export const drizzleAdapter =
 			async count(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = where ? convertWhereClause(where, model) : [];
+				const clause = where ? convertWhereClause(model, where) : [];
 				const res = await db
 					.select({ count: count() })
 					.from(schemaModel)
 					.where(...clause);
-				return res.count;
+				return res[0].count;
 			},
 			async update(data) {
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
@@ -353,7 +367,7 @@ export const drizzleAdapter =
 			async updateMany(data) {
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
@@ -365,14 +379,14 @@ export const drizzleAdapter =
 			async delete(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const builder = db.delete(schemaModel).where(...clause);
 				await builder;
 			},
 			async deleteMany(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model); //con
+				const clause = convertWhereClause(model, where);
 				const builder = db.delete(schemaModel).where(...clause);
 				const res = await builder;
 				return res ? res.length : 0;
