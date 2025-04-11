@@ -4,7 +4,7 @@ body:
   - type: checkboxes
     attributes:
       label: Is this suited for github?
-      description: Feel free to join the discord community [here](https://discord.gg/GYC3W7tZzb), we can usually respond faster to any questions.
+      description: Feel free to join the discord community [here](https://discord.gg/better-auth), we can usually respond faster to any questions.
       options:
         - label: Yes, this is suited for github
   - type: markdown

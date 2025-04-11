@@ -96,11 +96,21 @@ export interface AdminOptions {
 	bannedUserMessage?: string;
 }
 
+export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
+	O extends { roles: Record<string, unknown> }
+		? keyof O["roles"]
+		: "user" | "admin";
+
+function parseRoles(roles: string | string[]): string {
+	return Array.isArray(roles) ? roles.join(",") : roles;
+}
+
 export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
-		defaultRole: "user",
-		adminRoles: ["admin"],
+		defaultRole: options?.defaultRole ?? "user",
+		adminRoles: options?.adminRoles ?? ["admin"],
 		bannedUserMessage:
+			options?.bannedUserMessage ??
 			"You have been banned from this application. Please contact support if you believe this is an error.",
 		...options,
 	};
@@ -202,12 +212,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
-						role: z.string({
-							description: "The role to set. `admin` or `user` by default",
-						}),
+						role: z.union([
+							z.string({
+								description: "The role to set. `admin` or `user` by default",
+							}),
+							z.array(
+								z.string({
+									description: "The roles to set. `admin` or `user` by default",
+								}),
+							),
+						]),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -233,6 +250,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								},
 							},
 						},
+						$Infer: {
+							body: {} as {
+								userId: string;
+								role:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -254,7 +279,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
-							role: ctx.body.role,
+							role: parseRoles(ctx.body.role),
 						},
 						ctx,
 					);
@@ -278,9 +303,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							description: "The name of the user",
 						}),
 						role: z
-							.string({
-								description: "The role of the user",
-							})
+							.union([
+								z.string({
+									description: "The role of the user",
+								}),
+								z.array(
+									z.string({
+										description: "The roles of user",
+									}),
+								),
+							])
 							.optional(),
 						/**
 						 * extra fields for user
@@ -313,6 +345,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 										},
 									},
 								},
+							},
+						},
+						$Infer: {
+							body: {} as {
+								email: string;
+								password: string;
+								name: string;
+								role?:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
+								data?: Record<string, any>;
 							},
 						},
 					},
@@ -349,7 +392,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						await ctx.context.internalAdapter.createUser<UserWithRole>({
 							email: ctx.body.email,
 							name: ctx.body.name,
-							role: ctx.body.role ?? options?.defaultRole ?? "user",
+							role:
+								(ctx.body.role && parseRoles(ctx.body.role)) ??
+								options?.defaultRole ??
+								"user",
 							...ctx.body.data,
 						});
 
@@ -522,7 +568,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
-						const total = await ctx.context.internalAdapter.countTotalUsers();
+						const total = await ctx.context.internalAdapter.countTotalUsers(
+							where.length ? where : undefined,
+						);
 						return ctx.json({
 							users: users as UserWithRole[],
 							total: total,
@@ -543,7 +591,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -605,7 +653,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -669,7 +717,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 						/**
@@ -762,7 +810,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -974,7 +1022,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1032,7 +1080,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1092,7 +1140,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						newPassword: z.string({
 							description: "The new password",
 						}),
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1155,7 +1203,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					body: z.object({
 						permission: z.record(z.string(), z.array(z.string())),
-						userId: z.string().optional(),
+						userId: z.coerce.string().optional(),
 						role: z.string().optional(),
 					}),
 					metadata: {
@@ -1206,7 +1254,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									[key in keyof Statements]?: Array<Statements[key][number]>;
 								};
 								userId?: string;
-								role?: string;
+								role?: InferAdminRolesFromOption<O>;
 							},
 						},
 					},

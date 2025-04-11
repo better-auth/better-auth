@@ -32,6 +32,7 @@ describe("stripe", async () => {
 		subscriptions: {
 			retrieve: vi.fn(),
 			list: vi.fn().mockResolvedValue({ data: [] }),
+			update: vi.fn(),
 		},
 		webhooks: {
 			constructEvent: vi.fn(),

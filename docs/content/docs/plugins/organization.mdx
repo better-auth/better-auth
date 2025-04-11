@@ -731,14 +731,14 @@ The plugin provides an easy way to define your own set of permissions for each r
         Once you have created the roles you can pass them to the organization plugin both on the client and the server.
 
         ```ts title="auth.ts"
-        import { ac, owner, admin, member } from "@/auth/permissions"
         import { betterAuth } from "better-auth"
         import { organization } from "better-auth/plugins"
+        import { ac, owner, admin, member } from "@/auth/permissions"
 
         export const auth = betterAuth({
             plugins: [
                 organization({
-                    ac: ac,
+                    ac,
                     roles: {
                         owner,
                         admin,
@@ -760,7 +760,7 @@ The plugin provides an easy way to define your own set of permissions for each r
         export const client = createAuthClient({
             plugins: [
                 organizationClient({
-                    ac: ac,
+                    ac,
                     roles: {
                         owner,
                         admin,
@@ -1176,8 +1176,8 @@ Table Name: `team`
       description: "Timestamp of when the team was created" 
     },
   ]}
-  />
 />
+
 
 ### Customizing the Schema
 

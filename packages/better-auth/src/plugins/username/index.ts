@@ -33,7 +33,7 @@ export type UsernameOptions = {
 };
 
 function defaultUsernameValidator(username: string) {
-	return /^[a-zA-Z0-9_]+$/.test(username);
+	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
 export const username = (options?: UsernameOptions) => {
@@ -289,11 +289,11 @@ export const username = (options?: UsernameOptions) => {
 							context.path === "/update-user"
 						);
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						if (!ctx.body.displayUsername && ctx.body.username) {
 							ctx.body.displayUsername = ctx.body.username;
 						}
-					},
+					}),
 				},
 			],
 		},

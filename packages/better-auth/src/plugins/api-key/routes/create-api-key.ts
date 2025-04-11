@@ -41,7 +41,7 @@ export function createApiKey({
 					.nullable()
 					.default(null),
 
-				userId: z
+				userId: z.coerce
 					.string({
 						description:
 							"User Id of the user that the Api Key belongs to. Useful for server-side only.",
@@ -269,6 +269,7 @@ export function createApiKey({
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled: rateLimitEnabled ?? true,
 				requestCount: 0,
+				//@ts-ignore - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -290,7 +291,10 @@ export function createApiKey({
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(apiKey.permissions)
+					? safeJSONParse(
+							//@ts-ignore - from DB, this value is always a string
+							apiKey.permissions,
+						)
 					: null,
 			});
 		},

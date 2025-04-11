@@ -83,6 +83,7 @@ export default defineBuildConfig({
 		"./src/integrations/svelte-kit.ts",
 		"./src/integrations/solid-start.ts",
 		"./src/integrations/next-js.ts",
+		"./src/integrations/react-start.ts",
 		"./src/integrations/node.ts",
 		"./src/plugins/admin/index.ts",
 		"./src/plugins/admin/access/index.ts",

@@ -35,6 +35,9 @@ const STRIPE_ERROR_CODES = {
 	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
 	EMAIL_VERIFICATION_REQUIRED:
 		"Email verification is required before you can subscribe to a plan",
+	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
+	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
+		"Subscription is not scheduled for cancellation",
 } as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
@@ -53,7 +56,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		action:
 			| "upgrade-subscription"
 			| "list-subscription"
-			| "cancel-subscription",
+			| "cancel-subscription"
+			| "restore-subscription",
 	) =>
 		createAuthMiddleware(async (ctx) => {
 			const session = ctx.context.session;
@@ -62,6 +66,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			}
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
+
+			if (ctx.body?.referenceId && !options.subscription?.authorizeReference) {
+				logger.error(
+					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message:
+						"Reference id is not allowed. Read server logs for more details.",
+				});
+			}
 			const isAuthorized = ctx.body?.referenceId
 				? await options.subscription?.authorizeReference?.({
 						user: session.user,
@@ -609,6 +623,102 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					url,
 					redirect: true,
 				};
+			},
+		),
+		restoreSubscription: createAuthEndpoint(
+			"/subscription/restore",
+			{
+				method: "POST",
+				body: z.object({
+					referenceId: z.string().optional(),
+					subscriptionId: z.string().optional(),
+				}),
+				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
+			},
+			async (ctx) => {
+				const referenceId =
+					ctx.body?.referenceId || ctx.context.session.user.id;
+
+				const subscription = ctx.body.subscriptionId
+					? await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+								},
+							],
+						})
+					: await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: referenceId,
+								},
+							],
+						});
+				if (!subscription || !subscription.stripeCustomerId) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+				if (
+					subscription.status != "active" &&
+					subscription.status != "trialing"
+				) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
+					});
+				}
+				if (!subscription.cancelAtPeriodEnd) {
+					throw ctx.error("BAD_REQUEST", {
+						message:
+							STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					});
+				}
+
+				const activeSubscription = await client.subscriptions
+					.list({
+						customer: subscription.stripeCustomerId,
+						status: "active",
+					})
+					.then((res) => res.data[0]);
+				if (!activeSubscription) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+
+				try {
+					const newSub = await client.subscriptions.update(
+						activeSubscription.id,
+						{
+							cancel_at_period_end: false,
+						},
+					);
+
+					await ctx.context.adapter.update({
+						model: "subscription",
+						update: {
+							cancelAtPeriodEnd: false,
+							updatedAt: new Date(),
+						},
+						where: [
+							{
+								field: "id",
+								value: subscription.id,
+							},
+						],
+					});
+
+					return ctx.json(newSub);
+				} catch (error) {
+					ctx.context.logger.error("Error restoring subscription", error);
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+					});
+				}
 			},
 		),
 		listActiveSubscriptions: createAuthEndpoint(

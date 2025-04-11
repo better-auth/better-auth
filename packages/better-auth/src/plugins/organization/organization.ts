@@ -320,7 +320,7 @@ export interface OrganizationOptions {
  *
  * @example
  * ```ts
- * const auth = createAuth({
+ * const auth = betterAuth({
  * 	plugins: [
  * 		organization({
  * 			allowUserToCreateOrganization: true,

@@ -26,7 +26,7 @@ export function getIp(
 	];
 	const headers = "headers" in req ? req.headers : req;
 	for (const key of keys) {
-		const value = headers.get(key);
+		const value = "get" in headers ? headers.get(key) : headers[key];
 		if (typeof value === "string") {
 			const ip = value.split(",")[0].trim();
 			if (ip) return ip;

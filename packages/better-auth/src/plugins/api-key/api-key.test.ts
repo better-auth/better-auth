@@ -23,7 +23,7 @@ describe("api-key", async () => {
 			clientOptions: {
 				plugins: [apiKeyClient()],
 			},
-			testWith: "postgres",
+			// testWith: "postgres",
 		},
 	);
 	const { headers, user } = await signInWithTestUser();
@@ -1527,6 +1527,57 @@ describe("api-key", async () => {
 		expect(apiKey.permissions).toEqual(permissions);
 	});
 
+	it("should have permissions as an object from getApiKey", async () => {
+		const permissions = {
+			files: ["read", "write"],
+			users: ["read"],
+		};
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				permissions,
+				userId: user.id,
+			},
+			headers,
+		});
+		const apiKeyResults = await auth.api.getApiKey({
+			query: {
+				id: apiKey.id,
+			},
+			headers,
+		});
+
+		expect(apiKeyResults).not.toBeNull();
+		expect(apiKeyResults.permissions).toEqual(permissions);
+	});
+
+	it("should have permissions as an object from verifyApiKey", async () => {
+		const permissions = {
+			files: ["read", "write"],
+			users: ["read"],
+		};
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				permissions,
+				userId: user.id,
+			},
+			headers,
+		});
+		const apiKeyResults = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+				permissions: {
+					files: ["read"],
+				},
+			},
+			headers,
+		});
+
+		expect(apiKeyResults).not.toBeNull();
+		expect(apiKeyResults.key?.permissions).toEqual(permissions);
+	});
+
 	it("should create an API key with default permissions", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
@@ -1591,6 +1642,7 @@ describe("api-key", async () => {
 
 		expect(result.valid).toBe(true);
 		expect(result.error).toBeNull();
+		expect(result.key?.permissions).toEqual(permissions);
 	});
 
 	it("should fail to verify an API key with non-matching permissions", async () => {
