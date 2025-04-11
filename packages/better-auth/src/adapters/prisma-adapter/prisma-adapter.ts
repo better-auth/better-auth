@@ -58,7 +58,7 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(
+		async transformInput(
 			data: Record<string, any>,
 			model: string,
 			action: "create" | "update",
@@ -68,7 +68,7 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 					? {}
 					: {
 							id: options.advanced?.generateId
-								? options.advanced.generateId({
+								? await options.advanced.generateId({
 										model,
 									})
 								: data.id || generateId(),
@@ -187,7 +187,7 @@ export const prismaAdapter =
 			id: "prisma",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model, "create");
+				const transformed = await transformInput(values, model, "create");
 				if (!db[getModelName(model)]) {
 					throw new BetterAuthError(
 						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -258,7 +258,7 @@ export const prismaAdapter =
 					);
 				}
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model, "update");
+				const transformed = await transformInput(update, model, "update");
 				const result = await db[getModelName(model)].update({
 					where: whereClause,
 					data: transformed,
@@ -268,7 +268,7 @@ export const prismaAdapter =
 			async updateMany(data) {
 				const { model, where, update } = data;
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model, "update");
+				const transformed = await transformInput(update, model, "update");
 				const result = await db[getModelName(model)].updateMany({
 					where: whereClause,
 					data: transformed,
