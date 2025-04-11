@@ -38,26 +38,25 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
-											},
-											accountId: {
+										},
+										accountId: {
+											type: "string",
+										},
+										scopes: {
+											type: "array",
+											items: {
 												type: "string",
 											},
-											scopes: {
-												type: "array",
-												items: {
-													type: "string",
-												},
-											},
 										},
-										required: [
-											"id",
-											"provider",
-											"createdAt",
-											"updatedAt",
-											"accountId",
-											"scopes",
-										],
 									},
+									required: [
+										"id",
+										"provider",
+										"createdAt",
+										"updatedAt",
+										"accountId",
+										"scopes",
+									],
 								},
 							},
 						},

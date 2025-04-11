@@ -252,12 +252,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 												required: ["otp"],
 											},
 										},
-
+									},
 								},
 							},
 						},
 					},
-				 },
 				},
 				async (ctx) => {
 					const email = ctx.query.email;

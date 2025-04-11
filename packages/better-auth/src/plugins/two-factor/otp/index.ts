@@ -153,75 +153,77 @@ export const otp2fa = (options?: OTPOptions) => {
 				 */
 				trustDevice: z.boolean().optional(),
 			}),
-        use: [verifyTwoFactorMiddleware],
-        metadata: {
-            openapi: {
-                summary: "Verify two factor OTP",
-                description: "Verify two factor OTP",
-                responses: {
-                    "200": {
-                        description: "Two-factor OTP verified successfully",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    type: "object",
-                                    properties: {
-                                        token: {
-                                            type: "string",
-                                            description: "Session token for the authenticated session",
-                                        },
-                                        user: {
-                                            type: "object",
-                                            properties: {
-                                                id: {
-                                                    type: "string",
-                                                    description: "Unique identifier of the user",
-                                                },
-                                                email: {
-                                                    type: "string",
-                                                    format: "email",
-                                                    nullable: true,
-                                                    description: "User's email address",
-                                                },
-                                                emailVerified: {
-                                                    type: "boolean",
-                                                    nullable: true,
-                                                    description: "Whether the email is verified",
-                                                },
-                                                name: {
-                                                    type: "string",
-                                                    nullable: true,
-                                                    description: "User's name",
-                                                },
-                                                image: {
-                                                    type: "string",
-                                                    format: "uri",
-                                                    nullable: true,
-                                                    description: "User's profile image URL",
-                                                },
-                                                createdAt: {
-                                                    type: "string",
-                                                    format: "date-time",
-                                                    description: "Timestamp when the user was created",
-                                                },
-                                                updatedAt: {
-                                                    type: "string",
-                                                    format: "date-time",
-                                                    description: "Timestamp when the user was last updated",
-                                                },
-                                            },
-                                            required: ["id", "createdAt", "updatedAt"],
-                                            description: "The authenticated user object",
-                                        },
-                                    },
-                                    required: ["token", "user"],
-                                },
-                            },
-                        },
-                    },
-                },
+			use: [verifyTwoFactorMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Verify two factor OTP",
+					description: "Verify two factor OTP",
+					responses: {
+						"200": {
+							description: "Two-factor OTP verified successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											token: {
+												type: "string",
+												description:
+													"Session token for the authenticated session",
+											},
+											user: {
+												type: "object",
+												properties: {
+													id: {
+														type: "string",
+														description: "Unique identifier of the user",
+													},
+													email: {
+														type: "string",
+														format: "email",
+														nullable: true,
+														description: "User's email address",
+													},
+													emailVerified: {
+														type: "boolean",
+														nullable: true,
+														description: "Whether the email is verified",
+													},
+													name: {
+														type: "string",
+														nullable: true,
+														description: "User's name",
+													},
+													image: {
+														type: "string",
+														format: "uri",
+														nullable: true,
+														description: "User's profile image URL",
+													},
+													createdAt: {
+														type: "string",
+														format: "date-time",
+														description: "Timestamp when the user was created",
+													},
+													updatedAt: {
+														type: "string",
+														format: "date-time",
+														description:
+															"Timestamp when the user was last updated",
+													},
+												},
+												required: ["id", "createdAt", "updatedAt"],
+												description: "The authenticated user object",
+											},
+										},
+										required: ["token", "user"],
+									},
+								},
 							},
 						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const user = ctx.context.session.user;

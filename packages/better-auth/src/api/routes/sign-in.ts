@@ -164,45 +164,46 @@ export const signInSocial = createAuthEndpoint(
 										token: {
 											type: "string",
 											description: "Session token",
-										url: {
-											type: "null",
-											nullable: true,
-										},
-										user: {
-											type: "object",
-											properties: {
-												id: { type: "string" },
-												email: { type: "string" },
-												name: {
-													type: "string",
-													nullable: true,
-												},
-												image: {
-													type: "string",
-													nullable: true,
-												},
-												emailVerified: {
-													type: "boolean",
-												},
-												createdAt: {
-													type: "string",
-													format: "date-time",
-												},
-												updatedAt: {
-													type: "string",
-													format: "date-time",
-												},
+											url: {
+												type: "null",
+												nullable: true,
 											},
-											required: [
-												"id",
-												"email",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											user: {
+												type: "object",
+												properties: {
+													id: { type: "string" },
+													email: { type: "string" },
+													name: {
+														type: "string",
+														nullable: true,
+													},
+													image: {
+														type: "string",
+														nullable: true,
+													},
+													emailVerified: {
+														type: "boolean",
+													},
+													createdAt: {
+														type: "string",
+														format: "date-time",
+													},
+													updatedAt: {
+														type: "string",
+														format: "date-time",
+													},
+												},
+												required: [
+													"id",
+													"email",
+													"emailVerified",
+													"createdAt",
+													"updatedAt",
+												],
+											},
 										},
+										required: ["redirect", "token", "user"],
 									},
-									required: ["redirect", "token", "user"],
 								},
 							},
 						},
