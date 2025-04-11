@@ -21,3 +21,4 @@ export * from "./oidc-provider";
 export * from "./captcha";
 export * from "./api-key";
 export * from "./haveibeenpwned";
+export * from "./one-time-token";
