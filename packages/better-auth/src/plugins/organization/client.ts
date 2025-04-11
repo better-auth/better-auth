@@ -111,7 +111,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data?.permission ?? data?.permissions) as any,
+						permissions: (data.permissions ?? data.permission) as any,
 					});
 					return isAuthorized;
 				},

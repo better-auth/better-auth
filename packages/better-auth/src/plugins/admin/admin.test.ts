@@ -705,6 +705,16 @@ describe("access control", async (it) => {
 		});
 		expect(canCreateOrder).toBe(true);
 
+		// To be removed when `permission` will be removed entirely
+		const canCreateOrderLegacy = client.admin.checkRolePermission({
+			role: "admin",
+			permission: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderLegacy).toBe(true);
+
 		const canCreateOrderAndReadUser = client.admin.checkRolePermission({
 			role: "admin",
 			permissions: {

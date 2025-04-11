@@ -469,7 +469,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						$Infer: {
 							body: {} as {
 								/**
-								 * @depreacted Use `permissions` instead
+								 * @deprecated Use `permissions` instead
 								 */
 								permission?: {
 									[key in keyof Statements]?: Array<
@@ -558,7 +558,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					const result = hasPermission({
 						role: member.role,
 						options: options as OrganizationOptions,
-						permissions: (ctx.body?.permission ?? ctx.body?.permissions) as any,
+						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
 						error: null,

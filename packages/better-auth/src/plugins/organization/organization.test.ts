@@ -811,6 +811,16 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(canCreateProject).toBe(true);
+
+		// To be removed when `permission` will be removed entirely
+		const canCreateProjectLegacy = checkRolePermission({
+			role: "admin",
+			permission: {
+				project: ["create"],
+			},
+		});
+		expect(canCreateProjectLegacy).toBe(true);
+
 		const canCreateProjectServer = await hasPermission({
 			permissions: {
 				project: ["create"],

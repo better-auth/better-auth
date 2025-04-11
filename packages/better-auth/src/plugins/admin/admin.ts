@@ -1321,7 +1321,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: user.id,
 						role: user.role,
 						options: options as AdminOptions,
-						permissions: (ctx.body?.permission ?? ctx.body?.permissions) as any,
+						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
 						error: null,
