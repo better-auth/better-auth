@@ -23,6 +23,12 @@ describe("oidc", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
+				getAdditionalUserInfoClaim(user, scopes) {
+					return {
+						custom: "custom value",
+						userId: user.id,
+					};
+				},
 			}),
 			jwt(),
 		],
@@ -62,28 +68,33 @@ describe("oidc", async () => {
 
 	it("should create oidc client", async ({ expect }) => {
 		const createdClient = await serverClient.oauth2.register({
-			name: application.name,
-			redirectURLs: application.redirectURLs,
-			icon: application.icon,
-			metadata: {
-				custom: "data",
-			},
+			client_name: application.name,
+			redirect_uris: application.redirectURLs,
+			logo_uri: application.icon,
 		});
 		expect(createdClient.data).toMatchObject({
-			id: expect.any(String),
-			name: "test",
-			icon: "",
-			metadata: {
-				custom: "data",
-			},
-			clientId: expect.any(String),
-			clientSecret: expect.any(String),
-			redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-			type: "web",
-			disabled: false,
+			client_id: expect.any(String),
+			client_secret: expect.any(String),
+			client_name: "test",
+			logo_uri: "",
+			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			grant_types: ["authorization_code"],
+			response_types: ["code"],
+			token_endpoint_auth_method: "client_secret_basic",
+			client_id_issued_at: expect.any(Number),
+			client_secret_expires_at: 0,
 		});
 		if (createdClient.data) {
-			application = createdClient.data;
+			application = {
+				clientId: createdClient.data.client_id,
+				clientSecret: createdClient.data.client_secret,
+				redirectURLs: createdClient.data.redirect_uris,
+				metadata: {},
+				icon: createdClient.data.logo_uri || "",
+				type: "web",
+				disabled: false,
+				name: createdClient.data.client_name || "",
+			};
 		}
 	});
 

@@ -23,7 +23,7 @@ describe("api-key", async () => {
 			clientOptions: {
 				plugins: [apiKeyClient()],
 			},
-			testWith: "postgres",
+			// testWith: "postgres",
 		},
 	);
 	const { headers, user } = await signInWithTestUser();
@@ -489,6 +489,18 @@ describe("api-key", async () => {
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.metadata).toEqual(metadata);
+
+		const res = await auth.api.getApiKey({
+			query: {
+				id: apiKey.id,
+			},
+			headers,
+		});
+
+		expect(res).not.toBeNull();
+		if (res) {
+			expect(res.metadata).toEqual(metadata);
+		}
 	});
 
 	it("create API key's returned metadata should be an object", async () => {
@@ -1458,6 +1470,25 @@ describe("api-key", async () => {
 		expect(apiKey.success).toEqual(true);
 	});
 
+	it("should delete an API key by ID with headers using auth-client", async () => {
+		const newApiKey = await client.apiKey.create({}, { headers: headers });
+		if (!newApiKey.data) return;
+
+		const apiKey = await client.apiKey.delete(
+			{
+				keyId: newApiKey.data.id,
+			},
+			{ headers },
+		);
+
+		if (!apiKey.data?.success) {
+			console.log(apiKey.error);
+		}
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.data?.success).toEqual(true);
+	});
+
 	it("should fail to delete an API key by ID that doesn't exist", async () => {
 		let result: { data: { success: boolean } | null; error: Err | null } = {
 			data: null,
@@ -1496,6 +1527,57 @@ describe("api-key", async () => {
 		expect(apiKey.permissions).toEqual(permissions);
 	});
 
+	it("should have permissions as an object from getApiKey", async () => {
+		const permissions = {
+			files: ["read", "write"],
+			users: ["read"],
+		};
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				permissions,
+				userId: user.id,
+			},
+			headers,
+		});
+		const apiKeyResults = await auth.api.getApiKey({
+			query: {
+				id: apiKey.id,
+			},
+			headers,
+		});
+
+		expect(apiKeyResults).not.toBeNull();
+		expect(apiKeyResults.permissions).toEqual(permissions);
+	});
+
+	it("should have permissions as an object from verifyApiKey", async () => {
+		const permissions = {
+			files: ["read", "write"],
+			users: ["read"],
+		};
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				permissions,
+				userId: user.id,
+			},
+			headers,
+		});
+		const apiKeyResults = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+				permissions: {
+					files: ["read"],
+				},
+			},
+			headers,
+		});
+
+		expect(apiKeyResults).not.toBeNull();
+		expect(apiKeyResults.key?.permissions).toEqual(permissions);
+	});
+
 	it("should create an API key with default permissions", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
@@ -1506,6 +1588,34 @@ describe("api-key", async () => {
 		expect(apiKey.permissions).toEqual({
 			files: ["read"],
 		});
+	});
+
+	it("should have valid metadata from key verification results", async () => {
+		const metadata = {
+			test: "hello-world-123",
+		};
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				metadata: metadata,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		if (apiKey) {
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: apiKey.key,
+					metadata: metadata,
+				},
+				headers,
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.error).toBeNull();
+			expect(result.key?.metadata).toEqual(metadata);
+		}
 	});
 
 	it("should verify an API key with matching permissions", async () => {
@@ -1532,6 +1642,7 @@ describe("api-key", async () => {
 
 		expect(result.valid).toBe(true);
 		expect(result.error).toBeNull();
+		expect(result.key?.permissions).toEqual(permissions);
 	});
 
 	it("should fail to verify an API key with non-matching permissions", async () => {

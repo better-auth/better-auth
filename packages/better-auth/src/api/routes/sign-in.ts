@@ -132,6 +132,15 @@ export const signInSocial = createAuthEndpoint(
 						"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 				})
 				.optional(),
+			/**
+			 * The login hint to use for the authorization code request
+			 */
+			loginHint: z
+				.string({
+					description:
+						"The login hint to use for the authorization code request",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -155,7 +164,6 @@ export const signInSocial = createAuthEndpoint(
 										token: {
 											type: "string",
 											description: "Session token",
-										},
 										url: {
 											type: "null",
 											nullable: true,
@@ -254,7 +262,14 @@ export const signInSocial = createAuthEndpoint(
 					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 				});
 			}
-			if (!userInfo.user.email) {
+			const mapProfileToUser = await provider.options?.mapProfileToUser?.(
+				userInfo.user,
+			);
+			const userData = {
+				...userInfo.user,
+				...mapProfileToUser,
+			};
+			if (!userData.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
 				});
@@ -264,11 +279,12 @@ export const signInSocial = createAuthEndpoint(
 			}
 			const data = await handleOAuthUserInfo(c, {
 				userInfo: {
-					email: userInfo.user.email,
-					id: userInfo.user.id,
-					name: userInfo.user.name || "",
-					image: userInfo.user.image,
-					emailVerified: userInfo.user.emailVerified || false,
+					...userData,
+					email: userData.email,
+					id: userData.id,
+					name: userData.name || "",
+					image: userData.image,
+					emailVerified: userData.emailVerified || false,
 				},
 				account: {
 					providerId: provider.id,
@@ -307,6 +323,7 @@ export const signInSocial = createAuthEndpoint(
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
 		});
 
 		return c.json({

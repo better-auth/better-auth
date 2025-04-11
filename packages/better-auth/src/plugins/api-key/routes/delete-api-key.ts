@@ -21,7 +21,7 @@ export function deleteApiKey({
 	return createAuthEndpoint(
 		"/api-key/delete",
 		{
-			method: "DELETE",
+			method: "POST",
 			body: z.object({
 				keyId: z.string({
 					description: "The id of the Api Key",

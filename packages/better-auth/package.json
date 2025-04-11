@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.3-beta.3",
+  "version": "1.2.6-beta.7",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -14,9 +14,10 @@
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",
     "stub": "unbuild --stub",
-    "test": "pnpm prisma:push && vitest",
-    "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
-    "test:adapters": "pnpm prisma:push && vitest adapters",
+    "pretest": "pnpm prisma:normal:push && pnpm prisma:number-id:push",
+    "test": "vitest",
+    "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
+    "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
     "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
   },
@@ -203,6 +204,16 @@
         "default": "./dist/integrations/next-js.cjs"
       }
     },
+    "./react-start": {
+      "import": {
+        "types": "./dist/integrations/react-start.d.ts",
+        "default": "./dist/integrations/react-start.mjs"
+      },
+      "require": {
+        "types": "./dist/integrations/react-start.d.cts",
+        "default": "./dist/integrations/react-start.cjs"
+      }
+    },
     "./node": {
       "import": {
         "types": "./dist/integrations/node.d.ts",
@@ -261,6 +272,16 @@
       "require": {
         "types": "./dist/adapters/test.d.cts",
         "default": "./dist/adapters/test.cjs"
+      }
+    },
+    "./adapters": {
+      "import": {
+        "types": "./dist/adapters/index.d.ts",
+        "default": "./dist/adapters/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/index.d.cts",
+        "default": "./dist/adapters/index.cjs"
       }
     },
     "./plugins/access": {
@@ -520,6 +541,9 @@
       "next-js": [
         "./dist/integrations/next-js.d.ts"
       ],
+      "react-start": [
+        "./dist/integrations/react-start.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"
       ],
@@ -593,6 +617,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
+    "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
@@ -604,11 +629,11 @@
     "listhen": "^1.9.0",
     "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
-    "next": "^15.1.2",
+    "next": "^15.2.3",
     "oauth2-mock-server": "^7.2.0",
     "pg": "^8.13.1",
     "prisma": "^5.22.0",
-    "react": "^18.3.1",
+    "react": "^19.0.0",
     "react-native": "~0.74.6",
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
@@ -619,7 +644,7 @@
     "vue": "^3.5.13"
   },
   "dependencies": {
-    "@better-auth/utils": "0.2.3",
+    "@better-auth/utils": "0.2.4",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
@@ -628,9 +653,8 @@
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
-    "kysely": "^0.27.4",
+    "kysely": "^0.27.6",
     "nanostores": "^0.11.3",
-    "valibot": "1.0.0-beta.15",
     "zod": "^3.24.1"
   },
   "overrides": {

@@ -578,10 +578,9 @@ export const passkey = (options?: PasskeyOptions) => {
 							credentialType,
 						} = registrationInfo;
 						const pubKey = base64.encode(credential.publicKey);
-						const newPasskey: Passkey = {
+						const newPasskey: Omit<Passkey, "id"> = {
 							name: ctx.body.name,
 							userId: userData.id,
-							id: ctx.context.generateId({ model: "passkey" }),
 							credentialID: credential.id,
 							publicKey: pubKey,
 							counter: credential.counter,
@@ -590,7 +589,10 @@ export const passkey = (options?: PasskeyOptions) => {
 							backedUp: credentialBackedUp,
 							createdAt: new Date(),
 						};
-						const newPasskeyRes = await ctx.context.adapter.create<Passkey>({
+						const newPasskeyRes = await ctx.context.adapter.create<
+							Omit<Passkey, "id">,
+							Passkey
+						>({
 							model: "passkey",
 							data: newPasskey,
 						});

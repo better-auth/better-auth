@@ -266,7 +266,7 @@ const myPlugin = ()=>{
 
 ### Middleware
 
-You can add middleware to the server by passing a `middleware` array. This array should contain middleware objects, each with a `path` and a `middleware` property. Unlike hooks, middleware only runs on `api` requests from a client. If the endpoint is invoked directly, the middleware will not run.
+You can add middleware to the server by passing a `middlewares` array. This array should contain middleware objects, each with a `path` and a `middleware` property. Unlike hooks, middleware only runs on `api` requests from a client. If the endpoint is invoked directly, the middleware will not run.
 
 The `path` can be either a string or a path matcher, using the same path-matching system as `better-call`.
 
@@ -276,7 +276,7 @@ If you throw an `APIError` from the middleware or returned a `Response` object, 
 const myPlugin = ()=>{
     return {
         id: "my-plugin",
-        middleware: [
+        middlewares: [
             {
                 path: "/my-plugin/hello-world",
                 middleware: createAuthMiddleware(async(ctx)=>{
@@ -321,7 +321,7 @@ The `onResponse` function is executed immediately after a response is returned. 
 Here’s how to use it:
 
 - **Modify the Response**: You can return a modified response object to change the response before it is sent to the client.
-- **Continue Normally**: If you don’t return anything, the response will be sent as is.
+- **Continue Normally**: If you don't return anything, the response will be sent as is.
 
 ```ts title="plugin.ts"
 const myPlugin = ()=>{

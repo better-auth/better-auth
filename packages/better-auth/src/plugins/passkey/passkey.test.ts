@@ -56,10 +56,9 @@ describe("passkey", async () => {
 	it("should list user passkeys", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
-		await context.adapter.create({
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
 			model: "passkey",
 			data: {
-				id: "mockPasskeyId",
 				userId: user.id,
 				publicKey: "mockPublicKey",
 				name: "mockName",
@@ -69,7 +68,7 @@ describe("passkey", async () => {
 				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
-			} satisfies Passkey,
+			},
 		});
 
 		const passkeys = await auth.api.listPasskeys({

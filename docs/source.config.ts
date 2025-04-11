@@ -1,7 +1,25 @@
-import { defineCollections, defineDocs } from "fumadocs-mdx/config";
-import { defineConfig } from "fumadocs-mdx/config";
-import { remarkInstall } from "fumadocs-docgen";
+import {
+	defineDocs,
+	defineConfig,
+	defineCollections,
+} from "fumadocs-mdx/config";
 import { z } from "zod";
+import { remarkInstall } from "fumadocs-docgen";
+
+export const docs = defineDocs({
+	dir: "./content/docs",
+});
+
+export const changelogCollection = defineCollections({
+	type: "doc",
+	dir: "./content/changelogs",
+	schema: z.object({
+		title: z.string(),
+		description: z.string(),
+		date: z.date(),
+	}),
+});
+
 export default defineConfig({
 	mdxOptions: {
 		remarkPlugins: [
@@ -15,18 +33,4 @@ export default defineConfig({
 			],
 		],
 	},
-});
-
-export const changelogCollection = defineCollections({
-	type: "doc",
-	dir: "./content/changelogs",
-	schema: z.object({
-		title: z.string(),
-		description: z.string(),
-		date: z.date(),
-	}),
-});
-
-export const { docs, meta } = defineDocs({
-	dir: "./content/docs",
 });

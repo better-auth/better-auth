@@ -69,7 +69,7 @@
     "lucide-react": "^0.477.0",
     "mini-svg-data-uri": "^1.4.4",
     "mysql2": "^3.11.5",
-    "next": "^15.2.0",
+    "next": "^15.2.3",
     "next-themes": "^0.3.0",
     "prisma": "^5.22.0",
     "react": "^19.0.0",
@@ -81,6 +81,7 @@
     "recharts": "^2.14.1",
     "resend": "^4.0.1",
     "server-only": "^0.0.1",
+    "shiki": "^1.24.0",
     "sonner": "^1.7.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
@@ -100,7 +101,7 @@
     "dotenv-cli": "^7.4.4",
     "eslint-config-next": "15.0.0-canary.149",
     "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.16",
+    "tailwindcss": "3.4.16",
     "typescript": "^5.7.2"
   },
   "overrides": {

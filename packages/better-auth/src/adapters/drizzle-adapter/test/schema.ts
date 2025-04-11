@@ -6,7 +6,7 @@ It's not used in the production code.
 
 For information on how to use the drizzle-adapter, please refer to the documentation.
 
-https://www.better-auth.com/docs/concepts/database#drizzle-adapter
+https://www.better-auth.com/docs/adapters/drizzle
 
 */
 import { boolean, text, timestamp } from "drizzle-orm/pg-core";

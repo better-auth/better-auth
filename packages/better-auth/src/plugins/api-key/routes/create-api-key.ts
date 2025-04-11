@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
-import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -9,7 +8,6 @@ import type { AuthContext } from "../../../types";
 import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
-import { parseInputData } from "../../../db";
 import { safeJSONParse } from "../../../utils/json";
 
 export function createApiKey({
@@ -43,7 +41,7 @@ export function createApiKey({
 					.nullable()
 					.default(null),
 
-				userId: z
+				userId: z.coerce
 					.string({
 						description:
 							"User Id of the user that the Api Key belongs to. Useful for server-side only.",
@@ -383,8 +381,8 @@ export function createApiKey({
 				: defaultPermissions
 					? JSON.stringify(defaultPermissions)
 					: undefined;
-			let data: ApiKey = {
-				id: generateId(),
+
+			let data: Omit<ApiKey, "id"> = {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -409,30 +407,32 @@ export function createApiKey({
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled: rateLimitEnabled ?? true,
 				requestCount: 0,
+				//@ts-ignore - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
 			if (metadata) {
-				const parseMetadata = parseInputData(
-					data,
-					apiKeySchema({
-						rateLimitMax: opts.rateLimit.maxRequests!,
-						timeWindow: opts.rateLimit.timeWindow!,
-					}).apikey,
-				);
-				data.metadata = parseMetadata.metadata ?? null;
+				//@ts-expect-error - we intentionally save the metadata as string on DB.
+				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
-			const apiKey = await ctx.context.adapter.create<ApiKey>({
+			const apiKey = await ctx.context.adapter.create<
+				Omit<ApiKey, "id">,
+				ApiKey
+			>({
 				model: schema.apikey.modelName,
 				data: data,
 			});
+
 			return ctx.json({
-				...apiKey,
+				...(apiKey as ApiKey),
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(apiKey.permissions)
+					? safeJSONParse(
+							//@ts-ignore - from DB, this value is always a string
+							apiKey.permissions,
+						)
 					: null,
 			});
 		},

@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode } from "../oauth2";
+import { validateAuthorizationCode, refreshAccessToken } from "../oauth2";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */
@@ -55,6 +55,20 @@ export const roblox = (options: RobloxOptions) => {
 				authentication: "post",
 			});
 		},
+
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://apis.roblox.com/oauth/v1/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -71,6 +85,9 @@ export const roblox = (options: RobloxOptions) => {
 			if (error) {
 				return null;
 			}
+
+			const userMap = await options.mapProfileToUser?.(profile);
+
 			return {
 				user: {
 					id: profile.sub,
@@ -78,11 +95,13 @@ export const roblox = (options: RobloxOptions) => {
 					image: profile.picture,
 					email: profile.preferred_username || null, // Roblox does not provide email
 					emailVerified: true,
+					...userMap,
 				},
 				data: {
 					...profile,
 				},
 			};
 		},
+		options,
 	} satisfies OAuthProvider<RobloxProfile>;
 };

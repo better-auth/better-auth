@@ -82,7 +82,7 @@ export const auth = betterAuth({
 	secondaryStorage: {
 		get: async (key) => {
 			const value = await redis.get(key);
-			return value ? JSON.stringify(value) : null;
+			return value ? value : null;
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
@@ -193,12 +193,12 @@ Table Name: `session`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the verification request was created",
+      description: "Timestamp of when the session was created",
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the verification request was updated",
+      description: "Timestamp of when the session was updated",
     },
   ]}
 />
@@ -247,13 +247,13 @@ Table Name: `account`
     {
       name: "accessTokenExpiresAt",
       type: "Date",
-      description: "The time when the verification request expires",
+      description: "The time when the access token expires",
       isOptional: true,
     },
     {
       name: "refreshTokenExpiresAt",
       type: "Date",
-      description: "The time when the verification request expires",
+      description: "The time when the refresh token expires",
       isOptional: true,
     },
     {
@@ -278,12 +278,12 @@ Table Name: `account`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the verification request was created",
+      description: "Timestamp of when the account was created",
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the verification request was updated",
+      description: "Timestamp of when the account was updated",
     },
   ]}
 />
