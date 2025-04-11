@@ -13,6 +13,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import type { User } from "../../types";
+import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -62,6 +63,12 @@ export interface PhoneNumberOptions {
 	 * by default any string is accepted
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean | Promise<boolean>;
+	/**
+	 * Require a phone number verification before signing in
+	 *
+	 * @default false
+	 */
+	requireVerification?: boolean;
 	/**
 	 * Callback when phone number is verified
 	 */
@@ -122,15 +129,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		createdAt: "createdAt",
 	};
 
-	const ERROR_CODES = {
-		INVALID_PHONE_NUMBER: "Invalid phone number",
-		PHONE_NUMBER_EXIST: "Phone number already exist",
-		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
-		UNEXPECTED_ERROR: "Unexpected error",
-		OTP_NOT_FOUND: "OTP not found",
-		OTP_EXPIRED: "OTP expired",
-		INVALID_OTP: "Invalid OTP",
-	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
@@ -208,6 +206,23 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
+					}
+					if (opts.requireVerification) {
+						if (!user.phoneNumberVerified) {
+							const otp = generateOTP(opts.otpLength);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: otp,
+								identifier: phoneNumber,
+								expiresAt: getDate(opts.expiresIn, "sec"),
+							});
+							await opts.sendOTP?.({
+								phoneNumber,
+								code: otp,
+							});
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+							});
+						}
 					}
 					const accounts =
 						await ctx.context.internalAdapter.findAccountByUserId(user.id);

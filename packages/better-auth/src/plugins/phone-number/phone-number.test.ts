@@ -370,3 +370,55 @@ describe("reset password flow attempts", async (it) => {
 		expect(res.data?.status).toBe(true);
 	});
 });
+
+describe("phone number verification requirement", async () => {
+	let otp = "";
+	const { customFetchImpl } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				requireVerification: true,
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const testPhoneNumber = "+251911121314";
+	const testPassword = "password123";
+	const testEmail = "test2@test.com";
+
+	it("should not allow sign in with unverified phone number and trigger OTP send", async () => {
+		await client.signUp.email({
+			email: testEmail,
+			password: testPassword,
+			name: "test",
+			phoneNumber: testPhoneNumber,
+		});
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber: testPhoneNumber,
+			password: testPassword,
+		});
+		expect(signInRes.error?.status).toBe(401);
+		expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
+		expect(otp).toHaveLength(6);
+	});
+});
