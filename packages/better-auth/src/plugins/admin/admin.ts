@@ -132,11 +132,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions: never;
+				permissions?: never;
 		  }
 		| {
 				permissions: PermissionType;
-				permission: never;
+				permission?: never;
 		  };
 
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {

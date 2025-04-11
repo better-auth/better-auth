@@ -1,16 +1,26 @@
 import { defaultRoles } from "./access";
 import type { AdminOptions } from "./admin";
 
-export const hasPermission = (input: {
-	userId?: string;
-	role?: string;
-	options?: AdminOptions;
-	/**
-	 * @deprecated Use `permissions` instead
-	 */
-	permission?: { [key: string]: string[] };
-	permissions?: { [key: string]: string[] };
-}) => {
+type PermissionExclusive =
+	| {
+			/**
+			 * @deprecated Use `permissions` instead
+			 */
+			permission: { [key: string]: string[] };
+			permissions?: never;
+	  }
+	| {
+			permissions: { [key: string]: string[] };
+			permission?: never;
+	  };
+
+export const hasPermission = (
+	input: {
+		userId?: string;
+		role?: string;
+		options?: AdminOptions;
+	} & PermissionExclusive,
+) => {
 	if (input.userId && input.options?.adminUserIds?.includes(input.userId)) {
 		return true;
 	}

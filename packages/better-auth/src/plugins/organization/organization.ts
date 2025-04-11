@@ -450,11 +450,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions: never;
+				permissions?: never;
 		  }
 		| {
 				permissions: PermissionType;
-				permission: never;
+				permission?: never;
 		  };
 
 	return {

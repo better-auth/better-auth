@@ -29,11 +29,11 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions: never;
+				permissions?: never;
 		  }
 		| {
 				permissions: PermissionType;
-				permission: never;
+				permission?: never;
 		  };
 
 	const roles = {

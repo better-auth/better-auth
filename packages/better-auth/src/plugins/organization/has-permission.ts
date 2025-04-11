@@ -1,15 +1,25 @@
 import { defaultRoles } from "./access";
 import type { OrganizationOptions } from "./organization";
 
-export const hasPermission = (input: {
-	role: string;
-	options: OrganizationOptions;
-	/**
-	 * @deprecated Use `permissions` instead
-	 */
-	permission?: { [key: string]: string[] };
-	permissions?: { [key: string]: string[] };
-}) => {
+type PermissionExclusive =
+	| {
+			/**
+			 * @deprecated Use `permissions` instead
+			 */
+			permission: { [key: string]: string[] };
+			permissions?: never;
+	  }
+	| {
+			permissions: { [key: string]: string[] };
+			permission?: never;
+	  };
+
+export const hasPermission = (
+	input: {
+		role: string;
+		options: OrganizationOptions;
+	} & PermissionExclusive,
+) => {
 	if (!input.permissions && !input.permission) {
 		return false;
 	}
