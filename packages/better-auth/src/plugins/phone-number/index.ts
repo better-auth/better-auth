@@ -386,20 +386,89 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							summary: "Verify phone number",
 							description: "Use this endpoint to verify phone number",
 							responses: {
-								200: {
-									description: "Success",
+								"200": {
+									description: "Phone number verified successfully",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													user: {
-														$ref: "#/components/schemas/User",
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the verification was successful",
+														enum: [true],
 													},
-													session: {
-														$ref: "#/components/schemas/Session",
+													token: {
+														type: "string",
+														nullable: true,
+														description:
+															"Session token if session is created, null if disableSession is true or no session is created",
+													},
+													user: {
+														type: "object",
+														nullable: true,
+														properties: {
+															id: {
+																type: "string",
+																description: "Unique identifier of the user",
+															},
+															email: {
+																type: "string",
+																format: "email",
+																nullable: true,
+																description: "User's email address",
+															},
+															emailVerified: {
+																type: "boolean",
+																nullable: true,
+																description: "Whether the email is verified",
+															},
+															name: {
+																type: "string",
+																nullable: true,
+																description: "User's name",
+															},
+															image: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "User's profile image URL",
+															},
+															phoneNumber: {
+																type: "string",
+																description: "User's phone number",
+															},
+															phoneNumberVerified: {
+																type: "boolean",
+																description:
+																	"Whether the phone number is verified",
+															},
+															createdAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was created",
+															},
+															updatedAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was last updated",
+															},
+														},
+														required: [
+															"id",
+															"phoneNumber",
+															"phoneNumberVerified",
+															"createdAt",
+															"updatedAt",
+														],
+														description:
+															"User object with phone number details, null if no user is created or found",
 													},
 												},
+												required: ["status"],
 											},
 										},
 									},
@@ -607,6 +676,32 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					body: z.object({
 						phoneNumber: z.string(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Request OTP for password reset via phone number",
+							responses: {
+								"200": {
+									description: "OTP sent successfully for password reset",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the OTP was sent successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
@@ -650,6 +745,32 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						phoneNumber: z.string(),
 						newPassword: z.string(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Reset password using phone number OTP",
+							responses: {
+								"200": {
+									description: "Password reset successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the password was reset successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const verification =

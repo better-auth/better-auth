@@ -175,7 +175,173 @@ export const sso = (options?: SSOOptions) => {
 								"This endpoint is used to register an OIDC provider. This is used to configure the provider and link it to an organization",
 							responses: {
 								"200": {
-									description: "The created provider",
+									description: "OIDC provider created successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													issuer: {
+														type: "string",
+														format: "uri",
+														description: "The issuer URL of the provider",
+													},
+													domain: {
+														type: "string",
+														description:
+															"The domain of the provider, used for email matching",
+													},
+													oidcConfig: {
+														type: "object",
+														properties: {
+															issuer: {
+																type: "string",
+																format: "uri",
+																description: "The issuer URL of the provider",
+															},
+															pkce: {
+																type: "boolean",
+																description:
+																	"Whether PKCE is enabled for the authorization flow",
+															},
+															clientId: {
+																type: "string",
+																description: "The client ID for the provider",
+															},
+															clientSecret: {
+																type: "string",
+																description:
+																	"The client secret for the provider",
+															},
+															authorizationEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The authorization endpoint URL",
+															},
+															discoveryEndpoint: {
+																type: "string",
+																format: "uri",
+																description: "The discovery endpoint URL",
+															},
+															userInfoEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The user info endpoint URL",
+															},
+															scopes: {
+																type: "array",
+																items: { type: "string" },
+																nullable: true,
+																description:
+																	"The scopes requested from the provider",
+															},
+															tokenEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The token endpoint URL",
+															},
+															tokenEndpointAuthentication: {
+																type: "string",
+																enum: [
+																	"client_secret_post",
+																	"client_secret_basic",
+																],
+																nullable: true,
+																description:
+																	"Authentication method for the token endpoint",
+															},
+															jwksEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The JWKS endpoint URL",
+															},
+															mapping: {
+																type: "object",
+																nullable: true,
+																properties: {
+																	id: {
+																		type: "string",
+																		description:
+																			"Field mapping for user ID (defaults to 'sub')",
+																	},
+																	email: {
+																		type: "string",
+																		description:
+																			"Field mapping for email (defaults to 'email')",
+																	},
+																	emailVerified: {
+																		type: "string",
+																		nullable: true,
+																		description:
+																			"Field mapping for email verification (defaults to 'email_verified')",
+																	},
+																	name: {
+																		type: "string",
+																		description:
+																			"Field mapping for name (defaults to 'name')",
+																	},
+																	image: {
+																		type: "string",
+																		nullable: true,
+																		description:
+																			"Field mapping for image (defaults to 'picture')",
+																	},
+																	extraFields: {
+																		type: "object",
+																		additionalProperties: { type: "string" },
+																		nullable: true,
+																		description: "Additional field mappings",
+																	},
+																},
+																required: ["id", "email", "name"],
+															},
+														},
+														required: [
+															"issuer",
+															"pkce",
+															"clientId",
+															"clientSecret",
+															"discoveryEndpoint",
+														],
+														description: "OIDC configuration for the provider",
+													},
+													organizationId: {
+														type: "string",
+														nullable: true,
+														description:
+															"ID of the linked organization, if any",
+													},
+													userId: {
+														type: "string",
+														description:
+															"ID of the user who registered the provider",
+													},
+													providerId: {
+														type: "string",
+														description: "Unique identifier for the provider",
+													},
+													redirectURI: {
+														type: "string",
+														format: "uri",
+														description:
+															"The redirect URI for the provider callback",
+													},
+												},
+												required: [
+													"issuer",
+													"domain",
+													"oidcConfig",
+													"userId",
+													"providerId",
+													"redirectURI",
+												],
+											},
+										},
+									},
 								},
 							},
 						},
@@ -316,6 +482,34 @@ export const sso = (options?: SSOOptions) => {
 												},
 											},
 											required: ["callbackURL"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description:
+										"Authorization URL generated successfully for SSO sign-in",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+														format: "uri",
+														description:
+															"The authorization URL to redirect the user to for SSO sign-in",
+													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Indicates that the client should redirect to the provided URL",
+														enum: [true],
+													},
+												},
+												required: ["url", "redirect"],
+											},
 										},
 									},
 								},
