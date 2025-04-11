@@ -242,7 +242,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							})
 							.then((res) =>
 								res.data.find(
-									(subscription) => subscription.id === subscriptionToUpdate.id,
+									(subscription) =>
+										subscription.id === subscriptionToUpdate?.id ||
+										subscription.id === ctx.body.subscriptionId,
 								),
 							)
 							.catch((e) => null)
