@@ -54,6 +54,8 @@ const numberIdAdapterTests = {
 	SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT:
 		"Should return a number id as a result",
 	SHOULD_INCREMENT_THE_ID_BY_1: "Should increment the id by 1",
+	SHOULD_CONVERT_STRING_ID_TO_NUMBER_ID_IN_WHERE_CLAUSE:
+		"Should convert string id to number id in where clause",
 } as const;
 
 // @ts-ignore
@@ -840,6 +842,34 @@ export async function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				});
 				cleanup.push({ modelName: "user", id: res.id });
 				expect(parseInt(res.id)).toBe(idNumber + 1);
+			},
+		);
+
+		test.skipIf(
+			opts.disableTests?.SHOULD_CONVERT_STRING_ID_TO_NUMBER_ID_IN_WHERE_CLAUSE,
+		)(
+			`${opts.testPrefix ? `${opts.testPrefix} - ` : ""}${
+				numberIdAdapterTests.SHOULD_CONVERT_STRING_ID_TO_NUMBER_ID_IN_WHERE_CLAUSE
+			}`,
+			async ({ onTestFailed }) => {
+				onTestFailed(() => {
+					printDebugLogs();
+				});
+				const user = await (await adapter()).create({
+					model: "user",
+					data: {
+						name: "user3",
+						email: "user3@email.com",
+					},
+				});
+				const res = await (await adapter()).findMany<{ id: string }>({
+					model: "user",
+					// we intentionally pass the id as a string, and the adapter should convert that to a number.
+					where: [{ field: "id", value: user.id }],
+				});
+				cleanup.push({ modelName: "user", id: user.id });
+				expect(res.length).toBe(1);
+				expect(res[0]!.id).toBe(user.id);
 			},
 		);
 	});
