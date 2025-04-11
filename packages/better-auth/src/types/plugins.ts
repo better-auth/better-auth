@@ -9,7 +9,7 @@ import type {
 } from "../types/helper";
 
 import type { AuthContext, BetterAuthOptions } from ".";
-import type { Endpoint } from "better-call";
+import type { Endpoint, Middleware } from "better-call";
 
 export type AuthPluginSchema = {
 	[table in string]: {
@@ -36,7 +36,7 @@ export type BetterAuthPlugin = {
 	};
 	middlewares?: {
 		path: string;
-		middleware: Endpoint;
+		middleware: Middleware;
 	}[];
 	onRequest?: (
 		request: Request,
