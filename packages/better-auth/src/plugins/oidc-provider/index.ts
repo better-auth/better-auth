@@ -159,6 +159,26 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					query: z.record(z.string(), z.any()),
+					metadata: {
+						openapi: {
+							description: "Authorize an OAuth2 request",
+							responses: {
+								"200": {
+									description: "Authorization response generated successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												additionalProperties: true,
+												description:
+													"Authorization response, contents depend on the authorize function implementation",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					return authorize(ctx, opts);
@@ -172,6 +192,32 @@ export const oidcProvider = (options: OIDCOptions) => {
 						accept: z.boolean(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Handle OAuth2 consent",
+							responses: {
+								"200": {
+									description: "Consent processed successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													redirectURI: {
+														type: "string",
+														format: "uri",
+														description:
+															"The URI to redirect to, either with an authorization code or an error",
+													},
+												},
+												required: ["redirectURI"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const storedCode = await ctx.getSignedCookie(
@@ -623,8 +669,69 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
+
 					metadata: {
 						isAction: false,
+						openapi: {
+							description: "Get OAuth2 user information",
+							responses: {
+								"200": {
+									description: "User information retrieved successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													sub: {
+														type: "string",
+														description: "Subject identifier (user ID)",
+													},
+													email: {
+														type: "string",
+														format: "email",
+														nullable: true,
+														description:
+															"User's email address, included if 'email' scope is granted",
+													},
+													name: {
+														type: "string",
+														nullable: true,
+														description:
+															"User's full name, included if 'profile' scope is granted",
+													},
+													picture: {
+														type: "string",
+														format: "uri",
+														nullable: true,
+														description:
+															"User's profile picture URL, included if 'profile' scope is granted",
+													},
+													given_name: {
+														type: "string",
+														nullable: true,
+														description:
+															"User's given name, included if 'profile' scope is granted",
+													},
+													family_name: {
+														type: "string",
+														nullable: true,
+														description:
+															"User's family name, included if 'profile' scope is granted",
+													},
+													email_verified: {
+														type: "boolean",
+														nullable: true,
+														description:
+															"Whether the email is verified, included if 'email' scope is granted",
+													},
+												},
+												required: ["sub"],
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -743,6 +850,97 @@ export const oidcProvider = (options: OIDCOptions) => {
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Register an OAuth2 application",
+							responses: {
+								"200": {
+									description: "OAuth2 application registered successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													name: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													icon: {
+														type: "string",
+														nullable: true,
+														description: "Icon URL for the application",
+													},
+													metadata: {
+														type: "object",
+														additionalProperties: true,
+														nullable: true,
+														description:
+															"Additional metadata for the application",
+													},
+													clientId: {
+														type: "string",
+														description: "Unique identifier for the client",
+													},
+													clientSecret: {
+														type: "string",
+														description: "Secret key for the client",
+													},
+													redirectURLs: {
+														type: "array",
+														items: { type: "string", format: "uri" },
+														description: "List of allowed redirect URLs",
+													},
+													type: {
+														type: "string",
+														description: "Type of the client",
+														enum: ["web"],
+													},
+													authenticationScheme: {
+														type: "string",
+														description:
+															"Authentication scheme used by the client",
+														enum: ["client_secret"],
+													},
+													disabled: {
+														type: "boolean",
+														description: "Whether the client is disabled",
+														enum: [false],
+													},
+													userId: {
+														type: "string",
+														nullable: true,
+														description:
+															"ID of the user who registered the client, null if registered anonymously",
+													},
+													createdAt: {
+														type: "string",
+														format: "date-time",
+														description: "Creation timestamp",
+													},
+													updatedAt: {
+														type: "string",
+														format: "date-time",
+														description: "Last update timestamp",
+													},
+												},
+												required: [
+													"name",
+													"clientId",
+													"clientSecret",
+													"redirectURLs",
+													"type",
+													"authenticationScheme",
+													"disabled",
+													"createdAt",
+													"updatedAt",
+												],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const body = ctx.body;
@@ -863,6 +1061,39 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Get OAuth2 client details",
+							responses: {
+								"200": {
+									description: "OAuth2 client retrieved successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													clientId: {
+														type: "string",
+														description: "Unique identifier for the client",
+													},
+													name: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													icon: {
+														type: "string",
+														nullable: true,
+														description: "Icon URL for the application",
+													},
+												},
+												required: ["clientId", "name"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const client = await ctx.context.adapter.findOne<Record<string, any>>(

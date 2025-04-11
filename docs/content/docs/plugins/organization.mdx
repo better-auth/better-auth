@@ -1176,8 +1176,33 @@ Table Name: `team`
       description: "Timestamp of when the team was created" 
     },
   ]}
-/>
+  />
 
+  Table Name: `member`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "teamId", 
+      type: "string", 
+      description: "The id of the team",
+      isOptional: true
+    },
+  ]}
+  />
+
+  Table Name: `invitation`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "teamId", 
+      type: "string", 
+      description: "The id of the team",
+      isOptional: true
+    },
+  ]}
+  />
 
 ### Customizing the Schema
 
