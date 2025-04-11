@@ -69,7 +69,6 @@ describe("email-otp", async () => {
 				},
 			},
 		);
-
 		expect(verifiedUser.data?.token).toBeDefined();
 	});
 
@@ -342,6 +341,56 @@ describe("email-otp-verify", async () => {
 			email: testUser.email,
 			type: "email-verification",
 		});
+	});
+
+	it("should block after exceeding allowed attempts", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.emailOtp.verifyEmail({
+				email: testUser.email,
+				otp: "wrong-otp",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		//Try one more time - should be blocked
+		const res = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: "000000",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
+	});
+
+	it("should block reset password after exceeding allowed attempts", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.emailOtp.resetPassword({
+				email: testUser.email,
+				otp: "wrong-otp",
+				password: "new-password",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		// Try one more time - should be blocked
+		const res = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: "000000",
+			password: "new-password",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
 	});
 });
 
