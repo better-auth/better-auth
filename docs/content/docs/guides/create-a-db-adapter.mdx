@@ -112,347 +112,23 @@ Learn more about the `adapter` function [here](/docs/adapters/custom-adapter#ada
 
 </Steps>
 
-## Config
-
-The `config` object is used to provide information about the adapter to Better-Auth.
-
-We **highly recommend** going through and reading each provided option below, as it will help you understand how to properly configure your adapter.
-
-
-Required Config:
-
-<Accordions>
-  <Accordion title="adapterId">
-    The `adapterId` is a unique identifier for the adapter.
-  </Accordion>
-  <Accordion title="adapterName">
-    The `adapterName` is the name of the adapter.
-  </Accordion>
-</Accordions>
-
-Optional Config:
-
-<Accordions>
-<Accordion title="supportsNumericIds">
-The `supportsNumericIds` option is used to indicate if the database supports numeric ids.
-
-If this is set to `false` and the users config has enabled `useNumberId`, then we will throw an error.
-
-Default: `true`
-
-</Accordion>
-<Accordion title="supportsJSON">
-The `supportsJSON` option is used to indicate if the database supports JSON.
-
-If the database doesn't support JSON, we will use a `string` to save the JSON data.
-And when we retrieve the data, we will safely parse the `string` back into a JSON object.
-
-Default: `false`
-
-</Accordion>
-<Accordion title="supportsDates">
-The `supportsDates` option is used to indicate if the database supports dates.
-
-If the database doesn't support dates, we will use a `string` to save the date. (ISO string)
-When we retrieve the data, we will safely parse the `string` back into a `Date` object.
-
-Default: `true`
-
-</Accordion>
-<Accordion title="supportsBooleans">
-The `supportsBooleans` option is used to indicate if the database supports booleans.
-
-If the database doesn't support booleans, we will use a `0` or `1` to save the boolean value.
-When we retrieve the data, we will safely parse the `0` or `1` back into a boolean value.
-
-Default: `true`
-
-</Accordion>
-<Accordion title="usePlural">
-The `usePlural` option is used to indicate if the table names in the schema are plural.
-This is often defined by the user, and passed down through your custom adapter options.
-
-If you do not intend to allow the user to customize the table names, you can ignore this option, or set this to `false`.
-
-```ts title="Example"
-const adapter = myAdapter({
-  // This value then gets passed into the `usePlural`
-  // option in the createAdapter `config` object.
-  usePlural: true,
-});
-```
-
-Default: `false`
-
-</Accordion>
-
-<Accordion title="debugLogs">
-The `debugLogs` option is used to enable debug logs for the adapter.
-
-You can pass in a boolean, or an object with the following keys:
-
-- `create`
-- `update`
-- `updateMany`
-- `findOne`
-- `findMany`
-- `delete`
-- `deleteMany`
-- `count`
-
-If any of the keys are `true`, the debug logs will be enabled for that method.
-
-```ts title="Example"
-// Will log debug logs for all methods.
-const adapter = myAdapter({
-  debugLogs: true,
-});
-```
-
-```ts title="Example"
-// Will only log debug logs for the `create` and `update` methods.
-const adapter = myAdapter({
-  debugLogs: {
-    create: true,
-    update: true,
-  },
-});
-```
-
-Default: `false`
-
-</Accordion>
-
-<Accordion title="disableIdGeneration">
-The `disableIdGeneration` option is used to indicate if the database supports custom id generation.
-
-Default: `false`
-
-</Accordion>
-
-<Accordion title="customIdGenerator">
-If your database only supports a specific custom id generation, then you can use this option to generate your own IDs.
-
-Notes:
-* If the user enabled `useNumberId`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
-* If `generateId` is `false` in the user's Better-Auth config, then this option will be ignored.
-* If `generateId` is a function, then it will override this option.
-
-```ts title="Example"
-customIdGenerator: ({ model }) => {
-  return "my-super-unique-id";
-};
-```
-
-Default: `undefined`
-
-</Accordion>
-
-<Accordion title="mapKeysTransformInput">
-The `mapKeysTransformInput` option is used to map the keys of the input data.
-
-This is useful for databases that expect a different key name for a given situation.
-
-For example, MongoDB uses `_id` while in Better-Auth we use `id`.
-
-Each key in the returned object represents the old key to replace.
-The value represents the new key.
-
-This can be a partial object that only transforms some keys.
-
-```ts title="Example"
-mapKeysTransformInput: () => {
-  return {
-    id: "_id", // We want to replace `id` to `_id` to save into MongoDB
-  };
-},
-```
-
-Default: `undefined`
-
-</Accordion>
-<Accordion title="mapKeysTransformOutput">
-The `mapKeysTransformOutput` option is used to map the keys of the output data.
-
-This is useful for databases that use a different key name for a given situation.
-
-For example, MongoDB uses `_id` while in Better-Auth we use `id`.
-
-Each key in the returned object represents the old key to replace.
-The value represents the new key.
-
-This can be a partial object that only transforms some keys.
-
-```ts title="Example"
-mapKeysTransformOutput: () => {
-  return {
-    _id: "id", // We want to replace `_id` (from MongoDB) to `id` (for Better-Auth)
-  };
-},
-```
-
-Default: `undefined`
-
-</Accordion>
-
-<Accordion title="customTransformInput">
-The `customTransformInput` option is used to transform the input data
-
-<Callout type="warn">
-  If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then
-  the transformations will be applied before your `customTransformInput`
-  function is called.
-</Callout>
-
-Default: `undefined`
-
-The `customTransformInput` function receives the following arguments:
-
-- `data`: The data to transform.
-- `field`: The field that is being transformed.
-- `fieldAttributes`: The field attributes of the field that is being transformed.
-- `select`: The `select` values which the query expects to return.
-- `model`: The model that is being transformed.
-- `schema`: The schema that is being transformed.
-- `options`: Better Auth options.
-
-The `customTransformInput` function runs at every key in the data object of a given action.
-
-```ts title="Example"
-customTransformInput: ({ field, data }) => {
-  if (field === "id") {
-    return "123"; // Force the id to be "123"
-  }
-
-  return data;
-};
-```
-
-</Accordion>
-
-<Accordion title="customTransformOutput">
-The `customTransformOutput` function is used to transform the output data.
-
-Similar to the `customTransformInput` function, it runs at every key in the data object of a given action, but it runs after the data is retrieved from the database.
-
-```ts title="Example"
-customTransformOutput: ({ field, data }) => {
-  if (field === "name") {
-    return "Bob"; // Force the name to be "Bob"
-  }
-
-  return data;
-};
-```
-
-```ts
-const some_data = await adapter.create({
-  model: "user",
-  data: {
-    name: "John",
-  },
-});
-
-// The name will be "Bob"
-console.log(some_data.name);
-```
-
-</Accordion>
-</Accordions>
-
 ## Adapter
-
-### Terminology
-
-The following terms are used to differentiate between default and user-defined model and field names:
-
-- "Default Model Name": The model name defined internally by Better Auth or its plugins.
-- "Model Name": The custom model name specified by the user in their schema via Better Auth or plugin configuration.
-- "Default Field Name": The field name defined internally by Better Auth or its plugins.
-- "Field Name": The custom field name specified by the user.
-
-### Adapter Function
 
 The `adapter` function is where you write the code that interacts with your database.
 
 If you haven't already, check out the `options` object in the [config section](#config), as it can be useful for your adapter.
 
-Before we get into the adapter function, let's go over the options that are available to you.
+Before we get into the adapter function, let's go over the parameters that are available to you.
 
-<Accordions>
-<Accordion title="options">
-  The `options` object is the Better Auth options.
-</Accordion>
-<Accordion title="schema">
-  The `schema` object from the user's Better-Auth instance.
-</Accordion>
-<Accordion title="debugLog">
-  The `debugLog` function is used to help during debug development.
+- `options`: The Better Auth options.
+- `schema`: The schema from the user's Better Auth instance.
+- `debugLog`: The debug log function.
+- `getField`: The get field function.
+- `getDefaultModelName`: The get default model name function.
+- `getDefaultFieldName`: The get default field name function.
+- `getFieldAttributes`: The get field attributes function.
 
-We recommend allowing end-users of your adapter to configure the debug logs.
-
-By default, the debug logs are disabled.
-
-However, you can pass `true` to enable all debug logs, or an object to enable specific debug logs.
-
-```ts title="Example"
-debugLog: {
-  create: true,
-  update: true,
-  // etc...
-}
-```
-
-</Accordion>
-<Accordion title="getFieldName">
-  Get the field name which is expected to be saved in the database based on the user's schema.
-
-This is useful if you need to save the field name to the database.
-
-For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
-
-</Accordion>
-<Accordion title="getModelName">
-  Get the model name which is expected to be saved in the database based on the user's schema.
-
-This is useful if you need to save the model name to the database.
-
-For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
-
-</Accordion>
-<Accordion title="getDefaultModelName">
-  The `getDefaultModelName` function is used to get the default model name from the schema.
-
-This is useful if the user has defined a custom model name for a given model.
-
-For example, if the user has defined a custom model name for the `user` model, then you can use this function to get the actual model name from the schema.
-
-Note: If you're unsure if your currrent `modelName` data is from the schema's modelName value or the actual default model name, you can pass it through this function anyway, and it will always return the actualy model name.
-
-</Accordion>
-<Accordion title="getDefaultFieldName">
-  The `getDefaultFieldName` function is used to get the default field name from the schema.
-
-This is useful if the user has defined a custom field name for a given field.
-
-You would then use this function to get the actual field name from the schema, then save the data with this field name to the database.
-
-Note: If you're unsure if your currrent `fieldName` data is from the schema's fieldName value or the actual default field name, you can pass it through this function anyway, and it will always return the actualy field name.
-
-</Accordion>
-<Accordion title="getFieldAttributes">
-  The `getFieldAttributes` function is used to get the field attributes for a given field.
-
-We recommend not using `schema[model].fields[field]` directly, as it doesn't account of things such as `id`s.
-
-Instead, we recommend using this function to get the field attributes.
-
-Note: any model name or field name is allowed, whether default to schema or not.
-
-</Accordion>
-</Accordions>
-
-```ts title="Example"
+```ts title="Example" 
 adapter: ({
   options,
   schema,
@@ -469,16 +145,10 @@ adapter: ({
 
 ### Adapter Methods
 
-### Good to know
-
-Here are some things that we handle for you, and that you don't need to worry about:
-
 - All `model` values are already transformed into the correct model name for the database based on the end-user's schema configuration.
   - This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options to convert the `model` to the `schema` version.
 - We will automatically fill in any missing fields you return based on the user's `schema` configuration.
 - Any method that includes a `select` parameter, is only for the purpose of getting data from your database more efficiently. You do not need to worry about only returning what the `select` parameter states, as we will handle that for you.
-
----
 
 ### `create` method
 
@@ -735,3 +405,159 @@ describe("My Adapter Numeric ID Tests", async () => {
   });
 });
 ```
+
+## Config
+
+The `config` object is used to provide information about the adapter to Better-Auth.
+
+We **highly recommend** going through and reading each provided option below, as it will help you understand how to properly configure your adapter.
+
+### Required Config
+
+### `adapterId`
+A unique identifier for the adapter.
+
+### `adapterName`
+The name of the adapter.
+
+### Optional Config
+
+### `supportsNumericIds`
+Whether the database supports numeric ids. If this is set to `false` and the users config has enabled `useNumberId`, then we will throw an error.
+
+### `supportsJSON`
+Whether the database supports JSON. If the database doesn't support JSON, we will use a `string` to save the JSON data.And when we retrieve the data, we will safely parse the `string` back into a JSON object.
+
+### `supportsDates`
+Whether the database supports dates. If the database doesn't support dates, we will use a `string` to save the date. (ISO string) When we retrieve the data, we will safely parse the `string` back into a `Date` object.
+
+### `supportsBooleans`
+Whether the database supports booleans. If the database doesn't support booleans, we will use a `0` or `1` to save the boolean value. When we retrieve the data, we will safely parse the `0` or `1` back into a boolean value.
+
+### `usePlural`
+Whether the table names in the schema are plural. This is often defined by the user, and passed down through your custom adapter options. If you do not intend to allow the user to customize the table names, you can ignore this option, or set this to `false`.
+
+  ```ts title="Example"
+  const adapter = myAdapter({
+    // This value then gets passed into the `usePlural`
+    // option in the createAdapter `config` object.
+    usePlural: true,
+  });
+  ```
+
+### `debugLogs`
+Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `count`.
+If any of the keys are `true`, the debug logs will be enabled for that method.
+
+  ```ts title="Example"
+  // Will log debug logs for all methods.
+  const adapter = myAdapter({
+    debugLogs: true,
+  });
+  ```
+
+  ```ts title="Example"
+  // Will only log debug logs for the `create` and `update` methods.
+  const adapter = myAdapter({
+    debugLogs: {
+      create: true,
+      update: true,
+    },
+  });
+  ```
+
+### `disableIdGeneration`
+Whether to disable id generation. If this is set to `true`, then the user's `generateId` option will be ignored.
+
+### `customIdGenerator`
+If your database only supports a specific custom id generation, then you can use this option to generate your own IDs.
+
+### `mapKeysTransformInput`
+If your database uses a different key name for a given situation, you can use this option to map the keys. This is useful for databases that expect a different key name for a given situation.
+  For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+
+  Each key in the returned object represents the old key to replace.
+  The value represents the new key.
+
+  This can be a partial object that only transforms some keys.
+
+  ```ts title="Example"
+  mapKeysTransformInput: () => {
+    return {
+      id: "_id", // We want to replace `id` to `_id` to save into MongoDB
+    };
+  },
+  ```
+
+### `mapKeysTransformOutput`
+If your database uses a different key name for a given situation, you can use this option to map the keys. This is useful for databases that use a different key name for a given situation.
+  For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+
+  Each key in the returned object represents the old key to replace.
+  The value represents the new key.
+
+  This can be a partial object that only transforms some keys.
+
+  ```ts title="Example"
+  mapKeysTransformOutput: () => {
+    return {
+      _id: "id", // We want to replace `_id` (from MongoDB) to `id` (for Better-Auth)
+    };
+  },
+  ```
+
+### `customTransformInput`
+If you need to transform the input data before it is saved to the database, you can use this option to transform the data.
+
+<Callout type="warn">
+  If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then
+  the transformations will be applied before your `customTransformInput`
+  function is called.
+  </Callout>
+  The `customTransformInput` function receives the following arguments:
+
+  - `data`: The data to transform.
+  - `field`: The field that is being transformed.
+  - `fieldAttributes`: The field attributes of the field that is being transformed.
+  - `select`: The `select` values which the query expects to return.
+  - `model`: The model that is being transformed.
+  - `schema`: The schema that is being transformed.
+  - `options`: Better Auth options.
+
+  The `customTransformInput` function runs at every key in the data object of a given action.
+
+  ```ts title="Example"
+  customTransformInput: ({ field, data }) => {
+    if (field === "id") {
+      return "123"; // Force the id to be "123"
+    }
+
+    return data;
+  };
+  ```
+
+### `customTransformOutput`
+If you need to transform the output data before it is returned to the user, you can use this option to transform the data. The `customTransformOutput` function is used to transform the output data.
+  Similar to the `customTransformInput` function, it runs at every key in the data object of a given action, but it runs after the data is retrieved from the database.
+
+  ```ts title="Example"
+  customTransformOutput: ({ field, data }) => {
+    if (field === "name") {
+      return "Bob"; // Force the name to be "Bob"
+    }
+
+    return data;
+  };
+  ```
+
+  ```ts
+  const some_data = await adapter.create({
+    model: "user",
+    data: {
+      name: "John",
+    },
+  });
+
+  // The name will be "Bob"
+  console.log(some_data.name);
+  ```
