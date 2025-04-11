@@ -324,25 +324,33 @@ describe("reset password flow attempts", async (it) => {
 	const testPhoneNumber = "+251911121314";
 
 	it("should block reset password after exceeding allowed attempts", async () => {
+		//register phone number
 		await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
-			isPasswordReset: true,
+		});
+		await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: otp,
+		});
+
+		await client.phoneNumber.forgetPassword({
+			phoneNumber: testPhoneNumber,
 		});
 
 		for (let i = 0; i < 3; i++) {
-			const res = await client.phoneNumber.verify({
+			const res = await client.phoneNumber.resetPassword({
 				phoneNumber: testPhoneNumber,
-				code: "000000",
-				isPasswordReset: true,
+				otp: otp,
+				newPassword: "password",
 			});
 			expect(res.error?.status).toBe(400);
 			expect(res.error?.message).toBe("Invalid OTP");
 		}
 
-		const res = await client.phoneNumber.verify({
+		const res = await client.phoneNumber.resetPassword({
 			phoneNumber: testPhoneNumber,
-			code: "000000",
-			isPasswordReset: true,
+			otp: otp,
+			newPassword: "password",
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Too many attempts");
@@ -351,13 +359,11 @@ describe("reset password flow attempts", async (it) => {
 	it("should successfully reset password with correct code", async () => {
 		await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
-			isPasswordReset: true,
 		});
 
 		const res = await client.phoneNumber.verify({
 			phoneNumber: testPhoneNumber,
 			code: otp,
-			isPasswordReset: true,
 		});
 
 		expect(res.error).toBe(null);

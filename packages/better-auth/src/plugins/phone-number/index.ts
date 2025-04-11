@@ -667,6 +667,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						});
 					}
 					const [otpValue, attempts] = verification.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
 					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							verification.id,
@@ -675,7 +676,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: "Too many attempts",
 						});
 					}
-					if (otpValue !== ctx.body.otp) {
+					if (ctx.body.otp !== otpValue) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verification.id,
 							{
