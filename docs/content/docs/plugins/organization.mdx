@@ -800,14 +800,25 @@ You can use the `hasPermission` action provided by the `api` to check the permis
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-    auth.api.hasPermission({
-        headers: await headers(),
-        body: {
-            permissions: {
-                project: ["create"] // This must match the structure in your access control
-            }
-        }
-    });
+auth.api.hasPermission({
+  headers: await headers(),
+    body: {
+      permissions: {
+        project: ["create"] // This must match the structure in your access control
+      }
+    }
+});
+
+// You can also check multiple resource permissions at the same time
+auth.api.hasPermission({
+  headers: await headers(),
+    body: {
+      permissions: {
+        project: ["create"], // This must match the structure in your access control
+        sale: ["create"]
+      }
+    }
+});
 ```
 
 If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client.
@@ -816,6 +827,14 @@ If you want to check the permission of the user on the client from the server yo
 const canCreateProject = await authClient.organization.hasPermission({
     permissions: {
         project: ["create"]
+    }
+})
+
+// You can also check multiple resource permissions at the same time
+const canCreateProjectAndCreateSale = await authClient.organization.hasPermission({
+    permissions: {
+        project: ["create"],
+        sale: ["create"]
     }
 })
 ```
@@ -828,6 +847,15 @@ Once you have defined the roles and permissions to avoid checking the permission
 const canCreateProject = client.organization.checkRolePermission({
 	permissions: {
 		organization: ["delete"],
+	},
+	role: "admin",
+});
+
+// You can also check multiple resource permissions at the same time
+const canCreateProjectAndCreateSale = client.organization.checkRolePermission({
+	permissions: {
+		organization: ["delete"],
+    member: ["delete"]
 	},
 	role: "admin",
 });

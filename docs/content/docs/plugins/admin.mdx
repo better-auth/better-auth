@@ -420,6 +420,14 @@ const canCreateProject = await authClient.admin.hasPermission({
     project: ["create"],
   },
 });
+
+// You can also check multiple resource permissions at the same time
+const canCreateProjectAndCreateSale = await authClient.admin.hasPermission({
+  permissions: {
+    project: ["create"],
+    sale: ["create"]
+  },
+});
 ```
 
 If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
@@ -435,12 +443,23 @@ auth.api.userHasPermission({
   },
 });
 
-//you can also just pass the role directly
+// You can also just pass the role directly
 auth.api.userHasPermission({
   body: {
    role: "admin",
     permissions: {
       project: ["create"], // This must match the structure in your access control
+    },
+  },
+});
+
+// You can also check multiple resource permissions at the same time
+auth.api.userHasPermission({
+  body: {
+   role: "admin",
+    permissions: {
+      project: ["create"], // This must match the structure in your access control
+      sale: ["create"]
     },
   },
 });
@@ -455,6 +474,15 @@ Once you have defined the roles and permissions to avoid checking the permission
 const canCreateProject = client.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
+  },
+  role: "admin",
+});
+
+// You can also check multiple resource permissions at the same time
+const canCreateProjectAndRevokeSession = client.admin.checkRolePermission({
+  permissions: {
+    user: ["delete"],
+    session: ["revoke"]
   },
   role: "admin",
 });
