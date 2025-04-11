@@ -454,6 +454,16 @@
         "default": "./dist/plugins/organization/access/index.cjs"
       }
     },
+    "./plugins/one-time-token": {
+      "import": {
+        "types": "./dist/plugins/one-time-token/index.d.ts",
+        "default": "./dist/plugins/one-time-token/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/one-time-token/index.d.cts",
+        "default": "./dist/plugins/one-time-token/index.cjs"
+      }
+    },
     "./plugins/passkey": {
       "import": {
         "types": "./dist/plugins/passkey/index.d.ts",
@@ -595,6 +605,9 @@
       ],
       "plugins/oauth-proxy": [
         "./dist/plugins/oauth-proxy/index.d.ts"
+      ],
+      "plugins/one-time-token": [
+        "./dist/plugins/one-time-token/index.d.ts"
       ],
       "plugins/sso": [
         "./dist/plugins/sso/index.d.ts"
