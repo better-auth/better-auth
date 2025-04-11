@@ -105,5 +105,6 @@ export default defineBuildConfig({
 		"./src/plugins/sso/index.ts",
 		"./src/plugins/two-factor/index.ts",
 		"./src/plugins/username/index.ts",
+		"./src/plugins/haveibeenpwned/index.ts",
 	],
 });
