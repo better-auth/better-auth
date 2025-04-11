@@ -624,7 +624,7 @@ describe("Admin plugin", async () => {
 
 describe("access control", async (it) => {
 	const ac = createAccessControl({
-		user: ["create", "read", "update", "delete", "list"],
+		user: ["create", "read", "update", "delete", "list", "bulk-delete"],
 		order: ["create", "read", "update", "delete", "update-many"],
 	});
 
@@ -699,61 +699,126 @@ describe("access control", async (it) => {
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				order: ["create"],
 			},
 		});
 		expect(canCreateOrder).toBe(true);
 
+		const canCreateOrderAndReadUser = client.admin.checkRolePermission({
+			role: "admin",
+			permissions: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderAndReadUser).toBe(true);
+
 		const canCreateUser = client.admin.checkRolePermission({
 			role: "user",
-			permission: {
+			permissions: {
 				user: ["create"],
 			},
 		});
 		expect(canCreateUser).toBe(false);
+
+		const canCreateOrderAndCreateUser = client.admin.checkRolePermission({
+			role: "user",
+			permissions: {
+				order: ["create"],
+				user: ["create"],
+			},
+		});
+		expect(canCreateOrderAndCreateUser).toBe(false);
 	});
 
 	it("should validate using userId", async () => {
 		const canCreateUser = await auth.api.userHasPermission({
 			body: {
 				userId: user.id,
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
 		});
 		expect(canCreateUser.success).toBe(true);
+
+		const canCreateUserAndCreateOrder = await auth.api.userHasPermission({
+			body: {
+				userId: user.id,
+				permissions: {
+					user: ["create"],
+					order: ["create"],
+				},
+			},
+		});
+		expect(canCreateUserAndCreateOrder.success).toBe(true);
+
 		const canUpdateManyOrder = await auth.api.userHasPermission({
 			body: {
 				userId: user.id,
-				permission: {
+				permissions: {
 					order: ["update-many"],
 				},
 			},
 		});
 		expect(canUpdateManyOrder.success).toBe(false);
+
+		const canUpdateManyOrderAndBulkDeleteUser =
+			await auth.api.userHasPermission({
+				body: {
+					userId: user.id,
+					permissions: {
+						user: ["bulk-delete"],
+						order: ["update-many"],
+					},
+				},
+			});
+		expect(canUpdateManyOrderAndBulkDeleteUser.success).toBe(false);
 	});
 
 	it("should validate using role", async () => {
 		const canCreateUser = await auth.api.userHasPermission({
 			body: {
 				role: "admin",
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
 		});
 		expect(canCreateUser.success).toBe(true);
+
+		const canCreateUserAndCreateOrder = await auth.api.userHasPermission({
+			body: {
+				role: "admin",
+				permissions: {
+					user: ["create"],
+					order: ["create"],
+				},
+			},
+		});
+		expect(canCreateUserAndCreateOrder.success).toBe(true);
+
 		const canUpdateOrder = await auth.api.userHasPermission({
 			body: {
 				role: "user",
-				permission: {
+				permissions: {
 					order: ["update"],
 				},
 			},
 		});
 		expect(canUpdateOrder.success).toBe(false);
+
+		const canUpdateOrderAndUpdateUser = await auth.api.userHasPermission({
+			body: {
+				role: "user",
+				permissions: {
+					order: ["update"],
+					user: ["update"],
+				},
+			},
+		});
+		expect(canUpdateOrderAndUpdateUser.success).toBe(false);
 	});
 
 	it("shouldn't allow to list users", async () => {

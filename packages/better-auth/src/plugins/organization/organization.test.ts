@@ -500,7 +500,7 @@ describe("organization", async (it) => {
 			},
 		});
 		const hasPermission = await client.organization.hasPermission({
-			permission: {
+			permissions: {
 				member: ["update"],
 			},
 			fetchOptions: {
@@ -508,6 +508,17 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(hasPermission.data?.success).toBe(true);
+
+		const hasMultiplePermissions = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"],
+				invitation: ["create"],
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
 	it("should allow deleting organization", async () => {
@@ -795,13 +806,13 @@ describe("access control", async (it) => {
 	it("should return success", async () => {
 		const canCreateProject = checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["create"],
 			},
 		});
 		expect(canCreateProject).toBe(true);
 		const canCreateProjectServer = await hasPermission({
-			permission: {
+			permissions: {
 				project: ["create"],
 			},
 			fetchOptions: {
@@ -814,7 +825,7 @@ describe("access control", async (it) => {
 	it("should return not success", async () => {
 		const canCreateProject = checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["delete"],
 			},
 		});
@@ -826,7 +837,7 @@ describe("access control", async (it) => {
 		try {
 			checkRolePermission({
 				role: "admin",
-				permission: {
+				permissions: {
 					project: ["read"],
 					sales: ["delete"],
 				},

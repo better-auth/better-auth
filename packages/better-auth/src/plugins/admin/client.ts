@@ -1,4 +1,3 @@
-import { BetterAuthError } from "../../error";
 import type { BetterAuthClientPlugin } from "../../types";
 import { type AccessControl, type Role } from "../access";
 import { adminAc, defaultStatements, userAc } from "./access";
@@ -46,23 +45,31 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 						: "admin" | "user",
 				>(data: {
 					role: R;
-					permission: {
-						//@ts-expect-error fix this later
-						[key in keyof Statements]?: Statements[key][number][];
+					/**
+					 * @deprecated Use `permissions` instead
+					 */
+					permission?: {
+						[key in keyof Statements]?: Array<
+							Statements[key] extends readonly unknown[]
+								? Statements[key][number]
+								: never
+						>;
+					};
+					permissions?: {
+						[key in keyof Statements]?: Array<
+							Statements[key] extends readonly unknown[]
+								? Statements[key][number]
+								: never
+						>;
 					};
 				}) => {
-					if (Object.keys(data.permission).length > 1) {
-						throw new BetterAuthError(
-							"you can only check one resource permission at a time.",
-						);
-					}
 					const isAuthorized = hasPermission({
 						role: data.role as string,
 						options: {
 							ac: options?.ac,
 							roles: roles,
 						},
-						permission: data.permission as any,
+						permissions: (data?.permission ?? data?.permissions) as any,
 					});
 					return isAuthorized;
 				},
