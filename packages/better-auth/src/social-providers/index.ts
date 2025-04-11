@@ -36,7 +36,7 @@ export const socialProviders = {
 	reddit,
 	roblox,
 	vk,
-	patreon
+	patreon,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
