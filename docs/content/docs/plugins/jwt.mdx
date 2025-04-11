@@ -273,7 +273,7 @@ By default the entire user object is added to the JWT payload. You can modify th
 ```ts title="auth.ts"
 jwt({
   jwt: {
-    definePayload: (user) => {
+    definePayload: ({user}) => {
       return {
         id: user.id,
         email: user.email,
