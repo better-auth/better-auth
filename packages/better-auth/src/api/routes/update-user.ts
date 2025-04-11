@@ -59,9 +59,9 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 									schema: {
 										type: "object",
 										properties: {
-											user: {
-												type: "object",
-												ref: "#/components/schemas/User",
+											status: {
+												type: "boolean",
+												description: "Indicates if the update was successful",
 											},
 										},
 									},
@@ -155,17 +155,66 @@ export const changePassword = createAuthEndpoint(
 				description: "Change the password of the user",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "Password successfully changed",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
+										token: {
+											type: "string",
+											nullable: true, // Only present if revokeOtherSessions is true
+											description:
+												"New session token if other sessions were revoked",
+										},
 										user: {
-											description: "The user object",
-											$ref: "#/components/schemas/User",
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+													description: "The unique identifier of the user",
+												},
+												email: {
+													type: "string",
+													format: "email",
+													description: "The email address of the user",
+												},
+												name: {
+													type: "string",
+													description: "The name of the user",
+												},
+												image: {
+													type: "string",
+													format: "uri",
+													nullable: true,
+													description: "The profile image URL of the user",
+												},
+												emailVerified: {
+													type: "boolean",
+													description: "Whether the email has been verified",
+												},
+												createdAt: {
+													type: "string",
+													format: "date-time",
+													description: "When the user was created",
+												},
+												updatedAt: {
+													type: "string",
+													format: "date-time",
+													description: "When the user was last updated",
+												},
+											},
+											required: [
+												"id",
+												"email",
+												"name",
+												"emailVerified",
+												"createdAt",
+												"updatedAt",
+											],
 										},
 									},
+									required: ["user"],
 								},
 							},
 						},
@@ -341,11 +390,23 @@ export const deleteUser = createAuthEndpoint(
 				description: "Delete the user",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "User deletion processed successfully",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
+									properties: {
+										success: {
+											type: "boolean",
+											description: "Indicates if the operation was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["User deleted", "Verification email sent"],
+											description: "Status message of the deletion process",
+										},
+									},
+									required: ["success", "message"],
 								},
 							},
 						},
@@ -419,7 +480,12 @@ export const deleteUser = createAuthEndpoint(
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: session.user.id,
 				identifier: `delete-account-${token}`,
-				expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+				expiresAt: new Date(
+					Date.now() +
+						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+							60 * 60 * 24) *
+							1000,
+				),
 			});
 			const url = `${
 				ctx.context.baseURL
@@ -467,6 +533,36 @@ export const deleteUserCallback = createAuthEndpoint(
 			callbackURL: z.string().optional(),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		metadata: {
+			openapi: {
+				description:
+					"Callback to complete user deletion with verification token",
+				responses: {
+					"200": {
+						description: "User successfully deleted",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: {
+											type: "boolean",
+											description: "Indicates if the deletion was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["User deleted"],
+											description: "Confirmation message",
+										},
+									},
+									required: ["success", "message"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
@@ -540,20 +636,24 @@ export const changeEmail = createAuthEndpoint(
 			openapi: {
 				responses: {
 					"200": {
-						description: "Success",
+						description: "Email change request processed successfully",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
-										user: {
-											type: "object",
-											ref: "#/components/schemas/User",
-										},
 										status: {
 											type: "boolean",
+											description: "Indicates if the request was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["Email updated", "Verification email sent"],
+											description: "Status message of the email change process",
+											nullable: true,
 										},
 									},
+									required: ["status"],
 								},
 							},
 						},

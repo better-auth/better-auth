@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.6-beta.3",
+  "version": "1.2.6-beta.10",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -14,9 +14,10 @@
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",
     "stub": "unbuild --stub",
-    "test": "pnpm prisma:push && vitest",
-    "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
-    "test:adapters": "pnpm prisma:push && vitest adapters",
+    "pretest": "pnpm prisma:normal:push && pnpm prisma:number-id:push",
+    "test": "vitest",
+    "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
+    "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
     "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
   },
@@ -203,6 +204,16 @@
         "default": "./dist/integrations/next-js.cjs"
       }
     },
+    "./react-start": {
+      "import": {
+        "types": "./dist/integrations/react-start.d.ts",
+        "default": "./dist/integrations/react-start.mjs"
+      },
+      "require": {
+        "types": "./dist/integrations/react-start.d.cts",
+        "default": "./dist/integrations/react-start.cjs"
+      }
+    },
     "./node": {
       "import": {
         "types": "./dist/integrations/node.d.ts",
@@ -261,6 +272,16 @@
       "require": {
         "types": "./dist/adapters/test.d.cts",
         "default": "./dist/adapters/test.cjs"
+      }
+    },
+    "./adapters": {
+      "import": {
+        "types": "./dist/adapters/index.d.ts",
+        "default": "./dist/adapters/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/index.d.cts",
+        "default": "./dist/adapters/index.cjs"
       }
     },
     "./plugins/access": {
@@ -351,6 +372,16 @@
       "require": {
         "types": "./dist/plugins/jwt/index.d.cts",
         "default": "./dist/plugins/jwt/index.cjs"
+      }
+    },
+    "./plugins/haveibeenpwned": {
+      "import": {
+        "types": "./dist/plugins/haveibeenpwned/index.d.ts",
+        "default": "./dist/plugins/haveibeenpwned/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/haveibeenpwned/index.d.cts",
+        "default": "./dist/plugins/haveibeenpwned/index.cjs"
       }
     },
     "./plugins/sso": {
@@ -520,6 +551,9 @@
       "next-js": [
         "./dist/integrations/next-js.d.ts"
       ],
+      "react-start": [
+        "./dist/integrations/react-start.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"
       ],
@@ -555,6 +589,9 @@
       ],
       "plugins/generic-oauth": [
         "./dist/plugins/generic-oauth/index.d.ts"
+      ],
+      "plugins/haveibeenpwned": [
+        "./dist/plugins/haveibeenpwned/index.d.ts"
       ],
       "plugins/oauth-proxy": [
         "./dist/plugins/oauth-proxy/index.d.ts"
@@ -593,6 +630,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
+    "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",

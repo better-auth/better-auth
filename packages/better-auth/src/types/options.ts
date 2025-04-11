@@ -332,6 +332,12 @@ export type BetterAuthOptions = {
 			 * This is useful for cleaning up user data
 			 */
 			afterDelete?: (user: User, request?: Request) => Promise<void>;
+			/**
+			 * The expiration time for the delete token.
+			 *
+			 * @default 1 day (60 * 60 * 24) in seconds
+			 */
+			deleteTokenExpiresIn?: number;
 		};
 	};
 	session?: {
@@ -641,10 +647,44 @@ export type BetterAuthOptions = {
 		 */
 		cookiePrefix?: string;
 		/**
+		 * Database configuration.
+		 */
+		database?: {
+			/**
+			 * The default number of records to return from the database
+			 * when using the `findMany` adapter method.
+			 *
+			 * @default 100
+			 */
+			defaultFindManyLimit?: number;
+			/**
+			 * If your database auto increments number ids, set this to `true`.
+			 *
+			 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
+			 *
+			 * @default false
+			 */
+			useNumberId?: boolean;
+			/**
+			 * Custom generateId function.
+			 *
+			 * If not provided, random ids will be generated.
+			 * If set to false, the database's auto generated id will be used.
+			 */
+			generateId?:
+				| ((options: {
+						model: LiteralUnion<Models, string>;
+						size?: number;
+				  }) => string)
+				| false;
+		};
+		/**
 		 * Custom generateId function.
 		 *
 		 * If not provided, random ids will be generated.
 		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @deprecated Please use `database.generateId` instead. This will be potentially removed in future releases.
 		 */
 		generateId?:
 			| ((options: {

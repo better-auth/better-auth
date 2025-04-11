@@ -152,9 +152,9 @@ export const apple = (options: AppleOptions) => {
 			if (!profile) {
 				return null;
 			}
-			const name = profile.user
-				? `${profile.user.name.firstName} ${profile.user.name.lastName}`
-				: profile.email;
+			const name = token.user
+				? `${token.user.name?.firstName} ${token.user.name?.lastName}`
+				: profile.name || profile.email;
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {

@@ -8,6 +8,10 @@ Better Auth includes a built-in rate limiter to help manage traffic and prevent 
 - Window: 60 seconds
 - Max Requests: 100 requests
 
+<Callout type="warning">
+Server-side requests made using `auth.api` aren't affected by rate limiting. Rate limits only apply to client-initiated requests.
+</Callout>
+
 You can easily customize these settings by passing the rateLimit object to the betterAuth function.
 
 ```ts title="auth.ts"
@@ -198,10 +202,15 @@ Table Name: `rateLimit`
 <DatabaseTable
     fields={[
         { 
+        name: "id", 
+        type: "string", 
+        description: "Database ID",
+        isPrimaryKey: true
+        },
+        { 
         name: "key", 
         type: "string", 
         description: "Unique identifier for each rate limit key",
-        isPrimaryKey: true
         },
         { 
         name: "count", 

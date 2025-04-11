@@ -107,9 +107,10 @@ function parseRoles(roles: string | string[]): string {
 
 export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
-		defaultRole: "user",
-		adminRoles: ["admin"],
+		defaultRole: options?.defaultRole ?? "user",
+		adminRoles: options?.adminRoles ?? ["admin"],
 		bannedUserMessage:
+			options?.bannedUserMessage ??
 			"You have been banned from this application. Please contact support if you believe this is an error.",
 		...options,
 	};
@@ -567,7 +568,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
-						const total = await ctx.context.internalAdapter.countTotalUsers();
+						const total = await ctx.context.internalAdapter.countTotalUsers(
+							where.length ? where : undefined,
+						);
 						return ctx.json({
 							users: users as UserWithRole[],
 							total: total,

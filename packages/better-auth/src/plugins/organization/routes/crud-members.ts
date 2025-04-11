@@ -4,7 +4,6 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { InferOrganizationRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
-import { generateId } from "../../../utils";
 import { parseRoles, type OrganizationOptions } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -111,7 +110,6 @@ export const addMember = <O extends OrganizationOptions>() =>
 			}
 
 			const createdMember = await adapter.createMember({
-				id: generateId(),
 				organizationId: orgId,
 				userId: user.id,
 				role: parseRoles(ctx.body.role as string | string[]),
@@ -217,12 +215,6 @@ export const removeMember = createAuthEndpoint(
 		if (!toBeRemovedMember) {
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-			});
-		}
-		const role = ctx.context.roles[member.role];
-		if (!role) {
-			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 			});
 		}
 		const roles = toBeRemovedMember.role.split(",");
@@ -345,74 +337,79 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
+
+			if (!ctx.body.role) {
+				throw new APIError("BAD_REQUEST");
+			}
+
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
+
 			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
-			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const roleToSet: string[] = Array.isArray(ctx.body.role)
 				? (ctx.body.role as string[])
 				: ctx.body.role
 					? [ctx.body.role as string]
 					: [];
+
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organizationId,
 			});
+
 			if (!member) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
+
 			const toBeUpdatedMember =
-				member.role !== ctx.body.memberId
+				member.id !== ctx.body.memberId
 					? await adapter.findMemberById(ctx.body.memberId)
 					: member;
+
 			if (!toBeUpdatedMember) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const role = ctx.context.roles[member.role];
-			if (!role) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-				});
-			}
+
+			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
+			const updatingMemberRoles = member.role.split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
+
 			if (
-				(toBeUpdatedMember.role === creatorRole &&
-					member.role !== creatorRole) ||
-				(roleToSet.includes(creatorRole) && member.role !== creatorRole)
+				(toBeUpdatedMemberRoles.includes(creatorRole) &&
+					!updatingMemberRoles.includes(creatorRole)) ||
+				(roleToSet.includes(creatorRole) &&
+					!updatingMemberRoles.includes(creatorRole))
 			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
 			}
-			/**
-			 * If the member is not an owner, they cannot update the role of another member
-			 * as an owner.
-			 */
-			const canUpdateMember =
-				role.authorize({
+
+			const canUpdateMember = hasPermission({
+				role: member.role,
+				options: ctx.context.orgOptions,
+				permission: {
 					member: ["update"],
-				}).success ||
-				(ctx.body.role === "owner" && member.role === "owner");
+				},
+			});
+
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
 			}
-			if (!ctx.body.role) {
-				throw new APIError("BAD_REQUEST");
-			}
-
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
 				parseRoles(ctx.body.role as string | string[]),

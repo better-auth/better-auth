@@ -20,8 +20,8 @@ export const getJwksAdapter = (adapter: Adapter) => {
 
 			return key[0];
 		},
-		createJwk: async (webKey: Jwk) => {
-			const jwk = await adapter.create<Jwk>({
+		createJwk: async (webKey: Omit<Jwk, "id">) => {
+			const jwk = await adapter.create<Omit<Jwk, "id">, Jwk>({
 				model: "jwks",
 				data: {
 					...webKey,

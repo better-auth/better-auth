@@ -129,6 +129,20 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users.length).toBe(2);
 	});
 
+	it("should list users with search query", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "role",
+				filterOperator: "eq",
+				filterValue: "admin",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.total).toBe(1);
+	});
+
 	it("should not allow non-admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
