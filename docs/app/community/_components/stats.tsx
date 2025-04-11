@@ -38,7 +38,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Our Discord
@@ -63,7 +63,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -122,7 +122,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Subreddit
