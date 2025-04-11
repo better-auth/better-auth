@@ -35,6 +35,10 @@ export const addMember = <O extends OrganizationOptions>() =>
 						? { teamId?: string }
 						: {}),
 				},
+				openapi: {
+					operationId: "addOrganizationMember",
+					description: "Add a member to an organization",
+				},
 			},
 		},
 		async (ctx) => {
@@ -144,6 +148,7 @@ export const removeMember = createAuthEndpoint(
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "removeOrganizationMember",
 				description: "Remove a member from an organization",
 				responses: {
 					"200": {
@@ -300,7 +305,8 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					},
 				},
 				openapi: {
-					description: "Update the role of a member in an organization",
+					operationId: "updateOrganizationMemberRole",
+					description: "Update a member's role in an organization",
 					responses: {
 						"200": {
 							description: "Success",

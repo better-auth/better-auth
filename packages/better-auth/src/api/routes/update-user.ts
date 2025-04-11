@@ -31,6 +31,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					>,
 				},
 				openapi: {
+					operationId: "updateUser",
 					description: "Update the current user",
 					requestBody: {
 						content: {
@@ -61,7 +62,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										properties: {
 											user: {
 												type: "object",
-												ref: "#/components/schemas/User",
+												$ref: "#/components/schemas/User",
 											},
 										},
 									},
@@ -152,6 +153,7 @@ export const changePassword = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changePassword",
 				description: "Change the password of the user",
 				responses: {
 					"200": {
@@ -338,7 +340,33 @@ export const deleteUser = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "deleteUser",
 				description: "Delete the user",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									callbackURL: {
+										type: "string",
+										description:
+											"The callback URL to redirect to after the user is deleted",
+									},
+									password: {
+										type: "string",
+										description:
+											"The user's password. Required if session is not fresh",
+									},
+									token: {
+										type: "string",
+										description: "The deletion verification token",
+									},
+								},
+							},
+						},
+					},
+				},
 				responses: {
 					"200": {
 						description: "Success",
@@ -538,6 +566,7 @@ export const changeEmail = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "changeEmail",
 				responses: {
 					"200": {
 						description: "Success",
@@ -548,7 +577,7 @@ export const changeEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
+											$ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",

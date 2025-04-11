@@ -35,6 +35,7 @@ export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
 	{
 		method: "POST",
+		operationId: "forgetPassword",
 		body: z.object({
 			/**
 			 * The email address of the user to send a password reset email to.
@@ -60,6 +61,7 @@ export const forgetPassword = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "forgetPassword",
 				description: "Send a password reset email to the user",
 				responses: {
 					"200": {
@@ -140,7 +142,28 @@ export const forgetPasswordCallback = createAuthEndpoint(
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
+				operationId: "resetPasswordCallback",
 				description: "Redirects the user to the callback URL with the token",
+				parameters: [
+					{
+						name: "token",
+						in: "path",
+						required: true,
+						description: "The token to reset the password",
+						schema: {
+							type: "string",
+						},
+					},
+					{
+						name: "callbackURL",
+						in: "query",
+						required: true,
+						description: "The URL to redirect the user to reset their password",
+						schema: {
+							type: "string",
+						},
+					},
+				],
 				responses: {
 					"200": {
 						description: "Success",
@@ -204,6 +227,7 @@ export const resetPassword = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "resetPassword",
 				description: "Reset the password for a user",
 				responses: {
 					"200": {
