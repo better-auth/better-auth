@@ -70,6 +70,7 @@ export default defineBuildConfig({
 		"./src/adapters/kysely-adapter/index.ts",
 		"./src/adapters/memory-adapter/index.ts",
 		"./src/adapters/test.ts",
+		"./src/adapters/index.ts",
 		"./src/db/index.ts",
 		"./src/oauth2/index.ts",
 		"./src/client/react/index.ts",

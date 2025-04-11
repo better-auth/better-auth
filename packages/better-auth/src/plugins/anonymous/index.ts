@@ -107,7 +107,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const email = `temp-${id}@${emailDomainName}`;
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{
-							id,
 							email,
 							emailVerified: false,
 							isAnonymous: true,

@@ -14,9 +14,10 @@
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",
     "stub": "unbuild --stub",
-    "test": "pnpm prisma:push && vitest",
-    "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
-    "test:adapters": "pnpm prisma:push && vitest adapters",
+    "test": "vitest --exclude adapters && pnpm test:adapters",
+    "test:adapters": "pnpm prisma:normal:push && pnpm prisma:number-id:push && vitest run adapters",
+    "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
+    "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
     "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
   },
@@ -271,6 +272,16 @@
       "require": {
         "types": "./dist/adapters/test.d.cts",
         "default": "./dist/adapters/test.cjs"
+      }
+    },
+    "./adapters": {
+      "import": {
+        "types": "./dist/adapters/index.d.ts",
+        "default": "./dist/adapters/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/index.d.cts",
+        "default": "./dist/adapters/index.cjs"
       }
     },
     "./plugins/access": {

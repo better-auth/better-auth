@@ -20,7 +20,9 @@ const client = new MongoClient("mongodb://localhost:27017/database");
 const db = client.db();
 
 export const auth = betterAuth({
-  database: mongodbAdapter(db),
+  database: mongodbAdapter(db, {
+    usePlural: true, // If your collection names are plural, set this to true (optional, default is false)
+  }),
 });
 ```
 
