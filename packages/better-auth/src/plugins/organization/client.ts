@@ -36,6 +36,26 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission: never;
+		  };
+
 	const roles = {
 		admin: adminAc,
 		member: memberAc,
@@ -85,26 +105,11 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					R extends O extends { roles: any }
 						? keyof O["roles"]
 						: "admin" | "member" | "owner",
-				>(data: {
-					role: R;
-					/**
-					 * @deprecated Use `permissions` instead
-					 */
-					permission?: {
-						[key in keyof Statements]?: Array<
-							Statements[key] extends readonly unknown[]
-								? Statements[key][number]
-								: never
-						>;
-					};
-					permissions?: {
-						[key in keyof Statements]?: Array<
-							Statements[key] extends readonly unknown[]
-								? Statements[key][number]
-								: never
-						>;
-					};
-				}) => {
+				>(
+					data: PermissionExclusive & {
+						role: R;
+					},
+				) => {
 					const isAuthorized = hasPermission({
 						role: data.role as string,
 						options: {

@@ -119,6 +119,26 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		? S
 		: DefaultStatements;
 
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission: never;
+		  };
+
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
@@ -1265,24 +1285,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							},
 						},
 						$Infer: {
-							body: {} as {
+							body: {} as PermissionExclusive & {
 								/**
 								 * @deprecated Use `permissions` instead
 								 */
-								permission?: {
-									[key in keyof Statements]?: Array<
-										Statements[key] extends readonly unknown[]
-											? Statements[key][number]
-											: never
-									>;
-								};
-								permissions?: {
-									[key in keyof Statements]?: Array<
-										Statements[key] extends readonly unknown[]
-											? Statements[key][number]
-											: never
-									>;
-								};
 								userId?: string;
 								role?: InferAdminRolesFromOption<O>;
 							},

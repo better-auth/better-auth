@@ -437,6 +437,26 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission: never;
+		  };
+
 	return {
 		id: "organization",
 		endpoints: {
@@ -467,24 +487,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					use: [orgSessionMiddleware],
 					metadata: {
 						$Infer: {
-							body: {} as {
-								/**
-								 * @deprecated Use `permissions` instead
-								 */
-								permission?: {
-									[key in keyof Statements]?: Array<
-										Statements[key] extends readonly unknown[]
-											? Statements[key][number]
-											: never
-									>;
-								};
-								permissions?: {
-									[key in keyof Statements]?: Array<
-										Statements[key] extends readonly unknown[]
-											? Statements[key][number]
-											: never
-									>;
-								};
+							body: {} as PermissionExclusive & {
 								organizationId?: string;
 							},
 						},
