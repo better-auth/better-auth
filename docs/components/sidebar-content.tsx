@@ -329,7 +329,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Typescript",
+				title: "TypeScript",
 				href: "/docs/concepts/typescript",
 				icon: () => (
 					<svg

@@ -101,7 +101,7 @@ describe("magic link", async () => {
 		);
 	});
 
-	it("should signup with magic link", async () => {
+	it("should sign up with magic link", async () => {
 		const email = "new-email@email.com";
 		await client.signIn.magicLink({
 			email,

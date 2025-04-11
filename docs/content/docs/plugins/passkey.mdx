@@ -5,7 +5,7 @@ description: Passkey
 
 Passkeys are a secure, passwordless authentication method using cryptographic key pairs, supported by WebAuthn and FIDO2 standards in web browsers. They replace passwords with unique key pairs: a private key stored on the user’s device and a public key shared with the website. Users can log in using biometrics, PINs, or security keys, providing strong, phishing-resistant authentication without traditional passwords.
 
-The passkey plugin implementation is powered by [simple-web-authn](https://simplewebauthn.dev/) behind the scenes.
+The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplewebauthn.dev/) behind the scenes.
 
 ## Installation
 
@@ -20,7 +20,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
         `rpName`: Human-readable title for your website
 
-        `origin`: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do **NOT** include any trailing /
+        `origin`: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do **NOT** include any trailing /
 
         `authenticatorSelection`: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
             - `authenticatorAttachment`: Specifies the type of authenticator
@@ -109,7 +109,7 @@ const { data, error } = await authClient.passkey.addPasskey();
 
 This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
 
-You can also specify the type of authenticator you want to register. The authenticatorAttachment can be either `platform` or `cross-platform`.
+You can also specify the type of authenticator you want to register. The `authenticatorAttachment` can be either `platform` or `cross-platform`.
 
 ```ts title="auth-client.ts"
 // Register a cross-platform passkey showing only a QR code
@@ -119,9 +119,9 @@ const { data, error } = await authClient.passkey.addPasskey({
 });
 ```
 
-### Signin with a passkey
+### Sign in with a passkey
 
-To signin with a passkey you can use the passkeySignIn method. This will prompt the user to sign in with their passkey.
+To sign in with a passkey you can use the passkeySignIn method. This will prompt the user to sign in with their passkey.
 
 Signin method accepts:
 
@@ -267,6 +267,6 @@ Table Name: `passkey`
 
 **rpName**: Human-readable title for your website.
 
-**origin**: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do NOT include any trailing /.
+**origin**: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
 
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. When unspecified, both platform and cross-platform authenticators are allowed with `preferred` settings for `residentKey` and `userVerification`.
