@@ -20,3 +20,4 @@ export * from "./open-api";
 export * from "./oidc-provider";
 export * from "./captcha";
 export * from "./api-key";
+export * from "./haveibeenpwned";

@@ -374,6 +374,16 @@
         "default": "./dist/plugins/jwt/index.cjs"
       }
     },
+    "./plugins/haveibeenpwned": {
+      "import": {
+        "types": "./dist/plugins/haveibeenpwned/index.d.ts",
+        "default": "./dist/plugins/haveibeenpwned/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/haveibeenpwned/index.d.cts",
+        "default": "./dist/plugins/haveibeenpwned/index.cjs"
+      }
+    },
     "./plugins/sso": {
       "import": {
         "types": "./dist/plugins/sso/index.d.ts",
@@ -579,6 +589,9 @@
       ],
       "plugins/generic-oauth": [
         "./dist/plugins/generic-oauth/index.d.ts"
+      ],
+      "plugins/haveibeenpwned": [
+        "./dist/plugins/haveibeenpwned/index.d.ts"
       ],
       "plugins/oauth-proxy": [
         "./dist/plugins/oauth-proxy/index.d.ts"
