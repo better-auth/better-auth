@@ -391,12 +391,27 @@ describe("disabled paths", async () => {
 	});
 
 	it("should return 404 for disabled paths", async () => {
-		const response = await client.$fetch("/ok");
+		const response = await client.$fetch("/okay");
 		expect(response.data).toEqual({ ok: true });
 		const { error } = await client.signIn.email({
 			email: "test@test.com",
 			password: "test",
 		});
+		expect(error?.status).toBe(404);
+	});
+});
+
+describe("custom paths", async () => {
+	const { client } = await getTestInstance({
+		customPaths: {
+			"/ok": "/okay",
+		},
+	});
+
+	it("should redirect to custom path", async () => {
+		const response = await client.$fetch("/okay");
+		expect(response.data).toEqual({ ok: true });
+		const { error } = await client.$fetch("/ok");
 		expect(error?.status).toBe(404);
 	});
 });
