@@ -10,6 +10,11 @@ export interface CaptchaOptions {
 	secretKey: string;
 	endpoints?: string[];
 	siteVerifyURLOverride?: string;
+	/**
+	 * If true, captcha will not be required for OAuth routes
+	 * @default false
+	 */
+	skipOAuth?: boolean;
 }
 
 export const captcha = (options: CaptchaOptions) =>
@@ -23,8 +28,62 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
-				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
+				// Check for authentication-related headers that might indicate a popup auth
+				const isAuthPopup = (
+					request.headers.get('x-auth-popup') === 'true' ||
+					request.headers.get('x-auth-type') !== null
+				);
+
+				// Check URL parameters that might indicate authentication
+				let hasAuthParams = false;
+				try {
+					const url = new URL(request.url);
+					hasAuthParams = (
+						url.searchParams.has('auth') ||
+						url.searchParams.has('login') ||
+						url.searchParams.has('signup')
+					);
+				} catch (e) {
+					// URL parsing failed, continue with other checks
+				}
+
+				// Skip if not a matching endpoint and not a popup auth
+				if (!endpoints.some((endpoint) => request.url.includes(endpoint)) && !isAuthPopup && !hasAuthParams)
 					return;
+
+				// Skip captcha for OAuth routes if skipOAuth option is enabled
+				if (options.skipOAuth) {
+					// Check URL patterns for OAuth routes
+					const isOAuthURL = (
+						request.url.includes('/oauth2/') || 
+						request.url.includes('/callback/') ||
+						request.url.includes('/sign-in/oauth2')
+					);
+					
+					// Check for OAuth-specific headers or parameters
+					const hasOAuthHeader = (
+						request.headers.get('x-oauth-provider') !== null ||
+						request.headers.get('x-auth-type') === 'oauth'
+					);
+					
+					// Check URL search params for OAuth indicators
+					let hasOAuthParam = false;
+					try {
+						const url = new URL(request.url);
+						hasOAuthParam = (
+							url.searchParams.has('oauth') ||
+							url.searchParams.has('provider') ||
+							url.searchParams.has('code')
+						);
+					} catch (e) {
+						// URL parsing failed, continue with other checks
+					}
+					
+					// Skip captcha if any OAuth indicator is present
+					if (isOAuthURL || hasOAuthHeader || hasOAuthParam) {
+						return;
+					}
+				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
 
