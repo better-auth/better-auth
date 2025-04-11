@@ -44,12 +44,10 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 
-type Schema<T> = {
-	modelName?: string;
-	fields?: {
-		[key in keyof Omit<T, "id">]?: string;
-	};
-};
+export function parseRoles(roles: string | string[]): string {
+	return Array.isArray(roles) ? roles.join(",") : roles;
+}
+
 export interface OrganizationOptions {
 	/**
 	 * Configure whether new users are able to create new organizations.
@@ -118,7 +116,7 @@ export interface OrganizationOptions {
 			/**
 			 * Pass a custom default team creator function
 			 */
-			customCreateDefaultTeam: (
+			customCreateDefaultTeam?: (
 				organization: Organization & Record<string, any>,
 				request?: Request,
 			) => Promise<Team & Record<string, any>>;
@@ -322,7 +320,7 @@ export interface OrganizationOptions {
  *
  * @example
  * ```ts
- * const auth = createAuth({
+ * const auth = betterAuth({
  * 	plugins: [
  * 		organization({
  * 			allowUserToCreateOrganization: true,
@@ -485,15 +483,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
-					if (
-						!ctx.body.permission ||
-						Object.keys(ctx.body.permission).length > 1
-					) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								"invalid permission check. you can only check one resource permission at a time.",
-						});
-					}
 					const activeOrganizationId =
 						ctx.body.organizationId ||
 						ctx.context.session.session.activeOrganizationId;

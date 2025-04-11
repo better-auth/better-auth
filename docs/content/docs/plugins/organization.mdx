@@ -597,7 +597,8 @@ auth.api.addMember({
   body: {
       userId: "user-id",
       organizationId: "organization-id",
-      role: "admin"
+      role: "admin", // this can also be an array for multiple roles (e.g. ["admin", "sale"])
+      teamId: "team-id" // Optionally specify a teamId to add the member to a team. (requires teams to be enabled)
   }
 })
 ```
@@ -650,7 +651,7 @@ The owner have full control over all the resources and actions. The admin have f
 
 ### Custom Permissions
 
-the plugin providers easy way to define your own set of permission for each role.
+The plugin provides an easy way to define your own set of permissions for each role.
 
 <Steps>
     <Step>
@@ -730,14 +731,14 @@ the plugin providers easy way to define your own set of permission for each role
         Once you have created the roles you can pass them to the organization plugin both on the client and the server.
 
         ```ts title="auth.ts"
-        import { ac, owner, admin, member } from "@/auth/permissions"
         import { betterAuth } from "better-auth"
         import { organization } from "better-auth/plugins"
+        import { ac, owner, admin, member } from "@/auth/permissions"
 
         export const auth = betterAuth({
             plugins: [
                 organization({
-                    ac: ac,
+                    ac,
                     roles: {
                         owner,
                         admin,
@@ -759,7 +760,7 @@ the plugin providers easy way to define your own set of permission for each role
         export const client = createAuthClient({
             plugins: [
                 organizationClient({
-                    ac: ac,
+                    ac,
                     roles: {
                         owner,
                         admin,
@@ -778,11 +779,11 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-You can use the `organizationHasPermission` action provided by the `api` to check the permission of the user.
+You can use the `hasPermission` action provided by the `api` to check the permission of the user.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-    auth.api.organizationHasPermission({
+    auth.api.hasPermission({
         headers: await headers(),
         body: {
             permission: {
@@ -871,9 +872,11 @@ const team = await client.organization.createTeam({
 Get all teams in an organization:
 
 ```ts
-const teams = await client.organization.listTeams({
-    organizationId: "org-id" // Optional: defaults to active organization
-})
+const teams = await authClient.organization.listTeams({
+  query: {
+    organizationId: org.id, // Optional: defaults to active organization
+  },
+});
 ```
 
 #### Update Team

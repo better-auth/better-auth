@@ -55,7 +55,7 @@ describe("username", async (it) => {
 	});
 	it("should update username", async () => {
 		const res = await client.updateUser({
-			username: "new_username_2",
+			username: "new_username_2.1",
 			fetchOptions: {
 				headers,
 			},
@@ -67,13 +67,13 @@ describe("username", async (it) => {
 				throw: true,
 			},
 		});
-		expect(session?.user.username).toBe("new_username_2");
+		expect(session?.user.username).toBe("new_username_2.1");
 	});
 
 	it("should fail on duplicate username", async () => {
 		const res = await client.signUp.email({
 			email: "new-email-2@gamil.com",
-			username: "New_username_2",
+			username: "New_username_2.1",
 			password: "new_password",
 			name: "new-name",
 		});

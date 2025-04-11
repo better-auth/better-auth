@@ -157,6 +157,12 @@ export type BetterAuthOptions = {
 		 * @default 3600 seconds (1 hour)
 		 */
 		expiresIn?: number;
+		/**
+		 * A function that is called when a user verifies their email
+		 * @param user the user that verified their email
+		 * @param request the request object
+		 */
+		onEmailVerification?: (user: User, request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -412,7 +418,7 @@ export type BetterAuthOptions = {
 		 *
 		 * If set to 0, the session will be considered fresh every time. (⚠︎ not recommended)
 		 *
-		 * @default 5 minutes (5 * 60)
+		 * @default 1 day (60 * 60 * 24)
 		 */
 		freshAge?: number;
 	};
@@ -440,6 +446,12 @@ export type BetterAuthOptions = {
 			 * ⚠️ Warning: enabling this might lead to account takeovers, so proceed with caution.
 			 */
 			allowDifferentEmails?: boolean;
+			/**
+			 * If enabled (true), this will allow users to unlink all accounts.
+			 *
+			 * @default false
+			 */
+			allowUnlinkingAll?: boolean;
 		};
 	};
 	/**
@@ -463,7 +475,9 @@ export type BetterAuthOptions = {
 	/**
 	 * List of trusted origins.
 	 */
-	trustedOrigins?: string[] | ((request: Request) => string[]);
+	trustedOrigins?:
+		| string[]
+		| ((request: Request) => string[] | Promise<string[]>);
 	/**
 	 * Rate limiting configuration
 	 */
@@ -627,10 +641,44 @@ export type BetterAuthOptions = {
 		 */
 		cookiePrefix?: string;
 		/**
+		 * Database configuration.
+		 */
+		database?: {
+			/**
+			 * The default number of records to return from the database
+			 * when using the `findMany` adapter method.
+			 *
+			 * @default 100
+			 */
+			defaultFindManyLimit?: number;
+			/**
+			 * If your database auto increments number ids, set this to `true`.
+			 *
+			 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
+			 *
+			 * @default false
+			 */
+			useNumberId?: boolean;
+			/**
+			 * Custom generateId function.
+			 *
+			 * If not provided, random ids will be generated.
+			 * If set to false, the database's auto generated id will be used.
+			 */
+			generateId?:
+				| ((options: {
+						model: LiteralUnion<Models, string>;
+						size?: number;
+				  }) => string)
+				| false;
+		};
+		/**
 		 * Custom generateId function.
 		 *
 		 * If not provided, random ids will be generated.
 		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @deprecated Please use `database.generateId` instead. This will be potentially removed in future releases.
 		 */
 		generateId?:
 			| ((options: {

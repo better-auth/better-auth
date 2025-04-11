@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
-import { generateId } from "../../../utils";
 import { getSessionFromCtx } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import type { OrganizationOptions } from "../organization";
@@ -83,7 +82,6 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				});
 			}
 			const createdTeam = await adapter.createTeam({
-				id: generateId(),
 				name: ctx.body.name,
 				organizationId,
 				createdAt: new Date(),
@@ -146,7 +144,10 @@ export const removeTeam = createAuthEndpoint(
 				});
 			}
 		}
-		const team = await adapter.findTeamById(ctx.body.teamId);
+		const team = await adapter.findTeamById({
+			teamId: ctx.body.teamId,
+			organizationId,
+		});
 		if (!team || team.organizationId !== organizationId) {
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
@@ -216,7 +217,10 @@ export const updateTeam = createAuthEndpoint(
 			});
 		}
 
-		const team = await adapter.findTeamById(ctx.body.teamId);
+		const team = await adapter.findTeamById({
+			teamId: ctx.body.teamId,
+			organizationId,
+		});
 
 		if (!team || team.organizationId !== organizationId) {
 			throw new APIError("BAD_REQUEST", {

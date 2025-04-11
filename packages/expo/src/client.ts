@@ -3,6 +3,7 @@ import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
@@ -15,7 +16,9 @@ interface CookieAttributes {
 	sameSite?: "Strict" | "Lax" | "None";
 }
 
-function parseSetCookieHeader(header: string): Map<string, CookieAttributes> {
+export function parseSetCookieHeader(
+	header: string,
+): Map<string, CookieAttributes> {
 	const cookieMap = new Map<string, CookieAttributes>();
 	const cookies = header.split(", ");
 	cookies.forEach((cookie) => {
@@ -50,7 +53,7 @@ interface StoredCookie {
 	expires: Date | null;
 }
 
-function getSetCookie(header: string, prevCookie?: string) {
+export function getSetCookie(header: string, prevCookie?: string) {
 	const parsed = parseSetCookieHeader(header);
 	let toSetCookie: Record<string, StoredCookie> = {};
 	parsed.forEach((cookie, key) => {
@@ -189,7 +192,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (isWeb) {
 						return {
 							url,
-							options,
+							options: options as BetterFetchOption,
 						};
 					}
 					options = options || {};
@@ -236,10 +239,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					return {
 						url,
-						options: {
-							...options,
-							signal: new AbortController().signal,
-						},
+						options: options as BetterFetchOption,
 					};
 				},
 			},

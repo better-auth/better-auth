@@ -32,6 +32,7 @@ describe("stripe", async () => {
 		subscriptions: {
 			retrieve: vi.fn(),
 			list: vi.fn().mockResolvedValue({ data: [] }),
+			update: vi.fn(),
 		},
 		webhooks: {
 			constructEvent: vi.fn(),
@@ -243,19 +244,15 @@ describe("stripe", async () => {
 	});
 
 	it("should handle subscription webhook events", async () => {
-		const testSubscriptionId = "sub_123456";
-		const testReferenceId = "user_123";
-		await ctx.adapter.create({
+		const { id: testReferenceId } = await ctx.adapter.create({
 			model: "user",
 			data: {
-				id: testReferenceId,
 				email: "test@email.com",
 			},
 		});
-		await ctx.adapter.create({
+		const { id: testSubscriptionId } = await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: testSubscriptionId,
 				referenceId: testReferenceId,
 				stripeCustomerId: "cus_mock123",
 				status: "active",
@@ -298,7 +295,9 @@ describe("stripe", async () => {
 				retrieve: vi.fn().mockResolvedValue(mockSubscription),
 			},
 			webhooks: {
-				constructEvent: vi.fn().mockReturnValue(mockCheckoutSessionEvent),
+				constructEventAsync: vi
+					.fn()
+					.mockResolvedValue(mockCheckoutSessionEvent),
 			},
 		};
 
@@ -341,6 +340,7 @@ describe("stripe", async () => {
 				},
 			],
 		});
+
 		expect(updatedSubscription).toMatchObject({
 			id: testSubscriptionId,
 			status: "active",
@@ -350,22 +350,19 @@ describe("stripe", async () => {
 		});
 	});
 
-	it("should handle subscription deletion webhook", async () => {
-		const userId = "test_user";
-		const subId = "test_sub_delete";
+	const { id: userId } = await ctx.adapter.create({
+		model: "user",
+		data: {
+			email: "delete-test@email.com",
+		},
+	});
 
-		await ctx.adapter.create({
-			model: "user",
-			data: {
-				id: userId,
-				email: "delete-test@email.com",
-			},
-		});
+	it("should handle subscription deletion webhook", async () => {
+		const subId = "test_sub_delete";
 
 		await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: subId,
 				referenceId: userId,
 				stripeCustomerId: "cus_delete_test",
 				status: "active",
@@ -402,7 +399,7 @@ describe("stripe", async () => {
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
 			webhooks: {
-				constructEvent: vi.fn().mockReturnValue(mockDeleteEvent),
+				constructEventAsync: vi.fn().mockResolvedValue(mockDeleteEvent),
 			},
 			subscriptions: {
 				retrieve: vi.fn().mockResolvedValue({
@@ -498,7 +495,6 @@ describe("stripe", async () => {
 		};
 
 		const mockSubscription = {
-			id: "sub_123",
 			status: "active",
 			items: {
 				data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
@@ -513,7 +509,7 @@ describe("stripe", async () => {
 				retrieve: vi.fn().mockResolvedValue(mockSubscription),
 			},
 			webhooks: {
-				constructEvent: vi.fn().mockReturnValue(completeEvent),
+				constructEventAsync: vi.fn().mockResolvedValue(completeEvent),
 			},
 		};
 
@@ -529,11 +525,10 @@ describe("stripe", async () => {
 			plugins: [stripe(eventTestOptions)],
 		});
 
-		await ctx.adapter.create({
+		const { id: testSubscriptionId } = await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: "sub_123",
-				referenceId: "user_123",
+				referenceId: userId,
 				stripeCustomerId: "cus_123",
 				stripeSubscriptionId: "sub_123",
 				status: "incomplete",
@@ -567,7 +562,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					items: {
@@ -590,7 +585,9 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(updateEvent);
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
+			updateEvent,
+		);
 		await eventTestAuth.handler(updateRequest);
 		expect(onSubscriptionUpdate).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -603,7 +600,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					cancel_at_period_end: true,
@@ -631,7 +628,7 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
 			userCancelEvent,
 		);
 		await eventTestAuth.handler(userCancelRequest);
@@ -639,7 +636,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					cancel_at_period_end: true,
@@ -663,7 +660,9 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(cancelEvent);
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
+			cancelEvent,
+		);
 		await eventTestAuth.handler(cancelRequest);
 
 		expect(onSubscriptionCancel).toHaveBeenCalled();
@@ -672,12 +671,12 @@ describe("stripe", async () => {
 			type: "customer.subscription.deleted",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "canceled",
 					metadata: {
-						referenceId: "user_123",
-						subscriptionId: "sub_123",
+						referenceId: userId,
+						subscriptionId: testSubscriptionId,
 					},
 				},
 			},
@@ -694,7 +693,9 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(deleteEvent);
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
+			deleteEvent,
+		);
 		await eventTestAuth.handler(deleteRequest);
 
 		expect(onSubscriptionDeleted).toHaveBeenCalled();

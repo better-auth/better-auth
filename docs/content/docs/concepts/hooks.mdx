@@ -184,6 +184,26 @@ createAuthMiddleware(async (ctx) => {
 });
 ```
 
+#### Returned
+
+The returned value from the hook is passed to the next hook in the chain.
+
+```ts title="auth.ts"
+createAuthMiddleware(async (ctx) => {
+    const returned = ctx.context.returned; //this could be a successful response or an APIError
+});
+```
+
+#### Response Headers
+
+The response headers added by endpoints and hooks that run before this hook.
+
+```ts title="auth.ts"
+createAuthMiddleware(async (ctx) => {
+    const responseHeaders = ctx.context.responseHeaders;
+});
+```
+
 #### Predefined Auth Cookies
 
 Access BetterAuth’s predefined cookie properties:

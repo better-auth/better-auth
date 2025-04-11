@@ -178,7 +178,6 @@ subscription: {
             },
             freeTrial: {
                 days: 14,
-                forNewUsersOnly: true
             }
         }
     ]
@@ -209,6 +208,7 @@ await client.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
+    annual: true, // Optional: upgrade to an annual plan
     referenceId: "org_123" // Optional: defaults to the current logged in user id
     seats: 5 // Optional: for team plans
 });
@@ -263,6 +263,20 @@ const { data } = await client.subscription.cancel({
 
 This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
 
+#### Restoring a Canceled Subscription
+
+If a user changes their mind after canceling a subscription (but before the subscription period ends), you can restore the subscription:
+
+```ts title="client.ts"
+const { data } = await client.subscription.restore({
+    referenceId: "org_123" // optional, defaults to userId
+});
+```
+
+This will reactivate a subscription that was previously set to cancel at the end of the billing period (`cancelAtPeriodEnd: true`). The subscription will continue to renew automatically.
+
+> **Note:** This only works for subscriptions that are still active but marked to cancel at the end of the period. It cannot restore subscriptions that have already ended.
+
 ### Reference System
 
 By default, subscriptions are associated with the user ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
@@ -279,7 +293,9 @@ await client.subscription.upgrade({
 
 // List subscriptions for an organization
 const { data: subscriptions } = await client.subscription.list({
-    referenceId: "org_123456"
+    query: {
+        referenceId: "org_123456"
+    }
 });
 ```
 
@@ -306,7 +322,7 @@ subscription: {
     // ... other options
     authorizeReference: async ({ user, session, referenceId, action }) => {
         // Check if the user has permission to manage subscriptions for this reference
-        if (action === "upgrade-subscription" || action === "cancel-subscription") {
+        if (action === "upgrade-subscription" || action === "cancel-subscription" || action === "restore-subscription") {
             const org = await db.member.findFirst({
                 where: {
                     organizationId: referenceId,
@@ -383,7 +399,6 @@ You can configure trial periods for your plans:
     priceId: "price_0987654321",
     freeTrial: {
         days: 14,
-        forNewUsersOnly: true, // only new users can start a trial
         onTrialStart: async (subscription) => {
             // Called when a trial starts
             await sendTrialStartEmail(subscription.referenceId);
@@ -542,7 +557,7 @@ stripe({
 
 **requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
 
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" }, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
+**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
 
 ### Plan Configuration
 
@@ -562,7 +577,6 @@ Each plan can have the following properties:
 
 **freeTrial**: Object containing trial configuration:
   - **days**: `number` - Number of trial days.
-  - **forNewUsersOnly**: `boolean` - Whether the trial is only for new users. Default: `true`.
   - **onTrialStart**: `(subscription: Subscription) => Promise<void>` - Called when a trial starts.
   - **onTrialEnd**: `(data: { subscription: Subscription, user: User }, request?: Request) => Promise<void>` - Called when a trial ends.
   - **onTrialExpired**: `(subscription: Subscription) => Promise<void>` - Called when a trial expires without conversion.
@@ -582,6 +596,7 @@ await client.subscription.upgrade({
     plan: "team",
     referenceId: activeOrg.id,
     seats: 10,
+    annual: true, // upgrade to an annual plan (optional)
     successUrl: "/org/billing/success",
     cancelUrl: "/org/billing"
 });

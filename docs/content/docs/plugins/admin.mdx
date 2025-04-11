@@ -79,7 +79,7 @@ const newUser = await authClient.admin.createUser({
   name: "Test User",
   email: "test@example.com",
   password: "password123",
-  role: "user",
+  role: "user", // this can also be an array for multiple roles (e.g. ["user", "sale"])
   data: {
     // any additional on the user table including plugin fields and custom fields
     customField: "customValue",
@@ -129,6 +129,7 @@ const users = await authClient.admin.listUsers({
 ```
 
 #### Pagination
+
 The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:  
 
 ```ts
@@ -138,6 +139,7 @@ The `listUsers` function supports pagination by returning metadata alongside the
   limit: number | undefined,   // The limit provided in the query
   offset: number | undefined   // The offset provided in the query
 }
+```
 
 ##### How to Implement Pagination  
 
@@ -174,7 +176,7 @@ Changes the role of a user.
 ```ts title="admin.ts"
 const updatedUser = await authClient.admin.setRole({
   userId: "user_id_here",
-  role: "admin",
+  role: "admin", // this can also be an array for multiple roles (e.g. ["admin", "sale"])
 });
 ```
 
@@ -270,27 +272,31 @@ By default, there are two roles:
 
 `user`: Users with the user role have no control over other users.
 
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
+
 ### Permissions
 
 By default, there are two resources with up to six permissions.
 
 **user**:
-  `create` `list` `set-role` `ban` `impersonate` `delete`
+  `create` `list` `set-role` `ban` `impersonate` `delete` `set-password`
 
 **session**:
   `list` `revoke` `delete`
 
-The admin have full control over all the resources and actions. The user have no control over any of those actions.
+Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
 ### Custom Permissions
 
-the plugin providers easy way to define your own set of permission for each role.
+The plugin provides an easy way to define your own set of permissions for each role.
 
 <Steps>
     <Step>
     #### Create Access Control
 
-    You first need to create access controller by calling `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
+    You first need to create an access controller by calling the `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
 
@@ -360,14 +366,14 @@ the plugin providers easy way to define your own set of permission for each role
         Once you have created the roles you can pass them to the organization plugin both on the client and the server.
 
         ```ts title="auth.ts"
-        import { ac, admin, user } from "@/auth/permissions"
         import { betterAuth } from "better-auth"
-        import { admin } from "better-auth/plugins"
+        import { admin as adminPlugin } from "better-auth/plugins"
+        import { ac, admin, user } from "@/auth/permissions"
 
         export const auth = betterAuth({
             plugins: [
-                admin({
-                    ac: ac,
+                adminPlugin({
+                    ac,
                     roles: {
                         admin,
                         user,
@@ -388,7 +394,7 @@ the plugin providers easy way to define your own set of permission for each role
         export const client = createAuthClient({
             plugins: [
                 adminClient({
-                    ac: ac,
+                    ac,
                     roles: {
                         admin,
                         user,
@@ -406,7 +412,7 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-To check the permission of the user, you can use the `hasPermission` function provided by the client.
+To check a user's permissions, you can use the `hasPermission` function provided by the client.
 
 ```ts title="auth-client.ts"
 const canCreateProject = await authClient.admin.hasPermission({
@@ -416,11 +422,11 @@ const canCreateProject = await authClient.admin.hasPermission({
 });
 ```
 
-If you want to use the server instead to check if a user has a permission, you can use `adminHasPermission` action provided by the `api` to check the permission of the user.
+If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
     userId: 'id', //the user id
     permission: {
@@ -430,7 +436,7 @@ auth.api.adminHasPermission({
 });
 
 //you can also just pass the role directly
-auth.api.adminHasPermission({
+auth.api.userHasPermission({
   body: {
    role: "admin",
     permission: {
@@ -512,6 +518,20 @@ admin({
   defaultRole: "regular",
 });
 ```
+### Admin Roles
+
+The roles that are considered admin roles. Defaults to `["admin"]`.
+
+```ts title="auth.ts"
+admin({
+  adminRoles: ["admin", "superadmin"],
+});
+```
+
+<Callout type="warning">
+  Any role that isn't in the `adminRoles` list, even if they have the permission,
+  will not be considered an admin.
+</Callout>
 
 ### Admin userIds
 
@@ -522,6 +542,8 @@ admin({
     adminUserIds: ["user_id_1", "user_id_2"]
 })
 ```
+
+If a user is in the `adminUserIds` list, they will be able to perform any admin operation.
 
 ### impersonationSessionDuration
 
@@ -552,3 +574,14 @@ admin({
   defaultBanExpiresIn: 60 * 60 * 24, // 1 day
 });
 ```
+
+### bannedUserMessage
+
+The message to show when a banned user tries to sign in. Defaults to "You have been banned from this application. Please contact support if you believe this is an error."
+
+```ts title="auth.ts"
+admin({
+  bannedUserMessage: "Custom banned user message",
+});
+```
+

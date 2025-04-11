@@ -104,6 +104,11 @@ export interface PhoneNumberOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Allowed attempts for the OTP code
+	 * @default 3
+	 */
+	allowedAttempts?: number;
 }
 
 export const phoneNumber = (options?: PhoneNumberOptions) => {
@@ -119,6 +124,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 	const ERROR_CODES = {
 		INVALID_PHONE_NUMBER: "Invalid phone number",
+		PHONE_NUMBER_EXIST: "Phone number already exist",
 		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
 		UNEXPECTED_ERROR: "Unexpected error",
 		OTP_NOT_FOUND: "OTP not found",
@@ -323,7 +329,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
+						value: `${code}:0`,
 						identifier: ctx.body.phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -334,14 +340,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						},
 						ctx.request,
 					);
-					return ctx.json(
-						{ code },
-						{
-							body: {
-								message: "Code sent",
-							},
-						},
-					);
+					return ctx.json({ message: "code sent" });
 				},
 			),
 			verifyPhoneNumber: createAuthEndpoint(
@@ -427,7 +426,18 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.OTP_NOT_FOUND,
 						});
 					}
-					if (otp.value !== ctx.body.code) {
+					const [otpValue, attempts] = otp.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (otpValue !== ctx.body.code) {
+						await ctx.context.internalAdapter.updateVerificationValue(otp.id, {
+							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+						});
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid OTP",
 						});
@@ -440,6 +450,21 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						if (!session) {
 							throw new APIError("UNAUTHORIZED", {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
+							});
+						}
+						const existingUser =
+							await ctx.context.adapter.findMany<UserWithPhoneNumber>({
+								model: "user",
+								where: [
+									{
+										field: "phoneNumber",
+										value: ctx.body.phoneNumber,
+									},
+								],
+							});
+						if (existingUser.length) {
+							throw ctx.error("BAD_REQUEST", {
+								message: ERROR_CODES.PHONE_NUMBER_EXIST,
 							});
 						}
 						let user = await ctx.context.internalAdapter.updateUser(
@@ -600,7 +625,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
+						value: `${code}:0`,
 						identifier: `${ctx.body.phoneNumber}-forget-password`,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -641,7 +666,23 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					if (verification.value !== ctx.body.otp) {
+					const [otpValue, attempts] = verification.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verification.id,
+						);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (ctx.body.otp !== otpValue) {
+						await ctx.context.internalAdapter.updateVerificationValue(
+							verification.id,
+							{
+								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+							},
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
@@ -674,6 +715,15 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path.startsWith("/phone-number");
+				},
+				window: 60 * 1000,
+				max: 10,
+			},
+		],
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

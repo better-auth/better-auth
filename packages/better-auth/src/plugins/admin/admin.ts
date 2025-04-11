@@ -18,7 +18,6 @@ import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
 import { type AccessControl, type Role } from "../access";
-import { adminMiddleware } from "./call";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
@@ -41,6 +40,15 @@ export interface AdminOptions {
 	 * @default "user"
 	 */
 	defaultRole?: string;
+	/**
+	 * Roles that are considered admin roles.
+	 *
+	 * Any user role that isn't in this list, even if they have the permission,
+	 * will not be considered an admin.
+	 *
+	 * @default ["admin"]
+	 */
+	adminRoles?: string | string[];
 	/**
 	 * A default ban reason
 	 *
@@ -80,17 +88,52 @@ export interface AdminOptions {
 	 * If this is set, the `adminRole` option is ignored
 	 */
 	adminUserIds?: string[];
+	/**
+	 * Message to show when a user is banned
+	 *
+	 * By default, the message is "You have been banned from this application"
+	 */
+	bannedUserMessage?: string;
+}
+
+export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
+	O extends { roles: Record<string, unknown> }
+		? keyof O["roles"]
+		: "user" | "admin";
+
+function parseRoles(roles: string | string[]): string {
+	return Array.isArray(roles) ? roles.join(",") : roles;
 }
 
 export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
-		defaultRole: "user",
+		defaultRole: options?.defaultRole ?? "user",
+		adminRoles: options?.adminRoles ?? ["admin"],
+		bannedUserMessage:
+			options?.bannedUserMessage ??
+			"You have been banned from this application. Please contact support if you believe this is an error.",
 		...options,
 	};
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+
+	const adminMiddleware = createAuthMiddleware(async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		return {
+			session,
+		} as {
+			session: {
+				user: UserWithRole;
+				session: Session;
+			};
+		};
+	});
+
 	return {
 		id: "admin",
 		init(ctx) {
@@ -128,7 +171,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 											});
 											return;
 										}
-										return false;
+
+										throw new APIError("FORBIDDEN", {
+											message: opts.bannedUserMessage,
+											code: "BANNED_USER",
+										});
 									}
 								},
 							},
@@ -165,12 +212,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
-						role: z.string({
-							description: "The role to set. `admin` or `user` by default",
-						}),
+						role: z.union([
+							z.string({
+								description: "The role to set. `admin` or `user` by default",
+							}),
+							z.array(
+								z.string({
+									description: "The roles to set. `admin` or `user` by default",
+								}),
+							),
+						]),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -196,13 +250,21 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								},
 							},
 						},
+						$Infer: {
+							body: {} as {
+								userId: string;
+								role:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
+							},
+						},
 					},
 				},
 				async (ctx) => {
 					const canSetRole = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["set-role"],
 						},
@@ -217,7 +279,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
-							role: ctx.body.role,
+							role: parseRoles(ctx.body.role),
 						},
 						ctx,
 					);
@@ -240,9 +302,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						name: z.string({
 							description: "The name of the user",
 						}),
-						role: z.string({
-							description: "The role of the user",
-						}),
+						role: z
+							.union([
+								z.string({
+									description: "The role of the user",
+								}),
+								z.array(
+									z.string({
+										description: "The roles of user",
+									}),
+								),
+							])
+							.optional(),
 						/**
 						 * extra fields for user
 						 */
@@ -253,7 +324,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							}),
 						),
 					}),
-					use: [adminMiddleware],
 					metadata: {
 						openapi: {
 							operationId: "createUser",
@@ -277,22 +347,38 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								},
 							},
 						},
+						$Infer: {
+							body: {} as {
+								email: string;
+								password: string;
+								name: string;
+								role?:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
+								data?: Record<string, any>;
+							},
+						},
 					},
 				},
 				async (ctx) => {
-					const session = ctx.context.session;
-					const canCreateUser = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
-						options: ctx.context.adminOptions,
-						permission: {
-							user: ["create"],
-						},
-					});
-					if (!canCreateUser) {
-						throw new APIError("FORBIDDEN", {
-							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
+					const session = await getSessionFromCtx<{ role: string }>(ctx);
+					if (!session && (ctx.request || ctx.headers)) {
+						throw ctx.error("UNAUTHORIZED");
+					}
+					if (session) {
+						const canCreateUser = hasPermission({
+							userId: session.user.id,
+							role: session.user.role,
+							options: opts,
+							permission: {
+								user: ["create"],
+							},
 						});
+						if (!canCreateUser) {
+							throw new APIError("FORBIDDEN", {
+								message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
+							});
+						}
 					}
 					const existUser = await ctx.context.internalAdapter.findUserByEmail(
 						ctx.body.email,
@@ -306,7 +392,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						await ctx.context.internalAdapter.createUser<UserWithRole>({
 							email: ctx.body.email,
 							name: ctx.body.name,
-							role: ctx.body.role,
+							role:
+								(ctx.body.role && parseRoles(ctx.body.role)) ??
+								options?.defaultRole ??
+								"user",
 							...ctx.body.data,
 						});
 
@@ -418,12 +507,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 														type: "number",
 													},
 													limit: {
-														type: ["number", "undefined"],
+														type: "number",
 													},
 													offset: {
-														type: ["number", "undefined"],
+														type: "number",
 													},
 												},
+												required: ["users", "total"],
 											},
 										},
 									},
@@ -437,7 +527,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListUsers = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["list"],
 						},
@@ -478,7 +568,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
-						const total = await ctx.context.internalAdapter.countTotalUsers();
+						const total = await ctx.context.internalAdapter.countTotalUsers(
+							where.length ? where : undefined,
+						);
 						return ctx.json({
 							users: users as UserWithRole[],
 							total: total,
@@ -499,7 +591,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -536,7 +628,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListSessions = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["list"],
 						},
@@ -561,7 +653,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -596,7 +688,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["ban"],
 						},
@@ -625,7 +717,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 						/**
@@ -676,7 +768,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["ban"],
 						},
@@ -718,7 +810,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -755,7 +847,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canImpersonateUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["impersonate"],
 						},
@@ -905,7 +997,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["revoke"],
 						},
@@ -930,7 +1022,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -965,7 +1057,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["revoke"],
 						},
@@ -988,7 +1080,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1024,7 +1116,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canDeleteUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["delete"],
 						},
@@ -1045,12 +1137,54 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						newPassword: z.string(),
-						userId: z.string(),
+						newPassword: z.string({
+							description: "The new password",
+						}),
+						userId: z.coerce.string({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "setUserPassword",
+							summary: "Set a user's password",
+							description: "Set a user's password",
+							responses: {
+								200: {
+									description: "Password set",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
+					const canSetUserPassword = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permission: {
+							user: ["set-password"],
+						},
+					});
+					if (!canSetUserPassword) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
+						});
+					}
 					const hashedPassword = await ctx.context.password.hash(
 						ctx.body.newPassword,
 					);
@@ -1069,7 +1203,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					body: z.object({
 						permission: z.record(z.string(), z.array(z.string())),
-						userId: z.string().optional(),
+						userId: z.coerce.string().optional(),
 						role: z.string().optional(),
 					}),
 					metadata: {
@@ -1120,7 +1254,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									[key in keyof Statements]?: Array<Statements[key][number]>;
 								};
 								userId?: string;
-								role?: string;
+								role?: InferAdminRolesFromOption<O>;
 							},
 						},
 					},
@@ -1135,7 +1269,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								"invalid permission check. you can only check one resource permission at a time.",
 						});
 					}
-					const session = ctx.context.session;
+					const session = await getSessionFromCtx(ctx);
 
 					if (
 						!session &&

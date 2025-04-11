@@ -34,6 +34,7 @@ describe("jwt", async (it) => {
 				},
 			},
 		});
+
 		expect(token.length).toBeGreaterThan(10);
 	});
 
@@ -72,8 +73,10 @@ describe("jwt", async (it) => {
 
 		const jwks = await client.jwks();
 
-		const publicWebKey = await importJWK(jwks.data?.keys[0]);
-
+		const publicWebKey = await importJWK({
+			...jwks.data?.keys[0],
+			alg: "EdDSA",
+		});
 		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
 
 		expect(decoded).toBeDefined();

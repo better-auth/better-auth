@@ -15,6 +15,7 @@ import {
 } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
+import { BetterAuthError } from "../../error";
 
 type JWKOptions =
 	| {
@@ -101,84 +102,79 @@ export interface JwtOptions {
 	schema?: InferOptionSchema<typeof schema>;
 }
 
-export const jwt = (options?: JwtOptions) => {
-	async function getJwtToken(ctx: GenericEndpointContext) {
-		const adapter = getJwksAdapter(ctx.context.adapter);
+export async function getJwtToken(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions,
+) {
+	const adapter = getJwksAdapter(ctx.context.adapter);
 
-		let key = await adapter.getLatestKey();
-		const privateKeyEncryptionEnabled =
-			!options?.jwks?.disablePrivateKeyEncryption;
+	let key = await adapter.getLatestKey();
+	const privateKeyEncryptionEnabled =
+		!options?.jwks?.disablePrivateKeyEncryption;
 
-		if (key === undefined) {
-			const { publicKey, privateKey } = await generateKeyPair(
-				options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-				options?.jwks?.keyPairConfig ?? {
-					crv: "Ed25519",
-					extractable: true,
-				},
-			);
-
-			const publicWebKey = await exportJWK(publicKey);
-			const privateWebKey = await exportJWK(privateKey);
-			const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-
-			let jwk: Partial<Jwk> = {
-				id: ctx.context.generateId({
-					model: "jwks",
-				}),
-				publicKey: JSON.stringify(publicWebKey),
-				privateKey: privateKeyEncryptionEnabled
-					? JSON.stringify(
-							await symmetricEncrypt({
-								key: ctx.context.options.secret!,
-								data: stringifiedPrivateWebKey,
-							}),
-						)
-					: stringifiedPrivateWebKey,
-				createdAt: new Date(),
-			};
-
-			key = await adapter.createJwk(jwk as Jwk);
-		}
-
-		let privateWebKey = privateKeyEncryptionEnabled
-			? await symmetricDecrypt({
-					key: ctx.context.options.secret!,
-					data: JSON.parse(key.privateKey),
-				})
-			: key.privateKey;
-
-		const privateKey = await importJWK(
-			JSON.parse(privateWebKey),
+	if (key === undefined) {
+		const { publicKey, privateKey } = await generateKeyPair(
 			options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+			options?.jwks?.keyPairConfig ?? {
+				crv: "Ed25519",
+				extractable: true,
+			},
 		);
 
-		const payload = !options?.jwt?.definePayload
-			? ctx.context.session!.user
-			: await options?.jwt.definePayload(ctx.context.session!);
+		const publicWebKey = await exportJWK(publicKey);
+		const privateWebKey = await exportJWK(privateKey);
+		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 
-		const jwt = await new SignJWT({
-			...payload,
-			// I am aware that this is not the best way to handle this, but this is the only way I know to get the impersonatedBy field
-			...((ctx.context.session!.session as any).impersonatedBy!
-				? {
-						impersonatedBy: (ctx.context.session!.session as any)
-							.impersonatedBy,
-					}
-				: {}),
-		})
-			.setProtectedHeader({
-				alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-				kid: key.id,
-			})
-			.setIssuedAt()
-			.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
-			.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
-			.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
-			.setSubject(ctx.context.session!.user.id)
-			.sign(privateKey);
-		return jwt;
+		let jwk: Partial<Jwk> = {
+			publicKey: JSON.stringify(publicWebKey),
+			privateKey: privateKeyEncryptionEnabled
+				? JSON.stringify(
+						await symmetricEncrypt({
+							key: ctx.context.secret,
+							data: stringifiedPrivateWebKey,
+						}),
+					)
+				: stringifiedPrivateWebKey,
+			createdAt: new Date(),
+		};
+
+		key = await adapter.createJwk(jwk as Jwk);
 	}
+
+	let privateWebKey = privateKeyEncryptionEnabled
+		? await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: JSON.parse(key.privateKey),
+			}).catch(() => {
+				throw new BetterAuthError(
+					"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
+				);
+			})
+		: key.privateKey;
+
+	const privateKey = await importJWK(
+		JSON.parse(privateWebKey),
+		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+	);
+
+	const payload = !options?.jwt?.definePayload
+		? ctx.context.session!.user
+		: await options?.jwt.definePayload(ctx.context.session!);
+
+	const jwt = await new SignJWT(payload)
+		.setProtectedHeader({
+			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+			kid: key.id,
+		})
+		.setIssuedAt()
+		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
+		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
+		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
+		.setSubject(ctx.context.session!.user.id)
+		.sign(privateKey);
+	return jwt;
+}
+export const jwt = (options?: JwtOptions) => {
 	return {
 		id: "jwt",
 		endpoints: {
@@ -253,14 +249,11 @@ export const jwt = (options?: JwtOptions) => {
 						const privateKeyEncryptionEnabled =
 							!options?.jwks?.disablePrivateKeyEncryption;
 						let jwk: Partial<Jwk> = {
-							id: ctx.context.generateId({
-								model: "jwks",
-							}),
 							publicKey: JSON.stringify({ alg, ...publicWebKey }),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(
 										await symmetricEncrypt({
-											key: ctx.context.options.secret!,
+											key: ctx.context.secret,
 											data: stringifiedPrivateWebKey,
 										}),
 									)
@@ -320,7 +313,7 @@ export const jwt = (options?: JwtOptions) => {
 					},
 				},
 				async (ctx) => {
-					const jwt = await getJwtToken(ctx);
+					const jwt = await getJwtToken(ctx, options);
 					return ctx.json({
 						token: jwt,
 					});
@@ -334,9 +327,9 @@ export const jwt = (options?: JwtOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const session = ctx.context.session;
+						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
-							const jwt = await getJwtToken(ctx);
+							const jwt = await getJwtToken(ctx, options);
 							ctx.setHeader("set-auth-jwt", jwt);
 							ctx.setHeader("Access-Control-Expose-Headers", "set-auth-jwt");
 						}

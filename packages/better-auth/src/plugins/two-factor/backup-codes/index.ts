@@ -43,7 +43,7 @@ export async function generateBackupCodes(
 	const key = secret;
 	const backupCodes = options?.customBackupCodesGenerate
 		? options.customBackupCodesGenerate()
-		: generateBackupCodesFn();
+		: generateBackupCodesFn(options);
 	const encCodes = await symmetricEncrypt({
 		data: JSON.stringify(backupCodes),
 		key: key,
@@ -224,7 +224,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "GET",
 					body: z.object({
-						userId: z.string(),
+						userId: z.coerce.string(),
 					}),
 					metadata: {
 						SERVER_ONLY: true,

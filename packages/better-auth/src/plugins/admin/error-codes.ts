@@ -14,4 +14,7 @@ export const ADMIN_ERROR_CODES = {
 	YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS:
 		"You are not allowed to revoke users sessions",
 	YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS: "You are not allowed to delete users",
+	YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD:
+		"You are not allowed to set users password",
+	BANNED_USER: "You have been banned from this application",
 } as const;
