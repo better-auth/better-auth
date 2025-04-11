@@ -21,10 +21,11 @@ function withPath(url: string, path = "/api/auth") {
 	return `${url.replace(/\/+$/, "")}${path}`;
 }
 
-export function getBaseURL(url?: string, path?: string) {
+export function getBaseURL(url?: string, path?: string, request?: Request) {
 	if (url) {
 		return withPath(url, path);
 	}
+
 	const fromEnv =
 		env.BETTER_AUTH_URL ||
 		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
@@ -35,6 +36,22 @@ export function getBaseURL(url?: string, path?: string) {
 
 	if (fromEnv) {
 		return withPath(fromEnv, path);
+	}
+
+	const fromRequest = request?.headers.get("x-forwarded-host");
+	const fromRequestProto = request?.headers.get("x-forwarded-proto");
+	if (fromRequest && fromRequestProto) {
+		return withPath(`${fromRequestProto}://${fromRequest}`, path);
+	}
+
+	if (request) {
+		const url = getOrigin(request.url);
+		if (!url) {
+			throw new BetterAuthError(
+				"Could not get origin from request. Please provide a valid base URL.",
+			);
+		}
+		return withPath(url, path);
 	}
 
 	if (typeof window !== "undefined" && window.location) {

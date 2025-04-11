@@ -148,6 +148,10 @@ export const tiktok = (options: TiktokOptions) => {
 		},
 
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
+
 			const fields = [
 				"open_id",
 				"avatar_large_url",
@@ -179,5 +183,6 @@ export const tiktok = (options: TiktokOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<TiktokProfile>;
 };

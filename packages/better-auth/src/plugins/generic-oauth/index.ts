@@ -61,6 +61,11 @@ interface GenericOAuthConfig {
 	 */
 	responseType?: string;
 	/**
+	 * The response mode to use for the authorization code request.
+
+	 */
+	responseMode?: "query" | "form_post";
+	/**
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
@@ -116,6 +121,11 @@ interface GenericOAuthConfig {
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	/**
+	 * Allows to use basic authentication for the token endpoint.
+	 * Default is "post".
+	 */
+	authentication?: "basic" | "post";
 }
 
 interface GenericOAuthOptions {
@@ -234,6 +244,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authentication: c.authentication,
 						});
 					},
 					async getUserInfo(tokens) {
@@ -358,6 +369,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						prompt,
 						accessType,
 						authorizationUrlParams,
+						responseMode,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -407,20 +419,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? [...ctx.body.scopes, ...(scopes || [])]
 							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						responseType,
+						responseMode,
+						additionalParams: authorizationUrlParams,
 					});
-
-					if (responseType && responseType !== "code") {
-						authUrl.searchParams.set("response_type", responseType);
-					}
-
-					if (prompt) {
-						authUrl.searchParams.set("prompt", prompt);
-					}
-
-					if (accessType) {
-						authUrl.searchParams.set("access_type", accessType);
-					}
-
 					return ctx.json({
 						url: authUrl.toString(),
 						redirect: !ctx.body.disableRedirect,
@@ -547,6 +551,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authentication: provider.authentication,
 						});
 					} catch (e) {
 						ctx.context.logger.error(
@@ -687,6 +692,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						discoveryUrl,
 						pkce,
 						scopes,
+						prompt,
+						accessType,
+						authorizationUrlParams,
 					} = provider;
 
 					let finalAuthUrl = authorizationUrl;
@@ -735,6 +743,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						codeVerifier: pkce ? state.codeVerifier : undefined,
 						scopes: scopes || [],
 						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						additionalParams: authorizationUrlParams,
 					});
 
 					return c.json({

@@ -28,7 +28,7 @@ export const createOrganization = createAuthEndpoint(
 			slug: z.string({
 				description: "The slug of the organization",
 			}),
-			userId: z
+			userId: z.coerce
 				.string({
 					description:
 						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
@@ -308,11 +308,8 @@ export const updateOrganization = createAuthEndpoint(
 		const organizationId =
 			ctx.body.organizationId || session.session.activeOrganizationId;
 		if (!organizationId) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
@@ -321,12 +318,9 @@ export const updateOrganization = createAuthEndpoint(
 			organizationId: organizationId,
 		});
 		if (!member) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				},
+			throw new APIError("BAD_REQUEST", {
+				message:
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 			});
 		}
 		const canUpdateOrg = hasPermission({
@@ -337,12 +331,9 @@ export const updateOrganization = createAuthEndpoint(
 			options: ctx.context.orgOptions,
 		});
 		if (!canUpdateOrg) {
-			return ctx.json(null, {
-				body: {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
-				},
-				status: 403,
+			throw new APIError("FORBIDDEN", {
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 			});
 		}
 		const updatedOrg = await adapter.updateOrganization(

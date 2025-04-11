@@ -152,5 +152,6 @@ export const twitter = (options: TwitterOption) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<TwitterProfile>;
 };

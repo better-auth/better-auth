@@ -210,7 +210,8 @@ export const createInternalAdapter = (
 			context?: GenericEndpointContext,
 			overrideAll?: boolean,
 		) => {
-			const headers = request instanceof Request ? request.headers : request;
+			const headers =
+				request && "headers" in request ? request.headers : request;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
 				ipAddress: request ? getIp(request, ctx.options) || "" : "",
@@ -469,17 +470,13 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteAccount: async (providerId: string, userId: string) => {
+		deleteAccount: async (accountId: string) => {
 			await adapter.delete({
 				model: "account",
 				where: [
 					{
-						field: "providerId",
-						value: providerId,
-					},
-					{
-						field: "userId",
-						value: userId,
+						field: "id",
+						value: accountId,
 					},
 				],
 			});

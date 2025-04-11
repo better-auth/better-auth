@@ -33,7 +33,7 @@ export type UsernameOptions = {
 };
 
 function defaultUsernameValidator(username: string) {
-	return /^[a-zA-Z0-9_]+$/.test(username);
+	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
 export const username = (options?: UsernameOptions) => {
@@ -234,10 +234,6 @@ export const username = (options?: UsernameOptions) => {
 			before: [
 				{
 					matcher(context) {
-						return (
-							context.path === "/sign-up/email" ||
-							context.path === "/update-user"
-						);
 						return (
 							context.path === "/sign-up/email" ||
 							context.path === "/update-user"

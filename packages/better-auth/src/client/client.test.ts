@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createReactClient } from "./react";

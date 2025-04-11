@@ -23,7 +23,7 @@ type Primitive =
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
 	 * If the field should be required on a new record.
-	 * @default false
+	 * @default true
 	 */
 	required?: boolean;
 	/**

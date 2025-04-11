@@ -1,15 +1,11 @@
 import {
-	BookOpenCheck,
 	CircleHelp,
-	FlaskConical,
-	HandHelping,
 	Gauge,
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
 	Mail,
 	Mailbox,
-	NotebookPen,
 	Phone,
 	ScanFace,
 	ShieldCheck,
@@ -474,15 +470,12 @@ export const contents: Content[] = [
 						xmlns="http://www.w3.org/2000/svg"
 						width="1.2em"
 						height="1.2em"
-						viewBox="0 0 24 24"
+						viewBox="0 0 64 64"
 					>
-						<g fill="none">
-							<path d="M24 0v24H0V0zM12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035q-.016-.005-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.017-.018m.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093q.019.005.029-.008l.004-.014l-.034-.614q-.005-.019-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01z"></path>
-							<path
-								fill="currentColor"
-								d="M13.5 21.888C18.311 21.164 22 17.013 22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 5.013 3.689 9.165 8.5 9.888V15H9a1.5 1.5 0 0 1 0-3h1.5v-2A3.5 3.5 0 0 1 14 6.5h.5a1.5 1.5 0 0 1 0 3H14a.5.5 0 0 0-.5.5v2H15a1.5 1.5 0 0 1 0 3h-1.5z"
-							></path>
-						</g>
+						<path
+							fill="#888888"
+							d="M59.5 1h-55C2.5 1 1 2.6 1 4.5v55c0 2 1.6 3.5 3.5 3.5h29.6V38.9h-8v-9.3h8v-6.9c0-8 4.8-12.4 12-12.4c2.4 0 4.8.1 7.2.4V19h-4.8c-3.8 0-4.6 1.8-4.6 4.5v5.9H53l-1.3 9.4h-8v23.8h15.8c2 0 3.5-1.5 3.5-3.5V4.5c-.1-2-1.7-3.5-3.5-3.5"
+						></path>
 					</svg>
 				),
 			},
@@ -492,8 +485,8 @@ export const contents: Content[] = [
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="1em"
-						height="1em"
+						width="1.2em"
+						height="1.2em"
 						viewBox="0 0 15 15"
 					>
 						<path
@@ -511,8 +504,8 @@ export const contents: Content[] = [
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="1em"
-						height="1em"
+						width="1.2em"
+						height="1.2em"
 						viewBox="0 0 56 56"
 					>
 						<path
@@ -520,6 +513,24 @@ export const contents: Content[] = [
 							fillRule="evenodd"
 							d="M28.458 5c6.167 0 11.346 2.2 15.368 5.804l.323.295l-6.62 6.464c-1.695-1.59-4.666-3.493-9.07-3.493c-6.204 0-11.47 4.093-13.372 9.749c-.47 1.46-.756 3.023-.756 4.64c0 1.615.287 3.18.782 4.639c1.877 5.656 7.142 9.748 13.345 9.748c3.347 0 5.928-.886 7.881-2.176l.251-.17l.307-.222c2.813-2.108 4.144-5.084 4.46-7.169l.03-.22h-12.93v-8.705h22.025c.339 1.46.495 2.867.495 4.795c0 7.142-2.554 13.163-6.985 17.255c-3.884 3.597-9.201 5.682-15.535 5.682c-9.031 0-16.85-5.102-20.772-12.57l-.184-.358l-.222-.457A23.45 23.45 0 0 1 5 28.458c0-3.6.827-7.01 2.28-10.073l.222-.457l.184-.357C11.608 10.1 19.426 5 28.458 5"
 						/>
+					</svg>
+				),
+			},
+			{
+				title: "Kick",
+				href: "/docs/authentication/kick",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="#888888"
+							d="M9 3a1 1 0 0 1 1 1v3h1V6a1 1 0 0 1 .883-.993L12 5h1V4a1 1 0 0 1 .883-.993L14 3h6a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1v1a1 1 0 0 1-.883.993L18 11h-1v2h1a1 1 0 0 1 .993.883L19 14v1h1a1 1 0 0 1 .993.883L21 16v4a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-1h-1a1 1 0 0 1-.993-.883L11 18v-1h-1v3a1 1 0 0 1-.883.993L9 21H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+						></path>
 					</svg>
 				),
 			},
@@ -547,8 +558,8 @@ export const contents: Content[] = [
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="1.1em"
-						height="1.1em"
+						width="1.2em"
+						height="1.2em"
 						viewBox="0 0 24 24"
 					>
 						<path
@@ -564,8 +575,8 @@ export const contents: Content[] = [
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="1em"
-						height="1em"
+						width="1.2em"
+						height="1.2em"
 						viewBox="0 0 24 24"
 					>
 						<path
@@ -583,8 +594,8 @@ export const contents: Content[] = [
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="0.88em"
-						height="1em"
+						width="1.2em"
+						height="1.2em"
 						viewBox="0 0 448 512"
 					>
 						<path
@@ -675,8 +686,8 @@ export const contents: Content[] = [
 						x="0px"
 						y="0px"
 						viewBox="0 0 302.7 302.7"
-						width={16}
-						height={16}
+						width="1.2em"
+						height="1.2em"
 						fill="currentColor"
 					>
 						<path
@@ -776,8 +787,8 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="16"
-						height="16"
+						width="1.2em"
+						height="1.2em"
 						viewBox="0 0 24 24"
 					>
 						<path
@@ -1383,7 +1394,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					>
 						<path
 							fill="currentColor"
-							d="M6 30h20a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2m0-8h20v6H6Z"
+							d="M6 30h20a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2m0-8h20v6H6z"
 						></path>
 						<circle cx="9" cy="25" r="1" fill="currentColor"></circle>
 						<path
@@ -1448,6 +1459,42 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
+			},
+			{
+				title: "Polar",
+				href: "/docs/plugins/polar",
+				isNew: true,
+				icon: () => (
+					<svg
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 280 350"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+						className="size-4"
+					>
+						<g transform="translate(30, 20)">
+							<path
+								fillRule="evenodd"
+								clipRule="evenodd"
+								d="M64.8636 269.177C130.906 313.882 220.684 296.585 265.388 230.543C310.094 164.501 292.798 74.723 226.756 30.0179C160.714 -14.6872 70.935 2.60972 26.2299 68.6516C-18.4753 134.693 -1.17834 224.472 64.8636 269.177ZM84.0172 270.357C144.43 301.264 221.064 272.251 255.187 205.557C289.309 138.861 267.997 59.7378 207.584 28.8301C147.173 -2.0774 70.5375 26.9345 36.4152 93.63C2.29299 160.325 23.6051 239.448 84.0172 270.357Z"
+								fill="currentColor"
+							/>
+							<path
+								fillRule="evenodd"
+								clipRule="evenodd"
+								d="M101.233 286.13C155.766 303.879 219.918 256.991 244.522 181.401C269.124 105.812 244.86 30.146 190.327 12.3967C135.794 -5.35246 71.6428 41.5362 47.04 117.126C22.4374 192.715 46.7007 268.381 101.233 286.13ZM117.915 280.385C164.066 290.229 213.97 239.649 229.378 167.414C244.784 95.1779 219.862 28.6392 173.71 18.7955C127.559 8.95174 77.6556 59.5307 62.2482 131.767C46.841 204.002 71.7639 270.541 117.915 280.385Z"
+								fill="currentColor"
+							/>
+							<path
+								fillRule="evenodd"
+								clipRule="evenodd"
+								d="M130.567 292.297C167.056 296.192 203.471 235.332 211.903 156.36C220.336 77.3886 197.592 10.2109 161.104 6.3148C124.616 2.41866 88.2006 63.2795 79.7681 142.251C71.3357 221.222 94.0792 288.401 130.567 292.297ZM147.642 268.26C174.048 267.843 194.616 214.386 193.58 148.861C192.546 83.3351 170.299 30.5544 143.893 30.9716C117.486 31.3889 96.9186 84.8459 97.9538 150.372C98.9891 215.897 121.235 268.677 147.642 268.26Z"
+								fill="currentColor"
+							/>
+						</g>
+					</svg>
+				),
 			},
 			{
 				title: "Stripe",
@@ -1540,6 +1587,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Supabase Migration Guide",
+				href: "/docs/guides/supabase-migration-guide",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1em"
+						height="1em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="#888888"
+							d="M11 2.598V13.97H3.9c-.67 0-1.07-.784-.643-1.336zm2 5.433V2.333c0-1.811-2.297-2.624-3.418-1.171L1.673 11.41c-1.427 1.85-.125 4.559 2.227 4.559H11v5.698c0 1.811 2.296 2.624 3.418 1.171l7.908-10.249c1.427-1.849.126-4.558-2.227-4.558zm0 2h7.1c.669 0 1.069.784.643 1.336L13 21.402z"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Create Your First Plugin",
 				href: "/docs/guides/your-first-plugin",
 				icon: () => (
@@ -1620,7 +1684,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					>
 						<path
 							fill="currentColor"
-							d="M6.5 16q1.175 0 2.288.263T11 17.05V7.2q-1.025-.6-2.175-.9T6.5 6q-.9 0-1.788.175T3 6.7v9.9q.875-.3 1.738-.45T6.5 16m6.5 1.05q1.1-.525 2.213-.787T17.5 16q.9 0 1.763.15T21 16.6V6.7q-.825-.35-1.713-.525T17.5 6q-1.175 0-2.325.3T13 7.2zm-1 2.425q-.35 0-.663-.087t-.587-.238q-.975-.575-2.05-.862T6.5 18q-1.05 0-2.062.275T2.5 19.05q-.525.275-1.012-.025T1 18.15V6.1q0-.275.138-.525T1.55 5.2q1.15-.6 2.4-.9T6.5 4q1.45 0 2.838.375T12 5.5q1.275-.75 2.663-1.125T17.5 4q1.3 0 2.55.3t2.4.9q.275.125.413.375T23 6.1v12.05q0 .575-.487.875t-1.013.025q-.925-.5-1.937-.775T17.5 18q-1.125 0-2.2.288t-2.05.862q-.275.15-.587.238t-.663.087m2-10.7q0-.225.163-.462T14.525 8q.725-.25 1.45-.375T17.5 7.5q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112T17.5 9q-.65 0-1.275.125t-1.2.325q-.45.175-.737-.025T14 8.775m0 5.5q0-.225.163-.462t.362-.313q.725-.25 1.45-.375T17.5 13q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112T17.5 14.5q-.65 0-1.275.113t-1.2.312q-.45.175-.737-.012T14 14.275m0-2.75q0-.225.163-.462t.362-.313q.725-.25 1.45-.375t1.525-.125q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112t-.788-.038q-.65 0-1.275.125t-1.2.325q-.45.175-.737-.025t-.288-.65"
+							d="M6.5 16q1.175 0 2.288.263T11 17.05V7.2q-1.025-.6-2.175-.9T6.5 6q-.9 0-1.788.175T2.7 6.7v9.9q.875-.3 1.738-.45T6.5 16m6.5 1.05q1.1-.525 2.213-.787T17.5 16q.9 0 1.763.15T21 16.6V6.7q-.825-.35-1.713-.525T17.5 6q-1.175 0-2.325.3T13 7.2zm-1 2.425q-.35 0-.663-.087t-.587-.238q-.975-.575-2.05-.862T6.5 18q-1.05 0-2.062.275T2.5 19.05q-.525.275-1.012-.025T1 18.15V6.1q0-.275.138-.525T1.55 5.2q1.15-.6 2.4-.9T6.5 4q1.45 0 2.838.375T12 5.5q1.275-.75 2.663-1.125T17.5 4q1.3 0 2.55.3t2.4.9q.275.125.413.375T23 6.1v12.05q0 .575-.487.875t-1.013.025q-.925-.5-1.937-.775T17.5 18q-1.125 0-2.2.288t-2.05.862q-.275.15-.587.238t-.663.087m2-10.7q0-.225.163-.462T14.525 8q.725-.25 1.45-.375T17.5 7.5q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112T17.5 9q-.65 0-1.275.125t-1.2.325q-.45.175-.737-.025T14 8.775m0 5.5q0-.225.163-.462t.362-.313q.725-.25 1.45-.375T17.5 13q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112t-.788-.038q-.65 0-1.275.125t-1.2.325q-.45.175-.737-.025t-.288-.65"
+						></path>
+					</svg>
+				),
+			},
+			{
+				title: "Contributing",
+				href: "/docs/reference/contributing",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="#888888"
+							d="M6 3a3 3 0 0 1 3 3c0 1.31-.83 2.42-2 2.83v6.34c1.17.41 2 1.52 2 2.83a3 3 0 0 1-3 3a3 3 0 0 1-3-3c0-1.31.83-2.42 2-2.83V8.83A2.99 2.99 0 0 1 3 6a3 3 0 0 1 3-3m0 2a1 1 0 0 0-1 1a1 1 0 0 0 1 1a1 1 0 0 0 1-1a1 1 0 0 0-1-1m0 12a1 1 0 0 0-1 1a1 1 0 0 0 1 1a1 1 0 0 0 1-1a1 1 0 0 0-1-1m15 1a3 3 0 0 1-3 3a3 3 0 0 1-3-3c0-1.31.83-2.42 2-2.83V7h-2v3.25L10.75 6L15 1.75V5h2a2 2 0 0 1 2 2v8.17c1.17.41 2 1.52 2 2.83m-3-1a1 1 0 0 0-1 1a1 1 0 0 0 1 1a1 1 0 0 0 1-1a1 1 0 0 0-1-1"
 						></path>
 					</svg>
 				),
@@ -1637,77 +1718,45 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 		],
 	},
-	{
-		title: "Contribute",
-		Icon: () => (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-			>
-				<g fill="none" stroke="currentColor" strokeWidth="2">
-					<circle
-						cx="6"
-						cy="6"
-						r="3"
-						fill="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-					<circle
-						cx="18"
-						cy="6"
-						r="3"
-						fill="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-					<circle
-						cx="12"
-						cy="18"
-						r="3"
-						fill="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-					<path d="M6 9v1a2 2 0 0 0 2 2h4m6-3v1a2 2 0 0 1-2 2h-4m0 0v3" />
-				</g>
-			</svg>
-		),
-		list: [
-			{
-				title: "Getting Started",
-				href: "/docs/contribute/getting-started",
-				icon: () => <BookOpenCheck className="text-current size-4" />,
-			},
-			{
-				title: "Areas to Contribute",
-				href: "/docs/contribute/areas-to-contribute",
-				icon: () => <HandHelping className="w-4 h-4 text-current" />,
-			},
-			// {
-			// 	title: "Database Adapters",
-			// 	href: "/docs/contribute/database-adapters",
-			// 	icon: () => <Plug className="w-4 h-4 text-current" />,
-			// },
-			{
-				title: "Testing",
-				href: "/docs/contribute/testing",
-				icon: () => <FlaskConical className="w-4 h-4 text-current" />,
-			},
-			{
-				title: "Documenting",
-				href: "/docs/contribute/documenting",
-				icon: () => <NotebookPen className="w-4 h-4 text-current" />,
-			},
-			{
-				title: "Security Issues",
-				href: "/docs/contribute/security-issues",
-				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
-			},
-		],
-	},
+	// {
+
+	// 	title: "Contribute",
+	// 	Icon: () => (
+	//
+	// 	),
+	// 	list: [
+	// 		{
+	// 			title: "Getting Started",
+	// 			href: "/docs/contribute/getting-started",
+	// 			icon: () => <BookOpenCheck className="text-current size-4" />,
+	// 		},
+	// 		{
+	// 			title: "Areas to Contribute",
+	// 			href: "/docs/contribute/areas-to-contribute",
+	// 			icon: () => <HandHelping className="w-4 h-4 text-current" />,
+	// 		},
+	// 		// {
+	// 		// 	title: "Database Adapters",
+	// 		// 	href: "/docs/contribute/database-adapters",
+	// 		// 	icon: () => <Plug className="w-4 h-4 text-current" />,
+	// 		// },
+	// 		{
+	// 			title: "Testing",
+	// 			href: "/docs/contribute/testing",
+	// 			icon: () => <FlaskConical className="w-4 h-4 text-current" />,
+	// 		},
+	// 		{
+	// 			title: "Documenting",
+	// 			href: "/docs/contribute/documenting",
+	// 			icon: () => <NotebookPen className="w-4 h-4 text-current" />,
+	// 		},
+	// 		{
+	// 			title: "Security Issues",
+	// 			href: "/docs/contribute/security-issues",
+	// 			icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
+	// 		},
+	// 	],
+	// },
 ];
 
 export const examples: Content[] = [

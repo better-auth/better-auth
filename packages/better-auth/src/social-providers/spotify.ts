@@ -69,5 +69,6 @@ export const spotify = (options: SpotifyOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<SpotifyProfile>;
 };

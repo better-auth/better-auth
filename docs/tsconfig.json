@@ -9,12 +9,14 @@
 		"forceConsistentCasingInFileNames": true,
 		"noEmit": true,
 		"esModuleInterop": true,
-		"module": "Preserve",
+		"module": "esnext",
+		"moduleResolution": "bundler",
 		"resolveJsonModule": true,
 		"isolatedModules": true,
 		"jsx": "preserve",
 		"incremental": true,
 		"paths": {
+			"@/.source": ["./.source/index.ts"],
 			"@/*": ["./*"]
 		},
 		"plugins": [
