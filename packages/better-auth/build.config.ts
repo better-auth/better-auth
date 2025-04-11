@@ -37,6 +37,7 @@ export default defineBuildConfig({
 		"p-limit",
 		"tinyspy",
 		"next/dist/compiled/@edge-runtime/cookies",
+		"@tanstack/react-start",
 		"bson",
 		"mongodb-connection-string-url",
 		"@mongodb-js/saslprep",

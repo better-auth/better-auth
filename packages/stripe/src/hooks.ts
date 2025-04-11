@@ -20,7 +20,7 @@ export async function onCheckoutSessionCompleted(
 		const priceId = subscription.items.data[0]?.price.id;
 		const plan = await getPlanByPriceId(options, priceId as string);
 		if (plan) {
-			const referenceId = checkoutSession?.metadata?.referenceId;
+			const referenceId = checkoutSession?.client_reference_id;
 			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
 			const seats = subscription.items.data[0].quantity;
 			if (referenceId && subscriptionId) {
