@@ -4,10 +4,13 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
+	gte,
 	inArray,
 	like,
 	lt,
 	lte,
+	ne,
 	or,
 	SQL,
 } from "drizzle-orm";
@@ -102,6 +105,18 @@ const createTransform = (
 
 			if (w.operator === "lte") {
 				return [lte(schemaModel[field], w.value)];
+			}
+
+			if (w.operator === "gt") {
+				return [gt(schemaModel[field], w.value)];
+			}
+
+			if (w.operator === "gte") {
+				return [gte(schemaModel[field], w.value)];
+			}
+
+			if (w.operator === "ne") {
+				return [ne(schemaModel[field], w.value)];
 			}
 
 			return [eq(schemaModel[field], w.value)];
