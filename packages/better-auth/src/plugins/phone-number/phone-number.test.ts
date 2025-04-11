@@ -227,6 +227,7 @@ describe("verify phone-number", async (it) => {
 						return `temp-${phoneNumber}`;
 					},
 				},
+				allowedAttempts: 3,
 			}),
 		],
 	});
@@ -267,5 +268,28 @@ describe("verify phone-number", async (it) => {
 		);
 		expect(res.error).toBe(null);
 		expect(res.data?.status).toBe(true);
+	});
+
+	it("should block after exceeding allowed attempts", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber: testPhoneNumber,
+				code: "000000",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		//Try one more time - should be blocked
+		const res = await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: "000000",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
 	});
 });
