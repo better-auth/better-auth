@@ -9,6 +9,7 @@ import {
 	lt,
 	lte,
 	or,
+	sql,
 	SQL,
 } from "drizzle-orm";
 import { BetterAuthError } from "../../error";
@@ -87,7 +88,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						.where(...clause);
 					return res[0];
 				} else if (builderVal && builderVal[0]?.id?.value) {
-					const tId = builderVal[0]?.id.value;
+					let tId = builderVal[0]?.id?.value;
+					if (!tId) {
+						//get last inserted id
+						const lastInsertId = await db
+							.select({ id: sql`LAST_INSERT_ID()` })
+							.from(schemaModel)
+							.orderBy(desc(schemaModel.id))
+							.limit(1);
+						tId = lastInsertId[0].id;
+					}
 					const res = await db
 						.select()
 						.from(schemaModel)
