@@ -329,7 +329,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
+						value: `${code}:0`,
 						identifier: ctx.body.phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -428,7 +428,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const [otpValue, attempts] = otp.value.split(":");
 					const allowedAttempts = options?.allowedAttempts || 3;
-					if (parseInt(attempts) >= allowedAttempts) {
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 						throw new APIError("FORBIDDEN", {
 							message: "Too many attempts",
@@ -625,7 +625,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
+						value: `${code}:0`,
 						identifier: `${ctx.body.phoneNumber}-forget-password`,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -666,7 +666,22 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					if (verification.value !== ctx.body.otp) {
+					const [otpValue, attempts] = verification.value.split(":");
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verification.id,
+						);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (otpValue !== ctx.body.otp) {
+						await ctx.context.internalAdapter.updateVerificationValue(
+							verification.id,
+							{
+								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+							},
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});

@@ -293,3 +293,74 @@ describe("verify phone-number", async (it) => {
 		expect(res.error?.message).toBe("Too many attempts");
 	});
 });
+
+describe("reset password flow attempts", async (it) => {
+	let otp = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+				allowedAttempts: 3,
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const testPhoneNumber = "+251911121314";
+
+	it("should block reset password after exceeding allowed attempts", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+			isPasswordReset: true,
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber: testPhoneNumber,
+				code: "000000",
+				isPasswordReset: true,
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: "000000",
+			isPasswordReset: true,
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
+	});
+
+	it("should successfully reset password with correct code", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+			isPasswordReset: true,
+		});
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: otp,
+			isPasswordReset: true,
+		});
+
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+	});
+});
