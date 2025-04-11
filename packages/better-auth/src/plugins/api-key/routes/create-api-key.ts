@@ -268,7 +268,10 @@ export function createApiKey({
 				remaining: remaining || refillAmount || null,
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
-				rateLimitEnabled: rateLimitEnabled ?? opts.rateLimit.enabled ?? true,
+				rateLimitEnabled:
+					rateLimitEnabled ?? opts.rateLimit.enabled === undefined
+						? true
+						: opts.rateLimit.enabled,
 				requestCount: 0,
 				permissions: permissionsToApply,
 			};
