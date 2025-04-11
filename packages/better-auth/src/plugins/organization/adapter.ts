@@ -189,8 +189,8 @@ export const getOrgAdapter = (
 				},
 			};
 		},
-		createMember: async (data: MemberInput) => {
-			const member = await adapter.create<MemberInput, Member>({
+		createMember: async (data: Omit<MemberInput, "id">) => {
+			const member = await adapter.create<Omit<MemberInput, "id">, Member>({
 				model: "member",
 				data: {
 					...data,
@@ -411,8 +411,8 @@ export const getOrgAdapter = (
 			});
 			return organizations;
 		},
-		createTeam: async (data: TeamInput) => {
-			const team = await adapter.create<TeamInput, Team>({
+		createTeam: async (data: Omit<TeamInput, "id">) => {
+			const team = await adapter.create<Omit<TeamInput, "id">, Team>({
 				model: "team",
 				data,
 			});
@@ -576,7 +576,10 @@ export const getOrgAdapter = (
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
-			const invite = await adapter.create<InvitationInput, Invitation>({
+			const invite = await adapter.create<
+				Omit<InvitationInput, "id">,
+				Invitation
+			>({
 				model: "invitation",
 				data: {
 					status: "pending",
@@ -624,6 +627,40 @@ export const getOrgAdapter = (
 			return invitation.filter(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
+		},
+		findPendingInvitations: async (data: {
+			organizationId: string;
+		}) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+					{
+						field: "status",
+						value: "pending",
+					},
+				],
+			});
+			return invitations.filter(
+				(invite) => new Date(invite.expiresAt) > new Date(),
+			);
+		},
+		listInvitations: async (data: {
+			organizationId: string;
+		}) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+				],
+			});
+			return invitations;
 		},
 		updateInvitation: async (data: {
 			invitationId: string;

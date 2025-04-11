@@ -183,7 +183,6 @@ const isVerified = await authClient.phoneNumber.resetPassword({
 
 - `otpLength`: The length of the OTP code to be generated. Default is `6`.
 - `sendOTP`: A function that sends the OTP code to the user's phone number. It takes the phone number and the OTP code as arguments.
-- `verifyOTP`: A custom function to verify the OTP code. It takes the phone number and the OTP code as arguments and returns a boolean indicating whether the code is valid.
 - `expiresIn`: The time in seconds after which the OTP code expires. Default is `300` seconds.
 - `callbackOnVerification`: A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
 ```ts
@@ -204,8 +203,9 @@ export const auth = betterAuth({
 - `signUpOnVerification`: An object with the following properties:
     - `getTempEmail`: A function that generates a temporary email for the user. It takes the phone number as an argument and returns the temporary email.
     - `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
-    
 
+- `requireVerification`: When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE_NUMBER_NOT_VERIFIED) and automatically trigger an OTP send to start the verification process.
+    
 ## Schema
 
 The plugin requires 2 fields to be added to the user table 
@@ -229,3 +229,33 @@ The plugin requires 2 fields to be added to the user table
         },
     ]}
     />
+
+### OTP Verification Attempts
+
+The phone number plugin includes a built-in protection against brute force attacks by limiting the number of verification attempts for each OTP code.
+
+```typescript
+phoneNumber({
+  allowedAttempts: 3, // default is 3
+  // ... other options
+})
+```
+
+When a user exceeds the allowed number of verification attempts:
+- The OTP code is automatically deleted
+- Further verification attempts will return a 403 (Forbidden) status with "Too many attempts" message
+- The user will need to request a new OTP code to continue
+
+Example error response after exceeding attempts:
+```json
+{
+  "error": {
+    "status": 403,
+    "message": "Too many attempts"
+  }
+}
+```
+
+<Callout type="warning">
+When receiving a 403 status, prompt the user to request a new OTP code
+</Callout>

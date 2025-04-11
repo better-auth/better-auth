@@ -35,8 +35,8 @@ export const auth = betterAuth({
     // Other configs
     session: {
         fields: {
-            expiresAt: "expires", // e.g., "expires_at" or your existing field name
-            token: "sessionToken" // e.g., "session_token" or your existing field name
+            expiresAt: "expires", // Map your existing `expires` field to Better Auth's `expiresAt`
+            token: "sessionToken" // Map your existing `sessionToken` field to Better Auth's `token`
         }
     },
 });
@@ -76,8 +76,8 @@ export const auth = betterAuth({
 ```prisma title="schema.prisma"
 model Session {
     id          String   @id @default(cuid())
-    expires     DateTime @map("expiresAt") // Map `expires` to your existing field
-    token       String   @map("sessionToken") // Map `token` to your existing field
+    expiresAt   DateTime @map("expires") // Map your existing `expires` field to Better Auth's `expiresAt`
+    token       String   @map("sessionToken") // Map your existing `sessionToken` field to Better Auth's `token`
     userId      String
     user        User     @relation(fields: [userId], references: [id])
 }

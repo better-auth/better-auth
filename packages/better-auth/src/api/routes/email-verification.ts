@@ -64,7 +64,6 @@ export async function sendVerificationEmailFn(
 		ctx.request,
 	);
 }
-
 export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
@@ -93,11 +92,14 @@ export const sendVerificationEmail = createAuthEndpoint(
 									email: {
 										type: "string",
 										description: "The email to send the verification email to",
+										example: "user@example.com",
 									},
 									callbackURL: {
 										type: "string",
 										description:
 											"The URL to use for email verification callback",
+										example: "https://example.com/callback",
+										nullable: true,
 									},
 								},
 								required: ["email"],
@@ -115,6 +117,26 @@ export const sendVerificationEmail = createAuthEndpoint(
 									properties: {
 										status: {
 											type: "boolean",
+											description:
+												"Indicates if the email was sent successfully",
+											example: true,
+										},
+									},
+								},
+							},
+						},
+					},
+					"400": {
+						description: "Bad Request",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										message: {
+											type: "string",
+											description: "Error message",
+											example: "Verification email isn't enabled",
 										},
 									},
 								},
@@ -164,6 +186,26 @@ export const verifyEmail = createAuthEndpoint(
 		metadata: {
 			openapi: {
 				description: "Verify the email of the user",
+				parameters: [
+					{
+						name: "token",
+						in: "query",
+						description: "The token to verify the email",
+						required: true,
+						schema: {
+							type: "string",
+						},
+					},
+					{
+						name: "callbackURL",
+						in: "query",
+						description: "The URL to redirect to after email verification",
+						required: false,
+						schema: {
+							type: "string",
+						},
+					},
+				],
 				responses: {
 					"200": {
 						description: "Success",
@@ -174,13 +216,54 @@ export const verifyEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
+											properties: {
+												id: {
+													type: "string",
+													description: "User ID",
+												},
+												email: {
+													type: "string",
+													description: "User email",
+												},
+												name: {
+													type: "string",
+													description: "User name",
+												},
+												image: {
+													type: "string",
+													description: "User image URL",
+												},
+												emailVerified: {
+													type: "boolean",
+													description:
+														"Indicates if the user email is verified",
+												},
+												createdAt: {
+													type: "string",
+													description: "User creation date",
+												},
+												updatedAt: {
+													type: "string",
+													description: "User update date",
+												},
+											},
+											required: [
+												"id",
+												"email",
+												"name",
+												"image",
+												"emailVerified",
+												"createdAt",
+												"updatedAt",
+											],
 										},
 										status: {
 											type: "boolean",
+											description:
+												"Indicates if the email was verified successfully",
 										},
+										required: ["user", "status"],
 									},
-									required: ["user", "status"],
 								},
 							},
 						},
@@ -312,7 +395,7 @@ export const verifyEmail = createAuthEndpoint(
 			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
-					ctx.request,
+					ctx.headers,
 				);
 				if (!session) {
 					throw new APIError("INTERNAL_SERVER_ERROR", {

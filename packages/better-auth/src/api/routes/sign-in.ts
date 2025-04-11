@@ -145,29 +145,65 @@ export const signInSocial = createAuthEndpoint(
 		metadata: {
 			openapi: {
 				description: "Sign in with a social provider",
+				operationId: "socialSignIn",
 				responses: {
 					"200": {
-						description: "Success",
+						description:
+							"Success - Returns either session details or redirect URL",
 						content: {
 							"application/json": {
 								schema: {
+									// todo: we need support for multiple schema
 									type: "object",
+									description: "Session response when idToken is provided",
 									properties: {
-										token: {
-											type: "string",
-										},
-										user: {
-											type: "object",
-											ref: "#/components/schemas/User",
-										},
-										url: {
-											type: "string",
-										},
 										redirect: {
 											type: "boolean",
+											enum: [false],
 										},
+										token: {
+											type: "string",
+											description: "Session token",
+											url: {
+												type: "null",
+												nullable: true,
+											},
+											user: {
+												type: "object",
+												properties: {
+													id: { type: "string" },
+													email: { type: "string" },
+													name: {
+														type: "string",
+														nullable: true,
+													},
+													image: {
+														type: "string",
+														nullable: true,
+													},
+													emailVerified: {
+														type: "boolean",
+													},
+													createdAt: {
+														type: "string",
+														format: "date-time",
+													},
+													updatedAt: {
+														type: "string",
+														format: "date-time",
+													},
+												},
+												required: [
+													"id",
+													"email",
+													"emailVerified",
+													"createdAt",
+													"updatedAt",
+												],
+											},
+										},
+										required: ["redirect", "token", "user"],
 									},
-									required: ["redirect"],
 								},
 							},
 						},
@@ -227,7 +263,14 @@ export const signInSocial = createAuthEndpoint(
 					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 				});
 			}
-			if (!userInfo.user.email) {
+			const mapProfileToUser = await provider.options?.mapProfileToUser?.(
+				userInfo.user,
+			);
+			const userData = {
+				...userInfo.user,
+				...mapProfileToUser,
+			};
+			if (!userData.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
 				});
@@ -237,11 +280,12 @@ export const signInSocial = createAuthEndpoint(
 			}
 			const data = await handleOAuthUserInfo(c, {
 				userInfo: {
-					email: userInfo.user.email,
-					id: userInfo.user.id,
-					name: userInfo.user.name || "",
-					image: userInfo.user.image,
-					emailVerified: userInfo.user.emailVerified || false,
+					...userData,
+					email: userData.email,
+					id: userData.id,
+					name: userData.name || "",
+					image: userData.image,
+					emailVerified: userData.emailVerified || false,
 				},
 				account: {
 					providerId: provider.id,
@@ -334,27 +378,62 @@ export const signInEmail = createAuthEndpoint(
 				description: "Sign in with email and password",
 				responses: {
 					"200": {
-						description: "Success",
+						description:
+							"Success - Returns either session details or redirect URL",
 						content: {
 							"application/json": {
 								schema: {
+									// todo: we need support for multiple schema
 									type: "object",
+									description: "Session response when idToken is provided",
 									properties: {
+										redirect: {
+											type: "boolean",
+											enum: [false],
+										},
 										token: {
 											type: "string",
+											description: "Session token",
+										},
+										url: {
+											type: "null",
+											nullable: true,
 										},
 										user: {
 											type: "object",
-											ref: "#/components/schemas/User",
-										},
-										url: {
-											type: "string",
-										},
-										redirect: {
-											type: "boolean",
+											properties: {
+												id: { type: "string" },
+												email: { type: "string" },
+												name: {
+													type: "string",
+													nullable: true,
+												},
+												image: {
+													type: "string",
+													nullable: true,
+												},
+												emailVerified: {
+													type: "boolean",
+												},
+												createdAt: {
+													type: "string",
+													format: "date-time",
+												},
+												updatedAt: {
+													type: "string",
+													format: "date-time",
+												},
+											},
+											required: [
+												"id",
+												"email",
+												"emailVerified",
+												"createdAt",
+												"updatedAt",
+											],
 										},
 									},
-									required: ["token", "user", "redirect"],
+									required: ["redirect", "token", "user"],
 								},
 							},
 						},

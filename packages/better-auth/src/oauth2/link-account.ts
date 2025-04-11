@@ -111,12 +111,12 @@ export async function handleOAuthUserInfo(
 			};
 		}
 		try {
+			const { id: _, ...restUserInfo } = userInfo;
 			user = await c.context.internalAdapter
 				.createOAuthUser(
 					{
-						...userInfo,
+						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
-						id: undefined,
 					},
 					{
 						accessToken: account.accessToken,
@@ -178,7 +178,7 @@ export async function handleOAuthUserInfo(
 
 	const session = await c.context.internalAdapter.createSession(
 		user.id,
-		c.request,
+		c.headers,
 	);
 	if (!session) {
 		return {

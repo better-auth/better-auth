@@ -108,7 +108,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/callback");
+						return (
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const headers = ctx.context.responseHeaders;
@@ -152,7 +155,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			before: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/sign-in/social");
+						return (
+							context.path?.startsWith("/sign-in/social") ||
+							context.path?.startsWith("/sign-in/oauth2")
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const url = new URL(

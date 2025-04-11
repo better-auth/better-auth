@@ -29,7 +29,21 @@ export interface OAuthProvider<
 		codeVerifier?: string;
 		deviceId?: string;
 	}) => Promise<OAuth2Tokens>;
-	getUserInfo: (token: OAuth2Tokens) => Promise<{
+	getUserInfo: (
+		token: OAuth2Tokens & {
+			/**
+			 * The user object from the provider
+			 * This is only available for some providers like Apple
+			 */
+			user?: {
+				name?: {
+					firstName?: string;
+					lastName?: string;
+				};
+				email?: string;
+			};
+		},
+	) => Promise<{
 		user: {
 			id: string;
 			name?: string;
