@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { type InferRolesFromOption } from "../schema";
+import { type InferOrganizationRolesFromOption } from "../schema";
 import { APIError } from "better-call";
 import { parseRoles, type OrganizationOptions } from "../organization";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -59,7 +59,9 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						/**
 						 * The role to assign to the user
 						 */
-						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
+						role:
+							| InferOrganizationRolesFromOption<O>
+							| InferOrganizationRolesFromOption<O>[];
 						/**
 						 * The organization ID to invite
 						 * the user to

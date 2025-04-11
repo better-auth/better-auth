@@ -11,7 +11,7 @@ catalogs:
     react: 18.3.1
     react-dom: 18.3.1
 catalog:
-  "better-call": "^1.0.5"
+  "better-call": "^1.0.7"
   "@better-fetch/fetch": "^1.1.18"
   "unbuild": "^3.5.0"
   "typescript": "^5.7.3"

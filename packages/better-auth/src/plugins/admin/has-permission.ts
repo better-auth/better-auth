@@ -2,14 +2,14 @@ import { defaultRoles } from "./access";
 import type { AdminOptions } from "./admin";
 
 export const hasPermission = (input: {
-	userId: string;
+	userId?: string;
 	role?: string;
 	options?: AdminOptions;
 	permission: {
 		[key: string]: string[];
 	};
 }) => {
-	if (input.options?.adminUserIds?.includes(input.userId)) {
+	if (input.userId && input.options?.adminUserIds?.includes(input.userId)) {
 		return true;
 	}
 	const roles = (input.role || input.options?.defaultRole || "user").split(",");

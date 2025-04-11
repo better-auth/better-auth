@@ -7,7 +7,6 @@ const ogSchema = z.object({
 	mode: z.string(),
 	type: z.string(),
 });
-
 export async function GET(req: Request) {
 	try {
 		const geist = await fetch(
@@ -28,7 +27,7 @@ export async function GET(req: Request) {
 		const fontSize = trueHeading.length > 100 ? "30px" : "60px";
 		return new ImageResponse(
 			<div
-				tw="flex w-full relative flex-col p-9"
+				tw="flex w-full relative flex-col p-12"
 				style={{
 					color: paint,
 					backgroundColor: "transparent",
@@ -38,7 +37,7 @@ export async function GET(req: Request) {
 				}}
 			>
 				<div
-					tw={`relative flex flex-col w-full h-full border-2 border-[${paint}]/20 p-8}`}
+					tw={`relative flex flex-col w-full h-full border-2 border-[${paint}]/20 p-10}`}
 				>
 					<svg
 						style={{

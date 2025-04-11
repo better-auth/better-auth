@@ -571,9 +571,10 @@ export const getOrgAdapter = (
 			};
 			user: User;
 		}) => {
-			const defaultExpiration = 1000 * 60 * 60 * 48;
+			const defaultExpiration = 60 * 60 * 48;
 			const expiresAt = getDate(
 				options?.invitationExpiresIn || defaultExpiration,
+				"sec",
 			);
 			const invite = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",

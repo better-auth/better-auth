@@ -544,11 +544,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const code = ctx.query.code;
 
 					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
+						const defaultErrorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.baseURL}/error`;
+						throw ctx.redirect(`${errorURL || defaultErrorURL}?error=${error}`);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;
@@ -603,21 +602,21 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? await provider.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as User | null;
-
-					if (!userInfo?.email) {
+					if (!userInfo) {
+						throw redirectOnError("user_info_is_missing");
+					}
+					const mapUser = provider.mapProfileToUser
+						? await provider.mapProfileToUser(userInfo)
+						: userInfo;
+					if (!mapUser?.email) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
 						throw redirectOnError("email_is_missing");
 					}
-
-					const mapUser = provider.mapProfileToUser
-						? await provider.mapProfileToUser(userInfo)
-						: null;
-
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== userInfo.email.toLowerCase()
+							link.email !== mapUser.email.toLowerCase()
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
@@ -766,7 +765,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							clientId,
 							clientSecret,
 							redirectURI:
-								redirectURI || `${c.context.baseURL}/oauth2/callback`,
+								redirectURI ||
+								`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state: state.state,

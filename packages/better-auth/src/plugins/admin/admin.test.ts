@@ -79,6 +79,29 @@ describe("Admin plugin", async () => {
 		expect(newUser?.role).toBe("user");
 	});
 
+	it("should allow admin to create user with multiple roles", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: ["user", "admin"],
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user.role).toBe("user,admin");
+		await client.admin.removeUser(
+			{
+				userId: res.data?.user.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+	});
+
 	it("should not allow non-admin to create users", async () => {
 		const res = await client.admin.createUser(
 			{
@@ -104,6 +127,20 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(res.data?.users.length).toBe(2);
+	});
+
+	it("should list users with search query", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "role",
+				filterOperator: "eq",
+				filterValue: "admin",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.total).toBe(1);
 	});
 
 	it("should not allow non-admin to list users", async () => {
@@ -209,6 +246,39 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.user?.role).toBe("admin");
+	});
+
+	it("should allow to set multiple user roles", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: ["user", "admin"],
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.role).toBe("user,admin");
+		await client.admin.removeUser(
+			{
+				userId: createdUser.data?.user.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
 	});
 
 	it("should not allow non-admin to set user role", async () => {
