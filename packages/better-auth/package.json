@@ -8,6 +8,17 @@
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/better-auth"
   },
+
+  "keywords": [
+          "auth",
+          "oauth",
+          "oidc",
+          "2fa",
+          "social",
+          "security",
+          "typescript",
+          "nextjs"
+      ],
   "scripts": {
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
