@@ -18,6 +18,7 @@ import { salesforce } from "./salesforce";
 import { z } from "zod";
 import { vk } from "./vk";
 import { kick } from "./kick";
+import { zoom } from "./zoom";
 export const socialProviders = {
 	apple,
 	discord,
@@ -37,6 +38,7 @@ export const socialProviders = {
 	roblox,
 	salesforce,
 	vk,
+	zoom,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -75,6 +77,7 @@ export * from "./reddit";
 export * from "./roblox";
 export * from "./salesforce";
 export * from "./vk";
+export * from "./zoom";
 export * from "./kick";
 
 export type SocialProviderList = typeof socialProviderList;

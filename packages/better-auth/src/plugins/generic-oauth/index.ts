@@ -14,6 +14,7 @@ import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
 import { decodeJwt } from "jose";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -122,8 +123,8 @@ interface GenericOAuthConfig {
 	 */
 	disableSignUp?: boolean;
 	/**
-	 * Allows to use basic authentication for the token endpoint.
-	 * Default is "post".
+	 * Authentication method for token requests.
+	 * @default "post"
 	 */
 	authentication?: "basic" | "post";
 }
@@ -244,9 +245,37 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
-							authentication: c.authentication,
 						});
 					},
+					async refreshAccessToken(
+						refreshToken: string,
+					): Promise<OAuth2Tokens> {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return refreshAccessToken({
+							refreshToken,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
+
 					async getUserInfo(tokens) {
 						if (!finalUserInfoUrl) {
 							return null;
@@ -370,6 +399,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						accessType,
 						authorizationUrlParams,
 						responseMode,
+						authentication,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -514,11 +544,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const code = ctx.query.code;
 
 					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
+						const defaultErrorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.baseURL}/error`;
+						throw ctx.redirect(`${errorURL || defaultErrorURL}?error=${error}`);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;
@@ -573,36 +602,60 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? await provider.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as User | null;
-
-					if (!userInfo?.email) {
+					if (!userInfo) {
+						throw redirectOnError("user_info_is_missing");
+					}
+					const mapUser = provider.mapProfileToUser
+						? await provider.mapProfileToUser(userInfo)
+						: userInfo;
+					if (!mapUser?.email) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
 						throw redirectOnError("email_is_missing");
 					}
-
-					const mapUser = provider.mapProfileToUser
-						? await provider.mapProfileToUser(userInfo)
-						: null;
-
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== userInfo.email.toLowerCase()
+							link.email !== mapUser.email.toLowerCase()
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
-						const newAccount = await ctx.context.internalAdapter.createAccount({
-							userId: link.userId,
-							providerId: provider.providerId,
-							accountId: userInfo.id,
-							accessToken: tokens.accessToken,
-							refreshToken: tokens.refreshToken,
-							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-							scope: tokens.scopes?.join(","),
-						});
-						if (!newAccount) {
-							return redirectOnError("unable_to_link_account");
+						const existingAccount =
+							await ctx.context.internalAdapter.findAccount(userInfo.id);
+						if (existingAccount) {
+							if (existingAccount.userId !== link.userId) {
+								return redirectOnError(
+									"account_already_linked_to_different_user",
+								);
+							}
+							const updateData = Object.fromEntries(
+								Object.entries({
+									accessToken: tokens.accessToken,
+									idToken: tokens.idToken,
+									refreshToken: tokens.refreshToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								}).filter(([_, value]) => value !== undefined),
+							);
+							await ctx.context.internalAdapter.updateAccount(
+								existingAccount.id,
+								updateData,
+							);
+						} else {
+							const newAccount =
+								await ctx.context.internalAdapter.createAccount({
+									userId: link.userId,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									accessToken: tokens.accessToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								});
+							if (!newAccount) {
+								return redirectOnError("unable_to_link_account");
+							}
 						}
 						let toRedirectTo: string;
 						try {
@@ -661,6 +714,39 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						callbackURL: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Link an OAuth2 account to the current user session",
+							responses: {
+								"200": {
+									description:
+										"Authorization URL generated successfully for linking an OAuth2 account",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+														format: "uri",
+														description:
+															"The authorization URL to redirect the user to for linking the OAuth2 account",
+													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Indicates that the client should redirect to the provided URL",
+														enum: [true],
+													},
+												},
+												required: ["url", "redirect"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (c) => {
 					const session = c.context.session;
@@ -736,7 +822,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							clientId,
 							clientSecret,
 							redirectURI:
-								redirectURI || `${c.context.baseURL}/oauth2/callback`,
+								redirectURI ||
+								`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state: state.state,

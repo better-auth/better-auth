@@ -144,7 +144,12 @@ export function verifyApiKey({
 
 			const requiredPermissions = ctx.body.permissions;
 			const apiKeyPermissions = apiKey.permissions
-				? safeJSONParse(apiKey.permissions)
+				? safeJSONParse<{
+						[key: string]: string[];
+					}>(
+						//@ts-ignore - from DB, this value is always a string
+						apiKey.permissions,
+					)
 				: null;
 
 			if (requiredPermissions) {
@@ -267,13 +272,25 @@ export function verifyApiKey({
 			}
 			deleteAllExpiredApiKeys(ctx.context);
 
-			const { key: _, ...returningApiKey } = newApiKey ?? { key: 1 };
+			const { key: _, ...returningApiKey } = newApiKey ?? {
+				key: 1,
+				permissions: undefined,
+			};
 			if ("metadata" in returningApiKey) {
 				returningApiKey.metadata =
 					schema.apikey.fields.metadata.transform.output(
 						returningApiKey.metadata as never as string,
 					);
 			}
+
+			returningApiKey.permissions = returningApiKey.permissions
+				? safeJSONParse<{
+						[key: string]: string[];
+					}>(
+						//@ts-ignore - from DB, this value is always a string
+						returningApiKey.permissions,
+					)
+				: null;
 
 			return ctx.json({
 				valid: true,

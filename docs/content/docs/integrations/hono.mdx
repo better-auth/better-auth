@@ -149,3 +149,33 @@ export const auth = createAuth({
   }
 })
 ```
+
+### Client-Side Configuration
+
+When using the Hono client (`@hono/client`) to make requests to your Better Auth-protected endpoints, you need to configure it to send credentials (cookies) with cross-origin requests.
+
+```ts title="api.ts"
+import { hc } from "@hono/client";
+import type { AppType } from "./server"; // Your Hono app type
+
+const client = hc<AppType>("http://localhost:8787/", {
+  fetch: ((input, init) => {
+    return fetch(input, { 
+      ...init, 
+      credentials: "include" // Required for sending cookies cross-origin
+    });
+  }) satisfies typeof fetch,
+});
+
+// Now your client requests will include credentials
+const response = await client.someProtectedEndpoint.$get();
+```
+
+This configuration is necessary when:
+- Your client and server are on different domains/ports during development
+- You're making cross-origin requests in production
+- You need to send authentication cookies with your requests
+
+The `credentials: "include"` option tells the fetch client to send cookies even for cross-origin requests. This works in conjunction with the CORS configuration on your server that has `credentials: true`.
+
+> **Note:** Make sure your CORS configuration on the server matches your client's domain, and that `credentials: true` is set in both the server's CORS config and the client's fetch config.

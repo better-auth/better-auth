@@ -55,18 +55,20 @@ export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
-export type InferZodRolesFromOption<O extends OrganizationOptions | undefined> =
-	ZodLiteral<
-		O extends {
-			roles: {
-				[key: string]: any;
-			};
-		}
-			? keyof O["roles"] | (keyof O["roles"])[]
-			: "admin" | "member" | "owner" | ("admin" | "member" | "owner")[]
-	>;
-export type InferRolesFromOption<O extends OrganizationOptions | undefined> =
-	O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+export type InferOrganizationZodRolesFromOption<
+	O extends OrganizationOptions | undefined,
+> = ZodLiteral<
+	O extends {
+		roles: {
+			[key: string]: any;
+		};
+	}
+		? keyof O["roles"] | (keyof O["roles"])[]
+		: "admin" | "member" | "owner" | ("admin" | "member" | "owner")[]
+>;
+export type InferOrganizationRolesFromOption<
+	O extends OrganizationOptions | undefined,
+> = O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
@@ -76,9 +78,10 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 	? {
 			id: string;
 			organizationId: string;
-			role: InferRolesFromOption<O>;
+			role: InferOrganizationRolesFromOption<O>;
 			createdAt: Date;
 			userId: string;
+			teamId?: string;
 			user: {
 				email: string;
 				name: string;
@@ -88,9 +91,8 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 	: {
 			id: string;
 			organizationId: string;
+			role: InferOrganizationRolesFromOption<O>;
 			createdAt: Date;
-			role: InferRolesFromOption<O>;
-			teamId?: string;
 			userId: string;
 			user: {
 				email: string;
@@ -107,18 +109,18 @@ export type InferInvitation<O extends OrganizationOptions> =
 				id: string;
 				organizationId: string;
 				email: string;
-				role: InferRolesFromOption<O>;
+				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				teamId?: string;
 			}
 		: {
 				id: string;
 				organizationId: string;
 				email: string;
-				role: InferRolesFromOption<O>;
+				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
-				teamId?: string;
 			};

@@ -69,7 +69,7 @@
     "lucide-react": "^0.477.0",
     "mini-svg-data-uri": "^1.4.4",
     "mysql2": "^3.11.5",
-    "next": "^15.2.0",
+    "next": "^15.2.3",
     "next-themes": "^0.3.0",
     "prisma": "^5.22.0",
     "react": "^19.0.0",

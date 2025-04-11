@@ -3,10 +3,11 @@ import type { BetterAuthClientPlugin } from "../../types";
 import { type AccessControl, type Role } from "../access";
 import { adminAc, defaultStatements, userAc } from "./access";
 import type { admin } from "./admin";
+import { hasPermission } from "./has-permission";
 
 interface AdminClientOptions {
-	ac: AccessControl;
-	roles: {
+	ac?: AccessControl;
+	roles?: {
 		[key in string]: Role;
 	};
 }
@@ -23,7 +24,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 	};
 
 	return {
-		id: "better-auth-client",
+		id: "admin-client",
 		$InferServerPlugin: {} as ReturnType<
 			typeof admin<{
 				ac: O["ac"] extends AccessControl
@@ -55,12 +56,15 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 							"you can only check one resource permission at a time.",
 						);
 					}
-					const role = roles[data.role as unknown as "admin"];
-					if (!role) {
-						return false;
-					}
-					const isAuthorized = role?.authorize(data.permission as any);
-					return isAuthorized.success;
+					const isAuthorized = hasPermission({
+						role: data.role as string,
+						options: {
+							ac: options?.ac,
+							roles: roles,
+						},
+						permission: data.permission as any,
+					});
+					return isAuthorized;
 				},
 			},
 		}),

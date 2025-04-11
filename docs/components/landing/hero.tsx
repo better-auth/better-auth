@@ -162,7 +162,6 @@ export default function Hero() {
 										>
 											Get Started
 										</Link>
-
 										<Builder />
 									</div>
 								</>

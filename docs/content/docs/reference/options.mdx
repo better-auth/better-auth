@@ -411,13 +411,18 @@ export const auth = betterAuth({
 			secure: true
 		},
 		cookiePrefix: "myapp",
-		generateId: ((options: {
-			model: LiteralUnion<Models, string>;
-			size?: number;
-		}) => {
-			// Generate a unique ID for the model
-			return "my-id";
-		}) 
+		database: {
+			// If your DB is using auto-incrementing IDs, set this to true.
+			useNumberId: false,
+			// Use your own custom id generator, or disable generating IDs as a whole.
+			generateId: (((options: {
+				model: LiteralUnion<Models, string>;
+				size?: number;
+			}) => {
+				return "my-super-unique-id";
+			})) | false,
+			defaultFindManyLimit: 100,
+		}
 	},
 })
 ```

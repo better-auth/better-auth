@@ -37,8 +37,8 @@ ${
 							return {
 								...acc,
 								[provider]: {
-									clientId: `process.env.${provider.toUpperCase()}_CLIENT_ID`,
-									clientSecret: `process.env.${provider.toUpperCase()}_CLIENT_SECRET`,
+									clientId: `process.env.${provider.toUpperCase()}_CLIENT_ID!`,
+									clientSecret: `process.env.${provider.toUpperCase()}_CLIENT_SECRET!`,
 								},
 							};
 						}, {}),
@@ -123,14 +123,14 @@ ${
 	const activeFile = files.find((file) => file.id === activeFileId);
 
 	return (
-		<div className="w-full mr-auto max-w-3xl mt-8 border border-border rounded-md overflow-hidden">
+		<div className="w-full mr-auto max-w-[45rem] mt-8 border border-border rounded-md overflow-hidden">
 			<TabBar
 				files={files}
 				activeFileId={activeFileId}
 				onTabClick={handleTabClick}
 				onTabClose={handleTabClose}
 			/>
-			<div className="bg-back">
+			<div className="">
 				{activeFile && (
 					<CodeEditor
 						language="typescript"

@@ -14,6 +14,7 @@ import {
 	cancelInvitation,
 	createInvitation,
 	getInvitation,
+	listInvitations,
 	rejectInvitation,
 } from "./routes/crud-invites";
 import {
@@ -159,6 +160,27 @@ export interface OrganizationOptions {
 	 * @default 48 hours
 	 */
 	invitationExpiresIn?: number;
+	/**
+	 * The maximum invitation a user can send.
+	 *
+	 * @default 100
+	 */
+	invitationLimit?:
+		| number
+		| ((
+				data: {
+					user: User;
+					organization: Organization;
+					member: Member;
+				},
+				ctx: AuthContext,
+		  ) => Promise<number> | number);
+	/**
+	 * Cancel pending invitations on re-invite.
+	 *
+	 * @default true
+	 */
+	cancelPendingInvitationsOnReInvite?: boolean;
 	/**
 	 * Send an email with the
 	 * invitation link to the user.
@@ -320,7 +342,7 @@ export interface OrganizationOptions {
  *
  * @example
  * ```ts
- * const auth = createAuth({
+ * const auth = betterAuth({
  * 	plugins: [
  * 		organization({
  * 			allowUserToCreateOrganization: true,
@@ -348,6 +370,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
 		leaveOrganization,
+		listInvitations,
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {

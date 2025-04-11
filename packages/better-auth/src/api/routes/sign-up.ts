@@ -59,33 +59,65 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					},
 					responses: {
 						"200": {
-							description: "Success",
+							description: "Successfully created user",
 							content: {
 								"application/json": {
 									schema: {
 										type: "object",
 										properties: {
-											id: {
+											token: {
 												type: "string",
-												description: "The id of the user",
+												nullable: true,
+												description: "Authentication token for the session",
 											},
-											email: {
-												type: "string",
-												description: "The email of the user",
-											},
-											name: {
-												type: "string",
-												description: "The name of the user",
-											},
-											image: {
-												type: "string",
-												description: "The image of the user",
-											},
-											emailVerified: {
-												type: "boolean",
-												description: "If the email is verified",
+											user: {
+												type: "object",
+												properties: {
+													id: {
+														type: "string",
+														description: "The unique identifier of the user",
+													},
+													email: {
+														type: "string",
+														format: "email",
+														description: "The email address of the user",
+													},
+													name: {
+														type: "string",
+														description: "The name of the user",
+													},
+													image: {
+														type: "string",
+														format: "uri",
+														nullable: true,
+														description: "The profile image URL of the user",
+													},
+													emailVerified: {
+														type: "boolean",
+														description: "Whether the email has been verified",
+													},
+													createdAt: {
+														type: "string",
+														format: "date-time",
+														description: "When the user was created",
+													},
+													updatedAt: {
+														type: "string",
+														format: "date-time",
+														description: "When the user was last updated",
+													},
+												},
+												required: [
+													"id",
+													"email",
+													"name",
+													"emailVerified",
+													"createdAt",
+													"updatedAt",
+												],
 											},
 										},
+										required: ["user"], // token is optional
 									},
 								},
 							},
@@ -233,7 +265,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
-				ctx.request,
+				ctx.headers,
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {

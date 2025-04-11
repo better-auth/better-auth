@@ -103,7 +103,7 @@ const testimonials = [
 	},
 	{
 		name: "Nizzy",
-		profession: "engineer @calcom",
+		profession: "Co-founder of Zero",
 		link: "https://x.com/NizzyABI/status/1889178812459422162",
 		description:
 			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",

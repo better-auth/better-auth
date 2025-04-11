@@ -188,7 +188,9 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 				? never
 				: Field[key]["required"] extends false
 					? key
-					: never]?: InferFieldInput<Field[key]> | undefined | null;
+					: Field[key]["defaultValue"] extends string | number | boolean | Date
+						? key
+						: never]?: InferFieldInput<Field[key]> | undefined | null;
 		}
 	: {};
 
