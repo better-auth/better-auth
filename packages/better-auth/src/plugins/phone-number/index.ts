@@ -639,7 +639,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx.request,
+							ctx.headers,
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -123,7 +123,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
-						ctx.request,
+						ctx.headers,
 					);
 					if (!session) {
 						return ctx.json(null, {

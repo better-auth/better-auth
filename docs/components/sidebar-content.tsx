@@ -444,7 +444,6 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
-
 			{
 				title: "Discord",
 				href: "/docs/authentication/discord",

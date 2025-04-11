@@ -265,7 +265,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
-				ctx.request,
+				ctx.headers,
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {
