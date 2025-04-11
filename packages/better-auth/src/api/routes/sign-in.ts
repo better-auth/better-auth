@@ -227,7 +227,14 @@ export const signInSocial = createAuthEndpoint(
 					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 				});
 			}
-			if (!userInfo.user.email) {
+			const mapProfileToUser = await provider.options?.mapProfileToUser?.(
+				userInfo.user,
+			);
+			const userData = {
+				...userInfo.user,
+				...mapProfileToUser,
+			};
+			if (!userData.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
 				});
@@ -237,11 +244,12 @@ export const signInSocial = createAuthEndpoint(
 			}
 			const data = await handleOAuthUserInfo(c, {
 				userInfo: {
-					email: userInfo.user.email,
-					id: userInfo.user.id,
-					name: userInfo.user.name || "",
-					image: userInfo.user.image,
-					emailVerified: userInfo.user.emailVerified || false,
+					...userData,
+					email: userData.email,
+					id: userData.id,
+					name: userData.name || "",
+					image: userData.image,
+					emailVerified: userData.emailVerified || false,
 				},
 				account: {
 					providerId: provider.id,
