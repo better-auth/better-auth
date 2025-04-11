@@ -91,6 +91,7 @@ await authClient.sso.register({
     authorizationEndpoint: "https://idp.example.com/authorize",
     tokenEndpoint: "https://idp.example.com/token",
     jwksEndpoint: "https://idp.example.com/jwks",
+    getUserInfo: false,
     mapping: {
         id: "sub",
         email: "email",
@@ -115,6 +116,7 @@ await auth.api.createOIDCProvider({
         authorizationEndpoint: "https://idp.example.com/authorize",
         tokenEndpoint: "https://idp.example.comtoken",
         jwksEndpoint: "https://idp.example.com/jwks",
+        getUserInfo: false,
         mapping: {
             id: "sub",
             email: "email",
