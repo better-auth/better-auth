@@ -990,3 +990,18 @@ describe("cancel pending invitations on re-invite", async () => {
 		).toBe(1);
 	});
 });
+
+describe("types", async (it) => {
+	const { auth } = await getTestInstance({
+		plugins: [organization({})],
+	});
+
+	it("should infer active organization", async () => {
+		type ActiveOrganization = typeof auth.$Infer.ActiveOrganization;
+
+		type FullOrganization = Awaited<
+			ReturnType<typeof auth.api.getFullOrganization>
+		>;
+		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization>();
+	});
+});
