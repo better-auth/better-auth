@@ -670,7 +670,7 @@ export const sso = (options?: SSOOptions) => {
 							scope: tokenResponse.scopes?.join(","),
 						},
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-						overrideUserInfo: provider.oidcConfig.overrideUserInfo,
+						overrideUserInfo: config.overrideUserInfo,
 					});
 					if (linked.error) {
 						throw ctx.redirect(
