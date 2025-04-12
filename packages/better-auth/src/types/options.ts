@@ -775,7 +775,7 @@ export type BetterAuthOptions = {
 					  }
 				>;
 				/**
-				 * Hook that is called after a session is updated.
+				 * Hook that is called after a session is created.
 				 */
 				after?: (
 					session: Session,
