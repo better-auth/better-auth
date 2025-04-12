@@ -88,6 +88,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						: "admin" | "member" | "owner",
 				>(data: {
 					role: R;
+					customRole?: string;
 					permission: {
 						//@ts-expect-error fix this later
 						[key in keyof Statements]?: Statements[key][number][];
@@ -100,6 +101,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					}
 					const isAuthorized = hasPermission({
 						role: data.role as string,
+						customRole: data.role as string,
 						options: {
 							ac: options?.ac,
 							roles: roles,

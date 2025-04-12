@@ -22,6 +22,6 @@ export type AccessControl<TStatements extends Statements = Statements> =
 	ReturnType<typeof createAccessControl<TStatements>>;
 
 export type Role<TStatements extends Statements = Record<string, any>> = {
-	authorize: (request: any, connector?: "OR" | "AND") => AuthortizeResponse;
+	authorize: (request: any, customRole?: string, connector?: "OR" | "AND") => AuthortizeResponse;
 	statements: TStatements;
 };

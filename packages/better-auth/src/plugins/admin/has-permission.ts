@@ -5,6 +5,7 @@ export const hasPermission = (input: {
 	userId?: string;
 	role?: string;
 	options?: AdminOptions;
+	customRole?: string;
 	permission: {
 		[key: string]: string[];
 	};
@@ -16,7 +17,7 @@ export const hasPermission = (input: {
 	const acRoles = input.options?.roles || defaultRoles;
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
-		const result = _role?.authorize(input.permission);
+		const result = _role?.authorize(input.permission, input.customRole || "");
 		if (result?.success) {
 			return true;
 		}

@@ -3,6 +3,7 @@ import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./organization";
 
 export const role = z.string();
+export const customRole = z.string().optional();
 export const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "canceled"])
 	.default("pending");
@@ -25,6 +26,7 @@ export const memberSchema = z.object({
 	organizationId: z.string(),
 	userId: z.coerce.string(),
 	role,
+	customRole,
 	createdAt: z.date().default(() => new Date()),
 	teamId: z.string().optional(),
 });
@@ -34,6 +36,7 @@ export const invitationSchema = z.object({
 	organizationId: z.string(),
 	email: z.string(),
 	role,
+	customRole,
 	status: invitationStatus,
 	teamId: z.string().optional(),
 	inviterId: z.string(),

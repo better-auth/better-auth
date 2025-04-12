@@ -16,6 +16,7 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 							connector: "OR" | "AND";
 					  };
 			},
+			customRole: string,
 			connector: "OR" | "AND" = "AND",
 		): AuthortizeResponse {
 			let success = false;

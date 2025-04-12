@@ -527,6 +527,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					}
 					const result = hasPermission({
 						role: member.role,
+						customRole: member.customRole,
 						options: options as OrganizationOptions,
 						permission: ctx.body.permission as any,
 					});
