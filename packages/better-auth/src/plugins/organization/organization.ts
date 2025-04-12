@@ -443,6 +443,26 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
+
 	return {
 		id: "organization",
 		endpoints: {
@@ -454,18 +474,26 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				{
 					method: "POST",
 					requireHeaders: true,
-					body: z.object({
-						organizationId: z.string().optional(),
-						permission: z.record(z.string(), z.array(z.string())),
-					}),
+					body: z
+						.object({
+							organizationId: z.string().optional(),
+						})
+						.and(
+							z.union([
+								z.object({
+									permission: z.record(z.string(), z.array(z.string())),
+									permissions: z.undefined(),
+								}),
+								z.object({
+									permission: z.undefined(),
+									permissions: z.record(z.string(), z.array(z.string())),
+								}),
+							]),
+						),
 					use: [orgSessionMiddleware],
 					metadata: {
 						$Infer: {
-							body: {} as {
-								permission: {
-									//@ts-expect-error
-									[key in keyof Statements]?: Array<Statements[key][number]>;
-								};
+							body: {} as PermissionExclusive & {
 								organizationId?: string;
 							},
 						},
@@ -480,9 +508,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 												permission: {
 													type: "object",
 													description: "The permission to check",
+													deprecated: true,
+												},
+												permissions: {
+													type: "object",
+													description: "The permission to check",
 												},
 											},
-											required: ["permission"],
+											required: ["permissions"],
 										},
 									},
 								},
@@ -534,7 +567,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					const result = hasPermission({
 						role: member.role,
 						options: options as OrganizationOptions,
-						permission: ctx.body.permission as any,
+						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
 						error: null,

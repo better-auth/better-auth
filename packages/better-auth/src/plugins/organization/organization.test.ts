@@ -5,7 +5,6 @@ import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
 import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { BetterAuthError } from "../../error";
 import { APIError } from "better-call";
 
 describe("organization", async (it) => {
@@ -500,7 +499,7 @@ describe("organization", async (it) => {
 			},
 		});
 		const hasPermission = await client.organization.hasPermission({
-			permission: {
+			permissions: {
 				member: ["update"],
 			},
 			fetchOptions: {
@@ -508,6 +507,17 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(hasPermission.data?.success).toBe(true);
+
+		const hasMultiplePermissions = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"],
+				invitation: ["create"],
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
 	it("should allow deleting organization", async () => {
@@ -795,13 +805,23 @@ describe("access control", async (it) => {
 	it("should return success", async () => {
 		const canCreateProject = checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["create"],
 			},
 		});
 		expect(canCreateProject).toBe(true);
-		const canCreateProjectServer = await hasPermission({
+
+		// To be removed when `permission` will be removed entirely
+		const canCreateProjectLegacy = checkRolePermission({
+			role: "admin",
 			permission: {
+				project: ["create"],
+			},
+		});
+		expect(canCreateProjectLegacy).toBe(true);
+
+		const canCreateProjectServer = await hasPermission({
+			permissions: {
 				project: ["create"],
 			},
 			fetchOptions: {
@@ -814,7 +834,7 @@ describe("access control", async (it) => {
 	it("should return not success", async () => {
 		const canCreateProject = checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["delete"],
 			},
 		});
@@ -822,21 +842,14 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		let error: BetterAuthError | null = null;
-		try {
-			checkRolePermission({
-				role: "admin",
-				permission: {
-					project: ["read"],
-					sales: ["delete"],
-				},
-			});
-		} catch (e) {
-			if (e instanceof BetterAuthError) {
-				error = e;
-			}
-		}
-		expect(error).toBeInstanceOf(BetterAuthError);
+		const res = checkRolePermission({
+			role: "admin",
+			permissions: {
+				project: ["read"],
+				sales: ["delete"],
+			},
+		});
+		expect(res).toBe(false);
 	});
 });
 

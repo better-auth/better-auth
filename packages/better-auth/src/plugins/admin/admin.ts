@@ -119,6 +119,26 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		? S
 		: DefaultStatements;
 
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
+
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
@@ -265,7 +285,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["set-role"],
 						},
 					});
@@ -370,7 +390,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							userId: session.user.id,
 							role: session.user.role,
 							options: opts,
-							permission: {
+							permissions: {
 								user: ["create"],
 							},
 						});
@@ -528,7 +548,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["list"],
 						},
 					});
@@ -629,7 +649,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							session: ["list"],
 						},
 					});
@@ -689,7 +709,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["ban"],
 						},
 					});
@@ -769,7 +789,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["ban"],
 						},
 					});
@@ -848,7 +868,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["impersonate"],
 						},
 					});
@@ -1001,7 +1021,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							session: ["revoke"],
 						},
 					});
@@ -1061,7 +1081,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							session: ["revoke"],
 						},
 					});
@@ -1120,7 +1140,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["delete"],
 						},
 					});
@@ -1178,7 +1198,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["set-password"],
 						},
 					});
@@ -1204,11 +1224,23 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				"/admin/has-permission",
 				{
 					method: "POST",
-					body: z.object({
-						permission: z.record(z.string(), z.array(z.string())),
-						userId: z.coerce.string().optional(),
-						role: z.string().optional(),
-					}),
+					body: z
+						.object({
+							userId: z.coerce.string().optional(),
+							role: z.string().optional(),
+						})
+						.and(
+							z.union([
+								z.object({
+									permission: z.record(z.string(), z.array(z.string())),
+									permissions: z.undefined(),
+								}),
+								z.object({
+									permission: z.undefined(),
+									permissions: z.record(z.string(), z.array(z.string())),
+								}),
+							]),
+						),
 					metadata: {
 						openapi: {
 							description: "Check if the user has permission",
@@ -1221,9 +1253,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 												permission: {
 													type: "object",
 													description: "The permission to check",
+													deprecated: true,
+												},
+												permissions: {
+													type: "object",
+													description: "The permission to check",
 												},
 											},
-											required: ["permission"],
+											required: ["permissions"],
 										},
 									},
 								},
@@ -1251,11 +1288,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							},
 						},
 						$Infer: {
-							body: {} as {
-								permission: {
-									//@ts-expect-error
-									[key in keyof Statements]?: Array<Statements[key][number]>;
-								};
+							body: {} as PermissionExclusive & {
 								userId?: string;
 								role?: InferAdminRolesFromOption<O>;
 							},
@@ -1263,13 +1296,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
-					if (
-						!ctx.body.permission ||
-						Object.keys(ctx.body.permission).length > 1
-					) {
+					if (!ctx.body?.permission && !ctx.body?.permissions) {
 						throw new APIError("BAD_REQUEST", {
 							message:
-								"invalid permission check. you can only check one resource permission at a time.",
+								"invalid permission check. no permission(s) were passed.",
 						});
 					}
 					const session = await getSessionFromCtx(ctx);
@@ -1297,7 +1327,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: user.id,
 						role: user.role,
 						options: options as AdminOptions,
-						permission: ctx.body.permission as any,
+						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
 						error: null,
