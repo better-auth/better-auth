@@ -670,10 +670,7 @@ export const sso = (options?: SSOOptions) => {
 							scope: tokenResponse.scopes?.join(","),
 						},
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-						overrideUserInfo:
-							ctx.body.overrideUserInfo ||
-							options?.defaultOverrideUserInfo ||
-							false,
+						overrideUserInfo: provider.oidcConfig.overrideUserInfo,
 					});
 					if (linked.error) {
 						throw ctx.redirect(
@@ -804,6 +801,7 @@ interface OIDCConfig {
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string;
 	scopes?: string[];
+	overrideUserInfo?: boolean;
 	tokenEndpoint?: string;
 	tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic";
 	jwksEndpoint?: string;
