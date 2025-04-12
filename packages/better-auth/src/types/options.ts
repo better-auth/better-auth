@@ -29,7 +29,7 @@ export type BetterAuthOptions = {
 	 */
 	appName?: string;
 	/**
-	 * Base URL for the better auth. This is typically the
+	 * Base URL for the Better Auth. This is typically the
 	 * root URL where your application server is hosted.
 	 * If not explicitly set,
 	 * the system will check the following environment variable:
@@ -40,9 +40,9 @@ export type BetterAuthOptions = {
 	 */
 	baseURL?: string;
 	/**
-	 * Base path for the better auth. This is typically
+	 * Base path for the Better Auth. This is typically
 	 * the path where the
-	 * better auth routes are mounted.
+	 * Better Auth routes are mounted.
 	 *
 	 * @default "/api/auth"
 	 */
@@ -51,7 +51,7 @@ export type BetterAuthOptions = {
 	 * The secret to use for encryption,
 	 * signing and hashing.
 	 *
-	 * By default better auth will look for
+	 * By default Better Auth will look for
 	 * the following environment variables:
 	 * process.env.BETTER_AUTH_SECRET,
 	 * process.env.AUTH_SECRET

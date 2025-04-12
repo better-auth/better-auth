@@ -28,7 +28,7 @@ import { generateAuthConfig } from "../generators/auth-config";
 import { getTsconfigInfo } from "../utils/get-tsconfig-info";
 
 /**
- * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
+ * Should only use any database that is core DBs, and supports the Better Auth CLI generate functionality.
  */
 const supportedDatabases = [
 	// Built-in kysely
