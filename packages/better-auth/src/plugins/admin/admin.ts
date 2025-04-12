@@ -1354,7 +1354,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						missingPermissions: MissingPermissions<any> | null;
 					};
 					if (typeof result === "object")
-						ctxRes.missingPermissions = result.missingPermissions ?? null;
+						ctxRes.missingPermissions = result.missingPermissions;
 
 					return ctx.json(ctxRes);
 				},
