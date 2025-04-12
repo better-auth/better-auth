@@ -218,8 +218,7 @@ describe("session", async () => {
 					});
 					headers.set(
 						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
+						`better-auth.session_token=${cookies.get("better-auth.session_token")?.value
 						}`,
 					);
 				},
@@ -347,6 +346,7 @@ describe("session", async () => {
 describe("session storage", async () => {
 	let store = new Map<string, string>();
 	const { client, signInWithTestUser, db } = await getTestInstance({
+
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
@@ -438,6 +438,13 @@ describe("cookie cache", async () => {
 	const { client, testUser, auth, cookieSetter } = await getTestInstance({
 		database: adapter,
 		session: {
+			additionalFields: {
+				sensitiveData: {
+					type: "string",
+					returned: false, 
+					defaultValue: "sensetiveData"
+				}
+			},
 			cookieCache: {
 				enabled: true,
 			},
@@ -445,7 +452,7 @@ describe("cookie cache", async () => {
 	});
 	const ctx = await auth.$context;
 
-	it("should cache cookies", async () => {});
+	it("should cache cookies", async () => { });
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
 	const headers = new Headers();
@@ -461,10 +468,8 @@ describe("cookie cache", async () => {
 					const cookies = parseSetCookieHeader(header || "");
 					headers.set(
 						"cookie",
-						`better-auth.session_token=${
-							cookies.get("better-auth.session_token")?.value
-						};better-auth.session_data=${
-							cookies.get("better-auth.session_data")?.value
+						`better-auth.session_token=${cookies.get("better-auth.session_token")?.value
+						};better-auth.session_data=${cookies.get("better-auth.session_data")?.value
 						}`,
 					);
 				},
@@ -476,6 +481,7 @@ describe("cookie cache", async () => {
 				headers,
 			},
 		});
+	 	expect(session.data?.session).not.toHaveProperty("sensitiveData")
 		expect(session.data).not.toBeNull();
 		expect(fn).toHaveBeenCalledTimes(1);
 	});
