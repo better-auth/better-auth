@@ -325,7 +325,7 @@ export const updateOrganization = createAuthEndpoint(
 				organization: ["update"],
 			},
 			role: member.role,
-			customRole: member.role,
+			customRole: member.customRole,
 			options: ctx.context.orgOptions,
 		});
 		if (!canUpdateOrg) {
@@ -404,7 +404,7 @@ export const deleteOrganization = createAuthEndpoint(
 		}
 		const canDeleteOrg = hasPermission({
 			role: member.role,
-			customRole: member.role,
+			customRole: member.customRole,
 			permission: {
 				organization: ["delete"],
 			},
