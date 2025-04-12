@@ -61,7 +61,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		  };
 	type CheckPermissionResult = {
 		success: boolean;
-		missingPermissions: MissingPermissions<any> | null;
+		missingPermissions: MissingPermissions<PermissionType> | null;
 	};
 
 	const roles = {

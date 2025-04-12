@@ -41,7 +41,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 		  };
 	type CheckPermissionResult = {
 		success: boolean;
-		missingPermissions: MissingPermissions<any> | null;
+		missingPermissions: MissingPermissions<PermissionType> | null;
 	};
 
 	const roles = {
