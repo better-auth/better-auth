@@ -13,6 +13,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import type { User } from "../../types";
+import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -63,6 +64,12 @@ export interface PhoneNumberOptions {
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean | Promise<boolean>;
 	/**
+	 * Require a phone number verification before signing in
+	 *
+	 * @default false
+	 */
+	requireVerification?: boolean;
+	/**
 	 * Callback when phone number is verified
 	 */
 	callbackOnVerification?: (
@@ -104,6 +111,11 @@ export interface PhoneNumberOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Allowed attempts for the OTP code
+	 * @default 3
+	 */
+	allowedAttempts?: number;
 }
 
 export const phoneNumber = (options?: PhoneNumberOptions) => {
@@ -117,15 +129,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		createdAt: "createdAt",
 	};
 
-	const ERROR_CODES = {
-		INVALID_PHONE_NUMBER: "Invalid phone number",
-		PHONE_NUMBER_EXIST: "Phone number already exist",
-		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
-		UNEXPECTED_ERROR: "Unexpected error",
-		OTP_NOT_FOUND: "OTP not found",
-		OTP_EXPIRED: "OTP expired",
-		INVALID_OTP: "Invalid OTP",
-	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
@@ -203,6 +206,23 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
+					}
+					if (opts.requireVerification) {
+						if (!user.phoneNumberVerified) {
+							const otp = generateOTP(opts.otpLength);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: otp,
+								identifier: phoneNumber,
+								expiresAt: getDate(opts.expiresIn, "sec"),
+							});
+							await opts.sendOTP?.({
+								phoneNumber,
+								code: otp,
+							});
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+							});
+						}
 					}
 					const accounts =
 						await ctx.context.internalAdapter.findAccountByUserId(user.id);
@@ -324,7 +344,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
+						value: `${code}:0`,
 						identifier: ctx.body.phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -381,20 +401,89 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							summary: "Verify phone number",
 							description: "Use this endpoint to verify phone number",
 							responses: {
-								200: {
-									description: "Success",
+								"200": {
+									description: "Phone number verified successfully",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													user: {
-														$ref: "#/components/schemas/User",
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the verification was successful",
+														enum: [true],
 													},
-													session: {
-														$ref: "#/components/schemas/Session",
+													token: {
+														type: "string",
+														nullable: true,
+														description:
+															"Session token if session is created, null if disableSession is true or no session is created",
+													},
+													user: {
+														type: "object",
+														nullable: true,
+														properties: {
+															id: {
+																type: "string",
+																description: "Unique identifier of the user",
+															},
+															email: {
+																type: "string",
+																format: "email",
+																nullable: true,
+																description: "User's email address",
+															},
+															emailVerified: {
+																type: "boolean",
+																nullable: true,
+																description: "Whether the email is verified",
+															},
+															name: {
+																type: "string",
+																nullable: true,
+																description: "User's name",
+															},
+															image: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "User's profile image URL",
+															},
+															phoneNumber: {
+																type: "string",
+																description: "User's phone number",
+															},
+															phoneNumberVerified: {
+																type: "boolean",
+																description:
+																	"Whether the phone number is verified",
+															},
+															createdAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was created",
+															},
+															updatedAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was last updated",
+															},
+														},
+														required: [
+															"id",
+															"phoneNumber",
+															"phoneNumberVerified",
+															"createdAt",
+															"updatedAt",
+														],
+														description:
+															"User object with phone number details, null if no user is created or found",
 													},
 												},
+												required: ["status"],
 											},
 										},
 									},
@@ -421,7 +510,18 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.OTP_NOT_FOUND,
 						});
 					}
-					if (otp.value !== ctx.body.code) {
+					const [otpValue, attempts] = otp.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (otpValue !== ctx.body.code) {
+						await ctx.context.internalAdapter.updateVerificationValue(otp.id, {
+							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+						});
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid OTP",
 						});
@@ -539,7 +639,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx.request,
+							ctx.headers,
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -591,6 +691,32 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					body: z.object({
 						phoneNumber: z.string(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Request OTP for password reset via phone number",
+							responses: {
+								"200": {
+									description: "OTP sent successfully for password reset",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the OTP was sent successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
@@ -609,7 +735,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
+						value: `${code}:0`,
 						identifier: `${ctx.body.phoneNumber}-forget-password`,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -634,6 +760,32 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						phoneNumber: z.string(),
 						newPassword: z.string(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Reset password using phone number OTP",
+							responses: {
+								"200": {
+									description: "Password reset successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the password was reset successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const verification =
@@ -650,7 +802,23 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					if (verification.value !== ctx.body.otp) {
+					const [otpValue, attempts] = verification.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verification.id,
+						);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (ctx.body.otp !== otpValue) {
+						await ctx.context.internalAdapter.updateVerificationValue(
+							verification.id,
+							{
+								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+							},
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
@@ -683,6 +851,15 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path.startsWith("/phone-number");
+				},
+				window: 60 * 1000,
+				max: 10,
+			},
+		],
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

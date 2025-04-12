@@ -132,6 +132,14 @@ interface GenericOAuthConfig {
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
 	 */
 	discoveryHeaders?: Record<string, string>;
+  /**
+	 * Override user info with the provider info.
+	 *
+	 * This will update the user info with the provider info,
+	 * when the user signs in with the provider.
+	 * @default false
+	 */
+	overrideUserInfo?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -630,18 +638,42 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
-						const newAccount = await ctx.context.internalAdapter.createAccount({
-							userId: link.userId,
-							providerId: provider.providerId,
-							accountId: userInfo.id,
-							accessToken: tokens.accessToken,
-							refreshToken: tokens.refreshToken,
-							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-							scope: tokens.scopes?.join(","),
-						});
-						if (!newAccount) {
-							return redirectOnError("unable_to_link_account");
+						const existingAccount =
+							await ctx.context.internalAdapter.findAccount(userInfo.id);
+						if (existingAccount) {
+							if (existingAccount.userId !== link.userId) {
+								return redirectOnError(
+									"account_already_linked_to_different_user",
+								);
+							}
+							const updateData = Object.fromEntries(
+								Object.entries({
+									accessToken: tokens.accessToken,
+									idToken: tokens.idToken,
+									refreshToken: tokens.refreshToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								}).filter(([_, value]) => value !== undefined),
+							);
+							await ctx.context.internalAdapter.updateAccount(
+								existingAccount.id,
+								updateData,
+							);
+						} else {
+							const newAccount =
+								await ctx.context.internalAdapter.createAccount({
+									userId: link.userId,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									accessToken: tokens.accessToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								});
+							if (!newAccount) {
+								return redirectOnError("unable_to_link_account");
+							}
 						}
 						let toRedirectTo: string;
 						try {
@@ -667,6 +699,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,
+						overrideUserInfo: provider.overrideUserInfo,
 					});
 
 					if (result.error) {
@@ -700,6 +733,39 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						callbackURL: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Link an OAuth2 account to the current user session",
+							responses: {
+								"200": {
+									description:
+										"Authorization URL generated successfully for linking an OAuth2 account",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+														format: "uri",
+														description:
+															"The authorization URL to redirect the user to for linking the OAuth2 account",
+													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Indicates that the client should redirect to the provided URL",
+														enum: [true],
+													},
+												},
+												required: ["url", "redirect"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (c) => {
 					const session = c.context.session;

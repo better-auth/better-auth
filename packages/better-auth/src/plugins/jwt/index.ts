@@ -65,7 +65,13 @@ export interface JwtOptions {
 	};
 
 	jwt?: {
+		/**
+		 * The issuer of the JWT
+		 */
 		issuer?: string;
+		/**
+		 * The audience of the JWT
+		 */
 		audience?: string;
 		/**
 		 * Set the "exp" (Expiration Time) Claim.
@@ -91,10 +97,22 @@ export interface JwtOptions {
 		 * @default 15m
 		 */
 		expirationTime?: number | string | Date;
+		/**
+		 * A function that is called to define the payload of the JWT
+		 */
 		definePayload?: (session: {
 			user: User & Record<string, any>;
 			session: Session & Record<string, any>;
 		}) => Promise<Record<string, any>> | Record<string, any>;
+		/**
+		 * A function that is called to get the subject of the JWT
+		 *
+		 * @default session.user.id
+		 */
+		getSubject?: (session: {
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
+		}) => Promise<string> | string;
 	};
 	/**
 	 * Custom schema for the admin plugin
@@ -126,9 +144,6 @@ export async function getJwtToken(
 		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 
 		let jwk: Partial<Jwk> = {
-			id: ctx.context.generateId({
-				model: "jwks",
-			}),
 			publicKey: JSON.stringify(publicWebKey),
 			privateKey: privateKeyEncryptionEnabled
 				? JSON.stringify(
@@ -173,7 +188,10 @@ export async function getJwtToken(
 		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
 		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
 		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
-		.setSubject(ctx.context.session!.user.id)
+		.setSubject(
+			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
+				ctx.context.session!.user.id,
+		)
 		.sign(privateKey);
 	return jwt;
 }
@@ -189,8 +207,8 @@ export const jwt = (options?: JwtOptions) => {
 						openapi: {
 							description: "Get the JSON Web Key Set",
 							responses: {
-								200: {
-									description: "Success",
+								"200": {
+									description: "JSON Web Key Set retrieved successfully",
 									content: {
 										"application/json": {
 											schema: {
@@ -198,31 +216,68 @@ export const jwt = (options?: JwtOptions) => {
 												properties: {
 													keys: {
 														type: "array",
+														description: "Array of public JSON Web Keys",
 														items: {
 															type: "object",
 															properties: {
 																kid: {
 																	type: "string",
+																	description:
+																		"Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk",
 																},
 																kty: {
 																	type: "string",
-																},
-																use: {
-																	type: "string",
+																	description:
+																		"Key type (e.g., 'RSA', 'EC', 'OKP')",
 																},
 																alg: {
 																	type: "string",
+																	description:
+																		"Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')",
+																},
+																use: {
+																	type: "string",
+																	description:
+																		"Intended use of the public key (e.g., 'sig' for signature)",
+																	enum: ["sig"],
+																	nullable: true,
 																},
 																n: {
 																	type: "string",
+																	description:
+																		"Modulus for RSA keys (base64url-encoded)",
+																	nullable: true,
 																},
 																e: {
 																	type: "string",
+																	description:
+																		"Exponent for RSA keys (base64url-encoded)",
+																	nullable: true,
+																},
+																crv: {
+																	type: "string",
+																	description:
+																		"Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+																	nullable: true,
+																},
+																x: {
+																	type: "string",
+																	description:
+																		"X coordinate for elliptic curve keys (base64url-encoded)",
+																	nullable: true,
+																},
+																y: {
+																	type: "string",
+																	description:
+																		"Y coordinate for elliptic curve keys (base64url-encoded)",
+																	nullable: true,
 																},
 															},
+															required: ["kid", "kty", "alg"],
 														},
 													},
 												},
+												required: ["keys"],
 											},
 										},
 									},
@@ -252,9 +307,6 @@ export const jwt = (options?: JwtOptions) => {
 						const privateKeyEncryptionEnabled =
 							!options?.jwks?.disablePrivateKeyEncryption;
 						let jwk: Partial<Jwk> = {
-							id: ctx.context.generateId({
-								model: "jwks",
-							}),
 							publicKey: JSON.stringify({ alg, ...publicWebKey }),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(

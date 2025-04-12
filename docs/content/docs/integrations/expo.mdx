@@ -24,16 +24,30 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```
     </Step>
     <Step>
-        ## Install Better Auth and Expo Plugin
+        ## Install Server Dependencies
 
-        Install both the expo plugin in your server and both the Better Auth package and the Expo plugin in your Expo app.
+        Install both the Better Auth package and expo plugin into your server application.
 
         ```package-install
-        @better-auth/expo
+        @better-auth/expo better-auth
         ```
 
+    </Step>
+
+    <Step>
+        ## Install Client Dependencies
+
+        You also need to install both the Better Auth package and Expo plugin into your Expo application.
+
         ```package-install
-        better-auth
+        better-auth @better-auth/expo 
+        ```
+
+        If you plan on using our social integrations (Google, Apple etc.) then there are a few more dependencies that are required in your Expo app. In the default Expo template these are already installed so you may be able to skip this step if you have these dependencies already.
+
+        ```package-install
+        expo-linking expo-web-browser expo-constants
+        
         ```
     </Step>
     
@@ -47,9 +61,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { expo } from "@better-auth/expo";
 
         export const auth = betterAuth({
-            plugins: [
-                expo()
-            ]
+            plugins: [expo()]
         });
         ```
     </Step>
@@ -177,10 +189,10 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
             const [password, setPassword] = useState("");
 
             const handleLogin = async () => {
-            await authClient.signIn.email({
+                await authClient.signIn.email({
                     email,
                     password,
-            })
+                })
             };
 
             return (
@@ -245,16 +257,39 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
     </Tab>
 </Tabs>
 
+#### Social Sign-In
+
 For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL.
 
 ```tsx title="app/social-sign-in.tsx"
-
 import { Button } from "react-native";
 
 export default function App() {
     const handleLogin = async () => {
         await authClient.signIn.social({
             provider: "google",
+            callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
+        })
+    };
+    return <Button title="Login with Google" onPress={handleLogin} />;
+}
+```
+
+#### IdToken Sign-In
+
+If you want to make provider request on the mobile device and then verify the id token on the server, you can use the `authClient.signIn.social` method with the `idToken` option.
+
+```tsx title="app/social-sign-in.tsx"
+import { Button } from "react-native";
+
+export default function App() {
+    const handleLogin = async () => {
+        await authClient.signIn.social({
+            provider: "google", // only google, apple and facebook are supported for idToken sign-in
+            idToken: {
+                token: "...", // id token from provider
+                nonce: "...", // nonce from provider (optional)
+            }
             callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
         })
     };

@@ -14,6 +14,7 @@ import {
 	cancelInvitation,
 	createInvitation,
 	getInvitation,
+	listInvitations,
 	rejectInvitation,
 } from "./routes/crud-invites";
 import {
@@ -38,8 +39,14 @@ import {
 	removeTeam,
 	updateTeam,
 } from "./routes/crud-team";
-import type { Invitation, Member, Organization, Team } from "./schema";
-import type { Prettify } from "../../types/helper";
+import type {
+	InferInvitation,
+	InferMember,
+	Invitation,
+	Member,
+	Organization,
+	Team,
+} from "./schema";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
@@ -159,6 +166,27 @@ export interface OrganizationOptions {
 	 * @default 48 hours
 	 */
 	invitationExpiresIn?: number;
+	/**
+	 * The maximum invitation a user can send.
+	 *
+	 * @default 100
+	 */
+	invitationLimit?:
+		| number
+		| ((
+				data: {
+					user: User;
+					organization: Organization;
+					member: Member;
+				},
+				ctx: AuthContext,
+		  ) => Promise<number> | number);
+	/**
+	 * Cancel pending invitations on re-invite.
+	 *
+	 * @default true
+	 */
+	cancelPendingInvitationsOnReInvite?: boolean;
 	/**
 	 * Send an email with the
 	 * invitation link to the user.
@@ -348,6 +376,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
 		leaveOrganization,
+		listInvitations,
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
@@ -662,23 +691,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		},
 		$Infer: {
 			Organization: {} as Organization,
-			Invitation: {} as Invitation,
-			Member: {} as Member,
+			Invitation: {} as InferInvitation<O>,
+			Member: {} as InferMember<O>,
 			Team: teamSupport ? ({} as Team) : ({} as any),
-			ActiveOrganization: {} as Prettify<
-				Organization & {
-					members: Prettify<
-						Member & {
-							user: {
-								id: string;
-								name: string;
-								email: string;
-								image?: string | null;
-							};
-						}
-					>[];
-					invitations: Invitation[];
-				}
+			ActiveOrganization: {} as Awaited<
+				ReturnType<ReturnType<typeof getFullOrganization<O>>>
 			>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,

@@ -78,13 +78,16 @@ export const username = (options?: UsernameOptions) => {
 											schema: {
 												type: "object",
 												properties: {
+													token: {
+														type: "string",
+														description:
+															"Session token for the authenticated session",
+													},
 													user: {
 														$ref: "#/components/schemas/User",
 													},
-													session: {
-														$ref: "#/components/schemas/Session",
-													},
 												},
+												required: ["token", "user"],
 											},
 										},
 									},
@@ -197,7 +200,7 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.request,
+						ctx.headers,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {

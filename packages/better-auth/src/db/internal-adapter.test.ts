@@ -39,8 +39,10 @@ describe("adapter test", async () => {
 			},
 		},
 		advanced: {
-			generateId() {
-				return (id++).toString();
+			database: {
+				generateId() {
+					return (id++).toString();
+				},
 			},
 		},
 		databaseHooks: {

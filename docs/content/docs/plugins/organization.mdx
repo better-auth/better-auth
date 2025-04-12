@@ -511,6 +511,11 @@ await authClient.organization.inviteMember({
 })
 ```
 
+<Callout>
+  - If the user is already a member of the organization, the invitation will be canceled.
+  - If the user is already invited to the organization, unless `resend` is set to `true`, the invitation will not be sent again.
+  - If `cancelPendingInvitationsOnReInvite` is set to `true`, the invitation will be canceled if the user is already invited to the organization and a new invitation is sent.
+</Callout>
 
 ### Accept Invitation
 
@@ -549,6 +554,18 @@ To get an invitation you can use the `getInvitation` function provided by the cl
 client.organization.getInvitation({
     query: {
         id: params.id
+    }
+})
+```
+
+### List Invitations
+
+To list all invitations you can use the `listInvitations` function provided by the client.
+
+```ts title="auth-client.ts"
+const invitations = await authClient.organization.listInvitations({
+    query: {
+        organizationId: "organization-id" // optional, by default it will use the active organization
     }
 })
 ```
@@ -1176,8 +1193,33 @@ Table Name: `team`
       description: "Timestamp of when the team was created" 
     },
   ]}
-/>
+  />
 
+  Table Name: `member`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "teamId", 
+      type: "string", 
+      description: "The id of the team",
+      isOptional: true
+    },
+  ]}
+  />
+
+  Table Name: `invitation`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "teamId", 
+      type: "string", 
+      description: "The id of the team",
+      isOptional: true
+    },
+  ]}
+  />
 
 ### Customizing the Schema
 
@@ -1211,3 +1253,7 @@ const auth = betterAuth({
 **sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
 
 **invitationExpiresIn** : `number` - How long the invitation link is valid for in seconds. By default, it's 48 hours (2 days).
+
+**cancelPendingInvitationsOnReInvite**: `boolean` - Whether to cancel pending invitations if the user is already invited to the organization. By default, it's `true`.
+
+**invitationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of invitations allowed for a user. By default, it's `100`. You can set it to any number you want or a function that returns a boolean.
