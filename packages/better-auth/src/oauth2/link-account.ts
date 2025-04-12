@@ -109,6 +109,10 @@ export async function handleOAuthUserInfo(
 			await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...userInfo,
 				email: userInfo.email.toLowerCase(),
+				emailVerified:
+					userInfo.email.toLocaleLowerCase() === dbUser.user.email
+						? dbUser.user.emailVerified || userInfo.emailVerified
+						: userInfo.emailVerified,
 			});
 		}
 	} else {
