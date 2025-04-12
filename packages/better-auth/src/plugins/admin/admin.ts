@@ -976,10 +976,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					await ctx.context.internalAdapter.deleteSession(
 						session.session.token,
 					);
-
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
-					);
 					await setSessionCookie(ctx, adminSession);
 					return ctx.json(adminSession);
 				},
