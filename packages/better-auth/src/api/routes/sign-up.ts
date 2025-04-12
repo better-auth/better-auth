@@ -199,6 +199,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				if (isDevelopment) {
 					ctx.context.logger.error("Failed to create user", e);
 				}
+				if (e instanceof APIError) {
+					throw e;
+				}
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					details: e,
