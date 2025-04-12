@@ -516,7 +516,7 @@ const canCreateProjectAndRevokeSessionWithMissingPerms = client.admin.checkRoleP
     user: ["delete"],
     session: ["revoke"]
   },
-  returnMissingPermissions: true
+  returnMissingPermissions: true,
   role: "admin",
 });
 // ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }

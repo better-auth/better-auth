@@ -6,11 +6,7 @@ import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
-import {
-	type AccessControl,
-	type MissingPermissions,
-	type Role,
-} from "../access";
+import { type AccessControl, type Role } from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -583,16 +579,17 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 						returnMissingPermissions: ctx.body.returnMissingPermissions,
 					});
-					const ctxRes = {
+
+					const baseResponse = {
 						error: null,
 						success: typeof result === "boolean" ? result : result.success,
-					} as {
-						error: string | null;
-						success: boolean;
-						missingPermissions: MissingPermissions<any> | null;
 					};
-					if (typeof result === "object")
-						ctxRes.missingPermissions = result.missingPermissions;
+					const ctxRes = {
+						...baseResponse,
+						...(typeof result === "object" && {
+							missingPermissions: result.missingPermissions,
+						}),
+					};
 
 					return ctx.json(ctxRes);
 				},

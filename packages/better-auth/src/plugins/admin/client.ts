@@ -88,7 +88,9 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 						returnMissingPermissions:
 							data.returnMissingPermissions ?? undefined,
 					});
-					return isAuthorized as any;
+					return isAuthorized as T extends true
+						? CheckPermissionResult
+						: boolean;
 				},
 			},
 		}),

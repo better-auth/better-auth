@@ -888,8 +888,8 @@ const canCreateProjectAndCreateSaleWithMissingPerms = client.organization.checkR
 	permissions: {
 		organization: ["delete"],
     member: ["delete"]
-	},
-	role: "admin",
+  },
+  role: "admin",
   returnMissingPermissions: true
 })
 // ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }

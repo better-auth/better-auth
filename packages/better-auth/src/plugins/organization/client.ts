@@ -130,7 +130,10 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						returnMissingPermissions:
 							data.returnMissingPermissions ?? undefined,
 					});
-					return isAuthorized as any;
+
+					return isAuthorized as T extends true
+						? CheckPermissionResult
+						: boolean;
 				},
 			},
 		}),

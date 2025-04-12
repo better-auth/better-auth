@@ -6,7 +6,11 @@ export type MissingPermissions<TReq> = Partial<
 >;
 
 export type AuthorizeResponse<TReq> =
-	| { success: false; missingPermissions: MissingPermissions<TReq> }
+	| {
+			success: false;
+			missingPermissions: MissingPermissions<TReq>;
+			error: string;
+	  }
 	| { success: true; missingPermissions?: never };
 
 function checkArrayActions<TResourceKey extends keyof TStatements, TStatements>(
@@ -130,10 +134,14 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 			}
 
 			if (Object.keys(request).length === 0 && connector === "OR") {
-				return { success: false, missingPermissions: {} };
+				return {
+					success: false,
+					missingPermissions: {},
+					error: "Not authorized",
+				};
 			}
 
-			return { success: false, missingPermissions };
+			return { success: false, missingPermissions, error: "Not authorized" };
 		},
 		statements,
 	};

@@ -62,7 +62,7 @@ describe("access", () => {
 		expect(response.success).toBe(true);
 	});
 
-	it("should return missing permissions if success is false", () => {
+	it("should return missing permissions on failure and undefined on success", () => {
 		const response = role1.authorize({
 			project: ["create", "delete"],
 			ui: ["view", "edit"],

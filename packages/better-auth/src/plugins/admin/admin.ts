@@ -17,11 +17,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
-import {
-	type AccessControl,
-	type MissingPermissions,
-	type Role,
-} from "../access";
+import { type AccessControl, type Role } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
@@ -1345,16 +1341,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						returnMissingPermissions: ctx.body.returnMissingPermissions,
 					});
 
-					const ctxRes = {
+					const baseResponse = {
 						error: null,
 						success: typeof result === "boolean" ? result : result.success,
-					} as {
-						error: string | null;
-						success: boolean;
-						missingPermissions: MissingPermissions<any> | null;
 					};
-					if (typeof result === "object")
-						ctxRes.missingPermissions = result.missingPermissions;
+					const ctxRes = {
+						...baseResponse,
+						...(typeof result === "object" && {
+							missingPermissions: result.missingPermissions,
+						}),
+					};
 
 					return ctx.json(ctxRes);
 				},
