@@ -973,6 +973,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: "Failed to find admin session",
 						});
 					}
+
+					await ctx.context.internalAdapter.deleteSession(
+						session.session.token,
+					);
 					await setSessionCookie(ctx, adminSession);
 					return ctx.json(adminSession);
 				},

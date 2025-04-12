@@ -5,7 +5,6 @@ import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
 import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { BetterAuthError } from "../../error";
 import { APIError } from "better-call";
 
 describe("organization", async (it) => {
@@ -843,21 +842,14 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		let error: BetterAuthError | null = null;
-		try {
-			checkRolePermission({
-				role: "admin",
-				permissions: {
-					project: ["read"],
-					sales: ["delete"],
-				},
-			});
-		} catch (e) {
-			if (e instanceof BetterAuthError) {
-				error = e;
-			}
-		}
-		expect(error).toBeInstanceOf(BetterAuthError);
+		const res = checkRolePermission({
+			role: "admin",
+			permissions: {
+				project: ["read"],
+				sales: ["delete"],
+			},
+		});
+		expect(res).toBe(false);
 	});
 });
 
