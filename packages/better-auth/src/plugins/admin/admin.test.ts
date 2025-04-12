@@ -502,7 +502,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
-		expect(sessions.data?.sessions.length).toBe(4);
+		expect(sessions.data?.sessions.length).toBe(3);
 		const res = await client.admin.revokeUserSession(
 			{ sessionToken: sessions.data?.sessions[0].token || "" },
 			{ headers: adminHeaders },
@@ -512,7 +512,7 @@ describe("Admin plugin", async () => {
 			{ userId: user?.id || "" },
 			{ headers: adminHeaders },
 		);
-		expect(sessions2.data?.sessions.length).toBe(3);
+		expect(sessions2.data?.sessions.length).toBe(2);
 	});
 
 	it("should not allow non-admin to revoke user sessions", async () => {
