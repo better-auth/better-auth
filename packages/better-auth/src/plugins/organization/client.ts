@@ -112,7 +112,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				checkRolePermission: <
 					R extends O extends { roles: any }
 						? keyof O["roles"]
-						: "admin" | "user",
+						: "admin" | "member" | "owner",
 					T extends boolean | undefined = false,
 				>(
 					data: PermissionExclusive & {
