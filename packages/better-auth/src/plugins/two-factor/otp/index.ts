@@ -298,8 +298,16 @@ export const otp2fa = (options?: OTPOptions) => {
 						user: updatedUser,
 					});
 					return ctx.json({
-						status: true,
 						token: newSession.token,
+						user: {
+							id: updatedUser.id,
+							email: updatedUser.email,
+							emailVerified: updatedUser.emailVerified,
+							name: updatedUser.name,
+							image: updatedUser.image,
+							createdAt: updatedUser.createdAt,
+							updatedAt: updatedUser.updatedAt,
+						},
 					});
 				}
 				return valid(ctx);

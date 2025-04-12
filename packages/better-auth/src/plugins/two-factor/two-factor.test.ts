@@ -360,7 +360,6 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
-					console.log(parsed);
 					headers.append(
 						"cookie",
 						`better-auth.two_factor=${
@@ -370,14 +369,11 @@ describe("two factor", async () => {
 				},
 			},
 		});
-
-		console.log(headers);
 		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 			},
 		});
-
 		for (let i = 0; i < 5; i++) {
 			const res = await client.twoFactor.verifyOtp({
 				code: "000000", // Invalid code
@@ -385,7 +381,6 @@ describe("two factor", async () => {
 					headers,
 				},
 			});
-			console.log(res);
 			expect(res.error?.message).toBe("Invalid code");
 		}
 

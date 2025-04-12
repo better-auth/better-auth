@@ -281,8 +281,16 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						return valid(ctx);
 					}
 					return ctx.json({
-						user: user,
-						session: session.session,
+						token: session.session?.token,
+						user: {
+							id: session.user?.id,
+							email: session.user.email,
+							emailVerified: session.user.emailVerified,
+							name: session.user.name,
+							image: session.user.image,
+							createdAt: session.user.createdAt,
+							updatedAt: session.user.updatedAt,
+						},
 					});
 				},
 			),
