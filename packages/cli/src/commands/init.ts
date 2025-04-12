@@ -549,7 +549,7 @@ export async function initAction(opts: any) {
 			}
 		}
 	} else {
-		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up-to-date`)}!`);
+		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up to date`)}!`);
 	}
 
 	// ===== appName =====
