@@ -442,7 +442,7 @@ describe("cookie cache", async () => {
 				sensitiveData: {
 					type: "string",
 					returned: false,
-					defaultValue: "sensetiveData",
+					defaultValue: "sensitive-data",
 				},
 			},
 			cookieCache: {
