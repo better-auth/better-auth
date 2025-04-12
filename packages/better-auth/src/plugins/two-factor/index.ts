@@ -302,6 +302,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								maxAge: 60 * 10, // 10 minutes
 							},
 						);
+						const identifier = `2fa-${generateRandomString(20)}`;
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: data.user.id,
+							identifier,
+							expiresAt: new Date(Date.now() + 60 * 10 * 1000),
+						});
 						/**
 						 * We set the user id and the session
 						 * id as a hash. Later will fetch for
@@ -310,7 +316,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
-							data.user.id,
+							identifier,
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
