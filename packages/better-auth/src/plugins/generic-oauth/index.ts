@@ -132,7 +132,7 @@ interface GenericOAuthConfig {
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
 	 */
 	discoveryHeaders?: Record<string, string>;
-  /**
+	/**
 	 * Override user info with the provider info.
 	 *
 	 * This will update the user info with the provider info,
