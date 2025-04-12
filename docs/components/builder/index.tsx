@@ -100,7 +100,7 @@ const frameworks = [
 		),
 	},
 	{
-		title: "Solid Start",
+		title: "SolidStart",
 		description: "Fine-grained reactivity goes fullstack",
 		Icon: () => (
 			<svg
