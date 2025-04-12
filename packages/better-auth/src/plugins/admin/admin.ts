@@ -1286,9 +1286,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						$Infer: {
 							body: {} as PermissionExclusive & {
-								/**
-								 * @deprecated Use `permissions` instead
-								 */
 								userId?: string;
 								role?: InferAdminRolesFromOption<O>;
 							},
