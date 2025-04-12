@@ -46,6 +46,26 @@ Plugins can also set custom cookie options to align with specific security needs
 
 Better Auth includes built-in rate limiting to safeguard against brute-force attacks. Rate limits are applied across all routes by default, with specific routes subject to stricter limits based on potential risk.
 
+## IP Address Headers
+
+Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the IP address from the standard `X-Forwarded-For` header. However, you can configure a specific trusted header to ensure accurate IP address detection and prevent IP spoofing attacks.
+
+You can configure the IP address header in your Better Auth configuration:
+
+```typescript
+{
+  security: {
+    ipAddress: {
+      ipAddressHeaders: ['cf-connecting-ip'] // or any other custom header
+    }
+  }
+}
+```
+
+This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
+
+> **Important**: When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+
 ## Trusted Origins
 
 Trusted origins prevent CSRF attacks and block open redirects. You can set a list of trusted origins in the `trustedOrigins` configuration option. Requests from origins not on this list are automatically blocked.
