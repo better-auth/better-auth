@@ -438,6 +438,13 @@ describe("cookie cache", async () => {
 	const { client, testUser, auth, cookieSetter } = await getTestInstance({
 		database: adapter,
 		session: {
+			additionalFields: {
+				sensitiveData: {
+					type: "string",
+					returned: false,
+					defaultValue: "sensitive-data",
+				},
+			},
 			cookieCache: {
 				enabled: true,
 			},
@@ -476,6 +483,7 @@ describe("cookie cache", async () => {
 				headers,
 			},
 		});
+		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
 		expect(fn).toHaveBeenCalledTimes(1);
 	});
