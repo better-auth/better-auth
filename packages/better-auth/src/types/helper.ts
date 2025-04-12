@@ -56,3 +56,7 @@ export type DeepPartial<T> = T extends Function
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
 export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
+
+export type PrettifyOmitId<T extends Record<string, any>> = PrettifyDeep<
+	Omit<T, "id">
+>;
