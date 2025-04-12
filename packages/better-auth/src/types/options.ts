@@ -760,8 +760,8 @@ export type BetterAuthOptions = {
 		session?: {
 			create?: {
 				/**
-				 * Hook that is called before a session is updated.
-				 * if the hook returns false, the session will not be updated.
+				 * Hook that is called before a session is created.
+				 * if the hook returns false, the session will not be created.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
@@ -775,7 +775,7 @@ export type BetterAuthOptions = {
 					  }
 				>;
 				/**
-				 * Hook that is called after a session is updated.
+				 * Hook that is called after a session is created.
 				 */
 				after?: (
 					session: Session,
