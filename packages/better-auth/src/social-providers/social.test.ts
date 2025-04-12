@@ -215,7 +215,7 @@ describe("Social Providers", async (c) => {
 			});
 		});
 
-		it("should use callback url if the user is already registered", async () => {
+		it("Should use callback URL if the user is already registered", async () => {
 			const signInRes = await client.signIn.social({
 				provider: "google",
 				callbackURL: "/callback",

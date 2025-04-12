@@ -125,7 +125,7 @@ export type BetterAuthOptions = {
 			/**
 			 * @param user the user to send the
 			 * verification email to
-			 * @param url the url to send the verification email to
+			 * @param url the URL to send the verification email to
 			 * it contains the token as well
 			 * @param token the token to send the verification email to
 			 */
@@ -207,7 +207,7 @@ export type BetterAuthOptions = {
 			/**
 			 * @param user the user to send the
 			 * reset password email to
-			 * @param url the url to send the reset password email to
+			 * @param url the URL to send the reset password email to
 			 * @param token the token to send to the user (could be used instead of sending the url
 			 * if you need to redirect the user to custom route)
 			 */
@@ -938,9 +938,9 @@ export type BetterAuthOptions = {
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
 		/**
-		 * The url to redirect to on error
+		 * The URL to redirect to on error
 		 *
-		 * When errorURL is provided, the error will be added to the url as a query parameter
+		 * When errorURL is provided, the error will be added to the URL as a query parameter
 		 * and the user will be redirected to the errorURL.
 		 *
 		 * @default - "/api/auth/error"
