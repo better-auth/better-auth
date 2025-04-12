@@ -437,7 +437,7 @@ const canCreateProjectAndCreateSaleWithMissingPerms = await authClient.admin.has
   },
   returnMissingPermissions: true
 });
-// ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }
+// ^? { success: boolean; missingPermissions: { [key: string]: string[] } | null }
 ```
 
 If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
@@ -485,7 +485,7 @@ auth.api.userHasPermission({
     returnMissingPermissions: true
   },
 });
-// ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }
+// ^? { success: boolean; missingPermissions: { [key: string]: string[] } | null }
 ```
 
 
@@ -519,7 +519,7 @@ const canCreateProjectAndRevokeSessionWithMissingPerms = client.admin.checkRoleP
   returnMissingPermissions: true,
   role: "admin",
 });
-// ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }
+// ^? { success: boolean; missingPermissions: { [key: string]: string[] } | null }
 ```
 
 ## Schema
