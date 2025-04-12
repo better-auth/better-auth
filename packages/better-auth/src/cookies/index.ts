@@ -25,7 +25,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
-		(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
 		: undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
@@ -105,14 +105,18 @@ export async function setCookieCache(
 		ctx.context.options.session?.cookieCache?.enabled;
 
 	if (shouldStoreSessionDataInCookie) {
-		const filteredSession = (Object.entries(session.session).reduce((acc, [key, value]) => {
-			const fieldConfig = ctx.context.options.session?.additionalFields?.[key];
-			if (!fieldConfig || fieldConfig.returned !== false) {
-				acc[key] = value;
-			}
-			return acc;
-		}, {} as Record<string, any>))
-		const sessionData = {session: filteredSession , user: session.user}
+		const filteredSession = Object.entries(session.session).reduce(
+			(acc, [key, value]) => {
+				const fieldConfig =
+					ctx.context.options.session?.additionalFields?.[key];
+				if (!fieldConfig || fieldConfig.returned !== false) {
+					acc[key] = value;
+				}
+				return acc;
+			},
+			{} as Record<string, any>,
+		);
+		const sessionData = { session: filteredSession, user: session.user };
 		const data = base64Url.encode(
 			JSON.stringify({
 				session: sessionData,
