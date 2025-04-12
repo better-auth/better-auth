@@ -11,12 +11,11 @@ export const organizationSchema = z.object({
 	id: z.string().default(generateId),
 	name: z.string(),
 	slug: z.string(),
-	logo: z.string().nullish(),
+	logo: z.string().nullish().optional(),
 	metadata: z
 		.record(z.string())
 		.or(z.string().transform((v) => JSON.parse(v)))
-
-		.nullish(),
+		.optional(),
 	createdAt: z.date(),
 });
 
@@ -46,8 +45,7 @@ export const teamSchema = z.object({
 	createdAt: z.date(),
 	updatedAt: z.date().optional(),
 });
-export type Organization = z.infer<typeof organizationSchema> &
-	Record<string, any>;
+export type Organization = z.infer<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type Team = z.infer<typeof teamSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
