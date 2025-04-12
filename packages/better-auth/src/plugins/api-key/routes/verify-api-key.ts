@@ -85,7 +85,7 @@ export function verifyApiKey({
 				],
 			});
 
-			// No api key found
+			// No API key found
 			if (!apiKey) {
 				return ctx.json({
 					valid: false,
