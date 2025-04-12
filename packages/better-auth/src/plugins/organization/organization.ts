@@ -545,7 +545,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 														type: "boolean",
 													},
 													missingPermissions: {
-														type: "object",
+														type: ["object", "null"],
 													},
 												},
 												required: ["success"],

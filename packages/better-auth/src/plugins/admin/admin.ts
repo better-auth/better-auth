@@ -1290,7 +1290,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 														type: "boolean",
 													},
 													missingPermissions: {
-														type: "object",
+														type: ["object", "null"],
 													},
 												},
 												required: ["success"],
