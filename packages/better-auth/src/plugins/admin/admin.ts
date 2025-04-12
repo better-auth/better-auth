@@ -17,7 +17,11 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
-import { type AccessControl, type Role } from "../access";
+import {
+	type AccessControl,
+	type MissingPermissions,
+	type Role,
+} from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
@@ -1228,6 +1232,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						.object({
 							userId: z.coerce.string().optional(),
 							role: z.string().optional(),
+							returnMissingPermissions: z.boolean().optional(),
 						})
 						.and(
 							z.union([
@@ -1259,6 +1264,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 													type: "object",
 													description: "The permission to check",
 												},
+												returnMissingPermissions: {
+													type: "boolean",
+													description:
+														"Whether to return the missing permissions",
+												},
 											},
 											required: ["permissions"],
 										},
@@ -1279,6 +1289,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 													success: {
 														type: "boolean",
 													},
+													missingPermissions: {
+														type: "object",
+													},
 												},
 												required: ["success"],
 											},
@@ -1291,6 +1304,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							body: {} as PermissionExclusive & {
 								userId?: string;
 								role?: InferAdminRolesFromOption<O>;
+								returnMissingPermissions?: boolean;
 							},
 						},
 					},
@@ -1328,11 +1342,21 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						role: user.role,
 						options: options as AdminOptions,
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+						returnMissingPermissions: ctx.body.returnMissingPermissions,
 					});
-					return ctx.json({
+
+					const ctxRes = {
 						error: null,
-						success: result,
-					});
+						success: typeof result === "boolean" ? result : result.success,
+					} as {
+						error: string | null;
+						success: boolean;
+						missingPermissions: MissingPermissions<any> | null;
+					};
+					if (typeof result === "object")
+						ctxRes.missingPermissions = result.missingPermissions ?? null;
+
+					return ctx.json(ctxRes);
 				},
 			),
 		},

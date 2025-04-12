@@ -6,7 +6,11 @@ import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
-import { type AccessControl, type Role } from "../access";
+import {
+	type AccessControl,
+	type MissingPermissions,
+	type Role,
+} from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -477,6 +481,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					body: z
 						.object({
 							organizationId: z.string().optional(),
+							returnMissingPermissions: z.boolean().optional(),
 						})
 						.and(
 							z.union([
@@ -495,6 +500,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						$Infer: {
 							body: {} as PermissionExclusive & {
 								organizationId?: string;
+								returnMissingPermissions?: boolean;
 							},
 						},
 						openapi: {
@@ -513,6 +519,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 												permissions: {
 													type: "object",
 													description: "The permission to check",
+												},
+												returnMissingPermissions: {
+													type: "boolean",
+													description: "Whether to return missing permissions",
 												},
 											},
 											required: ["permissions"],
@@ -533,6 +543,9 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 													},
 													success: {
 														type: "boolean",
+													},
+													missingPermissions: {
+														type: "object",
 													},
 												},
 												required: ["success"],
@@ -568,11 +581,20 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						role: member.role,
 						options: options as OrganizationOptions,
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+						returnMissingPermissions: ctx.body.returnMissingPermissions,
 					});
-					return ctx.json({
+					const ctxRes = {
 						error: null,
-						success: result,
-					});
+						success: typeof result === "boolean" ? result : result.success,
+					} as {
+						error: string | null;
+						success: boolean;
+						missingPermissions: MissingPermissions<any> | null;
+					};
+					if (typeof result === "object")
+						ctxRes.missingPermissions = result.missingPermissions ?? null;
+
+					return ctx.json(ctxRes);
 				},
 			),
 		},

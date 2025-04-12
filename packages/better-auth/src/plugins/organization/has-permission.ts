@@ -18,6 +18,7 @@ export const hasPermission = (
 	input: {
 		role: string;
 		options: OrganizationOptions;
+		returnMissingPermissions?: boolean;
 	} & PermissionExclusive,
 ) => {
 	if (!input.permissions && !input.permission) {
@@ -28,9 +29,15 @@ export const hasPermission = (
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
 		const result = _role?.authorize(input.permissions ?? input.permission);
-		if (result?.success) {
-			return true;
+		if (input.returnMissingPermissions) {
+			return {
+				success: result?.success,
+				missingPermissions: result?.missingPermissions ?? null,
+			};
 		}
+
+		return result?.success ?? false;
 	}
+
 	return false;
 };

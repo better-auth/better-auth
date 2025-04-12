@@ -62,6 +62,24 @@ describe("access", () => {
 		expect(response.success).toBe(true);
 	});
 
+	it("should return missing permissions if success is false", () => {
+		const response = role1.authorize({
+			project: ["create", "delete"],
+			ui: ["view", "edit"],
+		});
+		expect(response.success).toBe(true);
+		expect(response.missingPermissions).toBeUndefined();
+
+		const failedResponse = role1.authorize({
+			project: ["create", "delete-many"],
+			ui: ["view", "edit"],
+		});
+		expect(failedResponse.success).toBe(false);
+		expect(failedResponse.missingPermissions).toEqual({
+			project: ["delete-many"],
+		});
+	});
+
 	it("should validate using or connector for a specific resource", () => {
 		const response = role1.authorize({
 			project: {

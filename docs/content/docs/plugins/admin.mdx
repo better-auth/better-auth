@@ -428,6 +428,16 @@ const canCreateProjectAndCreateSale = await authClient.admin.hasPermission({
     sale: ["create"]
   },
 });
+
+// `hasPermission` can also return missing permissions
+const canCreateProjectAndCreateSaleWithMissingPerms = await authClient.admin.hasPermission({
+  permissions: {
+    project: ["create"],
+    sale: ["create"]
+  },
+  returnMissingPermissions: true
+});
+// ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }
 ```
 
 If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
@@ -446,7 +456,7 @@ auth.api.userHasPermission({
 // You can also just pass the role directly
 auth.api.userHasPermission({
   body: {
-   role: "admin",
+    role: "admin",
     permissions: {
       project: ["create"], // This must match the structure in your access control
     },
@@ -456,13 +466,26 @@ auth.api.userHasPermission({
 // You can also check multiple resource permissions at the same time
 auth.api.userHasPermission({
   body: {
-   role: "admin",
+    role: "admin",
     permissions: {
       project: ["create"], // This must match the structure in your access control
       sale: ["create"]
     },
   },
 });
+
+// `userHasPermission` can also return missing permissions
+auth.api.userHasPermission({
+  body: {
+    role: "admin",
+    permissions: {
+      project: ["create"], // This must match the structure in your access control
+      sale: ["create"]
+    },
+    returnMissingPermissions: true
+  },
+});
+// ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }
 ```
 
 
@@ -486,6 +509,17 @@ const canCreateProjectAndRevokeSession = client.admin.checkRolePermission({
   },
   role: "admin",
 });
+
+// `checkRolePermission` can also return missing permissions
+const canCreateProjectAndRevokeSessionWithMissingPerms = client.admin.checkRolePermission({
+  permissions: {
+    user: ["delete"],
+    session: ["revoke"]
+  },
+  returnMissingPermissions: true
+  role: "admin",
+});
+// ^ { success: boolean; missingPermissions: { [key: string]: string[] } | null }
 ```
 
 ## Schema

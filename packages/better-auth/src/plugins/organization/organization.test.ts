@@ -518,6 +518,22 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(hasMultiplePermissions.data?.success).toBe(true);
+
+		const hasMultiplePermissionsWithMissingPerms =
+			await client.organization.hasPermission({
+				permissions: {
+					member: ["update"],
+					invitation: ["create"],
+				},
+				returnMissingPermissions: true,
+				fetchOptions: {
+					headers,
+				},
+			});
+		expect(hasMultiplePermissionsWithMissingPerms.data?.success).toBe(true);
+		expect(
+			hasMultiplePermissionsWithMissingPerms.data?.missingPermissions,
+		).toBeNull();
 	});
 
 	it("should allow deleting organization", async () => {
