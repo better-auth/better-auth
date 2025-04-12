@@ -128,6 +128,11 @@ interface GenericOAuthConfig {
 	 */
 	authentication?: "basic" | "post";
 	/**
+	 * Custom headers to include in the discovery request.
+	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
+	 */
+	discoveryHeaders?: Record<string, string>;
+	/**
 	 * Override user info with the provider info.
 	 *
 	 * This will update the user info with the provider info,
@@ -232,6 +237,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								userinfo_endpoint: string;
 							}>(c.discoveryUrl, {
 								method: "GET",
+								headers: c.discoveryHeaders,
 							});
 							if (discovery.data) {
 								finalTokenUrl = discovery.data.token_endpoint;
@@ -264,6 +270,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								token_endpoint: string;
 							}>(c.discoveryUrl, {
 								method: "GET",
+								headers: c.discoveryHeaders,
 							});
 							if (discovery.data) {
 								finalTokenUrl = discovery.data.token_endpoint;
@@ -416,6 +423,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authorization_endpoint: string;
 							token_endpoint: string;
 						}>(discoveryUrl, {
+							method: "GET",
+							headers: config.discoveryHeaders,
 							onError(context) {
 								ctx.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
@@ -566,6 +575,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							userinfo_endpoint: string;
 						}>(provider.discoveryUrl, {
 							method: "GET",
+							headers: provider.discoveryHeaders,
 						});
 						if (discovery.data) {
 							finalTokenUrl = discovery.data.token_endpoint;
@@ -803,6 +813,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authorization_endpoint: string;
 							token_endpoint: string;
 						}>(discoveryUrl, {
+							method: "GET",
+							headers: provider.discoveryHeaders,
 							onError(context) {
 								c.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
