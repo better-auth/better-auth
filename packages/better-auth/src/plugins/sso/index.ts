@@ -222,7 +222,9 @@ export const sso = (options?: SSOOptions) => {
 								scopes: body.scopes,
 								userinfoEndpoint: body.userInfoEndpoint,
 								overrideUserInfo:
-									ctx.body.overrideUserInfo || options?.defaultOverrideUserInfo,
+									ctx.body.overrideUserInfo ||
+									options?.defaultOverrideUserInfo ||
+									false,
 							}),
 							organizationId: body.organizationId,
 							userId: ctx.context.session.user.id,
@@ -669,7 +671,9 @@ export const sso = (options?: SSOOptions) => {
 						},
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 						overrideUserInfo:
-							options?.defaultOverrideUserInfo || ctx.body.overrideUserInfo,
+							ctx.body.overrideUserInfo ||
+							options?.defaultOverrideUserInfo ||
+							false,
 					});
 					if (linked.error) {
 						throw ctx.redirect(
