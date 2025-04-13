@@ -153,7 +153,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			const canInvite = hasPermission({
 				role: member.role,
 				options: ctx.context.orgOptions,
-				permission: {
+				permissions: {
 					invitation: ["create"],
 				},
 			});
@@ -489,7 +489,7 @@ export const cancelInvitation = createAuthEndpoint(
 		const canCancel = hasPermission({
 			role: member.role,
 			options: ctx.context.orgOptions,
-			permission: {
+			permissions: {
 				invitation: ["cancel"],
 			},
 		});

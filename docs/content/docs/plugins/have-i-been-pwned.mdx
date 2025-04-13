@@ -18,17 +18,7 @@ export const auth = betterAuth({
 })
 ```
 
-## Customization
-
-You can customize the error message:
-
-```ts
-haveIBeenPwned({
-    customPasswordCompromisedMessage: "Please choose a more secure password."
-})
-```
-
-## User Experience
+## Usage
 
 When a user attempts to create an account or update their password with a compromised password, they'll receive the following default error:
 
@@ -39,6 +29,15 @@ When a user attempts to create an account or update their password with a compro
 }
 ```
 
+## Config
+
+You can customize the error message:
+
+```ts
+haveIBeenPwned({
+    customPasswordCompromisedMessage: "Please choose a more secure password."
+})
+```
 ## Security Notes
 
 - Only the first 5 characters of the password hash are sent to the API

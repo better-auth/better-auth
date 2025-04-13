@@ -3,15 +3,14 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
-import { verifyTwoFactorMiddleware } from "../verify-middleware";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
 import { APIError } from "better-call";
-import { setSessionCookie } from "../../../cookies";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { verifyTwoFactor } from "../verify-two-factor";
 
 export interface BackupCodeOptions {
 	/**
@@ -120,7 +119,6 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							})
 							.optional(),
 					}),
-					use: [verifyTwoFactorMiddleware],
 					metadata: {
 						openapi: {
 							description: "Verify a backup code for two-factor authentication",
@@ -233,7 +231,8 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
+					const { session, valid } = await verifyTwoFactor(ctx);
+					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [
@@ -279,14 +278,19 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					});
 
 					if (!ctx.body.disableSession) {
-						await setSessionCookie(ctx, {
-							session: ctx.context.session.session,
-							user,
-						});
+						return valid(ctx);
 					}
 					return ctx.json({
-						user: user,
-						session: ctx.context.session,
+						token: session.session?.token,
+						user: {
+							id: session.user?.id,
+							email: session.user.email,
+							emailVerified: session.user.emailVerified,
+							name: session.user.name,
+							image: session.user.image,
+							createdAt: session.user.createdAt,
+							updatedAt: session.user.updatedAt,
+						},
 					});
 				},
 			),

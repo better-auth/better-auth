@@ -105,9 +105,21 @@ export async function setCookieCache(
 		ctx.context.options.session?.cookieCache?.enabled;
 
 	if (shouldStoreSessionDataInCookie) {
+		const filteredSession = Object.entries(session.session).reduce(
+			(acc, [key, value]) => {
+				const fieldConfig =
+					ctx.context.options.session?.additionalFields?.[key];
+				if (!fieldConfig || fieldConfig.returned !== false) {
+					acc[key] = value;
+				}
+				return acc;
+			},
+			{} as Record<string, any>,
+		);
+		const sessionData = { session: filteredSession, user: session.user };
 		const data = base64Url.encode(
 			JSON.stringify({
-				session: session,
+				session: sessionData,
 				expiresAt: getDate(
 					ctx.context.authCookies.sessionData.options.maxAge || 60,
 					"sec",
@@ -115,7 +127,7 @@ export async function setCookieCache(
 				signature: await createHMAC("SHA-256", "base64urlnopad").sign(
 					ctx.context.secret,
 					JSON.stringify({
-						...session,
+						...sessionData,
 						expiresAt: getDate(
 							ctx.context.authCookies.sessionData.options.maxAge || 60,
 							"sec",

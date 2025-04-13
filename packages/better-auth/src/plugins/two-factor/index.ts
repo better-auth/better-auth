@@ -296,21 +296,22 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
+						const maxAge = options?.otpOptions?.period || 60 * 5; // 5 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
-								maxAge: 60 * 10, // 10 minutes
+								maxAge,
 							},
 						);
-						/**
-						 * We set the user id and the session
-						 * id as a hash. Later will fetch for
-						 * sessions with the user id compare
-						 * the hash and set that as session.
-						 */
+						const identifier = `2fa-${generateRandomString(20)}`;
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: data.user.id,
+							identifier,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
+						});
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
-							data.user.id,
+							identifier,
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
