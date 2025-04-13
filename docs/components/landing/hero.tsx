@@ -5,7 +5,7 @@ import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, CornerRightUp } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";

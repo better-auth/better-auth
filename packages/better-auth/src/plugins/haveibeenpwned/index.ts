@@ -4,7 +4,8 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../../types";
 
 const ERROR_CODES = {
-	PASSWORD_COMPROMISED: "THE_PASSWORD_YOU_ENTERED_HAS_BEEN_COMPROMISED_PLEASE_CHOOSE_A_DIFFERENT_PASSWORD",
+	PASSWORD_COMPROMISED:
+		"THE_PASSWORD_YOU_ENTERED_HAS_BEEN_COMPROMISED_PLEASE_CHOOSE_A_DIFFERENT_PASSWORD",
 } as const;
 
 async function checkPasswordCompromise(
@@ -74,7 +75,6 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 							);
 							return ctx.password.hash(password);
 						},
-
 					},
 				},
 			};
