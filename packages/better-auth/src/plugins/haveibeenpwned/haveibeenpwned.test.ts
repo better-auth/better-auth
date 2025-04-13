@@ -22,9 +22,7 @@ describe("have-i-been-pwned", async () => {
 		});
 		expect(result.error).not.toBeNull();
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.code).toBe(
-			"THE_PASSWORD_YOU_ENTERED_HAS_BEEN_COMPROMISED_PLEASE_CHOOSE_A_DIFFERENT_PASSWORD",
-		);
+		expect(result.error?.code).toBe("PASSWORD_COMPROMISED");
 	});
 
 	it("should allow account creation with strong, uncompromised password", async () => {
