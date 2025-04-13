@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { haveIBeenPwned } from "./index";
+import { haveIBeenPwned , ERROR_CODES } from "./index";
 describe("have-i-been-pwned", async () => {
 	const { client } = await getTestInstance(
 		{
@@ -23,7 +23,7 @@ describe("have-i-been-pwned", async () => {
 		expect(result.error).not.toBeNull();
 		expect(result.error?.status).toBe(400);
 		expect(result.error?.code).toBe(
-			"THE_PASSWORD_YOU_ENTERED_HAS_BEEN_COMPROMISED_PLEASE_CHOOSE_A_DIFFERENT_PASSWORD",
+			ERROR_CODES.PASSWORD_COMPROMISED,
 		);
 	});
 
