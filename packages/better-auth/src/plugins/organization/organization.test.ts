@@ -492,14 +492,6 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		const org2 = await client.organization.getFullOrganization({
-			query: {
-				organizationId,
-			},
-			fetchOptions: {
-				headers,
-			},
-		});
 		expect(removedOwner.error?.status).toBe(400);
 	});
 
