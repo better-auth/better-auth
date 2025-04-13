@@ -6,4 +6,5 @@ export const USERNAME_ERROR_CODES = {
 	USERNAME_TOO_SHORT: "username is too short",
 	USERNAME_TOO_LONG: "username is too long",
 	INVALID_USERNAME: "username is invalid",
+	USERNAME_IS_EMPTY: "username is empty",
 };

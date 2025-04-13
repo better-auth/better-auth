@@ -97,7 +97,7 @@ export const username = (options?: UsernameOptions) => {
 
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
-
+					console.log("Username", ctx.body.username)
 					if (ctx.body.username.length < minUsernameLength) {
 						ctx.context.logger.error("Username too short", {
 							username: ctx.body.username,
@@ -118,13 +118,11 @@ export const username = (options?: UsernameOptions) => {
 
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
-
-					if (!validator(ctx.body.username)) {
+					if (ctx.body.username.length === 0 || !validator(ctx.body.username)) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
-
 					const user = await ctx.context.adapter.findOne<
 						User & { username: string }
 					>({
@@ -235,7 +233,12 @@ export const username = (options?: UsernameOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
+<<<<<<< HEAD
 						if (username !== undefined && typeof username === "string") {
+=======
+						console.log({ username })
+						if (username) {
+>>>>>>> 526b6398 (fix: username empty field on update guard)
 							const minUsernameLength = options?.minUsernameLength || 3;
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
@@ -252,7 +255,6 @@ export const username = (options?: UsernameOptions) => {
 
 							const validator =
 								options?.usernameValidator || defaultUsernameValidator;
-
 							const valid = await validator(username);
 							if (!valid) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
@@ -271,6 +273,12 @@ export const username = (options?: UsernameOptions) => {
 							if (user) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+								});
+							}
+						} else {
+							if (typeof username === "string" ) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.USERNAME_IS_EMPTY,
 								});
 							}
 						}
