@@ -23,6 +23,9 @@ describe("organization", async (it) => {
 						},
 						member: {
 							modelName: "teamMembers",
+							fields: {
+								userId: "user_id",
+							},
 						},
 					},
 					invitationLimit: 3,
