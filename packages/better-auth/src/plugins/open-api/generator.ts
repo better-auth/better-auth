@@ -4,7 +4,7 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import { ZodObject, ZodOptional, type ZodJSONSchema } from "zod";
+import { ZodObject, ZodOptional, ZodSchema } from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
@@ -69,7 +69,7 @@ export interface Path {
 }
 const paths: Record<string, Path> = {};
 
-function getTypeFromZodType(zodType: ZodJSONSchema) {
+function getTypeFromZodType(zodType: ZodSchema) {
 	switch (zodType.constructor.name) {
 		case "ZodString":
 			return "string";
@@ -94,19 +94,21 @@ function getParameters(options: EndpointOptions) {
 	}
 	if (options.query instanceof ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
-			parameters.push({
-				name: key,
-				in: "query",
-				schema: {
-					type: getTypeFromZodType(value as ZodJSONSchema),
-					...("minLength" in value && value.minLength
-						? {
-								minLength: value.minLength as number,
-							}
-						: {}),
-					description: (value as any).description,
-				},
-			});
+			if (value instanceof ZodSchema) {
+				parameters.push({
+					name: key,
+					in: "query",
+					schema: {
+						type: getTypeFromZodType(value),
+						...("minLength" in value && value.minLength
+							? {
+									minLength: value.minLength as number,
+								}
+							: {}),
+						description: value.description,
+					},
+				});
+			}
 		});
 	}
 	return parameters;
@@ -127,10 +129,10 @@ function getRequestBody(options: EndpointOptions): any {
 		const properties: Record<string, any> = {};
 		const required: string[] = [];
 		Object.entries(shape).forEach(([key, value]) => {
-			if (value) {
+			if (value instanceof ZodSchema) {
 				properties[key] = {
-					type: getTypeFromZodType(value as ZodJSONSchema),
-					description: (value as any).description,
+					type: getTypeFromZodType(value),
+					description: value.description,
 				};
 				if (!(value instanceof ZodOptional)) {
 					required.push(key);
