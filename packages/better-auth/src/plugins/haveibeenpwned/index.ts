@@ -3,7 +3,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../../types";
 
-export const ERROR_CODES = {
+const ERROR_CODES = {
 	PASSWORD_COMPROMISED:
 		"THE_PASSWORD_YOU_ENTERED_HAS_BEEN_COMPROMISED_PLEASE_CHOOSE_A_DIFFERENT_PASSWORD",
 } as const;

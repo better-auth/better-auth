@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { haveIBeenPwned, ERROR_CODES } from "./index";
+import { haveIBeenPwned } from "./index";
 describe("have-i-been-pwned", async () => {
 	const { client } = await getTestInstance(
 		{
@@ -22,7 +22,7 @@ describe("have-i-been-pwned", async () => {
 		});
 		expect(result.error).not.toBeNull();
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.code).toBe(ERROR_CODES.PASSWORD_COMPROMISED);
+		expect(result.error?.code).toBe("THE_PASSWORD_YOU_ENTERED_HAS_BEEN_COMPROMISED_PLEASE_CHOOSE_A_DIFFERENT_PASSWORD");
 	});
 
 	it("should allow account creation with strong, uncompromised password", async () => {
@@ -61,3 +61,4 @@ describe("have-i-been-pwned", async () => {
 		expect(result.error?.status).toBe(400);
 	});
 });
+
