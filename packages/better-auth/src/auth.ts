@@ -16,11 +16,8 @@ import { BetterAuthError } from "./error";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <
-	O extends BetterAuthOptions &
-		Record<Exclude<keyof O, keyof BetterAuthOptions>, never>,
->(
-	options: O,
+export const betterAuth = <O extends BetterAuthOptions>(
+	options: O & Record<never, never>,
 ) => {
 	const authContext = init(options as O);
 	const { api } = getEndpoints(authContext, options as O);

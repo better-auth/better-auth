@@ -350,7 +350,8 @@ describe("Social Providers", async (c) => {
 				},
 			});
 
-			const authUrl = signInRes.data.url;
+			const authUrl = signInRes.data?.url;
+			if (!authUrl) throw new Error("No auth url found");
 			const mockEndpoint = authUrl.replace(
 				"https://accounts.google.com/o/oauth2/auth",
 				"http://localhost:8080/authorize",

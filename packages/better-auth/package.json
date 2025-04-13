@@ -19,7 +19,7 @@
     "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
     "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
-    "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
+    "typecheck": "tsc --noEmit"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
