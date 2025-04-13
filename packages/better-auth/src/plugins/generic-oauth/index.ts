@@ -287,6 +287,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 							},
+							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
