@@ -165,6 +165,9 @@ export const createInternalAdapter = (
 				model: "user",
 				where,
 			});
+			if (typeof total === "string") {
+				return parseInt(total);
+			}
 			return total;
 		},
 		deleteUser: async (userId: string) => {
