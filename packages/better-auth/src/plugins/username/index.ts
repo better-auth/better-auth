@@ -117,7 +117,7 @@ export const username = (options?: UsernameOptions) => {
 
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
-					if (ctx.body.username.length === 0 || !validator(ctx.body.username)) {
+					if (!validator(ctx.body.username)) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
