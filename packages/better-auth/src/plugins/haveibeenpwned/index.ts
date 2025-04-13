@@ -3,6 +3,10 @@ import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../../types";
 
+const ERROR_CODES = {
+	PASSWORD_COMPROMISED: "THE_PASSWORD_YOU_ENTERED_HAS_BEEN_COMPROMISED_PLEASE_CHOOSE_A_DIFFERENT_PASSWORD",
+} as const;
+
 async function checkPasswordCompromise(
 	password: string,
 	customMessage?: string,
@@ -30,7 +34,6 @@ async function checkPasswordCompromise(
 				message: `Failed to check password. Status: ${error.status}`,
 			});
 		}
-
 		const lines = data.split("\n");
 		const found = lines.some(
 			(line) => line.split(":")[0].toUpperCase() === suffix.toUpperCase(),
@@ -41,6 +44,7 @@ async function checkPasswordCompromise(
 				message:
 					customMessage ||
 					"The password you entered has been compromised. Please choose a different password.",
+				code: ERROR_CODES.PASSWORD_COMPROMISED,
 			});
 		}
 	} catch (error) {
@@ -70,8 +74,10 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 							);
 							return ctx.password.hash(password);
 						},
+
 					},
 				},
 			};
 		},
+		$ERROR_CODES: ERROR_CODES,
 	}) satisfies BetterAuthPlugin;
