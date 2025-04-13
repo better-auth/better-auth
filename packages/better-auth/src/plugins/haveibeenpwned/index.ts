@@ -68,7 +68,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 			before: [
 				{
 					matcher(ctx) {
-						return ctx.path === "/sign-up/email"
+						return ctx.path === "/sign-up/email";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						if (ctx.body?.password) {
@@ -96,7 +96,6 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 						},
 					},
 				},
-
 			};
 		},
 		$ERROR_CODES: ERROR_CODES,
