@@ -15,7 +15,7 @@ export const techStackIcons: TechStackIconType = {
 		icon: <Icons.nuxt className="w-10 h-10" />,
 	},
 	svelteKit: {
-		name: "Svelte Kit",
+		name: "SvelteKit",
 		icon: <Icons.svelteKit className="w-10 h-10" />,
 	},
 	solidStart: {
