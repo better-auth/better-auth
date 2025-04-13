@@ -61,9 +61,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { expo } from "@better-auth/expo";
 
         export const auth = betterAuth({
-            plugins: [
-                expo()
-            ]
+            plugins: [expo()]
         });
         ```
     </Step>
@@ -191,10 +189,10 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
             const [password, setPassword] = useState("");
 
             const handleLogin = async () => {
-            await authClient.signIn.email({
+                await authClient.signIn.email({
                     email,
                     password,
-            })
+                })
             };
 
             return (
@@ -259,16 +257,39 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
     </Tab>
 </Tabs>
 
+#### Social Sign-In
+
 For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL.
 
 ```tsx title="app/social-sign-in.tsx"
-
 import { Button } from "react-native";
 
 export default function App() {
     const handleLogin = async () => {
         await authClient.signIn.social({
             provider: "google",
+            callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
+        })
+    };
+    return <Button title="Login with Google" onPress={handleLogin} />;
+}
+```
+
+#### IdToken Sign-In
+
+If you want to make provider request on the mobile device and then verify the id token on the server, you can use the `authClient.signIn.social` method with the `idToken` option.
+
+```tsx title="app/social-sign-in.tsx"
+import { Button } from "react-native";
+
+export default function App() {
+    const handleLogin = async () => {
+        await authClient.signIn.social({
+            provider: "google", // only google, apple and facebook are supported for idToken sign-in
+            idToken: {
+                token: "...", // id token from provider
+                nonce: "...", // nonce from provider (optional)
+            }
             callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
         })
     };
@@ -296,33 +317,7 @@ On native, the session data will be cached in SecureStore. This will allow you t
 
 ### Making Authenticated Requests to Your Server
 
-To make authenticated requests to your server that require the user's session, you have two options:
-
-1. Use the fetch client provided by Better Auth.
-2. Retrieve the session cookie from `SecureStore` and manually add it to your request headers.
-
----
-
-#### Option 1: Using the Fetch Client
-
-Better Auth provides a built-in fetch client powered by [Better Fetch](http://better-fetch.vercel.app). This client automatically includes the session cookie in the headers of your requests.
-
-```tsx
-import { authClient } from "@/lib/auth-client";
-
-const $fetch = authClient.$fetch;
-
-// Example usage
-$fetch("/api/secure-endpoint", {
-  method: "GET",
-});
-```
-
-For more details, see the [Better Fetch documentation](http://better-fetch.vercel.app/docs).
-
-#### Option 2: Adding the Cookie to Request Headers
-
-If you prefer using your own fetch client, you can retrieve the session cookie stored in the device using `authClient.getCookie` and manually add it to your request headers.
+To make authenticated requests to your server that require the user's session, you have to retrieve the session cookie from `SecureStore` and manually add it to your request headers.
 
 ```tsx
 import { authClient } from "@/lib/auth-client";

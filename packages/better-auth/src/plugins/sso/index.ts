@@ -14,7 +14,7 @@ import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
 
-interface SSOOptions {
+export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
@@ -63,9 +63,14 @@ interface SSOOptions {
 	};
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
-	 * sign-in need to be calle dwith with requestSignUp as true to create new users.
+	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
 	disableImplicitSignUp?: boolean;
+	/**
+	 * Override user info with the provider info.
+	 * @default false
+	 */
+	defaultOverrideUserInfo?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -165,6 +170,13 @@ export const sso = (options?: SSOOptions) => {
 								description:
 									"If organization plugin is enabled, the organization id to link the provider to",
 							})
+							.optional(),
+						overrideUserInfo: z
+							.boolean({
+								description:
+									"Override user info with the provider info. Defaults to false",
+							})
+							.default(false)
 							.optional(),
 					}),
 					use: [sessionMiddleware],
@@ -375,6 +387,10 @@ export const sso = (options?: SSOOptions) => {
 								mapping: body.mapping,
 								scopes: body.scopes,
 								userinfoEndpoint: body.userInfoEndpoint,
+								overrideUserInfo:
+									ctx.body.overrideUserInfo ||
+									options?.defaultOverrideUserInfo ||
+									false,
 							}),
 							organizationId: body.organizationId,
 							userId: ctx.context.session.user.id,
@@ -848,6 +864,7 @@ export const sso = (options?: SSOOptions) => {
 							scope: tokenResponse.scopes?.join(","),
 						},
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+						overrideUserInfo: config.overrideUserInfo,
 					});
 					if (linked.error) {
 						throw ctx.redirect(
@@ -961,7 +978,7 @@ export const sso = (options?: SSOOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-interface SSOProvider {
+export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
 	userId: string;
@@ -969,7 +986,7 @@ interface SSOProvider {
 	organizationId?: string;
 }
 
-interface OIDCConfig {
+export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
@@ -978,6 +995,7 @@ interface OIDCConfig {
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string;
 	scopes?: string[];
+	overrideUserInfo?: boolean;
 	tokenEndpoint?: string;
 	tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic";
 	jwksEndpoint?: string;

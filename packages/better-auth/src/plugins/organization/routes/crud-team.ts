@@ -99,7 +99,7 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				const canCreate = hasPermission({
 					role: member.role,
 					options: ctx.context.orgOptions,
-					permission: {
+					permissions: {
 						team: ["create"],
 					},
 				});
@@ -208,7 +208,7 @@ export const removeTeam = createAuthEndpoint(
 			const canRemove = hasPermission({
 				role: member.role,
 				options: ctx.context.orgOptions,
-				permission: {
+				permissions: {
 					team: ["delete"],
 				},
 			});
@@ -329,7 +329,7 @@ export const updateTeam = createAuthEndpoint(
 		const canUpdate = hasPermission({
 			role: member.role,
 			options: ctx.context.orgOptions,
-			permission: {
+			permissions: {
 				team: ["update"],
 			},
 		});

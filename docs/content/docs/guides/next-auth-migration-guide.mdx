@@ -42,9 +42,11 @@ export const auth = betterAuth({
 });
 ```
 
-#### Accounts Schema
+Make sure to have `createdAt` and `updatedAt` fields on your session schema.
 
-Map these fields in the accounts schema:
+#### Account Schema
+
+Map these fields in the account schema:
 
 - `providerAccountId` → `accountId`
 - `refresh_token` → `refreshToken`
@@ -57,7 +59,7 @@ Remove the `session_state`, `type`, and `token_type` fields, as they are not req
 ```typescript title="auth.ts"
 export const auth = betterAuth({
     // Other configs
-    accounts: {
+    account: {
         fields: {
             accountId: "providerAccountId",
             refreshToken: "refresh_token",
@@ -82,6 +84,8 @@ model Session {
     user        User     @relation(fields: [userId], references: [id])
 }
 ```
+
+Make sure to have `createdAt` and `updatedAt` fields on your account schema.
 </Step>
 <Step>
 

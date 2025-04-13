@@ -11,11 +11,13 @@ export async function handleOAuthUserInfo(
 		account,
 		callbackURL,
 		disableSignUp,
+		overrideUserInfo,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
 		disableSignUp?: boolean;
+		overrideUserInfo?: boolean;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -101,6 +103,17 @@ export async function handleOAuthUserInfo(
 					c,
 				);
 			}
+		}
+		if (overrideUserInfo) {
+			// update user info from the provider if overrideUserInfo is true
+			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				...userInfo,
+				email: userInfo.email.toLowerCase(),
+				emailVerified:
+					userInfo.email.toLocaleLowerCase() === dbUser.user.email
+						? dbUser.user.emailVerified || userInfo.emailVerified
+						: userInfo.emailVerified,
+			});
 		}
 	} else {
 		if (disableSignUp) {

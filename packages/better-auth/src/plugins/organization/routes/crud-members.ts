@@ -244,7 +244,7 @@ export const removeMember = createAuthEndpoint(
 		const canDeleteMember = hasPermission({
 			role: member.role,
 			options: ctx.context.orgOptions,
-			permission: {
+			permissions: {
 				member: ["delete"],
 			},
 		});
@@ -399,7 +399,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			const canUpdateMember = hasPermission({
 				role: member.role,
 				options: ctx.context.orgOptions,
-				permission: {
+				permissions: {
 					member: ["update"],
 				},
 			});
