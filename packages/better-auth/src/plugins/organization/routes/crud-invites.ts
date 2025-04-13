@@ -239,7 +239,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					role: roles,
-					email: ctx.body.email,
+					email: ctx.body.email.toLowerCase(),
 					organizationId: organizationId,
 					...("teamId" in ctx.body
 						? {
@@ -420,7 +420,7 @@ export const rejectInvitation = createAuthEndpoint(
 				message: "Invitation not found!",
 			});
 		}
-		if (invitation.email !== session.user.email) {
+		if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -598,7 +598,7 @@ export const getInvitation = createAuthEndpoint(
 				message: "Invitation not found!",
 			});
 		}
-		if (invitation.email !== session.user.email) {
+		if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
