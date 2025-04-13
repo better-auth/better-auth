@@ -69,7 +69,7 @@ const frameworks = [
 		),
 	},
 	{
-		title: "Svelte Kit",
+		title: "SvelteKit",
 		description: "Web development for the rest of us",
 		Icon: () => (
 			<svg
