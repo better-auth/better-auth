@@ -317,7 +317,7 @@ export const acceptInvitation = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 			});
 		}
-		if (invitation.email !== session.user.email) {
+		if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
