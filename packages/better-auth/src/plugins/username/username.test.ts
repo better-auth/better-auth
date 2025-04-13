@@ -9,7 +9,6 @@ describe("username", async (it) => {
 			plugins: [
 				username({
 					minUsernameLength: 4,
-					maxUsernameLength: 20,
 				}),
 			],
 		},
