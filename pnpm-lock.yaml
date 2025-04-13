@@ -10,8 +10,8 @@ catalogs:
       specifier: ^1.1.18
       version: 1.1.18
     better-call:
-      specifier: ^1.0.7
-      version: 1.0.7
+      specifier: ^1.0.8
+      version: 1.0.8
     typescript:
       specifier: ^5.7.3
       version: 5.8.2
@@ -188,7 +188,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.7
+        version: 1.0.8
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.8.1
@@ -1420,7 +1420,7 @@ importers:
         version: 13.1.1
       better-call:
         specifier: 'catalog:'
-        version: 1.0.7
+        version: 1.0.8
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1611,7 +1611,7 @@ importers:
         version: 1.1.18
       better-call:
         specifier: 'catalog:'
-        version: 1.0.7
+        version: 1.0.8
       zod:
         specifier: ^3.23.8
         version: 3.24.2
@@ -1658,7 +1658,7 @@ importers:
         version: 7.6.12
       better-call:
         specifier: 'catalog:'
-        version: 1.0.7
+        version: 1.0.8
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.8.1
@@ -10576,8 +10576,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.7:
-    resolution: {integrity: sha512-p5kEthErx3HsW9dCCvvEx+uuEdncn0ZrlqrOG3TkR1aVYgynpwYbTVU90nY8/UwfMhROzqZWs8vryainSQxrNg==}
+  better-call@1.0.8:
+    resolution: {integrity: sha512-/PV8JLqDRUN7JyBPbklVsS/8E4SO3pnf8hbpa8B7xrBrr+BBYpeOAxoqtnsyk/pRs35vNB4MZx8cn9dBuNlLDA==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -34891,7 +34891,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.7:
+  better-call@1.0.8:
     dependencies:
       '@better-fetch/fetch': 1.1.18
       rou3: 0.5.1
