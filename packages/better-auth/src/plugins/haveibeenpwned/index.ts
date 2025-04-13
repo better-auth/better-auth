@@ -5,7 +5,7 @@ import type { BetterAuthPlugin } from "../../types";
 import { createAuthMiddleware } from "../../api";
 
 const ERROR_CODES = {
-	PASSWORD_COMPROMISED: "PASSWORD_COMPROMISED"
+	PASSWORD_COMPROMISED: "Password compromised",
 } as const;
 
 async function checkPasswordCompromise(
