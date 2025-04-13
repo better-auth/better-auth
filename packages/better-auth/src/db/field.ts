@@ -208,10 +208,10 @@ export type PluginFieldAttribute = Omit<
 >;
 
 export type InferFieldsFromPlugins<
-	Options extends BetterAuthOptions,
+	Plugins extends BetterAuthOptions["plugins"],
 	Key extends string,
 	Format extends "output" | "input" = "output",
-> = Options["plugins"] extends Array<infer T>
+> = Plugins extends Array<infer T>
 	? T extends {
 			schema: {
 				[key in Key]: {
@@ -226,10 +226,13 @@ export type InferFieldsFromPlugins<
 	: {};
 
 export type InferFieldsFromOptions<
-	Options extends BetterAuthOptions,
-	Key extends "session" | "user",
+	Table extends {
+		session: BetterAuthOptions["session"];
+		user: BetterAuthOptions["user"];
+	},
+	Key extends keyof Table,
 	Format extends "output" | "input" = "output",
-> = Options[Key] extends {
+> = Table[Key] extends {
 	additionalFields: infer Field;
 }
 	? Format extends "output"
