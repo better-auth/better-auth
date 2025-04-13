@@ -97,7 +97,6 @@ export const username = (options?: UsernameOptions) => {
 
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
-					console.log("Username", ctx.body.username)
 					if (ctx.body.username.length < minUsernameLength) {
 						ctx.context.logger.error("Username too short", {
 							username: ctx.body.username,
@@ -233,7 +232,6 @@ export const username = (options?: UsernameOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
-						console.log({ username })
 						if (username) {
 							const minUsernameLength = options?.minUsernameLength || 3;
 							const maxUsernameLength = options?.maxUsernameLength || 30;
