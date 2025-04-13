@@ -109,7 +109,7 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		console.log({res})
+		console.log({ res });
 		expect(res.error?.status).toBe(422);
 		expect(res.error?.code).toBe("USERNAME_IS_EMPTY");
 	});

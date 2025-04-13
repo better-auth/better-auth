@@ -270,7 +270,7 @@ export const username = (options?: UsernameOptions) => {
 								});
 							}
 						} else {
-							if (typeof username === "string" ) {
+							if (typeof username === "string") {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
 									message: ERROR_CODES.USERNAME_IS_EMPTY,
 								});

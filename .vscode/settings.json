@@ -2,7 +2,7 @@
 	"biome.enabled": true,
 	"editor.defaultFormatter": "biomejs.biome",
 	"[typescript]": {
-		"editor.defaultFormatter": "vscode.typescript-language-features"
+		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"[jsonc]": {
 		"editor.defaultFormatter": "biomejs.biome"
