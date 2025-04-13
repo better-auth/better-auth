@@ -5,7 +5,8 @@ import type { BetterAuthPlugin } from "../../types";
 import { createAuthMiddleware } from "../../api";
 
 const ERROR_CODES = {
-	PASSWORD_COMPROMISED: "Password compromised",
+	PASSWORD_COMPROMISED:
+		"The password you entered has been compromised. Please choose a different password.",
 } as const;
 
 async function checkPasswordCompromise(
@@ -42,10 +43,8 @@ async function checkPasswordCompromise(
 
 		if (found) {
 			throw new APIError("BAD_REQUEST", {
-				message:
-					customMessage ||
-					"The password you entered has been compromised. Please choose a different password.",
-				code: ERROR_CODES.PASSWORD_COMPROMISED,
+				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED,
+				code: "PASSWORD_COMPROMISED",
 			});
 		}
 	} catch (error) {
