@@ -2,6 +2,7 @@ import { APIError } from "../../api";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../../types";
+import { createAuthMiddleware } from "../../api";
 
 const ERROR_CODES = {
 	PASSWORD_COMPROMISED:
@@ -63,6 +64,24 @@ export interface HaveIBeenPwnedOptions {
 export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 	({
 		id: "haveIBeenPwned",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path === "/sign-up/email"
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (ctx.body?.password) {
+							await checkPasswordCompromise(
+								ctx.body.password,
+								options?.customPasswordCompromisedMessage,
+							);
+						}
+						return ctx;
+					}),
+				},
+			],
+		},
 		init(ctx) {
 			return {
 				context: {
@@ -77,6 +96,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 						},
 					},
 				},
+
 			};
 		},
 		$ERROR_CODES: ERROR_CODES,
