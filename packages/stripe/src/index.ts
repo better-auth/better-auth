@@ -681,9 +681,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const activeSubscription = await client.subscriptions
 					.list({
 						customer: subscription.stripeCustomerId,
-						status: "active",
 					})
-					.then((res) => res.data[0]);
+					.then(
+						(res) =>
+							res.data.filter(
+								(sub) => sub.status === "active" || sub.status === "trialing",
+							)[0],
+					);
 				if (!activeSubscription) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
