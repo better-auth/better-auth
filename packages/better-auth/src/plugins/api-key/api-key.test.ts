@@ -23,7 +23,6 @@ describe("api-key", async () => {
 			clientOptions: {
 				plugins: [apiKeyClient()],
 			},
-			// testWith: "postgres",
 		},
 	);
 	const { headers, user } = await signInWithTestUser();
@@ -677,7 +676,6 @@ describe("api-key", async () => {
 	it("verify api key without key and userId", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
-				userId: user.id,
 				key: firstApiKey.key,
 			},
 		});
@@ -689,7 +687,6 @@ describe("api-key", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
 				key: "invalid",
-				userId: user.id,
 			},
 		});
 		expect(apiKey.valid).toBe(false);
@@ -733,7 +730,6 @@ describe("api-key", async () => {
 			const response = await rateLimitAuth.api.verifyApiKey({
 				body: {
 					key: apiKey2.key,
-					userId: user.id,
 				},
 				headers: rateLimitUserHeaders,
 			});
@@ -1607,7 +1603,6 @@ describe("api-key", async () => {
 			const result = await auth.api.verifyApiKey({
 				body: {
 					key: apiKey.key,
-					metadata: metadata,
 				},
 				headers,
 			});
