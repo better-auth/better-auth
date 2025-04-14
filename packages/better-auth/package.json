@@ -596,6 +596,9 @@
       "adapters/memory": [
         "./dist/adapters/memory-adapter/index.d.ts"
       ],
+      "adapters/redis": [
+        "./dist/adapters/redis-adapter/index.d.ts"
+      ],
       "plugins": [
         "./dist/plugins/index.d.ts"
       ],

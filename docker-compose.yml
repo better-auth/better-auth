@@ -50,9 +50,12 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
 
 volumes:
   mongodb_data:
   postgres_data:
   mysql_data:
   mssql_data:
+  redis_data:

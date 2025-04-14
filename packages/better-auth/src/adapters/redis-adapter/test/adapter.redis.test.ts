@@ -1,60 +1,56 @@
-import { expect, it, describe, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import { Redis } from "ioredis";
 import { redisAdapter } from "../redis-adapter";
 
 const TEST_REDIS_URL = "redis://localhost:6379";
-
 const client = new Redis(TEST_REDIS_URL);
 
 const adapter = redisAdapter({
 	connectionString: TEST_REDIS_URL,
 });
 
+// Clear Redis after all tests and close connection
 afterAll(async () => {
 	await client.flushall();
 	await client.quit();
 });
 
-describe("Set key", async () => {
-	await adapter.set("key", "value");
+// Clean Redis before each test to avoid cross-test pollution
+beforeEach(async () => {
+	await client.flushall();
+});
 
-	it("key should exist", async () => {
+describe("Redis Adapter", () => {
+	it("sets and gets a key", async () => {
+		await adapter.set("key", "value");
 		const data = await client.get("key");
 		expect(data).toBe("value");
 	});
-});
 
-describe("Set key with TTL to 2 seconds", async () => {
-	await adapter.set("key2", "value2", 2);
-
-	it("key should exist", async () => {
+	it("sets a key with TTL", async () => {
+		await adapter.set("key2", "value2", 2);
 		const data = await client.get("key2");
 		expect(data).toBe("value2");
-		// Wait for 3 seconds
-		await new Promise((resolve) => setTimeout(resolve, 3000));
-		const data2 = await client.get("key2");
-		expect(data2).toBe(null);
-	});
-});
 
-describe("Get key", async () => {
-	await client.set("key3", "value3");
+		// Wait for key to expire
+		await new Promise((r) => setTimeout(r, 3000));
+		const expiredData = await client.get("key2");
+		expect(expiredData).toBe(null);
+	}, 5000); // 5 seconds timeout for the test
 
-	it("key should exist", async () => {
+	it("gets an existing key", async () => {
+		await client.set("key3", "value3");
 		const data = await adapter.get("key3");
 		expect(data).toBe("value3");
 	});
 
-	it("key should not exist", async () => {
-		const data = await adapter.get("invalidKey");
+	it("returns null for non-existent key", async () => {
+		const data = await adapter.get("nonexistent");
 		expect(data).toBe(null);
 	});
-});
 
-describe("Delete key", async () => {
-	await client.set("key4", "value4");
-
-	it("key should be deleted", async () => {
+	it("deletes a key", async () => {
+		await client.set("key4", "value4");
 		await adapter.delete("key4");
 		const result = await client.get("key4");
 		expect(result).toBe(null);

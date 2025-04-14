@@ -1,6 +1,8 @@
 ---
+
 title: Redis
-description: Integrate Better Auth with Prisma.
+description: Integrate Better Auth with Redis.
+
 ---
 
 Redis is an open-source, in-memory data structure store that can be used as a database, cache, and message broker.
@@ -10,7 +12,7 @@ Read more [here](https://redis.io/).
 ## Example Usage
 
 Make sure you have Redis installed and configured.
-Then, you can use the Redis adapter to connect to your Redis instance.
+Then, use the Redis adapter to connect to your Redis instance.
 
 ```ts title="auth.ts"
 import { redisAdapter } from "better-auth/adapters/redis";
@@ -25,6 +27,7 @@ export const auth = betterAuth({
 
 ## Additional Information
 
-Redis Adapter use ioredis to connect to Redis. You can also use database like Dragonfly that follows the same API as Redis.
+The Redis adapter uses **ioredis** to connect to Redis.
+You can also use databases like **Dragonfly**, which follow the same API as Redis.
 
-If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+If you're looking for performance improvements or tips, check out our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
