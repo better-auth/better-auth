@@ -3,7 +3,7 @@ title: Have I Been Pwned
 description: A plugin to check if a password has been compromised
 ---
 
-The Have I Been Pwned plugin helps protect user accounts by preventing the use of passwords that have been exposed in known data breaches.
+The Have I Been Pwned plugin helps protect user accounts by preventing the use of passwords that have been exposed in known data breaches. It uses the [Have I Been Pwned](https://haveibeenpwned.com/) API to check if a password has been compromised.
 
 ## Installation
 
@@ -24,8 +24,8 @@ When a user attempts to create an account or update their password with a compro
 
 ```json
 {
-  "error": "BAD_REQUEST",
-  "message": "The password you entered has been compromised. Please choose a different password."
+  "code": "PASSWORD_COMPROMISED",
+  "message": "Password is compromised"
 }
 ```
 
