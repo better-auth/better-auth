@@ -32,7 +32,7 @@ description: Apple provider setup and usage.
         })
         ```
 
-        On native iOS, it doesn't use the service ID but the app ID (bundle ID) as client ID, so if using the service ID as clientId in signIn.social() with idToken, it throws an error: JWTClaimValidationFailed: unexpected "aud" claim value. So you need to provide the appBundleIdentifier when you want to sign in with Apple using the ID Token.
+        On native iOS, it doesn't use the service ID but the app ID (bundle ID) as client ID, so if using the service ID as `clientId` in `signIn.social()` with `idToken`, it throws an error: JWTClaimValidationFailed: unexpected "aud" claim value. So you need to provide the `appBundleIdentifier` when you want to sign in with Apple using the ID Token.
     </Step>
 </Steps>
 
