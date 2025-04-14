@@ -272,7 +272,7 @@ export const changePassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
-				ctx.headers,
+				ctx,
 			);
 			if (!newSession) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {

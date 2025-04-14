@@ -728,7 +728,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 						const s = await ctx.context.internalAdapter.createSession(
 							passkey.userId,
-							ctx.headers,
+							ctx,
 						);
 						if (!s) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {

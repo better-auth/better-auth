@@ -21,6 +21,7 @@ import { type AccessControl, type Role } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
+import { parseState } from "../../oauth2";
 
 export interface UserWithRole extends User {
 	role?: string;
@@ -156,7 +157,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 	return {
 		id: "admin",
-		init(ctx) {
+		init() {
 			return {
 				options: {
 					databaseHooks: {
@@ -174,8 +175,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						session: {
 							create: {
-								async before(session) {
-									const user = (await ctx.internalAdapter.findUserById(
+								async before(session, ctx) {
+									const user = (await ctx.context.internalAdapter.findUserById(
 										session.userId,
 									)) as UserWithRole;
 
@@ -184,12 +185,28 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 											user.banExpires &&
 											user.banExpires.getTime() < Date.now()
 										) {
-											await ctx.internalAdapter.updateUser(session.userId, {
-												banned: false,
-												banReason: null,
-												banExpires: null,
-											});
+											await ctx.context.internalAdapter.updateUser(
+												session.userId,
+												{
+													banned: false,
+													banReason: null,
+													banExpires: null,
+												},
+											);
 											return;
+										}
+
+										if (
+											ctx &&
+											(ctx.path.startsWith("/callback") ||
+												ctx.path.startsWith("/oauth2/callback"))
+										) {
+											const redirectURI =
+												ctx.context.options.onAPIError?.errorURL ||
+												`${ctx.context.baseURL}/error`;
+											throw ctx.redirect(
+												`${redirectURI}?error=banned&error_description=${opts.bannedUserMessage}`,
+											);
 										}
 
 										throw new APIError("FORBIDDEN", {
@@ -891,7 +908,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						targetUser.id,
-						undefined,
+						ctx,
 						true,
 						{
 							impersonatedBy: ctx.context.session.user.id,
@@ -899,7 +916,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								? getDate(options.impersonationSessionDuration, "sec")
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
-						ctx,
 						true,
 					);
 					if (!session) {

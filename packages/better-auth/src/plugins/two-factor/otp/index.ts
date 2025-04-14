@@ -286,7 +286,7 @@ export const otp2fa = (options?: OTPOptions) => {
 					);
 					const newSession = await ctx.context.internalAdapter.createSession(
 						session.user.id,
-						ctx.headers,
+						ctx,
 						false,
 						session.session,
 					);

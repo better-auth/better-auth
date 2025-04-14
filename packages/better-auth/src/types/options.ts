@@ -237,6 +237,8 @@ export type BetterAuthOptions = {
 		};
 		/**
 		 * Automatically sign in the user after sign up
+		 *
+		 * @default true
 		 */
 		autoSignIn?: boolean;
 	};
@@ -766,7 +768,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					session: Session,
-					context?: GenericEndpointContext,
+					context: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
