@@ -5,6 +5,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
+import { safeJSONParse } from "../../utils/json";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -12,6 +13,7 @@ const schema = z.object({
 	device_id: z.string().optional(),
 	error_description: z.string().optional(),
 	state: z.string().optional(),
+	user: z.string().optional(),
 });
 
 export const callbackOAuth = createAuthEndpoint(
@@ -61,7 +63,7 @@ export const callbackOAuth = createAuthEndpoint(
 		} = await parseState(c);
 
 		function redirectOnError(error: string) {
-			let url = errorURL || callbackURL || defaultErrorURL;
+			let url = errorURL || defaultErrorURL;
 			if (url.includes("?")) {
 				url = `${url}&error=${error}`;
 			} else {
@@ -100,7 +102,10 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError("invalid_code");
 		}
 		const userInfo = await provider
-			.getUserInfo(tokens)
+			.getUserInfo({
+				...tokens,
+				user: c.body?.user ? safeJSONParse<any>(c.body.user) : undefined,
+			})
 			.then((res) => res?.user);
 
 		if (!userInfo) {
@@ -129,23 +134,35 @@ export const callbackOAuth = createAuthEndpoint(
 				if (existingAccount.userId.toString() !== link.userId.toString()) {
 					return redirectOnError("account_already_linked_to_different_user");
 				}
+				const updateData = Object.fromEntries(
+					Object.entries({
+						accessToken: tokens.accessToken,
+						idToken: tokens.idToken,
+						refreshToken: tokens.refreshToken,
+						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+						scope: tokens.scopes?.join(","),
+					}).filter(([_, value]) => value !== undefined),
+				);
+				await c.context.internalAdapter.updateAccount(
+					existingAccount.id,
+					updateData,
+				);
+			} else {
+				const newAccount = await c.context.internalAdapter.createAccount(
+					{
+						userId: link.userId,
+						providerId: provider.id,
+						accountId: userInfo.id,
+						...tokens,
+						scope: tokens.scopes?.join(","),
+					},
+					c,
+				);
+				if (!newAccount) {
+					return redirectOnError("unable_to_link_account");
+				}
 			}
-
-			const newAccount = await c.context.internalAdapter.createAccount(
-				{
-					userId: link.userId,
-					providerId: provider.id,
-					accountId: userInfo.id,
-					...tokens,
-					scope: tokens.scopes?.join(","),
-				},
-				c,
-			);
-
-			if (!newAccount) {
-				return redirectOnError("unable_to_link_account");
-			}
-
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;

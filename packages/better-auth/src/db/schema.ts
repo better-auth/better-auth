@@ -61,7 +61,6 @@ export const verificationSchema = z.object({
 	updatedAt: z.date().default(() => new Date()),
 	expiresAt: z.date(),
 	identifier: z.string(),
-	nonce: z.string().nullish(),
 });
 
 export function parseOutputData<T extends Record<string, any>>(

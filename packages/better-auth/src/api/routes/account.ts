@@ -32,19 +32,31 @@ export const listUserAccounts = createAuthEndpoint(
 											},
 											createdAt: {
 												type: "string",
+												format: "date-time",
 											},
 											updatedAt: {
 												type: "string",
+												format: "date-time",
 											},
-											accountId: {
+										},
+										accountId: {
+											type: "string",
+										},
+										scopes: {
+											type: "array",
+											items: {
 												type: "string",
-											},
-											scopes: {
-												type: "array",
-												items: { type: "string" },
 											},
 										},
 									},
+									required: [
+										"id",
+										"provider",
+										"createdAt",
+										"updatedAt",
+										"accountId",
+										"scopes",
+									],
 								},
 							},
 						},
@@ -70,7 +82,6 @@ export const listUserAccounts = createAuthEndpoint(
 		);
 	},
 );
-
 export const linkSocialAccount = createAuthEndpoint(
 	"/link-social",
 	{
@@ -91,6 +102,16 @@ export const linkSocialAccount = createAuthEndpoint(
 			provider: z.enum(socialProviderList, {
 				description: "The OAuth2 provider to use",
 			}),
+			/**
+			 * Additional scopes to request when linking the account.
+			 * This is useful for requesting additional permissions when
+			 * linking a social account compared to the initial authentication.
+			 */
+			scopes: z
+				.array(z.string(), {
+					description: "Additional scopes to request from the provider",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -106,9 +127,13 @@ export const linkSocialAccount = createAuthEndpoint(
 									properties: {
 										url: {
 											type: "string",
+											description:
+												"The authorization URL to redirect the user to",
 										},
 										redirect: {
 											type: "boolean",
+											description:
+												"Indicates if the user should be redirected to the authorization URL",
 										},
 									},
 									required: ["url", "redirect"],
@@ -148,6 +173,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			state: state.state,
 			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			scopes: c.body.scopes,
 		});
 
 		return c.json({
@@ -156,7 +182,6 @@ export const linkSocialAccount = createAuthEndpoint(
 		});
 	},
 );
-
 export const unlinkAccount = createAuthEndpoint(
 	"/unlink-account",
 	{
@@ -166,6 +191,28 @@ export const unlinkAccount = createAuthEndpoint(
 			accountId: z.string().optional(),
 		}),
 		use: [freshSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Unlink an account",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { providerId, accountId } = ctx.body;

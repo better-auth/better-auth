@@ -5,12 +5,23 @@ exports[`init > should match config 1`] = `
   "adapter": {
     "count": [Function],
     "create": [Function],
+    "createSchema": undefined,
     "delete": [Function],
     "deleteMany": [Function],
     "findMany": [Function],
     "findOne": [Function],
     "id": "kysely",
     "options": {
+      "adapterConfig": {
+        "adapterId": "kysely",
+        "adapterName": "Kysely Adapter",
+        "debugLogs": undefined,
+        "supportsBooleans": false,
+        "supportsDates": false,
+        "supportsJSON": false,
+        "supportsNumericIds": true,
+        "usePlural": undefined,
+      },
       "type": "sqlite",
     },
     "update": [Function],

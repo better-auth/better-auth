@@ -11,11 +11,13 @@ export async function handleOAuthUserInfo(
 		account,
 		callbackURL,
 		disableSignUp,
+		overrideUserInfo,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
 		disableSignUp?: boolean;
+		overrideUserInfo?: boolean;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -102,6 +104,17 @@ export async function handleOAuthUserInfo(
 				);
 			}
 		}
+		if (overrideUserInfo) {
+			// update user info from the provider if overrideUserInfo is true
+			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				...userInfo,
+				email: userInfo.email.toLowerCase(),
+				emailVerified:
+					userInfo.email.toLocaleLowerCase() === dbUser.user.email
+						? dbUser.user.emailVerified || userInfo.emailVerified
+						: userInfo.emailVerified,
+			});
+		}
 	} else {
 		if (disableSignUp) {
 			return {
@@ -111,12 +124,12 @@ export async function handleOAuthUserInfo(
 			};
 		}
 		try {
+			const { id: _, ...restUserInfo } = userInfo;
 			user = await c.context.internalAdapter
 				.createOAuthUser(
 					{
-						...userInfo,
+						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
-						id: undefined,
 					},
 					{
 						accessToken: account.accessToken,
@@ -178,7 +191,7 @@ export async function handleOAuthUserInfo(
 
 	const session = await c.context.internalAdapter.createSession(
 		user.id,
-		c.request,
+		c.headers,
 	);
 	if (!session) {
 		return {
