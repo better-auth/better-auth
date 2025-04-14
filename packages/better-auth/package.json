@@ -8,17 +8,16 @@
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/better-auth"
   },
-
   "keywords": [
-          "auth",
-          "oauth",
-          "oidc",
-          "2fa",
-          "social",
-          "security",
-          "typescript",
-          "nextjs"
-      ],
+    "auth",
+    "oauth",
+    "oidc",
+    "2fa",
+    "social",
+    "security",
+    "typescript",
+    "nextjs"
+  ],
   "scripts": {
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
@@ -233,6 +232,16 @@
       "require": {
         "types": "./dist/integrations/node.d.cts",
         "default": "./dist/integrations/node.cjs"
+      }
+    },
+    "./adapters/redis": {
+      "import": {
+        "types": "./dist/adapters/redis-adapter/index.d.ts",
+        "default": "./dist/adapters/redis-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/redis-adapter/index.d.cts",
+        "default": "./dist/adapters/redis-adapter/index.cjs"
       }
     },
     "./adapters/prisma": {
@@ -663,6 +672,7 @@
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
+    "ioredis": "^5.6.1",
     "listhen": "^1.9.0",
     "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
