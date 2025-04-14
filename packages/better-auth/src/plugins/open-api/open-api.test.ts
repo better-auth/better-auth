@@ -7,7 +7,7 @@ describe("open-api", async (it) => {
 		plugins: [openAPI()],
 	});
 
-	it("should generate open api schema", async () => {
+	it("should generate OpenAPI schema", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		expect(schema).toBeDefined();
 	});
