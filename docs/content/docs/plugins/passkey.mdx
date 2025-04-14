@@ -92,7 +92,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
 To add or register a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
 
-```ts title="auth-client.ts"
+```ts
 // Default behavior allows both platform and cross-platform passkeys
 const { data, error } = await authClient.passkey.addPasskey();
 ```
@@ -101,7 +101,7 @@ This will prompt the user to register a passkey. And it'll add the passkey to th
 
 You can also specify the type of authenticator you want to register. The authenticatorAttachment can be either `platform` or `cross-platform`.
 
-```ts title="auth-client.ts"
+```ts
 // Register a cross-platform passkey showing only a QR code
 // for the user to scan as well as the option to plug in a security key
 const { data, error } = await authClient.passkey.addPasskey({
@@ -119,7 +119,7 @@ Signin method accepts:
 
 `callbackURL`: The URL to redirect to after the user has signed in. (optional)
 
-```ts title="auth-client.ts"
+```ts
 const data = await authClient.signIn.passkey();
 ```
 
