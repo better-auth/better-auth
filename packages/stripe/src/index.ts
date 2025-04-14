@@ -143,6 +143,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.number({
 							description: "Number of seats to upgrade to (if applicable)",
 						})
+						.nullable()
 						.optional(),
 					/**
 					 * Success URL to redirect back after successful subscription
@@ -388,7 +389,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									price: ctx.body.annual
 										? plan.annualDiscountPriceId
 										: plan.priceId,
-									quantity: ctx.body.seats || 1,
+									quantity:
+										ctx.body.seats === null ? undefined : ctx.body.seats || 1,
 								},
 							],
 							subscription_data: {
