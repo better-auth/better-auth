@@ -44,7 +44,6 @@ export async function onCheckoutSessionCompleted(
 							periodStart: new Date(subscription.current_period_start * 1000),
 							periodEnd: new Date(subscription.current_period_end * 1000),
 							stripeSubscriptionId: checkoutSession.subscription as string,
-							priceId,
 							seats,
 							...trial,
 						},
@@ -144,7 +143,6 @@ export async function onSubscriptionUpdated(
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
 				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
-				priceId,
 			},
 			where: [
 				{
