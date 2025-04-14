@@ -21,7 +21,6 @@ import { type AccessControl, type Role } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-import { parseState } from "../../oauth2";
 
 export interface UserWithRole extends User {
 	role?: string;
@@ -176,6 +175,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						session: {
 							create: {
 								async before(session, ctx) {
+									if (!ctx) {
+										return;
+									}
 									const user = (await ctx.context.internalAdapter.findUserById(
 										session.userId,
 									)) as UserWithRole;

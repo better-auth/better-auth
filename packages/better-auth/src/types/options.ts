@@ -768,7 +768,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					session: Session,
-					context: GenericEndpointContext,
+					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
