@@ -235,7 +235,7 @@ export const username = (options?: UsernameOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
-						if (username) {
+						if (username !== undefined && typeof username === "string") {
 							const minUsernameLength = options?.minUsernameLength || 3;
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
