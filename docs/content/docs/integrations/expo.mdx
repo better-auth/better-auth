@@ -277,7 +277,7 @@ export default function App() {
 
 #### IdToken Sign-In
 
-If you want to make provider request on the mobile device and then verify the id token on the server, you can use the `authClient.signIn.social` method with the `idToken` option.
+If you want to make provider request on the mobile device and then verify the ID token on the server, you can use the `authClient.signIn.social` method with the `idToken` option.
 
 ```tsx title="app/social-sign-in.tsx"
 import { Button } from "react-native";
@@ -287,7 +287,7 @@ export default function App() {
         await authClient.signIn.social({
             provider: "google", // only google, apple and facebook are supported for idToken sign-in
             idToken: {
-                token: "...", // id token from provider
+                token: "...", // ID token from provider
                 nonce: "...", // nonce from provider (optional)
             }
             callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
