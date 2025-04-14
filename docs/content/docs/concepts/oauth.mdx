@@ -47,7 +47,7 @@ export const auth = betterAuth({
 
 **refreshAccessToken**: A custom function to refresh the token. This feature is only supported for built-in social providers (Google, Facebook, GitHub, etc.) and is not currently supported for custom OAuth providers configured through the Generic OAuth Plugin. For built-in providers, you can provide a custom function to refresh the token if needed.
 
-Useful, if you have additio:nal fields in your user object you want to populate from the provider's profile. Or if you want to change how by default the user object is mapped.
+Useful, if you have additional fields in your user object you want to populate from the provider's profile. Or if you want to change how by default the user object is mapped.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
