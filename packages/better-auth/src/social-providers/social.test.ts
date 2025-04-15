@@ -32,7 +32,7 @@ vi.mock("../oauth2", async (importOriginal) => {
 						azp: "test",
 						nbf: 1234567890,
 						iss: "test",
-						locale: "en",
+						locale: "am",
 						jti: "test",
 						given_name: "Updated",
 						family_name: "User",
@@ -578,71 +578,44 @@ describe("Disable signup", async () => {
 	});
 });
 
-describe("signin", async () => {
+describe("overrideUserInfoOnSignIn", async () => {
 	const database = new Database(":memory:");
 
 	beforeAll(async () => {
 		const migrations = await getMigrations({
 			database,
+			user: {
+				additionalFields: {
+					locale: {
+						type: "string",
+					},
+				},
+			},
 		});
 		await migrations.runMigrations();
 	});
 	it("should allow user info override during sign in", async () => {
 		let state = "";
-		const { client, cookieSetter } = await getTestInstance({
-			database,
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					enabled: true,
-				},
-			},
-		});
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-		});
-		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("google.com"),
-			redirect: true,
-		});
-		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-
-		const headers = new Headers();
-
-		await client.$fetch("/callback/google", {
-			query: {
-				state,
-				code: "test",
-			},
-			method: "GET",
-			onError: (c) => {
-				cookieSetter(headers)(c as any);
-			},
-		});
-
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session.data?.user).toMatchObject({
-			name: "First Last",
-		});
-	});
-
-	it("should allow user info override during sign in", async () => {
-		let state = "";
 		const { client, cookieSetter } = await getTestInstance(
 			{
 				database,
+				user: {
+					additionalFields: {
+						locale: {
+							type: "string",
+						},
+					},
+				},
 				socialProviders: {
 					google: {
 						clientId: "test",
 						clientSecret: "test",
 						enabled: true,
-						overrideUserInfoOnSignIn: true,
+						mapProfileToUser(profile) {
+							return {
+								locale: profile.locale,
+							};
+						},
 					},
 				},
 			},
@@ -679,7 +652,73 @@ describe("signin", async () => {
 			},
 		});
 		expect(session.data?.user).toMatchObject({
+			name: "First Last",
+			locale: "en",
+		});
+	});
+
+	it("should allow user info override during sign in", async () => {
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database,
+				user: {
+					additionalFields: {
+						locale: {
+							type: "string",
+						},
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						overrideUserInfoOnSignIn: ["name"],
+						mapProfileToUser(profile) {
+							return {
+								locale: profile.locale,
+							};
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		console.log(session.data?.user);
+		expect(session.data?.user).toMatchObject({
 			name: "Updated User",
+			locale: "am",
 		});
 	});
 });

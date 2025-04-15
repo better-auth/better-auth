@@ -43,11 +43,20 @@ export const auth = betterAuth({
 
 **getUserInfo** A custom function to fetch user information from the provider. Given the tokens returned from the provider, this function should return the user's information.
 
-**overrideUserInfoOnSignIn**: A boolean value that determines whether to override the user information in the database when signing in. By default, it is set to `false`, meaning that the user information will not be overridden during sign-in. If you want to update the user information every time they sign in, set this to `true`.
+**overrideUserInfoOnSignIn**: `boolean | string[]` If you want to update the user information every time they sign in, set this to `true`. You can also pass an array of fields to override.
 
-**refreshAccessToken**: A custom function to refresh the token. This feature is only supported for built-in social providers (Google, Facebook, GitHub, etc.) and is not currently supported for custom OAuth providers configured through the Generic OAuth Plugin. For built-in providers, you can provide a custom function to refresh the token if needed.
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
 
-**mapProfileToUser** A custom function to map the user profile returned from the provider to the user object in your database.
+export const auth = betterAuth({
+  // Other configurations...
+  socialProviders: {
+    github: {
+      overrideUserInfoOnSignIn: ["githubName", "githubAvatar"], //or true to override all fields
+    },
+  },
+});
+```
 
 Useful, if you have additional fields in your user object you want to populate from the provider's profile. Or if you want to change how by default the user object is mapped.
 
