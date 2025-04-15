@@ -5,7 +5,6 @@ import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
 import { freshSessionMiddleware, sessionMiddleware } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -112,6 +111,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					nonce: z.string().optional(),
 					accessToken: z.string().optional(),
 					refreshToken: z.string().optional(),
+					scopes: z.array(z.string()).optional(),
 				})
 				.optional(),
 			/**
@@ -208,13 +208,13 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			const userInfo = await provider.getUserInfo({
+			const linkingUserInfo = await provider.getUserInfo({
 				idToken: token,
 				accessToken: c.body.idToken.accessToken,
 				refreshToken: c.body.idToken.refreshToken,
 			});
 
-			if (!userInfo || !userInfo?.user) {
+			if (!linkingUserInfo || !linkingUserInfo?.user) {
 				c.context.logger.error("Failed to get user info", {
 					provider: c.body.provider,
 				});
@@ -223,7 +223,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			if (!userInfo.user.email) {
+			if (!linkingUserInfo.user.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
 				});
@@ -232,28 +232,75 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			const data = await handleOAuthUserInfo(c, {
-				userInfo: {
-					email: userInfo.user.email,
-					id: userInfo.user.id,
-					name: userInfo.user.name || "",
-					image: userInfo.user.image,
-					emailVerified: userInfo.user.emailVerified || false,
-				},
-				account: {
-					providerId: provider.id,
-					accountId: userInfo.user.id,
-					accessToken: c.body.idToken.accessToken,
-					refreshToken: c.body.idToken.refreshToken,
-					idToken: token,
-				},
-				disableSignUp: true, // Always disable signup for linking
-			});
+			const existingAccounts = await c.context.internalAdapter.findAccounts(
+				session.user.id,
+			);
 
-			if (data.error) {
-				throw new APIError("BAD_REQUEST", {
-					message: data.error,
+			const hasBeenLinked = existingAccounts.find(
+				(a) =>
+					a.providerId === provider.id &&
+					a.accountId === linkingUserInfo.user.id,
+			);
+
+			if (hasBeenLinked) {
+				return c.json({
+					redirect: false,
+					status: true,
 				});
+			}
+
+			const trustedProviders =
+				c.context.options.account?.accountLinking?.trustedProviders;
+
+			const isTrustedProvider = trustedProviders?.includes(provider.id);
+			if (
+				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
+				c.context.options.account?.accountLinking?.enabled === false
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Account not linked - linking not allowed",
+				});
+			}
+
+			if (
+				linkingUserInfo.user.email !== session.user.email &&
+				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Account not linked - different emails not allowed",
+				});
+			}
+
+			try {
+				await c.context.internalAdapter.createAccount(
+					{
+						userId: session.user.id,
+						providerId: provider.id,
+						accountId: linkingUserInfo.user.id.toString(),
+						accessToken: c.body.idToken.accessToken,
+						idToken: token,
+						refreshToken: c.body.idToken.refreshToken,
+						scope: c.body.idToken.scopes?.join(","),
+					},
+					c,
+				);
+			} catch (e: any) {
+				throw new APIError("EXPECTATION_FAILED", {
+					message: "Account not linked - unable to create account",
+				});
+			}
+
+			if (
+				c.context.options.account?.accountLinking?.updateUserInfoOnLink === true
+			) {
+				try {
+					await c.context.internalAdapter.updateUser(session.user.id, {
+						name: linkingUserInfo.user?.name,
+						image: linkingUserInfo.user?.image,
+					});
+				} catch (e: any) {
+					console.warn("Could not update user - " + e.toString());
+				}
 			}
 
 			return c.json({

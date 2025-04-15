@@ -346,6 +346,18 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
+  If you want the newly linked accounts to update the user information, you need to enable this in the account linking settings. 
+
+  ```ts title="auth.ts"
+  export const auth = betterAuth({
+      account: {
+          accountLinking: {
+              updateUserInfoOnLink: true
+          }
+      },
+  });
+  ```
+
 - **Linking Credential-Based Accounts:** To link a credential-based account (e.g., email and password), users can initiate a "forgot password" flow, or you can call the `setPassword` method on the server. 
 
   ```ts
