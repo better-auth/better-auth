@@ -64,7 +64,7 @@ export function createApiKeyRoutes({
 					{
 						field: "expiresAt" satisfies keyof ApiKey,
 						operator: "lt",
-						value: new Date().getTime(),
+						value: new Date(),
 					},
 				],
 			});

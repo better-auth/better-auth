@@ -34,6 +34,7 @@ describe("jwt", async (it) => {
 				},
 			},
 		});
+
 		expect(token.length).toBeGreaterThan(10);
 	});
 
@@ -72,10 +73,30 @@ describe("jwt", async (it) => {
 
 		const jwks = await client.jwks();
 
-		const publicWebKey = await importJWK(jwks.data?.keys[0]);
-
+		const publicWebKey = await importJWK({
+			...jwks.data?.keys[0],
+			alg: "EdDSA",
+		});
 		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
 
 		expect(decoded).toBeDefined();
+	});
+
+	it("should set subject to user id by default", async () => {
+		const token = await client.token({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const jwks = await client.jwks();
+
+		const publicWebKey = await importJWK({
+			...jwks.data?.keys[0],
+			alg: "EdDSA",
+		});
+		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+		expect(decoded.payload.sub).toBeDefined();
+		expect(decoded.payload.sub).toBe(decoded.payload.id);
 	});
 });

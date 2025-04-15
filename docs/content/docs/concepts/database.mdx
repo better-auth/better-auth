@@ -82,7 +82,7 @@ export const auth = betterAuth({
 	secondaryStorage: {
 		get: async (key) => {
 			const value = await redis.get(key);
-			return value ? JSON.stringify(value) : null;
+			return value ? value : null;
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
@@ -193,12 +193,12 @@ Table Name: `session`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the verification request was created",
+      description: "Timestamp of when the session was created",
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the verification request was updated",
+      description: "Timestamp of when the session was updated",
     },
   ]}
 />
@@ -247,13 +247,13 @@ Table Name: `account`
     {
       name: "accessTokenExpiresAt",
       type: "Date",
-      description: "The time when the verification request expires",
+      description: "The time when the access token expires",
       isOptional: true,
     },
     {
       name: "refreshTokenExpiresAt",
       type: "Date",
-      description: "The time when the verification request expires",
+      description: "The time when the refresh token expires",
       isOptional: true,
     },
     {
@@ -278,12 +278,12 @@ Table Name: `account`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the verification request was created",
+      description: "Timestamp of when the account was created",
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the verification request was updated",
+      description: "Timestamp of when the account was updated",
     },
   ]}
 />
@@ -434,7 +434,7 @@ res.user.lang; // > "fr"
 
 <Callout>
   See the
-  [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client)
+  [TypeScript](/docs/concepts/typescript#inferring-additional-fields-on-client)
   documentation for more information on how to infer additional fields on the
   client side.
 </Callout>
@@ -474,9 +474,9 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` object in your auth config.
+Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced.database.generateId` option in your auth config.
 
-You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
+You can also disable ID generation by setting the `advanced.database.generateId` option to `false`. This will assume your database will generate the ID automatically.
 
 **Example: Automatic Database IDs**
 
@@ -489,7 +489,9 @@ export const auth = betterAuth({
     db: db,
   },
   advanced: {
-    generateId: false,
+    database: {
+      generateId: false,
+    },
   },
 });
 ```
@@ -519,7 +521,7 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => {
+        before: async (user, ctx) => {
           // Modify the user object before it is created
           return {
             data: {
@@ -550,7 +552,7 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => {
+        before: async (user, ctx) => {
           if (user.isAgreedToTerms === false) {
             // Your special condition.
             // Send the API error.
@@ -568,6 +570,8 @@ export const auth = betterAuth({
 });
 ```
 
+Much like standard hooks, database hooks also provide a `ctx` object that offers a variety of useful properties. Learn more in the [Hooks Documentation](/docs/concepts/hooks#ctx).
+
 ## Plugins Schema
 
 Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
@@ -581,4 +585,4 @@ To add new tables and columns to your database, you have two options:
 `CLI`: Use the migrate or generate command. These commands will scan your database and guide you through adding any missing tables or columns.
 `Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
 
-Both methods ensure your database schema stays up-to-date with your plugins' requirements.
+Both methods ensure your database schema stays up to date with your plugins' requirements.

@@ -73,7 +73,7 @@ export async function parseState(c: GenericEndpointContext) {
 			link: z
 				.object({
 					email: z.string(),
-					userId: z.string(),
+					userId: z.coerce.string(),
 				})
 				.optional(),
 			requestSignUp: z.boolean().optional(),
@@ -84,6 +84,7 @@ export async function parseState(c: GenericEndpointContext) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
 	if (parsedData.expiresAt < Date.now()) {
+		await c.context.internalAdapter.deleteVerificationValue(data.id);
 		throw c.redirect(
 			`${c.context.baseURL}/error?error=please_restart_the_process`,
 		);

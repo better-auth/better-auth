@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -11,6 +10,7 @@ import type { OrganizationOptions } from "../organization";
 import type {
 	InferInvitation,
 	InferMember,
+	Member,
 	Organization,
 	Team,
 } from "../schema";
@@ -27,7 +27,7 @@ export const createOrganization = createAuthEndpoint(
 			slug: z.string({
 				description: "The slug of the organization",
 			}),
-			userId: z
+			userId: z.coerce
 				.string({
 					description:
 						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
@@ -129,17 +129,41 @@ export const createOrganization = createAuthEndpoint(
 			});
 		}
 
+		let hookResponse:
+			| {
+					data: Omit<Organization, "id">;
+			  }
+			| undefined = undefined;
+		if (options.organizationCreation?.beforeCreate) {
+			const response = await options.organizationCreation.beforeCreate(
+				{
+					organization: {
+						slug: ctx.body.slug,
+						name: ctx.body.name,
+						logo: ctx.body.logo,
+						createdAt: new Date(),
+						metadata: ctx.body.metadata,
+					},
+					user,
+				},
+				ctx.request,
+			);
+			if (response && typeof response === "object" && "data" in response) {
+				hookResponse = response;
+			}
+		}
+
 		const organization = await adapter.createOrganization({
 			organization: {
-				id: generateId(),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
 				logo: ctx.body.logo,
 				createdAt: new Date(),
 				metadata: ctx.body.metadata,
+				...(hookResponse?.data || {}),
 			},
-			user,
 		});
+		let member: Member | undefined;
 		if (
 			options?.teams?.enabled &&
 			options.teams.defaultTeam?.enabled !== false
@@ -150,24 +174,34 @@ export const createOrganization = createAuthEndpoint(
 					ctx.request,
 				)) ||
 				(await adapter.createTeam({
-					id: generateId(),
 					organizationId: organization.id,
 					name: `${organization.name}`,
 					createdAt: new Date(),
 				}));
 
-			await adapter.createMember({
+			member = await adapter.createMember({
 				teamId: defaultTeam.id,
 				userId: user.id,
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
 			});
 		} else {
-			await adapter.createMember({
+			member = await adapter.createMember({
 				userId: user.id,
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
 			});
+		}
+
+		if (options.organizationCreation?.afterCreate) {
+			await options.organizationCreation.afterCreate(
+				{
+					organization,
+					user,
+					member,
+				},
+				ctx.request,
+			);
 		}
 
 		if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
@@ -177,7 +211,11 @@ export const createOrganization = createAuthEndpoint(
 			);
 		}
 
-		return ctx.json(organization);
+		return ctx.json({
+			...organization,
+			metadata: ctx.body.metadata,
+			members: [member],
+		});
 	},
 );
 
@@ -267,11 +305,8 @@ export const updateOrganization = createAuthEndpoint(
 		const organizationId =
 			ctx.body.organizationId || session.session.activeOrganizationId;
 		if (!organizationId) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
@@ -280,28 +315,22 @@ export const updateOrganization = createAuthEndpoint(
 			organizationId: organizationId,
 		});
 		if (!member) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				},
+			throw new APIError("BAD_REQUEST", {
+				message:
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 			});
 		}
 		const canUpdateOrg = hasPermission({
-			permission: {
+			permissions: {
 				organization: ["update"],
 			},
 			role: member.role,
 			options: ctx.context.orgOptions,
 		});
 		if (!canUpdateOrg) {
-			return ctx.json(null, {
-				body: {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
-				},
-				status: 403,
+			throw new APIError("FORBIDDEN", {
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 			});
 		}
 		const updatedOrg = await adapter.updateOrganization(
@@ -374,7 +403,7 @@ export const deleteOrganization = createAuthEndpoint(
 		}
 		const canDeleteOrg = hasPermission({
 			role: member.role,
-			permission: {
+			permissions: {
 				organization: ["delete"],
 			},
 			options: ctx.context.orgOptions,

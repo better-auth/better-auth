@@ -5,7 +5,7 @@ import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, CornerRightUp } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
@@ -49,7 +49,7 @@ function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 
 export default function Hero() {
 	return (
-		<section className="max-h-[40rem] w-full flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] relative overflow-hidden px-8 md:min-h-[40rem]">
+		<section className="max-h-[40rem] relative w-full flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] overflow-hidden px-8 md:min-h-[40rem]">
 			<Spotlight />
 			<div className="overflow-hidden bg-transparent md:px-10 dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem]">
 				<div className="lg:max-w-8xl mx-auto grid max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-12">
@@ -73,14 +73,6 @@ export default function Hero() {
 											Own Your Auth
 										</span>
 									</div>
-									<Link href={"/changelogs/1-2"}>
-										<span className="bg-gradient-to-tr from-stone-800/50 to-black  px-2 rounded-none">
-											<span className="text-xs text-zinc-200 tracking-tighter font-mono mb-0 underline underline-offset-4">
-												v1.2 is out
-											</span>
-											<CornerRightUp className="inline ml-1 w-3 h-3" />
-										</span>
-									</Link>
 								</div>
 							</div>
 
@@ -162,7 +154,6 @@ export default function Hero() {
 										>
 											Get Started
 										</Link>
-
 										<Builder />
 									</div>
 								</>

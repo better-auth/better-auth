@@ -1,7 +1,8 @@
-import type { Session, User } from "better-auth";
+import type { InferOptionSchema, Session, User } from "better-auth";
 import type Stripe from "stripe";
+import type { subscriptions, user } from "./schema";
 
-export type Plan = {
+export type StripePlan = {
 	/**
 	 * Monthly price id
 	 */
@@ -20,6 +21,13 @@ export type Plan = {
 	 * yearly subscription
 	 */
 	annualDiscountPriceId?: string;
+	/**
+	 * To use lookup key instead of price id
+	 *
+	 * https://docs.stripe.com/products-prices/
+	 * manage-prices#lookup-keys
+	 */
+	annualDiscountLookupKey?: string;
 	/**
 	 * Plan name
 	 */
@@ -44,12 +52,6 @@ export type Plan = {
 		 */
 		days: number;
 		/**
-		 * Only available for new users or users without existing subscription
-		 *
-		 * @default true
-		 */
-		forNewUsersOnly?: boolean;
-		/**
 		 * A function that will be called when the trial
 		 * starts.
 		 *
@@ -67,7 +69,6 @@ export type Plan = {
 		onTrialEnd?: (
 			data: {
 				subscription: Subscription;
-				user: User & Record<string, any>;
 			},
 			request?: Request,
 		) => Promise<void>;
@@ -211,7 +212,7 @@ export interface StripeOptions {
 		/**
 		 * List of plan
 		 */
-		plans: Plan[] | (() => Promise<Plan[]>);
+		plans: StripePlan[] | (() => Promise<StripePlan[]>);
 		/**
 		 * Require email verification before a user is allowed to upgrade
 		 * their subscriptions
@@ -230,7 +231,7 @@ export interface StripeOptions {
 				event: Stripe.Event;
 				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
-				plan: Plan;
+				plan: StripePlan;
 			},
 			request?: Request,
 		) => Promise<void>;
@@ -268,7 +269,8 @@ export interface StripeOptions {
 				action:
 					| "upgrade-subscription"
 					| "list-subscription"
-					| "cancel-subscription";
+					| "cancel-subscription"
+					| "restore-subscription";
 			},
 			request?: Request,
 		) => Promise<boolean>;
@@ -291,7 +293,7 @@ export interface StripeOptions {
 			data: {
 				user: User & Record<string, any>;
 				session: Session & Record<string, any>;
-				plan: Plan;
+				plan: StripePlan;
 				subscription: Subscription;
 			},
 			request?: Request,
@@ -312,6 +314,10 @@ export interface StripeOptions {
 		};
 	};
 	onEvent?: (event: Stripe.Event) => Promise<void>;
+	/**
+	 * Schema for the stripe plugin
+	 */
+	schema?: InferOptionSchema<typeof subscriptions & typeof user>;
 }
 
 export interface Customer {

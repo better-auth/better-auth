@@ -20,7 +20,7 @@ const features = [
 	{
 		id: 1,
 		label: "Framework Agnostic",
-		title: "Supports for popular <strong>frameworks</strong>.",
+		title: "Support for popular <strong>frameworks</strong>.",
 		description:
 			"Supports popular frameworks, including React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, Tanstack Start, Hono, and more.",
 		icon: PlugZap2Icon,
@@ -71,7 +71,7 @@ const features = [
 
 export default function Features({ stars }: { stars: string | null }) {
 	return (
-		<div className="md:w-10/12 mt-10 mx-auto font-geist relative md:border-l-0 md:border-b-0 md:border-[1.2px] rounded-none -pr-2">
+		<div className="md:w-10/12 mt-10 mx-auto font-geist relative md:border-l-0 md:border-b-0 md:border-[1.2px] rounded-none -pr-2 dark:bg-black/[0.95]">
 			<div className="w-full md:mx-0">
 				<div className="grid grid-cols-1 relative md:grid-rows-2 md:grid-cols-3 border-b-[1.2px]">
 					<div className="hidden md:grid top-1/2 left-0 -translate-y-1/2 w-full grid-cols-3 z-10 pointer-events-none select-none absolute">

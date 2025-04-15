@@ -53,7 +53,10 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
 		rateLimit: {
-			enabled: options?.rateLimit?.enabled ?? true,
+			enabled:
+				options?.rateLimit?.enabled === undefined
+					? true
+					: options?.rateLimit?.enabled,
 			timeWindow: options?.rateLimit?.timeWindow ?? 1000 * 60 * 60 * 24,
 			maxRequests: options?.rateLimit?.maxRequests ?? 10,
 		},

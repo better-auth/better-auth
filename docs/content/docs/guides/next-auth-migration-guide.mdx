@@ -35,16 +35,18 @@ export const auth = betterAuth({
     // Other configs
     session: {
         fields: {
-            expiresAt: "expires", // e.g., "expires_at" or your existing field name
-            token: "sessionToken" // e.g., "session_token" or your existing field name
+            expiresAt: "expires", // Map your existing `expires` field to Better Auth's `expiresAt`
+            token: "sessionToken" // Map your existing `sessionToken` field to Better Auth's `token`
         }
     },
 });
 ```
 
-#### Accounts Schema
+Make sure to have `createdAt` and `updatedAt` fields on your session schema.
 
-Map these fields in the accounts schema:
+#### Account Schema
+
+Map these fields in the account schema:
 
 - `providerAccountId` → `accountId`
 - `refresh_token` → `refreshToken`
@@ -57,7 +59,7 @@ Remove the `session_state`, `type`, and `token_type` fields, as they are not req
 ```typescript title="auth.ts"
 export const auth = betterAuth({
     // Other configs
-    accounts: {
+    account: {
         fields: {
             accountId: "providerAccountId",
             refreshToken: "refresh_token",
@@ -76,12 +78,14 @@ export const auth = betterAuth({
 ```prisma title="schema.prisma"
 model Session {
     id          String   @id @default(cuid())
-    expires     DateTime @map("expiresAt") // Map `expires` to your existing field
-    token       String   @map("sessionToken") // Map `token` to your existing field
+    expiresAt   DateTime @map("expires") // Map your existing `expires` field to Better Auth's `expiresAt`
+    token       String   @map("sessionToken") // Map your existing `sessionToken` field to Better Auth's `token`
     userId      String
     user        User     @relation(fields: [userId], references: [id])
 }
 ```
+
+Make sure to have `createdAt` and `updatedAt` fields on your account schema.
 </Step>
 <Step>
 

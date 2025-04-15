@@ -21,13 +21,54 @@ export function deleteApiKey({
 	return createAuthEndpoint(
 		"/api-key/delete",
 		{
-			method: "DELETE",
+			method: "POST",
 			body: z.object({
 				keyId: z.string({
 					description: "The id of the Api Key",
 				}),
 			}),
 			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Delete an existing API key",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										keyId: {
+											type: "string",
+											description: "The id of the API key to delete",
+										},
+									},
+									required: ["keyId"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "API key deleted successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+												description:
+													"Indicates if the API key was successfully deleted",
+											},
+										},
+										required: ["success"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const { keyId } = ctx.body;
@@ -44,14 +85,10 @@ export function deleteApiKey({
 						field: "id",
 						value: keyId,
 					},
-					{
-						field: "userId",
-						value: session.user.id,
-					},
 				],
 			});
 
-			if (!apiKey) {
+			if (!apiKey || apiKey.userId !== session.user.id) {
 				throw new APIError("NOT_FOUND", {
 					message: ERROR_CODES.KEY_NOT_FOUND,
 				});
@@ -65,10 +102,6 @@ export function deleteApiKey({
 							field: "id",
 							value: apiKey.id,
 						},
-						{
-							field: "userId",
-							value: session.user.id,
-						},
 					],
 				});
 			} catch (error: any) {
@@ -76,9 +109,7 @@ export function deleteApiKey({
 					message: error?.message,
 				});
 			}
-
 			deleteAllExpiredApiKeys(ctx.context);
-
 			return ctx.json({
 				success: true,
 			});

@@ -12,25 +12,33 @@ export function getIp(
 	if (isTest) {
 		return testIP;
 	}
-	const ipHeaders = options.advanced?.ipAddress?.ipAddressHeaders;
-	const keys = ipHeaders || [
-		"x-client-ip",
-		"x-forwarded-for",
-		"cf-connecting-ip",
-		"fastly-client-ip",
-		"x-real-ip",
-		"x-cluster-client-ip",
-		"x-forwarded",
-		"forwarded-for",
-		"forwarded",
-	];
-	const headers = req instanceof Request ? req.headers : req;
-	for (const key of keys) {
-		const value = headers.get(key);
+
+	const headers = "headers" in req ? req.headers : req;
+
+	const defaultHeaders = ["x-forwarded-for"];
+
+	const ipHeaders =
+		options.advanced?.ipAddress?.ipAddressHeaders || defaultHeaders;
+
+	for (const key of ipHeaders) {
+		const value = "get" in headers ? headers.get(key) : headers[key];
 		if (typeof value === "string") {
 			const ip = value.split(",")[0].trim();
-			if (ip) return ip;
+			if (isValidIP(ip)) {
+				return ip;
+			}
 		}
 	}
 	return null;
+}
+
+function isValidIP(ip: string): boolean {
+	const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+	if (ipv4Regex.test(ip)) {
+		const parts = ip.split(".").map(Number);
+		return parts.every((part) => part >= 0 && part <= 255);
+	}
+
+	const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+	return ipv6Regex.test(ip);
 }

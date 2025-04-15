@@ -20,9 +20,9 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as AdditionalUserFieldsInput<O> & {
+					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
 						name?: string;
-						image?: string | null;
+						image?: string;
 					},
 				},
 				openapi: {
@@ -54,8 +54,9 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 									schema: {
 										type: "object",
 										properties: {
-											user: {
-												type: "object",
+											status: {
+												type: "boolean",
+												description: "Indicates if the update was successful",
 											},
 										},
 									},
@@ -149,17 +150,66 @@ export const changePassword = createAuthEndpoint(
 				description: "Change the password of the user",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "Password successfully changed",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
+										token: {
+											type: "string",
+											nullable: true, // Only present if revokeOtherSessions is true
+											description:
+												"New session token if other sessions were revoked",
+										},
 										user: {
-											description: "The user object",
-											$ref: "#/components/schemas/User",
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+													description: "The unique identifier of the user",
+												},
+												email: {
+													type: "string",
+													format: "email",
+													description: "The email address of the user",
+												},
+												name: {
+													type: "string",
+													description: "The name of the user",
+												},
+												image: {
+													type: "string",
+													format: "uri",
+													nullable: true,
+													description: "The profile image URL of the user",
+												},
+												emailVerified: {
+													type: "boolean",
+													description: "Whether the email has been verified",
+												},
+												createdAt: {
+													type: "string",
+													format: "date-time",
+													description: "When the user was created",
+												},
+												updatedAt: {
+													type: "string",
+													format: "date-time",
+													description: "When the user was last updated",
+												},
+											},
+											required: [
+												"id",
+												"email",
+												"name",
+												"emailVerified",
+												"createdAt",
+												"updatedAt",
+											],
 										},
 									},
+									required: ["user"],
 								},
 							},
 						},
@@ -335,11 +385,23 @@ export const deleteUser = createAuthEndpoint(
 				description: "Delete the user",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "User deletion processed successfully",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
+									properties: {
+										success: {
+											type: "boolean",
+											description: "Indicates if the operation was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["User deleted", "Verification email sent"],
+											description: "Status message of the deletion process",
+										},
+									},
+									required: ["success", "message"],
 								},
 							},
 						},
@@ -413,7 +475,12 @@ export const deleteUser = createAuthEndpoint(
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: session.user.id,
 				identifier: `delete-account-${token}`,
-				expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+				expiresAt: new Date(
+					Date.now() +
+						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+							60 * 60 * 24) *
+							1000,
+				),
 			});
 			const url = `${
 				ctx.context.baseURL
@@ -461,6 +528,36 @@ export const deleteUserCallback = createAuthEndpoint(
 			callbackURL: z.string().optional(),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		metadata: {
+			openapi: {
+				description:
+					"Callback to complete user deletion with verification token",
+				responses: {
+					"200": {
+						description: "User successfully deleted",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: {
+											type: "boolean",
+											description: "Indicates if the deletion was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["User deleted"],
+											description: "Confirmation message",
+										},
+									},
+									required: ["success", "message"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
@@ -534,19 +631,24 @@ export const changeEmail = createAuthEndpoint(
 			openapi: {
 				responses: {
 					"200": {
-						description: "Success",
+						description: "Email change request processed successfully",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
-										user: {
-											type: "object",
-										},
 										status: {
 											type: "boolean",
+											description: "Indicates if the request was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["Email updated", "Verification email sent"],
+											description: "Status message of the email change process",
+											nullable: true,
 										},
 									},
+									required: ["status"],
 								},
 							},
 						},
@@ -563,15 +665,16 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
-		if (ctx.body.newEmail === ctx.context.session.user.email) {
+		const newEmail = ctx.body.newEmail.toLowerCase();
+
+		if (newEmail === ctx.context.session.user.email) {
 			ctx.context.logger.error("Email is the same");
 			throw new APIError("BAD_REQUEST", {
 				message: "Email is the same",
 			});
 		}
-		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
-			ctx.body.newEmail,
-		);
+		const existingUser =
+			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
 			ctx.context.logger.error("Email already exists");
 			throw new APIError("BAD_REQUEST", {
@@ -582,9 +685,8 @@ export const changeEmail = createAuthEndpoint(
 		 * If the email is not verified, we can update the email
 		 */
 		if (ctx.context.session.user.emailVerified !== true) {
-			const existing = await ctx.context.internalAdapter.findUserByEmail(
-				ctx.body.newEmail,
-			);
+			const existing =
+				await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
@@ -593,16 +695,22 @@ export const changeEmail = createAuthEndpoint(
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
-					email: ctx.body.newEmail,
+					email: newEmail,
 				},
 				ctx,
 			);
-
+			await setSessionCookie(ctx, {
+				session: ctx.context.session.session,
+				user: {
+					...ctx.context.session.user,
+					email: newEmail,
+				},
+			});
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
-					ctx.context.session.user.email,
-					ctx.body.newEmail,
+					newEmail,
+					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${
@@ -614,7 +722,7 @@ export const changeEmail = createAuthEndpoint(
 					{
 						user: {
 							...ctx.context.session.user,
-							email: ctx.body.newEmail,
+							email: newEmail,
 						},
 						url,
 						token,
@@ -641,7 +749,7 @@ export const changeEmail = createAuthEndpoint(
 		const token = await createEmailVerificationToken(
 			ctx.context.secret,
 			ctx.context.session.user.email,
-			ctx.body.newEmail,
+			newEmail,
 			ctx.context.options.emailVerification?.expiresIn,
 		);
 		const url = `${
@@ -650,7 +758,7 @@ export const changeEmail = createAuthEndpoint(
 		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
 			{
 				user: ctx.context.session.user,
-				newEmail: ctx.body.newEmail,
+				newEmail: newEmail,
 				url,
 				token,
 			},

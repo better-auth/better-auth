@@ -59,7 +59,7 @@ The username plugin wraps the email and password authenticator and adds username
 
 ## Usage
 
-### Signup with username
+### Sign up with username
 
 To sign up a user with username, you can use the existing `signUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
 
@@ -72,9 +72,9 @@ const data = await authClient.signUp.email({
 })
 ```
 
-### Signin with username
+### Sign in with username
 
-To signin a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
+To sign in a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
 
 - `username`: The username of the user.
 - `password`: The password of the user.
@@ -155,7 +155,7 @@ const auth = betterAuth({
 
 ### Username Validator 
 
-A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters and underscores. 
+A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters, underscores, and dots.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"

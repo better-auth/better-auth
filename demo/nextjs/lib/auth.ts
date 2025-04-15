@@ -9,6 +9,7 @@ import {
 	oAuthProxy,
 	openAPI,
 	oidcProvider,
+	customSession,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -18,6 +19,7 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "better-auth/plugins/passkey";
+import { expo } from "@better-auth/expo";
 import { stripe } from "@better-auth/stripe";
 import { Stripe } from "stripe";
 
@@ -152,7 +154,9 @@ export const auth = betterAuth({
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin(),
+		admin({
+			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
+		}),
 		multiSession(),
 		oAuthProxy(),
 		nextCookies(),
@@ -160,8 +164,17 @@ export const auth = betterAuth({
 			loginPage: "/sign-in",
 		}),
 		oneTap(),
+		customSession(async (session) => {
+			return {
+				...session,
+				user: {
+					...session.user,
+					dd: "test",
+				},
+			};
+		}),
 		stripe({
-			stripeClient: new Stripe(process.env.STRIPE_KEY!),
+			stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
@@ -185,5 +198,7 @@ export const auth = betterAuth({
 				],
 			},
 		}),
+		expo(),
 	],
+	trustedOrigins: ["exp://"],
 });

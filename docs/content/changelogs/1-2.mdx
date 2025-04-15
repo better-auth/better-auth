@@ -9,7 +9,7 @@ date: 2025-03-01
 To upgrade, run:
 
 ```package-install
-npm install better-auth@1.2.0
+npm install better-auth@1.2
 ```
 
 ---
@@ -30,13 +30,10 @@ export const auth = betterAuth({
     stripe({
       // [!code highlight]
       createCustomerOnSignup: true, // [!code highlight]
-      subscription: {
-        // [!code highlight]
+      subscription: { // [!code highlight]
         enabled: true, // [!code highlight]
-        plans: [
-          // [!code highlight]
-          {
-            // [!code highlight]
+        plans: [// [!code highlight]
+          { // [!code highlight]
             name: "pro", // [!code highlight]
             priceId: "price_1234567890", // [!code highlight]
           }, // [!code highlight]
@@ -104,7 +101,7 @@ Read the [Organization Plugin docs](/docs/plugins/organization#teams) for more i
 
 ### **Init CLI**
 
-The CLI now includes an `init` command to add better auth to your project.
+The CLI now includes an `init` command to add Better Auth to your project.
 
 ```bash title="terminal"
 npx @better-auth/cli init

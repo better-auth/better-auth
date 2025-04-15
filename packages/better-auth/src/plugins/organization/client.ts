@@ -12,15 +12,8 @@ import { type AccessControl, type Role } from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
-import { BetterAuthError } from "../../error";
-import {
-	defaultStatements,
-	defaultAc,
-	defaultRoles,
-	adminAc,
-	memberAc,
-	ownerAc,
-} from "./access";
+import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
+import { hasPermission } from "./has-permission";
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;
@@ -32,171 +25,185 @@ interface OrganizationClientOptions {
 	};
 }
 
-export const organizationClient = Object.assign(
-	<O extends OrganizationClientOptions>(options?: O) => {
-		const $listOrg = atom<boolean>(false);
-		const $activeOrgSignal = atom<boolean>(false);
-		const $activeMemberSignal = atom<boolean>(false);
+export const organizationClient = <O extends OrganizationClientOptions>(
+	options?: O,
+) => {
+	const $listOrg = atom<boolean>(false);
+	const $activeOrgSignal = atom<boolean>(false);
+	const $activeMemberSignal = atom<boolean>(false);
 
-		type DefaultStatements = typeof defaultStatements;
-		type Statements = O["ac"] extends AccessControl<infer S>
-			? S & DefaultStatements
-			: DefaultStatements;
-		const roles = {
-			admin: adminAc,
-			member: memberAc,
-			owner: ownerAc,
-			...options?.roles,
-		};
+	type DefaultStatements = typeof defaultStatements;
+	type Statements = O["ac"] extends AccessControl<infer S>
+		? S
+		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
 
-		type OrganizationReturn = O["teams"] extends { enabled: true }
-			? {
-					members: InferMember<O>[];
-					invitations: InferInvitation<O>[];
-					teams: Team[];
-				} & Organization
-			: {
-					members: InferMember<O>[];
-					invitations: InferInvitation<O>[];
-				} & Organization;
-		return {
-			id: "organization",
-			$InferServerPlugin: {} as ReturnType<
-				typeof organization<{
-					ac: O["ac"] extends AccessControl
-						? O["ac"]
-						: AccessControl<DefaultStatements>;
-					roles: O["roles"] extends Record<string, Role>
-						? O["roles"]
-						: {
-								admin: Role;
-								member: Role;
-								owner: Role;
-							};
-					teams: {
-						enabled: O["teams"] extends { enabled: true } ? true : false;
-					};
-				}>
-			>,
-			getActions: ($fetch) => ({
-				$Infer: {
-					ActiveOrganization: {} as OrganizationReturn,
-					Organization: {} as Organization,
-					Invitation: {} as InferInvitation<O>,
-					Member: {} as InferInvitation<O>,
-					Team: {} as Team,
-				},
-				organization: {
-					checkRolePermission: <
-						R extends O extends { roles: any }
-							? keyof O["roles"]
-							: "admin" | "member" | "owner",
-					>(data: {
-						role: R;
-						permission: {
-							//@ts-expect-error fix this later
-							[key in keyof Statements]?: Statements[key][number][];
+	const roles = {
+		admin: adminAc,
+		member: memberAc,
+		owner: ownerAc,
+		...options?.roles,
+	};
+
+	type OrganizationReturn = O["teams"] extends { enabled: true }
+		? {
+				members: InferMember<O>[];
+				invitations: InferInvitation<O>[];
+				teams: Team[];
+			} & Organization
+		: {
+				members: InferMember<O>[];
+				invitations: InferInvitation<O>[];
+			} & Organization;
+	return {
+		id: "organization",
+		$InferServerPlugin: {} as ReturnType<
+			typeof organization<{
+				ac: O["ac"] extends AccessControl
+					? O["ac"]
+					: AccessControl<DefaultStatements>;
+				roles: O["roles"] extends Record<string, Role>
+					? O["roles"]
+					: {
+							admin: Role;
+							member: Role;
+							owner: Role;
 						};
-					}) => {
-						if (Object.keys(data.permission).length > 1) {
-							throw new BetterAuthError(
-								"you can only check one resource permission at a time.",
-							);
-						}
-						const role = roles[data.role as unknown as "admin"];
-						if (!role) {
-							return false;
-						}
-						const isAuthorized = role?.authorize(data.permission as any);
-						return isAuthorized.success;
-					},
-				},
-			}),
-			getAtoms: ($fetch) => {
-				const listOrganizations = useAuthQuery<Organization[]>(
-					$listOrg,
-					"/organization/list",
-					$fetch,
-					{
-						method: "GET",
-					},
-				);
-				const activeOrganization = useAuthQuery<
-					Prettify<
-						Organization & {
-							members: (Member & {
-								user: {
-									id: string;
-									name: string;
-									email: string;
-									image: string | undefined;
-								};
-							})[];
-							invitations: Invitation[];
-						}
-					>
-				>(
-					[$activeOrgSignal],
-					"/organization/get-full-organization",
-					$fetch,
-					() => ({
-						method: "GET",
-					}),
-				);
-
-				const activeMember = useAuthQuery<Member>(
-					[$activeMemberSignal],
-					"/organization/get-active-member",
-					$fetch,
-					{
-						method: "GET",
-					},
-				);
-
-				return {
-					$listOrg,
-					$activeOrgSignal,
-					$activeMemberSignal,
-					activeOrganization,
-					listOrganizations,
-					activeMember,
+				teams: {
+					enabled: O["teams"] extends { enabled: true } ? true : false;
 				};
+			}>
+		>,
+		getActions: ($fetch) => ({
+			$Infer: {
+				ActiveOrganization: {} as OrganizationReturn,
+				Organization: {} as Organization,
+				Invitation: {} as InferInvitation<O>,
+				Member: {} as InferMember<O>,
+				Team: {} as Team,
 			},
-			pathMethods: {
-				"/organization/get-full-organization": "GET",
+			organization: {
+				checkRolePermission: <
+					R extends O extends { roles: any }
+						? keyof O["roles"]
+						: "admin" | "member" | "owner",
+				>(
+					data: PermissionExclusive & {
+						role: R;
+					},
+				) => {
+					const isAuthorized = hasPermission({
+						role: data.role as string,
+						options: {
+							ac: options?.ac,
+							roles: roles,
+						},
+						permissions: (data.permissions ?? data.permission) as any,
+					});
+					return isAuthorized;
+				},
 			},
-			atomListeners: [
+		}),
+		getAtoms: ($fetch) => {
+			const listOrganizations = useAuthQuery<Organization[]>(
+				$listOrg,
+				"/organization/list",
+				$fetch,
 				{
-					matcher(path) {
-						return (
-							path === "/organization/create" ||
-							path === "/organization/delete" ||
-							path === "/organization/update"
-						);
-					},
-					signal: "$listOrg",
+					method: "GET",
 				},
+			);
+			const activeOrganization = useAuthQuery<
+				Prettify<
+					Organization & {
+						members: (Member & {
+							user: {
+								id: string;
+								name: string;
+								email: string;
+								image: string | undefined;
+							};
+						})[];
+						invitations: Invitation[];
+					}
+				>
+			>(
+				[$activeOrgSignal],
+				"/organization/get-full-organization",
+				$fetch,
+				() => ({
+					method: "GET",
+				}),
+			);
+
+			const activeMember = useAuthQuery<Member>(
+				[$activeMemberSignal],
+				"/organization/get-active-member",
+				$fetch,
 				{
-					matcher(path) {
-						return path.startsWith("/organization");
-					},
-					signal: "$activeOrgSignal",
+					method: "GET",
 				},
-				{
-					matcher(path) {
-						return path.includes("/organization/update-member-role");
-					},
-					signal: "$activeMemberSignal",
+			);
+
+			return {
+				$listOrg,
+				$activeOrgSignal,
+				$activeMemberSignal,
+				activeOrganization,
+				listOrganizations,
+				activeMember,
+			};
+		},
+		pathMethods: {
+			"/organization/get-full-organization": "GET",
+		},
+		atomListeners: [
+			{
+				matcher(path) {
+					return (
+						path === "/organization/create" ||
+						path === "/organization/delete" ||
+						path === "/organization/update"
+					);
 				},
-			],
-		} satisfies BetterAuthClientPlugin;
-	},
-	{
-		defaultStatements,
-		defaultRoles,
-		defaultAc,
-		ownerAc,
-		adminAc,
-		memberAc,
-	},
-);
+				signal: "$listOrg",
+			},
+			{
+				matcher(path) {
+					return path.startsWith("/organization");
+				},
+				signal: "$activeOrgSignal",
+			},
+			{
+				matcher(path) {
+					return path.startsWith("/organization/set-active");
+				},
+				signal: "$sessionSignal",
+			},
+			{
+				matcher(path) {
+					return path.includes("/organization/update-member-role");
+				},
+				signal: "$activeMemberSignal",
+			},
+		],
+	} satisfies BetterAuthClientPlugin;
+};

@@ -4,6 +4,7 @@ import { toAuthEndpoints } from "./to-auth-endpoints";
 import { init } from "../init";
 import { z } from "zod";
 import { APIError } from "better-call";
+import { getTestInstance } from "../test-utils/test-instance";
 
 describe("before hook", async () => {
 	describe("context", async () => {
@@ -381,5 +382,21 @@ describe("after hook", async () => {
 			expect(result2.headers.get("set-cookie")).toContain("session=value");
 			expect(result2.headers.get("set-cookie")).toContain("data=2");
 		});
+	});
+});
+
+describe("disabled paths", async () => {
+	const { client } = await getTestInstance({
+		disabledPaths: ["/sign-in/email"],
+	});
+
+	it("should return 404 for disabled paths", async () => {
+		const response = await client.$fetch("/ok");
+		expect(response.data).toEqual({ ok: true });
+		const { error } = await client.signIn.email({
+			email: "test@test.com",
+			password: "test",
+		});
+		expect(error?.status).toBe(404);
 	});
 });

@@ -78,8 +78,8 @@ export default function V1Ship() {
 						If you were using Better Auth for production, we recommend updating
 						to V1 as soon as possible. There are some breaking changes, feel
 						free to join us on{" "}
-						<Link href="https://discord.gg/GYC3W7tZzb">Discord</Link>, and we'll
-						gladly assist.
+						<Link href="https://discord.com/better-auth">Discord</Link>, and
+						we'll gladly assist.
 					</p>
 				</div>
 			</div>

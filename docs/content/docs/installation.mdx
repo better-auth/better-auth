@@ -213,10 +213,10 @@ export const auth = betterAuth({
         enabled: true // [!code highlight]
     },// [!code highlight]
     socialProviders: { // [!code highlight]
-       github: { // [!code highlight]
-        clientId: process.env.GITHUB_CLIENT_ID, // [!code highlight]
-        clientSecret: process.env.GITHUB_CLIENT_SECRET, // [!code highlight]
-       } // [!code highlight]
+        github: { // [!code highlight]
+           clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
+           clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
+        }, // [!code highlight]
     }, // [!code highlight]
 });
 ```
@@ -228,7 +228,7 @@ You can use even more authentication methods like [passkey](/docs/plugins/passke
 
 <Step>
 ### Mount Handler
-To handle api requests, you need to set up a route handler on your server.
+To handle API requests, you need to set up a route handler on your server.
 
 Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path).
 
@@ -359,9 +359,9 @@ Better Auth supports any backend framework with standard Request and Response ob
     ```
     </Tab>
     <Tab value="tanstack-start">
-    ```ts title="app/routes/api/auth/$.ts"
+    ```ts title="src/routes/api/auth/$.ts"
     import { auth } from '~/lib/server/auth'
-    import { createAPIFileRoute } from '@tanstack/start/api'
+    import { createAPIFileRoute } from '@tanstack/react-start/api'
 
     export const APIRoute = createAPIFileRoute('/api/auth/$')({
         GET: ({ request }) => {
@@ -374,7 +374,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     ```
     </Tab>
     <Tab value="expo">
-    ```ts title="app/api/auth/[..all]+api.ts"
+    ```ts title="app/api/auth/[...all]+api.ts"
     import { auth } from '@/lib/server/auth'; // path to your auth file
 
     const handler = auth.handler;
@@ -391,10 +391,10 @@ The client-side library helps you interact with the auth server. Better Auth com
 
 1. Import `createAuthClient` from the package for your framework (e.g., "better-auth/react" for React).
 2. Call the function to create your client.
-3. Pass the base url of your auth server. (If the auth server is running on the same domain as your client, you can skip this step.)
+3. Pass the base URL of your auth server. (If the auth server is running on the same domain as your client, you can skip this step.)
 
 <Callout type="info">
-If you're using a different base path other than `/api/auth` make sure to pass the whole url including the path. (e.g. `http://localhost:3000/custom-path/auth`)
+If you're using a different base path other than `/api/auth` make sure to pass the whole URL including the path. (e.g. `http://localhost:3000/custom-path/auth`)
 </Callout>
 
 <Tabs items={["react", "vue", "svelte", "solid",
@@ -403,7 +403,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/client"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -411,7 +412,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/react"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -419,7 +421,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/vue"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -427,7 +430,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/svelte"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>
@@ -435,7 +439,8 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/solid"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
+                baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
     </Tab>

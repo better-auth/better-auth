@@ -65,7 +65,7 @@ export const auth = betterAuth({
             clientId: process.env.REDDIT_CLIENT_ID as string,
             clientSecret: process.env.REDDIT_CLIENT_SECRET as string,
             duration: "permanent",
-            scopes: ["identity", "read", "submit"] // Add required scopes
+            scope: ["read", "submit"] // Add required scopes
         },
     },
 })
