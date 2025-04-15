@@ -36,7 +36,13 @@ export default defineBuildConfig({
 			ext: "cjs",
 			globOptions: {
 				// test folders
-				ignore: ["**/*.test.ts", "**/*.spec.ts", "**/test/**", "test-utils"],
+				ignore: [
+					"**/*.test.ts",
+					"**/*.spec.ts",
+					"**/test/**",
+					"test-utils",
+					"**/__snapshots__/**",
+				],
 			},
 		},
 	],
