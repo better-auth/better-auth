@@ -260,7 +260,7 @@ You can set the active organization by calling the `organization.setActive` func
   })
 
   // you can also use organizationSlug instead of organizationId
-  authClient.organization.setActive({
+  await authClient.organization.setActive({
     organizationSlug: "organization-slug"
   })
   ```
@@ -270,7 +270,7 @@ You can set the active organization by calling the `organization.setActive` func
     ```ts title="api.ts"
     import { auth } from "@/lib/auth";
 
-    auth.api.setActiveOrganization({
+    await auth.api.setActiveOrganization({
       headers: // pass the headers,
       body: {
         organizationSlug: "organization-slug"
@@ -278,7 +278,7 @@ You can set the active organization by calling the `organization.setActive` func
     })
 
     // you can also use organizationId instead of organizationSlug
-    auth.api.setActiveOrganization({
+    await auth.api.setActiveOrganization({
       headers: // pass the headers,
       body: {
         organizationId: "organization-id"
