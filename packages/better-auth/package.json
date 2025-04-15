@@ -20,7 +20,7 @@
           "nextjs"
       ],
   "scripts": {
-    "build": "unbuild --clean",
+    "build": "unbuild",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",
@@ -41,7 +41,7 @@
         "default": "./dist/index.mjs"
       },
       "require": {
-        "types": "./dist/index.d.cts",
+        "types": "./dist/index.d.ts",
         "default": "./dist/index.cjs"
       }
     },
@@ -51,7 +51,7 @@
         "default": "./dist/social-providers/index.mjs"
       },
       "require": {
-        "types": "./dist/social-providers/index.d.cts",
+        "types": "./dist/social-providers/index.d.ts",
         "default": "./dist/social-providers/index.cjs"
       }
     },
@@ -61,7 +61,7 @@
         "default": "./dist/client/index.mjs"
       },
       "require": {
-        "types": "./dist/client/index.d.cts",
+        "types": "./dist/client/index.d.ts",
         "default": "./dist/client/index.cjs"
       }
     },
@@ -71,7 +71,7 @@
         "default": "./dist/client/plugins/index.mjs"
       },
       "require": {
-        "types": "./dist/client/plugins/index.d.cts",
+        "types": "./dist/client/plugins/index.d.ts",
         "default": "./dist/client/plugins/index.cjs"
       }
     },
@@ -81,7 +81,7 @@
         "default": "./dist/types/index.mjs"
       },
       "require": {
-        "types": "./dist/types/index.d.cts",
+        "types": "./dist/types/index.d.ts",
         "default": "./dist/types/index.cjs"
       }
     },
@@ -91,7 +91,7 @@
         "default": "./dist/crypto/index.mjs"
       },
       "require": {
-        "types": "./dist/crypto/index.d.cts",
+        "types": "./dist/crypto/index.d.ts",
         "default": "./dist/crypto/index.cjs"
       }
     },
@@ -101,7 +101,7 @@
         "default": "./dist/cookies/index.mjs"
       },
       "require": {
-        "types": "./dist/cookies/index.d.cts",
+        "types": "./dist/cookies/index.d.ts",
         "default": "./dist/cookies/index.cjs"
       }
     },
@@ -111,7 +111,7 @@
         "default": "./dist/oauth2/index.mjs"
       },
       "require": {
-        "types": "./dist/oauth2/index.d.cts",
+        "types": "./dist/oauth2/index.d.ts",
         "default": "./dist/oauth2/index.cjs"
       }
     },
@@ -121,7 +121,7 @@
         "default": "./dist/client/react/index.mjs"
       },
       "require": {
-        "types": "./dist/client/react/index.d.cts",
+        "types": "./dist/client/react/index.d.ts",
         "default": "./dist/client/react/index.cjs"
       }
     },
@@ -131,7 +131,7 @@
         "default": "./dist/client/solid/index.mjs"
       },
       "require": {
-        "types": "./dist/client/solid/index.d.cts",
+        "types": "./dist/client/solid/index.d.ts",
         "default": "./dist/client/solid/index.cjs"
       }
     },
@@ -141,7 +141,7 @@
         "default": "./dist/api/index.mjs"
       },
       "require": {
-        "types": "./dist/api/index.d.cts",
+        "types": "./dist/api/index.d.ts",
         "default": "./dist/api/index.cjs"
       }
     },
@@ -151,7 +151,7 @@
         "default": "./dist/db/index.mjs"
       },
       "require": {
-        "types": "./dist/db/index.d.cts",
+        "types": "./dist/db/index.d.ts",
         "default": "./dist/db/index.cjs"
       }
     },
@@ -161,7 +161,7 @@
         "default": "./dist/client/vue/index.mjs"
       },
       "require": {
-        "types": "./dist/client/vue/index.d.cts",
+        "types": "./dist/client/vue/index.d.ts",
         "default": "./dist/client/vue/index.cjs"
       }
     },
@@ -171,7 +171,7 @@
         "default": "./dist/plugins/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/index.d.cts",
+        "types": "./dist/plugins/index.d.ts",
         "default": "./dist/plugins/index.cjs"
       }
     },
@@ -181,7 +181,7 @@
         "default": "./dist/integrations/svelte-kit.mjs"
       },
       "require": {
-        "types": "./dist/integrations/svelte-kit.d.cts",
+        "types": "./dist/integrations/svelte-kit.d.ts",
         "default": "./dist/integrations/svelte-kit.cjs"
       }
     },
@@ -191,7 +191,7 @@
         "default": "./dist/integrations/solid-start.mjs"
       },
       "require": {
-        "types": "./dist/integrations/solid-start.d.cts",
+        "types": "./dist/integrations/solid-start.d.ts",
         "default": "./dist/integrations/solid-start.cjs"
       }
     },
@@ -201,7 +201,7 @@
         "default": "./dist/client/svelte/index.mjs"
       },
       "require": {
-        "types": "./dist/client/svelte/index.d.cts",
+        "types": "./dist/client/svelte/index.d.ts",
         "default": "./dist/client/svelte/index.cjs"
       }
     },
@@ -211,7 +211,7 @@
         "default": "./dist/integrations/next-js.mjs"
       },
       "require": {
-        "types": "./dist/integrations/next-js.d.cts",
+        "types": "./dist/integrations/next-js.d.ts",
         "default": "./dist/integrations/next-js.cjs"
       }
     },
@@ -221,7 +221,7 @@
         "default": "./dist/integrations/react-start.mjs"
       },
       "require": {
-        "types": "./dist/integrations/react-start.d.cts",
+        "types": "./dist/integrations/react-start.d.ts",
         "default": "./dist/integrations/react-start.cjs"
       }
     },
@@ -231,7 +231,7 @@
         "default": "./dist/integrations/node.mjs"
       },
       "require": {
-        "types": "./dist/integrations/node.d.cts",
+        "types": "./dist/integrations/node.d.ts",
         "default": "./dist/integrations/node.cjs"
       }
     },
@@ -241,7 +241,7 @@
         "default": "./dist/adapters/prisma-adapter/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/prisma-adapter/index.d.cts",
+        "types": "./dist/adapters/prisma-adapter/index.d.ts",
         "default": "./dist/adapters/prisma-adapter/index.cjs"
       }
     },
@@ -251,7 +251,7 @@
         "default": "./dist/adapters/drizzle-adapter/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/drizzle-adapter/index.d.cts",
+        "types": "./dist/adapters/drizzle-adapter/index.d.ts",
         "default": "./dist/adapters/drizzle-adapter/index.cjs"
       }
     },
@@ -261,7 +261,7 @@
         "default": "./dist/adapters/mongodb-adapter/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/mongodb-adapter/index.d.cts",
+        "types": "./dist/adapters/mongodb-adapter/index.d.ts",
         "default": "./dist/adapters/mongodb-adapter/index.cjs"
       }
     },
@@ -271,7 +271,7 @@
         "default": "./dist/adapters/memory-adapter/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/memory-adapter/index.d.cts",
+        "types": "./dist/adapters/memory-adapter/index.d.ts",
         "default": "./dist/adapters/memory-adapter/index.cjs"
       }
     },
@@ -281,7 +281,7 @@
         "default": "./dist/adapters/test.mjs"
       },
       "require": {
-        "types": "./dist/adapters/test.d.cts",
+        "types": "./dist/adapters/test.d.ts",
         "default": "./dist/adapters/test.cjs"
       }
     },
@@ -291,7 +291,7 @@
         "default": "./dist/adapters/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/index.d.cts",
+        "types": "./dist/adapters/index.d.ts",
         "default": "./dist/adapters/index.cjs"
       }
     },
@@ -301,7 +301,7 @@
         "default": "./dist/plugins/access/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/access/index.d.cts",
+        "types": "./dist/plugins/access/index.d.ts",
         "default": "./dist/plugins/access/index.cjs"
       }
     },
@@ -311,7 +311,7 @@
         "default": "./dist/plugins/admin/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/admin/index.d.cts",
+        "types": "./dist/plugins/admin/index.d.ts",
         "default": "./dist/plugins/admin/index.cjs"
       }
     },
@@ -321,7 +321,7 @@
         "default": "./dist/plugins/admin/access/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/admin/access/index.d.cts",
+        "types": "./dist/plugins/admin/access/index.d.ts",
         "default": "./dist/plugins/admin/access/index.cjs"
       }
     },
@@ -331,7 +331,7 @@
         "default": "./dist/plugins/anonymous/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/anonymous/index.d.cts",
+        "types": "./dist/plugins/anonymous/index.d.ts",
         "default": "./dist/plugins/anonymous/index.cjs"
       }
     },
@@ -341,7 +341,7 @@
         "default": "./dist/plugins/bearer/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/bearer/index.d.cts",
+        "types": "./dist/plugins/bearer/index.d.ts",
         "default": "./dist/plugins/bearer/index.cjs"
       }
     },
@@ -351,7 +351,7 @@
         "default": "./dist/plugins/custom-session/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/custom-session/index.d.cts",
+        "types": "./dist/plugins/custom-session/index.d.ts",
         "default": "./dist/plugins/custom-session/index.cjs"
       }
     },
@@ -361,7 +361,7 @@
         "default": "./dist/plugins/email-otp/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/email-otp/index.d.cts",
+        "types": "./dist/plugins/email-otp/index.d.ts",
         "default": "./dist/plugins/email-otp/index.cjs"
       }
     },
@@ -371,7 +371,7 @@
         "default": "./dist/plugins/generic-oauth/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/generic-oauth/index.d.cts",
+        "types": "./dist/plugins/generic-oauth/index.d.ts",
         "default": "./dist/plugins/generic-oauth/index.cjs"
       }
     },
@@ -381,7 +381,7 @@
         "default": "./dist/plugins/jwt/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/jwt/index.d.cts",
+        "types": "./dist/plugins/jwt/index.d.ts",
         "default": "./dist/plugins/jwt/index.cjs"
       }
     },
@@ -391,7 +391,7 @@
         "default": "./dist/plugins/haveibeenpwned/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/haveibeenpwned/index.d.cts",
+        "types": "./dist/plugins/haveibeenpwned/index.d.ts",
         "default": "./dist/plugins/haveibeenpwned/index.cjs"
       }
     },
@@ -401,7 +401,7 @@
         "default": "./dist/plugins/sso/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/sso/index.d.cts",
+        "types": "./dist/plugins/sso/index.d.ts",
         "default": "./dist/plugins/sso/index.cjs"
       }
     },
@@ -411,7 +411,7 @@
         "default": "./dist/plugins/oidc-provider/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/oidc-provider/index.d.cts",
+        "types": "./dist/plugins/oidc-provider/index.d.ts",
         "default": "./dist/plugins/oidc-provider/index.cjs"
       }
     },
@@ -421,7 +421,7 @@
         "default": "./dist/plugins/magic-link/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/magic-link/index.d.cts",
+        "types": "./dist/plugins/magic-link/index.d.ts",
         "default": "./dist/plugins/magic-link/index.cjs"
       }
     },
@@ -431,7 +431,7 @@
         "default": "./dist/plugins/multi-session/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/multi-session/index.d.cts",
+        "types": "./dist/plugins/multi-session/index.d.ts",
         "default": "./dist/plugins/multi-session/index.cjs"
       }
     },
@@ -441,7 +441,7 @@
         "default": "./dist/plugins/oauth-proxy/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/oauth-proxy/index.d.cts",
+        "types": "./dist/plugins/oauth-proxy/index.d.ts",
         "default": "./dist/plugins/oauth-proxy/index.cjs"
       }
     },
@@ -451,7 +451,7 @@
         "default": "./dist/plugins/organization/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/organization/index.d.cts",
+        "types": "./dist/plugins/organization/index.d.ts",
         "default": "./dist/plugins/organization/index.cjs"
       }
     },
@@ -461,7 +461,7 @@
         "default": "./dist/plugins/organization/access/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/organization/access/index.d.cts",
+        "types": "./dist/plugins/organization/access/index.d.ts",
         "default": "./dist/plugins/organization/access/index.cjs"
       }
     },
@@ -471,7 +471,7 @@
         "default": "./dist/plugins/one-time-token/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/one-time-token/index.d.cts",
+        "types": "./dist/plugins/one-time-token/index.d.ts",
         "default": "./dist/plugins/one-time-token/index.cjs"
       }
     },
@@ -481,7 +481,7 @@
         "default": "./dist/plugins/passkey/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/passkey/index.d.cts",
+        "types": "./dist/plugins/passkey/index.d.ts",
         "default": "./dist/plugins/passkey/index.cjs"
       }
     },
@@ -491,7 +491,7 @@
         "default": "./dist/plugins/phone-number/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/phone-number/index.d.cts",
+        "types": "./dist/plugins/phone-number/index.d.ts",
         "default": "./dist/plugins/phone-number/index.cjs"
       }
     },
@@ -501,7 +501,7 @@
         "default": "./dist/plugins/two-factor/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/two-factor/index.d.cts",
+        "types": "./dist/plugins/two-factor/index.d.ts",
         "default": "./dist/plugins/two-factor/index.cjs"
       }
     },
@@ -511,7 +511,7 @@
         "default": "./dist/plugins/username/index.mjs"
       },
       "require": {
-        "types": "./dist/plugins/username/index.d.cts",
+        "types": "./dist/plugins/username/index.d.ts",
         "default": "./dist/plugins/username/index.cjs"
       }
     }
