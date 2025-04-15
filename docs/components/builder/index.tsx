@@ -69,7 +69,7 @@ const frameworks = [
 		),
 	},
 	{
-		title: "Svelte Kit",
+		title: "SvelteKit",
 		description: "Web development for the rest of us",
 		Icon: () => (
 			<svg
@@ -100,7 +100,7 @@ const frameworks = [
 		),
 	},
 	{
-		title: "Solid Start",
+		title: "SolidStart",
 		description: "Fine-grained reactivity goes fullstack",
 		Icon: () => (
 			<svg

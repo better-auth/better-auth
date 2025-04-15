@@ -1,3 +1,5 @@
+import type { User } from "../../types";
+
 export interface OIDCOptions {
 	/**
 	 * The amount of time in seconds that the access token is valid for.
@@ -106,6 +108,19 @@ export interface OIDCOptions {
 	 * Custom function to generate a client secret.
 	 */
 	generateClientSecret?: () => string;
+	/**
+	 * Get the additional user info claims
+	 *
+	 * This applies to the `userinfo` endpoint and the `id_token`.
+	 *
+	 * @param user - The user object.
+	 * @param scopes - The scopes that the client requested.
+	 * @returns The user info claim.
+	 */
+	getAdditionalUserInfoClaim?: (
+		user: User & Record<string, any>,
+		scopes: string[],
+	) => Record<string, any> | Promise<Record<string, any>>;
 }
 
 export interface AuthorizationQuery {

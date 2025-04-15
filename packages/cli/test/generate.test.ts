@@ -31,6 +31,35 @@ describe("generate", async () => {
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
 	});
 
+	it("should generate prisma schema with number id", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						useNumberId: true,
+					},
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-numberid.prisma",
+		);
+	});
+
 	it("should generate prisma schema for mongodb", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",

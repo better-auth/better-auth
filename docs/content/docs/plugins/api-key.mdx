@@ -278,7 +278,7 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
 
 ### Delete an API Key
 
-<Endpoint method="DELETE" path="/api-key/delete" />
+<Endpoint method="POST" path="/api-key/delete" />
 <Tabs items={['Client', 'Server']}>
     <Tab value="Client">
       ```ts
@@ -535,7 +535,7 @@ console.log(apiKey.metadata.plan); // "premium"
 
 `apiKeyHeaders` <span className="opacity-70">`string | string[];`</span>
 
-The header name to check for api key. Default is `x-api-key`.
+The header name to check for API key. Default is `x-api-key`.
 
 
 `customAPIKeyGetter` <span className="opacity-70">`(ctx: GenericEndpointContext) => string | null`</span>
@@ -656,7 +656,7 @@ Customize the rate-limiting.
 
 `schema` <span className="opacity-70">`InferOptionSchema<ReturnType<typeof apiKeySchema>>`</span>
 
-Custom schema for the api key plugin.
+Custom schema for the API key plugin.
 
 `disableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
@@ -687,7 +687,7 @@ Table: `apiKey`
     {
       name: "id",
       type: "string",
-      description: "The ID of the api key.",
+      description: "The ID of the API key.",
       isUnique: true,
       isPrimaryKey: true,
     },

@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode } from "../oauth2";
+import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 
 /**
  * [More info](https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info/)
@@ -146,7 +146,19 @@ export const tiktok = (options: TiktokOptions) => {
 				tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
 			});
 		},
-
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -183,5 +195,6 @@ export const tiktok = (options: TiktokOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<TiktokProfile>;
 };

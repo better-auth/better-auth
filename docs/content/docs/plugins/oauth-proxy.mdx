@@ -35,7 +35,7 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
             github: {
                 clientId: "your-client-id",
                 clientSecret: "your-client-secret",
-                redirectURI: "https://my-main-app.com/api/auth/callback/github". // [!code highlight]
+                redirectURI: "https://my-main-app.com/api/auth/callback/github" // [!code highlight]
             }
        }
     })
@@ -58,9 +58,11 @@ await authClient.signIn.social({
 When the OAuth provider returns the user to your server, the plugin automatically redirects them to the intended callback URL.
 
 <Callout>
-To share cookies between the proxy server and your main server it uses url query parameters to pass the cookies encrypted in the URL. This is secure as the cookies are encrypted and can only be decrypted by the server.
+To share cookies between the proxy server and your main server it uses URL query parameters to pass the cookies encrypted in the URL. This is secure as the cookies are encrypted and can only be decrypted by the server.
 </Callout>
 
 ## Options
 
 **currentURL**: The application's current URL is automatically determined by the plugin. It first it check for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn’t inferred correctly, you can specify it manually here.
+
+**productionURL**: If this value matches the `baseURL` in your auth config, requests will not be proxied. Defaults to the `BETTER_AUTH_URL` environment variable.

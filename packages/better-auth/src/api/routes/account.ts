@@ -33,19 +33,31 @@ export const listUserAccounts = createAuthEndpoint(
 											},
 											createdAt: {
 												type: "string",
+												format: "date-time",
 											},
 											updatedAt: {
 												type: "string",
+												format: "date-time",
 											},
-											accountId: {
+										},
+										accountId: {
+											type: "string",
+										},
+										scopes: {
+											type: "array",
+											items: {
 												type: "string",
-											},
-											scopes: {
-												type: "array",
-												items: { type: "string" },
 											},
 										},
 									},
+									required: [
+										"id",
+										"provider",
+										"createdAt",
+										"updatedAt",
+										"accountId",
+										"scopes",
+									],
 								},
 							},
 						},
@@ -71,7 +83,6 @@ export const listUserAccounts = createAuthEndpoint(
 		);
 	},
 );
-
 export const linkSocialAccount = createAuthEndpoint(
 	"/link-social",
 	{
@@ -107,6 +118,16 @@ export const linkSocialAccount = createAuthEndpoint(
 			 * Whether to allow sign up for new users
 			 */
 			requestSignUp: z.boolean().optional(),
+			/**
+			 * Additional scopes to request when linking the account.
+			 * This is useful for requesting additional permissions when
+			 * linking a social account compared to the initial authentication.
+			 */
+			scopes: z
+				.array(z.string(), {
+					description: "Additional scopes to request from the provider",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -122,9 +143,13 @@ export const linkSocialAccount = createAuthEndpoint(
 									properties: {
 										url: {
 											type: "string",
+											description:
+												"The authorization URL to redirect the user to",
 										},
 										redirect: {
 											type: "boolean",
+											description:
+												"Indicates if the user should be redirected to the authorization URL",
 										},
 										status: {
 											type: "boolean",
@@ -141,6 +166,7 @@ export const linkSocialAccount = createAuthEndpoint(
 	},
 	async (c) => {
 		const session = c.context.session;
+
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.body.provider,
 		);
@@ -246,6 +272,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			state: state.state,
 			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			scopes: c.body.scopes,
 		});
 
 		return c.json({
@@ -254,37 +281,59 @@ export const linkSocialAccount = createAuthEndpoint(
 		});
 	},
 );
-
 export const unlinkAccount = createAuthEndpoint(
 	"/unlink-account",
 	{
 		method: "POST",
 		body: z.object({
 			providerId: z.string(),
-			accountId: z.string(), // Add account ID to identify which account to unlink
+			accountId: z.string().optional(),
 		}),
 		use: [freshSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Unlink an account",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { providerId, accountId } = ctx.body;
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			ctx.context.session.user.id,
 		);
-		const accountExist = accounts.find(
-			(account) =>
-				account.providerId === providerId && account.accountId === accountId,
-		);
-		if (!accountExist) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
-			});
-		}
 		if (
 			accounts.length === 1 &&
 			!ctx.context.options.account?.accountLinking?.allowUnlinkingAll
 		) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+			});
+		}
+		const accountExist = accounts.find((account) =>
+			accountId
+				? account.accountId === accountId && account.providerId === providerId
+				: account.providerId === providerId,
+		);
+		if (!accountExist) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
 			});
 		}
 		await ctx.context.internalAdapter.deleteAccount(accountExist.id);

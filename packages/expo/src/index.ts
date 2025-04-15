@@ -3,7 +3,7 @@ import { createAuthMiddleware } from "better-auth/api";
 
 export interface ExpoOptions {
 	/**
-	 * Override origin header for expo api routes
+	 * Override origin header for expo API routes
 	 */
 	overrideOrigin?: boolean;
 }
