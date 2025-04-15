@@ -10,7 +10,6 @@ export default defineBuildConfig({
 	declaration: true,
 	outDir: "dist",
 	clean: true,
-	failOnWarn: false,
 	externals: [
 		...Object.keys(packagejson.dependencies || {}),
 		...Object.keys(packagejson.devDependencies || {}),
