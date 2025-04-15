@@ -43,7 +43,7 @@ export const auth = betterAuth({
 
 **getUserInfo** A custom function to fetch user information from the provider. Given the tokens returned from the provider, this function should return the user's information.
 
-**overrideUserInfoOnSignIn**: by default, all extra fields other than the core ones (name, email, emailVerified, image) are not updated on sign in. If you want to update them, set this to `true`. You can also pass an array of fields to override.
+**overrideUserInfoOnSignIn**: when a user signs in, by default only 4 core user fields are updated: name, email, emailVerified, and image. Any additional fields in the user profile remain unchanged. To modify this behavior, you can pass `true` to override all fields or an array of fields to override.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";

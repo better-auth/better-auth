@@ -177,10 +177,14 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	responseMode?: "query" | "form_post";
 	/**
-	 * If enabled, the user info will be overridden with the provider user info
-	 * This is useful if you want to use the provider user info to update the user info
+	 * By default, only 4 core user fields are updated on sign in: name, email, emailVerified, and image.
+	 * If you want to update all fields, set this to `true`.
+	 * You can also pass an array of fields to override.
 	 *
-	 * You can also pass an array of fields to override
+	 * @example
+	 * ```ts
+	 * overrideUserInfoOnSignIn: ["name", "email", "image"]
+	 * ```
 	 *
 	 * @default false
 	 */

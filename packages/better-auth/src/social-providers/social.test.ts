@@ -715,7 +715,7 @@ describe("overrideUserInfoOnSignIn", async () => {
 				headers,
 			},
 		});
-		console.log(session.data?.user);
+
 		expect(session.data?.user).toMatchObject({
 			name: "Updated User",
 			locale: "am",
