@@ -20,19 +20,24 @@ export default defineBuildConfig({
 			format: "esm",
 			ext: "mjs",
 			globOptions: {
-        // test folders
-        ignore: ['**/*.test.ts', '**/*.spec.ts', '**/test/**', "test-utils", "**/__snapshots__/**"],
-      },
+				// test folders
+				ignore: [
+					"**/*.test.ts",
+					"**/*.spec.ts",
+					"**/test/**",
+					"test-utils",
+					"**/__snapshots__/**",
+				],
+			},
 		},
 		{
 			input: "./src/",
 			format: "cjs",
 			ext: "cjs",
 			globOptions: {
-        // test folders
-        ignore: ['**/*.test.ts', '**/*.spec.ts', '**/test/**', "test-utils"],
-      },
-		}
+				// test folders
+				ignore: ["**/*.test.ts", "**/*.spec.ts", "**/test/**", "test-utils"],
+			},
+		},
 	],
-	
 });
