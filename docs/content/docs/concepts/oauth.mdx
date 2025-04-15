@@ -43,7 +43,7 @@ export const auth = betterAuth({
 
 **getUserInfo** A custom function to fetch user information from the provider. Given the tokens returned from the provider, this function should return the user's information.
 
-**overrideUserInfoOnSignIn**: `boolean | string[]` If you want to update the user information every time they sign in, set this to `true`. You can also pass an array of fields to override.
+**overrideUserInfoOnSignIn**: by default, all extra fields other than the core ones (name, email, emailVerified, image) are not updated on sign in. If you want to update them, set this to `true`. You can also pass an array of fields to override.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -52,7 +52,7 @@ export const auth = betterAuth({
   // Other configurations...
   socialProviders: {
     github: {
-      overrideUserInfoOnSignIn: ["githubName", "githubAvatar"], //or true to override all fields
+      overrideUserInfoOnSignIn: ["name"], //or true to override all fields
     },
   },
 });
