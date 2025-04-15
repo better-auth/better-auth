@@ -329,7 +329,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Typescript",
+				title: "TypeScript",
 				href: "/docs/concepts/typescript",
 				icon: () => (
 					<svg
@@ -1106,7 +1106,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/svelte-kit",
 			},
 			{
-				title: "Solid Start",
+				title: "SolidStart",
 				icon: Icons.solidStart,
 				href: "/docs/integrations/solid-start",
 			},
@@ -1430,6 +1430,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "One-Time Token",
 				href: "/docs/plugins/one-time-token",
+				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1847,7 +1848,7 @@ export const examples: Content[] = [
 				icon: Icons.remix,
 			},
 			{
-				title: "Next JS",
+				title: "Next.js",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
 			},

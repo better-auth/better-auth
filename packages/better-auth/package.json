@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -8,6 +8,17 @@
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/better-auth"
   },
+
+  "keywords": [
+          "auth",
+          "oauth",
+          "oidc",
+          "2fa",
+          "social",
+          "security",
+          "typescript",
+          "nextjs"
+      ],
   "scripts": {
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
@@ -19,7 +30,7 @@
     "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
     "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
-    "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
+    "typecheck": "tsc --noEmit"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

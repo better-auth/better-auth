@@ -43,7 +43,7 @@ const { data: session } = await useSession(useFetch);
                     <div class="border-y py-2 border-dotted bg-secondary/60 opacity-80">
                         <div class="text-xs flex items-center gap-2 justify-center text-muted-foreground">
                             <span class="text-center">
-                                All features on this demo are Implemented with better auth without
+                                All features on this demo are Implemented with Better Auth without
                                 any custom backend code
                             </span>
                         </div>

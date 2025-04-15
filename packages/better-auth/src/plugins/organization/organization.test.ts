@@ -23,6 +23,9 @@ describe("organization", async (it) => {
 						},
 						member: {
 							modelName: "teamMembers",
+							fields: {
+								userId: "user_id",
+							},
 						},
 					},
 					invitationLimit: 3,
@@ -480,10 +483,11 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
+
 		if (!org.data) throw new Error("Organization not found");
 		const removedOwner = await client.organization.removeMember({
 			organizationId: org.data.id,
-			memberIdOrEmail: org.data.members[0].id,
+			memberIdOrEmail: org.data?.members.find((m) => m.role === "owner")!.id,
 			fetchOptions: {
 				headers,
 			},
@@ -657,7 +661,7 @@ describe("organization", async (it) => {
 			name: "name",
 		};
 
-		// test api method
+		// test API method
 		const newUser = await auth.api.signUpEmail({
 			body: {
 				email: userOverLimit.email,

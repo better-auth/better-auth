@@ -91,7 +91,6 @@ describe("Drizzle Adapter Tests (MySQL)", async () => {
 describe("Drizzle Adapter Authentication Flow Tests (MySQL)", async () => {
 	const pool = createTestPool();
 	const opts = createTestOptions(pool);
-	let mysql: Kysely<any>;
 	const testUser = {
 		email: "test-email@email.com",
 		password: "password",
@@ -99,7 +98,6 @@ describe("Drizzle Adapter Authentication Flow Tests (MySQL)", async () => {
 	};
 
 	beforeAll(async () => {
-		mysql = createKyselyInstance(pool);
 		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 	});
