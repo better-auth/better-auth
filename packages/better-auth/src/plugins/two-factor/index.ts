@@ -226,7 +226,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						ctx.context.session.session,
 					);
 					// Call hook
-					options?.onDisableTwoFactor?.({user: updatedUser});
+					await options?.onDisableTwoFactor?.({user: updatedUser});
 					
 					/**
 					 * Update the session cookie with the new user data
