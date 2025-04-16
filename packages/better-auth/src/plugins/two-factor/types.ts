@@ -30,8 +30,8 @@ export interface TwoFactorOptions {
 	 */
 	skipVerificationOnEnable?: boolean;
 	/**
- 	 * Hook which is called, when the user disables two factor authentication.
-         */
+	 * Hook which is called, when the user disables two factor authentication.
+	 */
 	onDisableTwoFactor?: (data: {
 		user: User & Record<string, any>;
 	}) => Promise<void> | void;
