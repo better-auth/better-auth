@@ -57,6 +57,8 @@ Map these fields in the account schema:
 - (next-auth v3) `access_token_expires` → `accessTokenExpiresAt` and int → datetime
 - (next-auth v4) `expires_at` → `accessTokenExpiresAt` and int → datetime
 - `id_token` → `idToken`
+- (next-auth v4) add `createdAt` with datetime type
+- (next-auth v4) add `updatedAt` with datetime type
 
 Remove the `session_state`, `type`, and `token_type` fields, as they are not required by Better Auth.
 
