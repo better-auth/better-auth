@@ -48,10 +48,12 @@ Make sure to have `createdAt` and `updatedAt` fields on your session schema.
 
 Map these fields in the account schema:
 
+- (next-auth v4) `provider` → `providerId`
 - `providerAccountId` → `accountId`
 - `refresh_token` → `refreshToken`
 - `access_token` → `accessToken`
-- `access_token_expires` → `accessTokenExpiresAt`
+- (next-auth v3) `access_token_expires` → `accessTokenExpiresAt`
+- (next-auth v4) `expires_at` → `accessTokenExpiresAt`
 - `id_token` → `idToken`
 
 Remove the `session_state`, `type`, and `token_type` fields, as they are not required by Better Auth.
