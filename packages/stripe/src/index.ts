@@ -944,7 +944,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
         ? typeof subscriptionEndpoints
         : {}),
     },
-    init(ctx) {
+    init() {
       return {
         options: {
           databaseHooks: {
