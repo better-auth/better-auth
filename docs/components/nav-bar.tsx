@@ -108,10 +108,6 @@ export const Navbar = () => {
 
 export const navMenu = [
 	{
-		name: "helo_",
-		path: "/",
-	},
-	{
 		name: "docs",
 		path: "/docs",
 	},
