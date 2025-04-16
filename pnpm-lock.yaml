@@ -48,6 +48,9 @@ importers:
       simple-git-hooks:
         specifier: ^2.11.1
         version: 2.11.1
+      stripe:
+        specifier: 18.0.0
+        version: 18.0.0
       taze:
         specifier: ^0.18.0
         version: 0.18.0
