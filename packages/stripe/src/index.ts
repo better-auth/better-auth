@@ -259,7 +259,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
                   (subscription) => subscription.id === ctx.body.subscriptionId,
                 ),
               )
-              .catch((e) => null)
+              .catch(() => null)
           : null;
 
         const subscriptions = subscriptionToUpdate
