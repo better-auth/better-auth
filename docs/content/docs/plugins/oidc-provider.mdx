@@ -124,6 +124,25 @@ The UserInfo endpoint returns different claims based on the scopes that were gra
 
 The `getAdditionalUserInfoClaim` function receives the user object and the requested scopes array, allowing you to conditionally include claims based on the scopes granted during authorization. These additional claims will be included in both the UserInfo endpoint response and the ID token.
 
+### Introspection Endpoint
+
+The OIDC provider contains an [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662) compliant endpoint to introspect a token. It can be used to determine if a token is active or not. Both access and refresh token can be intropsected.
+
+<Endpoint path="/oauth2/introspection" method="POST" />
+```ts title="api-app.ts"
+// Example of how an API call would use the introspection endpoint
+const response = await fetch('https://your-domain.com/api/auth/oauth2/introspection', {
+  headers: {
+    'Authorization': 'Basic BASE64_CLIENT_ID_CLIENT_SECRET'
+  }
+});
+
+const introspection = await response.json();
+const active = introspection.active
+```
+
+If the token is inactive, only the `active` properties is returned. The other ones such as, `scope`, `client_id`, etc. are ommited.
+
 ### Consent Screen
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.

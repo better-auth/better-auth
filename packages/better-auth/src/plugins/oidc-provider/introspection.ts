@@ -118,12 +118,16 @@ export async function introspection(
         });
     }
 
+    const expiry = token === accessToken.accessToken
+        ? accessToken.accessTokenExpiresAt
+        : accessToken.refreshTokenExpiresAt
+
     return ctx.json({
         active: true,
         scope: accessToken.scopes,
         client_id: accessToken.clientId,
         username: user.name,
         token_type: "Bearer",
-        exp: Math.floor(accessToken.accessTokenExpiresAt.getTime() / 1000),
+        exp: Math.floor(expiry.getTime() / 1000),
     })
 }
