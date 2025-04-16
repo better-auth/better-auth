@@ -323,7 +323,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
         let subscription = existingSubscription;
         if (!subscription) {
-          const newSubscription = await ctx.context.adapter.create<
+          subscription = await ctx.context.adapter.create<
             InputSubscription,
             Subscription
           >({
@@ -336,7 +336,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
               seats: ctx.body.seats || 1,
             },
           });
-          subscription = newSubscription;
         }
 
         if (!subscription) {
