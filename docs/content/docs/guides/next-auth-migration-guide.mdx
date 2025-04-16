@@ -21,7 +21,9 @@ Instead of altering your existing database column names, you can map them to mat
 
 #### User Schema
 
-Your existing user schema is likely compatible with Better Auth, so no changes are needed.
+Map the following fields in the session schema:
+
+- (next-auth v4) `emailVerified`: datetime → boolean
 
 #### Session Schema
 
