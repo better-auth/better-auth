@@ -488,12 +488,12 @@ export interface OIDCMetadata {
 	/**
 	 * Supported ID token signing algorithms.
 	 *
-	 * only `RS256` and `none` are supported.
+	 * only `HS256` and `none` are supported.
 	 *
 	 * @default
-	 * ["RS256", "none"]
+	 * ["HS256", "none"]
 	 */
-	id_token_signing_alg_values_supported: ("RS256" | "none")[];
+	id_token_signing_alg_values_supported: ("HS256" | "none")[];
 	/**
 	 * Supported token endpoint authentication methods.
 	 *
