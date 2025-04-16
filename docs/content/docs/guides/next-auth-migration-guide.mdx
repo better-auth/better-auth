@@ -31,6 +31,8 @@ Map the following fields in the session schema:
 
 - `expires` → `expiresAt`
 - `sessionToken` → `token`
+- (next-auth v4) add `createdAt` with datetime type
+- (next-auth v4) add `updatedAt` with datetime type
 
 ```typescript title="auth.ts"
 export const auth = betterAuth({
