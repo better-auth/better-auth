@@ -7,6 +7,8 @@ import { getOAuth2Tokens, refreshAccessToken } from "../oauth2";
 import { signJWT } from "../crypto/jwt";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
+import Database from "better-sqlite3";
+import { getMigrations } from "../db";
 
 let server = new OAuth2Server();
 
@@ -16,7 +18,33 @@ vi.mock("../oauth2", async (importOriginal) => {
 		...original,
 		validateAuthorizationCode: vi
 			.fn()
-			.mockImplementation(async (...args: any) => {
+			.mockImplementation(async (option: any) => {
+				if (option.options.overrideUserInfoOnSignIn) {
+					const data: GoogleProfile = {
+						email: "user@email.com",
+						email_verified: true,
+						name: "Updated User",
+						picture: "https://test.com/picture.png",
+						exp: 1234567890,
+						sub: "1234567890",
+						iat: 1234567890,
+						aud: "test",
+						azp: "test",
+						nbf: 1234567890,
+						iss: "test",
+						locale: "en",
+						jti: "test",
+						given_name: "Updated",
+						family_name: "User",
+					};
+					const testIdToken = await signJWT(data, DEFAULT_SECRET);
+					const tokens = getOAuth2Tokens({
+						access_token: "test",
+						refresh_token: "test",
+						id_token: testIdToken,
+					});
+					return tokens;
+				}
 				const data: GoogleProfile = {
 					email: "user@email.com",
 					email_verified: true,
@@ -215,7 +243,7 @@ describe("Social Providers", async (c) => {
 			});
 		});
 
-		it("should use callback url if the user is already registered", async () => {
+		it("Should use callback URL if the user is already registered", async () => {
 			const signInRes = await client.signIn.social({
 				provider: "google",
 				callbackURL: "/callback",
@@ -350,7 +378,8 @@ describe("Social Providers", async (c) => {
 				},
 			});
 
-			const authUrl = signInRes.data.url;
+			const authUrl = signInRes.data?.url;
+			if (!authUrl) throw new Error("No auth url found");
 			const mockEndpoint = authUrl.replace(
 				"https://accounts.google.com/o/oauth2/auth",
 				"http://localhost:8080/authorize",
@@ -545,6 +574,112 @@ describe("Disable signup", async () => {
 					"http://localhost:3000/api/auth/error?error=signup_disabled",
 				);
 			},
+		});
+	});
+});
+
+describe("signin", async () => {
+	const database = new Database(":memory:");
+
+	beforeAll(async () => {
+		const migrations = await getMigrations({
+			database,
+		});
+		await migrations.runMigrations();
+	});
+	it("should allow user info override during sign in", async () => {
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance({
+			database,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			name: "First Last",
+		});
+	});
+
+	it("should allow user info override during sign in", async () => {
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database,
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						overrideUserInfoOnSignIn: true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			name: "Updated User",
 		});
 	});
 });

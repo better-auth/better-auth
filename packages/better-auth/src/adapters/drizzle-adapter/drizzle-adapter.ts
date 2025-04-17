@@ -269,7 +269,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						.select({ count: count() })
 						.from(schemaModel)
 						.where(...clause);
-					return res.count;
+					return res[0].count;
 				},
 				async update({ model, where, update: values }) {
 					const schemaModel = getSchema(model);

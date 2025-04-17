@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { haveIBeenPwned } from "./index";
-
 describe("have-i-been-pwned", async () => {
-	const { client } = await getTestInstance(
+	const { client, auth } = await getTestInstance(
 		{
 			plugins: [haveIBeenPwned()],
 		},
@@ -11,7 +10,7 @@ describe("have-i-been-pwned", async () => {
 			disableTestUser: true,
 		},
 	);
-
+	const ctx = await auth.$context;
 	it("should prevent account creation with compromised password", async () => {
 		const uniqueEmail = `test-${Date.now()}@example.com`;
 		const compromisedPassword = "123456789";
@@ -21,8 +20,11 @@ describe("have-i-been-pwned", async () => {
 			password: compromisedPassword,
 			name: "Test User",
 		});
+		const user = await ctx.internalAdapter.findUserByEmail(uniqueEmail);
+		expect(user).toBeNull();
 		expect(result.error).not.toBeNull();
 		expect(result.error?.status).toBe(400);
+		expect(result.error?.code).toBe("PASSWORD_COMPROMISED");
 	});
 
 	it("should allow account creation with strong, uncompromised password", async () => {
@@ -46,7 +48,6 @@ describe("have-i-been-pwned", async () => {
 			password: initialPassword,
 			name: "Test User",
 		});
-		console.log(res);
 		const result = await client.changePassword(
 			{
 				currentPassword: initialPassword,
@@ -58,7 +59,6 @@ describe("have-i-been-pwned", async () => {
 				},
 			},
 		);
-		console.log({ result });
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
 	});

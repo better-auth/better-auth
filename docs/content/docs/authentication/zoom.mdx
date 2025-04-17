@@ -51,8 +51,8 @@ description: Zoom provider setup and usage.
     export const auth = betterAuth({
       socialProviders: {
         zoom: { // [!code highlight]
-          clientId: process.env.ZOOM_CLIENT_ID, // [!code highlight]
-          clientSecret: process.env.ZOOM_CLIENT_SECRET, // [!code highlight]
+          clientId: process.env.ZOOM_CLIENT_ID as string, // [!code highlight]
+          clientSecret: process.env.ZOOM_CLIENT_SECRET as string, // [!code highlight]
         }, // [!code highlight]
       },
     })
@@ -63,7 +63,7 @@ description: Zoom provider setup and usage.
   <Step>
     ### Sign In with Zoom 
     To sign in with Zoom, you can use the `signIn.social` function provided by the client.
-    You will need to specify `salesforce` as the provider.
+    You will need to specify `zoom` as the provider.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"

@@ -23,7 +23,6 @@ describe("api-key", async () => {
 			clientOptions: {
 				plugins: [apiKeyClient()],
 			},
-			// testWith: "postgres",
 		},
 	);
 	const { headers, user } = await signInWithTestUser();
@@ -519,7 +518,7 @@ describe("api-key", async () => {
 		expect(apiKey.metadata.test).toEqual(metadata.test);
 	});
 
-	it("create api key with with metadata when metadata is disabled (should fail)", async () => {
+	it("create API key with with metadata when metadata is disabled (should fail)", async () => {
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
@@ -674,10 +673,9 @@ describe("api-key", async () => {
 	// VERIFY API KEY
 	// =========================================================================
 
-	it("verify api key without key and userId", async () => {
+	it("verify API key without key and userId", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
-				userId: user.id,
 				key: firstApiKey.key,
 			},
 		});
@@ -685,11 +683,10 @@ describe("api-key", async () => {
 		expect(apiKey.valid).toBe(true);
 	});
 
-	it("verify api key with invalid key (should fail)", async () => {
+	it("verify API key with invalid key (should fail)", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
 				key: "invalid",
-				userId: user.id,
 			},
 		});
 		expect(apiKey.valid).toBe(false);
@@ -722,7 +719,7 @@ describe("api-key", async () => {
 
 	const { headers: rateLimitUserHeaders } = await rateLimitTestUser();
 
-	it("should fail to verify api key 20 times in a row due to rate-limit", async () => {
+	it("should fail to verify API key 20 times in a row due to rate-limit", async () => {
 		const { data: apiKey2 } = await rateLimitClient.apiKey.create(
 			{},
 			{ headers: rateLimitUserHeaders },
@@ -733,7 +730,6 @@ describe("api-key", async () => {
 			const response = await rateLimitAuth.api.verifyApiKey({
 				body: {
 					key: apiKey2.key,
-					userId: user.id,
 				},
 				headers: rateLimitUserHeaders,
 			});
@@ -745,7 +741,7 @@ describe("api-key", async () => {
 		}
 	});
 
-	it("should allow us to verify api key after rate-limit window has passed", async () => {
+	it("should allow us to verify API key after rate-limit window has passed", async () => {
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000);
 		const response = await rateLimitAuth.api.verifyApiKey({
@@ -758,7 +754,7 @@ describe("api-key", async () => {
 		expect(response?.valid).toBe(true);
 	});
 
-	it("should check if verifying an api key's remaining count does go down", async () => {
+	it("should check if verifying an API key's remaining count does go down", async () => {
 		const remaining = 10;
 		const { data: apiKey } = await client.apiKey.create(
 			{
@@ -785,7 +781,7 @@ describe("api-key", async () => {
 		expect(afterVerificationTwice?.key?.remaining).toEqual(remaining - 2);
 	});
 
-	it("should fail if the api key has no remaining", async () => {
+	it("should fail if the API key has no remaining", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
 				remaining: 1,
@@ -809,7 +805,7 @@ describe("api-key", async () => {
 		expect(afterVerification.error?.code).toBe("USAGE_EXCEEDED");
 	});
 
-	it("should fail if the api key is expired", async () => {
+	it("should fail if the API key is expired", async () => {
 		vi.useRealTimers();
 		const { headers } = await signInWithTestUser();
 		const apiKey2 = await client.apiKey.create(
@@ -834,7 +830,7 @@ describe("api-key", async () => {
 	// UPDATE API KEY
 	// =========================================================================
 
-	it("should fail to update api key name without headers or userId", async () => {
+	it("should fail to update API key name without headers or userId", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -850,7 +846,7 @@ describe("api-key", async () => {
 		expect(error).toBeInstanceOf(APIError);
 	});
 
-	it("should update api key name with headers", async () => {
+	it("should update API key name with headers", async () => {
 		const newName = "Hello World";
 		const apiKey = await auth.api.updateApiKey({
 			body: {
@@ -864,7 +860,7 @@ describe("api-key", async () => {
 		expect(apiKey.name).toEqual(newName);
 	});
 
-	it("should fail to update api key name with a length larger than the allowed maximum", async () => {
+	it("should fail to update API key name with a length larger than the allowed maximum", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -884,7 +880,7 @@ describe("api-key", async () => {
 		expect(error).not.toBeNull();
 	});
 
-	it("should fail to update api key name with a length smaller than the allowed minimum", async () => {
+	it("should fail to update API key name with a length smaller than the allowed minimum", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -904,7 +900,7 @@ describe("api-key", async () => {
 		expect(error).not.toBeNull();
 	});
 
-	it("should fail to update api key with no values to update", async () => {
+	it("should fail to update API key with no values to update", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -923,7 +919,7 @@ describe("api-key", async () => {
 		expect(error).not.toBeNull();
 	});
 
-	it("should update api key expiresIn value", async () => {
+	it("should update API key expiresIn value", async () => {
 		const expiresIn = 60 * 60 * 24 * 7; // 7 days
 		const expectedResult = new Date().getTime() + expiresIn;
 		const apiKey = await auth.api.updateApiKey({
@@ -1160,7 +1156,7 @@ describe("api-key", async () => {
 		expect(apiKey.refillAmount).toEqual(refillAmount);
 	});
 
-	it("should update api key enable value", async () => {
+	it("should update API key enable value", async () => {
 		const newValue = false;
 		const apiKey = await auth.api.updateApiKey({
 			body: {
@@ -1215,7 +1211,7 @@ describe("api-key", async () => {
 		expect(apiKey.metadata).toEqual(metadata);
 	});
 
-	it("update api key's returned metadata should be an object", async () => {
+	it("update API key's returned metadata should be an object", async () => {
 		const metadata = {
 			test: "test-12345",
 		};
@@ -1338,7 +1334,7 @@ describe("api-key", async () => {
 		expect(session?.session).toBeDefined();
 	});
 
-	it("should get session from an API key with custom api key getter", async () => {
+	it("should get session from an API key with custom API key getter", async () => {
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
@@ -1371,7 +1367,7 @@ describe("api-key", async () => {
 		expect(session?.session).toBeDefined();
 	});
 
-	it("should fail to get session from an API key with invalid api key", async () => {
+	it("should fail to get session from an API key with invalid API key", async () => {
 		const headers = new Headers();
 		headers.set("x-api-key", "invalid");
 
@@ -1607,7 +1603,6 @@ describe("api-key", async () => {
 			const result = await auth.api.verifyApiKey({
 				body: {
 					key: apiKey.key,
-					metadata: metadata,
 				},
 				headers,
 			});

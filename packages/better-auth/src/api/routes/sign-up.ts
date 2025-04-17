@@ -24,6 +24,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
+						callbackURL?: string;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -178,6 +179,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options,
 				additionalFields as any,
 			);
+			/**
+			 * Hash the password
+			 *
+			 * This is done prior to creating the user
+			 * to ensure that any plugin that
+			 * may break the hashing should break
+			 * before the user is created.
+			 */
+			const hash = await ctx.context.password.hash(password);
 			let createdUser: User;
 			try {
 				createdUser = await ctx.context.internalAdapter.createUser(
@@ -212,10 +222,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 				});
 			}
-			/**
-			 * Link the account to the user
-			 */
-			const hash = await ctx.context.password.hash(password);
 			await ctx.context.internalAdapter.linkAccount(
 				{
 					userId: createdUser.id,

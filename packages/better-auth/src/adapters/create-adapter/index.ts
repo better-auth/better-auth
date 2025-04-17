@@ -99,8 +99,10 @@ export const createAdapter =
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				//@ts-expect-error - The model name can be a custom modelName, not one of the default ones.
-				f = Object.values(schema).find((f) => f.modelName === model)!;
+				//@ts-expect-error
+				f = Object.values(schema[model]?.fields).find(
+					(f) => f.fieldName === field,
+				);
 			}
 			if (!f) {
 				debugLog(`Field ${field} not found in model ${model}`);
@@ -250,7 +252,7 @@ export const createAdapter =
 								if (config.disableIdGeneration) return undefined;
 								const useNumberId = options.advanced?.database?.useNumberId;
 								let generateId = options.advanced?.database?.generateId;
-								if (options.advanced?.generateId) {
+								if (options.advanced?.generateId !== undefined) {
 									logger.warn(
 										"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
 									);
