@@ -87,7 +87,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         - **Social Authentication Support:** enables social auth flows by handling authorization URLs and callbacks within the Expo web browser.
         - **Secure Cookie Management:** stores cookies securely and automatically adds them to the headers of your auth requests.
 
-        ```ts title="lib/authClient.ts"
+        ```ts title="lib/auth-client.ts"
         import { createAuthClient } from "better-auth/react";
         import { expoClient } from "@better-auth/expo/client";
         import * as SecureStore from "expo-secure-store";
@@ -190,12 +190,12 @@ Expo is a popular framework for building cross-platform apps with React Native. 
 
 With Better Auth initialized, you can now use the `authClient` to authenticate users in your Expo app.
 
-<Tabs items={["signIn", "signUp"]}>
-    <Tab value="signIn">
-        ```tsx title="app/signIn.tsx"
+<Tabs items={["sign-in", "sign-up"]}>
+    <Tab value="sign-in">
+        ```tsx title="app/sign-in.tsx"
         import { useState } from "react"; 
         import { View, TextInput, Button } from "react-native";
-        import { authClient } from "@/lib/authClient";
+        import { authClient } from "@/lib/auth-client";
 
         export default function App() {
             const [email, setEmail] = useState("");
@@ -226,11 +226,11 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
         }
         ```
     </Tab>
-    <Tab value="signUp">
-        ```tsx title="app/signUp.tsx"
+    <Tab value="sign-up">
+        ```tsx title="app/sign-up.tsx"
         import { useState } from "react";
         import { View, TextInput, Button } from "react-native";
-        import { authClient } from "@/lib/authClient";
+        import { authClient } from "@/lib/auth-client";
 
         export default function App() {
             const [email, setEmail] = useState("");
@@ -316,7 +316,7 @@ Better Auth provides a `useSession` hook to access the current user's session in
 
 ```tsx title="app/App.tsx"
 import { Text } from "react-native";
-import { authClient } from "@/lib/authClient";
+import { authClient } from "@/lib/auth-client";
 
 export default function App() {
     const { data: session } = authClient.useSession();
@@ -333,7 +333,7 @@ On native, the session data will be cached in SecureStore. This will allow you t
 To make authenticated requests to your server that require the user's session, you have to retrieve the session cookie from `SecureStore` and manually add it to your request headers.
 
 ```tsx
-import { authClient } from "@/lib/authClient";
+import { authClient } from "@/lib/auth-client";
 
 const makeAuthenticatedRequest = async () => {
   const cookies = authClient.getCookie(); // [!code highlight]
@@ -350,7 +350,7 @@ const makeAuthenticatedRequest = async () => {
     
 ```tsx title="lib/trpcProvider.tsx"
 //...other imports
-import { authClient } from "@/lib/authClient"; // [!code highlight]
+import { authClient } from "@/lib/auth-client"; // [!code highlight]
 
 export const api = createTRPCReact<AppRouter>();
 
@@ -391,7 +391,7 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 **storage**: the storage mechanism used to cache the session data and cookies.
 
-```ts title="lib/authClient.ts"
+```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
 import SecureStorage from "expo-secure-store";
 
@@ -403,7 +403,7 @@ const authClient = createAuthClient({
 
 **scheme**: scheme is used to deep link back to your app after a user has authenticated using oAuth providers. By default, Better Auth tries to read the scheme from the `app.json` file. If you need to override this, you can pass the scheme option to the client.
 
-```ts title="lib/authClient.ts"
+```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
 
 const authClient = createAuthClient({
@@ -414,7 +414,7 @@ const authClient = createAuthClient({
 
 **disableCache**: By default, the client will cache the session data in SecureStore. You can disable this behavior by passing the `disableCache` option to the client.
 
-```ts title="lib/authClient.ts"
+```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
 
 const authClient = createAuthClient({
