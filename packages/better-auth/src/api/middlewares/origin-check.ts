@@ -1,8 +1,8 @@
 import { APIError } from "better-call";
-import { createAuthMiddleware } from "../call";
-import { wildcardMatch } from "../../utils/wildcard";
-import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import type { GenericEndpointContext } from "../../types";
+import { getHost, getOrigin, getProtocol } from "../../utils/url";
+import { wildcardMatch } from "../../utils/wildcard";
+import { createAuthMiddleware } from "../call";
 
 /**
  * A middleware to validate callbackURL and origin against
@@ -29,16 +29,20 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 
 	const matchesPattern = (url: string, pattern: string): boolean => {
 		if (url.startsWith("/")) {
-			return false;
+			// For relative paths, check if the pattern is a base URL
+			const baseUrl = pattern.endsWith("/") ? pattern : `${pattern}/`;
+			return url.startsWith("/") && pattern === getOrigin(baseUrl);
 		}
 		if (pattern.includes("*")) {
 			return wildcardMatch(pattern)(getHost(url));
 		}
 
-		const protocol = getProtocol(url);
+		// Strip query parameters before checking origin
+		const urlWithoutQuery = url.split('?')[0];
+		const protocol = getProtocol(urlWithoutQuery);
 		return protocol === "http:" || protocol === "https:" || !protocol
-			? pattern === getOrigin(url)
-			: url.startsWith(pattern);
+			? pattern === getOrigin(urlWithoutQuery)
+			: urlWithoutQuery.startsWith(pattern);
 	};
 	const validateURL = (url: string | undefined, label: string) => {
 		if (!url) {
@@ -89,12 +93,16 @@ export const originCheck = (
 
 		const matchesPattern = (url: string, pattern: string): boolean => {
 			if (url.startsWith("/")) {
-				return false;
+				// For relative paths, check if the pattern is a base URL
+				const baseUrl = pattern.endsWith("/") ? pattern : `${pattern}/`;
+				return url.startsWith("/") && pattern === getOrigin(baseUrl);
 			}
 			if (pattern.includes("*")) {
 				return wildcardMatch(pattern)(getHost(url));
 			}
-			return url.startsWith(pattern);
+			// Strip query parameters before checking origin
+			const urlWithoutQuery = url.split('?')[0];
+			return urlWithoutQuery.startsWith(pattern);
 		};
 
 		const validateURL = (url: string | undefined, label: string) => {
