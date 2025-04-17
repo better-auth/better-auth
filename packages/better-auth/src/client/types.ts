@@ -42,7 +42,7 @@ export interface BetterAuthClientPlugin {
 		/**
 		 * better-auth client options
 		 */
-		clientOptions: ClientOptions | undefined,
+		options: ClientOptions | undefined,
 	) => Record<string, any>;
 	/**
 	 * State atoms that'll be resolved by each framework
