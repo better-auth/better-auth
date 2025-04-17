@@ -165,6 +165,9 @@ export const createInternalAdapter = (
 				model: "user",
 				where,
 			});
+			if (typeof total === "string") {
+				return parseInt(total);
+			}
 			return total;
 		},
 		deleteUser: async (userId: string) => {
@@ -750,13 +753,13 @@ export const createInternalAdapter = (
 			return account;
 		},
 		updateAccount: async (
-			accountId: string,
+			id: string,
 			data: Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
 			const account = await updateWithHooks<Account>(
 				data,
-				[{ field: "id", value: accountId }],
+				[{ field: "id", value: id }],
 				"account",
 				undefined,
 				context,
