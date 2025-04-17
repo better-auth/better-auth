@@ -401,7 +401,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						}
 					}
 					const existUser = await ctx.context.internalAdapter.findUserByEmail(
-						ctx.body.email,
+						ctx.body.email, {}, ctx
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {

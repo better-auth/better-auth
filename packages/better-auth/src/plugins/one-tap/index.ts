@@ -94,7 +94,7 @@ export const oneTap = (options?: OneTapOptions) =>
 						return ctx.json({ error: "Email not available in token" });
 					}
 
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					const user = await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 					if (!user) {
 						if (options?.disableSignup) {
 							throw new APIError("BAD_GATEWAY", {

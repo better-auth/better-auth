@@ -453,7 +453,7 @@ export const signInEmail = createAuthEndpoint(
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 			includeAccounts: true,
-		});
+		}, ctx);
 
 		if (!user) {
 			await ctx.context.password.hash(password);

@@ -155,7 +155,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 			});
 		}
 		const { email } = ctx.body;
-		const user = await ctx.context.internalAdapter.findUserByEmail(email);
+		const user = await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 		if (!user) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.USER_NOT_FOUND,
@@ -306,7 +306,7 @@ export const verifyEmail = createAuthEndpoint(
 		});
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
-			parsed.email,
+			parsed.email, {}, ctx
 		);
 		if (!user) {
 			return redirectOnError("user_not_found");

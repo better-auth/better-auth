@@ -20,7 +20,7 @@ describe("have-i-been-pwned", async () => {
 			password: compromisedPassword,
 			name: "Test User",
 		});
-		const user = await ctx.internalAdapter.findUserByEmail(uniqueEmail);
+		const user = await ctx.internalAdapter.findUserByEmail(uniqueEmail, _, ctx);
 		expect(user).toBeNull();
 		expect(result.error).not.toBeNull();
 		expect(result.error?.status).toBe(400);

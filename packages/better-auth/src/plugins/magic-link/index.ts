@@ -103,7 +103,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (options.disableSignUp) {
 						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
+							await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 
 						if (!user) {
 							throw new APIError("BAD_REQUEST", {
@@ -209,7 +209,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						name?: string;
 					};
 					let user = await ctx.context.internalAdapter
-						.findUserByEmail(email)
+						.findUserByEmail(email, {}, ctx)
 						.then((res) => res?.user);
 
 					if (!user) {
