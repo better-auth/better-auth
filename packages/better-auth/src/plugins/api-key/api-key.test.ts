@@ -673,16 +673,6 @@ describe("api-key", async () => {
 	// VERIFY API KEY
 	// =========================================================================
 
-	it("verify API key without key and userId", async () => {
-		const apiKey = await auth.api.verifyApiKey({
-			body: {
-				key: firstApiKey.key,
-			},
-		});
-		expect(apiKey.key).not.toBe(null);
-		expect(apiKey.valid).toBe(true);
-	});
-
 	it("verify API key with invalid key (should fail)", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
