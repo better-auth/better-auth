@@ -770,17 +770,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 				async (c) => {
 					const session = c.context.session;
-					const account = await c.context.internalAdapter.findAccounts(
-						session.user.id,
-					);
-					const existingAccount = account.find(
-						(a) => a.providerId === c.body.providerId,
-					);
-					if (existingAccount) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
-						});
-					}
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
 					);
