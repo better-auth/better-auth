@@ -1678,7 +1678,6 @@ describe("api-key", async () => {
 			},
 		});
 
-		console.log(resultPermissions);
 		expect(resultPermissions.success).toBe(false);
 		expect(resultPermissions.missingPermissions).toEqual({
 			files: ["write"],

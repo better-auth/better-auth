@@ -81,6 +81,8 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 			const missingPermissions: MissingPermissions<typeof request> = {};
 			let overallSuccess = connector === "AND";
 
+			if (!statements) statements = {} as TStatements;
+
 			for (const requestedResource of Object.keys(
 				request,
 			) as (keyof typeof request)[]) {
