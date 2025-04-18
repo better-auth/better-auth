@@ -131,7 +131,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											},
 											createdAt: {
 												type: "string",
-											}
+											},
 										},
 										required: [
 											"id",
