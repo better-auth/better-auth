@@ -141,7 +141,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											"inviterId",
 											"status",
 											"expiresAt",
-											"createdAt"
+											"createdAt",
 										],
 									},
 								},
