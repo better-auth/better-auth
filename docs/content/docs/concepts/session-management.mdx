@@ -164,7 +164,9 @@ When cookie caching is enabled, the server can check session validity from the c
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-const auth = new BetterAuth({
+import { betterAuth } from "better-auth"l
+
+export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
