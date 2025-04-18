@@ -129,6 +129,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											expiresAt: {
 												type: "string",
 											},
+											createdAt: {
+												type: "string",
+											}
 										},
 										required: [
 											"id",
@@ -138,6 +141,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											"inviterId",
 											"status",
 											"expiresAt",
+											"createdAt"
 										],
 									},
 								},
