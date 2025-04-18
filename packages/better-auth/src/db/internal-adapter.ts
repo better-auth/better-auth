@@ -208,17 +208,21 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request: Request | Headers | undefined,
+			ctx: GenericEndpointContext,
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
-			context?: GenericEndpointContext,
 			overrideAll?: boolean,
 		) => {
 			const headers =
-				request && "headers" in request ? request.headers : request;
+				ctx.request && "headers" in ctx.request
+					? ctx.request.headers
+					: ctx.request;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
-				ipAddress: request ? getIp(request, ctx.options) || "" : "",
+				ipAddress:
+					ctx.request || ctx.headers
+						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
+						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -273,7 +277,7 @@ export const createInternalAdapter = (
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
 					: undefined,
-				context,
+				ctx,
 			);
 			return res as Session;
 		},
