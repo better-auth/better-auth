@@ -318,6 +318,11 @@ export const auth = betterAuth({
 - `modelName`: The model name for the account
 - `fields`: Map fields to different column names
 
+### `updateAccountOnSignIn`
+
+If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
+will be updated on sign in with the latest data from the provider.
+
 ### `accountLinking`
 
 Configuration for account linking.
