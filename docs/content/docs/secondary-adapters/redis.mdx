@@ -1,6 +1,6 @@
 ---
 
-title: Redis
+title: Redis Secondary Storage
 description: Integrate Better Auth with Redis.
 
 ---
@@ -12,14 +12,14 @@ Read more [about Redis here](https://redis.io/).
 ## Example Usage
 
 Make sure you have Redis installed and configured.
-Then, use the Redis adapter to connect to your Redis instance.
+Then, use the Redis Secondary adapter to connect to your Redis instance.
 
 ```ts title="auth.ts"
-import { redisAdapter } from "better-auth/adapters/redis";
+import { redisSecondaryAdapter } from "better-auth/secondary-adapters/redis";
 
 export const auth = betterAuth({
     ...,
-    secondaryStorage: redisAdapter({
+    secondaryStorage: redisSecondaryAdapter({
         connectionString: "redis://user:password@localhost:6379",
     }),
 });

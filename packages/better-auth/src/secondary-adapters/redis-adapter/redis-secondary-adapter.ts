@@ -1,7 +1,7 @@
 import type { SecondaryStorage } from "../../types";
 import { Redis } from "ioredis";
 
-export interface RedisConfig {
+export interface SecondaryRedisConfig {
 	/**
 	 * Redis connection string
 	 *
@@ -10,9 +10,9 @@ export interface RedisConfig {
 	connectionString: string;
 }
 
-class RedisAdapter implements SecondaryStorage {
+class RedisSecondaryAdapter implements SecondaryStorage {
 	private readonly client: Redis;
-	constructor(config: RedisConfig) {
+	constructor(config: SecondaryRedisConfig) {
 		this.client = new Redis(config.connectionString);
 	}
 
@@ -59,6 +59,8 @@ class RedisAdapter implements SecondaryStorage {
 	}
 }
 
-export function redisAdapter(config: RedisConfig): RedisAdapter {
-	return new RedisAdapter(config);
+export function redisSecondaryAdapter(
+	config: SecondaryRedisConfig,
+): RedisSecondaryAdapter {
+	return new RedisSecondaryAdapter(config);
 }

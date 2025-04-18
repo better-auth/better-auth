@@ -234,14 +234,14 @@
         "default": "./dist/integrations/node.cjs"
       }
     },
-    "./adapters/redis": {
+    "./secondary-adapters/redis": {
       "import": {
-        "types": "./dist/adapters/redis-adapter/index.d.ts",
-        "default": "./dist/adapters/redis-adapter/index.mjs"
+        "types": "./dist/secondary-adapters/redis-adapter/index.d.ts",
+        "default": "./dist/secondary-adapters/redis-adapter/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/redis-adapter/index.d.cts",
-        "default": "./dist/adapters/redis-adapter/index.cjs"
+        "types": "./dist/secondary-adapters/redis-adapter/index.d.cts",
+        "default": "./dist/secondary-adapters/redis-adapter/index.cjs"
       }
     },
     "./adapters/prisma": {
@@ -596,8 +596,8 @@
       "adapters/memory": [
         "./dist/adapters/memory-adapter/index.d.ts"
       ],
-      "adapters/redis": [
-        "./dist/adapters/redis-adapter/index.d.ts"
+      "secondary-adapters/redis": [
+        "./dist/secondary-adapters/redis-adapter/index.d.ts"
       ],
       "plugins": [
         "./dist/plugins/index.d.ts"

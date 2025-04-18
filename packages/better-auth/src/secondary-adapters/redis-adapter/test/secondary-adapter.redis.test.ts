@@ -1,11 +1,11 @@
 import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import { Redis } from "ioredis";
-import { redisAdapter } from "../redis-adapter";
+import { redisSecondaryAdapter } from "../redis-secondary-adapter";
 
 const TEST_REDIS_URL = "redis://localhost:6379";
 const client = new Redis(TEST_REDIS_URL);
 
-const adapter = redisAdapter({
+const adapter = redisSecondaryAdapter({
 	connectionString: TEST_REDIS_URL,
 });
 
