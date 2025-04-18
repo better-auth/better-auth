@@ -85,7 +85,7 @@ export async function handleOAuthUserInfo(
 				};
 			}
 		} else {
-			if (c.context.options.account?.updateAccountOnSignIn) {
+			if (c.context.options.account?.updateAccountOnSignIn !== false) {
 				const updateData = Object.fromEntries(
 					Object.entries({
 						accessToken: account.accessToken,
