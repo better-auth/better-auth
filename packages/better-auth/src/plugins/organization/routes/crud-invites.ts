@@ -115,7 +115,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 											},
 											createdAt: {
 												type: "string",
-											}
+											},
 										},
 										required: [
 											"id",
@@ -575,7 +575,7 @@ export const getInvitation = createAuthEndpoint(
 										"inviterId",
 										"status",
 										"expiresAt",
-										"createAt",
+										"createdAt",
 										"organizationName",
 										"organizationSlug",
 										"inviterEmail",
