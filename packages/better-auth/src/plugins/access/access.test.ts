@@ -5,11 +5,13 @@ describe("access", () => {
 	const ac = createAccessControl({
 		project: ["create", "update", "delete", "delete-many"],
 		ui: ["view", "edit", "comment", "hide"],
+		video: ["create"],
 	});
 
 	const role1 = ac.newRole({
 		project: ["create", "update", "delete"],
 		ui: ["view", "edit", "comment"],
+		video: [],
 	});
 
 	it("should validate permissions", async () => {
@@ -77,6 +79,17 @@ describe("access", () => {
 		expect(failedResponse.success).toBe(false);
 		expect(failedResponse.missingPermissions).toEqual({
 			project: ["delete-many"],
+		});
+
+		const failedResponseMany = role1.authorize({
+			project: ["create", "delete-many"],
+			ui: ["view", "edit"],
+			video: ["create"],
+		});
+		expect(failedResponseMany.success).toBe(false);
+		expect(failedResponseMany.missingPermissions).toEqual({
+			project: ["delete-many"],
+			video: ["create"],
 		});
 	});
 

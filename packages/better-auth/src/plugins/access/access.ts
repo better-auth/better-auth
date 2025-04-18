@@ -19,19 +19,21 @@ function checkArrayActions<TResourceKey extends keyof TStatements, TStatements>(
 	missingPermissions: MissingPermissions<TStatements>,
 	requestedResource: TResourceKey,
 ): boolean {
-	const missingInArray: string[] = [];
-	for (const requestedAction of requestedActions) {
-		if (!allowedActions.includes(requestedAction)) {
-			missingInArray.push(requestedAction);
+	let allAllowed = true;
+	const missingActions: string[] = [];
+
+	for (let i = 0; i < requestedActions.length; i++) {
+		if (!allowedActions.includes(requestedActions[i])) {
+			missingActions.push(requestedActions[i]);
+			allAllowed = false;
 		}
 	}
-	if (missingInArray.length > 0) {
-		missingPermissions[requestedResource] = missingInArray;
 
-		return false;
+	if (!allAllowed) {
+		missingPermissions[requestedResource] = missingActions;
 	}
 
-	return true;
+	return allAllowed;
 }
 
 function checkObjectActions<
@@ -43,33 +45,37 @@ function checkObjectActions<
 	missingPermissions: MissingPermissions<TStatements>,
 	requestedResource: TResourceKey,
 ): boolean {
-	if (requestedActions.connector === "OR") {
-		const hasAtLeastOneAction = requestedActions.actions.some(
-			(requestedAction) => allowedActions.includes(requestedAction),
+	const { actions, connector } = requestedActions;
+
+	if (connector === "OR") {
+		const hasAtLeastOneAction = actions.some((action) =>
+			allowedActions.includes(action),
 		);
 		if (!hasAtLeastOneAction) {
 			missingPermissions[requestedResource] = requestedActions;
 			return false;
 		}
+
+		return true;
 	} else {
-		const missingInObjectAnd: string[] = [];
-		for (const requestedAction of requestedActions.actions) {
-			if (!allowedActions.includes(requestedAction)) {
-				missingInObjectAnd.push(requestedAction);
+		let allAllowed = true;
+		const missingActions: string[] = [];
+		for (let i = 0; i < actions.length; i++) {
+			if (!allowedActions.includes(actions[i])) {
+				missingActions.push(actions[i]);
+				allAllowed = false;
 			}
 		}
 
-		if (missingInObjectAnd.length > 0) {
+		if (!allAllowed) {
 			missingPermissions[requestedResource] = {
 				...requestedActions,
-				actions: missingInObjectAnd,
+				actions: missingActions,
 			};
-
-			return false;
 		}
-	}
 
-	return true;
+		return allAllowed;
+	}
 }
 
 export function role<TStatements extends Statements>(statements: TStatements) {
@@ -83,9 +89,9 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 
 			if (!statements) statements = {} as TStatements;
 
-			for (const requestedResource of Object.keys(
-				request,
-			) as (keyof typeof request)[]) {
+			for (const requestedResource in request) {
+				if (!Object.prototype.hasOwnProperty.call(request, requestedResource))
+					continue;
 				const requestedValue = request[requestedResource];
 				let resourceSuccess = true;
 				const allowed = statements[requestedResource];
@@ -96,10 +102,7 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 					resourceSuccess = false;
 				} else if (requestedValue !== undefined) {
 					if (Array.isArray(requestedValue)) {
-						resourceSuccess = checkArrayActions<
-							keyof TStatements,
-							AuthorizeRequest<TStatements>
-						>(
+						resourceSuccess = checkArrayActions(
 							currentlyAllowed,
 							requestedValue as readonly string[],
 							missingPermissions,
