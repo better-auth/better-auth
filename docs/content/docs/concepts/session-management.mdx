@@ -174,7 +174,7 @@ const auth = new BetterAuth({
 });
 ```
 
-If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true`
+If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true` this will force the server to fetch the session from the database and also refresh the cookie cache.
 
 ```ts title="auth-client.ts"
 const session = await authClient.getSession({ query: {
