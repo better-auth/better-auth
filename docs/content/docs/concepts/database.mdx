@@ -434,7 +434,7 @@ res.user.lang; // > "fr"
 
 <Callout>
   See the
-  [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client)
+  [TypeScript](/docs/concepts/typescript#inferring-additional-fields-on-client)
   documentation for more information on how to infer additional fields on the
   client side.
 </Callout>
@@ -474,9 +474,9 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` object in your auth config.
+Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced.database.generateId` option in your auth config.
 
-You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
+You can also disable ID generation by setting the `advanced.database.generateId` option to `false`. This will assume your database will generate the ID automatically.
 
 **Example: Automatic Database IDs**
 
@@ -489,7 +489,9 @@ export const auth = betterAuth({
     db: db,
   },
   advanced: {
-    generateId: false,
+    database: {
+      generateId: false,
+    },
   },
 });
 ```
@@ -583,4 +585,4 @@ To add new tables and columns to your database, you have two options:
 `CLI`: Use the migrate or generate command. These commands will scan your database and guide you through adding any missing tables or columns.
 `Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
 
-Both methods ensure your database schema stays up-to-date with your plugins' requirements.
+Both methods ensure your database schema stays up to date with your plugins' requirements.

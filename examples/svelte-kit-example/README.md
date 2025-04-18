@@ -1,7 +1,7 @@
-# Svelte Kit Better Auth Example
+# SvelteKit Better Auth Example
 
 
-This is an example of how to use Better Auth with Svelte Kit.
+This is an example of how to use Better Auth with SvelteKit.
 
 **Implements the following features:**
 Email & Password . <u>Social Sign-in with Google</u> . Passkeys . Email Verification . Password Reset . Two Factor Authentication . Profile Update . Session Management

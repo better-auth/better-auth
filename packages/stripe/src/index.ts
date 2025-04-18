@@ -145,12 +145,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.optional(),
 					/**
-					 * Success url to redirect back after successful subscription
+					 * Success URL to redirect back after successful subscription
 					 */
 					successUrl: z
 						.string({
 							description:
-								"callback url to redirect back after successful subscription",
+								"Callback URL to redirect back after successful subscription",
 						})
 						.default("/"),
 					/**
@@ -159,7 +159,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					cancelUrl: z
 						.string({
 							description:
-								"callback url to redirect back after successful subscription",
+								"Callback URL to redirect back after successful subscription",
 						})
 						.default("/"),
 					/**
@@ -681,9 +681,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const activeSubscription = await client.subscriptions
 					.list({
 						customer: subscription.stripeCustomerId,
-						status: "active",
 					})
-					.then((res) => res.data[0]);
+					.then(
+						(res) =>
+							res.data.filter(
+								(sub) => sub.status === "active" || sub.status === "trialing",
+							)[0],
+					);
 				if (!activeSubscription) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,

@@ -54,7 +54,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						return `integer({ mode: 'number' }).primaryKey({ autoIncrement: true })`;
 					}
 				}
-				return databaseType === "pg" ? `uuid('${name}')` : `text('${name}')`;
+				return `text('${name}')`;
 			}
 
 			const type = field.type as
@@ -122,7 +122,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (databaseType === "mysql") {
 				id = `varchar('id', { length: 36 }).primaryKey()`;
 			} else if (databaseType === "pg") {
-				id = `uuid('id').primaryKey()`;
+				id = `text('id').primaryKey()`;
 			} else {
 				id = `text('id').primaryKey()`;
 			}
@@ -175,7 +175,7 @@ function generateImport({
 		databaseType === "mysql"
 			? "varchar, text"
 			: databaseType === "pg"
-				? "uuid, text"
+				? "text"
 				: "text",
 	);
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");

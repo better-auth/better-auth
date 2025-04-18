@@ -19,7 +19,7 @@ describe("username", async (it) => {
 		},
 	);
 
-	it("should signup with username", async () => {
+	it("should sign up with username", async () => {
 		const headers = new Headers();
 		await client.signUp.email(
 			{
@@ -100,5 +100,15 @@ describe("username", async (it) => {
 		});
 		expect(res.error?.status).toBe(422);
 		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
+	});
+
+	it("should fail on empty username", async () => {
+		const res = await client.signUp.email({
+			email: "email-4@email.com",
+			username: "",
+			password: "new_password",
+			name: "new-name",
+		});
+		expect(res.error?.status).toBe(422);
 	});
 });

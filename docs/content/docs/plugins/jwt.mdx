@@ -122,8 +122,8 @@ async function validateToken(token: string) {
       new URL('http://localhost:3000/api/auth/jwks')
     )
     const { payload } = await jwtVerify(token, JWKS, {
-      issuer: 'http://localhost:3000', // Should match your JWT issuer which is the BASE_URL
-      audience: 'http://localhost:3000', // Should match your JWT audience which is the BASE_URL by default
+      issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
     })
     return payload
   } catch (error) {
@@ -158,8 +158,8 @@ async function validateToken(token: string) {
       keys: storedJWKS.data?.keys!,
     })
     const { payload } = await jwtVerify(token, JWKS, {
-      issuer: 'http://localhost:3000', // Should match your JWT issuer which is the BASE_URL
-      audience: 'http://localhost:3000', // Should match your JWT audience which is the BASE_URL by default
+      issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
     })
     return payload
   } catch (error) {

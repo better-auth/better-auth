@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.2.6-beta.12",
+  "version": "1.2.8-beta.1",
   "description": "",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -39,11 +39,11 @@
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
-    "expo-constants": "~16.0.2",
+    "expo-constants": "~17.0.8",
     "expo-crypto": "^13.0.2",
-    "expo-linking": "~6.3.1",
-    "expo-secure-store": "~13.0.2",
-    "expo-web-browser": "~13.0.3",
+    "expo-linking": "~7.0.5",
+    "expo-secure-store": "~14.0.1",
+    "expo-web-browser": "~14.0.2",
     "unbuild": "^3.5.0",
     "vitest": "^1.6.0"
   },
@@ -51,8 +51,8 @@
     "better-auth": "workspace:*"
   },
   "dependencies": {
-    "better-call": "catalog:",
     "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
     "zod": "^3.23.8"
   },
   "files": [

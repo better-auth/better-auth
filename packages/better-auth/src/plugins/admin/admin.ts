@@ -909,9 +909,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const authCookies = ctx.context.authCookies;
 					deleteSessionCookie(ctx);
+					const dontRememberMeCookie = await ctx.getSignedCookie(
+						ctx.context.authCookies.dontRememberToken.name,
+						ctx.context.secret,
+					);
 					await ctx.setSignedCookie(
 						"admin_session",
-						ctx.context.session.session.token,
+						`${ctx.context.session.session.token}:${
+							dontRememberMeCookie || ""
+						}`,
 						ctx.context.secret,
 						authCookies.sessionToken.options,
 					);
@@ -961,13 +967,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						"admin_session",
 						ctx.context.secret,
 					);
+
 					if (!adminCookie) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
 						});
 					}
+					const [adminSessionToken, dontRememberMeCookie] =
+						adminCookie?.split(":");
 					const adminSession =
-						await ctx.context.internalAdapter.findSession(adminCookie);
+						await ctx.context.internalAdapter.findSession(adminSessionToken);
 					if (!adminSession || adminSession.session.userId !== user.id) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
@@ -976,7 +985,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					await ctx.context.internalAdapter.deleteSession(
 						session.session.token,
 					);
-					await setSessionCookie(ctx, adminSession);
+					await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
 					return ctx.json(adminSession);
 				},
 			),

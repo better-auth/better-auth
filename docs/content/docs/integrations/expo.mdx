@@ -69,7 +69,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Step>
         ## Initialize Better Auth Client
         
-        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
+        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base URL of your Better Auth backend. Make sure to import the client from `/react`.
 
         You need to also import client plugin from `@better-auth/expo/client` and pass it to the `plugins` array when initializing the auth client.
 
@@ -84,7 +84,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import * as SecureStore from "expo-secure-store";
 
         export const authClient = createAuthClient({
-            baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
+            baseURL: "http://localhost:8081", /* Base URL of your Better Auth backend. */
             plugins: [
                 expoClient({
                     scheme: "myapp",
@@ -126,7 +126,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Step>
         ## Configure Metro Bundler
 
-        To resolve better auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
+        To resolve Better Auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
 
         ```js title="metro.config.js"
         const { getDefaultConfig } = require("expo/metro-config");
@@ -317,33 +317,7 @@ On native, the session data will be cached in SecureStore. This will allow you t
 
 ### Making Authenticated Requests to Your Server
 
-To make authenticated requests to your server that require the user's session, you have two options:
-
-1. Use the fetch client provided by Better Auth.
-2. Retrieve the session cookie from `SecureStore` and manually add it to your request headers.
-
----
-
-#### Option 1: Using the Fetch Client
-
-Better Auth provides a built-in fetch client powered by [Better Fetch](http://better-fetch.vercel.app). This client automatically includes the session cookie in the headers of your requests.
-
-```tsx
-import { authClient } from "@/lib/auth-client";
-
-const $fetch = authClient.$fetch;
-
-// Example usage
-$fetch("/api/secure-endpoint", {
-  method: "GET",
-});
-```
-
-For more details, see the [Better Fetch documentation](http://better-fetch.vercel.app/docs).
-
-#### Option 2: Adding the Cookie to Request Headers
-
-If you prefer using your own fetch client, you can retrieve the session cookie stored in the device using `authClient.getCookie` and manually add it to your request headers.
+To make authenticated requests to your server that require the user's session, you have to retrieve the session cookie from `SecureStore` and manually add it to your request headers.
 
 ```tsx
 import { authClient } from "@/lib/auth-client";

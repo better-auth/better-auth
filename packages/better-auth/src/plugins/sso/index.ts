@@ -14,7 +14,7 @@ import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
 
-interface SSOOptions {
+export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
@@ -978,7 +978,7 @@ export const sso = (options?: SSOOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-interface SSOProvider {
+export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
 	userId: string;
@@ -986,7 +986,7 @@ interface SSOProvider {
 	organizationId?: string;
 }
 
-interface OIDCConfig {
+export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
