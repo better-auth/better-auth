@@ -7,7 +7,7 @@ description: Integrate Better Auth with Redis.
 
 Redis is an open-source, in-memory data structure store that can be used as a database, cache, and message broker.
 In Better Auth, Redis can be used as a session store to manage user sessions and authentication tokens.
-Read more [here](https://redis.io/).
+Read more [about Redis here](https://redis.io/).
 
 ## Example Usage
 
@@ -20,7 +20,7 @@ import { redisAdapter } from "better-auth/adapters/redis";
 export const auth = betterAuth({
     ...,
     secondaryStorage: redisAdapter({
-        connectionString: "redis://localhost:6379",
+        connectionString: "redis://user:password@localhost:6379",
     }),
 });
 ```
