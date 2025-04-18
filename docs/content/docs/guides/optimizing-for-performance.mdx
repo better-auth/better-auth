@@ -16,7 +16,9 @@ Calling your database every time `useSession` or `getSession` invoked isn’t id
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-const auth = new betterAuth({
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
   session: {
     cookieCache: {
       enabled: true,
