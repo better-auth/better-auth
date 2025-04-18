@@ -225,6 +225,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			updateApiKey: routes.updateApiKey,
 			deleteApiKey: routes.deleteApiKey,
 			listApiKeys: routes.listApiKeys,
+			hasPermissionApiKey: routes.hasPermissionApiKey,
 		},
 		schema: schema,
 	} satisfies BetterAuthPlugin;
