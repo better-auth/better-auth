@@ -90,8 +90,7 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 			if (!statements) statements = {} as TStatements;
 
 			for (const requestedResource in request) {
-				if (!Object.prototype.hasOwnProperty.call(request, requestedResource))
-					continue;
+				if (!Object.hasOwn(request, requestedResource)) continue;
 				const requestedValue = request[requestedResource];
 				let resourceSuccess = true;
 				const allowed = statements[requestedResource];
