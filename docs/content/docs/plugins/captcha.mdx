@@ -27,6 +27,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
             captcha({ // [!code highlight]
                 provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
+                skipOAuth: true, // Skip captcha for OAuth flows (optional) // [!code highlight]
             }), // [!code highlight]
         ], // [!code highlight]
     });
@@ -54,6 +55,52 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     - To implement Cloudflare Turnstile on the client side, follow the official [Cloudflare Turnstile documentation](https://developers.cloudflare.com/turnstile/) or use a library like [react-turnstile](https://www.npmjs.com/package/@marsidev/react-turnstile).
     - To implement Google reCAPTCHA on the client side, follow the official [Google reCAPTCHA documentation](https://developers.google.com/recaptcha/intro) or use libraries like [react-google-recaptcha](https://www.npmjs.com/package/react-google-recaptcha) (v2) and [react-google-recaptcha-v3](https://www.npmjs.com/package/react-google-recaptcha-v3) (v3).
     - To implement hCaptcha on the client side, follow the official [hCaptcha documentation](https://docs.hcaptcha.com/#add-the-hcaptcha-widget-to-your-webpage) or use libraries like [@hcaptcha/react-hcaptcha](https://www.npmjs.com/package/@hcaptcha/react-hcaptcha)
+
+    #### Special headers for authentication popups
+
+    If you're using authentication popups or modals instead of dedicated authentication pages, you should add specific headers to help the captcha plugin identify these requests:
+
+    ```ts
+    // For standard authentication popups
+    await authClient.signIn.email({
+        email: "user@example.com",
+        password: "secure-password",
+        fetchOptions: {
+            headers: {
+                "x-captcha-response": turnstileToken,
+                "x-auth-popup": "true", // Indicates this is a popup authentication
+            },
+        },
+    });
+
+    // For OAuth authentication popups
+    await authClient.signIn.oauth({
+        provider: "google",
+        fetchOptions: {
+            headers: {
+                "x-auth-type": "oauth", // Indicates this is an OAuth authentication
+            },
+        },
+    });
+    ```
+
+    Alternatively, you can add URL parameters to your requests:
+
+    ```ts
+    // Using URL parameters for authentication popups
+    const response = await fetch(`/api/auth/sign-in?auth=true`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-captcha-response": turnstileToken,
+        },
+        body: JSON.stringify({
+            email: "user@example.com",
+            password: "secure-password",
+        }),
+    });
+    ```
+
   </Step>
 </Steps>
 
@@ -65,13 +112,15 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     in the [Plugin Options](#plugin-options) section).
   </Step>
   <Step>
-    it validates the captcha token on the server, by calling the captcha provider's `/siteverify`.
+    If the request is identified as an OAuth authentication flow and the `skipOAuth` option is enabled, the captcha validation is skipped.
+  </Step>
+  <Step>
+    For non-OAuth requests or when `skipOAuth` is disabled, it validates the captcha token on the server by calling the captcha provider's `/siteverify`.
   </Step>
   <Step>
     - if the token is missing, gets rejected by the captcha provider, or if the `/siteverify` endpoint is
     unavailable, the plugin returns an error and interrupts the request.
     - if the token is accepted by the captcha provider, the middleware returns `undefined`, meaning the request is allowed to proceed.
-
   </Step>
 </Steps>
 
@@ -83,3 +132,5 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 - `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
 - `siteKey` (optional - only *hCaptcha*): prevents tokens issued on one sitekey from being redeemed elsewhere.
 - `siteVerifyURLOverride` (optional): overrides endpoint URL for the captcha verification request.
+- `skipOAuth` (optional)
+  When set to `true`, captcha validation will be skipped for OAuth authentication flows. This is useful when you want to enforce captcha for regular sign-in/sign-up but not for social login. Defaults to `false`.
