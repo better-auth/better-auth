@@ -19,6 +19,7 @@ export async function validatePassword(
 	const compare = await ctx.context.password.verify({
 		hash: currentPassword,
 		password: data.password,
+		account: credentialAccount
 	});
 	return compare;
 }
@@ -37,6 +38,7 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 	const compare = await c.context.password.verify({
 		hash: currentPassword,
 		password: c.body.password,
+		account: credentialAccount
 	});
 	if (!compare) {
 		throw new APIError("BAD_REQUEST", {
