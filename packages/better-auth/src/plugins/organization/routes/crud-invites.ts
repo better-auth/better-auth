@@ -125,7 +125,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 											"inviterId",
 											"status",
 											"expiresAt",
-											"createdAt"
+											"createdAt",
 										],
 									},
 								},
