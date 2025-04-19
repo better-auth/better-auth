@@ -8,7 +8,7 @@ description: Apple provider setup and usage.
         ### Get your OAuth credentials
         To use Apple sign in, you need a client ID and client secret. You can get them from the [Apple Developer Portal](https://developer.apple.com/account/resources/authkeys/list).
 
-        Apple requires a little harder setup to get a client secret. You can use the guide below to get your client secret.
+        The process for creating the client secret requires a few steps, which are described in the following guide:
         <Link href="https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret">
            Creating a client secret
         </Link>
@@ -32,7 +32,7 @@ description: Apple provider setup and usage.
         })
         ```
 
-        On native iOS, it doesn't use the service id but the app id (bundle id) as client id, so if using the service id as clientId in signIn.social() with idToken, it throws an error: JWTClaimValidationFailed: unexpected "aud" claim value. So you need to provide the appBundleIdentifier when you want to sign in with Apple using the ID Token.
+        On native iOS, it doesn't use the service ID but the app ID (bundle ID) as client ID, so if using the service ID as `clientId` in `signIn.social()` with `idToken`, it throws an error: JWTClaimValidationFailed: unexpected "aud" claim value. So you need to provide the `appBundleIdentifier` when you want to sign in with Apple using the ID Token.
     </Step>
 </Steps>
 
@@ -63,7 +63,7 @@ To sign in with Apple using the ID Token, you can use the `signIn.social` functi
 This is useful when you have the ID Token from Apple on the client-side and want to use it to sign in on the server.
 
 <Callout>
- If id token is provided no redirection will happen, and the user will be signed in directly.
+ If ID token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>
 
 ```ts title="auth-client.ts"
