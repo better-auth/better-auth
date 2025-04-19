@@ -10,10 +10,12 @@ import type {
 	AuthPluginSchema,
 	Session,
 	User,
+	AuthContext,
 } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
+import type { EndpointContext } from "better-call";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -48,7 +50,15 @@ export interface AnonymousOptions {
 	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
 	 * @returns The name for the anonymous user.
 	 */
-	generateName?: () => string;
+	generateName?: (
+		ctx: EndpointContext<
+			"/sign-in/anonymous",
+			{
+				method: "POST";
+			},
+			AuthContext
+		>,
+	) => string;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */
@@ -111,7 +121,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
-					const name = options?.generateName?.() || "Anonymous";
+					const name = options?.generateName?.(ctx) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{
 							email,
