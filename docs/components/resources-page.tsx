@@ -95,17 +95,17 @@ const resources: Resources = {
 	],
 	blogPosts: [
 		{
-			title: "The Future of Authentication",
+			title: "Better Auth with Hono, Bun, TypeScript, React and Vite",
 			description:
-				"Exploring upcoming trends and innovations in authentication technology.",
-			href: "https://example.com/future-auth",
+				"You'll learn how to implement authentication with Better Auth in a client - server architecture, where the frontend is separate from the backend.",
+			href: "https://catalins.tech/better-auth-with-hono-bun-typescript-react-vite",
 			tags: ["trends", "future"],
 		},
 		{
-			title: "Passwordless Authentication Guide",
+			title: "Polar.sh + BetterAuth for Organizations",
 			description:
-				"A comprehensive guide to implementing passwordless authentication.",
-			href: "https://example.com/passwordless",
+				"Polar.sh is a platform for building payment integrations. This article will show you how to use Better Auth to authenticate your users.",
+			href: " https://dev.to/phumudzosly/polarsh-betterauth-for-organizations-1j1b",
 			tags: ["passwordless", "security"],
 		},
 		{
