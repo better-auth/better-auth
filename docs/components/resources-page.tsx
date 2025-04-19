@@ -109,10 +109,10 @@ const resources: Resources = {
 			tags: ["passwordless", "security"],
 		},
 		{
-			title: "OAuth 2.0 Explained",
+			title: "Authenticating users in Astro with Better Auth",
 			description:
-				"Deep dive into OAuth 2.0 and how it works with Better Auth.",
-			href: "https://example.com/oauth",
+				"Step by step guide on how to authenticate users in Astro with Better Auth.",
+			href: "https://www.launchfa.st/blog/astro-better-auth",
 			tags: ["oauth", "security"],
 		},
 	],
