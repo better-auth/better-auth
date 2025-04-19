@@ -14,6 +14,7 @@ import type {
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
+import { z } from "zod";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -43,6 +44,12 @@ export interface AnonymousOptions {
 	 * Disable deleting the anonymous user after linking
 	 */
 	disableDeleteAnonymousUser?: boolean;
+	/**
+	 * A hook to generate a name for the anonymous user.
+	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
+	 * @returns The name for the anonymous user.
+	 */
+	generateName?: () => string;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */
@@ -105,12 +112,13 @@ export const anonymous = (options?: AnonymousOptions) => {
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
+					const name = options?.generateName?.() || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{
 							email,
 							emailVerified: false,
 							isAnonymous: true,
-							name: "Anonymous",
+							name,
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
