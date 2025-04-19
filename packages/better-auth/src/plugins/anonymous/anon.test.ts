@@ -130,16 +130,15 @@ describe("anonymous", async () => {
 	});
 
 	it("should work with generateName", async () => {
-		const { customFetchImpl, auth, sessionSetter, testUser } =
-			await getTestInstance({
-				plugins: [
-					anonymous({
-						generateName() {
-							return "i-am-anonymous";
-						},
-					}),
-				],
-			});
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				anonymous({
+					generateName() {
+						return "i-am-anonymous";
+					},
+				}),
+			],
+		});
 		const client = createAuthClient({
 			plugins: [anonymousClient()],
 			fetchOptions: {
