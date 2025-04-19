@@ -13,11 +13,11 @@ export async function handleOAuthUserInfo(
 		disableSignUp,
 		overrideUserInfo,
 	}: {
-		userInfo: Omit<User, "createdAt" | "updatedAt">;
+		userInfo: User;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
 		disableSignUp?: boolean;
-		overrideUserInfo?: boolean;
+		overrideUserInfo?: boolean | string[];
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -104,18 +104,37 @@ export async function handleOAuthUserInfo(
 				);
 			}
 		}
-		if (overrideUserInfo) {
-			const { id: _, ...restUserInfo } = userInfo;
-			// update user info from the provider if overrideUserInfo is true
-			await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-				emailVerified:
-					userInfo.email.toLocaleLowerCase() === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
-			});
-		}
+
+		const {
+			id: _,
+			name,
+			email,
+			emailVerified,
+			image,
+			createdAt,
+			...restUserInfo
+		} = userInfo;
+		const coreFields =
+			typeof overrideUserInfo === "boolean"
+				? {
+						name,
+						email,
+						emailVerified,
+						image,
+					}
+				: Object.fromEntries(
+						Object.entries({
+							name,
+							email,
+							emailVerified,
+							image,
+							createdAt,
+						}).filter(([key]) => overrideUserInfo?.includes(key)),
+					);
+		await c.context.internalAdapter.updateUser(dbUser.user.id, {
+			...coreFields, // core fields should be updated only if overrideUserInfo is true
+			...restUserInfo, // rest of the user info should be updated always
+		});
 	} else {
 		if (disableSignUp) {
 			return {
