@@ -197,26 +197,7 @@ export function ResourcesPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <a href="#getting-started" className="no-underline">
-        <h2 id="getting-started" className="text-2xl font-bold tracking-tight">Getting Started</h2>
-      </a>
-      <ResourceFilter
-        title="Filter by topic"
-        tags={getStartedTags}
-        activeTag={activeFilters.gettingStarted}
-        onTagClick={(tag) =>
-          setActiveFilters((prev) => ({ ...prev, gettingStarted: tag }))
-        }
-      />
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {filterResources(
-          resources.gettingStarted,
-          activeFilters.gettingStarted,
-        ).map((resource) => (
-          <ResourceCard key={resource.href} {...resource} />
-        ))}
-      </div>
+    <div className="space-y-8 border-t-[1.2px]">
       <a href="#videos" className="no-underline">
         <h2 id="videos" className="text-2xl font-bold tracking-tight">Video Tutorials</h2>
       </a>
