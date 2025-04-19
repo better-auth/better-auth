@@ -18,8 +18,6 @@ export function ResourceCard({
 }: ResourceCardProps) {
   return (
     <p
-      href={href}
-      target="_blank"
       rel="noopener noreferrer"
       className={cn(
         "group relative flex rounded-none flex-col group space-y-1 border transition-colors hover:bg-muted/80",
@@ -35,11 +33,11 @@ export function ResourceCard({
       </div>
       <p dangerouslySetInnerHTML={{ __html: `${description}` }} className="p-4 text-sm md:decoration-none text-muted-foreground"></p>
       {tags && tags.length > 0 && (
-        <div className="py-3 border-zinc-700/80 border-t-[1.2px] flex flex-wrap gap-2">
+        <div className="py-3 border-zinc-700/80 border-t-[1.2px] flex flex-wrap items-end gap-2">
           {tags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex underline underline-offset-2 items-center rounded-md bg-secondary/10 px-2 py-1 text-xs font-medium text-secondary-foreground"
+              className="inline-flex items-end underline underline-offset-2 rounded-md bg-secondary/10 px-2 py-1 text-xs font-medium text-secondary-foreground"
             >
               {tag}
             </span>
