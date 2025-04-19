@@ -17,7 +17,6 @@ export function ResourceFilter({
 }: ResourceFilterProps) {
 	return (
 		<div className={cn("space-y-4", className)}>
-			{/* <h2 className="text-lg font-semibold tracking-tight no-underline">{title}</h2> */}
 			<div className="flex flex-wrap gap-2">
 				<button
 					onClick={() => onTagClick(null)}
