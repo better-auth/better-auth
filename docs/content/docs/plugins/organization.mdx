@@ -49,7 +49,7 @@ export const auth = betterAuth({
     import { createAuthClient } from "better-auth/client"
     import { organizationClient } from "better-auth/client/plugins"
 
-    const client = createAuthClient({
+    const authClient = createAuthClient({
         plugins: [ // [!code highlight]
             organizationClient() // [!code highlight]
         ] // [!code highlight]
@@ -175,10 +175,10 @@ To list the organizations that a user is a member of, you can use `useListOrgani
 <Tabs items={["React", "Vue", "Svelte"]} defaultValue="React">
 <Tab value="React">
 ```tsx title="client.tsx"
-import { client } from "@/auth/client"
+import { authClient } from "@/lib/auth-client"
 
 function App(){
-    const { data: organizations } = client.useListOrganizations()
+    const { data: organizations } = authClient.useListOrganizations()
     return (
         <div>
             {organizations.map(org => <p>{org.name}</p>)}
@@ -191,8 +191,8 @@ function App(){
 <Tab value="Svelte">
 ```svelte title="page.svelte"
 <script lang="ts">
-  import { client } from "$lib/client";
-  const organizations = client.useListOrganizations();
+  import { authClient } from "$lib/auth-client";
+  const organizations = authClient.useListOrganizations();
 </script>
 
 <h1>Organizations</h1>s
@@ -216,7 +216,7 @@ function App(){
 <script lang="ts">;
 export default {
     setup() {
-        const organizations = client.useListOrganizations()
+        const organizations = authClient.useListOrganizations()
         return { organizations };
     }
 };
@@ -253,7 +253,7 @@ You can set the active organization by calling the `organization.setActive` func
 <Tabs items={["client", "server"]} defaultValue="client">
   <Tab value="client">
   ```ts title="auth-client.ts"
-  import { client } from "@/lib/auth-client";
+  import { authClient } from "@/lib/auth-client";
 
   await authClient.organization.setActive({
     organizationId: "organization-id"
@@ -317,10 +317,10 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 <Tabs items={['React', 'Vue', 'Svelte']}>
     <Tab value="React">
     ```tsx title="client.tsx"
-    import { client } from "@/auth/client"
+    import { authClient } from "@/lib/auth-client"
 
     function App(){
-        const { data: activeOrganization } = client.useActiveOrganization()
+        const { data: activeOrganization } = authClient.useActiveOrganization()
         return (
             <div>
                 {activeOrganization ? <p>{activeOrganization.name}</p> : null}
@@ -332,8 +332,8 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
     <Tab value="Svelte">
     ```tsx title="client.tsx"
     <script lang="ts">
-    import { client } from "$lib/client";
-    const activeOrganization = client.useActiveOrganization();
+    import { authClient } from "$lib/auth-client";
+    const activeOrganization = authClient.useActiveOrganization();
     </script>
 
     <h2>Active Organization</h2>
@@ -352,7 +352,7 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
     <script lang="ts">;
     export default {
         setup() {
-            const activeOrganization = client.useActiveOrganization();
+            const activeOrganization = authClient.useActiveOrganization();
             return { activeOrganization };
         }
     };
@@ -419,7 +419,7 @@ To update organization info, you can use `organization.update`
 
 
 ```ts
-await client.organization.update({
+await authClient.organization.update({
   data: {
     name: "updated-name",
     logo: "new-logo.url",
@@ -551,7 +551,7 @@ await authClient.organization.rejectInvitation({
 To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
 
 ```ts title="auth-client.ts"
-client.organization.getInvitation({
+authClient.organization.getInvitation({
     query: {
         id: params.id
     }
@@ -774,7 +774,7 @@ The plugin provides an easy way to define your own set of permissions for each r
         import { organizationClient } from "better-auth/client/plugins"
         import { ac, owner, admin, member, myCustomRole } from "@/auth/permissions"
 
-        export const client = createAuthClient({
+        export const authClient = createAuthClient({
             plugins: [
                 organizationClient({
                     ac,
@@ -844,7 +844,7 @@ const canCreateProjectAndCreateSale = await authClient.organization.hasPermissio
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
 
 ```ts title="auth-client.ts"
-const canCreateProject = client.organization.checkRolePermission({
+const canCreateProject = authClient.organization.checkRolePermission({
 	permissions: {
 		organization: ["delete"],
 	},
@@ -852,7 +852,7 @@ const canCreateProject = client.organization.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndCreateSale = client.organization.checkRolePermission({
+const canCreateProjectAndCreateSale = authClient.organization.checkRolePermission({
 	permissions: {
 		organization: ["delete"],
     member: ["delete"]
@@ -890,7 +890,7 @@ export const auth = betterAuth({
 import { createAuthClient } from "better-auth/client"
 import { organizationClient } from "better-auth/client/plugins"
 
-export const client = createAuthClient({
+export const authClient = createAuthClient({
     plugins: [
         organizationClient({
             teams: {
@@ -907,7 +907,7 @@ export const client = createAuthClient({
 Create a new team within an organization:
 
 ```ts
-const team = await client.organization.createTeam({
+const team = await authClient.organization.createTeam({
     name: "Development Team",
     organizationId: "org-id" // Optional: defaults to active organization
 })
@@ -928,7 +928,7 @@ const teams = await authClient.organization.listTeams({
 Update a team's details:
 
 ```ts
-const updatedTeam = await client.organization.updateTeam({
+const updatedTeam = await authClient.organization.updateTeam({
     teamId: "team-id",
     data: {
         name: "Updated Team Name"
@@ -940,7 +940,7 @@ const updatedTeam = await client.organization.updateTeam({
 Delete a team from an organization:
 
 ```ts
-await client.organization.removeTeam({
+await authClient.organization.removeTeam({
     teamId: "team-id",
     organizationId: "org-id" // Optional: defaults to active organization
 })
@@ -989,7 +989,7 @@ The teams feature supports several configuration options:
 When inviting members to an organization, you can specify a team:
 
 ```ts
-await client.organization.inviteMember({
+await authClient.organization.inviteMember({
     email: "user@example.com",
     role: "member",
     teamId: "team-id"
