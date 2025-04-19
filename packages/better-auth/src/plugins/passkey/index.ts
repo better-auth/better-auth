@@ -303,16 +303,19 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: id,
-						value: JSON.stringify({
-							expectedChallenge: options.challenge,
-							userData: {
-								id: session.user.id,
-							},
-						}),
-						expiresAt: expirationTime,
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: id,
+							value: JSON.stringify({
+								expectedChallenge: options.challenge,
+								userData: {
+									id: session.user.id,
+								},
+							}),
+							expiresAt: expirationTime,
+						},
+						ctx,
+					);
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -469,11 +472,14 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: id,
-						value: JSON.stringify(data),
-						expiresAt: expirationTime,
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: id,
+							value: JSON.stringify(data),
+							expiresAt: expirationTime,
+						},
+						ctx,
+					);
 					return ctx.json(options, {
 						status: 200,
 					});

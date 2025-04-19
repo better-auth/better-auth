@@ -472,16 +472,19 @@ export const deleteUser = createAuthEndpoint(
 
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const token = generateRandomString(32, "0-9", "a-z");
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: session.user.id,
-				identifier: `delete-account-${token}`,
-				expiresAt: new Date(
-					Date.now() +
-						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
-							60 * 60 * 24) *
-							1000,
-				),
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					value: session.user.id,
+					identifier: `delete-account-${token}`,
+					expiresAt: new Date(
+						Date.now() +
+							(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+								60 * 60 * 24) *
+								1000,
+					),
+				},
+				ctx,
+			);
 			const url = `${
 				ctx.context.baseURL
 			}/delete-user/callback?token=${token}&callbackURL=${
