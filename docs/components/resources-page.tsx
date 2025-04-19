@@ -11,43 +11,16 @@ interface Resource {
 }
 
 interface Resources {
-	gettingStarted: Resource[];
 	videoTutorials: Resource[];
 	blogPosts: Resource[];
-	community: Resource[];
 }
 
 interface ActiveFilters {
-	gettingStarted: string | null;
 	videoTutorials: string | null;
 	blogPosts: string | null;
-	community: string | null;
 }
 
 const resources: Resources = {
-	gettingStarted: [
-		{
-			title: "Getting Started with Better Auth",
-			description:
-				"Learn the basics of Better Auth and how to implement authentication in your application.",
-			href: "https://example.com/getting-started",
-			tags: ["quickstart", "setup", "basics"],
-		},
-		{
-			title: "Authentication Best Practices",
-			description:
-				"Discover the best practices for implementing secure authentication in your applications.",
-			href: "https://example.com/best-practices",
-			tags: ["security", "best-practices", "guidelines"],
-		},
-		{
-			title: "Better Auth vs Other Solutions",
-			description:
-				"A comprehensive comparison of Better Auth with other authentication solutions.",
-			href: "https://example.com/comparison",
-			tags: ["comparison", "alternatives"],
-		},
-	],
 	videoTutorials: [
 		{
 			title: "The State of Authentication",
@@ -74,21 +47,21 @@ const resources: Resources = {
 			title: "Nextjs 15 Authentication Made EASY with Better Auth",
 			description:
 				"A practical guide showing how to seamlessly integrate Better Auth with Next.js 15 for robust authentication.",
-			href: "youtube.com/watch?v=lxslnp-ZEMw",
+			href: "https://www.youtube.com/watch?v=lxslnp-ZEMw",
 			tags: ["nextjs", "integration", "tutorial"],
 		},
 		{
 			title: "Best authentication framework for next.js",
 			description:
 				"A detailed comparison of authentication frameworks for Next.js, highlighting why Better Auth might be your best choice.",
-			href: "youtube.com/watch?v=V--T0q9FrEw",
+			href: "https://www.youtube.com/watch?v=V--T0q9FrEw",
 			tags: ["nextjs", "comparison", "frameworks"],
 		},
 		{
 			title: "Better-Auth: A First Look",
 			description:
 				"An introductory overview and demonstration of Better Auth's core features and capabilities.",
-			href: "youtube.com/watch?v=2cQTV6NYxis",
+			href: "https://www.youtube.com/watch?v=2cQTV6NYxis",
 			tags: ["overview", "introduction", "demo"],
 		},
 		{
@@ -110,7 +83,7 @@ const resources: Resources = {
 			title: "Polar.sh + BetterAuth for Organizations",
 			description:
 				"Polar.sh is a platform for building payment integrations. This article will show you how to use Better Auth to authenticate your users.",
-			href: " https://dev.to/phumudzosly/polarsh-betterauth-for-organizations-1j1b",
+			href: "https://dev.to/phumudzosly/polarsh-betterauth-for-organizations-1j1b",
 			tags: ["organizations", "integration", "payments"],
 		},
 		{
@@ -128,46 +101,13 @@ const resources: Resources = {
 			tags: ["multi-tenant", "zenstack", "architecture"],
 		},
 	],
-	community: [
-		{
-			title: "GitHub Discussions",
-			description: "Join the community discussion about Better Auth on GitHub.",
-			href: "https://github.com/better-auth/better-auth/discussions",
-			tags: ["support", "github", "discussions"],
-		},
-		{
-			title: "Stack Overflow",
-			description:
-				"Find answers to common questions about Better Auth on Stack Overflow.",
-			href: "https://stackoverflow.com/questions/tagged/better-auth",
-			tags: ["q&a", "troubleshooting", "help"],
-		},
-		{
-			title: "Discord Community",
-			description:
-				"Join our Discord community for real-time support and discussions.",
-			href: "https://discord.gg/better-auth",
-			tags: ["chat", "realtime", "community"],
-		},
-	],
 };
 
 export function ResourcesPage() {
 	const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-		gettingStarted: null,
 		videoTutorials: null,
 		blogPosts: null,
-		community: null,
 	});
-
-	const allTags = Array.from(
-		new Set(
-			Object.values(resources)
-				.flat()
-				.flatMap((resource) => resource.tags)
-				.slice(0, 10),
-		),
-	);
 
 	const blogsTags = Array.from(
 		new Set(
@@ -180,14 +120,6 @@ export function ResourcesPage() {
 	const videoTags = Array.from(
 		new Set(
 			Object.values(resources.videoTutorials)
-				.flat()
-				.flatMap((resource) => resource.tags)
-				.slice(0, 10),
-		),
-	);
-	const getStartedTags = Array.from(
-		new Set(
-			Object.values(resources.gettingStarted)
 				.flat()
 				.flatMap((resource) => resource.tags)
 				.slice(0, 10),
@@ -210,7 +142,6 @@ export function ResourcesPage() {
 				</h2>
 			</a>
 			<ResourceFilter
-				title="Filter by topic"
 				tags={videoTags}
 				activeTag={activeFilters.videoTutorials}
 				onTagClick={(tag) =>
@@ -231,7 +162,6 @@ export function ResourcesPage() {
 				</h2>
 			</a>
 			<ResourceFilter
-				title="Filter by topic"
 				tags={blogsTags}
 				activeTag={activeFilters.blogPosts}
 				onTagClick={(tag) =>

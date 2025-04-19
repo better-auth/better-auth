@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils";
 
 interface ResourceFilterProps {
-	title: string;
 	tags: string[];
 	activeTag: string | null;
 	onTagClick: (tag: string | null) => void;
@@ -9,7 +8,6 @@ interface ResourceFilterProps {
 }
 
 export function ResourceFilter({
-	title,
 	tags,
 	activeTag,
 	onTagClick,

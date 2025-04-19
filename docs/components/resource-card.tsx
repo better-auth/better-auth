@@ -18,9 +18,8 @@ export function ResourceCard({
 }: ResourceCardProps) {
 	return (
 		<div
-			rel="noopener noreferrer"
 			className={cn(
-				"group relative flex justify-between rounded-none flex-col group space-y-1 border transition-colors hover:bg-muted/80",
+				"relative flex justify-between rounded-none flex-col group space-y-1 border transition-colors hover:bg-muted/80",
 				className,
 			)}
 		>
@@ -34,7 +33,9 @@ export function ResourceCard({
 					</a>
 				</div>
 				<p
-					dangerouslySetInnerHTML={{ __html: `${description}` }}
+					dangerouslySetInnerHTML={{
+						__html: `${description}`,
+					}}
 					className="p-4 py-0 text-sm md:decoration-none text-muted-foreground"
 				></p>
 			</div>
