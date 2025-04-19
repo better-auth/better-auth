@@ -522,6 +522,22 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(hasMultiplePermissions.data?.success).toBe(true);
+
+		const hasMultiplePermissionsWithMissingPerms =
+			await client.organization.hasPermission({
+				permissions: {
+					member: ["update"],
+					invitation: ["create"],
+				},
+				returnMissingPermissions: true,
+				fetchOptions: {
+					headers,
+				},
+			});
+		expect(hasMultiplePermissionsWithMissingPerms.data?.success).toBe(true);
+		expect(
+			hasMultiplePermissionsWithMissingPerms.data?.missingPermissions,
+		).toBeNull();
 	});
 
 	it("should allow deleting organization", async () => {
@@ -843,6 +859,18 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(canCreateProject).toBe(false);
+
+		const canCreateProjectWithMissingPerms = checkRolePermission({
+			role: "admin",
+			permissions: {
+				project: ["delete"],
+			},
+			returnMissingPermissions: true,
+		});
+		expect(canCreateProjectWithMissingPerms?.success).toBe(false);
+		expect(canCreateProjectWithMissingPerms?.missingPermissions).toEqual({
+			project: ["delete"],
+		});
 	});
 
 	it("should return not success", async () => {
@@ -854,6 +882,19 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(res).toBe(false);
+	});
+
+	const canCreateProjectWithMissingPerms = checkRolePermission({
+		role: "admin",
+		permissions: {
+			project: ["read"],
+			sales: ["delete"],
+		},
+		returnMissingPermissions: true,
+	});
+	expect(canCreateProjectWithMissingPerms?.success).toBe(false);
+	expect(canCreateProjectWithMissingPerms?.missingPermissions).toEqual({
+		sales: ["delete"],
 	});
 });
 

@@ -16,7 +16,7 @@ export function getApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		bypassLastCheckTime?: boolean,
 	): Promise<number> | undefined;
 }) {
 	return createAuthEndpoint(

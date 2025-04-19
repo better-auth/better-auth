@@ -8,6 +8,7 @@ import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
+import { hasPermissionApiKey } from "./has-permission-api-key";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -47,9 +48,9 @@ export function createApiKeyRoutes({
 
 	function deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime = false,
+		bypassLastCheckTime = false,
 	) {
-		if (lastChecked && !byPassLastCheckTime) {
+		if (lastChecked && !bypassLastCheckTime) {
 			const now = new Date();
 			const diff = now.getTime() - lastChecked.getTime();
 			if (diff < 10000) {
@@ -86,6 +87,11 @@ export function createApiKeyRoutes({
 		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		listApiKeys: listApiKeys({ opts, schema, deleteAllExpiredApiKeys }),
 		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
+			deleteAllExpiredApiKeys,
+		}),
+		hasPermissionApiKey: hasPermissionApiKey({
+			opts,
+			schema,
 			deleteAllExpiredApiKeys,
 		}),
 	};
