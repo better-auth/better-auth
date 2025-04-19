@@ -593,17 +593,23 @@ export const createInternalAdapter = (
 		},
 		findUserByEmail: async (
 			email: string,
-			options?: { includeAccounts: boolean },
+			options?: { includeAccounts?: boolean },
+			ctx?: GenericEndpointContext
 		) => {
-			const user = await adapter.findOne<User>({
-				model: "user",
-				where: [
-					{
-						value: email.toLowerCase(),
-						field: "email",
-					},
-				],
-			});
+			let user;
+			if (ctx?.context.options.user?.findUser) {
+				user = await ctx.context.options.user.findUser(ctx);
+			} else {
+				user = await adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							value: email.toLowerCase(),
+							field: "email",
+						},
+					],
+				});
+			}
 			if (!user) return null;
 			if (options?.includeAccounts) {
 				const accounts = await adapter.findMany<Account>({

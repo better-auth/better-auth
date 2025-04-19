@@ -674,7 +674,7 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 		const existingUser =
-			await ctx.context.internalAdapter.findUserByEmail(newEmail);
+			await ctx.context.internalAdapter.findUserByEmail(newEmail, {}, ctx);
 		if (existingUser) {
 			ctx.context.logger.error("Email already exists");
 			throw new APIError("BAD_REQUEST", {
@@ -686,7 +686,7 @@ export const changeEmail = createAuthEndpoint(
 		 */
 		if (ctx.context.session.user.emailVerified !== true) {
 			const existing =
-				await ctx.context.internalAdapter.findUserByEmail(newEmail);
+				await ctx.context.internalAdapter.findUserByEmail(newEmail, {}, ctx);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
