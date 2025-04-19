@@ -10,6 +10,7 @@ import type {
 	AuthPluginSchema,
 	Session,
 	User,
+	GenericEndpointContext,
 } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
@@ -47,6 +48,12 @@ export interface AnonymousOptions {
 	 * Custom schema for the anonymous plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+
+	/**
+	 * Username for the Anonymous user. 
+	 * @default `${crypto.randomUUID()} - Anonymous`
+	 */
+	userName?: string
 }
 
 const schema = {
@@ -100,7 +107,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (ctx:GenericEndpointContext) => {
 					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
@@ -110,7 +117,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							email,
 							emailVerified: false,
 							isAnonymous: true,
-							name: "Anonymous",
+							name: options?.userName || `${crypto.randomUUID()} - Anonymous`,
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
@@ -164,7 +171,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							ctx.path.startsWith("/email-otp/verify-email")
 						);
 					},
-					handler: createAuthMiddleware(async (ctx) => {
+					handler: createAuthMiddleware(async (ctx: GenericEndpointContext) => {
 						const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 
 						/**
