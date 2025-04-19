@@ -683,3 +683,78 @@ describe("signin", async () => {
 		});
 	});
 });
+
+describe("updateAccountOnSignIn", async () => {
+	const { client, cookieSetter, auth } = await getTestInstance({
+		account: {
+			updateAccountOnSignIn: false,
+		},
+	});
+	const ctx = await auth.$context;
+	it("should not update account on sign in", async () => {
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const userAccounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		await ctx.internalAdapter.updateAccount(userAccounts[0].id, {
+			accessToken: "new-access-token",
+		});
+
+		//re-sign in
+		const signInRes2 = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes2.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		const state2 =
+			new URL(signInRes2.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state: state2,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+		const session2 = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const userAccounts2 = await ctx.internalAdapter.findAccounts(
+			session2.data?.user.id!,
+		);
+		expect(userAccounts2[0].accessToken).toBe("new-access-token");
+	});
+});
