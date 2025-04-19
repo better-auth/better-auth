@@ -50,24 +50,46 @@ const resources: Resources = {
 	],
 	videoTutorials: [
 		{
-			title: "Building a Secure Auth System",
+			title: "The State of Authentication",
+			description:
+				"In this video, <strong>Theo(t3.gg)</strong> discusses the state and future of authentication framework.",
+			href: "https://www.youtube.com/watch?v=D2f_gN1uZbc",
+			tags: ["2fa", "security"],
+		},
+		{
+			title: "Last Authentication You Will Ever Need",
 			description:
 				"Step-by-step guide to building a secure authentication system with Better Auth.",
-			href: "https://example.com/video-tutorial",
-			tags: ["security", "tutorial"],
+			href: "https://www.youtube.com/watch?v=hFtufpaMcLM",
+			tags: ["sign-up", "social"],
 		},
 		{
-			title: "Social Authentication Deep Dive",
+			title: "This Might Be My New Favourite Auth Library",
 			description:
-				"Learn how to implement social authentication with various providers.",
-			href: "https://example.com/social-auth",
+				"In this video, <strong>DevEd</strong> discusses why he loves Better Auth and how easy it is to use.",
+			href: "https://www.youtube.com/watch?v=Hjs3zM7o7NE",
 			tags: ["social", "oauth"],
 		},
+
 		{
-			title: "Two-Factor Authentication",
+			title: "Nextjs 15 Authentication Made EASY with Better Auth",
 			description:
 				"Implement robust two-factor authentication in your application.",
-			href: "https://example.com/2fa",
+			href: "youtube.com/watch?v=lxslnp-ZEMw",
+			tags: ["2fa", "security"],
+		},
+		{
+			title: "Best authentication framework for next.js",
+			description:
+				"Implement robust two-factor authentication in your application.",
+			href: "youtube.com/watch?v=V--T0q9FrEw",
+			tags: ["2fa", "security"],
+		},
+		{
+			title: "Better-Auth: A First Look",
+			description:
+				"Implement robust two-factor authentication in your application.",
+			href: "youtube.com/watch?v=2cQTV6NYxis",
 			tags: ["2fa", "security"],
 		},
 	],
