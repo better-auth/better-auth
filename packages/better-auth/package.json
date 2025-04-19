@@ -591,6 +591,9 @@
       "adapters/drizzle": [
         "./dist/adapters/drizzle-adapter/index.d.ts"
       ],
+      "adapters/kysely": [
+        "./dist/adapters/kysely-adapter/index.d.ts"
+      ],
       "adapters/mongodb": [
         "./dist/adapters/mongodb-adapter/index.d.ts"
       ],
