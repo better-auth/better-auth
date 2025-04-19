@@ -14,7 +14,6 @@ import type {
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
-import { z } from "zod";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
