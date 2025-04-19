@@ -53,7 +53,7 @@ const resources: Resources = {
 			title: "The State of Authentication",
 			description:
 				"<strong>Theo(t3.gg)</strong> explores the current landscape of authentication, discussing trends, challenges, and where the industry is heading.",
-			href: "https://www.youtube.com/watch?v=D2f_gN1uZbc",
+			href: "https://www.youtube.com/watch?v=lxslnp-ZEMw",
 			tags: ["trends", "overview"],
 		},
 		{
