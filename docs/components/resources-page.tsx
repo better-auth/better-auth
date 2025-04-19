@@ -52,42 +52,42 @@ const resources: Resources = {
 		{
 			title: "The State of Authentication",
 			description:
-				"In this video, <strong>Theo(t3.gg)</strong> discusses the state and future of authentication framework.",
+				"<strong>Theo(t3.gg)</strong> explores the current landscape of authentication, discussing trends, challenges, and where the industry is heading.",
 			href: "https://www.youtube.com/watch?v=D2f_gN1uZbc",
 			tags: ["trends", "overview"],
 		},
 		{
 			title: "Last Authentication You Will Ever Need",
 			description:
-				"Step-by-step guide to building a secure authentication system with Better Auth.",
+				"A comprehensive tutorial demonstrating why Better Auth could be the final authentication solution you'll need for your projects.",
 			href: "https://www.youtube.com/watch?v=hFtufpaMcLM",
 			tags: ["tutorial", "implementation", "guide"],
 		},
 		{
 			title: "This Might Be My New Favourite Auth Library",
 			description:
-				"In this video, <strong>DevEd</strong> discusses why he loves Better Auth and how easy it is to use.",
+				"<strong>DevEd</strong> explores the features and capabilities of Better Auth, explaining why it stands out among authentication libraries.",
 			href: "https://www.youtube.com/watch?v=Hjs3zM7o7NE",
 			tags: ["review", "showcase"],
 		},
 		{
 			title: "Nextjs 15 Authentication Made EASY with Better Auth",
 			description:
-				"Implement robust two-factor authentication in your application.",
+				"A practical guide showing how to seamlessly integrate Better Auth with Next.js 15 for robust authentication.",
 			href: "youtube.com/watch?v=lxslnp-ZEMw",
 			tags: ["nextjs", "integration", "tutorial"],
 		},
 		{
 			title: "Best authentication framework for next.js",
 			description:
-				"Implement robust two-factor authentication in your application.",
+				"A detailed comparison of authentication frameworks for Next.js, highlighting why Better Auth might be your best choice.",
 			href: "youtube.com/watch?v=V--T0q9FrEw",
 			tags: ["nextjs", "comparison", "frameworks"],
 		},
 		{
 			title: "Better-Auth: A First Look",
 			description:
-				"Implement robust two-factor authentication in your application.",
+				"An introductory overview and demonstration of Better Auth's core features and capabilities.",
 			href: "youtube.com/watch?v=2cQTV6NYxis",
 			tags: ["overview", "introduction", "demo"],
 		},
