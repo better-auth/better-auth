@@ -584,6 +584,7 @@ export const getOrgAdapter = (
 				data: {
 					status: "pending",
 					expiresAt,
+					createdAt: new Date(),
 					inviterId: user.id,
 					...invitation,
 				},
