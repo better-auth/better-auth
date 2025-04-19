@@ -66,7 +66,7 @@ const resources: Resources = {
 		{
 			title: "This Might Be My New Favourite Auth Library",
 			description:
-				"<strong>DevEd</strong> explores the features and capabilities of Better Auth, explaining why it stands out among authentication libraries.",
+				"<strong>developedbyed</strong> explores the features and capabilities of Better Auth, explaining why it stands out among authentication libraries.",
 			href: "https://www.youtube.com/watch?v=Hjs3zM7o7NE",
 			tags: ["review", "showcase"],
 		},
