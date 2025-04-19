@@ -108,11 +108,14 @@ export const forgetPassword = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			},
+			ctx,
+		);
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			{

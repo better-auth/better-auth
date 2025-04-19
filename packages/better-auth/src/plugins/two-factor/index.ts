@@ -304,11 +304,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: data.user.id,
-							identifier,
-							expiresAt: new Date(Date.now() + maxAge * 1000),
-						});
+						await ctx.context.internalAdapter.createVerificationValue(
+							{
+								value: data.user.id,
+								identifier,
+								expiresAt: new Date(Date.now() + maxAge * 1000),
+							},
+							ctx,
+						);
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,
