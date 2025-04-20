@@ -321,7 +321,7 @@ import { authClient } from "@/lib/auth-client";
 export default function App() {
     const { data: session } = authClient.useSession();
 
-    return <Text>Welcome, {session.user.name}</Text>;
+    return <Text>Welcome, {session?.user.name}</Text>;
 }
 ```
 
