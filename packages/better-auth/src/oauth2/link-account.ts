@@ -104,7 +104,6 @@ export async function handleOAuthUserInfo(
 				);
 			}
 		}
-
 		const {
 			id: _,
 			name,
@@ -114,8 +113,8 @@ export async function handleOAuthUserInfo(
 			createdAt,
 			...restUserInfo
 		} = userInfo;
-		const coreFields =
-			typeof overrideUserInfo === "boolean"
+		const coreFields = overrideUserInfo
+			? typeof overrideUserInfo === "boolean"
 				? {
 						name,
 						email,
@@ -130,7 +129,8 @@ export async function handleOAuthUserInfo(
 							image,
 							createdAt,
 						}).filter(([key]) => overrideUserInfo?.includes(key)),
-					);
+					)
+			: {};
 		await c.context.internalAdapter.updateUser(dbUser.user.id, {
 			...coreFields, // core fields should be updated only if overrideUserInfo is true
 			...restUserInfo, // rest of the user info should be updated always
