@@ -680,6 +680,8 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
 
 A custom function to hash the API key. Useful if you want to use a custom hashing algorithm, or if you want to disable hashing altogether, which you can just return the `key` itself.
 
+**Security Warning:** It's strongly recommended to use a proper hashing function rather than disabling hashing. Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys. If you must customize the hashing, consider using a secure algorithm like bcrypt or HMAC instead of returning the raw key.
+
 ---
 
 ## Schema
