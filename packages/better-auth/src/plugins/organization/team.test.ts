@@ -221,7 +221,6 @@ describe("team", async (it) => {
 			},
 			plugins: [
 				organization({
-					async sendInvitationEmail(data, request) {},
 					teams: {
 						enabled: true,
 						maximumMembersPerTeam: 1,
