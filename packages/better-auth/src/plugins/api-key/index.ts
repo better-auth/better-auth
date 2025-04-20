@@ -42,6 +42,16 @@ export const ERROR_CODES = {
 		"The property you're trying to set can only be set from the server auth instance only.",
 };
 
+const defaultKeyHasher = async (key: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(key),
+	);
+	const hashed = base64Url.encode(new Uint8Array(hash), {
+		padding: false,
+	});
+	return hashed;
+};
+
 export const apiKey = (options?: ApiKeyOptions) => {
 	const opts = {
 		...options,
@@ -52,6 +62,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		maximumNameLength: options?.maximumNameLength ?? 32,
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
+		customKeyHasher: options?.customKeyHasher ?? defaultKeyHasher,
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -148,12 +159,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						}
 
-						const hash = await createHash("SHA-256").digest(
-							new TextEncoder().encode(key),
-						);
-						const hashed = base64Url.encode(new Uint8Array(hash), {
-							padding: false,
-						});
+						const hashed = await opts.customKeyHasher(key);
 
 						const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 							model: schema.apikey.modelName,

@@ -253,6 +253,70 @@ describe("api-key", async () => {
 		expect(apiKey.expiresAt?.getTime()).toBeGreaterThanOrEqual(expectedResult);
 	});
 
+	it("should support custom key hasher", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						customKeyHasher(key) {
+							return `${key}-my-custom-hasher`;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const apiKey2 = await auth.api.createApiKey({
+			body: {},
+			headers,
+		});
+		expect(apiKey2.key.endsWith("-my-custom-hasher")).not.toEqual(true);
+		const res = await (await auth.$context).adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: apiKey2.id,
+				},
+			],
+		});
+		expect(res?.key.endsWith("-my-custom-hasher")).toEqual(true);
+	});
+
+	it("should be able to verify with custom key hasher", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						customKeyHasher(key) {
+							return `${key}-my-custom-hasher`;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const apiKey2 = await auth.api.createApiKey({
+			body: {},
+			headers,
+		});
+
+		const result = await auth.api.verifyApiKey({ body: { key: apiKey2.key } });
+		expect(result.valid).toEqual(true);
+	});
+
 	it("should fail to create a key with a custom expiresIn value when customExpiresTime is disabled", async () => {
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{

@@ -3,8 +3,6 @@ import { createAuthEndpoint } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { isRateLimited } from "../rate-limit";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -68,12 +66,7 @@ export function verifyApiKey({
 				});
 			}
 
-			const hash = await createHash("SHA-256").digest(
-				new TextEncoder().encode(key),
-			);
-			const hashed = base64Url.encode(new Uint8Array(hash), {
-				padding: false,
-			});
+			const hashed = await opts.customKeyHasher(key);
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 				model: schema.apikey.modelName,

@@ -8,6 +8,10 @@ export interface ApiKeyOptions {
 	 */
 	apiKeyHeaders?: string | string[];
 	/**
+	 * A custom function to allow you to hash the key before saving it into the database.
+	 */
+	customKeyHasher?: (key: string) => string | Promise<string>;
+	/**
 	 * The function to get the API key from the context
 	 */
 	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;

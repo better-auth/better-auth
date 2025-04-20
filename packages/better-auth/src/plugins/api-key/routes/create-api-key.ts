@@ -5,8 +5,6 @@ import { getDate } from "../../../utils/date";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
-import { createHash } from "@better-auth/utils/hash";
-import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 
@@ -357,10 +355,7 @@ export function createApiKey({
 				prefix: prefix || opts.defaultPrefix,
 			});
 
-			const hash = await createHash("SHA-256").digest(key);
-			const hashed = base64Url.encode(hash, {
-				padding: false,
-			});
+			const hashed = await opts.customKeyHasher(key);
 
 			let start: string | null = null;
 

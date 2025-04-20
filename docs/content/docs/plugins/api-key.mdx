@@ -676,6 +676,10 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
   </Accordion>
 </Accordions>
 
+`customKeyHasher` <span className="opacity-70">`(key: string) => string | Promise<string>`</span>
+
+A custom function to hash the API key. Useful if you want to use a custom hashing algorithm, or if you want to disable hashing altogether, which you can just return the `key` itself.
+
 ---
 
 ## Schema
