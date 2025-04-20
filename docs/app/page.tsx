@@ -28,7 +28,7 @@ export default async function HomePage() {
 	return (
 		<main className="h-min mx-auto overflow-x-hidden">
 			<div className="w-full bg-gradient-to-br border-b dark:border-zinc-800 border-zinc-200 dark:from-zinc-950 dark:to-black from-zinc-150 to-zinc-100 dark:text-white text-center py-2">
-				<p className="text-sm px-4 font-mono">
+				<p className="text-sm px-4 tracking-tight font-mono">
 					Introducing{" "}
 					<Link target="_blank" href="https://better-auth.build">
 						Better Auth Infrastructure
@@ -36,7 +36,7 @@ export default async function HomePage() {
 					|{" "}
 					<Link
 						href="https://better-auth.build"
-						className="underline text-blue-400 hover:text-blue-600"
+						className="underline underline-offset-2 text-blue-400 hover:text-blue-600"
 					>
 						Join the waitlist
 					</Link>{" "}
