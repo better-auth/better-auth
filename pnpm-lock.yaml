@@ -1449,6 +1449,12 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.11.11
+      '@types/pouchdb':
+        specifier: ^6.4.2
+        version: 6.4.2
+      '@types/pouchdb-find':
+        specifier: ^7.3.3
+        version: 7.3.3
       '@types/prompts':
         specifier: ^2.4.9
         version: 2.4.9
@@ -1488,6 +1494,15 @@ importers:
       pg:
         specifier: ^8.13.1
         version: 8.13.3
+      pouchdb:
+        specifier: ^9.0.0
+        version: 9.0.0(encoding@0.1.13)
+      pouchdb-adapter-memory:
+        specifier: ^9.0.0
+        version: 9.0.0(encoding@0.1.13)
+      pouchdb-find:
+        specifier: ^9.0.0
+        version: 9.0.0(encoding@0.1.13)
       prisma:
         specifier: ^5.22.0
         version: 5.22.0
@@ -9342,6 +9357,57 @@ packages:
   '@types/pg@8.11.11':
     resolution: {integrity: sha512-kGT1qKM8wJQ5qlawUrEkXgvMSXoV213KfMGXcwfDwUIfUHXqXYXOfS1nE1LINRJVVVx5wCm70XnFlMHaIcQAfw==}
 
+  '@types/pouchdb-adapter-cordova-sqlite@1.0.4':
+    resolution: {integrity: sha512-1MGjmAMux3OIyJ+iXfhJ5hNIzS+KjGJ05O3bF5Gen5TiJUFNK1bOp3VVV9SxXgz+hGwnBruBAWdAqhbB6ZHhSA==}
+
+  '@types/pouchdb-adapter-fruitdown@6.1.6':
+    resolution: {integrity: sha512-KaFB29hUI97eTtJI6pjv7EQcqhZ63qHWovKgyiE+HZF5fVmdrBbTmnIrbR87AJXcXKy47+oQFJ7rzxY8TalpLQ==}
+
+  '@types/pouchdb-adapter-http@6.1.6':
+    resolution: {integrity: sha512-DJur1mt07GJXwGb5K+MOILoCOSgoQpsi7hybcTzRLeR3IO8Y8eq7TnhTkftAJdx9VHJGOiOXFjO+8BYM69j5yA==}
+
+  '@types/pouchdb-adapter-idb@6.1.7':
+    resolution: {integrity: sha512-KwjkJ4fTNz5wPXYu20bUoWud7ty0t7tgdo4oc0AJvG+fcURAH7mI7uFmpE4dZIT+hUq5G61xu96AVq9b2q4T3g==}
+
+  '@types/pouchdb-adapter-leveldb@6.1.6':
+    resolution: {integrity: sha512-mqeTpA2Ni2U4FA5ISRESy4WwhfUahXViUa3jQpXGdSpruaeHlhTLzZJPyz7/mGlvdAfAFv9Vd5d6ys3ASmMujw==}
+
+  '@types/pouchdb-adapter-localstorage@6.1.6':
+    resolution: {integrity: sha512-+HQBCpD80XkKJE64r7uLwzkNRgkvMnhDI5rIFLx3USxdrRph/R3awcEubRFndcgtxzcUaL9iYw9KetgFMUqPrg==}
+
+  '@types/pouchdb-adapter-memory@6.1.6':
+    resolution: {integrity: sha512-QCCtW561XuwFACzP/4zYySzs/a4em0EeuQdszen0YOaGV1/fRqJE0dOlmzh8do4sNJomLO6+MFtEzguGljnkgA==}
+
+  '@types/pouchdb-adapter-node-websql@6.1.5':
+    resolution: {integrity: sha512-yi68syUvHs4OM3mzKlh4zfpov64KITIAnxi387zgdby6SEfAJzWPC0dfH77iEVRDGCrKb3cKTNkl/UGHnphaow==}
+
+  '@types/pouchdb-adapter-websql@6.1.7':
+    resolution: {integrity: sha512-9oNkP5ZCGMkQALO9KmtbHXlkBq8i2hoCEE6/gWzRicAvL1y+WIKjEQiIIEamMhj5u5tARvW3n2/r+JXwLCyYgw==}
+
+  '@types/pouchdb-browser@6.1.5':
+    resolution: {integrity: sha512-f+HjxEjYFpgoYWXnMI9AQZZ+SIG8dBiBPrpfWWGsCl+48rumsP5BuBWHq/aXoB8SRKYO0XdP4TNvMBWM3UATCw==}
+
+  '@types/pouchdb-core@7.0.15':
+    resolution: {integrity: sha512-gq1Qbqn9nCaAKRRv6fRHZ4/ER+QYEwSXBZlDQcxwdbPrtZO8EhIn2Bct0AlguaSEdFcABfbaxxyQwFINkNQ9dQ==}
+
+  '@types/pouchdb-find@7.3.3':
+    resolution: {integrity: sha512-U7zXk67s9Ar+9Pwj5kSbuMnn8zif0AOOIPy4KRFeJ/S/Tk+mNS90soj+3OV21H8xyB7WTxjvS1JLablZC6C6ow==}
+
+  '@types/pouchdb-http@6.1.5':
+    resolution: {integrity: sha512-9jGCAl6DUsXIl1vjuPu8tzGykAr84549P4IS0zYdrOKq5eXzQRUb/tb2hEVTmmTcYKXu2P1N55ABsdDNZvzGGA==}
+
+  '@types/pouchdb-mapreduce@6.1.10':
+    resolution: {integrity: sha512-AgYVqCnaA5D7cWkWyzZVuk0137N4yZsmIQTD/i3DmuMxYYoFrtWUoQu0tbA52SpTRGdL8ubQ7JFQXzA13fA6IQ==}
+
+  '@types/pouchdb-node@6.1.7':
+    resolution: {integrity: sha512-hryc2eCtNB3GbLcHSwU8glLaY66gDMus1AYkcIYAAxufdnK2BAy1oxaRLmnwRn1A1vG41P/t0htFD161LUnfQw==}
+
+  '@types/pouchdb-replication@6.4.7':
+    resolution: {integrity: sha512-slB4zOwri3SAVHioFx/FWC/KqOzzb7nDFtV+qzaKzxkf+U5zTwCbK3uRHaj0d/XQk0DwVeajf1ni3Wiyq3j2OA==}
+
+  '@types/pouchdb@6.4.2':
+    resolution: {integrity: sha512-YsI47rASdtzR+3V3JE2UKY58snhm0AglHBpyckQBkRYoCbTvGagXHtV0x5n8nzN04jQmvTG+Sm85cIzKT3KXBA==}
+
   '@types/prismjs@1.26.5':
     resolution: {integrity: sha512-AUZTa7hQ2KY5L7AmtSiqxlhWxb4ina0yd8hNbl4TWuqnv/pFP0nDMb3YrfSBf4hJVGLh2YEIBfKaBW/9UEl6IQ==}
 
@@ -10106,6 +10172,25 @@ packages:
   abortcontroller-polyfill@1.7.8:
     resolution: {integrity: sha512-9f1iZ2uWh92VcrU9Y8x+LdM4DLj75VE0MJB8zuF1iUnroEptStw+DQ8EQPMUdfe5k+PkB1uUfDQfWbhstH8LrQ==}
 
+  abstract-leveldown@2.7.2:
+    resolution: {integrity: sha512-+OVvxH2rHVEhWLdbudP6p0+dNMXu8JA1CbhP19T8paTYAcX7oJ4OVjT+ZUVpv7mITxXHqDMej+GdqXBmXkw09w==}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
+  abstract-leveldown@6.2.3:
+    resolution: {integrity: sha512-BsLm5vFMRUrrLeCcRc+G0t2qOaTzpoJQLOubq2XM72eNpjF5UdU5o/5NvlNhx95XHcAvcl8OMXr4mlg/fRgUXQ==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
+  abstract-leveldown@6.3.0:
+    resolution: {integrity: sha512-TU5nlYgta8YrBMNpc9FwQzRbiXsj49gsALsXadbGHt9CROPzX5fB0rWDR5mtdpOOKa5XqRFpbj1QroPAoPzVjQ==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
+  abstract-leveldown@7.2.0:
+    resolution: {integrity: sha512-DnhQwcFEaYsvYDnACLZhMmCWd3rkOeEvglpa4q5i/5Jlm3UIsWaxVzuXvDLFCSCWRO3yy2/+V/G7FusFgejnfQ==}
+    engines: {node: '>=10'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
   accepts@1.3.8:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
     engines: {node: '>= 0.6'}
@@ -10853,6 +10938,10 @@ packages:
 
   canvas-confetti@1.9.3:
     resolution: {integrity: sha512-rFfTURMvmVEX1gyXFgn5QMn81bYk70qa0HLzcIOSVEyl57n6o9ItHeBtUSWdvKAPY0xlvBHno4/v3QPrT83q9g==}
+
+  catering@2.1.1:
+    resolution: {integrity: sha512-K7Qy8O9p76sL3/3m7/zLKbRkyOlSZAgzEaLhyj2mXS8PsCud2Eo4hAb8aLtZqHh0QGqLcb9dlJSu6lHRVENm1w==}
+    engines: {node: '>=6'}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -11730,6 +11819,11 @@ packages:
     resolution: {integrity: sha512-4tvttepXG1VaYGrRibk5EwJd1t4udunSOVMdLSAL6mId1ix438oPwPZMALY41FCijukO1L0twNcGsdzS7dHgDg==}
     engines: {node: '>=10'}
 
+  deferred-leveldown@5.3.0:
+    resolution: {integrity: sha512-a59VOT+oDy7vtAbLRCZwWgxu2BaCfd5Hk7wxJd48ei7I+nsg8Orlb9CLG0PMZienk9BSUKgeAqkO2+Lw+1+Ukw==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
   define-data-property@1.1.4:
     resolution: {integrity: sha512-rBMvIzlpA8v6E+SJZoo++HAYqsLrkg7MSfIinMPFhmkorw7X+dOXVJQs+QT69zGkzMyfDnIMN2Wid1+NbL3T+A==}
     engines: {node: '>= 0.4'}
@@ -11904,6 +11998,9 @@ packages:
   dotenv@7.0.0:
     resolution: {integrity: sha512-M3NhsLbV1i6HuGzBUH8vXrtxOk+tWmzWKDMbAVSUp3Zsjm7ywFeuwrUXhmhQyRK1q5B5GGy7hcXPbj3bnfZg2g==}
     engines: {node: '>=6'}
+
+  double-ended-queue@2.1.0-0:
+    resolution: {integrity: sha512-+BNfZ+deCo8hMNpDqDnvT+c0XpJ5cUa6mqYq89bho2Ifze4URTqRkcwR399hWoTrTkbZ/XJYDgP6rc7pRgffEQ==}
 
   drizzle-kit@0.30.5:
     resolution: {integrity: sha512-l6dMSE100u7sDaTbLczibrQZjA35jLsHNqIV+jmhNVO3O8jzM6kywMOmV9uOz9ZVSCMPQhAZEFjL/qDPVrqpUA==}
@@ -12359,11 +12456,19 @@ packages:
     resolution: {integrity: sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg==}
     engines: {node: '>= 0.8'}
 
+  encoding-down@6.3.0:
+    resolution: {integrity: sha512-QKrV0iKR6MZVJV08QY0wp1e7vF6QbhnbQhb07bwpEyuz4uZiZgPlEGdkCROuFkUwdxlFaiPIhjyarH1ee/3vhw==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
   encoding@0.1.13:
     resolution: {integrity: sha512-ETBauow1T35Y/WZMkio9jiM0Z5xjHHmJ4XmjZOq1l/dXz3lr2sRn87nJy20RupqSh1F2m3HHPSp8ShIPQJrJ3A==}
 
   end-of-stream@1.4.4:
     resolution: {integrity: sha512-+uw1inIHVPQoaVuHzRyXd21icM+cnt4CzD5rW+NC1wjOUSTOs+Te7FOv7AhN7vS9x/oIyhLP5PR1H+phQAHu5Q==}
+
+  end-stream@0.1.0:
+    resolution: {integrity: sha512-Brl10T8kYnc75IepKizW6Y9liyW8ikz1B7n/xoHrJxoVSSjoqPn30sb7XVFfQERK4QfUMYRGs9dhWwtt2eu6uA==}
 
   enhanced-resolve@5.17.1:
     resolution: {integrity: sha512-LMHl3dXhTcfv8gM4kEzIUeTQ+7fpdA0l2tUf34BddXPkz2A5xJ5L/Pchd5BL6rdccM9QGvu0sWZzK1Z1t4wwyg==}
@@ -13062,6 +13167,9 @@ packages:
     resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
     engines: {node: ^12.20 || >= 14.13}
 
+  fetch-cookie@2.2.0:
+    resolution: {integrity: sha512-h9AgfjURuCgA2+2ISl8GbavpUdR+WGAM2McW/ovn4tVccegp8ZqCKWSBR8uRdM8dDNlx5WdKRWxBYUwteLDCNQ==}
+
   fetch-retry@4.1.1:
     resolution: {integrity: sha512-e6eB7zN6UBSwGVwrbWVH+gdLnkW9WwHhmq2YDK1Sh30pzx1onRVGBvogTlUeWxwTa+L86NYdo4hFkh7O8ZjSnA==}
 
@@ -13356,6 +13464,9 @@ packages:
   function.prototype.name@1.1.8:
     resolution: {integrity: sha512-e5iwyodOHhbMr/yNrc7fDYG4qlbIvI5gajyzPnb5TCwyhjApznQh1BMFou9b30SevY43gCJKXycoCBjMbsuW0Q==}
     engines: {node: '>= 0.4'}
+
+  functional-red-black-tree@1.0.1:
+    resolution: {integrity: sha512-dsKNQNdj6xA3T+QlADDA7mOSlX0qiMINjn0cgr+eGHGsbSHzTabcIogz2+p/iqP1Xs6EP/sS2SbqH+brGTbq0g==}
 
   functions-have-names@1.2.3:
     resolution: {integrity: sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==}
@@ -13911,6 +14022,9 @@ packages:
     engines: {node: '>=16.x'}
     hasBin: true
 
+  immediate@3.3.0:
+    resolution: {integrity: sha512-HR7EVodfFUdQCTIeySw+WDRFJlPcLOJbXfwwZ7Oom6tjsvZ3bOkCDJHehQC3nxJrv7+f9XecwazynjU8e4Vw3Q==}
+
   immutable@5.0.3:
     resolution: {integrity: sha512-P8IdPQHq3lA1xVeBRi5VPqUm5HDgKnx0Ru51wZz5mjxHr5n3RWhjIpOFU7ybkUxfB+5IToy+OLaHYDBIWsv+uw==}
 
@@ -14357,6 +14471,9 @@ packages:
     resolution: {integrity: sha512-jv+8jaWCl0g2lSBkNSVXdzfBA0npK1HGC2KtWM9FumFRoGS94g3NbCCLVnCYHLjp4GrW2KZeeSTMo5ddtznmGw==}
     engines: {node: '>=18'}
 
+  isarray@0.0.1:
+    resolution: {integrity: sha512-D2S+3GLxWH+uhrNEcoh/fnmYeP8E8/zHl644d/jdA0g2uyXvy3sb0qxotE+ne0LtccHknQzWwZEzhak7oJ0COQ==}
+
   isarray@1.0.0:
     resolution: {integrity: sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==}
 
@@ -14709,6 +14826,69 @@ packages:
     resolution: {integrity: sha512-tkuLHQlvWUTeQ3doAqnHbNn8T6WX1KA8yvbKG9x4VtKtIjHsVKQZCH11zRgAfbDAXC2UNIg/K9BYAAcEzUIrNg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  level-codec@9.0.2:
+    resolution: {integrity: sha512-UyIwNb1lJBChJnGfjmO0OR+ezh2iVu1Kas3nvBS/BzGnx79dv6g7unpKIDNPMhfdTEGoc7mC8uAu51XEtX+FHQ==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by level-transcoder (https://github.com/Level/community#faq)
+
+  level-concat-iterator@2.0.1:
+    resolution: {integrity: sha512-OTKKOqeav2QWcERMJR7IS9CUo1sHnke2C0gkSmcR7QuEtFNLLzHQAvnMw8ykvEcv0Qtkg0p7FOwP1v9e5Smdcw==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
+  level-concat-iterator@3.1.0:
+    resolution: {integrity: sha512-BWRCMHBxbIqPxJ8vHOvKUsaO0v1sLYZtjN3K2iZJsRBYtp+ONsY6Jfi6hy9K3+zolgQRryhIn2NRZjZnWJ9NmQ==}
+    engines: {node: '>=10'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
+  level-errors@2.0.1:
+    resolution: {integrity: sha512-UVprBJXite4gPS+3VznfgDSU8PTRuVX0NXwoWW50KLxd2yw4Y1t2JUR5In1itQnudZqRMT9DlAM3Q//9NCjCFw==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
+  level-iterator-stream@4.0.2:
+    resolution: {integrity: sha512-ZSthfEqzGSOMWoUGhTXdX9jv26d32XJuHz/5YnuHZzH6wldfWMOVwI9TBtKcya4BKTyTt3XVA0A3cF3q5CY30Q==}
+    engines: {node: '>=6'}
+
+  level-js@5.0.2:
+    resolution: {integrity: sha512-SnBIDo2pdO5VXh02ZmtAyPP6/+6YTJg2ibLtl9C34pWvmtMEmRTWpra+qO/hifkUtBTOtfx6S9vLDjBsBK4gRg==}
+    deprecated: Superseded by browser-level (https://github.com/Level/community#faq)
+
+  level-packager@5.1.1:
+    resolution: {integrity: sha512-HMwMaQPlTC1IlcwT3+swhqf/NUO+ZhXVz6TY1zZIIZlIR0YSn8GtAAWmIvKjNY16ZkEg/JcpAuQskxsXqC0yOQ==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
+
+  level-supports@1.0.1:
+    resolution: {integrity: sha512-rXM7GYnW8gsl1vedTJIbzOrRv85c/2uCMpiiCzO2fndd06U/kUXEEU9evYn4zFggBOg36IsBW8LzqIpETwwQzg==}
+    engines: {node: '>=6'}
+
+  level-supports@2.1.0:
+    resolution: {integrity: sha512-E486g1NCjW5cF78KGPrMDRBYzPuueMZ6VBXHT6gC7A8UYWGiM14fGgp+s/L1oFfDWSPV/+SFkYCmZ0SiESkRKA==}
+    engines: {node: '>=10'}
+
+  level-write-stream@1.0.0:
+    resolution: {integrity: sha512-bBNKOEOMl8msO+uIM9YX/gUO6ckokZ/4pCwTm/lwvs46x6Xs8Zy0sn3Vh37eDqse4mhy4fOMIb/JsSM2nyQFtw==}
+
+  level@6.0.1:
+    resolution: {integrity: sha512-psRSqJZCsC/irNhfHzrVZbmPYXDcEYhA5TVNwr+V92jF44rbf86hqGp8fiT702FyiArScYIlPSBTDUASCVNSpw==}
+    engines: {node: '>=8.6.0'}
+
+  leveldown@5.6.0:
+    resolution: {integrity: sha512-iB8O/7Db9lPaITU1aA2txU/cBEXAt4vWwKQRrrWuS6XDgbP4QZGj9BL2aNbwb002atoQ/lIotJkfyzz+ygQnUQ==}
+    engines: {node: '>=8.6.0'}
+    deprecated: Superseded by classic-level (https://github.com/Level/community#faq)
+
+  leveldown@6.1.1:
+    resolution: {integrity: sha512-88c+E+Eizn4CkQOBHwqlCJaTNEjGpaEIikn1S+cINc5E9HEvJ77bqY4JY/HxT5u0caWqsc3P3DcFIKBI1vHt+A==}
+    engines: {node: '>=10.12.0'}
+    deprecated: Superseded by classic-level (https://github.com/Level/community#faq)
+
+  levelup@4.4.0:
+    resolution: {integrity: sha512-94++VFO3qN95cM/d6eBXvd894oJE0w3cInq9USsyQzzoJxmiYzPAocNcuGCPGGjoXqDVJcr3C1jzt1TSjyaiLQ==}
+    engines: {node: '>=6'}
+    deprecated: Superseded by abstract-level (https://github.com/Level/community#faq)
 
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
@@ -15093,6 +15273,9 @@ packages:
     resolution: {integrity: sha512-FbAj6lXil6t8z4z3j0E5mfRlPzxkySotzUHwRXjlpRh10vc6AI6WN62ehZj82VG7M20rqogJ0GLwar2Xa05a8Q==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
 
+  ltgt@2.2.1:
+    resolution: {integrity: sha512-AI2r85+4MquTw9ZYqabu4nMwy9Oftlfa/e/52t9IjtfG+mGBbTNdAoZ3RQKLHR6r0wQnwZnPIEh/Ya6XTWAKNA==}
+
   lucide-react@0.447.0:
     resolution: {integrity: sha512-SZ//hQmvi+kDKrNepArVkYK7/jfeZ5uFNEnYmd45RKZcbGD78KLnrcNXmgeg6m+xNHFvTG+CblszXCy4n6DN4w==}
     peerDependencies:
@@ -15276,6 +15459,10 @@ packages:
   media-typer@0.3.0:
     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
     engines: {node: '>= 0.6'}
+
+  memdown@1.4.1:
+    resolution: {integrity: sha512-iVrGHZB8i4OQfM155xx8akvG9FIj+ht14DX5CQkCTG4EHzZ3d3sgckIf/Lm9ivZalEsFuEVnWv2B2WZvbrro2w==}
+    deprecated: Superseded by memory-level (https://github.com/Level/community#faq)
 
   memoize-one@5.2.1:
     resolution: {integrity: sha512-zYiwtZUcYyXKo/np96AGZAckk+FWWsUdJ3cHGGmld7+AhvcWmQyGCYUh1hc4Q/pkOhb65dQR/pqCyK0cOaHz4Q==}
@@ -15999,6 +16186,9 @@ packages:
   napi-build-utils@1.0.2:
     resolution: {integrity: sha512-ONmRUqK7zj7DWX0D9ADe03wbwOBZxNAfF20PlGfCWQcD3+/MakShIHrMqx9YwPTfxDdF1zLeL+RGZiR9kGMLdg==}
 
+  napi-macros@2.0.0:
+    resolution: {integrity: sha512-A0xLykHtARfueITVDernsAWdtIMbOJgKgcluwENp3AlsKN/PloyO10HtmoqnFAQAcxPkgZN7wdfPfEd0zNGxbg==}
+
   native-duplexpair@1.0.0:
     resolution: {integrity: sha512-E7QQoM+3jvNtlmyfqRZ0/U75VFgCls+fSkbml2MpgWkWyz3ox8Y58gNhfuziuQYGNNQAbFZJQck55LHCnCK6CA==}
 
@@ -16114,9 +16304,19 @@ packages:
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
     engines: {node: '>=10.5.0'}
+    deprecated: Use your platform's native DOMException instead
 
   node-fetch-native@1.6.6:
     resolution: {integrity: sha512-8Mc2HhqPdlIfedsuZoc3yioPuzp6b+L5jRCRY1QzuWZh2EGJVQrGppC6V6cF0bLdbW0+O2YpqCA25aF/1lvipQ==}
+
+  node-fetch@2.6.9:
+    resolution: {integrity: sha512-DJm/CJkZkRjKKj4Zi4BsKVZh3ValV5IR5s7LVZnW+6YMh0W1BfNA8XSs6DLMGYlId5F3KnA70uu2qepcR08Qqg==}
+    engines: {node: 4.x || >=6.0.0}
+    peerDependencies:
+      encoding: ^0.1.0
+    peerDependenciesMeta:
+      encoding:
+        optional: true
 
   node-fetch@2.7.0:
     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
@@ -16145,6 +16345,10 @@ packages:
 
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
+    hasBin: true
+
+  node-gyp-build@4.1.1:
+    resolution: {integrity: sha512-dSq1xmcPDKPZ2EED2S6zw/b9NKsqzXRE6dVr8TVQnI3FJOTteUMuqF3Qqs6LZg+mLGYJWqQzMbIjMtJqTv87nQ==}
     hasBin: true
 
   node-gyp-build@4.8.4:
@@ -17113,6 +17317,60 @@ packages:
   potpack@1.0.2:
     resolution: {integrity: sha512-choctRBIV9EMT9WGAZHn3V7t0Z2pMQyl0EZE6pFc/6ml3ssw7Dlf/oAOvFwjm1HVsqfQN8GfeFyJ+d8tRzqueQ==}
 
+  pouchdb-abstract-mapreduce@9.0.0:
+    resolution: {integrity: sha512-SnTtqwAEiAa3uxKbc1J7LfiBViwEkKe2xkK92zxyTXPqWBvMnh4UU3GXxx7GrXTM4L9llsQ3lSjpbH4CNqG1Mw==}
+
+  pouchdb-adapter-leveldb-core@9.0.0:
+    resolution: {integrity: sha512-b3ZGPtVXyivGL5SK3AIDG7PrNsZdoDpGFkmTytDTtctkVhxOg71gnXXP+CrupENPqSNG/eGbKW4w+bbMpxy6aA==}
+
+  pouchdb-adapter-memory@9.0.0:
+    resolution: {integrity: sha512-XbCwJ5f5U9dGdkiDikzYjTebdPHuA6Ghylx1Pq0lDe4y6l8R9xhjDSUy56pJ8G2F4Z+8QdB5FBY9EQoFlFSXWQ==}
+
+  pouchdb-adapter-utils@9.0.0:
+    resolution: {integrity: sha512-hmbm4ey0HL0vtoY1tRTPIt2FfYjvMh3DWoGGSxXDTS73qTFQ+Fhhi5I0AnN9PcD2omfKQAVXiYks4kkMvlAHqA==}
+
+  pouchdb-binary-utils@9.0.0:
+    resolution: {integrity: sha512-2OMtgDZi82vqs+zNDE0YiYjOaWkYCUcZJZKK3WkRr+XYRu+2B7umJrnygJFhUwoGedBbHSrlQBLhdNV3F1AX1A==}
+
+  pouchdb-changes-filter@9.0.0:
+    resolution: {integrity: sha512-ig0fo0WLgIjAniFJ19Uw1Y+oxiypqC+Skhd8BCETRVXOhLBzueRwEQR4thffyo0UayYVqldJfSR5wHSDvEVk/A==}
+
+  pouchdb-collate@9.0.0:
+    resolution: {integrity: sha512-TrnEDNZEmIIl+W3xKUO8h+geqVLQ90oZe5ujPkl8myUzpREULWXWQBnV5EzPXVEKDBpJlb8T3I6oy/zdWGQpdA==}
+
+  pouchdb-core@9.0.0:
+    resolution: {integrity: sha512-98SJgs8bqXhr4gMGuOTR8yVeLlMYy797zlOtdlvlXIxIicvocyA8ColhVVhdBXPNOGxT2HwReIMywdIVAgibpg==}
+
+  pouchdb-errors@9.0.0:
+    resolution: {integrity: sha512-961PSMLhW0UqqdJ566g+CdLZ5pkBJRd6l4WWpCDdD0USvE4xYfYGzv43w7nZZBw1k3Xdy092yqPge7yX/tfnyw==}
+
+  pouchdb-fetch@9.0.0:
+    resolution: {integrity: sha512-TbE3cUcAJQrwb9kr44tDP0X+NAbcqgjsTvcL30L4xzBNJeCPTIRjukYX80s154SHJUXBxcWRiPsMmNqpXsjfCA==}
+
+  pouchdb-find@9.0.0:
+    resolution: {integrity: sha512-vvVhq4eEOmSkwSRwf2NBYtdhURB7ryJ7sUI4WDN00GuLUj2g8jAXBJuZIryVgdYt/5S5cfn70iRL6Eow+LFhpA==}
+
+  pouchdb-json@9.0.0:
+    resolution: {integrity: sha512-aI41mYVyI195GXuT1Ys7mLIB/Mvrz11ihoTP6km6hYqVgSuaUxuZcFUozlyTJiZXr7H5kdhNgclhlVnjir4JAA==}
+
+  pouchdb-mapreduce-utils@9.0.0:
+    resolution: {integrity: sha512-Bjh8W6QXqp1j7MKmHhYYp5cYlcQsm5drD8Jd/F+ZlfNt18uiD2SQXWzGM5797+tiW/LszFGb8ttw0uHWjxufCQ==}
+
+  pouchdb-md5@9.0.0:
+    resolution: {integrity: sha512-58xUYBvW3/s+aH0j4uOhhN8yCk0LQ254cxBzI/gbKA9PrfwHpe4zrr0L/ia5ml3A30oH1f8aTnuVMwWDkFcuww==}
+
+  pouchdb-merge@9.0.0:
+    resolution: {integrity: sha512-Xh+TgOZCkGoZpI589btKf/cTiuQ5CsnPl9YpdW4h0cAPusniN6XNsR62F+/HbL9wirI6XTEPHUrk7MsQbk3S3A==}
+
+  pouchdb-selector-core@9.0.0:
+    resolution: {integrity: sha512-ZYHYsdoedwm8j5tYofz+3+uUSK8i+7tRCBb01T0OuqDQb17+w5mzjHF8Ppi160xdPUPaWCo1Un+nLWGJzkmA3g==}
+
+  pouchdb-utils@9.0.0:
+    resolution: {integrity: sha512-xWZE5c+nAslgmLC8JBZbky8AYgdz7pKtv7KTSi6CD2tuQD0WyNKib0YnhZndeE84dksTeZlqlg56RQHsHoB2LQ==}
+
+  pouchdb@9.0.0:
+    resolution: {integrity: sha512-6wjFc/PzwaWz86rmMXoqdBlR/fBSkNoWO1mEJO7RZNS6n3xf+fhhXWAWtws741KpLKx84IkmmJ48tp+fhFzj4A==}
+
   prebuild-install@7.1.2:
     resolution: {integrity: sha512-UnNke3IQb6sgarcZIDU3gbMeTp/9SSU1DAIkil7PrqG1vZlBtY5msYccSKSHDqa3hNg436IXK+SNImReuA1wEQ==}
     engines: {node: '>=10'}
@@ -17278,6 +17536,9 @@ packages:
   prr@1.0.1:
     resolution: {integrity: sha512-yPw4Sng1gWghHQWj0B3ZggWUm4qVbPwPFcRG8KyxiU7J2OHFSoEHKS+EZ3fv5l1t9CyCiop6l/ZYeWbrgoQejw==}
 
+  psl@1.15.0:
+    resolution: {integrity: sha512-JZd3gMVBAVQkSs6HdNZo9Sdo0LNcQeMNP3CozBJb3JYC/QUYZTnKxP+f8oWRX4rHP5EurWxqAHTSwUCjlNKa1w==}
+
   pump@2.0.1:
     resolution: {integrity: sha512-ruPMNRkN3MHP1cWJc9OWr+T/xDP0jhXYCLfJcBuX54hhfIBnaQmAUMfDcG4DM5UMWByBbJY69QSphm3jtDKIkA==}
 
@@ -17323,6 +17584,9 @@ packages:
     resolution: {integrity: sha512-wkvS7mL/JMugcup3/rMitHmd9ecIGd2lhFhK9N3UUQ450h66d1r3Y9nvXzQAW1Lq+wyx61k/1pfKS5KuKiyEbg==}
     engines: {node: '>=0.4.x'}
     deprecated: The querystring API is considered Legacy. new code should use the URLSearchParams API instead.
+
+  querystringify@2.2.0:
+    resolution: {integrity: sha512-FIqgj2EUvTa7R50u0rGsyTftzjYmv/a3hO345bZNrqabNqjtgiDMgmo4mkUjd+nzU5oF3dClKqFIPUKybUyqoQ==}
 
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
@@ -17658,16 +17922,18 @@ packages:
   read-cache@1.0.0:
     resolution: {integrity: sha512-Owdv/Ft7IjOgm/i0xvNDZ1LrRANRfew4b2prF3OWMQLxLfu3bS8FVhCsrSCMK4lR56Y9ya+AThoTpDCTxCmpRA==}
 
+  readable-stream@0.0.4:
+    resolution: {integrity: sha512-azrivNydKRYt7zwLV5wWUK7YzKTWs3q87xSmY6DlHapPrCvaT6ZrukvM5erV+yCSSPmZT8zkSdttOHQpWWm9zw==}
+
+  readable-stream@1.1.14:
+    resolution: {integrity: sha512-+MeVjFf4L44XUkhM1eYbD8fyEsxcV81pqMSR5gblfcLCHfZvbrqy4/qYHE+/R5HoBUT11WV5O08Cr1n3YXkWVQ==}
+
   readable-stream@2.3.8:
     resolution: {integrity: sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==}
 
   readable-stream@3.6.2:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
-
-  readable-stream@4.5.2:
-    resolution: {integrity: sha512-yjavECdqeZ3GLXNgRXgeQEdz9fvDDkNKyHnbHRFtOr7/LcfgBcmct7t/ET+HaCTqfh06OzoAxrkN/IfjJBVe+g==}
-    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   readable-stream@4.7.0:
     resolution: {integrity: sha512-oIGGmcpTLwPga8Bn6/Z75SVaH1z5dUut2ibSyAMVhmUggWpmDn2dapB0n7f8nwaSiRtepAsfJyfXIO5DCVAODg==}
@@ -18428,6 +18694,9 @@ packages:
   space-separated-tokens@2.0.2:
     resolution: {integrity: sha512-PEGlAwrG8yXGXRjW32fGbg66JAlOAwbObuqVoJpv/mRgoWDQfgH1wDPvtzWyUSNAXBGSk8h755YDbbcEy3SH2Q==}
 
+  spark-md5@3.0.2:
+    resolution: {integrity: sha512-wcFzz9cDfbuqe0FZzfi2or1sgyIrsDwmPwfZC4hiNidPdPINjeUwNfv5kldczoEAcjl9Y1L3SM7Uz2PUEQzxQw==}
+
   sparse-bitfield@3.0.3:
     resolution: {integrity: sha512-kvzhi7vqKTfkh0PZU+2D2PIllw2ymqJKujUcyPMd9Y75Nv4nPbGJZXNhxsgdQab2BmlDct1YnfQCguEvHr7VsQ==}
 
@@ -18591,6 +18860,9 @@ packages:
     resolution: {integrity: sha512-UXSH262CSZY1tfu3G3Secr6uGLCFVPMhIqHjlgCUtCCcgihYc/xKs9djMTMUOb2j1mVSeU8EU6NWc/iQKU6Gfg==}
     engines: {node: '>= 0.4'}
 
+  string_decoder@0.10.31:
+    resolution: {integrity: sha512-ev2QzSzWPYmy9GuqfIVildA4OdcGLeFZQrq5ys6RtiuF+RQQiZWr8TZNyAcuVXyQRYfEO+MsoB/1BuQVhOJuoQ==}
+
   string_decoder@1.1.1:
     resolution: {integrity: sha512-n/ShnvDi6FHbbVfviro+WojiFzv+s8MPMHBczVePfUpDJLwoLT0ht1l4YwBCbi8pJAveEEdnkHyPyTP/mzRfwg==}
 
@@ -18699,6 +18971,9 @@ packages:
 
   stylis@4.2.0:
     resolution: {integrity: sha512-Orov6g6BB1sDfYgzWfTHDOxamtX1bE/zo104Dh9e6fqJ3PooipYyfJ0pUmrZO2wAvO8YbEyeFrkV91XTsGMSrw==}
+
+  sublevel-pouchdb@9.0.0:
+    resolution: {integrity: sha512-pX4r8+F7wuts0C81kUJ341h4bl2aRe7qV572FE8X1FMz9VkKlmi2nPD1vfeiOJXz5Y09I4MHjGULAbqvTfQZEQ==}
 
   sucrase@3.35.0:
     resolution: {integrity: sha512-8EbVDiu9iN/nESwxeSxDKe0dunta1GOlHufmSSXxMD2z2/tMZpDMpvXQGsc+ajGo8y2uYUmixaSRUc/QPoQ0GA==}
@@ -18973,6 +19248,9 @@ packages:
   through2@2.0.5:
     resolution: {integrity: sha512-/mrRod8xqpA+IHSLyGCQ2s8SPHiCDEeQJSep1jqLYeEUClOFG2Qsh+4FU6G9VeqpZnGW/Su8LQGc4YKni5rYSQ==}
 
+  through2@3.0.2:
+    resolution: {integrity: sha512-enaDQ4MUyP2W6ZyT6EsMzqBPZaM/avg8iuo+l2d3QCs0J+6RaqkHV/2/lOwDTueBHeJ/2LG9lrLW3d5rWPucuQ==}
+
   through@2.3.8:
     resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
 
@@ -19062,6 +19340,10 @@ packages:
 
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
+    engines: {node: '>=6'}
+
+  tough-cookie@4.1.4:
+    resolution: {integrity: sha512-Loo5UUvLD9ScZ6jh8beX1T6sO1w2/MpCRpEP7V280GKMVUQ0Jzar2U3UJPsrdbziLEMMhu3Ujnq//rhiFuIeag==}
     engines: {node: '>=6'}
 
   tr46@5.0.0:
@@ -19468,6 +19750,10 @@ packages:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
     engines: {node: '>= 4.0.0'}
 
+  universalify@0.2.0:
+    resolution: {integrity: sha512-CJ1QgKmNg3CwvAv/kOFmtnEN05f0D/cn9QntgNOQlQF9dgvVTHj3t+8JPdjqawCHk7V/KA+fbUqzZ9XWhcqPUg==}
+    engines: {node: '>= 4.0.0'}
+
   universalify@1.0.0:
     resolution: {integrity: sha512-rb6X1W158d7pRQBg5gkR8uPaSfiids68LTJQYOtEUhoJUWBdaQHsuT/EUduxXYxcrt4r5PJ4fuHW1MHT6p0qug==}
     engines: {node: '>= 10.0.0'}
@@ -19594,6 +19880,9 @@ packages:
 
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
+
+  url-parse@1.5.10:
+    resolution: {integrity: sha512-WypcfiRhfeUP9vvF0j6rw0J3hrWrw6iZv3+22h6iRMJ/8z1Tj6XfLP4DsUix5MhMPnXpiHDoKyoZ/bdCkwBCiQ==}
 
   urlpattern-polyfill@8.0.2:
     resolution: {integrity: sha512-Qp95D4TPJl1kC9SKigDcqgyM2VDVO4RiJc2d4qe5GrYm+zbIQCWWKAFaJNQ4BhdFeDGwBmAxqJBwWSJDb9T3BQ==}
@@ -20275,6 +20564,9 @@ packages:
       typescript:
         optional: true
 
+  vuvuzela@1.0.3:
+    resolution: {integrity: sha512-Tm7jR1xTzBbPW+6y1tknKiEhz04Wf/1iZkcTJjSFcpNko43+dFW6+OOeQe9taJIug3NdfUAjFKgUSyQrIKaDvQ==}
+
   walker@1.0.8:
     resolution: {integrity: sha512-ts/8E8l5b7kY0vlWLewOkDXMmPdLcVV4GmOQLyxuSswIJsweeFZtAsMF7k1Nszz+TYBQrlYRmzOnr398y1JemQ==}
 
@@ -20450,6 +20742,9 @@ packages:
   write-file-atomic@5.0.1:
     resolution: {integrity: sha512-+QU2zd6OTD8XWIJCbffaiQeH9U73qIqafo1x6V1snCWYGJf6cVE0cDR4D8xRzcEnfI21IFrUPzPGtcPf8AC+Rw==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
+
+  write-stream@0.4.3:
+    resolution: {integrity: sha512-IJrvkhbAnj89W/GAVdVgbnPiVw5Ntg/B4tc/MUCIEwj/g6JIww1DWJyB/yBMT3yw2/TkT6IUZ0+IYef3flEw8A==}
 
   ws@6.2.3:
     resolution: {integrity: sha512-jmTjYU0j60B+vHey6TfR3Z7RD61z/hmxBS3VMSGIrroOWXQEneK1zNuotOUrGyBHQj0yrpsLHPWtigEFd13ndA==}
@@ -32692,6 +32987,101 @@ snapshots:
       pg-protocol: 1.7.0
       pg-types: 4.0.2
 
+  '@types/pouchdb-adapter-cordova-sqlite@1.0.4':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-fruitdown@6.1.6':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-http@6.1.6':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-idb@6.1.7':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-leveldb@6.1.6':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-localstorage@6.1.6':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-memory@6.1.6':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-node-websql@6.1.5':
+    dependencies:
+      '@types/pouchdb-adapter-websql': 6.1.7
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-adapter-websql@6.1.7':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-browser@6.1.5':
+    dependencies:
+      '@types/pouchdb-adapter-http': 6.1.6
+      '@types/pouchdb-adapter-idb': 6.1.7
+      '@types/pouchdb-adapter-websql': 6.1.7
+      '@types/pouchdb-core': 7.0.15
+      '@types/pouchdb-mapreduce': 6.1.10
+      '@types/pouchdb-replication': 6.4.7
+
+  '@types/pouchdb-core@7.0.15':
+    dependencies:
+      '@types/debug': 4.1.12
+      '@types/pouchdb-find': 7.3.3
+
+  '@types/pouchdb-find@7.3.3':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-http@6.1.5':
+    dependencies:
+      '@types/pouchdb-adapter-http': 6.1.6
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-mapreduce@6.1.10':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+
+  '@types/pouchdb-node@6.1.7':
+    dependencies:
+      '@types/pouchdb-adapter-http': 6.1.6
+      '@types/pouchdb-adapter-leveldb': 6.1.6
+      '@types/pouchdb-core': 7.0.15
+      '@types/pouchdb-mapreduce': 6.1.10
+      '@types/pouchdb-replication': 6.4.7
+
+  '@types/pouchdb-replication@6.4.7':
+    dependencies:
+      '@types/pouchdb-core': 7.0.15
+      '@types/pouchdb-find': 7.3.3
+
+  '@types/pouchdb@6.4.2':
+    dependencies:
+      '@types/pouchdb-adapter-cordova-sqlite': 1.0.4
+      '@types/pouchdb-adapter-fruitdown': 6.1.6
+      '@types/pouchdb-adapter-http': 6.1.6
+      '@types/pouchdb-adapter-idb': 6.1.7
+      '@types/pouchdb-adapter-leveldb': 6.1.6
+      '@types/pouchdb-adapter-localstorage': 6.1.6
+      '@types/pouchdb-adapter-memory': 6.1.6
+      '@types/pouchdb-adapter-node-websql': 6.1.5
+      '@types/pouchdb-adapter-websql': 6.1.7
+      '@types/pouchdb-browser': 6.1.5
+      '@types/pouchdb-core': 7.0.15
+      '@types/pouchdb-http': 6.1.5
+      '@types/pouchdb-mapreduce': 6.1.10
+      '@types/pouchdb-node': 6.1.7
+      '@types/pouchdb-replication': 6.4.7
+
   '@types/prismjs@1.26.5': {}
 
   '@types/prompts@2.4.9':
@@ -34130,6 +34520,35 @@ snapshots:
 
   abortcontroller-polyfill@1.7.8: {}
 
+  abstract-leveldown@2.7.2:
+    dependencies:
+      xtend: 4.0.2
+
+  abstract-leveldown@6.2.3:
+    dependencies:
+      buffer: 5.7.1
+      immediate: 3.3.0
+      level-concat-iterator: 2.0.1
+      level-supports: 1.0.1
+      xtend: 4.0.2
+
+  abstract-leveldown@6.3.0:
+    dependencies:
+      buffer: 5.7.1
+      immediate: 3.3.0
+      level-concat-iterator: 2.0.1
+      level-supports: 1.0.1
+      xtend: 4.0.2
+
+  abstract-leveldown@7.2.0:
+    dependencies:
+      buffer: 6.0.3
+      catering: 2.1.1
+      is-buffer: 2.0.5
+      level-concat-iterator: 3.1.0
+      level-supports: 2.1.0
+      queue-microtask: 1.2.3
+
   accepts@1.3.8:
     dependencies:
       mime-types: 2.1.35
@@ -34968,7 +35387,7 @@ snapshots:
       '@types/readable-stream': 4.0.18
       buffer: 6.0.3
       inherits: 2.0.4
-      readable-stream: 4.5.2
+      readable-stream: 4.7.0
 
   blake3-wasm@2.1.5: {}
 
@@ -35282,6 +35701,8 @@ snapshots:
   caniuse-lite@1.0.30001707: {}
 
   canvas-confetti@1.9.3: {}
+
+  catering@2.1.1: {}
 
   ccount@2.0.1: {}
 
@@ -36258,6 +36679,11 @@ snapshots:
 
   defer-to-connect@2.0.1: {}
 
+  deferred-leveldown@5.3.0:
+    dependencies:
+      abstract-leveldown: 6.2.3
+      inherits: 2.0.4
+
   define-data-property@1.1.4:
     dependencies:
       es-define-property: 1.0.0
@@ -36414,6 +36840,8 @@ snapshots:
   dotenv@16.4.7: {}
 
   dotenv@7.0.0: {}
+
+  double-ended-queue@2.1.0-0: {}
 
   drizzle-kit@0.30.5:
     dependencies:
@@ -36589,6 +37017,13 @@ snapshots:
 
   encodeurl@2.0.0: {}
 
+  encoding-down@6.3.0:
+    dependencies:
+      abstract-leveldown: 6.3.0
+      inherits: 2.0.4
+      level-codec: 9.0.2
+      level-errors: 2.0.1
+
   encoding@0.1.13:
     dependencies:
       iconv-lite: 0.6.3
@@ -36597,6 +37032,10 @@ snapshots:
   end-of-stream@1.4.4:
     dependencies:
       once: 1.4.0
+
+  end-stream@0.1.0:
+    dependencies:
+      write-stream: 0.4.3
 
   enhanced-resolve@5.17.1:
     dependencies:
@@ -36629,7 +37068,6 @@ snapshots:
   errno@0.1.8:
     dependencies:
       prr: 1.0.1
-    optional: true
 
   error-ex@1.3.2:
     dependencies:
@@ -38052,6 +38490,11 @@ snapshots:
       node-domexception: 1.0.0
       web-streams-polyfill: 3.3.3
 
+  fetch-cookie@2.2.0:
+    dependencies:
+      set-cookie-parser: 2.7.1
+      tough-cookie: 4.1.4
+
   fetch-retry@4.1.1: {}
 
   fflate@0.8.1: {}
@@ -38406,6 +38849,8 @@ snapshots:
       functions-have-names: 1.2.3
       hasown: 2.0.2
       is-callable: 1.2.7
+
+  functional-red-black-tree@1.0.1: {}
 
   functions-have-names@1.2.3: {}
 
@@ -39125,6 +39570,8 @@ snapshots:
 
   image-size@2.0.0: {}
 
+  immediate@3.3.0: {}
+
   immutable@5.0.3: {}
 
   import-fresh@2.0.0:
@@ -39553,6 +40000,8 @@ snapshots:
   is64bit@2.0.0:
     dependencies:
       system-architecture: 0.1.0
+
+  isarray@0.0.1: {}
 
   isarray@1.0.0: {}
 
@@ -40052,6 +40501,74 @@ snapshots:
       needle: 3.3.1
       source-map: 0.6.1
 
+  level-codec@9.0.2:
+    dependencies:
+      buffer: 5.7.1
+
+  level-concat-iterator@2.0.1: {}
+
+  level-concat-iterator@3.1.0:
+    dependencies:
+      catering: 2.1.1
+
+  level-errors@2.0.1:
+    dependencies:
+      errno: 0.1.8
+
+  level-iterator-stream@4.0.2:
+    dependencies:
+      inherits: 2.0.4
+      readable-stream: 3.6.2
+      xtend: 4.0.2
+
+  level-js@5.0.2:
+    dependencies:
+      abstract-leveldown: 6.2.3
+      buffer: 5.7.1
+      inherits: 2.0.4
+      ltgt: 2.2.1
+
+  level-packager@5.1.1:
+    dependencies:
+      encoding-down: 6.3.0
+      levelup: 4.4.0
+
+  level-supports@1.0.1:
+    dependencies:
+      xtend: 4.0.2
+
+  level-supports@2.1.0: {}
+
+  level-write-stream@1.0.0:
+    dependencies:
+      end-stream: 0.1.0
+
+  level@6.0.1:
+    dependencies:
+      level-js: 5.0.2
+      level-packager: 5.1.1
+      leveldown: 5.6.0
+
+  leveldown@5.6.0:
+    dependencies:
+      abstract-leveldown: 6.2.3
+      napi-macros: 2.0.0
+      node-gyp-build: 4.1.1
+
+  leveldown@6.1.1:
+    dependencies:
+      abstract-leveldown: 7.2.0
+      napi-macros: 2.0.0
+      node-gyp-build: 4.8.4
+
+  levelup@4.4.0:
+    dependencies:
+      deferred-leveldown: 5.3.0
+      level-errors: 2.0.1
+      level-iterator-stream: 4.0.2
+      level-supports: 1.0.1
+      xtend: 4.0.2
+
   leven@3.1.0: {}
 
   levn@0.4.1:
@@ -40425,6 +40942,8 @@ snapshots:
   lru-cache@7.18.3: {}
 
   lru.min@1.1.1: {}
+
+  ltgt@2.2.1: {}
 
   lucide-react@0.447.0(react@18.3.1):
     dependencies:
@@ -40808,6 +41327,15 @@ snapshots:
       '@babel/runtime': 7.26.9
 
   media-typer@0.3.0: {}
+
+  memdown@1.4.1:
+    dependencies:
+      abstract-leveldown: 2.7.2
+      functional-red-black-tree: 1.0.1
+      immediate: 3.3.0
+      inherits: 2.0.4
+      ltgt: 2.2.1
+      safe-buffer: 5.1.2
 
   memoize-one@5.2.1: {}
 
@@ -42057,6 +42585,8 @@ snapshots:
 
   napi-build-utils@1.0.2: {}
 
+  napi-macros@2.0.0: {}
+
   native-duplexpair@1.0.0: {}
 
   nativewind@4.1.23(n43ynox5hzamhj5rua2vyprucm):
@@ -42396,6 +42926,12 @@ snapshots:
 
   node-fetch-native@1.6.6: {}
 
+  node-fetch@2.6.9(encoding@0.1.13):
+    dependencies:
+      whatwg-url: 14.1.1
+    optionalDependencies:
+      encoding: 0.1.13
+
   node-fetch@2.7.0(encoding@0.1.13):
     dependencies:
       whatwg-url: 14.1.1
@@ -42418,6 +42954,8 @@ snapshots:
     dependencies:
       detect-libc: 2.0.3
     optional: true
+
+  node-gyp-build@4.1.1: {}
 
   node-gyp-build@4.8.4: {}
 
@@ -43799,6 +44337,139 @@ snapshots:
 
   potpack@1.0.2: {}
 
+  pouchdb-abstract-mapreduce@9.0.0(encoding@0.1.13):
+    dependencies:
+      pouchdb-binary-utils: 9.0.0
+      pouchdb-collate: 9.0.0
+      pouchdb-errors: 9.0.0
+      pouchdb-fetch: 9.0.0(encoding@0.1.13)
+      pouchdb-mapreduce-utils: 9.0.0
+      pouchdb-md5: 9.0.0
+      pouchdb-utils: 9.0.0
+    transitivePeerDependencies:
+      - encoding
+
+  pouchdb-adapter-leveldb-core@9.0.0(encoding@0.1.13):
+    dependencies:
+      double-ended-queue: 2.1.0-0
+      levelup: 4.4.0
+      pouchdb-adapter-utils: 9.0.0
+      pouchdb-binary-utils: 9.0.0
+      pouchdb-core: 9.0.0(encoding@0.1.13)
+      pouchdb-errors: 9.0.0
+      pouchdb-json: 9.0.0
+      pouchdb-md5: 9.0.0
+      pouchdb-merge: 9.0.0
+      pouchdb-utils: 9.0.0
+      sublevel-pouchdb: 9.0.0
+      through2: 3.0.2
+    transitivePeerDependencies:
+      - encoding
+
+  pouchdb-adapter-memory@9.0.0(encoding@0.1.13):
+    dependencies:
+      memdown: 1.4.1
+      pouchdb-adapter-leveldb-core: 9.0.0(encoding@0.1.13)
+    transitivePeerDependencies:
+      - encoding
+
+  pouchdb-adapter-utils@9.0.0:
+    dependencies:
+      pouchdb-binary-utils: 9.0.0
+      pouchdb-errors: 9.0.0
+      pouchdb-md5: 9.0.0
+      pouchdb-merge: 9.0.0
+      pouchdb-utils: 9.0.0
+
+  pouchdb-binary-utils@9.0.0: {}
+
+  pouchdb-changes-filter@9.0.0:
+    dependencies:
+      pouchdb-errors: 9.0.0
+      pouchdb-selector-core: 9.0.0
+      pouchdb-utils: 9.0.0
+
+  pouchdb-collate@9.0.0: {}
+
+  pouchdb-core@9.0.0(encoding@0.1.13):
+    dependencies:
+      pouchdb-changes-filter: 9.0.0
+      pouchdb-errors: 9.0.0
+      pouchdb-fetch: 9.0.0(encoding@0.1.13)
+      pouchdb-merge: 9.0.0
+      pouchdb-utils: 9.0.0
+      uuid: 8.3.2
+    transitivePeerDependencies:
+      - encoding
+
+  pouchdb-errors@9.0.0: {}
+
+  pouchdb-fetch@9.0.0(encoding@0.1.13):
+    dependencies:
+      fetch-cookie: 2.2.0
+      node-fetch: 2.6.9(encoding@0.1.13)
+    transitivePeerDependencies:
+      - encoding
+
+  pouchdb-find@9.0.0(encoding@0.1.13):
+    dependencies:
+      pouchdb-abstract-mapreduce: 9.0.0(encoding@0.1.13)
+      pouchdb-collate: 9.0.0
+      pouchdb-errors: 9.0.0
+      pouchdb-fetch: 9.0.0(encoding@0.1.13)
+      pouchdb-md5: 9.0.0
+      pouchdb-selector-core: 9.0.0
+      pouchdb-utils: 9.0.0
+    transitivePeerDependencies:
+      - encoding
+
+  pouchdb-json@9.0.0:
+    dependencies:
+      vuvuzela: 1.0.3
+
+  pouchdb-mapreduce-utils@9.0.0:
+    dependencies:
+      pouchdb-utils: 9.0.0
+
+  pouchdb-md5@9.0.0:
+    dependencies:
+      pouchdb-binary-utils: 9.0.0
+      spark-md5: 3.0.2
+
+  pouchdb-merge@9.0.0:
+    dependencies:
+      pouchdb-utils: 9.0.0
+
+  pouchdb-selector-core@9.0.0:
+    dependencies:
+      pouchdb-collate: 9.0.0
+      pouchdb-utils: 9.0.0
+
+  pouchdb-utils@9.0.0:
+    dependencies:
+      pouchdb-errors: 9.0.0
+      pouchdb-md5: 9.0.0
+      uuid: 8.3.2
+
+  pouchdb@9.0.0(encoding@0.1.13):
+    dependencies:
+      double-ended-queue: 2.1.0-0
+      fetch-cookie: 2.2.0
+      level: 6.0.1
+      level-codec: 9.0.2
+      level-write-stream: 1.0.0
+      leveldown: 6.1.1
+      levelup: 4.4.0
+      ltgt: 2.2.1
+      node-fetch: 2.6.9(encoding@0.1.13)
+      readable-stream: 1.1.14
+      spark-md5: 3.0.2
+      through2: 3.0.2
+      uuid: 8.3.2
+      vuvuzela: 1.0.3
+    transitivePeerDependencies:
+      - encoding
+
   prebuild-install@7.1.2:
     dependencies:
       detect-libc: 2.0.3
@@ -43948,8 +44619,11 @@ snapshots:
     dependencies:
       proxy-compare: 3.0.1
 
-  prr@1.0.1:
-    optional: true
+  prr@1.0.1: {}
+
+  psl@1.15.0:
+    dependencies:
+      punycode: 2.3.1
 
   pump@2.0.1:
     dependencies:
@@ -43996,6 +44670,8 @@ snapshots:
       strict-uri-encode: 2.0.0
 
   querystring@0.2.1: {}
+
+  querystringify@2.2.0: {}
 
   queue-microtask@1.2.3: {}
 
@@ -44644,6 +45320,15 @@ snapshots:
     dependencies:
       pify: 2.3.0
 
+  readable-stream@0.0.4: {}
+
+  readable-stream@1.1.14:
+    dependencies:
+      core-util-is: 1.0.3
+      inherits: 2.0.4
+      isarray: 0.0.1
+      string_decoder: 0.10.31
+
   readable-stream@2.3.8:
     dependencies:
       core-util-is: 1.0.3
@@ -44659,14 +45344,6 @@ snapshots:
       inherits: 2.0.4
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
-
-  readable-stream@4.5.2:
-    dependencies:
-      abort-controller: 3.0.0
-      buffer: 6.0.3
-      events: 3.3.0
-      process: 0.11.10
-      string_decoder: 1.3.0
 
   readable-stream@4.7.0:
     dependencies:
@@ -45741,6 +46418,8 @@ snapshots:
 
   space-separated-tokens@2.0.2: {}
 
+  spark-md5@3.0.2: {}
+
   sparse-bitfield@3.0.3:
     dependencies:
       memory-pager: 1.5.0
@@ -45916,6 +46595,8 @@ snapshots:
       define-properties: 1.2.1
       es-object-atoms: 1.0.0
 
+  string_decoder@0.10.31: {}
+
   string_decoder@1.1.1:
     dependencies:
       safe-buffer: 5.1.2
@@ -46021,6 +46702,12 @@ snapshots:
   styleq@0.1.3: {}
 
   stylis@4.2.0: {}
+
+  sublevel-pouchdb@9.0.0:
+    dependencies:
+      level-codec: 9.0.2
+      ltgt: 2.2.1
+      readable-stream: 1.1.14
 
   sucrase@3.35.0:
     dependencies:
@@ -46484,6 +47171,11 @@ snapshots:
       readable-stream: 2.3.8
       xtend: 4.0.2
 
+  through2@3.0.2:
+    dependencies:
+      inherits: 2.0.4
+      readable-stream: 3.6.2
+
   through@2.3.8: {}
 
   timsort@0.3.0: {}
@@ -46548,6 +47240,13 @@ snapshots:
     optional: true
 
   totalist@3.0.1: {}
+
+  tough-cookie@4.1.4:
+    dependencies:
+      psl: 1.15.0
+      punycode: 2.3.1
+      universalify: 0.2.0
+      url-parse: 1.5.10
 
   tr46@5.0.0:
     dependencies:
@@ -47025,6 +47724,8 @@ snapshots:
 
   universalify@0.1.2: {}
 
+  universalify@0.2.0: {}
+
   universalify@1.0.0: {}
 
   universalify@2.0.1: {}
@@ -47159,6 +47860,11 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
+
+  url-parse@1.5.10:
+    dependencies:
+      querystringify: 2.2.0
+      requires-port: 1.0.0
 
   urlpattern-polyfill@8.0.2: {}
 
@@ -48198,6 +48904,8 @@ snapshots:
     optionalDependencies:
       typescript: 5.8.2
 
+  vuvuzela@1.0.3: {}
+
   walker@1.0.8:
     dependencies:
       makeerror: 1.0.12
@@ -48416,6 +49124,10 @@ snapshots:
     dependencies:
       imurmurhash: 0.1.4
       signal-exit: 4.1.0
+
+  write-stream@0.4.3:
+    dependencies:
+      readable-stream: 0.0.4
 
   ws@6.2.3:
     dependencies:

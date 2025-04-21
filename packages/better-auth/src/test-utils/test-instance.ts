@@ -16,6 +16,13 @@ import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
+import PouchDB from "pouchdb";
+import PouchDBMemory from "pouchdb-adapter-memory";
+import PouchDBFind from "pouchdb-find";
+import { pouchdbAdapter } from "../adapters/pouchdb-adapter";
+
+PouchDB.plugin(PouchDBMemory);
+PouchDB.plugin(PouchDBFind);
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -27,7 +34,7 @@ export async function getTestInstance<
 		port?: number;
 		disableTestUser?: boolean;
 		testUser?: Partial<User>;
-		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql" | "pouchdb";
 	},
 ) {
 	const testWith = config?.testWith || "sqlite";
@@ -63,6 +70,15 @@ export async function getTestInstance<
 		return db;
 	}
 
+	async function pouchdbClient() {
+		const dbClient = async (dbName: string) => {
+			const db = new PouchDB(dbName, {adapter: 'memory'});
+			return db;
+		};
+		const db = await dbClient("better-auth");
+		return db;
+	}
+
 	const opts = {
 		socialProviders: {
 			github: {
@@ -80,9 +96,11 @@ export async function getTestInstance<
 				? { db: postgres, type: "postgres" }
 				: testWith === "mongodb"
 					? mongodbAdapter(await mongodbClient())
-					: testWith === "mysql"
-						? { db: mysql, type: "mysql" }
-						: new Database(dbName),
+					: testWith === "pouchdb"
+						? pouchdbAdapter(await pouchdbClient())
+						: testWith === "mysql"
+							? { db: mysql, type: "mysql" }
+							: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -121,7 +139,7 @@ export async function getTestInstance<
 		});
 	}
 
-	if (testWith !== "mongodb") {
+	if (testWith !== "mongodb" && testWith !== "pouchdb") {
 		const { runMigrations } = await getMigrations({
 			...auth.options,
 			database: opts.database,
@@ -135,6 +153,11 @@ export async function getTestInstance<
 		if (testWith === "mongodb") {
 			const db = await mongodbClient();
 			await db.dropDatabase();
+			return;
+		}
+		if (testWith === "pouchdb") {
+			const db = await pouchdbClient();
+			await db.destroy();
 			return;
 		}
 		if (testWith === "postgres") {
