@@ -114,11 +114,20 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 								if (aValue === "0" && bValue === "1") return -1;
 								return 0;
 							} else if (fieldAttributes.type === "date") {
-								const aDate = new Date(aValue);
-								const bDate = new Date(bValue);
-								return sortBy.direction === "desc"
-									? bDate.getTime() - aDate.getTime()
-									: aDate.getTime() - bDate.getTime();
+								try {
+									const aDate = new Date(aValue);
+									const bDate = new Date(bValue);
+									return sortBy.direction === "desc"
+										? bDate.getTime() - aDate.getTime()
+										: aDate.getTime() - bDate.getTime();
+								} catch (error) {
+									debugLog(
+										`Error sorting date field ${sortBy.field} for key ${a.key}: (Could it be that a date is invalid?)`,
+										error,
+									);
+
+									return 0;
+								}
 							} else {
 								return 0;
 							}

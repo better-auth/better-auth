@@ -1,4 +1,4 @@
-import { beforeAll, describe } from "vitest";
+import { afterAll, beforeAll, describe } from "vitest";
 import { redisAdapter } from "..";
 import Redis from "ioredis";
 import { runAdapterTest } from "../../test";
@@ -12,6 +12,9 @@ describe("Adapter tests", async () => {
 	beforeAll(async () => {
 		await clearAll();
 	});
+	afterAll(async () => {
+		await redis.quit();
+	})
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return redisAdapter(redis, {
