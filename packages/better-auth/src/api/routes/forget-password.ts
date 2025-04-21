@@ -97,9 +97,9 @@ export const forgetPassword = createAuthEndpoint(
 		});
 		if (!user) {
 			ctx.context.logger.error("Reset Password: User not found", { email });
-			return ctx.json({
-				status: true,
-			});
+			throw new APIError('INVALID_EMAIL', {
+				message: "User not found",
+			})
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
 		const expiresAt = getDate(
