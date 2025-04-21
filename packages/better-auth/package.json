@@ -275,6 +275,16 @@
         "default": "./dist/adapters/memory-adapter/index.cjs"
       }
     },
+    "./adapters/redis": {
+      "import": {
+        "types": "./dist/adapters/redis-adapter/index.d.ts",
+        "default": "./dist/adapters/redis-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/redis-adapter/index.d.cts",
+        "default": "./dist/adapters/redis-adapter/index.cjs"
+      }
+    },
     "./adapters/test": {
       "import": {
         "types": "./dist/adapters/test.d.ts",
@@ -587,6 +597,9 @@
       "adapters/mongodb": [
         "./dist/adapters/mongodb-adapter/index.d.ts"
       ],
+      "adapters/redis": [
+        "./dist/adapters/redis-adapter/index.d.ts"
+      ],
       "adapters/memory": [
         "./dist/adapters/memory-adapter/index.d.ts"
       ],
@@ -682,6 +695,7 @@
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
+    "ioredis": "^5.6.1",
     "listhen": "^1.9.0",
     "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
