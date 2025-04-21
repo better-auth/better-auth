@@ -1,0 +1,44 @@
+---
+title: PouchDB Adapter (Beta)
+description: Integrate Better Auth with PouchDB for offline-first applications.
+---
+
+CouchDB is a NoSQL database that is widely used for building scalable and flexible applications. It provides a flexible schema that allows for easy data modeling and querying.
+Read more here: [CouchDB](https://couchdb.apache.org/).
+
+PouchDB is a JavaScript database that can run in the browser or in Node.js, making it perfect for offline-first applications.
+It's designed to sync with CouchDB and compatible servers, enabling you to build applications that work offline and sync when online.
+Read more here: [PouchDB](https://pouchdb.com/).
+
+:::warning
+This adapter is currently in beta. While it's functional and passes all tests, the API and implementation details might change in future releases.
+:::
+
+## Example Usage
+
+Make sure you have PouchDB installed and configured.
+Then, you can use the PouchDB adapter.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import PouchDB from "pouchdb";
+import PouchDBFind from "pouchdb-find";
+import PouchDBMemory from "pouchdb-adapter-memory";
+
+import { pouchdbAdapter } from "better-auth/adapters/pouchdb";
+
+PouchDB.plugin(PouchDBMemory); // change pouchdb to an appropriate adapter or use a remote instance
+PouchDB.plugin(PouchDBFind);
+
+const db = new PouchDB("better-auth");
+// remote instance
+// const db = new PouchDB("http://localhost:5984/better-auth");
+
+export const auth = betterAuth({
+  database: pouchdbAdapter(db),
+});
+```
+
+## Schema generation & migration
+
+For PouchDB, we don't need to generate or migrate the schema.
