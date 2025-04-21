@@ -56,6 +56,7 @@ export default defineBuildConfig({
 		"@babel/parser",
 		"punycode",
 		"csstype",
+		"ioredis",
 	],
 	entries: [
 		"./src/index.ts",
