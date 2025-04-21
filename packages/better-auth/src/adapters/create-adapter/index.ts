@@ -479,7 +479,7 @@ export const createAdapter =
 					) {
 						newValue = Number(newValue);
 					}
-					
+
 					if (config.customTransformOutput) {
 						newValue = config.customTransformOutput({
 							data: newValue,
