@@ -1,83 +1,13 @@
 import type { Redis } from "ioredis";
 import type { CleanedWhere } from "../create-adapter";
-import type { FieldType } from "../../db";
-import { logger } from "../../utils";
 
 export async function filterFirstKey(
 	redis: Redis,
 	modelName: string,
 	where: CleanedWhere[],
 ): Promise<string | null> {
-	const pattern = `${modelName}:*`;
-	let cursor = "0";
-
-	do {
-		const [newCursor, keys] = await redis.scan(cursor, "MATCH", pattern);
-		cursor = newCursor;
-
-		for (const key of keys) {
-			let match = true;
-			for (const condition of where) {
-				const { field, operator, value } = condition;
-				const item = await redis.hget(key, field);
-
-				if (!item) {
-					match = false;
-					break;
-				}
-
-				let conditionMatch = false;
-
-				switch (operator) {
-					case "eq":
-						conditionMatch = item === String(value);
-						break;
-					case "ne":
-						conditionMatch = item !== String(value);
-						break;
-					case "lt":
-						conditionMatch = Number(item) < Number(value);
-						break;
-					case "lte":
-						conditionMatch = Number(item) <= Number(value);
-						break;
-					case "gt":
-						conditionMatch = Number(item) > Number(value);
-						break;
-					case "gte":
-						conditionMatch = Number(item) >= Number(value);
-						break;
-					case "in":
-						if (Array.isArray(value)) {
-							conditionMatch = value.map(String).includes(item);
-						}
-						break;
-					case "contains":
-						conditionMatch = item.includes(String(value));
-						break;
-					case "starts_with":
-						conditionMatch = item.startsWith(String(value));
-						break;
-					case "ends_with":
-						conditionMatch = item.endsWith(String(value));
-						break;
-					default:
-						conditionMatch = true; // or false if no operator means no match
-				}
-
-				if (!conditionMatch) {
-					match = false;
-					break;
-				}
-			}
-
-			if (match) {
-				return key; // Found a match, return the key immediately
-			}
-		}
-	} while (cursor !== "0");
-
-	return null; // No match found
+	const keys = await filterKeys(redis, modelName, where);
+	return keys.length > 0 ? keys[0] : null;
 }
 export async function getAll(
 	redis: Redis,
@@ -168,8 +98,6 @@ export async function filterKeys(
 				case "ends_with":
 					conditionMatch = item.endsWith(String(value));
 					break;
-				default:
-					conditionMatch = true; // or false if no operator means no match
 			}
 			if (!conditionMatch) {
 				match = false;
