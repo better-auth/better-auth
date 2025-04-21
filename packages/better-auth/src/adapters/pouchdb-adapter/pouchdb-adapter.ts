@@ -261,11 +261,8 @@ export const pouchdbAdapter = (db: PouchDB.Database) => (options: BetterAuthOpti
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
 
-
 			const result = await db.find(await createQuery({model, where, limit, offset, sortBy}));
-			if (sortBy) {
-				console.log("result", JSON.stringify(result, null, 2));
-			}
+
 			const res = result.docs.map((r) => transform.transformOutput(r, model));
 			return res;
 		},
