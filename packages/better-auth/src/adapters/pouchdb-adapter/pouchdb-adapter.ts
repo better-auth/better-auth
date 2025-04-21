@@ -1,8 +1,7 @@
-import { skip } from "node:test";
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { withApplyDefault } from "../utils";
-
+import type PouchDB from "pouchdb";
 const createTransform = (options: BetterAuthOptions) => {
 	const schema = getAuthTables(options);
 	/**

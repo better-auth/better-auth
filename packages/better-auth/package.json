@@ -264,6 +264,16 @@
         "default": "./dist/adapters/mongodb-adapter/index.cjs"
       }
     },
+    "./adapters/pouchdb": {
+      "import": {
+        "types": "./dist/adapters/pouchdb-adapter/index.d.ts",
+        "default": "./dist/adapters/pouchdb-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/pouchdb-adapter/index.d.cts",
+        "default": "./dist/adapters/pouchdb-adapter/index.cjs"
+      }
+    },
     "./adapters/memory": {
       "import": {
         "types": "./dist/adapters/memory-adapter/index.d.ts",
@@ -585,6 +595,9 @@
       ],
       "adapters/mongodb": [
         "./dist/adapters/mongodb-adapter/index.d.ts"
+      ],
+      "adapters/pouchdb": [
+        "./dist/adapters/pouchdb-adapter/index.d.ts"
       ],
       "adapters/memory": [
         "./dist/adapters/memory-adapter/index.d.ts"

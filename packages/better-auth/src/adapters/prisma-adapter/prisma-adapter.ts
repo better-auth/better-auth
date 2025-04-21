@@ -12,7 +12,8 @@ export interface PrismaConfig {
 		| "mysql"
 		| "postgresql"
 		| "sqlserver"
-		| "mongodb";
+		| "mongodb"
+		| "pouchdb";
 
 	/**
 	 * Enable debug logs for the adapter
