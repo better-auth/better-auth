@@ -38,7 +38,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 						throw new Error("ID is missing during adapter create method.");
 					}
 					const key = `${model}:${data.id}`;
-					debugLog({ method: "create", key });
+					debugLog({ method: "create" }, { key });
 					try {
 						// Use hmset to store data as a hash
 						const result = await redis.hmset(key, data);
@@ -55,17 +55,17 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 				},
 				async count({ model, where }) {
 					const keys = await findWithWhere(redis, model, where);
-					debugLog({ method: "count", keys });
+					debugLog({ method: "count" }, { keys });
 					return keys.length;
 				},
 				async findOne({ model, where }) {
 					const keys = await findOneWithWhere(redis, model, where);
-					debugLog({ method: "findOne", keys });
+					debugLog({ method: "findOne" }, { keys });
 					return keys as any;
 				},
 				async findMany({ model, where, limit, sortBy, offset }) {
 					let matchingKeys = await filterKeys(redis, model, where);
-					debugLog({ method: "findMany", matchingKeys });
+					debugLog({ method: "findMany" }, { matchingKeys });
 					// Sort the keys (using asynchronous compare function)
 					if (sortBy) {
 						const fieldAttributes = getFieldAttributes({
@@ -161,7 +161,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 					// Find the key to update
 					const matchingKey = await filterFirstKey(redis, model, where);
 
-					debugLog({ method: "update", matchingKey });
+					debugLog({ method: "update" }, { matchingKey });
 
 					if (!matchingKey) {
 						return null; // No matching record found
@@ -176,7 +176,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 						}
 					}
 
-					debugLog({ method: "update", updateData });
+					debugLog({ method: "update" }, { updateData });
 
 					// Update the record in Redis
 					await redis.hmset(matchingKey, updateData);
@@ -189,13 +189,13 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 				},
 				async delete({ model, where }) {
 					const matchingKey = await filterFirstKey(redis, model, where);
-					debugLog({ method: "delete", matchingKey });
+					debugLog({ method: "delete" }, { matchingKey });
 					if (!matchingKey) return;
 					await redis.del(matchingKey);
 				},
 				async deleteMany({ model, where }) {
 					const keys = await filterKeys(redis, model, where);
-					debugLog({ method: "deleteMany", keys });
+					debugLog({ method: "deleteMany" }, { keys });
 					await redis.del(keys);
 					return keys.length;
 				},
@@ -203,6 +203,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 					//TODO: vvvv
 					const { model, where, update } = data;
 					const keys = await filterKeys(redis, model, where);
+					debugLog({ method: "updateMany" }, { keys });
 					for (const key of keys) {
 						const currentData = await redis.hgetall(key);
 						await redis.hmset(key, update);
