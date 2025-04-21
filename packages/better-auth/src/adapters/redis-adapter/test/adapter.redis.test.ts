@@ -14,7 +14,7 @@ describe("Adapter tests", async () => {
 	});
 	afterAll(async () => {
 		await redis.quit();
-	})
+	});
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return redisAdapter(redis, {
