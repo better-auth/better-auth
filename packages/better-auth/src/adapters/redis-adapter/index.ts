@@ -190,12 +190,13 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 				async delete({ model, where }) {
 					const matchingKey = await filterFirstKey(redis, model, where);
 					debugLog({ method: "delete" }, { matchingKey });
-					if (!matchingKey) return;
+					if (!matchingKey || !matchingKey.length) return;
 					await redis.del(matchingKey);
 				},
 				async deleteMany({ model, where }) {
 					const keys = await filterKeys(redis, model, where);
 					debugLog({ method: "deleteMany" }, { keys });
+					if (!keys || !keys.length) return 0;
 					await redis.del(keys);
 					return keys.length;
 				},
