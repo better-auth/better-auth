@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { FieldAttribute } from ".";
+import { getSchema, type FieldAttribute } from ".";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
@@ -86,19 +86,7 @@ export function parseOutputData<T extends Record<string, any>>(
 }
 
 export function getAllFields(options: BetterAuthOptions, table: string) {
-	let schema: Record<string, FieldAttribute> = {
-		...(table === "user" ? options.user?.additionalFields : {}),
-		...(table === "session" ? options.session?.additionalFields : {}),
-	};
-	for (const plugin of options.plugins || []) {
-		if (plugin.schema && plugin.schema[table]) {
-			schema = {
-				...schema,
-				...plugin.schema[table].fields,
-			};
-		}
-	}
-	return schema;
+	return getSchema(options)[table].fields;
 }
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {
@@ -154,7 +142,11 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key].defaultValue && action === "create") {
-			parsedData[key] = fields[key].defaultValue;
+			if (typeof fields[key].defaultValue === "function") {
+				parsedData[key] = fields[key].defaultValue();
+			} else {
+				parsedData[key] = fields[key].defaultValue;
+			}
 			continue;
 		}
 

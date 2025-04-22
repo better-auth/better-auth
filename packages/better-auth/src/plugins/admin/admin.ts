@@ -16,7 +16,7 @@ import {
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserInput, parseUserOutput } from "../../db/schema";
 import { type AccessControl, type Role } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
@@ -439,6 +439,77 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					return ctx.json({
 						user: user as UserWithRole,
 					});
+				},
+			),
+			adminUpdateUser: createAuthEndpoint(
+				"/admin/update-user",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.coerce.string({
+							description: "The user id",
+						}),
+						data: z.record(z.any(), {
+							description: "The user data to update",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "updateUser",
+							summary: "Update a user",
+							description: "Update a user's details",
+							responses: {
+								200: {
+									description: "User updated",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const canUpdateUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["update"],
+						},
+					});
+					if (!canUpdateUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS,
+							code: "YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS",
+						});
+					}
+					const data = parseUserInput(
+						ctx.context.options,
+						ctx.body.data,
+						"update",
+					);
+
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						ctx.body.userId,
+						data,
+						ctx,
+					);
+
+					return parseUserOutput(
+						ctx.context.options,
+						updatedUser as UserWithRole,
+					);
 				},
 			),
 			listUsers: createAuthEndpoint(
