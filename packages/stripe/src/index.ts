@@ -22,6 +22,7 @@ import type {
 	Customer,
 	InputSubscription,
 	StripeOptions,
+	StripePlan,
 	Subscription,
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
@@ -995,4 +996,4 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type { Subscription };
+export type { Subscription, StripePlan };
