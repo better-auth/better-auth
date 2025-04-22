@@ -574,6 +574,9 @@
       "react-start": [
         "./dist/integrations/react-start.d.ts"
       ],
+      "adapters": [
+        "./dist/adapters/index.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"
       ],
