@@ -129,7 +129,7 @@ describe("generate", async () => {
 				user: {
 					additionalFields: {
 						role: {
-							type: ['admin', 'user'],
+							type: ["admin", "user"],
 							required: true,
 							fieldName: "role",
 						},

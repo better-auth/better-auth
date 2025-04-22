@@ -11,7 +11,9 @@ export function convertToSnakeCase(str: string) {
 }
 
 export function convertToCamelCase(str: string) {
-	return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_,char) => char.toUpperCase());
+	return str
+		.toLowerCase()
+		.replace(/[^a-zA-Z0-9]+(.)/g, (_, char) => char.toUpperCase());
 }
 
 export const generateDrizzleSchema: SchemaGenerator = async ({
@@ -147,7 +149,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
-
 		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
 			modelName,
 		)}", {
@@ -171,9 +172,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						.join(",\n ")}
 				});`;
 		code += `\n${schema}\n`;
-
 	}
-	
 	return {
 		code: code,
 		fileName: filePath,
@@ -210,7 +209,6 @@ function generateImport({
 
 	imports.push(isArray ? (databaseType === "mysql" ? "mysqlEnum" : "") : "");
 	imports.push(isArray ? (databaseType === "pg" ? "pgEnum" : "") : "");
-	
 	return `import { ${imports
 		.map((x) => x.trim())
 		.filter((x) => x !== "")
