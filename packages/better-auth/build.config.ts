@@ -56,6 +56,7 @@ export default defineBuildConfig({
 		"@babel/parser",
 		"punycode",
 		"csstype",
+		"ioredis",
 	],
 	entries: [
 		"./src/index.ts",
@@ -70,6 +71,7 @@ export default defineBuildConfig({
 		"./src/adapters/mongodb-adapter/index.ts",
 		"./src/adapters/kysely-adapter/index.ts",
 		"./src/adapters/memory-adapter/index.ts",
+		"./src/adapters/redis-adapter/index.ts",
 		"./src/adapters/test.ts",
 		"./src/adapters/index.ts",
 		"./src/db/index.ts",
