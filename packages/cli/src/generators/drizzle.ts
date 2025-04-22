@@ -122,7 +122,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				const enumValues = field.type.map((t) => `'${t}'`).join(", ");
 				if (databaseType === "pg") {
 					const enumConstName = convertToCamelCase(name) + "Enum";
-					const pgEnum = `export const ${enumConstName} = pgEnum("${convertToSnakeCase(name)}", [${enumValues}]);`;
+					const pgEnum = `export const ${enumConstName} = pgEnum("${convertToSnakeCase(
+						name,
+					)}", [${enumValues}]);`;
 					code += `\n${pgEnum}\n`;
 
 					return `${enumConstName}('${name}')`;
