@@ -41,7 +41,7 @@ This plugin is currently in beta. We're actively collecting feedback and explori
         Next, install the Stripe SDK on your server:
 
         ```package-install
-        stripe
+        stripe@17.7.0
         ```
     </Step>
     <Step>
@@ -52,7 +52,9 @@ This plugin is currently in beta. We're actively collecting feedback and explori
         import { stripe } from "@better-auth/stripe"
         import Stripe from "stripe"
 
-        const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+        const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+            apiVersion: "2025-02-24.acacia",
+        })
 
         export const auth = betterAuth({
             // ... your existing config
