@@ -13,7 +13,15 @@ import {
 import type { Redis } from "ioredis";
 
 export interface RedisAdapterConfig {
+	/**
+	 * Debug log configuration.
+	 */
 	debugLogs?: AdapterDebugLogs;
+	/**
+	 * If true, the adapter will use plural model names.
+	 * @default false
+	 */
+	usePlural?: boolean;
 }
 
 export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
@@ -23,6 +31,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 			adapterName: "Redis Adapter",
 			debugLogs: config?.debugLogs,
 			supportsNumericIds: false,
+			usePlural: config?.usePlural,
 			supportsArrays: false,
 			supportsJSON: false,
 			supportsDates: false,
