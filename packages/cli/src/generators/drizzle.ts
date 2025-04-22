@@ -111,6 +111,16 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `text('${name}').array()`,
 				},
 			} as const;
+			if (Array.isArray(field.type)) {
+				const enumValues = field.type.map(t => `'${t}'`).join(', ');
+				if (databaseType === 'pg') {
+				  return `text('${name}', { enum: [${enumValues}] })`;
+				} else if (databaseType === 'mysql') {
+				  return `mysqlEnum('${name}', [${enumValues}])`;
+				} else {
+				  return `text('${name}', { enum: [${enumValues}] })`;
+				}
+			  }
 			return typeMap[type][databaseType];
 		}
 
@@ -181,6 +191,7 @@ function generateImport({
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
 	imports.push(databaseType === "mysql" ? "int" : "integer");
+	imports.push(databaseType === "mysql" ? "mysqlEnum" : "");
 
 	return `import { ${imports
 		.map((x) => x.trim())

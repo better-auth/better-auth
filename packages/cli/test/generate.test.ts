@@ -126,6 +126,15 @@ describe("generate", async () => {
 						schema: {},
 					},
 				),
+				user: {
+					additionalFields: {
+						role: {
+							type: ['admin', 'user'],
+							required: true,
+							fieldName: 'role'
+						}
+					}
+				},
 				plugins: [twoFactor(), username()],
 			},
 		});
