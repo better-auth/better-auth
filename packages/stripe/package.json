@@ -14,6 +14,7 @@
   "scripts": {
     "test": "vitest",
     "build": "unbuild",
+    "typecheck": "tsc --noEmit",
     "dev": "unbuild --watch"
   },
   "exports": {

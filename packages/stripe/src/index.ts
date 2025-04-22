@@ -831,10 +831,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
-											stripeSubscription.current_period_end * 1000,
+											stripeSubscription.items.data[0]?.current_period_end *
+												1000,
 										),
 										periodStart: new Date(
-											stripeSubscription.current_period_start * 1000,
+											stripeSubscription.items.data[0]?.current_period_start *
+												1000,
 										),
 										stripeSubscriptionId: stripeSubscription.id,
 										...(stripeSubscription.trial_start &&
