@@ -112,15 +112,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				},
 			} as const;
 			if (Array.isArray(field.type)) {
-				const enumValues = field.type.map(t => `'${t}'`).join(', ');
-				if (databaseType === 'pg') {
-				  return `text('${name}', { enum: [${enumValues}] })`;
-				} else if (databaseType === 'mysql') {
-				  return `mysqlEnum('${name}', [${enumValues}])`;
+				const enumValues = field.type.map((t) => `'${t}'`).join(", ");
+				if (databaseType === "pg") {
+					return `text('${name}', { enum: [${enumValues}] })`;
+				} else if (databaseType === "mysql") {
+					return `mysqlEnum('${name}', [${enumValues}])`;
 				} else {
-				  return `text('${name}', { enum: [${enumValues}] })`;
+					return `text('${name}', { enum: [${enumValues}] })`;
 				}
-			  }
+			}
 			return typeMap[type][databaseType];
 		}
 
