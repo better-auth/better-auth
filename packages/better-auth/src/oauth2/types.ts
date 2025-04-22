@@ -50,6 +50,9 @@ export interface OAuthProvider<
 			email?: string | null;
 			image?: string;
 			emailVerified: boolean;
+			createdAt?: Date;
+			updatedAt?: Date;
+			[key: string]: any;
 		};
 		data: T;
 	} | null>;
