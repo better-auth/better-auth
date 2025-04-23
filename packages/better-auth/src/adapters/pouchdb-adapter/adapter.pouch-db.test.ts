@@ -31,20 +31,6 @@ describe("adapter test", async () => {
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({
-				user: {
-					fields: {
-						email: "email_address",
-					},
-					additionalFields: {
-						test: {
-							type: "string",
-							defaultValue: "test",
-						},
-					},
-				},
-				session: {
-					modelName: "sessions",
-				},
 				...customOptions,
 			});
 		},

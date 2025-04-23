@@ -18,6 +18,12 @@ This adapter is currently in beta. While it's functional and passes all tests, t
 ## Example Usage
 
 Make sure you have PouchDB installed and configured.
+
+```bash
+// install pouchdb and its plugins, note use appropriate adapter for your use case
+npm install pouchdb pouchdb-find pouchdb-adapter-memory
+```
+
 Then, you can use the PouchDB adapter.
 
 ```ts title="auth.ts"
@@ -33,7 +39,7 @@ PouchDB.plugin(PouchDBFind);
 
 const db = new PouchDB("better-auth");
 // remote instance
-// const db = new PouchDB("http://localhost:5984/better-auth");
+// const db = new PouchDB("http://localhost:5984/better-auth", { skip_setup: true, auth: { username: "username", password: "password" } });
 
 export const auth = betterAuth({
   database: pouchdbAdapter(db),
