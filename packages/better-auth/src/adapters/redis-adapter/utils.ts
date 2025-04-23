@@ -1,40 +1,45 @@
-import type { Redis } from "ioredis";
 import type { CleanedWhere } from "../create-adapter";
 import type { FieldAttribute } from "../../db";
+import type { RedisClientType } from "redis";
 
 export async function filterFirstKey(
-	redis: Redis,
+	redis: RedisClientType,
 	modelName: string,
 	where: CleanedWhere[],
 ): Promise<string | null> {
 	const keys = await filterKeys(redis, modelName, where);
 	return keys.length > 0 ? keys[0] : null;
 }
+
 export async function getAll(
-	redis: Redis,
+	redis: RedisClientType,
 	modelName: string,
 	select?: string[],
 ): Promise<Record<string, any>[]> {
 	const pattern = `${modelName}:*`;
-	let cursor = "0";
+	let cursor = 0;
 	const allModels: string[] = [];
+
 	do {
-		const [newCursor, keys] = await redis.scan(cursor, "MATCH", pattern);
-		cursor = newCursor;
-		allModels.push(...keys);
-	} while (cursor !== "0");
+		const res = await redis.scan(cursor, {
+			MATCH: pattern,
+			COUNT: 100,
+		});
+		cursor = Number(res.cursor);
+		allModels.push(...res.keys);
+	} while (cursor !== 0);
 
 	const results: Record<string, any>[] = [];
 	for (const model of allModels) {
 		if (!select?.length) {
-			const data = await redis.hgetall(model);
+			const data = await redis.hGetAll(model);
 			if (data && Object.keys(data).length > 0) {
 				results.push(data);
 			}
 		} else {
 			const data: Record<string, string> = {};
 			for (const key of select) {
-				const value = await redis.hget(model, key);
+				const value = await redis.hGet(model, key);
 				if (value) {
 					data[key] = value;
 				}
@@ -47,19 +52,22 @@ export async function getAll(
 	return results;
 }
 export async function filterKeys(
-	redis: Redis,
+	redis: RedisClientType,
 	modelName: string,
 	where?: CleanedWhere[],
 ): Promise<string[]> {
 	const pattern = `${modelName}:*`;
-	let cursor = "0";
+	let cursor = 0;
 	let allKeys: string[] = [];
 
 	do {
-		const [newCursor, keys] = await redis.scan(cursor, "MATCH", pattern);
-		cursor = newCursor;
-		allKeys = allKeys.concat(keys);
-	} while (cursor !== "0");
+		const res = await redis.scan(cursor, {
+			MATCH: pattern,
+			COUNT: 100,
+		});
+		cursor = Number(res.cursor);
+		allKeys = allKeys.concat(res.keys);
+	} while (cursor !== 0);
 
 	if (!where || where.length === 0) {
 		return allKeys;
@@ -71,7 +79,7 @@ export async function filterKeys(
 		let match = true;
 		for (const condition of where) {
 			const { field, operator, value } = condition;
-			const item = await redis.hget(key, field);
+			const item = await redis.hGet(key, field);
 
 			if (!item) {
 				match = false;
@@ -126,8 +134,9 @@ export async function filterKeys(
 
 	return filteredKeys;
 }
+
 export async function findWithWhere(
-	redis: Redis,
+	redis: RedisClientType,
 	modelName: string,
 	where?: CleanedWhere[],
 	select?: string[],
@@ -142,14 +151,14 @@ export async function findWithWhere(
 	const results: Record<string, any>[] = [];
 	for (const key of matchingKeys) {
 		if (!select?.length) {
-			const data = await redis.hgetall(key);
+			const data = await redis.hGetAll(key);
 			if (data && Object.keys(data).length > 0) {
 				results.push(data);
 			}
 		} else {
 			const data: Record<string, string> = {};
 			for (const field of select) {
-				const value = await redis.hget(key, field);
+				const value = await redis.hGet(key, field);
 				if (value) {
 					data[field] = value;
 				}
@@ -162,8 +171,9 @@ export async function findWithWhere(
 
 	return results;
 }
+
 export async function findOneWithWhere(
-	redis: Redis,
+	redis: RedisClientType,
 	modelName: string,
 	where?: CleanedWhere[],
 	select?: string[],
@@ -179,7 +189,7 @@ export async function findOneWithWhere(
 	// now we return the data
 	// if `select` is not provided, we return the whole data
 	if (!select?.length) {
-		const data = await redis.hgetall(matchingKey);
+		const data = await redis.hGetAll(matchingKey);
 		if (data && Object.keys(data).length > 0) {
 			return data;
 		}
@@ -189,7 +199,7 @@ export async function findOneWithWhere(
 	// if `select` is provided, we return the data with only the selected fields
 	const data: Record<string, string> = {};
 	for (const key of select) {
-		const value = await redis.hget(matchingKey, key);
+		const value = await redis.hGet(matchingKey, key);
 		if (value) {
 			data[key] = value;
 		}
@@ -218,7 +228,7 @@ export async function sort({
 	model: string;
 	matchingKeys: string[];
 	sortBy: { field: string; direction: "asc" | "desc" };
-	redis: Redis;
+	redis: RedisClientType;
 	debugLog: (message: string, ...args: any[]) => void;
 }) {
 	const fieldAttributes = getFieldAttributes({
@@ -229,7 +239,7 @@ export async function sort({
 	// Pre-fetch all field values for sorting
 	const keyFieldPairs = await Promise.all(
 		matchingKeys.map(async (key) => {
-			const value = await redis.hget(key, sortBy.field);
+			const value = await redis.hGet(key, sortBy.field); 
 			return { key, value };
 		}),
 	);
@@ -238,13 +248,13 @@ export async function sort({
 		let aValue = a.value;
 		let bValue = b.value;
 
-		if (aValue === null && bValue === null) {
+		if (aValue === undefined && bValue === undefined) {
 			return 0;
 		}
-		if (aValue === null) {
+		if (aValue === undefined) {
 			return 1;
 		}
-		if (bValue === null) {
+		if (bValue === undefined) {
 			return -1;
 		}
 
