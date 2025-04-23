@@ -14,8 +14,16 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
-				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
+				if (
+					!endpoints.some((endpoint) => {
+						if (typeof endpoint === "function") {
+							return endpoint(request.url);
+						}
+						return request.url.includes(endpoint);
+					})
+				) {
 					return undefined;
+				}
 
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY);
