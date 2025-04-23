@@ -148,10 +148,10 @@ export async function findWithWhere(
 			}
 		} else {
 			const data: Record<string, string> = {};
-			for (const key of select) {
-				const value = await redis.hget(key, key);
+			for (const field of select) {
+				const value = await redis.hget(key, field);
 				if (value) {
-					data[key] = value;
+					data[field] = value;
 				}
 			}
 			if (Object.keys(data).length > 0) {
