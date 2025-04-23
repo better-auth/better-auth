@@ -171,6 +171,20 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * Disable Redirect
 					 */
 					disableRedirect: z.boolean().default(false),
+					/**
+					 * Stripe UI_Mode
+					 * @default "hosted"
+					 */
+					uiMode: z
+						.enum(["custom", "embedded", "hosted"])
+						.default("hosted")
+						.optional(),
+					/**
+					 * Stripe Checkout Create Session Additional Params
+					 */
+					additionalCheckoutSessionParams: z
+						.record(z.string(), z.any())
+						.optional(),
 				}),
 				use: [
 					sessionMiddleware,
@@ -361,6 +375,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						}
 					: undefined;
 
+				const successUrl = getUrl(
+					ctx,
+					`${
+						ctx.context.baseURL
+					}/subscription/success?callbackURL=${encodeURIComponent(
+						ctx.body.successUrl,
+					)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
+				);
+
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
@@ -375,15 +398,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								: {
 										customer_email: session.user.email,
 									}),
-							success_url: getUrl(
-								ctx,
-								`${
-									ctx.context.baseURL
-								}/subscription/success?callbackURL=${encodeURIComponent(
-									ctx.body.successUrl,
-								)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
-							),
-							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+							...(ctx.body.uiMode === "hosted"
+								? {
+										ui_mode: "hosted",
+										success_url: successUrl,
+										cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+									}
+								: {
+										// custom and embedded mode
+										ui_mode: ctx.body.uiMode,
+										// stripe doesn't support success_url/cancel_url for custom and embedded mode
+										return_url: successUrl,
+									}),
 							line_items: [
 								{
 									price: ctx.body.annual
@@ -404,6 +430,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								referenceId,
 								...params?.params?.metadata,
 							},
+							...ctx.body.additionalCheckoutSessionParams,
 						},
 						params?.options,
 					)
