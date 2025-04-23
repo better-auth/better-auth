@@ -545,8 +545,8 @@ class MockSAMLIdP {
 		});
 		this.app.get("/api/sso/saml2/idp/post", async (req, res) => {
 			const samlRequest = req;
-      console.log({samlRequest})	
-      const user = { emailAddress: "test@email.com", famName: "hello world" };
+			console.log({ samlRequest });
+			const user = { emailAddress: "test@email.com", famName: "hello world" };
 			const { context, entityEndpoint } = await this.idp.createLoginResponse(
 				this.sp,
 				null,
@@ -558,8 +558,8 @@ class MockSAMLIdP {
 		});
 		this.app.get("/api/sso/saml2/idp/redirect", async (req, res) => {
 			const samlRequest = req.query;
-		  console.log(samlRequest)	
-      const user = { emailAddress: "test@email.com", famName: "hello world" };
+			console.log(samlRequest);
+			const user = { emailAddress: "test@email.com", famName: "hello world" };
 			const { context, entityEndpoint } = await this.idp.createLoginResponse(
 				this.sp,
 				null,
@@ -591,52 +591,6 @@ class MockSAMLIdP {
 				console.error("Error handling SAML ACS endpoint:", error);
 				res.status(500).send({ error: "Failed to process SAML response." });
 			}
-		});
-		this.app.get("/idp/login", (req, res) => {
-			res.send(`
-        <html>
-          <body>
-            <h1>Mock IdP Login</h1>
-            <form action="/idp/sso" method="POST">
-              <input type="hidden" name="SAMLRequest" value="${
-								req.query.SAMLRequest
-							}">
-              <input type="hidden" name="RelayState" value="${
-								req.query.RelayState || ""
-							}">
-              <button type="submit">Login</button>
-            </form>
-          </body>
-        </html>
-      `);
-		});
-
-		this.app.post("/idp/sso", (req, res) => {
-			const { SAMLRequest, RelayState } = req.body;
-
-			const mockUser = {
-				email: "testuser@example.com",
-				name: "Test User",
-				givenName: "Test",
-				sn: "User",
-				displayName: "Test User",
-				uid: "testuser123",
-			};
-
-			res.send(`
-        <html>
-          <body>
-            <h1>Mock SAML Response</h1>
-            <form action="${
-							RelayState || "http://localhost:3000/api/sso/saml2/sp/acs"
-						}" method="POST">
-              <input type="hidden" name="SAMLResponse" value="mock-saml-response">
-              <input type="hidden" name="RelayState" value="${RelayState || ""}">
-              <button type="submit">Continue to Service Provider</button>
-            </form>
-          </body>
-        </html>
-      `);
 		});
 	}
 
@@ -781,7 +735,7 @@ describe("SAML SSO", async () => {
 				},
 				spMetadata: {
 					metadata: idpMetadata,
-          binding: "post",
+					binding: "post",
 					privateKey: spPrivateKey,
 					privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 					isAssertionEncrypted: true,
@@ -834,8 +788,8 @@ describe("SAML SSO", async () => {
 				},
 				spMetadata: {
 					metadata: spMetadata,
-				  binding: "post",	
-          privateKey: spPrivateKey,
+					binding: "post",
+					privateKey: spPrivateKey,
 					privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 					isAssertionEncrypted: true,
 					encPrivateKey: spEncyptionKey,
@@ -882,8 +836,8 @@ describe("SAML SSO", async () => {
 				},
 				spMetadata: {
 					metadata: idpMetadata,
-          binding: "post",
-          // we can do a mapping of property here
+					binding: "post",
+					// we can do a mapping of property here
 					privateKey: spPrivateKey,
 					privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 					isAssertionEncrypted: true,
@@ -906,7 +860,7 @@ describe("SAML SSO", async () => {
 			url: expect.stringContaining("http://localhost:8081"),
 			samlResponse: expect.any(String),
 		});
-		
+
 		const result = await auth.api.callbackSSOSAML({
 			body: {
 				SAMLResponse: signInResponse.samlResponse,

@@ -168,12 +168,11 @@ export const ssoSAML = (options?: SSOOptions) => {
 							message: "Invalid SAML request",
 						});
 					}
-          const responseResult = await fetch(loginRequest.entityEndpoint)
-          const responseResultValues = await responseResult.json()
-          return ctx.json({
+					const responseResult = await fetch(loginRequest.entityEndpoint);
+					const responseResultValues = await responseResult.json();
+					return ctx.json({
 						url: responseResultValues.entityEndpoint,
-					  samlResponse: responseResultValues.samlResponse,
-            
+						samlResponse: responseResultValues.samlResponse,
 					});
 				},
 			),
@@ -208,7 +207,6 @@ export const ssoSAML = (options?: SSOOptions) => {
 				async (ctx) => {
 					const { SAMLResponse, RelayState } = ctx.body;
 					const { providerId } = ctx.params;
-					console.log({ providerId });
 					const provider = await ctx.context.adapter.findOne<SSOProvider>({
 						model: "ssoProvider",
 						where: [{ field: "providerId", value: providerId }],
@@ -288,7 +286,6 @@ export const ssoSAML = (options?: SSOOptions) => {
 							user.id,
 							ctx.request,
 						);
-          console.log({session,user})
 					await setSessionCookie(ctx, { session, user });
 					return ctx.json({
 						redirect: true,
