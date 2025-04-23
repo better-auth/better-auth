@@ -157,6 +157,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * Success URL Stripe Replaceable Params
 					 * these params will not be encoded when sent to stripe, because they need to be replaced with actual values by stripe
+					 * example: `{ session_id: "{CHECKOUT_SESSION_ID}" }` will be replaced with the actual checkout session id, useful for when following the stripe documentation
 					 */
 					successUrlStripeReplaceableParams: z.record(z.string(), z.any()).optional(),
 					/**
@@ -379,7 +380,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						}
 					: undefined;
 
-				const successUrlReplaceableParams = `${ctx.body.successUrlStripeReplaceableParams ? `${Object.entries(ctx.body.successUrlStripeReplaceableParams).map(([key, value], index) => `${encodeURIComponent((index === 0 ? "?" : "&") + key + "=")}${value}`).join("")}` : ""}`;
+				// Construct URL parameters from replaceable params object
+				// These params will be passed directly to Stripe without encoding
+				let successUrlReplaceableParams = "";
+				
+				if (ctx.body.successUrlStripeReplaceableParams) {
+					const paramEntries = Object.entries(ctx.body.successUrlStripeReplaceableParams);
+					
+					successUrlReplaceableParams = paramEntries.map(([key, value], index) => {
+						const prefix = index === 0 ? "?" : "&";
+						const paramKey = encodeURIComponent(`${prefix}${key}=`);
+						return `${paramKey}${value}`;
+					}).join("");
+				}
+
+				// Construct the success URL with the replaceable params
 				const successUrl = getUrl(
 					ctx,
 					`${
