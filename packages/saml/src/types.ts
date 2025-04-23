@@ -55,9 +55,9 @@ export const SAMLConfigSchema = z.object({
 	issuer: z.string(),
 	cert: z.string(),
 	callbackUrl: z.string(),
-  audience: z.string().optional(),
-  domain: z.string().optional(),	
-  idpMetadata: z.object({
+	audience: z.string().optional(),
+	domain: z.string().optional(),
+	idpMetadata: z.object({
 		metadata: z.string(),
 		privateKey: z.string().optional(),
 		privateKeyPass: z.string().optional(),
@@ -67,8 +67,8 @@ export const SAMLConfigSchema = z.object({
 	}),
 	spMetadata: z.object({
 		metadata: z.string(),
-	  binding: z.string().optional(),
-    mapping: z
+		binding: z.string().optional(),
+		mapping: z
 			.object({
 				id: z.string({
 					description:
