@@ -10,7 +10,10 @@ import {
 	type AdapterDebugLogs,
 	type CustomAdapter,
 } from "../create-adapter";
-import type { Redis } from "ioredis";
+import { createClient, type RedisClientType } from "redis";
+
+const client: RedisClientType = createClient({ url: process.env.REDIS_URL });
+
 
 export interface RedisAdapterConfig {
 	/**
@@ -24,7 +27,7 @@ export interface RedisAdapterConfig {
 	usePlural?: boolean;
 }
 
-export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
+export const redisAdapter = (redis: RedisClientType, config?: RedisAdapterConfig) => {
 	return createAdapter({
 		config: {
 			adapterId: "redis",
@@ -49,7 +52,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 					}
 					const key = `${model}:${data.id}`;
 					debugLog({ method: "create" }, { key });
-					await redis.hmset(key, data);
+					await redis.hSet(key, data);
 					return data;
 				},
 				async count({ model, where }) {
@@ -58,7 +61,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 					return keys.length;
 				},
 				async findOne({ model, where, select }) {
-					const keys = await findOneWithWhere(redis, model, where);
+					const keys = await findOneWithWhere(redis, model, where, select);
 					debugLog({ method: "findOne" }, { keys });
 					return keys as any;
 				},
@@ -82,7 +85,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 					);
 					const results: Record<string, any>[] = [];
 					for (const key of paginatedKeys) {
-						const data = await redis.hgetall(key);
+						const data = await redis.hGetAll(key);
 						if (data && Object.keys(data).length > 0) {
 							results.push(data);
 						}
@@ -102,8 +105,8 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 						}
 					}
 					debugLog({ method: "update" }, { updateData });
-					await redis.hmset(matchingKey, updateData);
-					const updatedRecord = await redis.hgetall(matchingKey);
+					await redis.hSet(matchingKey, updateData);
+					const updatedRecord = await redis.hGetAll(matchingKey);
 					return updatedRecord as any;
 				},
 				async delete({ model, where }) {
@@ -123,7 +126,7 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 					const keys = await filterKeys(redis, model, where);
 					debugLog({ method: "updateMany" }, { keys });
 					for (const key of keys) {
-						await redis.hmset(key, update);
+						await redis.hSet(key, update);
 					}
 					return keys.length;
 				},
@@ -131,3 +134,4 @@ export const redisAdapter = (redis: Redis, config?: RedisAdapterConfig) => {
 		},
 	});
 };
+

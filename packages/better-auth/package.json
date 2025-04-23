@@ -695,7 +695,6 @@
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
-    "ioredis": "^5.6.1",
     "listhen": "^1.9.0",
     "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
@@ -712,6 +711,21 @@
     "unbuild": "catalog:",
     "vitest": "^1.6.0",
     "vue": "^3.5.13"
+  },
+  "dependencies": {
+    "@better-auth/utils": "0.2.4",
+    "@better-fetch/fetch": "catalog:",
+    "@noble/ciphers": "^0.6.0",
+    "@noble/hashes": "^1.6.1",
+    "@simplewebauthn/browser": "^13.0.0",
+    "@simplewebauthn/server": "^13.0.0",
+    "better-call": "catalog:",
+    "defu": "^6.1.4",
+    "jose": "^5.9.6",
+    "kysely": "^0.27.6",
+    "nanostores": "^0.11.3",
+    "redis": "^4.7.0",
+    "zod": "^3.24.1"
   },
   "overrides": {
     "whatwg-url": "^14.0.0"
