@@ -239,7 +239,7 @@ export async function sort({
 	// Pre-fetch all field values for sorting
 	const keyFieldPairs = await Promise.all(
 		matchingKeys.map(async (key) => {
-			const value = await redis.hGet(key, sortBy.field); 
+			const value = await redis.hGet(key, sortBy.field);
 			return { key, value };
 		}),
 	);
