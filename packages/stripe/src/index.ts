@@ -155,6 +155,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.default("/"),
 					/**
+					 * Success URL Stripe Replaceable Params
+					 * these params will not be encoded when sent to stripe, because they need to be replaced with actual values by stripe
+					 */
+					successUrlStripeReplaceableParams: z.record(z.string(), z.any()).optional(),
+					/**
 					 * Cancel URL
 					 */
 					cancelUrl: z
@@ -375,13 +380,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						}
 					: undefined;
 
+				const successUrlReplaceableParams = `${ctx.body.successUrlStripeReplaceableParams ? `${Object.entries(ctx.body.successUrlStripeReplaceableParams).map(([key, value], index) => `${encodeURIComponent((index === 0 ? "?" : "&") + key + "=")}${value}`).join("")}` : ""}`;
 				const successUrl = getUrl(
 					ctx,
 					`${
 						ctx.context.baseURL
 					}/subscription/success?callbackURL=${encodeURIComponent(
 						ctx.body.successUrl,
-					)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
+					)}${successUrlReplaceableParams}&subscriptionId=${encodeURIComponent(subscription.id)}`,
 				);
 
 				const checkoutSession = await client.checkout.sessions
