@@ -1,3 +1,4 @@
+import { betterFetch } from "@better-fetch/fetch";
 import type {
   OAuthProvider,
   ProviderOptions,
@@ -8,7 +9,6 @@ import {
   validateAuthorizationCode,
   refreshAccessToken,
 } from "../oauth2";
-import { betterFetch } from "@better-fetch/fetch";
 
 export interface FigmaProfile {
   id: string;
@@ -18,19 +18,15 @@ export interface FigmaProfile {
 }
 
 export interface FigmaOptions extends ProviderOptions<FigmaProfile> {}
-
 export const figma = (options: FigmaOptions) => {
   const tokenEndpoint = "https://www.figma.com/api/oauth/token";
-
   return {
     id: "figma",
     name: "Figma",
-
     createAuthorizationURL({ state, scopes, redirectURI }) {
       const _scopes = options.disableDefaultScope ? [] : ["file_read"];
       options.scope && _scopes.push(...options.scope);
       scopes && _scopes.push(...scopes);
-
       return createAuthorizationURL({
         id: "figma",
         options,
@@ -40,7 +36,6 @@ export const figma = (options: FigmaOptions) => {
         redirectURI,
       });
     },
-
     validateAuthorizationCode: async ({ code, redirectURI }) => {
       return validateAuthorizationCode({
         code,
@@ -49,7 +44,6 @@ export const figma = (options: FigmaOptions) => {
         tokenEndpoint,
       });
     },
-
     refreshAccessToken: options.refreshAccessToken
       ? options.refreshAccessToken
       : async (refreshToken) => {
@@ -62,12 +56,10 @@ export const figma = (options: FigmaOptions) => {
             tokenEndpoint,
           });
         },
-
     async getUserInfo(token: OAuth2Tokens) {
       if (options.getUserInfo) {
         return options.getUserInfo(token);
       }
-
       const { data: profile, error } = await betterFetch<{ user: FigmaProfile }>(
         "https://api.figma.com/v1/me",
         {
@@ -81,7 +73,6 @@ export const figma = (options: FigmaOptions) => {
 
       const user = profile.user;
       const userMap = await options.mapProfileToUser?.(user);
-
       return {
         user: {
           id: user.id,
@@ -94,7 +85,6 @@ export const figma = (options: FigmaOptions) => {
         data: user,
       };
     },
-
     options,
   } satisfies OAuthProvider<FigmaProfile>;
 };
