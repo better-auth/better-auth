@@ -1,4 +1,8 @@
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type {
+  OAuthProvider,
+  ProviderOptions,
+  OAuth2Tokens
+} from "../oauth2";
 import {
   createAuthorizationURL,
   validateAuthorizationCode,
@@ -59,7 +63,7 @@ export const figma = (options: FigmaOptions) => {
           });
         },
 
-    async getUserInfo(token) {
+    async getUserInfo(token: OAuth2Tokens) {
       if (options.getUserInfo) {
         return options.getUserInfo(token);
       }
