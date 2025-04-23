@@ -182,8 +182,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					uiMode: z
 						.enum(["custom", "embedded", "hosted"])
-						.default("hosted")
-						.optional(),
+						.default("hosted"),
 					/**
 					 * Stripe Checkout Create Session Additional Params
 					 */
