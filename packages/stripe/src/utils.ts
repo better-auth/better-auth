@@ -11,7 +11,10 @@ export async function getPlanByPriceId(
 	priceId: string,
 ) {
 	return await getPlans(options).then((res) =>
-		res?.find((plan) => plan.priceId === priceId),
+		res?.find(
+			(plan) =>
+				plan.priceId === priceId || plan.annualDiscountPriceId === priceId,
+		),
 	);
 }
 

@@ -38,11 +38,11 @@ export interface GoogleOneTapOptions {
 	 */
 	uxMode?: "popup" | "redirect";
 	/**
-	 * The context to use for the Google One Tap flow
+	 * The context to use for the Google One Tap flow. See https://developers.google.com/identity/gsi/web/reference/js-reference
 	 *
 	 * @default "signin"
 	 */
-	context?: string;
+	context?: "signin" | "signup" | "use";
 	/**
 	 * Additional configuration options to pass to the Google One Tap API.
 	 */

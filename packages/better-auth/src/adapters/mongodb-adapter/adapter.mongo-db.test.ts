@@ -44,7 +44,9 @@ describe("adapter test", async () => {
 				...customOptions,
 			});
 		},
-		skipGenerateIdTest: true,
+		disableTests: {
+			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
+		},
 	});
 });
 

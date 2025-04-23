@@ -10,13 +10,8 @@ description: Twitter provider setup and usage.
 
         Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/twitter` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
         
-        {        /*
-                <Callout type="warn">
-                    If twitter doesn't return the email address, the authentication won't be successful. Make sure to ask for the email address when you create the Twitter app.
-                </Callout>
-                */}
         <Callout type="info">
-            Twitter API v2 does not provide email addresses. As a workaround, the user's `email` field uses the `username` value instead.
+            Twitter API v2 now supports email address retrieval. Make sure to request the `user.email` scope when configuring your Twitter app to enable this feature.
         </Callout>
     </Step>
 
@@ -30,8 +25,8 @@ description: Twitter provider setup and usage.
         export const auth = betterAuth({
             socialProviders: {
                 twitter: { // [!code highlight]
-                    clientId: process.env.TWITTER_CLIENT_ID, // [!code highlight]
-                    clientSecret: process.env.TWITTER_CLIENT_SECRET, // [!code highlight]
+                    clientId: process.env.TWITTER_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.TWITTER_CLIENT_SECRET as string, // [!code highlight]
                 }, // [!code highlight]
             },
         })

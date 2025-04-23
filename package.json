@@ -6,7 +6,6 @@
     "packageManager": "pnpm@9.15.0",
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
-        "build:docs": "turbo --filter \"./docs\" build",
         "dev": "turbo --filter \"./packages/*\" dev",
         "dev:dts": "turbo --filter \"./packages/*\" dev:dts",
         "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
@@ -17,7 +16,7 @@
         "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
         "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
         "bump": "bumpp",
-        "test": "turbo --filter \"./{packages,dev}/*\" test",
+        "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck"
     },
     "dependencies": {
@@ -29,8 +28,8 @@
         "simple-git-hooks": "^2.11.1",
         "taze": "^0.18.0",
         "tinyglobby": "^0.2.10",
-        "turbo": "^2.4.4",
-        "typescript": "^5.7.2"
+        "turbo": "^2.3.3",
+        "typescript": "5.6.1-rc"
     },
     "pnpm": {
         "overrides": {

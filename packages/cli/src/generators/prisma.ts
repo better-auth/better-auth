@@ -51,11 +51,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const originalTable = tables[table]?.modelName;
 			const modelName = capitalizeFirstLetter(originalTable || "");
 
-			function getType(
-				type: FieldType,
-				isOptional: boolean,
-				isBigint: boolean,
-			) {
+			function getType({
+				isBigint,
+				isOptional,
+				type,
+			}: { type: FieldType; isOptional: boolean; isBigint: boolean }) {
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
 				}
@@ -85,13 +85,22 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 			if (!prismaModel) {
 				if (provider === "mongodb") {
+					// Mongo DB doesn't support auto increment, so just use their normal _id.
 					builder
 						.model(modelName)
 						.field("id", "String")
 						.attribute("id")
 						.attribute(`map("_id")`);
 				} else {
-					builder.model(modelName).field("id", "String").attribute("id");
+					if (options.advanced?.database?.useNumberId) {
+						builder
+							.model(modelName)
+							.field("id", "Int")
+							.attribute("id")
+							.attribute("default(autoincrement())");
+					} else {
+						builder.model(modelName).field("id", "String").attribute("id");
+					}
 				}
 			}
 
@@ -108,16 +117,35 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 
-				builder
-					.model(modelName)
-					.field(
-						field,
-						getType(attr.type, !attr?.required, attr?.bigint || false),
-					);
+				builder.model(modelName).field(
+					field,
+					field === "id" && options.advanced?.database?.useNumberId
+						? getType({
+								isBigint: false,
+								isOptional: false,
+								type: "number",
+							})
+						: getType({
+								isBigint: attr?.bigint || false,
+								isOptional: !attr?.required,
+								type:
+									attr.references?.field === "id"
+										? options.advanced?.database?.useNumberId
+											? "number"
+											: "string"
+										: attr.type,
+							}),
+				);
 				if (attr.unique) {
 					builder.model(modelName).blockAttribute(`unique([${field}])`);
 				}
 				if (attr.references) {
+					let action = "Cascade";
+					if (attr.references.onDelete === "no action") action = "NoAction";
+					else if (attr.references.onDelete === "set null") action = "SetNull";
+					else if (attr.references.onDelete === "set default")
+						action = "SetDefault";
+					else if (attr.references.onDelete === "restrict") action = "Restrict";
 					builder
 						.model(modelName)
 						.field(
@@ -125,7 +153,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							capitalizeFirstLetter(attr.references.model),
 						)
 						.attribute(
-							`relation(fields: [${field}], references: [${attr.references.field}], onDelete: Cascade)`,
+							`relation(fields: [${field}], references: [${attr.references.field}], onDelete: ${action})`,
 						);
 				}
 				if (
@@ -165,6 +193,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	return {
 		code: schema.trim() === schemaPrisma.trim() ? "" : schema,
 		fileName: filePath,
+		overwrite: true,
 	};
 };
 

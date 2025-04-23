@@ -140,12 +140,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 export async function middleware(request: NextRequest) {
-	const sessionCookie = getSessionCookie(request, {
-        // Optionally pass config if cookie name, prefix or useSecureCookies option is customized in auth config.
-		cookieName: "session_token",
-		cookiePrefix: "better-auth",
-		useSecureCookies: true,
-    });
+	const sessionCookie = getSessionCookie(request);
 
 	if (!sessionCookie) {
 		return NextResponse.redirect(new URL("/", request.url));
@@ -158,6 +153,16 @@ export const config = {
 	matcher: ["/dashboard"], // Specify the routes the middleware applies to
 };
 ```
+
+<Callout type="info">
+If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
+```ts
+const sessionCookie = getSessionCookie(request, {
+    cookieName: "my_session_cookie",
+    cookiePrefix: "my_prefix"
+});
+```
+</Callout>
 
 ### For Next.js release `15.1.7` and below
 
@@ -205,6 +210,7 @@ Be careful when using the new runtime. It's an experimental feature and it may b
 
 ```ts
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
 export async function middleware(request: NextRequest) {

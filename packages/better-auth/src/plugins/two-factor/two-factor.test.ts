@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { twoFactor, twoFactorClient } from ".";
+import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
@@ -52,7 +52,6 @@ describe("two factor", async () => {
 				headers,
 			},
 		});
-
 		expect(res.data?.backupCodes.length).toEqual(10);
 		expect(res.data?.totpURI).toBeDefined();
 		const dbUser = await db.findOne<UserWithTwoFactor>({
@@ -76,6 +75,36 @@ describe("two factor", async () => {
 		expect(dbUser?.twoFactorEnabled).toBe(null);
 		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
+	});
+
+	it("should use custom issuer from request parameter", async () => {
+		const CUSTOM_ISSUER = "Custom App Name";
+		const res = await client.twoFactor.enable({
+			password: testUser.password,
+			issuer: CUSTOM_ISSUER,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totpURI = res.data?.totpURI;
+		expect(totpURI).toMatch(
+			new RegExp(`^otpauth://totp/${encodeURIComponent(CUSTOM_ISSUER)}:`),
+		);
+		expect(totpURI).toContain(`&issuer=Custom+App+Name&`);
+	});
+
+	it("should fallback to appName when no issuer provided", async () => {
+		const res = await client.twoFactor.enable({
+			password: testUser.password,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totpURI = res.data?.totpURI;
+		expect(totpURI).toMatch(/^otpauth:\/\/totp\/Better%20Auth:/);
+		expect(totpURI).toContain("&issuer=Better+Auth&");
 	});
 
 	it("should enable twoFactor", async () => {
@@ -161,6 +190,18 @@ describe("two factor", async () => {
 			},
 		});
 		expect(verifyRes.data?.token).toBeDefined();
+	});
+
+	it("should fail if two factor cookie is missing", async () => {
+		const res = await client.twoFactor.verifyTotp({
+			code: "123456",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+		);
 	});
 
 	let backupCodes: string[] = [];
@@ -308,6 +349,53 @@ describe("two factor", async () => {
 		expect(signInRes.data?.user).toBeDefined();
 	});
 
+	it("should limit OTP verification attempts", async () => {
+		const headers = new Headers();
+		// Sign in to trigger 2FA
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					headers.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+		await client.twoFactor.sendOtp({
+			fetchOptions: {
+				headers,
+			},
+		});
+		for (let i = 0; i < 5; i++) {
+			const res = await client.twoFactor.verifyOtp({
+				code: "000000", // Invalid code
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(res.error?.message).toBe("Invalid code");
+		}
+
+		// Next attempt should be blocked
+		const res = await client.twoFactor.verifyOtp({
+			code: OTP, // Even with correct code
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error?.message).toBe(
+			"Too many attempts. Please request a new code.",
+		);
+	});
+
 	it("should disable two factor", async () => {
 		const res = await client.twoFactor.disable({
 			password: testUser.password,
@@ -336,7 +424,7 @@ describe("two factor", async () => {
 	});
 });
 
-describe("two factor auth api", async () => {
+describe("two factor auth API", async () => {
 	let OTP = "";
 	const sendOTP = vi.fn();
 	const { auth, signInWithTestUser, testUser } = await getTestInstance({

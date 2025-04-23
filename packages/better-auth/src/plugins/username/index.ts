@@ -6,9 +6,9 @@ import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { TWO_FACTOR_ERROR_CODES } from "../two-factor/error-code";
 import { schema } from "./schema";
 import { mergeSchema } from "../../db/schema";
+import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
 export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
@@ -33,19 +33,10 @@ export type UsernameOptions = {
 };
 
 function defaultUsernameValidator(username: string) {
-	return /^[a-zA-Z0-9_]+$/.test(username);
+	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
 export const username = (options?: UsernameOptions) => {
-	const ERROR_CODES = {
-		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
-		EMAIL_NOT_VERIFIED: "email not verified",
-		UNEXPECTED_ERROR: "unexpected error",
-		USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
-		USERNAME_TOO_SHORT: "username is too short",
-		USERNAME_TOO_LONG: "username is too long",
-		INVALID_USERNAME: "username is invalid",
-	};
 	return {
 		id: "username",
 		endpoints: {
@@ -78,13 +69,16 @@ export const username = (options?: UsernameOptions) => {
 											schema: {
 												type: "object",
 												properties: {
+													token: {
+														type: "string",
+														description:
+															"Session token for the authenticated session",
+													},
 													user: {
 														$ref: "#/components/schemas/User",
 													},
-													session: {
-														$ref: "#/components/schemas/Session",
-													},
 												},
+												required: ["token", "user"],
 											},
 										},
 									},
@@ -197,7 +191,7 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.request,
+						ctx.headers,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -241,7 +235,7 @@ export const username = (options?: UsernameOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
-						if (username) {
+						if (username !== undefined && typeof username === "string") {
 							const minUsernameLength = options?.minUsernameLength || 3;
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
@@ -289,14 +283,14 @@ export const username = (options?: UsernameOptions) => {
 							context.path === "/update-user"
 						);
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						if (!ctx.body.displayUsername && ctx.body.username) {
 							ctx.body.displayUsername = ctx.body.username;
 						}
-					},
+					}),
 				},
 			],
 		},
-		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

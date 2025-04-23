@@ -1,7 +1,7 @@
 import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
 import Features from "@/components/features";
-
+import Link from "next/link";
 async function getGitHubStars() {
 	try {
 		const response = await fetch(
@@ -27,6 +27,21 @@ export default async function HomePage() {
 	const stars = await getGitHubStars();
 	return (
 		<main className="h-min mx-auto overflow-x-hidden">
+			<div className="w-full bg-gradient-to-br border-b dark:border-zinc-800 border-zinc-200 dark:from-zinc-950 dark:to-black from-zinc-150 to-zinc-100 dark:text-white text-center py-2">
+				<p className="text-sm px-4 tracking-tight font-mono">
+					Introducing{" "}
+					<Link target="_blank" href="https://better-auth.build">
+						Better Auth Infrastructure
+					</Link>{" "}
+					|{" "}
+					<Link
+						href="https://better-auth.build"
+						className="underline underline-offset-2 text-blue-400 hover:text-blue-600"
+					>
+						Join the waitlist
+					</Link>{" "}
+				</p>
+			</div>
 			<Section
 				className="mb-1 overflow-y-clip"
 				crosses
