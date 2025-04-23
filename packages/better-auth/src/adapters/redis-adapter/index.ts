@@ -10,10 +10,7 @@ import {
 	type AdapterDebugLogs,
 	type CustomAdapter,
 } from "../create-adapter";
-import { createClient, type RedisClientType } from "redis";
-
-const client: RedisClientType = createClient({ url: process.env.REDIS_URL });
-
+import { type RedisClientType } from "redis";
 
 export interface RedisAdapterConfig {
 	/**
@@ -27,7 +24,10 @@ export interface RedisAdapterConfig {
 	usePlural?: boolean;
 }
 
-export const redisAdapter = (redis: RedisClientType, config?: RedisAdapterConfig) => {
+export const redisAdapter = (
+	redis: RedisClientType<any, any, any>,
+	config?: RedisAdapterConfig,
+) => {
 	return createAdapter({
 		config: {
 			adapterId: "redis",
@@ -134,4 +134,3 @@ export const redisAdapter = (redis: RedisClientType, config?: RedisAdapterConfig
 		},
 	});
 };
-

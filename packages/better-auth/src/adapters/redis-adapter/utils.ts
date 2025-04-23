@@ -3,7 +3,7 @@ import type { FieldAttribute } from "../../db";
 import type { RedisClientType } from "redis";
 
 export async function filterFirstKey(
-	redis: RedisClientType,
+	redis: RedisClientType<any, any, any>,
 	modelName: string,
 	where: CleanedWhere[],
 ): Promise<string | null> {
@@ -12,7 +12,7 @@ export async function filterFirstKey(
 }
 
 export async function getAll(
-	redis: RedisClientType,
+	redis: RedisClientType<any, any, any>,
 	modelName: string,
 	select?: string[],
 ): Promise<Record<string, any>[]> {
@@ -52,7 +52,7 @@ export async function getAll(
 	return results;
 }
 export async function filterKeys(
-	redis: RedisClientType,
+	redis: RedisClientType<any, any, any>,
 	modelName: string,
 	where?: CleanedWhere[],
 ): Promise<string[]> {
@@ -136,7 +136,7 @@ export async function filterKeys(
 }
 
 export async function findWithWhere(
-	redis: RedisClientType,
+	redis: RedisClientType<any, any, any>,
 	modelName: string,
 	where?: CleanedWhere[],
 	select?: string[],
@@ -173,7 +173,7 @@ export async function findWithWhere(
 }
 
 export async function findOneWithWhere(
-	redis: RedisClientType,
+	redis: RedisClientType<any, any, any>,
 	modelName: string,
 	where?: CleanedWhere[],
 	select?: string[],
@@ -228,7 +228,7 @@ export async function sort({
 	model: string;
 	matchingKeys: string[];
 	sortBy: { field: string; direction: "asc" | "desc" };
-	redis: RedisClientType;
+	redis: RedisClientType<any, any, any>;
 	debugLog: (message: string, ...args: any[]) => void;
 }) {
 	const fieldAttributes = getFieldAttributes({
