@@ -49,7 +49,7 @@ describe("simple-flow", async () => {
 		},
 	);
 	const testUser = {
-		email: "test-eamil@email.com",
+		email: "test-email@email.com",
 		password: "password",
 		name: "Test Name",
 	};
