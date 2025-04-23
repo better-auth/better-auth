@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe } from "vitest";
 import { redisAdapter } from "..";
-import Redis from "ioredis";
 import { runAdapterTest } from "../../test";
+import { createClient } from "redis";
 
-const redis = new Redis({
-	host: "localhost",
-	port: 6379,
-});
+const redis = await createClient({ url: "redis://localhost:6379" })
+	.on("error", (err) => {
+		console.error("Test Redis Adapter connection error:", err);
+	})
+	.connect();
 
 describe("Adapter tests", async () => {
 	beforeAll(async () => {
@@ -27,7 +28,7 @@ describe("Adapter tests", async () => {
 async function clearAll(): Promise<void> {
 	try {
 		// FLUSHDB clears all keys from the current database
-		await redis.flushdb();
+		await redis.flushDb();
 	} catch (error) {
 		console.error("Error clearing Redis database:", error);
 		throw error;
