@@ -440,9 +440,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							code: e.code,
 						});
 					});
+				// we only care about disableRedirect for hosted mode
+				// because in custom and embedded mode, there isn't any redirect that should happen
+				const redirect = !ctx.body.disableRedirect && ctx.body.uiMode === "hosted";
 				return ctx.json({
 					...checkoutSession,
-					redirect: !ctx.body.disableRedirect,
+					redirect,
 				});
 			},
 		),
