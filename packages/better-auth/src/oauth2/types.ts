@@ -29,7 +29,21 @@ export interface OAuthProvider<
 		codeVerifier?: string;
 		deviceId?: string;
 	}) => Promise<OAuth2Tokens>;
-	getUserInfo: (token: OAuth2Tokens) => Promise<{
+	getUserInfo: (
+		token: OAuth2Tokens & {
+			/**
+			 * The user object from the provider
+			 * This is only available for some providers like Apple
+			 */
+			user?: {
+				name?: {
+					firstName?: string;
+					lastName?: string;
+				};
+				email?: string;
+			};
+		},
+	) => Promise<{
 		user: {
 			id: string;
 			name?: string;
@@ -39,6 +53,9 @@ export interface OAuthProvider<
 		};
 		data: T;
 	} | null>;
+	/**
+	 * Custom function to refresh a token
+	 */
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
 	/**
@@ -57,6 +74,7 @@ export interface OAuthProvider<
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	options?: ProviderOptions;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
@@ -112,6 +130,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 		data: any;
 	}>;
 	/**
+	 * Custom function to refresh a token
+	 */
+	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
+	/**
 	 * Custom function to map the provider profile to a
 	 * user.
 	 */
@@ -154,4 +176,11 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * The response mode to use for the authorization code request
 	 */
 	responseMode?: "query" | "form_post";
+	/**
+	 * If enabled, the user info will be overridden with the provider user info
+	 * This is useful if you want to use the provider user info to update the user info
+	 *
+	 * @default false
+	 */
+	overrideUserInfoOnSignIn?: boolean;
 };

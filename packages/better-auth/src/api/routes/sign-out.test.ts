@@ -6,7 +6,6 @@ describe("sign-out", async (it) => {
 
 	it("should sign out", async () => {
 		const { headers } = await signInWithTestUser();
-
 		const res = await client.signOut({
 			fetchOptions: {
 				headers,

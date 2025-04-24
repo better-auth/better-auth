@@ -26,3 +26,6 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		idToken: data.id_token,
 	};
 }
+
+export const encodeOAuthParameter = (value: string) =>
+	encodeURIComponent(value).replace(/%20/g, "+");

@@ -140,7 +140,7 @@ describe("SSO", async () => {
 		}
 	});
 
-	it("should signin with SSO provider with email matching", async () => {
+	it("should sign in with SSO provider with email matching", async () => {
 		const res = await auth.api.signInSSO({
 			body: {
 				email: "my-email@localhost.com",
@@ -156,7 +156,7 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
-	it("should signin with SSO provider with domain", async () => {
+	it("should sign in with SSO provider with domain", async () => {
 		const res = await auth.api.signInSSO({
 			body: {
 				email: "my-email@test.com",
@@ -173,7 +173,7 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
-	it("should signin with SSO provider with providerId", async () => {
+	it("should sign in with SSO provider with providerId", async () => {
 		const res = await auth.api.signInSSO({
 			body: {
 				providerId: "test",
@@ -396,7 +396,6 @@ describe("provisioning", async (ctx) => {
 		token.payload.name = "Test User";
 		token.payload.picture = "https://test.com/picture.png";
 	});
-
 	it("should provision user", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await auth.api.createOrganization({
@@ -464,7 +463,7 @@ describe("provisioning", async (ctx) => {
 		});
 	});
 
-	it("should signin with SSO provide with org slug", async () => {
+	it("should sign in with SSO provide with org slug", async () => {
 		const res = await auth.api.signInSSO({
 			body: {
 				organizationSlug: "localhost",

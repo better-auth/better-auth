@@ -28,7 +28,7 @@ import { generateAuthConfig } from "../generators/auth-config";
 import { getTsconfigInfo } from "../utils/get-tsconfig-info";
 
 /**
- * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
+ * Should only use any database that is core DBs, and supports the Better Auth CLI generate functionality.
  */
 const supportedDatabases = [
 	// Built-in kysely
@@ -41,7 +41,7 @@ const supportedDatabases = [
 	"drizzle:mysql",
 	"drizzle:sqlite",
 	// Prisma
-	"prisma:pg",
+	"prisma:postgresql",
 	"prisma:mysql",
 	"prisma:sqlite",
 	// Mongo
@@ -549,7 +549,7 @@ export async function initAction(opts: any) {
 			}
 		}
 	} else {
-		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up-to-date`)}!`);
+		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up to date`)}!`);
 	}
 
 	// ===== appName =====

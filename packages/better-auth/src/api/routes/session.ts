@@ -21,7 +21,6 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { base64 } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
-
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/get-session",
@@ -65,14 +64,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 										type: "object",
 										properties: {
 											session: {
-												type: "object",
 												$ref: "#/components/schemas/Session",
 											},
 											user: {
-												type: "object",
 												$ref: "#/components/schemas/User",
 											},
 										},
+										required: ["session", "user"],
 									},
 								},
 							},
@@ -115,8 +113,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						sessionDataPayload.signature,
 					);
 					if (!isValid) {
-						deleteSessionCookie(ctx);
-						return ctx.json(null);
+						const dataCookie = ctx.context.authCookies.sessionData.name;
+						ctx.setCookie(dataCookie, "", {
+							maxAge: 0,
+						});
 					}
 				}
 
@@ -194,7 +194,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					updateAge * 1000;
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
-				if (shouldBeUpdated) {
+				if (
+					shouldBeUpdated &&
+					(!ctx.query?.disableRefresh ||
+						!ctx.context.options.session?.disableSessionRefresh)
+				) {
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
 							session.session.token,
@@ -327,7 +331,6 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		session,
 	};
 });
-
 /**
  * user active sessions list
  */
@@ -349,18 +352,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 									schema: {
 										type: "array",
 										items: {
-											type: "object",
-											properties: {
-												token: {
-													type: "string",
-												},
-												userId: {
-													type: "string",
-												},
-												expiresAt: {
-													type: "string",
-												},
-											},
+											$ref: "#/components/schemas/Session",
 										},
 									},
 								},
@@ -413,9 +405,30 @@ export const revokeSession = createAuthEndpoint(
 								properties: {
 									token: {
 										type: "string",
+										description: "The token to revoke",
 									},
 								},
 								required: ["token"],
+							},
+						},
+					},
+				},
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+											description:
+												"Indicates if the session was revoked successfully",
+										},
+									},
+									required: ["status"],
+								},
 							},
 						},
 					},
@@ -472,6 +485,8 @@ export const revokeSessions = createAuthEndpoint(
 									properties: {
 										status: {
 											type: "boolean",
+											description:
+												"Indicates if all sessions were revoked successfully",
 										},
 									},
 									required: ["status"],
@@ -523,8 +538,11 @@ export const revokeOtherSessions = createAuthEndpoint(
 									properties: {
 										status: {
 											type: "boolean",
+											description:
+												"Indicates if all other sessions were revoked successfully",
 										},
 									},
+									required: ["status"],
 								},
 							},
 						},

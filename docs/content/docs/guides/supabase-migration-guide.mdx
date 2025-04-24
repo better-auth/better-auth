@@ -96,8 +96,8 @@ export const auth = betterAuth({
     },
     socialProviders: {
         github: {
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
         }
     },
     plugins: [admin(), anonymous()], // [!code highlight]
@@ -125,7 +125,7 @@ This tables will be created on the `public` schema.
 <Step>
 ### Copy the migration script
 
-Now that we have the necessary tables in our database, we can run the migration script to migrate the users and accounts from supabase to better auth.
+Now that we have the necessary tables in our database, we can run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
 Start by creating a `.ts` file in your project.
 
@@ -259,7 +259,7 @@ migrateFromSupabase();
 <Step>
 ### Run the migration script
 
-Run the migration script to migrate the users and accounts from supabase to better auth.
+Run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
 ```bash title="Terminal"
 bun migration.ts # or use node, ts-node, etc.
@@ -268,9 +268,9 @@ bun migration.ts # or use node, ts-node, etc.
 <Step>
 ### Update your code
 
-Update your codebase from supabase auth calls to better auth api.
+Update your codebase from Supabase auth calls to Better Auth API.
 
-Here's a list of the supabase auth api calls and their better auth counterparts.
+Here's a list of the Supabase auth API calls and their Better Auth counterparts.
 
 - `supabase.auth.signUp` -> `authClient.signUp.email`
 - `supabase.auth.signInWithPassword` -> `authClient.signIn.email`

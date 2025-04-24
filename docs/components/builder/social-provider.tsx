@@ -391,4 +391,34 @@ export const socialProviders = {
 		),
 		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 448 512"><path fill="currentColor" d="M64 32C28.7 32 0 60.7 0 96v320c0 35.3 28.7 64 64 64h320c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zm297.1 84L257.3 234.6L379.4 396h-95.6L209 298.1L123.3 396H75.8l111-126.9L69.7 116h98l67.7 89.5l78.2-89.5zm-37.8 251.6L153.4 142.9h-28.3l171.8 224.7h26.3z"></path></svg>`,
 	},
+	zoom: {
+		Icon: (props?: SVGProps<any>) => (
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="1.2em"
+				height="1.2em"
+				viewBox="0 0 16 16"
+			>
+				<path
+					fill="currentColor"
+					fillRule="evenodd"
+					d="M1.45 3.334C.648 3.334 0 3.982 0 4.783v4.986c0 1.6 1.298 2.898 2.898 2.898h6.986c.8 0 1.45-.649 1.45-1.45V6.233a2.9 2.9 0 0 0-2.899-2.899zM16 4.643v6.715c0 .544-.618.86-1.059.539l-2.059-1.498a1.33 1.33 0 0 1-.549-1.078V6.679c0-.427.204-.827.55-1.078l2.058-1.498a.667.667 0 0 1 1.059.54"
+					clipRule="evenodd"
+				></path>
+			</svg>
+		),
+		stringIcon: `<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 16 16"
+					>
+						<path
+							fill="currentColor"
+							fillRule="evenodd"
+							d="M1.45 3.334C.648 3.334 0 3.982 0 4.783v4.986c0 1.6 1.298 2.898 2.898 2.898h6.986c.8 0 1.45-.649 1.45-1.45V6.233a2.9 2.9 0 0 0-2.899-2.899zM16 4.643v6.715c0 .544-.618.86-1.059.539l-2.059-1.498a1.33 1.33 0 0 1-.549-1.078V6.679c0-.427.204-.827.55-1.078l2.058-1.498a.667.667 0 0 1 1.059.54"
+							clipRule="evenodd"
+						></path>
+					</svg>`,
+	},
 };

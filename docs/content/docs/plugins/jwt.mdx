@@ -6,8 +6,7 @@ description: Authenticate users with JWT tokens in services that can't use the s
 The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to verify the token.
 
 <Callout type="info">
-  This plugin is not meant as a replacement for the session. 
-  It's meant to be used for services that can't use the session.
+  This plugin is not meant as a replacement for the session. It's meant to be used for services that requires JWT tokens.
 </Callout>
 
 ## Installation
@@ -112,6 +111,67 @@ In the case a JWT with a different kid is received it is recommended to fetch th
   }
 ```
 
+#### Example using jose with remote JWKS
+
+```ts
+import { jwtVerify, createRemoteJWKSet } from 'jose'
+
+async function validateToken(token: string) {
+  try {
+    const JWKS = createRemoteJWKSet(
+      new URL('http://localhost:3000/api/auth/jwks')
+    )
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
+    })
+    return payload
+  } catch (error) {
+    console.error('Token validation failed:', error)
+    throw error
+  }
+}
+
+// Usage example
+const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
+const payload = await validateToken(token)
+```
+
+#### Example with local JWKS
+
+```ts
+import { jwtVerify, createLocalJWKSet } from 'jose'
+
+
+async function validateToken(token: string) {
+  try {
+    /**
+     * This is the JWKS that you get from the /api/auth/
+     * jwks endpoint
+     */
+    const storedJWKS = {
+      keys: [{
+        //...
+      }]
+    };
+    const JWKS = createLocalJWKSet({
+      keys: storedJWKS.data?.keys!,
+    })
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
+    })
+    return payload
+  } catch (error) {
+    console.error('Token validation failed:', error)
+    throw error
+  }
+}
+
+// Usage example
+const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
+const payload = await validateToken(token)
+```
 
 ## Schema
 
@@ -213,7 +273,7 @@ By default the entire user object is added to the JWT payload. You can modify th
 ```ts title="auth.ts"
 jwt({
   jwt: {
-    definePayload: (user) => {
+    definePayload: ({user}) => {
       return {
         id: user.id,
         email: user.email,
@@ -224,7 +284,7 @@ jwt({
 })
 ```
 
-### Modify Issuer, Audience or Expiration time
+### Modify Issuer, Audience, Subject or Expiration time
 If none is given, the BASE_URL is used as the issuer and the audience is set to the BASE_URL. The expiration time is set to 15 minutes.
 
 ```ts title="auth.ts"
@@ -232,7 +292,11 @@ jwt({
   jwt: {
     issuer: "https://example.com",
     audience: "https://example.com",
-    expirationTime: "1h"
+    expirationTime: "1h",
+    getSubject: (session) => {
+      // by default the subject is the user id
+      return session.user.email
+    }
   }
 })
 ```

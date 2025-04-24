@@ -32,6 +32,7 @@ describe("stripe", async () => {
 		subscriptions: {
 			retrieve: vi.fn(),
 			list: vi.fn().mockResolvedValue({ data: [] }),
+			update: vi.fn(),
 		},
 		webhooks: {
 			constructEvent: vi.fn(),
@@ -243,19 +244,15 @@ describe("stripe", async () => {
 	});
 
 	it("should handle subscription webhook events", async () => {
-		const testSubscriptionId = "sub_123456";
-		const testReferenceId = "user_123";
-		await ctx.adapter.create({
+		const { id: testReferenceId } = await ctx.adapter.create({
 			model: "user",
 			data: {
-				id: testReferenceId,
 				email: "test@email.com",
 			},
 		});
-		await ctx.adapter.create({
+		const { id: testSubscriptionId } = await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: testSubscriptionId,
 				referenceId: testReferenceId,
 				stripeCustomerId: "cus_mock123",
 				status: "active",
@@ -353,22 +350,19 @@ describe("stripe", async () => {
 		});
 	});
 
-	it("should handle subscription deletion webhook", async () => {
-		const userId = "test_user";
-		const subId = "test_sub_delete";
+	const { id: userId } = await ctx.adapter.create({
+		model: "user",
+		data: {
+			email: "delete-test@email.com",
+		},
+	});
 
-		await ctx.adapter.create({
-			model: "user",
-			data: {
-				id: userId,
-				email: "delete-test@email.com",
-			},
-		});
+	it("should handle subscription deletion webhook", async () => {
+		const subId = "test_sub_delete";
 
 		await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: subId,
 				referenceId: userId,
 				stripeCustomerId: "cus_delete_test",
 				status: "active",
@@ -501,7 +495,6 @@ describe("stripe", async () => {
 		};
 
 		const mockSubscription = {
-			id: "sub_123",
 			status: "active",
 			items: {
 				data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
@@ -532,11 +525,10 @@ describe("stripe", async () => {
 			plugins: [stripe(eventTestOptions)],
 		});
 
-		await ctx.adapter.create({
+		const { id: testSubscriptionId } = await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: "sub_123",
-				referenceId: "user_123",
+				referenceId: userId,
 				stripeCustomerId: "cus_123",
 				stripeSubscriptionId: "sub_123",
 				status: "incomplete",
@@ -570,7 +562,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					items: {
@@ -608,7 +600,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					cancel_at_period_end: true,
@@ -644,7 +636,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					cancel_at_period_end: true,
@@ -679,12 +671,12 @@ describe("stripe", async () => {
 			type: "customer.subscription.deleted",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "canceled",
 					metadata: {
-						referenceId: "user_123",
-						subscriptionId: "sub_123",
+						referenceId: userId,
+						subscriptionId: testSubscriptionId,
 					},
 				},
 			},

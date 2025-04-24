@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAuthEndpoint, getSessionFromCtx } from "../../api";
+import { createAuthEndpoint, getSession } from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -24,9 +24,6 @@ export const customSession = <
 				"/get-session",
 				{
 					method: "GET",
-					metadata: {
-						CUSTOM_SESSION: true,
-					},
 					query: z.optional(
 						z.object({
 							/**
@@ -48,13 +45,46 @@ export const customSession = <
 								.optional(),
 						}),
 					),
+					metadata: {
+						CUSTOM_SESSION: true,
+						openapi: {
+							description: "Get custom session data",
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "array",
+												nullable: true,
+												items: {
+													$ref: "#/components/schemas/Session",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					requireHeaders: true,
 				},
 				async (ctx) => {
-					const session = await getSessionFromCtx(ctx);
-					if (!session) {
+					const session = await getSession()({
+						...ctx,
+						asResponse: false,
+						headers: ctx.headers,
+						returnHeaders: true,
+					}).catch((e) => {
+						return null;
+					});
+					if (!session?.response) {
 						return ctx.json(null);
 					}
-					const fnResult = await fn(session as any);
+					const fnResult = await fn(session.response as any);
+					session.headers.forEach((value, key) => {
+						ctx.setHeader(key, value);
+					});
 					return ctx.json(fnResult);
 				},
 			),

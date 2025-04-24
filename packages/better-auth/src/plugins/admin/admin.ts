@@ -96,11 +96,21 @@ export interface AdminOptions {
 	bannedUserMessage?: string;
 }
 
+export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
+	O extends { roles: Record<string, unknown> }
+		? keyof O["roles"]
+		: "user" | "admin";
+
+function parseRoles(roles: string | string[]): string {
+	return Array.isArray(roles) ? roles.join(",") : roles;
+}
+
 export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
-		defaultRole: "user",
-		adminRoles: ["admin"],
+		defaultRole: options?.defaultRole ?? "user",
+		adminRoles: options?.adminRoles ?? ["admin"],
 		bannedUserMessage:
+			options?.bannedUserMessage ??
 			"You have been banned from this application. Please contact support if you believe this is an error.",
 		...options,
 	};
@@ -108,6 +118,26 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
 
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
@@ -202,12 +232,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
-						role: z.string({
-							description: "The role to set. `admin` or `user` by default",
-						}),
+						role: z.union([
+							z.string({
+								description: "The role to set. `admin` or `user` by default",
+							}),
+							z.array(
+								z.string({
+									description: "The roles to set. `admin` or `user` by default",
+								}),
+							),
+						]),
 					}),
 					use: [adminMiddleware],
 					metadata: {
@@ -233,6 +270,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								},
 							},
 						},
+						$Infer: {
+							body: {} as {
+								userId: string;
+								role:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -240,7 +285,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["set-role"],
 						},
 					});
@@ -254,7 +299,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
-							role: ctx.body.role,
+							role: parseRoles(ctx.body.role),
 						},
 						ctx,
 					);
@@ -278,9 +323,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							description: "The name of the user",
 						}),
 						role: z
-							.string({
-								description: "The role of the user",
-							})
+							.union([
+								z.string({
+									description: "The role of the user",
+								}),
+								z.array(
+									z.string({
+										description: "The roles of user",
+									}),
+								),
+							])
 							.optional(),
 						/**
 						 * extra fields for user
@@ -315,6 +367,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								},
 							},
 						},
+						$Infer: {
+							body: {} as {
+								email: string;
+								password: string;
+								name: string;
+								role?:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
+								data?: Record<string, any>;
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -327,7 +390,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							userId: session.user.id,
 							role: session.user.role,
 							options: opts,
-							permission: {
+							permissions: {
 								user: ["create"],
 							},
 						});
@@ -349,7 +412,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						await ctx.context.internalAdapter.createUser<UserWithRole>({
 							email: ctx.body.email,
 							name: ctx.body.name,
-							role: ctx.body.role ?? options?.defaultRole ?? "user",
+							role:
+								(ctx.body.role && parseRoles(ctx.body.role)) ??
+								options?.defaultRole ??
+								"user",
 							...ctx.body.data,
 						});
 
@@ -482,7 +548,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["list"],
 						},
 					});
@@ -522,7 +588,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
-						const total = await ctx.context.internalAdapter.countTotalUsers();
+						const total = await ctx.context.internalAdapter.countTotalUsers(
+							where.length ? where : undefined,
+						);
 						return ctx.json({
 							users: users as UserWithRole[],
 							total: total,
@@ -543,7 +611,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -581,7 +649,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							session: ["list"],
 						},
 					});
@@ -605,7 +673,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -641,7 +709,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["ban"],
 						},
 					});
@@ -669,7 +737,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 						/**
@@ -721,7 +789,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["ban"],
 						},
 					});
@@ -762,7 +830,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -800,7 +868,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["impersonate"],
 						},
 					});
@@ -841,9 +909,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const authCookies = ctx.context.authCookies;
 					deleteSessionCookie(ctx);
+					const dontRememberMeCookie = await ctx.getSignedCookie(
+						ctx.context.authCookies.dontRememberToken.name,
+						ctx.context.secret,
+					);
 					await ctx.setSignedCookie(
 						"admin_session",
-						ctx.context.session.session.token,
+						`${ctx.context.session.session.token}:${
+							dontRememberMeCookie || ""
+						}`,
 						ctx.context.secret,
 						authCookies.sessionToken.options,
 					);
@@ -893,19 +967,25 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						"admin_session",
 						ctx.context.secret,
 					);
+
 					if (!adminCookie) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
 						});
 					}
+					const [adminSessionToken, dontRememberMeCookie] =
+						adminCookie?.split(":");
 					const adminSession =
-						await ctx.context.internalAdapter.findSession(adminCookie);
+						await ctx.context.internalAdapter.findSession(adminSessionToken);
 					if (!adminSession || adminSession.session.userId !== user.id) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to find admin session",
 						});
 					}
-					await setSessionCookie(ctx, adminSession);
+					await ctx.context.internalAdapter.deleteSession(
+						session.session.token,
+					);
+					await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
 					return ctx.json(adminSession);
 				},
 			),
@@ -950,7 +1030,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							session: ["revoke"],
 						},
 					});
@@ -974,7 +1054,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1010,7 +1090,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							session: ["revoke"],
 						},
 					});
@@ -1032,7 +1112,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1069,7 +1149,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["delete"],
 						},
 					});
@@ -1092,7 +1172,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						newPassword: z.string({
 							description: "The new password",
 						}),
-						userId: z.string({
+						userId: z.coerce.string({
 							description: "The user id",
 						}),
 					}),
@@ -1127,7 +1207,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: opts,
-						permission: {
+						permissions: {
 							user: ["set-password"],
 						},
 					});
@@ -1153,11 +1233,23 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				"/admin/has-permission",
 				{
 					method: "POST",
-					body: z.object({
-						permission: z.record(z.string(), z.array(z.string())),
-						userId: z.string().optional(),
-						role: z.string().optional(),
-					}),
+					body: z
+						.object({
+							userId: z.coerce.string().optional(),
+							role: z.string().optional(),
+						})
+						.and(
+							z.union([
+								z.object({
+									permission: z.record(z.string(), z.array(z.string())),
+									permissions: z.undefined(),
+								}),
+								z.object({
+									permission: z.undefined(),
+									permissions: z.record(z.string(), z.array(z.string())),
+								}),
+							]),
+						),
 					metadata: {
 						openapi: {
 							description: "Check if the user has permission",
@@ -1170,9 +1262,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 												permission: {
 													type: "object",
 													description: "The permission to check",
+													deprecated: true,
+												},
+												permissions: {
+													type: "object",
+													description: "The permission to check",
 												},
 											},
-											required: ["permission"],
+											required: ["permissions"],
 										},
 									},
 								},
@@ -1200,25 +1297,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							},
 						},
 						$Infer: {
-							body: {} as {
-								permission: {
-									//@ts-expect-error
-									[key in keyof Statements]?: Array<Statements[key][number]>;
-								};
+							body: {} as PermissionExclusive & {
 								userId?: string;
-								role?: string;
+								role?: InferAdminRolesFromOption<O>;
 							},
 						},
 					},
 				},
 				async (ctx) => {
-					if (
-						!ctx.body.permission ||
-						Object.keys(ctx.body.permission).length > 1
-					) {
+					if (!ctx.body?.permission && !ctx.body?.permissions) {
 						throw new APIError("BAD_REQUEST", {
 							message:
-								"invalid permission check. you can only check one resource permission at a time.",
+								"invalid permission check. no permission(s) were passed.",
 						});
 					}
 					const session = await getSessionFromCtx(ctx);
@@ -1246,7 +1336,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: user.id,
 						role: user.role,
 						options: options as AdminOptions,
-						permission: ctx.body.permission as any,
+						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
 						error: null,

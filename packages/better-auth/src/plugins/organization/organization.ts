@@ -14,6 +14,7 @@ import {
 	cancelInvitation,
 	createInvitation,
 	getInvitation,
+	listInvitations,
 	rejectInvitation,
 } from "./routes/crud-invites";
 import {
@@ -38,8 +39,14 @@ import {
 	removeTeam,
 	updateTeam,
 } from "./routes/crud-team";
-import type { Invitation, Member, Organization, Team } from "./schema";
-import type { Prettify } from "../../types/helper";
+import type {
+	InferInvitation,
+	InferMember,
+	Invitation,
+	Member,
+	Organization,
+	Team,
+} from "./schema";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
@@ -159,6 +166,27 @@ export interface OrganizationOptions {
 	 * @default 48 hours
 	 */
 	invitationExpiresIn?: number;
+	/**
+	 * The maximum invitation a user can send.
+	 *
+	 * @default 100
+	 */
+	invitationLimit?:
+		| number
+		| ((
+				data: {
+					user: User;
+					organization: Organization;
+					member: Member;
+				},
+				ctx: AuthContext,
+		  ) => Promise<number> | number);
+	/**
+	 * Cancel pending invitations on re-invite.
+	 *
+	 * @default true
+	 */
+	cancelPendingInvitationsOnReInvite?: boolean;
 	/**
 	 * Send an email with the
 	 * invitation link to the user.
@@ -320,7 +348,7 @@ export interface OrganizationOptions {
  *
  * @example
  * ```ts
- * const auth = createAuth({
+ * const auth = betterAuth({
  * 	plugins: [
  * 		organization({
  * 			allowUserToCreateOrganization: true,
@@ -348,6 +376,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
 		leaveOrganization,
+		listInvitations,
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
@@ -414,6 +443,26 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
+
 	return {
 		id: "organization",
 		endpoints: {
@@ -425,18 +474,26 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				{
 					method: "POST",
 					requireHeaders: true,
-					body: z.object({
-						organizationId: z.string().optional(),
-						permission: z.record(z.string(), z.array(z.string())),
-					}),
+					body: z
+						.object({
+							organizationId: z.string().optional(),
+						})
+						.and(
+							z.union([
+								z.object({
+									permission: z.record(z.string(), z.array(z.string())),
+									permissions: z.undefined(),
+								}),
+								z.object({
+									permission: z.undefined(),
+									permissions: z.record(z.string(), z.array(z.string())),
+								}),
+							]),
+						),
 					use: [orgSessionMiddleware],
 					metadata: {
 						$Infer: {
-							body: {} as {
-								permission: {
-									//@ts-expect-error
-									[key in keyof Statements]?: Array<Statements[key][number]>;
-								};
+							body: {} as PermissionExclusive & {
 								organizationId?: string;
 							},
 						},
@@ -451,9 +508,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 												permission: {
 													type: "object",
 													description: "The permission to check",
+													deprecated: true,
+												},
+												permissions: {
+													type: "object",
+													description: "The permission to check",
 												},
 											},
-											required: ["permission"],
+											required: ["permissions"],
 										},
 									},
 								},
@@ -505,7 +567,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					const result = hasPermission({
 						role: member.role,
 						options: options as OrganizationOptions,
-						permission: ctx.body.permission as any,
+						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
 						error: null,
@@ -662,23 +724,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		},
 		$Infer: {
 			Organization: {} as Organization,
-			Invitation: {} as Invitation,
-			Member: {} as Member,
+			Invitation: {} as InferInvitation<O>,
+			Member: {} as InferMember<O>,
 			Team: teamSupport ? ({} as Team) : ({} as any),
-			ActiveOrganization: {} as Prettify<
-				Organization & {
-					members: Prettify<
-						Member & {
-							user: {
-								id: string;
-								name: string;
-								email: string;
-								image?: string | null;
-							};
-						}
-					>[];
-					invitations: Invitation[];
-				}
+			ActiveOrganization: {} as Awaited<
+				ReturnType<ReturnType<typeof getFullOrganization<O>>>
 			>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,

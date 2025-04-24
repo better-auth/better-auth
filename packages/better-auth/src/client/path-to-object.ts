@@ -133,7 +133,6 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 										{
 											code?: string;
 											message?: string;
-											t?: FetchOptions["throw"];
 										},
 										FetchOptions["throw"] extends true
 											? true

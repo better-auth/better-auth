@@ -1,11 +1,10 @@
 name: Report an issue
 description: Create a report to help us improve
-labels: ['bug']
 body:
   - type: checkboxes
     attributes:
       label: Is this suited for github?
-      description: Feel free to join the discord community [here](https://discord.gg/GYC3W7tZzb), we can usually respond faster to any questions.
+      description: Feel free to join the discord community [here](https://discord.gg/better-auth), we can usually respond faster to any questions.
       options:
         - label: Yes, this is suited for github
   - type: markdown
@@ -70,7 +69,7 @@ body:
   - type: textarea
     attributes:
       label: Auth config (if applicable)
-      description: If you haven’t already shared a reproducible example or don’t think it’s unrelated, please include your auth config. Make sure to remove any sensitive information.
+      description: If you haven't already shared a reproducible example or don't think it's unrelated, please include your auth config. Make sure to remove any sensitive information.
       render: typescript
       value: |
         import { betterAuth } from "better-auth"
