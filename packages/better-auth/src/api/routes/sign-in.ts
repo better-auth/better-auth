@@ -499,23 +499,27 @@ export const signInEmail = createAuthEndpoint(
 					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
-			const token = await createEmailVerificationToken(
-				ctx.context.secret,
-				user.user.email,
-				undefined,
-				ctx.context.options.emailVerification?.expiresIn,
-			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-			await ctx.context.options.emailVerification.sendVerificationEmail(
-				{
-					user: user.user,
-					url,
-					token,
-				},
-				ctx.request,
-			);
+
+			if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+				const token = await createEmailVerificationToken(
+					ctx.context.secret,
+					user.user.email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
+				const url = `${
+					ctx.context.baseURL
+				}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+				await ctx.context.options.emailVerification.sendVerificationEmail(
+					{
+						user: user.user,
+						url,
+						token,
+					},
+					ctx.request,
+				);
+			}
+
 			throw new APIError("FORBIDDEN", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
