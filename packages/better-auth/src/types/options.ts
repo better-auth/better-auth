@@ -438,6 +438,16 @@ export type BetterAuthOptions = {
 	account?: {
 		modelName?: string;
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		/**
+		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
+		 * will be updated on sign in with the latest data from the provider.
+		 *
+		 * @default true
+		 */
+		updateAccountOnSignIn?: boolean;
+		/**
+		 * Configuration for account linking.
+		 */
 		accountLinking?: {
 			/**
 			 * Enable account linking

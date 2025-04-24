@@ -131,7 +131,7 @@ export type InferOptionSchema<S extends AuthPluginSchema> = S extends Record<
 	? {
 			[K in keyof S]?: {
 				modelName?: string;
-				fields: {
+				fields?: {
 					[P in keyof Fields]?: string;
 				};
 			};
