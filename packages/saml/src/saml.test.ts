@@ -857,13 +857,14 @@ describe("SAML SSO", async () => {
 			},
 		});
 		expect(signInResponse).toEqual({
-			url: expect.stringContaining("http://localhost:3001"),
-			samlResponse: expect.any(String),
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
 		});
-
+		const loginResponse = await fetch(signInResponse.url);
+		const resultValue = await loginResponse.json();
 		const result = await auth.api.callbackSSOSAML({
 			body: {
-				SAMLResponse: signInResponse.samlResponse,
+				SAMLResponse: resultValue.samlResponse,
 				RelayState: "http://localhost:3001/dashboard",
 			},
 			params: {
