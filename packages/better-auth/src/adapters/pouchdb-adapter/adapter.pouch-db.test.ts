@@ -13,14 +13,14 @@ PouchDB.plugin(PouchDBFind);
 
 describe("adapter test", async () => {
 	const dbClient = async (dbName: string) => {
-		const db = new PouchDB(dbName, {adapter: 'memory'});
+		const db = new PouchDB(dbName, { adapter: "memory" });
 		return db;
 	};
 
 	let db = await dbClient("better-auth");
 	async function clearDb() {
-		const docs = await db.allDocs();	
-		await db.bulkDocs(docs.rows.map(row => ({ ...row, _deleted: true })));
+		const docs = await db.allDocs();
+		await db.bulkDocs(docs.rows.map((row) => ({ ...row, _deleted: true })));
 	}
 
 	beforeAll(async () => {

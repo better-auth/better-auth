@@ -72,7 +72,7 @@ export async function getTestInstance<
 
 	async function pouchdbClient() {
 		const dbClient = async (dbName: string) => {
-			const db = new PouchDB(dbName, {adapter: 'memory'});
+			const db = new PouchDB(dbName, { adapter: "memory" });
 			return db;
 		};
 		const db = await dbClient("better-auth");
