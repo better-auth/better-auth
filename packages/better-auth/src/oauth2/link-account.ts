@@ -113,7 +113,7 @@ export async function handleOAuthUserInfo(
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
-					userInfo.email.toLocaleLowerCase() === dbUser.user.email
+					userInfo.email.toLowerCase() === dbUser.user.email
 						? dbUser.user.emailVerified || userInfo.emailVerified
 						: userInfo.emailVerified,
 			});
