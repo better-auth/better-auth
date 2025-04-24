@@ -152,7 +152,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 
 					const loginRequest = sp.createLoginRequest(
 						idp,
-						"post",
+						options?.binding || "post",
 					) as BindingContext & { entityEndpoint: string; type: string };
 					const { samlContent, extract } = await idp.parseLoginRequest(
 						sp,
@@ -228,12 +228,15 @@ export const ssoSAML = (options?: SSOOptions) => {
 					const sp = saml.ServiceProvider({
 						metadata: parsedSamlConfig.spMetadata.metadata,
 					});
-
 					let parsedResponse: FlowResult;
 					try {
-						parsedResponse = await sp.parseLoginResponse(idp, "post", {
-							body: { SAMLResponse, RelayState },
-						});
+						parsedResponse = await sp.parseLoginResponse(
+							idp,
+							options?.binding || "post",
+							{
+								body: { SAMLResponse, RelayState },
+							},
+						);
 
 						if (!parsedResponse) {
 							throw new Error("Empty SAML response");

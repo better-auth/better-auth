@@ -25,6 +25,7 @@ export interface SSOProvider {
 }
 
 export interface SSOOptions {
+	binding?: "post" | "redirect";
 	provisionUser?: (data: {
 		user: User & Record<string, any>;
 		userInfo: Record<string, any>;
