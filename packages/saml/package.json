@@ -43,12 +43,14 @@
     }
   },
   "dependencies": {
-    "@authenio/samlify-xsd-schema-validator": "^1.0.5",
     "samlify": "^2.9.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "better-auth": "workspace:^",
+    "@authenio/samlify-xsd-schema-validator": "^1.0.5",
+    "body-parser": "^2.2.0",
+    "express": "^5.1.0",
     "vitest": "^1.6.0"
   }
 }

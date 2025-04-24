@@ -4,12 +4,7 @@ import { type BetterAuthPlugin, logger } from "better-auth";
 import { createAuthEndpoint } from "better-auth/plugins";
 import { setSessionCookie } from "better-auth/cookies";
 import * as saml from "samlify";
-import {
-	SAMLConfigSchema,
-	type SSOOptions,
-	type SSOProvider,
-	type SAMLConfig,
-} from "./types";
+import { SAMLConfigSchema, type SSOOptions, type SAMLConfig } from "./types";
 import type { Session, User } from "../../better-auth/src";
 
 export const ssoSAML = (options?: SSOOptions) => {
