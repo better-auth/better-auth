@@ -78,9 +78,11 @@ await authClient.saml.register({
        metadata: "your idp metadata" 
     }
 });
+```
 </Tab>
 
 <Tab value="server">
+```ts title="register-provider.ts"
  await auth.api.createSAMLProvider({
     body: {
         providerId: "example-saml-provider",
@@ -101,8 +103,9 @@ await authClient.saml.register({
         }
     }
 });
+```
 </Tab>
-
+</Tabs>
 
 ### Get Service Provider Metadata
  

@@ -37,7 +37,9 @@ export const ssoSAML = (options?: SSOOptions) => {
 					},
 				},
 				async (ctx) => {
-					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+					const provider = await ctx.context.adapter.findOne<{
+						samlConfig: string;
+					}>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -121,7 +123,9 @@ export const ssoSAML = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const { providerId, callbackURL } = ctx.body;
-					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+					const provider = await ctx.context.adapter.findOne<{
+						samlConfig: string;
+					}>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -140,7 +144,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 					const parsedSamlConfig = JSON.parse(provider.samlConfig);
 					const sp = saml.ServiceProvider({
 						metadata: parsedSamlConfig.spMetadata.metadata,
-						allowCreate: "true",
+						allowCreate: true,
 						loginRequestTemplate: {
 							context:
 								'<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" AssertionConsumerServiceURL="{AssertionConsumerServiceURL}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:NameIDPolicy Format="{NameIDFormat}" AllowCreate="{AllowCreate}"/></samlp:AuthnRequest>',
@@ -149,11 +153,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 					const idp = saml.IdentityProvider({
 						metadata: parsedSamlConfig.idpMetadata.metadata,
 					});
-					const loginRequest = await sp.createLoginRequest(
-						idp,
-						"post",
-						ctx.request,
-					);
+					const loginRequest = sp.createLoginRequest(idp, "post");
 					const { samlContent, extract } = await idp.parseLoginRequest(
 						sp,
 						"post",
@@ -207,7 +207,9 @@ export const ssoSAML = (options?: SSOOptions) => {
 				async (ctx) => {
 					const { SAMLResponse, RelayState } = ctx.body;
 					const { providerId } = ctx.params;
-					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+					const provider = await ctx.context.adapter.findOne<{
+						samlConfig: string;
+					}>({
 						model: "ssoProvider",
 						where: [{ field: "providerId", value: providerId }],
 					});
