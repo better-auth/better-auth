@@ -275,10 +275,9 @@ export const signInSocial = createAuthEndpoint(
 				userInfo: {
 					...userInfo.user,
 					email: userInfo.user.email,
-					id: userInfo.user.id,
-					name: userInfo.user.name || "",
-					image: userInfo.user.image,
-					emailVerified: userInfo.user.emailVerified || false,
+					name: userInfo.user.name || userInfo.user.email,
+					createdAt: userInfo.user.createdAt || new Date(),
+					updatedAt: userInfo.user.updatedAt || new Date(),
 				},
 				account: {
 					providerId: provider.id,

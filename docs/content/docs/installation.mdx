@@ -228,13 +228,7 @@ You can use even more authentication methods like [passkey](/docs/plugins/passke
 
 <Step>
 ### Mount Handler
-To handle API requests, you need to set up a route handler on your server.
-
-Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path).
-
-<Callout>
-Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
-</Callout>
+To handle API requests from a client, you need to set up a route handler on your server. Better Auth supports any backend framework with standard `Request` and `Response` objects and offers helper functions for popular frameworks. By default, the handler should be mounted at `/api/auth/*`.
 
 <Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo"]} defaultValue="react">
     <Tab value="next-js">
@@ -244,6 +238,9 @@ Better Auth supports any backend framework with standard Request and Response ob
 
         export const { POST, GET } = toNextJsHandler(auth);
         ```
+        <Callout type="info">
+            Checkout [next-cookies](/docs/integrations/next#server-action-cookies) plugin to be able to set cookies automatically when authenticating users from the server.
+        </Callout>
     </Tab>
     <Tab value="nuxt">
     ```ts title="/server/api/auth/[...all].ts"

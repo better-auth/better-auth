@@ -178,6 +178,8 @@ export const callbackOAuth = createAuthEndpoint(
 				...userInfo,
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
+				createdAt: userInfo.createdAt || new Date(),
+				updatedAt: userInfo.updatedAt || new Date(),
 			},
 			account: {
 				providerId: provider.id,

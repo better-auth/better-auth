@@ -847,12 +847,15 @@ export const sso = (options?: SSOOptions) => {
 					}
 					const linked = await handleOAuthUserInfo(ctx, {
 						userInfo: {
+							...userInfo,
 							email: userInfo.email,
 							name: userInfo.name || userInfo.email,
 							id: userInfo.id,
 							image: userInfo.image,
 							emailVerified: userInfo.emailVerified || false,
-						},
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						} as User,
 						account: {
 							idToken: tokenResponse.idToken,
 							accessToken: tokenResponse.accessToken,
