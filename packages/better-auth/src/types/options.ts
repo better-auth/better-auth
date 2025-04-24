@@ -14,7 +14,6 @@ import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
-import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
@@ -77,7 +76,7 @@ export type BetterAuthOptions = {
 	database?:
 		| PostgresPool
 		| MysqlPool
-		| Database
+		| BetterSqlite3Database
 		| Dialect
 		| AdapterInstance
 		| {
