@@ -50,6 +50,20 @@ const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	}`;
 };
 
+const isInvoiceStatus = (value: unknown): value is Stripe.Invoice.Status => {
+	if (typeof value !== "string") {
+		return false;
+	}
+	return ['draft', 'open', 'paid', 'uncollectible', 'void'].includes(value);
+};
+
+const isCollectionMethod = (value: unknown): value is Stripe.Invoice.CollectionMethod => {
+	if (typeof value !== "string") {
+		return false;
+	}
+	return ['charge_automatically', 'send_invoice'].includes(value);
+};
+
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
@@ -873,6 +887,133 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 	} as const;
+
+	const invoiceEndpoints = {
+		listInvoices: createAuthEndpoint(
+			"/invoice/list",
+			{
+				method: "GET",
+				query: z.object({
+					/**
+					 * The status of the invoice
+					 * @type {Stripe.Invoice.Status}
+					 * @example "draft"
+					 * @example "open"
+					 * @example "paid"
+					 * @example "uncollectible"
+					 * @example "void"
+					 */
+					status: z.string().optional(),
+
+					/**
+					 * The ID of the subscription to filter by
+					 * @type {string}
+					 * @example "sub_1234567890"
+					 */
+					subscription: z.string().optional(),
+
+					/**
+					 * The collection method of the invoice
+					 * @type {Stripe.Invoice.CollectionMethod}
+					 * @example "charge_automatically"
+					 * @example "send_invoice"
+					 */
+					collectionMethod: z.string().optional(),
+
+					/**
+					 * The creation date of the invoice
+					 * @type {object}
+					 * @example {gt: 1714204800}
+					 */
+					created: z.object({
+						gt: z.number().optional(),
+						gte: z.number().optional(),
+						lt: z.number().optional(),
+						lte: z.number().optional(),
+					}).optional(),
+
+					/**
+					 * A cursor for use in pagination. 
+					 * ending_before is an object ID that defines your place in the list. 
+					 * For instance, if you make a list request and receive 100 objects,
+					 *  starting with obj_bar, your subsequent call can include ending_before=obj_bar in order to fetch the previous page of the list.
+					 * @type {string}
+					 * @example "obj_bar"
+					 */
+					ending_before: z.string().optional(),
+
+					/**
+					 * A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 10.
+					 * @type {number}
+					 * @example 10
+					 */
+					limit: z.number().default(10),
+
+					/**
+					 * A cursor for use in pagination. 
+					 * starting_after is an object ID that defines your place in the list. 
+					 * For instance, if you make a list request and receive 100 objects, 
+					 * starting with obj_bar, your subsequent call can include starting_after=obj_bar in order to fetch the next page of the list.
+					 * @type {string}
+					 * @example "obj_bar"
+					 */
+					starting_after: z.string().optional(),					
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				// get the user from the session
+				const { user } = ctx.context.session;
+				// check if the user has a Stripe customer ID
+				if (!user.stripeCustomerId) {
+					throw new APIError("BAD_REQUEST", {
+						message: "User has no Stripe customer ID",
+					});
+				}
+				// get the status and collection method from the query
+				// those are the only two parameters which we can check for validity passed what Zod can do
+				// the rest of the parameters are passed through to the Stripe API as-is
+				const { status, collectionMethod, ...otherParams } = ctx.query;
+
+				// create the invoice list params
+				// make sure we only give the invoices for the user session
+				let invoiceListParams: Stripe.InvoiceListParams = {
+					customer: user.stripeCustomerId,
+					...otherParams,
+				}
+
+				// if the status is provided, make sure it's a valid invoice status
+				if (status) {
+					if (!isInvoiceStatus(status)) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid invoice status",
+						});
+					} else {
+						invoiceListParams.status = status;
+					}
+				}
+
+				// if the collection method is provided, add it to the params
+				if (collectionMethod) {
+					if (!isCollectionMethod(collectionMethod)) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid collection method",
+						});
+					} else {
+						invoiceListParams.collection_method = collectionMethod;
+					}
+				}
+
+				// get the invoices
+				const invoices = await client.invoices.list(invoiceListParams);
+
+				// return the invoices
+				return ctx.json(invoices);
+			},
+		),
+		
+	} as const
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -939,6 +1080,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.json({ success: true });
 				},
 			),
+			...invoiceEndpoints,
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {
