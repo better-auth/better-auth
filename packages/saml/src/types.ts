@@ -58,14 +58,16 @@ export const SAMLConfigSchema = z.object({
 	callbackUrl: z.string(),
 	audience: z.string().optional(),
 	domain: z.string().optional(),
-	idpMetadata: z.object({
-		metadata: z.string(),
-		privateKey: z.string().optional(),
-		privateKeyPass: z.string().optional(),
-		isAssertionEncrypted: z.boolean().optional(),
-		encPrivateKey: z.string().optional(),
-		encPrivateKeyPass: z.string().optional(),
-	}),
+	idpMetadata: z
+		.object({
+			metadata: z.string(),
+			privateKey: z.string().optional(),
+			privateKeyPass: z.string().optional(),
+			isAssertionEncrypted: z.boolean().optional(),
+			encPrivateKey: z.string().optional(),
+			encPrivateKeyPass: z.string().optional(),
+		})
+		.optional(),
 	spMetadata: z.object({
 		metadata: z.string(),
 		binding: z.string().optional(),

@@ -8,9 +8,15 @@ import { SAMLConfigSchema, type SSOOptions, type SAMLConfig } from "./types";
 import type { Session, User } from "../../better-auth/src";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { FlowResult } from "samlify/types/src/flow";
+saml.setSchemaValidator({
+	validate: (response) => {
+		/* implment your own or always returns a resolved promise to skip */
+		return Promise.resolve("skipped");
+	},
+});
 export const ssoSAML = (options?: SSOOptions) => {
 	return {
-		id: "sso-saml",
+		id: "saml",
 		endpoints: {
 			spMetadata: createAuthEndpoint(
 				"/sso/saml2/sp/metadata",
@@ -81,6 +87,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
+					console.log(body);
 					const provider = await ctx.context.adapter.create({
 						model: "ssoProvider",
 						data: {
@@ -149,30 +156,19 @@ export const ssoSAML = (options?: SSOOptions) => {
 					const idp = saml.IdentityProvider({
 						metadata: parsedSamlConfig.idpMetadata.metadata,
 					});
-
+					console.log({ idp });
 					const loginRequest = sp.createLoginRequest(
 						idp,
-						options?.binding || "post",
+						"redirect",
 					) as BindingContext & { entityEndpoint: string; type: string };
-					const { samlContent, extract } = await idp.parseLoginRequest(
-						sp,
-						"post",
-						{
-							body: {
-								SAMLRequest: loginRequest.context,
-							},
-						},
-					);
-					if (!samlContent) {
+					if (!loginRequest) {
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid SAML request",
 						});
 					}
-					const responseResult = await fetch(loginRequest.entityEndpoint);
-					const responseResultValues = await responseResult.json();
 					return ctx.json({
-						url: responseResultValues.entityEndpoint,
-						samlResponse: responseResultValues.samlResponse,
+						url: loginRequest.context,
+						redirect: true,
 					});
 				},
 			),
@@ -230,13 +226,9 @@ export const ssoSAML = (options?: SSOOptions) => {
 					});
 					let parsedResponse: FlowResult;
 					try {
-						parsedResponse = await sp.parseLoginResponse(
-							idp,
-							options?.binding || "post",
-							{
-								body: { SAMLResponse, RelayState },
-							},
-						);
+						parsedResponse = await sp.parseLoginResponse(idp, "post", {
+							body: { SAMLResponse, RelayState },
+						});
 
 						if (!parsedResponse) {
 							throw new Error("Empty SAML response");
