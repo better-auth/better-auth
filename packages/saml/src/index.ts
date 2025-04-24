@@ -7,6 +7,7 @@ import * as saml from "samlify";
 import { SAMLConfigSchema, type SSOOptions, type SAMLConfig } from "./types";
 import type { Session, User } from "../../better-auth/src";
 import type { BindingContext } from "samlify/types/src/entity";
+import type { FlowResult } from "samlify/types/src/flow";
 export const ssoSAML = (options?: SSOOptions) => {
 	return {
 		id: "sso-saml",
@@ -228,7 +229,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 						metadata: parsedSamlConfig.spMetadata.metadata,
 					});
 
-					let parsedResponse: saml.LoginResponse;
+					let parsedResponse: FlowResult;
 					try {
 						parsedResponse = await sp.parseLoginResponse(idp, "post", {
 							body: { SAMLResponse, RelayState },
