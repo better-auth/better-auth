@@ -6,6 +6,7 @@ import { setSessionCookie } from "better-auth/cookies";
 import * as saml from "samlify";
 import { SAMLConfigSchema, type SSOOptions, type SAMLConfig } from "./types";
 import type { Session, User } from "../../better-auth/src";
+import type { BindingContext } from "samlify/types/src/entity";
 export const ssoSAML = (options?: SSOOptions) => {
 	return {
 		id: "sso-saml",
@@ -147,7 +148,11 @@ export const ssoSAML = (options?: SSOOptions) => {
 					const idp = saml.IdentityProvider({
 						metadata: parsedSamlConfig.idpMetadata.metadata,
 					});
-					const loginRequest = sp.createLoginRequest(idp, "post");
+
+					const loginRequest = sp.createLoginRequest(
+						idp,
+						"post",
+					) as BindingContext & { entityEndpoint: string; type: string };
 					const { samlContent, extract } = await idp.parseLoginRequest(
 						sp,
 						"post",
