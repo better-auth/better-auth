@@ -26,7 +26,7 @@ saml.setSchemaValidator(validator);
 let idp: ReturnType<typeof IdentityProvider>;
 
 const spMetadata = `
- <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/sp/metadata">
+ <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
    <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
     <md:KeyDescriptor use="signing">
        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
@@ -42,10 +42,10 @@ const spMetadata = `
          </ds:X509Data>
        </ds:KeyInfo>
      </md:KeyDescriptor>
-     <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/sp/sls"/>
+     <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3001/api/sso/saml2/sp/sls"/>
      <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
-     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/sp/acs" index="1"/>
-     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/sp/acs" index="1"/>
+     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:3001/api/sso/saml2/sp/acs" index="1"/>
+     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3001/api/sso/saml2/sp/acs" index="1"/>
      </md:SPSSODescriptor>
    <md:Organization>
      <md:OrganizationName xml:lang="en-US">Organization Name</md:OrganizationName>
@@ -857,14 +857,14 @@ describe("SAML SSO", async () => {
 			},
 		});
 		expect(signInResponse).toEqual({
-			url: expect.stringContaining("http://localhost:8081"),
+			url: expect.stringContaining("http://localhost:3001"),
 			samlResponse: expect.any(String),
 		});
 
 		const result = await auth.api.callbackSSOSAML({
 			body: {
 				SAMLResponse: signInResponse.samlResponse,
-				RelayState: "http://localhost:8081/dashboard",
+				RelayState: "http://localhost:3001/dashboard",
 			},
 			params: {
 				providerId: provider.providerId,
@@ -873,7 +873,7 @@ describe("SAML SSO", async () => {
 
 		expect(result).toEqual({
 			redirect: true,
-			url: "http://localhost:8081/dashboard",
+			url: "http://localhost:3001/dashboard",
 		});
 	});
 });
