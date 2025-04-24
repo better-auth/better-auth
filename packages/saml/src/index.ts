@@ -6,7 +6,6 @@ import { setSessionCookie } from "better-auth/cookies";
 import * as saml from "samlify";
 import { SAMLConfigSchema, type SSOOptions, type SAMLConfig } from "./types";
 import type { Session, User } from "../../better-auth/src";
-
 export const ssoSAML = (options?: SSOOptions) => {
 	return {
 		id: "sso-saml",
@@ -257,7 +256,7 @@ export const ssoSAML = (options?: SSOOptions) => {
 					};
 					const sessionRefs = extract.sessionToken;
 					let user: User;
-					const userExsists = await ctx.context.adapter.findOne({
+					const userExsists = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
 							{
