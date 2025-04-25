@@ -599,7 +599,6 @@ describe("Create Adapter Helper", async () => {
 						model: "user",
 						where: [{ field: "id", value: "123" }],
 					});
-
 				});
 
 				expect(parameters[0]!.field).toEqual("_id");
