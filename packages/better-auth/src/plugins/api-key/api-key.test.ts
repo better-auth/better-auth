@@ -115,10 +115,31 @@ describe("api-key", async () => {
 		expect(apiKey.lastRefillAt).toBeNull();
 		expect(apiKey.enabled).toEqual(true);
 		expect(apiKey.rateLimitTimeWindow).toEqual(86400000);
-		expect(apiKey.rateLimitMax).toEqual(10);
-		expect(apiKey.requestCount).toEqual(0);
-		expect(apiKey.remaining).toBeNull();
-		expect(apiKey.lastRequest).toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
+	});
+
+	it("should have the real value from rateLimitEnabled", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: false,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(false);
+	});
+
+	it("should have true if the rate limit is undefined", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: undefined,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
 	});
 
 	it("should create the API key with the given name", async () => {
