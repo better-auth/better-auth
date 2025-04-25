@@ -58,6 +58,35 @@ export const SAMLConfigSchema = z.object({
 	callbackUrl: z.string(),
 	audience: z.string().optional(),
 	domain: z.string().optional(),
+	mapping: z
+		.object({
+			id: z
+				.string({
+					description:
+						"The field in the user info response that contains the id. Defaults to 'sub'",
+				})
+				.optional(),
+			email: z
+				.string({
+					description:
+						"The field in the user info response that contains the email. Defaults to 'email'",
+				})
+				.optional(),
+			firstName: z
+				.string({
+					description:
+						"The field in the user info response that contains the first name. Defaults to 'givenName'",
+				})
+				.optional(),
+			lastName: z
+				.string({
+					description:
+						"The field in the user info response that contains the last name. Defaults to 'surname'",
+				})
+				.optional(),
+			extraFields: z.record(z.string()).optional(),
+		})
+		.optional(),
 	idpMetadata: z
 		.object({
 			metadata: z.string(),
@@ -71,23 +100,7 @@ export const SAMLConfigSchema = z.object({
 	spMetadata: z.object({
 		metadata: z.string(),
 		binding: z.string().optional(),
-		mapping: z
-			.object({
-				id: z.string({
-					description:
-						"The field in the user info response that contains the id. Defaults to 'sub'",
-				}),
-				email: z.string({
-					description:
-						"The field in the user info response that contains the email. Defaults to 'email'",
-				}),
-				name: z.string({
-					description:
-						"The field in the user info response that contains the name. Defaults to 'name'",
-				}),
-				extraFields: z.record(z.string()).optional(),
-			})
-			.optional(),
+
 		privateKey: z.string().optional(),
 		privateKeyPass: z.string().optional(),
 		isAssertionEncrypted: z.boolean().optional(),

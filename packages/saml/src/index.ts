@@ -87,7 +87,6 @@ export const ssoSAML = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
-					console.log(body);
 					const provider = await ctx.context.adapter.create({
 						model: "ssoProvider",
 						data: {
@@ -148,15 +147,14 @@ export const ssoSAML = (options?: SSOOptions) => {
 					const sp = saml.ServiceProvider({
 						metadata: parsedSamlConfig.spMetadata.metadata,
 						allowCreate: true,
-						loginRequestTemplate: {
-							context:
-								'<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" AssertionConsumerServiceURL="{AssertionConsumerServiceURL}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:NameIDPolicy Format="{NameIDFormat}" AllowCreate="{AllowCreate}"/></samlp:AuthnRequest>',
-						},
+						// loginRequestTemplate: {
+						// 	context:
+						// 		'<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" AssertionConsumerServiceURL="{AssertionConsumerServiceURL}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:NameIDPolicy Format="{NameIDFormat}" AllowCreate="{AllowCreate}"/></samlp:AuthnRequest>',
+						// },
 					});
 					const idp = saml.IdentityProvider({
 						metadata: parsedSamlConfig.idpMetadata.metadata,
 					});
-					console.log({ idp });
 					const loginRequest = sp.createLoginRequest(
 						idp,
 						"redirect",
@@ -217,7 +215,6 @@ export const ssoSAML = (options?: SSOOptions) => {
 					}
 
 					const parsedSamlConfig = JSON.parse(provider.samlConfig);
-
 					const idp = saml.IdentityProvider({
 						metadata: parsedSamlConfig.idpMetadata.metadata,
 					});
@@ -241,21 +238,27 @@ export const ssoSAML = (options?: SSOOptions) => {
 						});
 					}
 					const { extract } = parsedResponse;
+					const attributes = parsedResponse.extract.attributes;
+					const mapping = parsedSamlConfig?.mapping ?? {};
 					const userInfo = {
-						id: parsedResponse.extract.nameID,
-						email:
-							parsedResponse.extract.attributes?.email ||
-							parsedResponse.extract.nameID,
+						...Object.fromEntries(
+							Object.entries(mapping.extraFields || {}).map(([key, value]) => [
+								key,
+								extract.attributes[value as string],
+							]),
+						),
+						id: attributes[mapping.id || "nameID"],
+						email: attributes[mapping.email || "nameID" || "email"],
 						name:
 							[
-								parsedResponse.extract.attributes?.givenName,
-								parsedResponse.extract.attributes?.surname,
+								attributes[mapping.firstName || "givenName"],
+								attributes[mapping.lastName || "surname"],
 							]
 								.filter(Boolean)
 								.join(" ") || parsedResponse.extract.attributes?.displayName,
 						attributes: parsedResponse.extract.attributes,
 					};
-					const sessionRefs = extract.sessionToken;
+					const sessionRefs = extract.sessionIndex.sessionIndex;
 					let user: User;
 					const userExsists = await ctx.context.adapter.findOne<User>({
 						model: "user",
