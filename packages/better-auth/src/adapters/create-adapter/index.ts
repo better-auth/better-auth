@@ -468,6 +468,8 @@ export const createAdapter =
 			? undefined
 			: CleanedWhere[] => {
 			if (!where) return undefined as any;
+			const newMappedKeys = config.mapKeysTransformInput ?? {};
+
 			return where.map((w) => {
 				const {
 					field: unsafe_field,
@@ -486,11 +488,13 @@ export const createAdapter =
 					field: unsafe_field,
 					model,
 				});
+				const fieldName: string =
+					newMappedKeys[defaultFieldName] ||
+					getFieldName({
+						field: defaultFieldName,
+						model: defaultModelName,
+					});
 
-				const fieldName = getFieldName({
-					field: defaultFieldName,
-					model: defaultModelName,
-				});
 				const fieldAttr = getFieldAttributes({
 					field: defaultFieldName,
 					model: defaultModelName,
