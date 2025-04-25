@@ -1,5 +1,5 @@
 import type { BetterAuthClientPlugin } from "better-auth";
-import { ssoSAML } from ".";
+import { ssoSAML } from "./index";
 export const ssoSAMLClient = () => {
 	return {
 		id: "saml-client",

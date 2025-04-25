@@ -4,7 +4,7 @@ import { type BetterAuthPlugin, logger } from "better-auth";
 import { createAuthEndpoint } from "better-auth/plugins";
 import { setSessionCookie } from "better-auth/cookies";
 import * as saml from "samlify";
-import type { Session, User } from "../../better-auth/src";
+import type { Session, User } from "../../../better-auth/src";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { FlowResult } from "samlify/types/src/flow";
 import { type SSOOptions, type SAMLConfig } from "./types";

@@ -1,18 +1,17 @@
 {
-  "name": "@better-auth/saml",
+  "name": "@better-auth/sso",
   "version": "1.0.0",
-  "description": "SAML 2.0 authentication plugin for Better Auth",
+  "description": "SSO authentication plugin for Better Auth",
   "main": "dist/index.cjs",
   "license": "MIT",
   "keywords": [
-    "saml",
+    "sso",
     "auth",
     "better-auth",
     "sso",
-    "saml2",
-    "saml2.0",
-    "saml2.0-auth",
-    "saml2.0-sso"
+    "oidc",
+    "saml",
+    "oauth2"
   ],
   "scripts": {
     "test": "vitest",
@@ -30,6 +29,16 @@
       "types": "./dist/client.d.ts",
       "import": "./dist/client.mjs",
       "require": "./dist/client.cjs"
+    },
+    "./saml": {
+      "types": "./dist/saml/index.d.ts",
+      "import": "./dist/saml/index.mjs",
+      "require": "./dist/saml/index.cjs"
+    },
+    "./saml/client": {
+      "types": "./dist/saml/client.d.ts",
+      "import": "./dist/saml/client.mjs",
+      "require": "./dist/saml/client.cjs"
     }
   },
   "typesVersions": {
@@ -39,12 +48,19 @@
       ],
       "client": [
         "./dist/client.d.ts"
+      ],
+      "saml": [
+        "./dist/saml/index.d.ts"
+      ],
+      "saml/client": [
+        "./dist/saml/client.d.ts"
       ]
     }
   },
   "dependencies": {
     "samlify": "^2.9.0",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "oauth2-mock-server": "^7.2.0"
   },
   "devDependencies": {
     "better-auth": "workspace:^",

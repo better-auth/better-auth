@@ -500,7 +500,7 @@ const createTemplateCallback = (idp, sp, email) => (template) => {
 };
 class MockSAMLIdP {
 	private app: express.Application;
-	private server: ReturnType<typeof createServer>;
+	private server: ReturnType<typeof createServer> | undefined;
 	private port: number;
 	private idp: ReturnType<typeof IdentityProvider>;
 	private sp: ReturnType<typeof ServiceProvider>;
