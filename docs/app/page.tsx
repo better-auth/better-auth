@@ -27,20 +27,28 @@ export default async function HomePage() {
 	const stars = await getGitHubStars();
 	return (
 		<main className="h-min mx-auto overflow-x-hidden">
-			<div className="w-full bg-gradient-to-br border-b dark:border-zinc-800 border-zinc-200 dark:from-zinc-950 dark:to-black from-zinc-150 to-zinc-100 dark:text-white text-center py-2">
-				<p className="text-sm px-4 tracking-tight font-mono">
-					Introducing{" "}
-					<Link target="_blank" href="https://better-auth.build">
-						Better Auth Infrastructure
-					</Link>{" "}
-					|{" "}
-					<Link
-						href="https://better-auth.build"
-						className="underline underline-offset-2 text-blue-400 hover:text-blue-600"
-					>
-						Join the waitlist
-					</Link>{" "}
-				</p>
+			<div className="w-full bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-black dark:to-zinc-950 border-b border-zinc-200 dark:border-zinc-800">
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					<div className="flex items-center justify-center h-12">
+						<span className="font-medium text-sm text-zinc-700 dark:text-zinc-300">
+							Introducing{" "}
+							<Link
+								href="https://better-auth.build"
+								target="_blank"
+								className="font-semibold text-zinc-900 dark:text-white/90 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+							>
+								Better Auth Infrastructure
+							</Link>
+							<span className="mx-3 text-zinc-400">|</span>
+							<Link
+								href="https://better-auth.build"
+								className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+							>
+								Join the waitlist →
+							</Link>
+						</span>
+					</div>
+				</div>
 			</div>
 			<Section
 				className="mb-1 overflow-y-clip"
