@@ -63,12 +63,6 @@ importers:
 
   demo/nextjs:
     dependencies:
-      '@better-auth/expo':
-        specifier: workspace:*
-        version: link:../../packages/expo
-      '@better-auth/sso':
-        specifier: workspace:*
-        version: link:../../packages/sso
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../packages/stripe
