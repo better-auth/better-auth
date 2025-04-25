@@ -7,5 +7,11 @@ export default defineBuildConfig({
 	outDir: "dist",
 	clean: false,
 	failOnWarn: false,
-	externals: ["better-auth", "better-call", "@better-fetch/fetch", "stripe"],
+	externals: [
+		"better-auth",
+		"better-call",
+		"@better-fetch/fetch",
+		"stripe",
+		"saml",
+	],
 });

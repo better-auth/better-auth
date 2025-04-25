@@ -4,16 +4,83 @@ import { type BetterAuthPlugin, logger } from "better-auth";
 import { createAuthEndpoint } from "better-auth/plugins";
 import { setSessionCookie } from "better-auth/cookies";
 import * as saml from "samlify";
-import { SAMLConfigSchema, type SSOOptions, type SAMLConfig } from "./types";
 import type { Session, User } from "../../better-auth/src";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { FlowResult } from "samlify/types/src/flow";
+import { type SSOOptions, type SAMLConfig } from "./types";
 saml.setSchemaValidator({
 	validate: (response) => {
 		/* implment your own or always returns a resolved promise to skip */
 		return Promise.resolve("skipped");
 	},
 });
+
+const SAMLConfigSchema = z.object({
+	entryPoint: z.string(),
+	providerId: z.string(),
+	issuer: z.string(),
+	cert: z.string(),
+	callbackUrl: z.string(),
+	audience: z.string().optional(),
+	domain: z.string().optional(),
+	mapping: z
+		.object({
+			id: z
+				.string({
+					description:
+						"The field in the user info response that contains the id. Defaults to 'sub'",
+				})
+				.optional(),
+			email: z
+				.string({
+					description:
+						"The field in the user info response that contains the email. Defaults to 'email'",
+				})
+				.optional(),
+			firstName: z
+				.string({
+					description:
+						"The field in the user info response that contains the first name. Defaults to 'givenName'",
+				})
+				.optional(),
+			lastName: z
+				.string({
+					description:
+						"The field in the user info response that contains the last name. Defaults to 'surname'",
+				})
+				.optional(),
+			extraFields: z.record(z.string()).optional(),
+		})
+		.optional(),
+	idpMetadata: z
+		.object({
+			metadata: z.string(),
+			privateKey: z.string().optional(),
+			privateKeyPass: z.string().optional(),
+			isAssertionEncrypted: z.boolean().optional(),
+			encPrivateKey: z.string().optional(),
+			encPrivateKeyPass: z.string().optional(),
+		})
+		.optional(),
+	spMetadata: z.object({
+		metadata: z.string(),
+		binding: z.string().optional(),
+
+		privateKey: z.string().optional(),
+		privateKeyPass: z.string().optional(),
+		isAssertionEncrypted: z.boolean().optional(),
+		encPrivateKey: z.string().optional(),
+		encPrivateKeyPass: z.string().optional(),
+	}),
+	wantAssertionsSigned: z.boolean().optional(),
+	signatureAlgorithm: z.string().optional(),
+	digestAlgorithm: z.string().optional(),
+	identifierFormat: z.string().optional(),
+	privateKey: z.string().optional(),
+	decryptionPvk: z.string().optional(),
+	additionalParams: z.record(z.string()).optional(),
+});
+
 export const ssoSAML = (options?: SSOOptions) => {
 	return {
 		id: "saml",
