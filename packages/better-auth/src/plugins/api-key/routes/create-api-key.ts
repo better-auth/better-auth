@@ -7,6 +7,7 @@ import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
+import { defaultKeyHasher } from "../utilts";
 
 export function createApiKey({
 	keyGenerator,
@@ -355,7 +356,7 @@ export function createApiKey({
 				prefix: prefix || opts.defaultPrefix,
 			});
 
-			const hashed = await opts.customKeyHasher(key);
+			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
 			let start: string | null = null;
 

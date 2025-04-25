@@ -253,14 +253,12 @@ describe("api-key", async () => {
 		expect(apiKey.expiresAt?.getTime()).toBeGreaterThanOrEqual(expectedResult);
 	});
 
-	it("should support custom key hasher", async () => {
+	it("should support disabling key hashing", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
-						customKeyHasher(key) {
-							return `${key}-my-custom-hasher`;
-						},
+						disableKeyHashing: true,
 					}),
 				],
 			},
@@ -276,7 +274,6 @@ describe("api-key", async () => {
 			body: {},
 			headers,
 		});
-		expect(apiKey2.key.endsWith("-my-custom-hasher")).not.toEqual(true);
 		const res = await (await auth.$context).adapter.findOne<ApiKey>({
 			model: "apikey",
 			where: [
@@ -286,17 +283,15 @@ describe("api-key", async () => {
 				},
 			],
 		});
-		expect(res?.key.endsWith("-my-custom-hasher")).toEqual(true);
+		expect(res?.key).toEqual(apiKey2.key);
 	});
 
-	it("should be able to verify with custom key hasher", async () => {
+	it("should be able to verify with key hashing disabled", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
-						customKeyHasher(key) {
-							return `${key}-my-custom-hasher`;
-						},
+						disableKeyHashing: true,
 					}),
 				],
 			},

@@ -8,11 +8,14 @@ export interface ApiKeyOptions {
 	 */
 	apiKeyHeaders?: string | string[];
 	/**
-	 * A custom function to allow you to hash the key before saving it into the database.
+	 * Disable hashing of the API key.
 	 *
-	 * **Security Warning:** It's strongly recommended to not disable hashing. Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys. If you must customize the hashing, consider using a secure algorithm like bcrypt or HMAC instead of returning the raw key.
+	 * **Security Warning:** It's strongly recommended to not disable hashing.
+	 * Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+	 *
+	 * @default false
 	 */
-	customKeyHasher?: (key: string) => string | Promise<string>;
+	disableKeyHashing?: boolean;
 	/**
 	 * The function to get the API key from the context
 	 */

@@ -8,6 +8,7 @@ import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
+import { defaultKeyHasher } from "../utilts";
 
 export function verifyApiKey({
 	opts,
@@ -66,7 +67,7 @@ export function verifyApiKey({
 				});
 			}
 
-			const hashed = await opts.customKeyHasher(key);
+			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 				model: schema.apikey.modelName,
