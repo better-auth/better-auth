@@ -2,7 +2,6 @@ import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
 import Features from "@/components/features";
 import Link from "next/link";
-import { PlusSvg } from "@/components/landing/section-svg";
 
 async function getGitHubStars() {
 	try {
