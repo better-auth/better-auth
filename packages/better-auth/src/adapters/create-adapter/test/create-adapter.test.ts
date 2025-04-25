@@ -172,7 +172,6 @@ describe("Create Adapter Helper", async () => {
 			adapter(args_0) {
 				return {
 					async create(data) {
-						console.log(data);
 						expect(data.data.id).not.toBeDefined();
 						return data.data;
 					},
@@ -180,11 +179,11 @@ describe("Create Adapter Helper", async () => {
 			},
 		});
 
-		const r = await adapter.create({
+		const testResult = await adapter.create({
 			model: "user",
 			data: { name: "test-name" },
 		});
-		expect(r.id).not.toBeDefined();
+		expect(testResult.id).not.toBeDefined();
 	});
 
 	test("Should throw an error if the database doesn't support numeric ids and the user has enabled `useNumberId`", async () => {
