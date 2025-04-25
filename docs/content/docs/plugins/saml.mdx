@@ -130,3 +130,39 @@ const { url , redirect } = await authClient.saml.signIn({
     callbackURL: "/dashboard" // Where to redirect after auth
 }); 
 ```
+
+
+## Schema
+
+The SAML plugin adds the following table to your database:
+
+<DatabaseTable
+    fields={[
+        {
+            name: "id",
+            type: "string",
+            description: "A database identifier",
+            isRequired: true,
+            isPrimaryKey: true,
+        },
+        {
+            name: "issuer",
+            type: "string",
+            description: "The issuer identifier for the SAML provider",
+            isRequired: true,
+        },
+        {
+            name: "samlConfig",
+            type: "string",
+            description: "The SAML configuration stored as a JSON string",
+            isRequired: true,
+        },
+        {
+            name: "providerId",
+            type: "string",
+            description: "The provider identifier. Used to identify a provider and generate redirect URLs",
+            isRequired: true,
+            isUnique: true,
+        }
+    ]}
+/>						
