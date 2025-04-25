@@ -1,4 +1,5 @@
 import type { User } from "better-auth";
+
 export type SAMLConfig = {
 	entryPoint: string;
 	issuer: string;

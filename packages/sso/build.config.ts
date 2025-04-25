@@ -13,5 +13,6 @@ export default defineBuildConfig({
 		"@better-fetch/fetch",
 		"stripe",
 		"saml",
+		"sso",
 	],
 });

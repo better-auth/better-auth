@@ -7,7 +7,8 @@ import * as saml from "samlify";
 import type { Session, User } from "../../../better-auth/src";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { FlowResult } from "samlify/types/src/flow";
-import { type SSOOptions, type SAMLConfig } from "./types";
+import { type SAMLSSOOptions, type SAMLConfig } from "./types";
+
 saml.setSchemaValidator({
 	validate: (response) => {
 		/* implment your own or always returns a resolved promise to skip */
@@ -81,7 +82,7 @@ const SAMLConfigSchema = z.object({
 	additionalParams: z.record(z.string()).optional(),
 });
 
-export const ssoSAML = (options?: SSOOptions) => {
+export const ssoSAML = (options?: SAMLSSOOptions) => {
 	return {
 		id: "saml",
 		endpoints: {

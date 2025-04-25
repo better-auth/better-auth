@@ -17,6 +17,7 @@ import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../better-auth/src/oauth2/link-account";
 import { setSessionCookie } from "../../better-auth/src/cookies";
+import { ssoSAML } from "./saml";
 export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
@@ -76,7 +77,7 @@ export interface SSOOptions {
 	defaultOverrideUserInfo?: boolean;
 }
 
-export const sso = (options?: SSOOptions) => {
+const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
 		endpoints: {
@@ -1011,3 +1012,4 @@ export interface OIDCConfig {
 		extraFields?: Record<string, string>;
 	};
 }
+export { sso, ssoSAML };

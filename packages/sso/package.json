@@ -20,7 +20,7 @@
   },
   "module": "dist/index.mjs",
   "exports": {
-    ".": {
+    "./index": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
@@ -64,6 +64,7 @@
   },
   "devDependencies": {
     "better-auth": "workspace:^",
+    "@types/better-sqlite3": "^7.6.12",
     "@authenio/samlify-xsd-schema-validator": "^1.0.5",
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
