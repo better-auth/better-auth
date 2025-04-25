@@ -1,15 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { sso } from ".";
+import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import { organization } from "../organization";
 
-describe("SSO SAML", async () => {
+let server = new OAuth2Server();
+
+describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [sso(), organization()],
 	});
 
-	beforeAll(async () => {});
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.issuer.on;
+		await server.start(8080, "localhost");
+		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
+	});
 
 	afterAll(async () => {
 		await server.stop().catch(() => {});
