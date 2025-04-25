@@ -19,7 +19,7 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { sso } from "better-auth/plugins/sso";
+        import { sso } from "@better-auth/sso";
 
         const auth = betterAuth({
             plugins: [ // [!code highlight]
@@ -52,7 +52,7 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { ssoClient } from "better-auth/client/plugins"
+        import { ssoClient } from "@better-auth/sso/client"
 
         const authClient = createAuthClient({
             plugins: [ // [!code highlight]
