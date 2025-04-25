@@ -19,11 +19,25 @@ SAML (Security Assertion Markup Language) is an XML-based standard for exchangin
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { ssoSAML } from "better-auth/plugins/sso-saml";
+        import { ssoSAML } from "better-auth/plugins/saml";
 
         const auth = betterAuth({
             plugins: [ // [!code highlight]
                 ssoSAML() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Add Plugin to the client
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { ssoSAMLClient } from "better-auth/plugins/saml/client";
+
+        const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                ssoSAMLClient() // [!code highlight]
             ] // [!code highlight]
         })
         ```
