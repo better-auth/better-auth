@@ -1,7 +1,7 @@
 import { APIError } from "../../api";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin } from "../../types/plugins";
 
 const ERROR_CODES = {
 	PASSWORD_COMPROMISED:
@@ -55,6 +55,10 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
+	/**
+	 * Custom message to be shown when the password is compromised.
+	 * @default "The password you entered has been compromised. Please choose a different password."
+	 */
 	customPasswordCompromisedMessage?: string;
 }
 
