@@ -8,7 +8,7 @@ import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
-import { defaultKeyHasher } from "../utilts";
+import { defaultKeyHasher } from "../";
 
 export function verifyApiKey({
 	opts,

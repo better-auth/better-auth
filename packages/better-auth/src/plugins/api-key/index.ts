@@ -7,7 +7,19 @@ import { getDate } from "../../utils/date";
 import type { ApiKey, ApiKeyOptions } from "./types";
 import { createApiKeyRoutes } from "./routes";
 import type { User } from "../../types";
-import { defaultKeyHasher } from "./utilts";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+
+
+export const defaultKeyHasher = async (key: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(key),
+	);
+	const hashed = base64Url.encode(new Uint8Array(hash), {
+		padding: false,
+	});
+	return hashed;
+};
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",

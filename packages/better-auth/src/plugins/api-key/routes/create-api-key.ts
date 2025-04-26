@@ -7,7 +7,7 @@ import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
-import { defaultKeyHasher } from "../utilts";
+import { defaultKeyHasher } from "../";
 
 export function createApiKey({
 	keyGenerator,
