@@ -407,7 +407,7 @@ export function createApiKey({
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled:
 					rateLimitEnabled === undefined
-						? opts.rateLimit.enabled || true
+						? opts.rateLimit.enabled ?? true
 						: rateLimitEnabled,
 				requestCount: 0,
 				//@ts-ignore - we intentionally save the permissions as string on DB.
