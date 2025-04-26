@@ -45,7 +45,7 @@ export const subscriptions = {
 			createdAt: {
 				type: "date",
 				required: true,
-				defaultValue: Date.now(),
+				defaultValue: Date.now,
 				
 			}
 		},
