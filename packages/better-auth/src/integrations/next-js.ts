@@ -52,7 +52,7 @@ export const nextCookies = () => {
 									cookieHelper.set(key, decodeURIComponent(value.value), opts);
 								} catch (e) {
 									// this will fail if the cookie is being set on server component
-									ctx.context.logger.error(`Error sending the cookie to the browser. A possible cause is trying to set the cookie in a React Server Component as RSCs can only read cookies. Use Server actions or Client components instead. More info at https://nextjs.org/docs/app/api-reference/functions/cookies; ${e}`)							
+									ctx.context.logger.error(`Error sending the cookie to the browser. A possible cause is trying to set the cookie in a React Server Component as RSCs can only read cookies. Use Server actions or Client components instead. More info at https://nextjs.org/docs/app/api-reference/functions/cookies;`, e)							
 								}
 							});
 							return;
