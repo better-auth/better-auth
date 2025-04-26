@@ -470,7 +470,7 @@ To add a member to an organization, we first need to send an invitation to the u
 
 ### Setup Invitation Email
 
-For member invitation to work we first need to provider `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
+For member invitation to work we first need to provide `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
 
 You'll need to construct and send the invitation link to the user. The link should include the invitation ID, which will be used with the acceptInvitation function when the user clicks on it.
 
@@ -551,7 +551,7 @@ await authClient.organization.rejectInvitation({
 To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
 
 ```ts title="auth-client.ts"
-authClient.organization.getInvitation({
+await authClient.organization.getInvitation({
     query: {
         id: params.id
     }
@@ -610,7 +610,7 @@ If you want to add a member directly to an organization without sending an invit
 ```ts title="api.ts"
 import { auth } from "@/auth";
 
-auth.api.addMember({
+await auth.api.addMember({
   body: {
       userId: "user-id",
       organizationId: "organization-id",
