@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.8-beta.1",
+  "version": "1.2.8-beta.2",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -8,17 +8,16 @@
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/better-auth"
   },
-
   "keywords": [
-          "auth",
-          "oauth",
-          "oidc",
-          "2fa",
-          "social",
-          "security",
-          "typescript",
-          "nextjs"
-      ],
+    "auth",
+    "oauth",
+    "oidc",
+    "2fa",
+    "social",
+    "security",
+    "typescript",
+    "nextjs"
+  ],
   "scripts": {
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
@@ -30,7 +29,7 @@
     "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
     "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -575,6 +574,9 @@
       "react-start": [
         "./dist/integrations/react-start.d.ts"
       ],
+      "adapters": [
+        "./dist/adapters/index.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"
       ],
@@ -691,7 +693,7 @@
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
-    "kysely": "^0.27.6",
+    "kysely": "^0.28.1",
     "nanostores": "^0.11.3",
     "zod": "^3.24.1"
   },

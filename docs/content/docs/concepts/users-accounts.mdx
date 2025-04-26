@@ -260,6 +260,38 @@ To list user accounts you can use `client.user.listAccounts` method. Which will 
 ```ts
 const accounts = await authClient.listAccounts();
 ```
+
+### Token Encryption
+
+Better Auth doesn’t encrypt tokens by default and that’s intentional. We want you to have full control over how encryption and decryption are handled, rather than baking in behavior that could be confusing or limiting. If you need to store encrypted tokens (like accessToken or refreshToken), you can use databaseHooks to encrypt them before they’re saved to your database.
+
+```ts
+export const auth = betterAuth({
+    databaseHooks: {
+        account: {
+            create: {
+                before(account, context) {
+                     const withEncryptedTokens = { ...account };
+                    if (account.accessToken) {
+                        const encryptedAccessToken = encrypt(account.accessToken)  // [!code focus]
+                        withEncryptedTokens.accessToken = encryptedAccessToken;
+                    }
+                    if (account.refreshToken) {
+                        const encryptedRefreshToken = encrypt(account.refreshToken); // [!code focus]
+                        withEncryptedTokens.refreshToken = encryptedRefreshToken;
+                    }
+                    return {
+                        data: resultAccount
+                    }
+                },
+            }
+        }
+    }
+})
+```
+
+Then whenever you retrieve back the account make sure to decrypt the tokens before using them.
+
 ### Account Linking
 
 Account linking enables users to associate multiple authentication methods with a single account. With Better Auth, users can connect additional social sign-ons or OAuth providers to their existing accounts if the provider confirms the user's email as verified.
@@ -295,7 +327,7 @@ export const auth = betterAuth({
 
 Users already signed in can manually link their account to additional social providers or credential-based accounts.
 
-- **Linking Social Accounts:** Use the `user.linkSocial` method on the client to link a social provider to the user's account.
+- **Linking Social Accounts:** Use the `linkSocial` method on the client to link a social provider to the user's account.
 
   ```ts
   await authClient.linkSocial({
@@ -365,3 +397,4 @@ export const auth = betterAuth({
     },
 });
 ```
+

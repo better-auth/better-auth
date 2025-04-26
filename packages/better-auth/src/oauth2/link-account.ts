@@ -85,23 +85,25 @@ export async function handleOAuthUserInfo(
 				};
 			}
 		} else {
-			const updateData = Object.fromEntries(
-				Object.entries({
-					accessToken: account.accessToken,
-					idToken: account.idToken,
-					refreshToken: account.refreshToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-				}).filter(([_, value]) => value !== undefined),
-			);
-
-			if (Object.keys(updateData).length > 0) {
-				await c.context.internalAdapter.updateAccount(
-					hasBeenLinked.id,
-					updateData,
-					c,
+			if (c.context.options.account?.updateAccountOnSignIn !== false) {
+				const updateData = Object.fromEntries(
+					Object.entries({
+						accessToken: account.accessToken,
+						idToken: account.idToken,
+						refreshToken: account.refreshToken,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
+					}).filter(([_, value]) => value !== undefined),
 				);
+
+				if (Object.keys(updateData).length > 0) {
+					await c.context.internalAdapter.updateAccount(
+						hasBeenLinked.id,
+						updateData,
+						c,
+					);
+				}
 			}
 		}
 		if (overrideUserInfo) {
@@ -111,7 +113,7 @@ export async function handleOAuthUserInfo(
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
-					userInfo.email.toLocaleLowerCase() === dbUser.user.email
+					userInfo.email.toLowerCase() === dbUser.user.email
 						? dbUser.user.emailVerified || userInfo.emailVerified
 						: userInfo.emailVerified,
 			});

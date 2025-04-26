@@ -3,6 +3,7 @@ import { createAuthEndpoint, getSession } from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	GenericEndpointContext,
 	InferSession,
 	InferUser,
 } from "../../types";
@@ -11,10 +12,13 @@ export const customSession = <
 	Returns extends Record<string, any>,
 	O extends BetterAuthOptions = BetterAuthOptions,
 >(
-	fn: (session: {
-		user: InferUser<O>;
-		session: InferSession<O>;
-	}) => Promise<Returns>,
+	fn: (
+		session: {
+			user: InferUser<O>;
+			session: InferSession<O>;
+		},
+		ctx: GenericEndpointContext,
+	) => Promise<Returns>,
 	options?: O,
 ) => {
 	return {
@@ -81,7 +85,7 @@ export const customSession = <
 					if (!session?.response) {
 						return ctx.json(null);
 					}
-					const fnResult = await fn(session.response as any);
+					const fnResult = await fn(session.response as any, ctx);
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});
