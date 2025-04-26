@@ -10,7 +10,7 @@ export interface ApiKeyOptions {
 	/**
 	 * Disable hashing of the API key.
 	 *
-	 * **⚠️ Security Warning:** It's strongly recommended to not disable hashing.
+	* ⚠️ Security Warning: It's strongly recommended to not disable hashing.
 	 * Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
 	 *
 	 * @default false
