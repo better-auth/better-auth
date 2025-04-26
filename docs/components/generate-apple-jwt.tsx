@@ -1,10 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as jose from "jose";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import { KJUR } from "jsrsasign";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,20 +61,32 @@ export const GenerateAppleJwt = () => {
 		setError(null);
 
 		try {
-			const ecPrivateKey = await jose.importPKCS8(data.privateKey, "ES256");
+			//normalize the private key by replacing \r\n with \n and trimming whitespace just incase lol
+			const normalizedKey = data.privateKey.replace(/\r\n/g, "\n").trim();
 
-			const jwt = await new jose.SignJWT({})
-				.setProtectedHeader({
-					alg: "ES256",
-					kid: data.keyId, // Key ID
-				})
-				.setIssuedAt() // Issues current time
-				.setIssuer(data.teamId) // Team ID
-				.setAudience("https://appleid.apple.com") // Audience
-				.setSubject(data.clientId) // Client ID (Service ID)
-				.setExpirationTime("180d") // expires in 180 days (max allowed). Maybe we could let them change this?
-				.sign(ecPrivateKey);
+			//since jose is not working with safari, we are using jsrsasign
 
+			const header = {
+				alg: "ES256",
+				kid: data.keyId,
+				typ: "JWT",
+			};
+
+			const issuedAtSeconds = Math.floor(Date.now() / 1000);
+			const expirationSeconds = issuedAtSeconds + 180 * 24 * 60 * 60; // 180 days. Should we let the user choose this ? MAX is 6 months
+
+			const payload = {
+				iss: data.teamId, // Issuer (Team ID)
+				aud: "https://appleid.apple.com", // Audience
+				sub: data.clientId, // Subject (Client ID -> Service ID)
+				iat: issuedAtSeconds, // Issued At timestamp
+				exp: expirationSeconds, // Expiration timestamp
+			};
+
+			const sHeader = JSON.stringify(header);
+			const sPayload = JSON.stringify(payload);
+
+			const jwt = KJUR.jws.JWS.sign("ES256", sHeader, sPayload, normalizedKey);
 			setGeneratedJwt(jwt);
 		} catch (err: any) {
 			console.error("JWT Generation Error:", err);
