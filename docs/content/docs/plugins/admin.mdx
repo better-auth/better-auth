@@ -319,21 +319,21 @@ The plugin provides an easy way to define your own set of permissions for each r
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
 
-    const statement = {
-        project: ["create", "share", "update", "delete"],
+    export const statement = {
+        project: ["create", "share", "update", "delete"], // <-- Permissions available for created roles
     } as const;
 
     const ac = createAccessControl(statement);
 
-    const user = ac.newRole({ // [!code highlight]
+    export const user = ac.newRole({ // [!code highlight]
         project: ["create"], // [!code highlight]
     }); // [!code highlight]
 
-    const admin = ac.newRole({ // [!code highlight]
+   export const admin = ac.newRole({ // [!code highlight]
         project: ["create", "update"], // [!code highlight]
     }); // [!code highlight]
 
-    const myCustomRole = ac.newRole({ // [!code highlight]
+    export const myCustomRole = ac.newRole({ // [!code highlight]
         project: ["create", "update", "delete"], // [!code highlight]
         user: ["ban"], // [!code highlight]
     }); // [!code highlight]
