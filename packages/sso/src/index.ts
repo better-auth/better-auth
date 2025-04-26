@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
-import type { BetterAuthPlugin, User } from "../../types";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "../../better-auth/src/api";
+import type { BetterAuthPlugin, User } from "../../better-auth/src/types";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -8,12 +12,12 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 	type OAuth2Tokens,
-} from "../../oauth2";
+} from "../../better-auth/src/oauth2";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { setSessionCookie } from "../../cookies";
-
+import { handleOAuthUserInfo } from "../../better-auth/src/oauth2/link-account";
+import { setSessionCookie } from "../../better-auth/src/cookies";
+import { ssoSAML } from "./saml";
 export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
@@ -73,7 +77,7 @@ export interface SSOOptions {
 	defaultOverrideUserInfo?: boolean;
 }
 
-export const sso = (options?: SSOOptions) => {
+const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
 		endpoints: {
@@ -1008,3 +1012,4 @@ export interface OIDCConfig {
 		extraFields?: Record<string, string>;
 	};
 }
+export { sso, ssoSAML };

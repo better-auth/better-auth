@@ -1,10 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { sso } from ".";
+import { getTestInstance } from "../../better-auth/src/test-utils/test-instance";
+import { sso } from "./index";
 import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
-import { organization } from "../organization";
-
+import { organization } from "../../better-auth/src/plugins/organization";
 let server = new OAuth2Server();
 
 describe("SSO", async () => {
