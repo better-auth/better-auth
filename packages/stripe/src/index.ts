@@ -947,52 +947,52 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				? typeof subscriptionEndpoints
 				: {}),
 		},
-		init(ctx) {
-			return {
-				options: {
-					databaseHooks: {
-						user: {
-							create: {
-								async after(user, ctx) {
-									if (ctx && options.createCustomerOnSignUp) {
-										const stripeCustomer = await client.customers.create({
-											email: user.email,
-											name: user.name,
-											metadata: {
-												userId: user.id,
-											},
-										});
-										const customer = await ctx.context.adapter.update<Customer>(
-											{
-												model: "user",
-												update: {
-													stripeCustomerId: stripeCustomer.id,
-												},
-												where: [
-													{
-														field: "id",
-														value: user.id,
-													},
-												],
-											},
-										);
-										if (!customer) {
-											logger.error("#BETTER_AUTH: Failed to create  customer");
-										} else {
-											await options.onCustomerCreate?.({
-												customer,
-												stripeCustomer,
-												user,
-											});
-										}
-									}
-								},
-							},
-						},
-					},
-				},
-			};
-		},
+		// init(ctx) {
+		// 	return {
+		// 		options: {
+		// 			databaseHooks: {
+		// 				user: {
+		// 					create: {
+		// 						async after(user, ctx) {
+		// 							if (ctx && options.createCustomerOnSignUp) {
+		// 								const stripeCustomer = await client.customers.create({
+		// 									email: user.email,
+		// 									name: user.name,
+		// 									metadata: {
+		// 										userId: user.id,
+		// 									},
+		// 								});
+		// 								const customer = await ctx.context.adapter.update<Customer>(
+		// 									{
+		// 										model: "user",
+		// 										update: {
+		// 											stripeCustomerId: stripeCustomer.id,
+		// 										},
+		// 										where: [
+		// 											{
+		// 												field: "id",
+		// 												value: user.id,
+		// 											},
+		// 										],
+		// 									},
+		// 								);
+		// 								if (!customer) {
+		// 									logger.error("#BETTER_AUTH: Failed to create  customer");
+		// 								} else {
+		// 									await options.onCustomerCreate?.({
+		// 										customer,
+		// 										stripeCustomer,
+		// 										user,
+		// 									});
+		// 								}
+		// 							}
+		// 						},
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 	};
+		// },
 		schema: getSchema(options),
 	} satisfies BetterAuthPlugin;
 };
