@@ -56,7 +56,7 @@ The Admin plugin provides a set of administrative functions for user management 
     import { createAuthClient } from "better-auth/client"
     import { adminClient } from "better-auth/client/plugins"
 
-    const authClient = createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             adminClient()
         ]
@@ -434,7 +434,8 @@ If you want to check a user's permissions server-side, you can use the `userHasP
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-auth.api.userHasPermission({
+
+await auth.api.userHasPermission({
   body: {
     userId: 'id', //the user id
     permissions: {
@@ -444,7 +445,7 @@ auth.api.userHasPermission({
 });
 
 // You can also just pass the role directly
-auth.api.userHasPermission({
+await auth.api.userHasPermission({
   body: {
    role: "admin",
     permissions: {
@@ -454,7 +455,7 @@ auth.api.userHasPermission({
 });
 
 // You can also check multiple resource permissions at the same time
-auth.api.userHasPermission({
+await auth.api.userHasPermission({
   body: {
    role: "admin",
     permissions: {
@@ -471,7 +472,7 @@ auth.api.userHasPermission({
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
 
 ```ts title="auth-client.ts"
-const canCreateProject = client.admin.checkRolePermission({
+const canCreateProject = await authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
   },
@@ -479,7 +480,7 @@ const canCreateProject = client.admin.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndRevokeSession = client.admin.checkRolePermission({
+const canCreateProjectAndRevokeSession = await authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
     session: ["revoke"]
