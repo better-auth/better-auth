@@ -66,7 +66,7 @@ export interface PasskeyOptions {
 	/**
 	 * Allow customization of the attestationType options
 	 * during passkey registration.
-	 * 
+	 *
 	 * @default "none"
 	 */
 	attestationType?: "direct" | "none";
