@@ -19,7 +19,7 @@ import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 /**
  * Configuration interface for generic OAuth providers.
  */
-interface GenericOAuthConfig {
+export interface GenericOAuthConfig {
 	/** Unique identifier for the OAuth provider */
 	providerId: string;
 	/**
@@ -208,120 +208,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 	} as const;
 	return {
 		id: "generic-oauth",
-		init: (ctx) => {
-			const genericProviders = options.config.map((c) => {
-				let finalUserInfoUrl = c.userInfoUrl;
-				return {
-					id: c.providerId,
-					name: c.providerId,
-					createAuthorizationURL(data) {
-						return createAuthorizationURL({
-							id: c.providerId,
-							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
-								redirectURI: c.redirectURI,
-							},
-							authorizationEndpoint: c.authorizationUrl!,
-							state: data.state,
-							codeVerifier: c.pkce ? data.codeVerifier : undefined,
-							scopes: c.scopes || [],
-							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
-						});
-					},
-					async validateAuthorizationCode(data) {
-						let finalTokenUrl = c.tokenUrl;
-						if (c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								token_endpoint: string;
-								userinfo_endpoint: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							if (discovery.data) {
-								finalTokenUrl = discovery.data.token_endpoint;
-								finalUserInfoUrl = discovery.data.userinfo_endpoint;
-							}
-						}
-						if (!finalTokenUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: "Invalid OAuth configuration. Token URL not found.",
-							});
-						}
-						return validateAuthorizationCode({
-							code: data.code,
-							codeVerifier: data.codeVerifier,
-							redirectURI: data.redirectURI,
-							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
-								redirectURI: c.redirectURI,
-							},
-							tokenEndpoint: finalTokenUrl,
-						});
-					},
-					async refreshAccessToken(
-						refreshToken: string,
-					): Promise<OAuth2Tokens> {
-						let finalTokenUrl = c.tokenUrl;
-						if (c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								token_endpoint: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							if (discovery.data) {
-								finalTokenUrl = discovery.data.token_endpoint;
-							}
-						}
-						if (!finalTokenUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: "Invalid OAuth configuration. Token URL not found.",
-							});
-						}
-						return refreshAccessToken({
-							refreshToken,
-							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
-							},
-							authentication: c.authentication,
-							tokenEndpoint: finalTokenUrl,
-						});
-					},
-
-					async getUserInfo(tokens) {
-						if (!finalUserInfoUrl) {
-							return null;
-						}
-						const userInfo = c.getUserInfo
-							? await c.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl);
-						if (!userInfo) {
-							return null;
-						}
-						return {
-							user: {
-								id: userInfo?.id,
-								email: userInfo?.email,
-								emailVerified: userInfo?.emailVerified,
-								image: userInfo?.image,
-								name: userInfo?.name,
-								...c.mapProfileToUser?.(userInfo),
-							},
-							data: userInfo,
-						};
-					},
-				} as OAuthProvider;
-			});
-			return {
-				context: {
-					socialProviders: genericProviders.concat(ctx.socialProviders),
-				},
-			};
-		},
 		endpoints: {
 			signInWithOAuth2: createAuthEndpoint(
 				"/sign-in/oauth2",
