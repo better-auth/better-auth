@@ -740,6 +740,22 @@ export const createInternalAdapter = (
 			});
 			return account;
 		},
+		findAccountByProviderId: async (accountId: string, providerId: string) => {
+			const account = await adapter.findOne<Account>({
+				model: "account",
+				where: [
+					{
+						field: "accountId",
+						value: accountId,
+					},
+					{
+						field: "providerId",
+						value: providerId,
+					},
+				],
+			});
+			return account;
+		},
 		findAccountByUserId: async (userId: string) => {
 			const account = await adapter.findMany<Account>({
 				model: "account",
