@@ -146,6 +146,40 @@ describe("api-key", async () => {
 		expect(apiKey.rateLimitEnabled).toBe(true);
 	});
 
+	it("should respect rateLimit configuration from plugin options", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						rateLimit: {
+							enabled: false,
+							timeWindow: 1000,
+							maxRequests: 10,
+						},
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		const apiKeyResult = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		expect(apiKeyResult).not.toBeNull();
+		expect(apiKeyResult.rateLimitEnabled).toBe(false);
+		expect(apiKeyResult.rateLimitTimeWindow).toBe(1000);
+		expect(apiKeyResult.rateLimitMax).toBe(10);
+	});
+
 	it("should create the API key with the given name", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
