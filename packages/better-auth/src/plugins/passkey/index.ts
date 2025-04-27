@@ -64,6 +64,14 @@ export interface PasskeyOptions {
 	origin?: string | null;
 
 	/**
+	 * Allow customization of the attestationType options
+	 * during passkey registration.
+	 * 
+	 * @default "none"
+	 */
+	attestationType?: "direct" | "none";
+
+	/**
 	 * Allow customization of the authenticatorSelection options
 	 * during passkey registration.
 	 */
@@ -272,7 +280,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						userID,
 						userName: session.user.email || session.user.id,
 						userDisplayName: session.user.email || session.user.id,
-						attestationType: "none",
+						attestationType: opts.attestationType || "none",
 						excludeCredentials: userPasskeys.map((passkey) => ({
 							id: passkey.credentialID,
 							transports: passkey.transports?.split(
