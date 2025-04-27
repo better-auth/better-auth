@@ -18,6 +18,7 @@ export const schema = {
 			clientId: {
 				type: "string",
 				unique: true,
+				shouldIndex: true,
 			},
 			clientSecret: {
 				type: "string",
@@ -36,6 +37,7 @@ export const schema = {
 			userId: {
 				type: "string",
 				required: false,
+				shouldIndex: true,
 			},
 			createdAt: {
 				type: "date",
@@ -51,10 +53,12 @@ export const schema = {
 			accessToken: {
 				type: "string",
 				unique: true,
+				shouldIndex: true,
 			},
 			refreshToken: {
 				type: "string",
 				unique: true,
+				shouldIndex: true,
 			},
 			accessTokenExpiresAt: {
 				type: "date",
@@ -85,9 +89,11 @@ export const schema = {
 		fields: {
 			clientId: {
 				type: "string",
+				shouldIndex: true,
 			},
 			userId: {
 				type: "string",
+				shouldIndex: true,
 			},
 			scopes: {
 				type: "string",

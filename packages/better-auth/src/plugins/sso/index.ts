@@ -958,15 +958,18 @@ export const sso = (options?: SSOOptions) => {
 							model: "user",
 							field: "id",
 						},
+						shouldIndex: true,
 					},
 					providerId: {
 						type: "string",
 						required: true,
 						unique: true,
+						shouldIndex: true,
 					},
 					organizationId: {
 						type: "string",
 						required: false,
+						shouldIndex: true,
 					},
 					domain: {
 						type: "string",

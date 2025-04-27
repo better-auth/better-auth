@@ -41,6 +41,7 @@ export const apiKeySchema = ({
 					type: "string",
 					required: true,
 					input: false,
+					shouldIndex: true,
 				},
 				/**
 				 * The user id of the user who created the key.
@@ -50,6 +51,7 @@ export const apiKeySchema = ({
 					references: { model: "user", field: "id" },
 					required: true,
 					input: false,
+					shouldIndex: true,
 				},
 				/**
 				 * The interval to refill the key in milliseconds.
