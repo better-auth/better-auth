@@ -101,13 +101,10 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 *
 	 * Note: Right now, Better Auth always provides an `id` field, and it's not configurable. The `id` will always be a primary key.
 	 * This means no other fields in BA should set this `isPrimaryKey` to true. This is added for future-proofing.
-	 *
-	 * @default false
 	 */
 	isPrimaryKey?: boolean;
 	/**
 	 * If the field should be indexed.
-	 * @default false
 	 */
 	shouldIndex?: boolean;
 };
