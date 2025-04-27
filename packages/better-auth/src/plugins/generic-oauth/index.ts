@@ -640,7 +640,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							return redirectOnError("email_doesn't_match");
 						}
 						const existingAccount =
-							await ctx.context.internalAdapter.findAccount(userInfo.id);
+							await ctx.context.internalAdapter.findAccountByProviderId(
+								userInfo.id,
+								provider.providerId,
+							);
 						if (existingAccount) {
 							if (existingAccount.userId !== link.userId) {
 								return redirectOnError(
