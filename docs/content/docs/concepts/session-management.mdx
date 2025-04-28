@@ -187,7 +187,7 @@ const session = await authClient.getSession({ query: {
 or on the server
 
 ```ts title="server.ts"
-auth.api.getSession({
+await auth.api.getSession({
     query: {
         disableCookieCache: true,
     }, 
