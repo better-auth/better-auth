@@ -90,12 +90,12 @@ Secondary storage configuration used to store session and rate limit data.
 
 ```ts
 import { betterAuth } from "better-auth";
-import { redisStorage } from "better-auth/storage";
 
 export const auth = betterAuth({
-	secondaryStorage: redisStorage({
-		url: "redis://localhost:6379"
-	}),
+	// ... other options
+    secondaryStorage: {
+    	// Your implementation here
+    },
 })
 ```
 
