@@ -32,12 +32,15 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			supportsBooleans:
 				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
 					? false
-					: true,
+					: config?.type === "postgres"
+						? true
+						: false,
 			supportsDates:
 				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
 					? false
-					: true,
-			supportsJSON: false,
+					: config?.type === "postgres"
+						? true
+						: false,			supportsJSON: false,
 		},
 		adapter: ({ getFieldName, schema }) => {
 			const withReturning = async (
