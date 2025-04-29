@@ -40,7 +40,8 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					? false
 					: config?.type === "postgres"
 						? true
-						: false,			supportsJSON: false,
+						: false,
+			supportsJSON: false,
 		},
 		adapter: ({ getFieldName, schema }) => {
 			const withReturning = async (
