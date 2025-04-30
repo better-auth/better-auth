@@ -182,9 +182,9 @@ export interface Subscription {
 	 * Alert threshold for metered billing (single threshold per subscription)
 	 */
 	meteredAlertThreshold?: number;
-    /**
-     * Alert id for metered billing (only allow a single alert per subscription)
-     */
+	/**
+	 * Alert id for metered billing (only allow a single alert per subscription)
+	 */
 	meteredAlertId?: string;
 }
 
@@ -306,23 +306,23 @@ export interface StripeOptions {
 		/**
 		 * A callback to run after a user has deleted their subscription
 		 * @returns
-		*/
+		 */
 		onSubscriptionDeleted?: (data: {
 			event: Stripe.Event;
 			stripeSubscription: Stripe.Subscription;
 			subscription: Subscription;
 		}) => Promise<void>;
-        /**
-         * A callback to run when a usage alert is triggered
-         * @param data - data containing event, subscription, user and alert details
-         * @returns
-         */
-        onAlertTriggered?: (data: {
-            event: Stripe.Event;
-            subscription: Subscription;
-            user: User;
-            alertData: Stripe.Billing.Alert;
-        }) => Promise<void>;
+		/**
+		 * A callback to run when a usage alert is triggered
+		 * @param data - data containing event, subscription, user and alert details
+		 * @returns
+		 */
+		onAlertTriggered?: (data: {
+			event: Stripe.Event;
+			subscription: Subscription;
+			user: User;
+			alertData: Stripe.Billing.Alert;
+		}) => Promise<void>;
 		/**
 		 * parameters for session create params
 		 *

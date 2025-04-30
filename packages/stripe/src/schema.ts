@@ -63,7 +63,7 @@ export const subscriptions = {
 				required: false,
 			},
 			trialEnd: {
-				type: "date", 
+				type: "date",
 				required: false,
 			},
 			priceId: {

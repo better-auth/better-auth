@@ -2,7 +2,6 @@ import {
 	type GenericEndpointContext,
 	type BetterAuthPlugin,
 	logger,
-    type User,
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
@@ -15,7 +14,7 @@ import {
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import {
-    onAlertTriggered,
+	onAlertTriggered,
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
@@ -289,15 +288,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					existingSubscription.status === "active" &&
 					existingSubscription.plan === ctx.body.plan
 				) {
-                    /**
-                     * If the subscription is already active and the plan is the same,
-                     * we need to redirect to the billing portal
-                     */
-                    const { url } = await client.billingPortal.sessions
-                        .create({
-                            customer: customerId,
-                            return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
-                        }).catch(async (e) => {
+					/**
+					 * If the subscription is already active and the plan is the same,
+					 * we need to redirect to the billing portal
+					 */
+					const { url } = await client.billingPortal.sessions
+						.create({
+							customer: customerId,
+							return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+						})
+						.catch(async (e) => {
 							throw ctx.error("BAD_REQUEST", {
 								message: e.message,
 								code: e.code,
@@ -322,8 +322,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										{
 											id: activeSubscription.items.data[0]?.id as string,
 											// Only include quantity for non-metered plans
-											...(plan.metered 
-												? {} 
+											...(plan.metered
+												? {}
 												: { quantity: ctx.body.seats || 1 }),
 											price: ctx.body.annual
 												? plan.annualDiscountPriceId
@@ -358,10 +358,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							status: "incomplete",
 							referenceId,
 							seats: ctx.body.seats || 1,
-                            metered: plan.metered ? plan.metered.meterId : undefined,
-                            meteredUsage: plan.metered ? 0 : undefined,
-                            meteredAlertThreshold: undefined,
-                            meteredAlertId: undefined,
+							metered: plan.metered ? plan.metered.meterId : undefined,
+							meteredUsage: plan.metered ? 0 : undefined,
+							meteredAlertThreshold: undefined,
+							meteredAlertId: undefined,
 						},
 					});
 					subscription = newSubscription;
@@ -859,7 +859,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									update: {
 										status: stripeSubscription.status,
 										// Only use quantity as seats for non-metered plans
-										seats: plan.metered ? 1 : (stripeSubscription.items.data[0]?.quantity || 1),
+										seats: plan.metered
+											? 1
+											: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
 											stripeSubscription.items.data[0]?.current_period_end *
@@ -932,7 +934,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			async (ctx) => {
 				const { user } = ctx.context.session;
 				const referenceId = ctx.body.referenceId || user.id;
-				
+
 				// Find the subscription
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
@@ -948,16 +950,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								subs.find(
 									(sub) =>
 										(sub.status === "active" || sub.status === "trialing") &&
-										(!ctx.body.plan || sub.plan.toLowerCase() === ctx.body.plan.toLowerCase()),
+										(!ctx.body.plan ||
+											sub.plan.toLowerCase() === ctx.body.plan.toLowerCase()),
 								),
 							);
-				
+
 				if (!subscription) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					});
 				}
-				
+
 				// Find the plan
 				const plan = await getPlanByName(options, subscription.plan);
 				if (!plan || !plan.metered) {
@@ -965,15 +968,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.METER_NOT_FOUND,
 					});
 				}
-				
+
 				try {
-					 // Get the meter information from Stripe to determine the aggregation method
-					const meter = await client.billing.meters.retrieve(plan.metered.meterId)
+					// Get the meter information from Stripe to determine the aggregation method
+					const meter = await client.billing.meters
+						.retrieve(plan.metered.meterId)
 						.catch((error: any) => {
-							ctx.context.logger.error(`Error retrieving meter: ${error.message}`, error);
+							ctx.context.logger.error(
+								`Error retrieving meter: ${error.message}`,
+								error,
+							);
 							throw new Error(STRIPE_ERROR_CODES.METER_NOT_FOUND);
 						});
-					
+
 					// Record usage in Stripe
 					const meterEvent = await client.billing.meterEvents.create({
 						event_name: ctx.body.eventName || plan.metered.eventName,
@@ -982,24 +989,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							value: ctx.body.value.toString(),
 						},
 					});
-					
+
 					// Calculate new usage based on aggregation method
 					let currentUsage = 0;
-					
-					if (meter.default_aggregation.formula === 'sum') {
+
+					if (meter.default_aggregation.formula === "sum") {
 						// Sum mode: add the new value to existing usage
 						currentUsage = (subscription.meteredUsage || 0) + ctx.body.value;
-					} else if (meter.default_aggregation.formula === 'count') {
+					} else if (meter.default_aggregation.formula === "count") {
 						// Count mode: Number of events
 						currentUsage = (subscription.meteredUsage || 0) + 1;
-					} else if (meter.default_aggregation.formula === 'last') {
+					} else if (meter.default_aggregation.formula === "last") {
 						// Latest mode: use the new value
 						currentUsage = ctx.body.value;
 					} else {
 						// Default fallback to sum
 						currentUsage = (subscription.meteredUsage || 0) + ctx.body.value;
 					}
-					
+
 					// Update usage in our database
 					await ctx.context.adapter.update({
 						model: "subscription",
@@ -1008,7 +1015,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						},
 						where: [{ field: "id", value: subscription.id }],
 					});
-					
+
 					return ctx.json({
 						success: true,
 						meterEvent,
@@ -1023,7 +1030,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 			},
 		),
-		
+
 		createUsageAlert: createAuthEndpoint(
 			"/subscription/alert",
 			{
@@ -1059,7 +1066,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			async (ctx) => {
 				const { user } = ctx.context.session;
 				const referenceId = ctx.body.referenceId || user.id;
-				
+
 				// Find the subscription
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
@@ -1075,16 +1082,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								subs.find(
 									(sub) =>
 										(sub.status === "active" || sub.status === "trialing") &&
-										(!ctx.body.plan || sub.plan.toLowerCase() === ctx.body.plan.toLowerCase()),
+										(!ctx.body.plan ||
+											sub.plan.toLowerCase() === ctx.body.plan.toLowerCase()),
 								),
 							);
-				
+
 				if (!subscription || !subscription.stripeCustomerId) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					});
 				}
-				
+
 				// Find the plan
 				const plan = await getPlanByName(options, subscription.plan);
 				if (!plan || !plan.metered) {
@@ -1092,22 +1100,28 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.METER_NOT_FOUND,
 					});
 				}
-				
+
 				try {
-					 // Check if there is a stored alert ID for this subscription to archive it
+					// Check if there is a stored alert ID for this subscription to archive it
 					if (subscription.meteredAlertId) {
 						try {
 							// Archive the previous alert if it exists
 							await client.billing.alerts.archive(subscription.meteredAlertId);
-							ctx.context.logger.info(`Archived existing alert ${subscription.meteredAlertId}`);
+							ctx.context.logger.info(
+								`Archived existing alert ${subscription.meteredAlertId}`,
+							);
 						} catch (error: any) {
 							// If the alert doesn't exist anymore or there's another error, just log it
-							ctx.context.logger.warn(`Couldn't archive previous alert: ${error.message}`);
+							ctx.context.logger.warn(
+								`Couldn't archive previous alert: ${error.message}`,
+							);
 						}
 					}
-					
+
 					// Create a new alert in Stripe
-					const alertTitle = ctx.body.title || `Usage alert for ${plan.name}: ${ctx.body.threshold} units`;
+					const alertTitle =
+						ctx.body.title ||
+						`Usage alert for ${plan.name}: ${ctx.body.threshold} units`;
 					const alert = await client.billing.alerts.create({
 						title: alertTitle,
 						alert_type: "usage_threshold",
@@ -1123,17 +1137,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							recurrence: "one_time",
 						},
 					});
-					
+
 					// Update alert threshold and store the alert ID in our database
 					await ctx.context.adapter.update({
 						model: "subscription",
 						update: {
 							meteredAlertThreshold: ctx.body.threshold,
-							meteredAlertId: alert.id
+							meteredAlertId: alert.id,
 						},
 						where: [{ field: "id", value: subscription.id }],
 					});
-					
+
 					return ctx.json({
 						success: true,
 						alert,
