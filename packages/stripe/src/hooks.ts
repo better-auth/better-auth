@@ -60,7 +60,7 @@ export async function onCheckoutSessionCompleted(
 								checkoutSession.subscription as string,
 							seats,
 							// Set metered billing properties if plan has metering
-							meteredId: plan.metered
+							metered: plan.metered
 								? plan.metered.meterId
 								: undefined,
 							meteredUsage: plan.metered ? 0 : undefined,
@@ -304,6 +304,15 @@ export async function onAlertTriggered(
                         });
 
                     if (subscription) {
+                        // Also clear the stored alert ID since it's now triggered and archived
+                        await ctx.context.adapter.update({
+                            model: "subscription",
+                            update: {
+                                meteredAlertId: null
+                            },
+                            where: [{ field: "id", value: subscription.id }],
+                        });
+                        
                         ctx.context.logger.info("Usage alert triggered", {
                             meterId,
                             customerId,

@@ -42,7 +42,7 @@ export const subscriptions = {
 				type: "number",
 				required: false,
 			},
-			meteredId: {
+			metered: {
 				type: "string",
 				required: false,
 			},
@@ -52,6 +52,10 @@ export const subscriptions = {
 			},
 			meteredAlertThreshold: {
 				type: "number",
+				required: false,
+			},
+			meteredAlertId: {
+				type: "string",
 				required: false,
 			},
 			trialStart: {

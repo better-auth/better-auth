@@ -29,7 +29,6 @@ import type {
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
 import { getSchema } from "./schema";
-import { on } from "events";
 
 const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -359,9 +358,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							status: "incomplete",
 							referenceId,
 							seats: ctx.body.seats || 1,
-                            meteredId: plan.metered ? plan.metered.meterId : undefined,
+                            metered: plan.metered ? plan.metered.meterId : undefined,
                             meteredUsage: plan.metered ? 0 : undefined,
-                            meteredAlertThreshold: undefined
+                            meteredAlertThreshold: undefined,
+                            meteredAlertId: undefined,
 						},
 					});
 					subscription = newSubscription;
@@ -968,7 +968,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				
 				try {
 					 // Get the meter information from Stripe to determine the aggregation method
-					const meter = await client.billing.meters.retrieve(plan.metered.meterId);
+					const meter = await client.billing.meters.retrieve(plan.metered.meterId)
+						.catch((error: any) => {
+							ctx.context.logger.error(`Error retrieving meter: ${error.message}`, error);
+							throw new Error(STRIPE_ERROR_CODES.METER_NOT_FOUND);
+						});
 					
 					// Record usage in Stripe
 					const meterEvent = await client.billing.meterEvents.create({
@@ -1090,29 +1094,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 				
 				try {
-					// First, check if an alert exists for this user and meter
-					const existingAlerts = await client.billing.alerts.list({
-						limit: 100,
-					});
-					
-					// Filter alerts for this customer and meter with the same threshold
-					existingAlerts.data.forEach(async (alert) => {
-						if (alert.alert_type !== "usage_threshold") return false;
-						if (!alert.usage_threshold) return false;
-						
-						// Check if this alert is for our meter
-						if (alert.usage_threshold.meter !== plan.metered?.meterId) return false;
-						
-						// Check if this alert is for our customer
-						const customerFilter = alert.usage_threshold.filters?.find(f => 
-							f.type === "customer" && f.customer === subscription.stripeCustomerId
-						);
-						
-						if(!customerFilter) return false;
-
-                        await client.billing.alerts.archive(alert.id);
-                        ctx.context.logger.info(`Archiving existing alert ${alert.id}`);
-					});
+					 // Check if there is a stored alert ID for this subscription to archive it
+					if (subscription.meteredAlertId) {
+						try {
+							// Archive the previous alert if it exists
+							await client.billing.alerts.archive(subscription.meteredAlertId);
+							ctx.context.logger.info(`Archived existing alert ${subscription.meteredAlertId}`);
+						} catch (error: any) {
+							// If the alert doesn't exist anymore or there's another error, just log it
+							ctx.context.logger.warn(`Couldn't archive previous alert: ${error.message}`);
+						}
+					}
 					
 					// Create a new alert in Stripe
 					const alertTitle = ctx.body.title || `Usage alert for ${plan.name}: ${ctx.body.threshold} units`;
@@ -1132,11 +1124,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						},
 					});
 					
-					// Update alert threshold in our database
+					// Update alert threshold and store the alert ID in our database
 					await ctx.context.adapter.update({
 						model: "subscription",
 						update: {
-							meteredAlertThreshold: ctx.body.threshold
+							meteredAlertThreshold: ctx.body.threshold,
+							meteredAlertId: alert.id
 						},
 						where: [{ field: "id", value: subscription.id }],
 					});

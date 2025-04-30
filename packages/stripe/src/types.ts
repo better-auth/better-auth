@@ -173,7 +173,7 @@ export interface Subscription {
 	/**
 	 * Metered usage configuration
 	 */
-	meteredId?: string;
+	metered?: string;
 	/**
 	 * Current usage amount for metered billing
 	 */
@@ -182,6 +182,10 @@ export interface Subscription {
 	 * Alert threshold for metered billing (single threshold per subscription)
 	 */
 	meteredAlertThreshold?: number;
+    /**
+     * Alert id for metered billing (only allow a single alert per subscription)
+     */
+	meteredAlertId?: string;
 }
 
 export interface StripeOptions {
