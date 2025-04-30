@@ -56,7 +56,7 @@ The Admin plugin provides a set of administrative functions for user management 
     import { createAuthClient } from "better-auth/client"
     import { adminClient } from "better-auth/client/plugins"
 
-    const authClient = createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             adminClient()
         ]
@@ -79,7 +79,7 @@ const newUser = await authClient.admin.createUser({
   name: "Test User",
   email: "test@example.com",
   password: "password123",
-  role: "user",
+  role: "user", // this can also be an array for multiple roles (e.g. ["user", "sale"])
   data: {
     // any additional on the user table including plugin fields and custom fields
     customField: "customValue",
@@ -130,7 +130,7 @@ const users = await authClient.admin.listUsers({
 
 #### Pagination
 
-The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:  
+The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:
 
 ```ts
 {
@@ -141,18 +141,18 @@ The `listUsers` function supports pagination by returning metadata alongside the
 }
 ```
 
-##### How to Implement Pagination  
+##### How to Implement Pagination
 
-To paginate results, use the `total`, `limit`, and `offset` values to calculate:  
+To paginate results, use the `total`, `limit`, and `offset` values to calculate:
 
-- **Total pages:** `Math.ceil(total / limit)`  
-- **Current page:** `(offset / limit) + 1`  
+- **Total pages:** `Math.ceil(total / limit)`
+- **Current page:** `(offset / limit) + 1`
 - **Next page offset:** `Math.min(offset + limit, (total - 1))` – The value to use as `offset` for the next page, ensuring it does not exceed the total number of pages.
 - **Previous page offset:** `Math.max(0, offset - limit)` – The value to use as `offset` for the previous page (ensuring it doesn’t go below zero).
 
-##### Example Usage  
+##### Example Usage
 
-Fetching the second page with 10 users per page:  
+Fetching the second page with 10 users per page:
 
 ```ts title="admin.ts"
 const pageSize = 10;
@@ -176,7 +176,7 @@ Changes the role of a user.
 ```ts title="admin.ts"
 const updatedUser = await authClient.admin.setRole({
   userId: "user_id_here",
-  role: "admin",
+  role: "admin", // this can also be an array for multiple roles (e.g. ["admin", "sale"])
 });
 ```
 
@@ -272,6 +272,10 @@ By default, there are two roles:
 
 `user`: Users with the user role have no control over other users.
 
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
+
 ### Permissions
 
 By default, there are two resources with up to six permissions.
@@ -282,17 +286,17 @@ By default, there are two resources with up to six permissions.
 **session**:
   `list` `revoke` `delete`
 
-The admin have full control over all the resources and actions. The user have no control over any of those actions.
+Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
 ### Custom Permissions
 
-the plugin providers easy way to define your own set of permission for each role.
+The plugin provides an easy way to define your own set of permissions for each role.
 
 <Steps>
     <Step>
     #### Create Access Control
 
-    You first need to create access controller by calling `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
+    You first need to create an access controller by calling the `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
 
@@ -315,21 +319,21 @@ the plugin providers easy way to define your own set of permission for each role
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
 
-    const statement = {
-        project: ["create", "share", "update", "delete"],
+    export const statement = {
+        project: ["create", "share", "update", "delete"], // <-- Permissions available for created roles
     } as const;
 
     const ac = createAccessControl(statement);
 
-    const user = ac.newRole({ // [!code highlight]
+    export const user = ac.newRole({ // [!code highlight]
         project: ["create"], // [!code highlight]
     }); // [!code highlight]
 
-    const admin = ac.newRole({ // [!code highlight]
+   export const admin = ac.newRole({ // [!code highlight]
         project: ["create", "update"], // [!code highlight]
     }); // [!code highlight]
 
-    const myCustomRole = ac.newRole({ // [!code highlight]
+    export const myCustomRole = ac.newRole({ // [!code highlight]
         project: ["create", "update", "delete"], // [!code highlight]
         user: ["ban"], // [!code highlight]
     }); // [!code highlight]
@@ -408,35 +412,55 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-To check the permission of the user, you can use the `hasPermission` function provided by the client.
+To check a user's permissions, you can use the `hasPermission` function provided by the client.
 
 ```ts title="auth-client.ts"
 const canCreateProject = await authClient.admin.hasPermission({
-  permission: {
+  permissions: {
     project: ["create"],
+  },
+});
+
+// You can also check multiple resource permissions at the same time
+const canCreateProjectAndCreateSale = await authClient.admin.hasPermission({
+  permissions: {
+    project: ["create"],
+    sale: ["create"]
   },
 });
 ```
 
-If you want to use the server instead to check if a user has a permission, you can use `userHasPermission` action provided by the `api` to check the permission of the user.
+If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-auth.api.userHasPermission({
+
+await auth.api.userHasPermission({
   body: {
     userId: 'id', //the user id
-    permission: {
+    permissions: {
       project: ["create"], // This must match the structure in your access control
     },
   },
 });
 
-//you can also just pass the role directly
-auth.api.userHasPermission({
+// You can also just pass the role directly
+await auth.api.userHasPermission({
   body: {
    role: "admin",
-    permission: {
+    permissions: {
       project: ["create"], // This must match the structure in your access control
+    },
+  },
+});
+
+// You can also check multiple resource permissions at the same time
+await auth.api.userHasPermission({
+  body: {
+   role: "admin",
+    permissions: {
+      project: ["create"], // This must match the structure in your access control
+      sale: ["create"]
     },
   },
 });
@@ -448,9 +472,18 @@ auth.api.userHasPermission({
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
 
 ```ts title="auth-client.ts"
-const canCreateProject = client.admin.checkRolePermission({
-  permission: {
+const canCreateProject = await authClient.admin.checkRolePermission({
+  permissions: {
     user: ["delete"],
+  },
+  role: "admin",
+});
+
+// You can also check multiple resource permissions at the same time
+const canCreateProjectAndRevokeSession = await authClient.admin.checkRolePermission({
+  permissions: {
+    user: ["delete"],
+    session: ["revoke"]
   },
   role: "admin",
 });
@@ -580,4 +613,3 @@ admin({
   bannedUserMessage: "Custom banned user message",
 });
 ```
-

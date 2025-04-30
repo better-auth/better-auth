@@ -1,4 +1,4 @@
-import { logger, type GenericEndpointContext } from "better-auth";
+import { type GenericEndpointContext, logger } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceId } from "./utils";
@@ -20,7 +20,9 @@ export async function onCheckoutSessionCompleted(
 		const priceId = subscription.items.data[0]?.price.id;
 		const plan = await getPlanByPriceId(options, priceId as string);
 		if (plan) {
-			const referenceId = checkoutSession?.metadata?.referenceId;
+			const referenceId =
+				checkoutSession?.client_reference_id ||
+				checkoutSession?.metadata?.referenceId;
 			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
 			const seats = subscription.items.data[0].quantity;
 			if (referenceId && subscriptionId) {
@@ -39,8 +41,12 @@ export async function onCheckoutSessionCompleted(
 							plan: plan.name.toLowerCase(),
 							status: subscription.status,
 							updatedAt: new Date(),
-							periodStart: new Date(subscription.current_period_start * 1000),
-							periodEnd: new Date(subscription.current_period_end * 1000),
+							periodStart: new Date(
+								subscription.items.data[0].current_period_start * 1000,
+							),
+							periodEnd: new Date(
+								subscription.items.data[0].current_period_end * 1000,
+							),
 							stripeSubscriptionId: checkoutSession.subscription as string,
 							seats,
 							...trial,
@@ -110,7 +116,8 @@ export async function onSubscriptionUpdated(
 			});
 			if (subs.length > 1) {
 				const activeSub = subs.find(
-					(sub) => sub.status === "active" || sub.status === "trialing",
+					(sub: Subscription) =>
+						sub.status === "active" || sub.status === "trialing",
 				);
 				if (!activeSub) {
 					logger.warn(
@@ -136,8 +143,12 @@ export async function onSubscriptionUpdated(
 					: {}),
 				updatedAt: new Date(),
 				status: subscriptionUpdated.status,
-				periodStart: new Date(subscriptionUpdated.current_period_start * 1000),
-				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
+				periodStart: new Date(
+					subscriptionUpdated.items.data[0].current_period_start * 1000,
+				),
+				periodEnd: new Date(
+					subscriptionUpdated.items.data[0].current_period_end * 1000,
+				),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
 				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,

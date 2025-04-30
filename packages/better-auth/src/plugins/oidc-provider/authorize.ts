@@ -44,6 +44,8 @@ export async function authorize(
 			ctx.context.secret,
 			{
 				maxAge: 600,
+				path: "/",
+				sameSite: "lax",
 			},
 		);
 		const queryFromURL = ctx.request.url?.split("?")[1];
@@ -238,6 +240,8 @@ export async function authorize(
 	if (options?.consentPage) {
 		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
 			maxAge: 600,
+			path: "/",
+			sameSite: "lax",
 		});
 		const conceptURI = `${options.consentPage}?client_id=${
 			client.clientId

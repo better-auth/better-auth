@@ -19,6 +19,7 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "better-auth/plugins/passkey";
+import { expo } from "@better-auth/expo";
 import { stripe } from "@better-auth/stripe";
 import { Stripe } from "stripe";
 
@@ -197,5 +198,7 @@ export const auth = betterAuth({
 				],
 			},
 		}),
+		expo(),
 	],
+	trustedOrigins: ["exp://"],
 });

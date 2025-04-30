@@ -113,7 +113,7 @@ await auth.api.createOIDCProvider({
         clientId: "your-client-id",
         clientSecret: "your-client-secret",
         authorizationEndpoint: "https://idp.example.com/authorize",
-        tokenEndpoint: "https://idp.example.comtoken",
+        tokenEndpoint: "https://idp.example.com/token",
         jwksEndpoint: "https://idp.example.com/jwks",
         mapping: {
             id: "sub",
@@ -170,7 +170,7 @@ const res = await authClient.signIn.sso({
 });
 ```
 
-To use the server api you can use `signInSSO`
+To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
 const res = await auth.api.signInSSO({
@@ -216,7 +216,7 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
         { name: "oidcConfig", type: "string", description: "The OIDC configuration", isRequired: false },
         { name: "userId", type: "string", description: "The user id", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider id. Used to identify a provider and to generate a redirect url.", isRequired: true, isUnique: true },
+        { name: "providerId", type: "string", description: "The provider id. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
         { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
     ]}
 />

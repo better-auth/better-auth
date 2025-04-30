@@ -29,7 +29,7 @@ export type BetterAuthOptions = {
 	 */
 	appName?: string;
 	/**
-	 * Base URL for the better auth. This is typically the
+	 * Base URL for the Better Auth. This is typically the
 	 * root URL where your application server is hosted.
 	 * If not explicitly set,
 	 * the system will check the following environment variable:
@@ -40,9 +40,9 @@ export type BetterAuthOptions = {
 	 */
 	baseURL?: string;
 	/**
-	 * Base path for the better auth. This is typically
+	 * Base path for the Better Auth. This is typically
 	 * the path where the
-	 * better auth routes are mounted.
+	 * Better Auth routes are mounted.
 	 *
 	 * @default "/api/auth"
 	 */
@@ -51,7 +51,7 @@ export type BetterAuthOptions = {
 	 * The secret to use for encryption,
 	 * signing and hashing.
 	 *
-	 * By default better auth will look for
+	 * By default Better Auth will look for
 	 * the following environment variables:
 	 * process.env.BETTER_AUTH_SECRET,
 	 * process.env.AUTH_SECRET
@@ -125,7 +125,7 @@ export type BetterAuthOptions = {
 			/**
 			 * @param user the user to send the
 			 * verification email to
-			 * @param url the url to send the verification email to
+			 * @param url the URL to send the verification email to
 			 * it contains the token as well
 			 * @param token the token to send the verification email to
 			 */
@@ -207,7 +207,7 @@ export type BetterAuthOptions = {
 			/**
 			 * @param user the user to send the
 			 * reset password email to
-			 * @param url the url to send the reset password email to
+			 * @param url the URL to send the reset password email to
 			 * @param token the token to send to the user (could be used instead of sending the url
 			 * if you need to redirect the user to custom route)
 			 */
@@ -332,6 +332,12 @@ export type BetterAuthOptions = {
 			 * This is useful for cleaning up user data
 			 */
 			afterDelete?: (user: User, request?: Request) => Promise<void>;
+			/**
+			 * The expiration time for the delete token.
+			 *
+			 * @default 1 day (60 * 60 * 24) in seconds
+			 */
+			deleteTokenExpiresIn?: number;
 		};
 	};
 	session?: {
@@ -364,6 +370,13 @@ export type BetterAuthOptions = {
 		 * @default 1 day (60 * 60 * 24)
 		 */
 		updateAge?: number;
+		/**
+		 * Disable session refresh so that the session is not updated
+		 * regardless of the `updateAge` option.
+		 *
+		 * @default false
+		 */
+		disableSessionRefresh?: boolean;
 		/**
 		 * Additional fields for the session
 		 */
@@ -425,6 +438,16 @@ export type BetterAuthOptions = {
 	account?: {
 		modelName?: string;
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		/**
+		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
+		 * will be updated on sign in with the latest data from the provider.
+		 *
+		 * @default true
+		 */
+		updateAccountOnSignIn?: boolean;
+		/**
+		 * Configuration for account linking.
+		 */
 		accountLinking?: {
 			/**
 			 * Enable account linking
@@ -641,10 +664,44 @@ export type BetterAuthOptions = {
 		 */
 		cookiePrefix?: string;
 		/**
+		 * Database configuration.
+		 */
+		database?: {
+			/**
+			 * The default number of records to return from the database
+			 * when using the `findMany` adapter method.
+			 *
+			 * @default 100
+			 */
+			defaultFindManyLimit?: number;
+			/**
+			 * If your database auto increments number ids, set this to `true`.
+			 *
+			 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
+			 *
+			 * @default false
+			 */
+			useNumberId?: boolean;
+			/**
+			 * Custom generateId function.
+			 *
+			 * If not provided, random ids will be generated.
+			 * If set to false, the database's auto generated id will be used.
+			 */
+			generateId?:
+				| ((options: {
+						model: LiteralUnion<Models, string>;
+						size?: number;
+				  }) => string)
+				| false;
+		};
+		/**
 		 * Custom generateId function.
 		 *
 		 * If not provided, random ids will be generated.
 		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @deprecated Please use `database.generateId` instead. This will be potentially removed in future releases.
 		 */
 		generateId?:
 			| ((options: {
@@ -713,8 +770,8 @@ export type BetterAuthOptions = {
 		session?: {
 			create?: {
 				/**
-				 * Hook that is called before a session is updated.
-				 * if the hook returns false, the session will not be updated.
+				 * Hook that is called before a session is created.
+				 * if the hook returns false, the session will not be created.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
@@ -728,7 +785,7 @@ export type BetterAuthOptions = {
 					  }
 				>;
 				/**
-				 * Hook that is called after a session is updated.
+				 * Hook that is called after a session is created.
 				 */
 				after?: (
 					session: Session,
@@ -891,9 +948,9 @@ export type BetterAuthOptions = {
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
 		/**
-		 * The url to redirect to on error
+		 * The URL to redirect to on error
 		 *
-		 * When errorURL is provided, the error will be added to the url as a query parameter
+		 * When errorURL is provided, the error will be added to the URL as a query parameter
 		 * and the user will be redirected to the errorURL.
 		 *
 		 * @default - "/api/auth/error"

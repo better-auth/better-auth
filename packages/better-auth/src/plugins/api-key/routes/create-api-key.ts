@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
-import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -97,6 +96,144 @@ export function createApiKey({
 					.optional(),
 				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),
+			metadata: {
+				openapi: {
+					description: "Create a new API key for a user",
+					responses: {
+						"200": {
+							description: "API key created successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+												description: "Unique identifier of the API key",
+											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+												description: "Creation timestamp",
+											},
+											updatedAt: {
+												type: "string",
+												format: "date-time",
+												description: "Last update timestamp",
+											},
+											name: {
+												type: "string",
+												nullable: true,
+												description: "Name of the API key",
+											},
+											prefix: {
+												type: "string",
+												nullable: true,
+												description: "Prefix of the API key",
+											},
+											start: {
+												type: "string",
+												nullable: true,
+												description:
+													"Starting characters of the key (if configured)",
+											},
+											key: {
+												type: "string",
+												description:
+													"The full API key (only returned on creation)",
+											},
+											enabled: {
+												type: "boolean",
+												description: "Whether the key is enabled",
+											},
+											expiresAt: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description: "Expiration timestamp",
+											},
+											userId: {
+												type: "string",
+												description: "ID of the user owning the key",
+											},
+											lastRefillAt: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description: "Last refill timestamp",
+											},
+											lastRequest: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description: "Last request timestamp",
+											},
+											metadata: {
+												type: "object",
+												nullable: true,
+												additionalProperties: true,
+												description: "Metadata associated with the key",
+											},
+											rateLimitMax: {
+												type: "number",
+												nullable: true,
+												description: "Maximum requests in time window",
+											},
+											rateLimitTimeWindow: {
+												type: "number",
+												nullable: true,
+												description: "Rate limit time window in milliseconds",
+											},
+											remaining: {
+												type: "number",
+												nullable: true,
+												description: "Remaining requests",
+											},
+											refillAmount: {
+												type: "number",
+												nullable: true,
+												description: "Amount to refill",
+											},
+											refillInterval: {
+												type: "number",
+												nullable: true,
+												description: "Refill interval in milliseconds",
+											},
+											rateLimitEnabled: {
+												type: "boolean",
+												description: "Whether rate limiting is enabled",
+											},
+											requestCount: {
+												type: "number",
+												description: "Current request count in window",
+											},
+											permissions: {
+												type: "object",
+												nullable: true,
+												additionalProperties: {
+													type: "array",
+													items: { type: "string" },
+												},
+												description: "Permissions associated with the key",
+											},
+										},
+										required: [
+											"id",
+											"createdAt",
+											"updatedAt",
+											"key",
+											"enabled",
+											"userId",
+											"rateLimitEnabled",
+											"requestCount",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const {
@@ -244,8 +381,8 @@ export function createApiKey({
 				: defaultPermissions
 					? JSON.stringify(defaultPermissions)
 					: undefined;
-			let data: ApiKey = {
-				id: generateId(),
+
+			let data: Omit<ApiKey, "id"> = {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -268,8 +405,12 @@ export function createApiKey({
 				remaining: remaining || refillAmount || null,
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
-				rateLimitEnabled: rateLimitEnabled ?? true,
+				rateLimitEnabled:
+					rateLimitEnabled ?? opts.rateLimit.enabled === undefined
+						? true
+						: opts.rateLimit.enabled,
 				requestCount: 0,
+				//@ts-ignore - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -278,16 +419,23 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
-			const apiKey = await ctx.context.adapter.create<ApiKey>({
+			const apiKey = await ctx.context.adapter.create<
+				Omit<ApiKey, "id">,
+				ApiKey
+			>({
 				model: schema.apikey.modelName,
 				data: data,
 			});
+
 			return ctx.json({
-				...apiKey,
+				...(apiKey as ApiKey),
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(apiKey.permissions)
+					? safeJSONParse(
+							//@ts-ignore - from DB, this value is always a string
+							apiKey.permissions,
+						)
 					: null,
 			});
 		},

@@ -79,6 +79,29 @@ describe("Admin plugin", async () => {
 		expect(newUser?.role).toBe("user");
 	});
 
+	it("should allow admin to create user with multiple roles", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: ["user", "admin"],
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user.role).toBe("user,admin");
+		await client.admin.removeUser(
+			{
+				userId: res.data?.user.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+	});
+
 	it("should not allow non-admin to create users", async () => {
 		const res = await client.admin.createUser(
 			{
@@ -104,6 +127,20 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(res.data?.users.length).toBe(2);
+	});
+
+	it("should list users with search query", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "role",
+				filterOperator: "eq",
+				filterValue: "admin",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.total).toBe(1);
 	});
 
 	it("should not allow non-admin to list users", async () => {
@@ -209,6 +246,39 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.user?.role).toBe("admin");
+	});
+
+	it("should allow to set multiple user roles", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: ["user", "admin"],
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.role).toBe("user,admin");
+		await client.admin.removeUser(
+			{
+				userId: createdUser.data?.user.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
 	});
 
 	it("should not allow non-admin to set user role", async () => {
@@ -432,7 +502,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
-		expect(sessions.data?.sessions.length).toBe(4);
+		expect(sessions.data?.sessions.length).toBe(3);
 		const res = await client.admin.revokeUserSession(
 			{ sessionToken: sessions.data?.sessions[0].token || "" },
 			{ headers: adminHeaders },
@@ -442,7 +512,7 @@ describe("Admin plugin", async () => {
 			{ userId: user?.id || "" },
 			{ headers: adminHeaders },
 		);
-		expect(sessions2.data?.sessions.length).toBe(3);
+		expect(sessions2.data?.sessions.length).toBe(2);
 	});
 
 	it("should not allow non-admin to revoke user sessions", async () => {
@@ -554,7 +624,7 @@ describe("Admin plugin", async () => {
 
 describe("access control", async (it) => {
 	const ac = createAccessControl({
-		user: ["create", "read", "update", "delete", "list"],
+		user: ["create", "read", "update", "delete", "list", "bulk-delete"],
 		order: ["create", "read", "update", "delete", "update-many"],
 	});
 
@@ -629,61 +699,136 @@ describe("access control", async (it) => {
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				order: ["create"],
 			},
 		});
 		expect(canCreateOrder).toBe(true);
 
+		// To be removed when `permission` will be removed entirely
+		const canCreateOrderLegacy = client.admin.checkRolePermission({
+			role: "admin",
+			permission: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderLegacy).toBe(true);
+
+		const canCreateOrderAndReadUser = client.admin.checkRolePermission({
+			role: "admin",
+			permissions: {
+				order: ["create"],
+				user: ["read"],
+			},
+		});
+		expect(canCreateOrderAndReadUser).toBe(true);
+
 		const canCreateUser = client.admin.checkRolePermission({
 			role: "user",
-			permission: {
+			permissions: {
 				user: ["create"],
 			},
 		});
 		expect(canCreateUser).toBe(false);
+
+		const canCreateOrderAndCreateUser = client.admin.checkRolePermission({
+			role: "user",
+			permissions: {
+				order: ["create"],
+				user: ["create"],
+			},
+		});
+		expect(canCreateOrderAndCreateUser).toBe(false);
 	});
 
 	it("should validate using userId", async () => {
 		const canCreateUser = await auth.api.userHasPermission({
 			body: {
 				userId: user.id,
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
 		});
 		expect(canCreateUser.success).toBe(true);
+
+		const canCreateUserAndCreateOrder = await auth.api.userHasPermission({
+			body: {
+				userId: user.id,
+				permissions: {
+					user: ["create"],
+					order: ["create"],
+				},
+			},
+		});
+		expect(canCreateUserAndCreateOrder.success).toBe(true);
+
 		const canUpdateManyOrder = await auth.api.userHasPermission({
 			body: {
 				userId: user.id,
-				permission: {
+				permissions: {
 					order: ["update-many"],
 				},
 			},
 		});
 		expect(canUpdateManyOrder.success).toBe(false);
+
+		const canUpdateManyOrderAndBulkDeleteUser =
+			await auth.api.userHasPermission({
+				body: {
+					userId: user.id,
+					permissions: {
+						user: ["bulk-delete"],
+						order: ["update-many"],
+					},
+				},
+			});
+		expect(canUpdateManyOrderAndBulkDeleteUser.success).toBe(false);
 	});
 
 	it("should validate using role", async () => {
 		const canCreateUser = await auth.api.userHasPermission({
 			body: {
 				role: "admin",
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
 		});
 		expect(canCreateUser.success).toBe(true);
+
+		const canCreateUserAndCreateOrder = await auth.api.userHasPermission({
+			body: {
+				role: "admin",
+				permissions: {
+					user: ["create"],
+					order: ["create"],
+				},
+			},
+		});
+		expect(canCreateUserAndCreateOrder.success).toBe(true);
+
 		const canUpdateOrder = await auth.api.userHasPermission({
 			body: {
 				role: "user",
-				permission: {
+				permissions: {
 					order: ["update"],
 				},
 			},
 		});
 		expect(canUpdateOrder.success).toBe(false);
+
+		const canUpdateOrderAndUpdateUser = await auth.api.userHasPermission({
+			body: {
+				role: "user",
+				permissions: {
+					order: ["update"],
+					user: ["update"],
+				},
+			},
+		});
+		expect(canUpdateOrderAndUpdateUser.success).toBe(false);
 	});
 
 	it("shouldn't allow to list users", async () => {

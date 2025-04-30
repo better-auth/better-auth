@@ -124,7 +124,7 @@ export const oneTap = (options?: OneTapOptions) =>
 						}
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.user.id,
-							ctx.request,
+							ctx.headers,
 						);
 						await setSessionCookie(ctx, {
 							user: newUser.user,
@@ -166,7 +166,7 @@ export const oneTap = (options?: OneTapOptions) =>
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						ctx.request,
+						ctx.headers,
 					);
 
 					await setSessionCookie(ctx, {

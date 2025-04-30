@@ -5,7 +5,7 @@ import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, CornerRightUp } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
@@ -73,14 +73,6 @@ export default function Hero() {
 											Own Your Auth
 										</span>
 									</div>
-									<Link href={"/changelogs/1-2"}>
-										<span className="bg-gradient-to-tr dark:from-stone-800/50 dark:to-black from-stone-200 to-white  px-2 rounded-none">
-											<span className="text-xs dark:text-zinc-200 tracking-tighter font-mono mb-0 underline underline-offset-4">
-												v1.2 is out
-											</span>
-											<CornerRightUp className="inline ml-1 w-3 h-3" />
-										</span>
-									</Link>
 								</div>
 							</div>
 
@@ -162,7 +154,6 @@ export default function Hero() {
 										>
 											Get Started
 										</Link>
-
 										<Builder />
 									</div>
 								</>

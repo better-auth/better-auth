@@ -10,7 +10,7 @@ export default function CommunityHeader() {
 					</h1>
 					<p className="dark:text-gray-400 max-w-md mx-auto text-stone-800">
 						join <span className="italic font-bold">better-auth</span> community
-						to get help, share ideas, and stay up-to-date.
+						to get help, share ideas, and stay up to date.
 					</p>
 					<div className="flex justify-center items-center mt-6 space-x-6">
 						<IconLink

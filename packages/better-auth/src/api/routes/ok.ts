@@ -11,7 +11,7 @@ export const ok = createAuthEndpoint(
 				description: "Check if the API is working",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "API is working",
 						content: {
 							"application/json": {
 								schema: {
@@ -19,8 +19,10 @@ export const ok = createAuthEndpoint(
 									properties: {
 										ok: {
 											type: "boolean",
+											description: "Indicates if the API is working",
 										},
 									},
+									required: ["ok"],
 								},
 							},
 						},
