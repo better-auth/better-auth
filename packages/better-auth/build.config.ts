@@ -5,6 +5,11 @@ export default defineBuildConfig({
 		emitCJS: true,
 		esbuild: {
 			treeShaking: true,
+			tsconfigRaw: {
+				compilerOptions: {
+					experimentalDecorators: true,
+				},
+			},
 		},
 	},
 	declaration: true,
@@ -56,6 +61,8 @@ export default defineBuildConfig({
 		"@babel/parser",
 		"punycode",
 		"csstype",
+		"@nestjs/common",
+		"@nestjs/core",
 	],
 	entries: [
 		"./src/index.ts",
@@ -86,6 +93,7 @@ export default defineBuildConfig({
 		"./src/integrations/next-js.ts",
 		"./src/integrations/react-start.ts",
 		"./src/integrations/node.ts",
+		"./src/integrations/nestjs/index.ts",
 		"./src/plugins/admin/index.ts",
 		"./src/plugins/admin/access/index.ts",
 		"./src/plugins/anonymous/index.ts",
