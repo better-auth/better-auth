@@ -232,7 +232,7 @@ const authClient = createAuthClient({
     plugins: [customSessionClient<typeof auth>()],
 });
 
-const { data } = await authClient.useSession();
+const { data } = authClient.useSession();
 const { data: sessionData } = await authClient.getSession();
 // data.roles
 // data.user.newField
