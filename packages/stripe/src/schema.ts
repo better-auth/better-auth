@@ -42,6 +42,34 @@ export const subscriptions = {
 				type: "number",
 				required: false,
 			},
+			meteredId: {
+				type: "string",
+				required: false,
+			},
+			meteredUsage: {
+				type: "number",
+				required: false,
+			},
+			meteredAlertThreshold: {
+				type: "number",
+				required: false,
+			},
+			trialStart: {
+				type: "date",
+				required: false,
+			},
+			trialEnd: {
+				type: "date", 
+				required: false,
+			},
+			priceId: {
+				type: "string",
+				required: false,
+			},
+			groupId: {
+				type: "string",
+				required: false,
+			},
 		},
 	},
 } satisfies AuthPluginSchema;

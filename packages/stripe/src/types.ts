@@ -83,6 +83,19 @@ export type StripePlan = {
 			request?: Request,
 		) => Promise<void>;
 	};
+	/**
+	 * Metered billing configuration for usage-based pricing
+	 */
+	metered?: {
+		/**
+		 * Stripe meter ID
+		 */
+		meterId: string;
+		/**
+		 * Event name for usage tracking
+		 */
+		eventName: string;
+	};
 };
 
 export interface Subscription {
@@ -157,6 +170,18 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number;
+	/**
+	 * Metered usage configuration
+	 */
+	meteredId?: string;
+	/**
+	 * Current usage amount for metered billing
+	 */
+	meteredUsage?: number;
+	/**
+	 * Alert threshold for metered billing (single threshold per subscription)
+	 */
+	meteredAlertThreshold?: number;
 }
 
 export interface StripeOptions {
@@ -277,12 +302,23 @@ export interface StripeOptions {
 		/**
 		 * A callback to run after a user has deleted their subscription
 		 * @returns
-		 */
+		*/
 		onSubscriptionDeleted?: (data: {
 			event: Stripe.Event;
 			stripeSubscription: Stripe.Subscription;
 			subscription: Subscription;
 		}) => Promise<void>;
+        /**
+         * A callback to run when a usage alert is triggered
+         * @param data - data containing event, subscription, user and alert details
+         * @returns
+         */
+        onAlertTriggered?: (data: {
+            event: Stripe.Event;
+            subscription: Subscription;
+            user: User;
+            alertData: Stripe.Billing.Alert;
+        }) => Promise<void>;
 		/**
 		 * parameters for session create params
 		 *

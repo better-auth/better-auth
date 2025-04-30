@@ -2,6 +2,7 @@ import {
 	type GenericEndpointContext,
 	type BetterAuthPlugin,
 	logger,
+    type User,
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
@@ -14,6 +15,7 @@ import {
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import {
+    onAlertTriggered,
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
@@ -27,6 +29,7 @@ import type {
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
 import { getSchema } from "./schema";
+import { on } from "events";
 
 const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -39,6 +42,9 @@ const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
+	METER_NOT_FOUND: "Meter ID not found",
+	INVALID_USAGE_VALUE: "Invalid usage value",
+	ALERT_CREATION_FAILED: "Failed to create usage alert",
 } as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
@@ -284,8 +290,23 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					existingSubscription.status === "active" &&
 					existingSubscription.plan === ctx.body.plan
 				) {
-					throw new APIError("BAD_REQUEST", {
-						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
+                    /**
+                     * If the subscription is already active and the plan is the same,
+                     * we need to redirect to the billing portal
+                     */
+                    const { url } = await client.billingPortal.sessions
+                        .create({
+                            customer: customerId,
+                            return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+                        }).catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+					return ctx.json({
+						url,
+						redirect: true,
 					});
 				}
 
@@ -301,7 +322,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									items: [
 										{
 											id: activeSubscription.items.data[0]?.id as string,
-											quantity: 1,
+											// Only include quantity for non-metered plans
+											...(plan.metered 
+												? {} 
+												: { quantity: ctx.body.seats || 1 }),
 											price: ctx.body.annual
 												? plan.annualDiscountPriceId
 												: plan.priceId,
@@ -335,6 +359,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							status: "incomplete",
 							referenceId,
 							seats: ctx.body.seats || 1,
+                            meteredId: plan.metered ? plan.metered.meterId : undefined,
+                            meteredUsage: plan.metered ? 0 : undefined,
+                            meteredAlertThreshold: undefined
 						},
 					});
 					subscription = newSubscription;
@@ -389,7 +416,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									price: ctx.body.annual
 										? plan.annualDiscountPriceId
 										: plan.priceId,
-									quantity: ctx.body.seats || 1,
+									// Only include quantity for non-metered plans
+									...(plan.metered ? {} : { quantity: ctx.body.seats || 1 }),
 								},
 							],
 							subscription_data: {
@@ -830,7 +858,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									model: "subscription",
 									update: {
 										status: stripeSubscription.status,
-										seats: stripeSubscription.items.data[0]?.quantity || 1,
+										// Only use quantity as seats for non-metered plans
+										seats: plan.metered ? 1 : (stripeSubscription.items.data[0]?.quantity || 1),
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
 											stripeSubscription.items.data[0]?.current_period_end *
@@ -870,6 +899,259 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 				throw ctx.redirect(getUrl(ctx, callbackURL));
+			},
+		),
+		recordUsage: createAuthEndpoint(
+			"/subscription/usage",
+			{
+				method: "POST",
+				body: z.object({
+					/**
+					 * Reference ID of the subscription
+					 */
+					referenceId: z.string().optional(),
+					/**
+					 * Subscription ID (optional)
+					 */
+					subscriptionId: z.string().optional(),
+					/**
+					 * Plan name (optional if subscription ID is provided)
+					 */
+					plan: z.string().optional(),
+					/**
+					 * Usage value to record
+					 */
+					value: z.number().positive(),
+					/**
+					 * Event name override (optional)
+					 */
+					eventName: z.string().optional(),
+				}),
+				use: [sessionMiddleware, referenceMiddleware("upgrade-subscription")],
+			},
+			async (ctx) => {
+				const { user } = ctx.context.session;
+				const referenceId = ctx.body.referenceId || user.id;
+				
+				// Find the subscription
+				const subscription = ctx.body.subscriptionId
+					? await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [{ field: "id", value: ctx.body.subscriptionId }],
+						})
+					: await ctx.context.adapter
+							.findMany<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+							.then((subs) =>
+								subs.find(
+									(sub) =>
+										(sub.status === "active" || sub.status === "trialing") &&
+										(!ctx.body.plan || sub.plan.toLowerCase() === ctx.body.plan.toLowerCase()),
+								),
+							);
+				
+				if (!subscription) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+				
+				// Find the plan
+				const plan = await getPlanByName(options, subscription.plan);
+				if (!plan || !plan.metered) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.METER_NOT_FOUND,
+					});
+				}
+				
+				try {
+					 // Get the meter information from Stripe to determine the aggregation method
+					const meter = await client.billing.meters.retrieve(plan.metered.meterId);
+					
+					// Record usage in Stripe
+					const meterEvent = await client.billing.meterEvents.create({
+						event_name: ctx.body.eventName || plan.metered.eventName,
+						payload: {
+							stripe_customer_id: subscription.stripeCustomerId!,
+							value: ctx.body.value.toString(),
+						},
+					});
+					
+					// Calculate new usage based on aggregation method
+					let currentUsage = 0;
+					
+					if (meter.default_aggregation.formula === 'sum') {
+						// Sum mode: add the new value to existing usage
+						currentUsage = (subscription.meteredUsage || 0) + ctx.body.value;
+					} else if (meter.default_aggregation.formula === 'count') {
+						// Count mode: Number of events
+						currentUsage = (subscription.meteredUsage || 0) + 1;
+					} else if (meter.default_aggregation.formula === 'last') {
+						// Latest mode: use the new value
+						currentUsage = ctx.body.value;
+					} else {
+						// Default fallback to sum
+						currentUsage = (subscription.meteredUsage || 0) + ctx.body.value;
+					}
+					
+					// Update usage in our database
+					await ctx.context.adapter.update({
+						model: "subscription",
+						update: {
+							meteredUsage: currentUsage,
+						},
+						where: [{ field: "id", value: subscription.id }],
+					});
+					
+					return ctx.json({
+						success: true,
+						meterEvent,
+						usage: currentUsage,
+						aggregationMode: meter.default_aggregation.formula,
+					});
+				} catch (error: any) {
+					ctx.context.logger.error("Error recording usage", error);
+					throw ctx.error("BAD_REQUEST", {
+						message: error.message || STRIPE_ERROR_CODES.INVALID_USAGE_VALUE,
+					});
+				}
+			},
+		),
+		
+		createUsageAlert: createAuthEndpoint(
+			"/subscription/alert",
+			{
+				method: "POST",
+				body: z.object({
+					/**
+					 * Reference ID of the subscription
+					 */
+					referenceId: z.string().optional(),
+					/**
+					 * Subscription ID (optional)
+					 */
+					subscriptionId: z.string().optional(),
+					/**
+					 * Plan name (optional if subscription ID is provided)
+					 */
+					plan: z.string().optional(),
+					/**
+					 * Alert threshold value
+					 */
+					threshold: z.number().positive(),
+					/**
+					 * Alert title
+					 */
+					title: z.string(),
+					/**
+					 * Webhook URL to receive alert notifications (optional)
+					 */
+					webhookUrl: z.string().url().optional(),
+				}),
+				use: [sessionMiddleware, referenceMiddleware("upgrade-subscription")],
+			},
+			async (ctx) => {
+				const { user } = ctx.context.session;
+				const referenceId = ctx.body.referenceId || user.id;
+				
+				// Find the subscription
+				const subscription = ctx.body.subscriptionId
+					? await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [{ field: "id", value: ctx.body.subscriptionId }],
+						})
+					: await ctx.context.adapter
+							.findMany<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+							.then((subs) =>
+								subs.find(
+									(sub) =>
+										(sub.status === "active" || sub.status === "trialing") &&
+										(!ctx.body.plan || sub.plan.toLowerCase() === ctx.body.plan.toLowerCase()),
+								),
+							);
+				
+				if (!subscription || !subscription.stripeCustomerId) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+				
+				// Find the plan
+				const plan = await getPlanByName(options, subscription.plan);
+				if (!plan || !plan.metered) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.METER_NOT_FOUND,
+					});
+				}
+				
+				try {
+					// First, check if an alert exists for this user and meter
+					const existingAlerts = await client.billing.alerts.list({
+						limit: 100,
+					});
+					
+					// Filter alerts for this customer and meter with the same threshold
+					existingAlerts.data.forEach(async (alert) => {
+						if (alert.alert_type !== "usage_threshold") return false;
+						if (!alert.usage_threshold) return false;
+						
+						// Check if this alert is for our meter
+						if (alert.usage_threshold.meter !== plan.metered?.meterId) return false;
+						
+						// Check if this alert is for our customer
+						const customerFilter = alert.usage_threshold.filters?.find(f => 
+							f.type === "customer" && f.customer === subscription.stripeCustomerId
+						);
+						
+						if(!customerFilter) return false;
+
+                        await client.billing.alerts.archive(alert.id);
+                        ctx.context.logger.info(`Archiving existing alert ${alert.id}`);
+					});
+					
+					// Create a new alert in Stripe
+					const alertTitle = ctx.body.title || `Usage alert for ${plan.name}: ${ctx.body.threshold} units`;
+					const alert = await client.billing.alerts.create({
+						title: alertTitle,
+						alert_type: "usage_threshold",
+						usage_threshold: {
+							filters: [
+								{
+									type: "customer",
+									customer: subscription.stripeCustomerId,
+								},
+							],
+							meter: plan.metered.meterId,
+							gte: ctx.body.threshold,
+							recurrence: "one_time",
+						},
+					});
+					
+					// Update alert threshold in our database
+					await ctx.context.adapter.update({
+						model: "subscription",
+						update: {
+							meteredAlertThreshold: ctx.body.threshold
+						},
+						where: [{ field: "id", value: subscription.id }],
+					});
+					
+					return ctx.json({
+						success: true,
+						alert,
+						threshold: ctx.body.threshold,
+					});
+				} catch (error: any) {
+					ctx.context.logger.error("Error creating usage alert", error);
+					throw ctx.error("BAD_REQUEST", {
+						message: error.message || STRIPE_ERROR_CODES.ALERT_CREATION_FAILED,
+					});
+				}
 			},
 		),
 	} as const;
@@ -922,6 +1204,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								break;
 							case "customer.subscription.deleted":
 								await onSubscriptionDeleted(ctx, options, event);
+								await options.onEvent?.(event);
+								break;
+							case "billing.alert.triggered":
+								await onAlertTriggered(ctx, options, event);
 								await options.onEvent?.(event);
 								break;
 							default:

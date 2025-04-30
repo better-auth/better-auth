@@ -1,21 +1,24 @@
-import { type GenericEndpointContext, logger } from "better-auth";
+import { type GenericEndpointContext, logger, type User } from "better-auth";
 import type Stripe from "stripe";
-import type { InputSubscription, StripeOptions, Subscription } from "./types";
+import type { Customer, InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceId } from "./utils";
 
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
-	event: Stripe.Event,
+	event: Stripe.Event
 ) {
 	try {
 		const client = options.stripeClient;
 		const checkoutSession = event.data.object as Stripe.Checkout.Session;
-		if (checkoutSession.mode === "setup" || !options.subscription?.enabled) {
+		if (
+			checkoutSession.mode === "setup" ||
+			!options.subscription?.enabled
+		) {
 			return;
 		}
 		const subscription = await client.subscriptions.retrieve(
-			checkoutSession.subscription as string,
+			checkoutSession.subscription as string
 		);
 		const priceId = subscription.items.data[0]?.price.id;
 		const plan = await getPlanByPriceId(options, priceId as string);
@@ -29,8 +32,12 @@ export async function onCheckoutSessionCompleted(
 				const trial =
 					subscription.trial_start && subscription.trial_end
 						? {
-								trialStart: new Date(subscription.trial_start * 1000),
-								trialEnd: new Date(subscription.trial_end * 1000),
+								trialStart: new Date(
+									subscription.trial_start * 1000
+								),
+								trialEnd: new Date(
+									subscription.trial_end * 1000
+								),
 							}
 						: {};
 
@@ -42,13 +49,21 @@ export async function onCheckoutSessionCompleted(
 							status: subscription.status,
 							updatedAt: new Date(),
 							periodStart: new Date(
-								subscription.items.data[0].current_period_start * 1000,
+								subscription.items.data[0]
+									.current_period_start * 1000
 							),
 							periodEnd: new Date(
-								subscription.items.data[0].current_period_end * 1000,
+								subscription.items.data[0].current_period_end *
+									1000
 							),
-							stripeSubscriptionId: checkoutSession.subscription as string,
+							stripeSubscriptionId:
+								checkoutSession.subscription as string,
 							seats,
+							// Set metered billing properties if plan has metering
+							meteredId: plan.metered
+								? plan.metered.meterId
+								: undefined,
+							meteredUsage: plan.metered ? 0 : undefined,
 							...trial,
 						},
 						where: [
@@ -60,19 +75,22 @@ export async function onCheckoutSessionCompleted(
 					});
 
 				if (trial.trialStart && plan.freeTrial?.onTrialStart) {
-					await plan.freeTrial.onTrialStart(dbSubscription as Subscription);
+					await plan.freeTrial.onTrialStart(
+						dbSubscription as Subscription
+					);
 				}
 
 				if (!dbSubscription) {
-					dbSubscription = await ctx.context.adapter.findOne<Subscription>({
-						model: "subscription",
-						where: [
-							{
-								field: "id",
-								value: subscriptionId,
-							},
-						],
-					});
+					dbSubscription =
+						await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "id",
+									value: subscriptionId,
+								},
+							],
+						});
 				}
 				await options.subscription?.onSubscriptionComplete?.({
 					event,
@@ -91,7 +109,7 @@ export async function onCheckoutSessionCompleted(
 export async function onSubscriptionUpdated(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
-	event: Stripe.Event,
+	event: Stripe.Event
 ) {
 	try {
 		if (!options.subscription?.enabled) {
@@ -107,7 +125,12 @@ export async function onSubscriptionUpdated(
 			model: "subscription",
 			where: subscriptionId
 				? [{ field: "id", value: subscriptionId }]
-				: [{ field: "stripeSubscriptionId", value: subscriptionUpdated.id }],
+				: [
+						{
+							field: "stripeSubscriptionId",
+							value: subscriptionUpdated.id,
+						},
+					],
 		});
 		if (!subscription) {
 			const subs = await ctx.context.adapter.findMany<Subscription>({
@@ -117,11 +140,11 @@ export async function onSubscriptionUpdated(
 			if (subs.length > 1) {
 				const activeSub = subs.find(
 					(sub: Subscription) =>
-						sub.status === "active" || sub.status === "trialing",
+						sub.status === "active" || sub.status === "trialing"
 				);
 				if (!activeSub) {
 					logger.warn(
-						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
+						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`
 					);
 					return;
 				}
@@ -144,10 +167,11 @@ export async function onSubscriptionUpdated(
 				updatedAt: new Date(),
 				status: subscriptionUpdated.status,
 				periodStart: new Date(
-					subscriptionUpdated.items.data[0].current_period_start * 1000,
+					subscriptionUpdated.items.data[0].current_period_start *
+						1000
 				),
 				periodEnd: new Date(
-					subscriptionUpdated.items.data[0].current_period_end * 1000,
+					subscriptionUpdated.items.data[0].current_period_end * 1000
 				),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
 				seats,
@@ -201,7 +225,7 @@ export async function onSubscriptionUpdated(
 export async function onSubscriptionDeleted(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
-	event: Stripe.Event,
+	event: Stripe.Event
 ) {
 	if (!options.subscription?.enabled) {
 		return;
@@ -239,8 +263,72 @@ export async function onSubscriptionDeleted(
 			});
 		} else {
 			logger.warn(
-				`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
+				`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`
 			);
+		}
+	} catch (error: any) {
+		logger.error(`Stripe webhook failed. Error: ${error}`);
+	}
+}
+
+export async function onAlertTriggered(
+	ctx: GenericEndpointContext,
+	options: StripeOptions,
+	event: Stripe.Event
+) {
+	if (!options.subscription?.enabled) {
+		return;
+	}
+	try {
+		if ('alert' in event.data.object) {
+			const alertEvent = event.data.object.alert as Stripe.Billing.Alert;
+            if (
+                alertEvent.alert_type === "usage_threshold" &&
+                alertEvent.usage_threshold
+            ) {
+                const meterId = alertEvent.usage_threshold.meter;
+                const customerId = alertEvent.usage_threshold?.filters?.find(
+                    (f) => f.type === "customer"
+                )?.customer as string;
+
+                const client = options.stripeClient;
+                await client.billing.alerts.archive(alertEvent.id);
+                if (meterId && customerId) {
+                    // Find the subscription
+                    const subscription =
+                        await ctx.context.adapter.findOne<Subscription>({
+                            model: "subscription",
+                            where: [
+                                { field: "stripeCustomerId", value: customerId },
+                            ],
+                        });
+
+                    if (subscription) {
+                        ctx.context.logger.info("Usage alert triggered", {
+                            meterId,
+                            customerId,
+                            threshold: alertEvent.usage_threshold.gte,
+                            currentUsage: subscription.meteredUsage,
+                        });
+                        // Find the customer information
+                        const user = await ctx.context.adapter.findOne<User>({
+                            model: "user",
+                            where: [
+                                { field: "stripeCustomerId", value: customerId },
+                            ],
+                        });
+
+                        if (user) {
+                            await options.subscription?.onAlertTriggered?.({
+                                event,
+                                subscription,
+                                user,
+                                alertData: alertEvent,
+                            });
+                        }
+                    }
+                }
+            }
 		}
 	} catch (error: any) {
 		logger.error(`Stripe webhook failed. Error: ${error}`);
