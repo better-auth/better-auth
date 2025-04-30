@@ -105,7 +105,7 @@ export class AuthModule implements NestModule, OnModuleInit {
 			);
 
 		if (!this.options.disableBodyParser)
-			consumer.apply(SkipBodyParsingMiddleware).forRoutes("*");
+			consumer.apply(SkipBodyParsingMiddleware).forRoutes("*path");
 
 		// Get basePath from options or use default
 		let basePath = this.auth.options.basePath ?? "/api/auth";
