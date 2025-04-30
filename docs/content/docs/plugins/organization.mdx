@@ -49,7 +49,7 @@ export const auth = betterAuth({
     import { createAuthClient } from "better-auth/client"
     import { organizationClient } from "better-auth/client/plugins"
 
-    const authClient = createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [ // [!code highlight]
             organizationClient() // [!code highlight]
         ] // [!code highlight]

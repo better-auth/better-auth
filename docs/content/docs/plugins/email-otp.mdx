@@ -37,7 +37,7 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
     import { createAuthClient } from "better-auth/client"
     import { emailOTPClient } from "better-auth/client/plugins"
     
-    const authClient =  createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             emailOTPClient()
         ]

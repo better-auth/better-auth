@@ -76,7 +76,7 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
         import { createAuthClient } from "better-auth/client"
         import { passkeyClient } from "better-auth/client/plugins"
 
-        const authClient =  createAuthClient({
+        export const authClient = createAuthClient({
             plugins: [ // [!code highlight]
                 passkeyClient() // [!code highlight]
             ] // [!code highlight]
