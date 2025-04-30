@@ -19,7 +19,7 @@ import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 /**
  * Configuration interface for generic OAuth providers.
  */
-interface GenericOAuthConfig {
+export interface GenericOAuthConfig {
 	/** Unique identifier for the OAuth provider */
 	providerId: string;
 	/**
@@ -640,7 +640,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							return redirectOnError("email_doesn't_match");
 						}
 						const existingAccount =
-							await ctx.context.internalAdapter.findAccount(userInfo.id);
+							await ctx.context.internalAdapter.findAccountByProviderId(
+								userInfo.id,
+								provider.providerId,
+							);
 						if (existingAccount) {
 							if (existingAccount.userId !== link.userId) {
 								return redirectOnError(
@@ -671,6 +674,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 									scope: tokens.scopes?.join(","),
+									refreshToken: tokens.refreshToken,
+									idToken: tokens.idToken,
 								});
 							if (!newAccount) {
 								return redirectOnError("unable_to_link_account");
@@ -770,17 +775,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 				async (c) => {
 					const session = c.context.session;
-					const account = await c.context.internalAdapter.findAccounts(
-						session.user.id,
-					);
-					const existingAccount = account.find(
-						(a) => a.providerId === c.body.providerId,
-					);
-					if (existingAccount) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
-						});
-					}
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
 					);

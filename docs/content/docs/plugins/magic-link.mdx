@@ -37,7 +37,7 @@ Magic link or email link is a way to authenticate users without a password. When
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
     import { magicLinkClient } from "better-auth/client/plugins";
-    const authClient =  createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             magicLinkClient()
         ]

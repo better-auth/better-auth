@@ -55,7 +55,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
     import { createAuthClient } from "better-auth/client"
     import { anonymousClient } from "better-auth/client/plugins"
     
-    const authClient =  createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             anonymousClient()
         ]
