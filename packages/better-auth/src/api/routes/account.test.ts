@@ -118,7 +118,9 @@ describe("account", async () => {
 			redirect: true,
 		});
 		const state =
-			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+				: "";
 		email = "test@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
@@ -161,7 +163,10 @@ describe("account", async () => {
 			redirect: true,
 		});
 
-		const url = new URL(linkAccountRes.data!.url);
+		const url =
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url)
+				: new URL("");
 		const scopesParam = url.searchParams.get("scope");
 		expect(scopesParam).toContain(customScope);
 	});
@@ -191,7 +196,9 @@ describe("account", async () => {
 			redirect: true,
 		});
 		const state =
-			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+				: "";
 		email = "test2@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
