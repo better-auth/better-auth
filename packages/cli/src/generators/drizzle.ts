@@ -135,7 +135,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field]!;
-							return `${field}: ${getType(field, attr)}${
+							let type = getType(field, attr);
+							if (attr.defaultValue !== undefined) {
+								type += `.default(${JSON.stringify(attr.defaultValue)})`;
+							}
+							return `${field}: ${type}${
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
 								attr.references
