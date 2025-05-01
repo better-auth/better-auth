@@ -725,6 +725,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							banned: false,
 							banExpires: null,
 							banReason: null,
+							updatedAt: new Date(),
 						},
 					);
 					return ctx.json({
@@ -815,6 +816,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: options?.defaultBanExpiresIn
 									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
+							updatedAt: new Date(),
 						},
 						ctx,
 					);
