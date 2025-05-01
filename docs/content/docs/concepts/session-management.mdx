@@ -164,7 +164,9 @@ When cookie caching is enabled, the server can check session validity from the c
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-const auth = new BetterAuth({
+import { betterAuth } from "better-auth"l
+
+export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
@@ -174,7 +176,7 @@ const auth = new BetterAuth({
 });
 ```
 
-If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true`
+If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true` this will force the server to fetch the session from the database and also refresh the cookie cache.
 
 ```ts title="auth-client.ts"
 const session = await authClient.getSession({ query: {
@@ -185,7 +187,7 @@ const session = await authClient.getSession({ query: {
 or on the server
 
 ```ts title="server.ts"
-auth.api.getSession({
+await auth.api.getSession({
     query: {
         disableCookieCache: true,
     }, 
@@ -230,7 +232,7 @@ const authClient = createAuthClient({
     plugins: [customSessionClient<typeof auth>()],
 });
 
-const { data } = await authClient.useSession();
+const { data } = authClient.useSession();
 const { data: sessionData } = await authClient.getSession();
 // data.roles
 // data.user.newField
@@ -256,7 +258,7 @@ export const auth = betterAuth({
     ...options,
     plugins: [
         ...(options.plugins ?? []),
-        customSession(async ({ user, session }) => {
+        customSession(async ({ user, session }, ctx) => {
             // now both user and session will infer the fields added by plugins and your custom fields
             return {
                 user,

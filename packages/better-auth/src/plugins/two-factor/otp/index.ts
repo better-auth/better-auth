@@ -255,9 +255,11 @@ export const otp2fa = (options?: OTPOptions) => {
 				);
 			const [otp, counter] = toCheckOtp?.value?.split("!") ?? [];
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					`2fa-otp-${key}`,
-				);
+				if (toCheckOtp) {
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						toCheckOtp.id,
+					);
+				}
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				});
@@ -265,7 +267,7 @@ export const otp2fa = (options?: OTPOptions) => {
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
-					`2fa-otp-${key}`,
+					toCheckOtp.id,
 				);
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,

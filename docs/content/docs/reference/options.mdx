@@ -90,12 +90,12 @@ Secondary storage configuration used to store session and rate limit data.
 
 ```ts
 import { betterAuth } from "better-auth";
-import { redisStorage } from "better-auth/storage";
 
 export const auth = betterAuth({
-	secondaryStorage: redisStorage({
-		url: "redis://localhost:6379"
-	}),
+	// ... other options
+    secondaryStorage: {
+    	// Your implementation here
+    },
 })
 ```
 
@@ -317,6 +317,11 @@ export const auth = betterAuth({
 
 - `modelName`: The model name for the account
 - `fields`: Map fields to different column names
+
+### `updateAccountOnSignIn`
+
+If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
+will be updated on sign in with the latest data from the provider.
 
 ### `accountLinking`
 
