@@ -21,5 +21,5 @@ export const auth = betterAuth({
 		// sendVerificationEmail: async ({ user, url, token }, request) => {
 		// 	// TODO add function(s) to send verification email.
 		// },
-	}
+	},
 });
