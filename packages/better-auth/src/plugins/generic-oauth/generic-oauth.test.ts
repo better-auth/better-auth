@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
-import { genericOAuthClient } from "./client";
 import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { genericOAuthClient } from "./client";
 
-import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
+import { OAuth2Server } from "oauth2-mock-server";
 import { parseSetCookieHeader } from "../../cookies";
 
 let server = new OAuth2Server();
@@ -388,5 +388,55 @@ describe("oauth2", async () => {
 			customFetchImpl,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+	});
+
+	it("should pass authorization headers in oAuth2Callback", async () => {
+		const customHeaders = {
+			"X-Custom-Header": "test-value",
+		};
+
+		let receivedHeaders: Record<string, string> = {};
+		server.service.once("beforeTokenSigning", (token, req) => {
+			receivedHeaders = req.headers as Record<string, string>;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test3",
+							discoveryUrl:
+								"http://localhost:8081/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							authorizationHeaders: customHeaders,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test3",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		const headers = new Headers();
+		await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
+
+		expect(receivedHeaders).toHaveProperty("x-custom-header");
+		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
 	});
 });
