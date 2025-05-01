@@ -137,7 +137,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							let type = getType(field, attr);
 							if (attr.defaultValue) {
-								type += `.default(${JSON.stringify(attr.defaultValue)})`;
+								if (typeof attr.defaultValue === "function") {
+									type += `.$defaultFn(${attr.defaultValue})`;
+								} else {
+									type += `.default(${attr.defaultValue})`;
+								}
 							}
 							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
