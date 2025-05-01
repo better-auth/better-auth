@@ -139,9 +139,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							if (attr.defaultValue !== undefined) {
 								type += `.default(${JSON.stringify(attr.defaultValue)})`;
 							}
-							return `${field}: ${type}${
-								attr.required ? ".notNull()" : ""
-							}${attr.unique ? ".unique()" : ""}${
+							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
+								attr.unique ? ".unique()" : ""
+							}${
 								attr.references
 									? `.references(()=> ${getModelName(
 											attr.references.model,
