@@ -99,4 +99,31 @@ describe("jwt", async (it) => {
 		expect(decoded.payload.sub).toBeDefined();
 		expect(decoded.payload.sub).toBe(decoded.payload.id);
 	});
+
+	it("should properly expose set-auth-jwt header in CORS", async () => {
+		let exposedHeaders = "";
+		let jwtToken = "";
+		
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					exposedHeaders = context.response.headers.get("Access-Control-Expose-Headers") || "";
+					jwtToken = context.response.headers.get("set-auth-jwt") || "";
+				},
+			},
+		});
+
+		expect(exposedHeaders).toContain("set-auth-jwt");
+		
+		expect(jwtToken.length).toBeGreaterThan(10);
+		
+		const jwks = await client.jwks();
+		const publicWebKey = await importJWK({
+			...jwks.data?.keys[0],
+			alg: "EdDSA",
+		});
+		const decoded = await jwtVerify(jwtToken, publicWebKey);
+		expect(decoded).toBeDefined();
+	});
 });
