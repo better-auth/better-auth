@@ -1438,7 +1438,6 @@ describe("api-key", async () => {
 				headers,
 			});
 
-			console.log(session);
 			result.data = session;
 		} catch (error: any) {
 			result.error = error;
@@ -1489,6 +1488,7 @@ describe("api-key", async () => {
 
 		expect(result.error?.status).toEqual("UNAUTHORIZED");
 		expect(result.error?.body?.message).toEqual(ERROR_CODES.KEY_EXPIRED);
+		vi.useRealTimers();
 	});
 
 	it("should fail to get the session if the key has no remaining requests", async () => {

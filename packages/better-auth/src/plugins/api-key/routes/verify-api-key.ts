@@ -167,9 +167,9 @@ export async function validateApiKey({
 	});
 
 	if (!newApiKey) {
-		throw new APIError("UNAUTHORIZED", {
-			message: ERROR_CODES.USAGE_EXCEEDED,
-			code: "USAGE_EXCEEDED" as const,
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message: "Failed to update API key",
+			code: "INTERNAL_SERVER_ERROR" as const,
 		});
 	}
 
@@ -272,7 +272,15 @@ export function verifyApiKey({
 						key: null,
 					});
 				}
-				throw error;
+
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.INVALID_API_KEY,
+						code: "INVALID_API_KEY" as const,
+					},
+					key: null,
+				});
 			}
 
 			const { key: _, ...returningApiKey } = apiKey ?? {
