@@ -13,7 +13,7 @@ export function getIp(
 		return testIP;
 	}
 	if (isDevelopment) {
-		return testIP
+		return testIP;
 	}
 
 	const headers = "headers" in req ? req.headers : req;
