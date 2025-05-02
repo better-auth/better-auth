@@ -117,12 +117,12 @@ This is useful when you have the ID Token from Apple on the client-side and want
 </Callout>
 
 ```ts title="auth-client.ts"
-    await authClient.signIn.social({
-        provider: "apple",
-        idToken: {
-            token: // Apple ID Token,
-            nonce: // Nonce (optional)
-            accessToken: // Access Token (optional)
-        }
-    })
+await authClient.signIn.social({
+    provider: "apple",
+    idToken: {
+        token: // Apple ID Token,
+        nonce: // Nonce (optional)
+        accessToken: // Access Token (optional)
+    }
+})
 ```
