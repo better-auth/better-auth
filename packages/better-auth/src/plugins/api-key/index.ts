@@ -6,9 +6,10 @@ import { mergeSchema } from "../../db";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
-import type { ApiKey, ApiKeyOptions } from "./types";
+import type { ApiKeyOptions } from "./types";
 import { createApiKeyRoutes } from "./routes";
 import type { User } from "../../types";
+import { validateApiKey } from "./routes/verify-api-key";
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
@@ -155,21 +156,15 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							padding: false,
 						});
 
-						const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-							model: schema.apikey.modelName,
-							where: [
-								{
-									field: "key",
-									value: hashed,
-								},
-							],
+						const apiKey = await validateApiKey({
+							hashedKey: hashed,
+							ctx,
+							opts,
+							schema,
 						});
 
-						if (!apiKey) {
-							throw new APIError("UNAUTHORIZED", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
-						}
+						await routes._deleteAllExpiredApiKeys(ctx.context);
+
 						let user: User;
 						try {
 							const userResult = await ctx.context.internalAdapter.findUserById(
