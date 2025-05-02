@@ -29,6 +29,14 @@ export type Adapter = {
 		model: string;
 		data: Omit<T, "id">;
 		select?: string[];
+		/**
+		 * By default, any `id` provided in `data` will be ignored.
+		 *
+		 * If you want to force the `id` to be the same as the `data.id`, set this to `true`.
+		 *
+		 * @default false
+		 */
+		forceAllowId?: boolean;
 	}) => Promise<R>;
 	findOne: <T>(data: {
 		model: string;
