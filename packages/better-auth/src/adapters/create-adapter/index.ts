@@ -548,7 +548,7 @@ export const createAdapter =
 
 				if ("id" in unsafeData && !forceAllowId) {
 					logger.warn(
-						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you. The id will be ignored.`,
+						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
 					);
 					const err = new Error();
 					const stack = err.stack
