@@ -14,6 +14,7 @@ import {
 	UserSquare2,
 	Database,
 	KeyRound,
+	Book,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
@@ -329,7 +330,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Typescript",
+				title: "TypeScript",
 				href: "/docs/concepts/typescript",
 				icon: () => (
 					<svg
@@ -444,7 +445,6 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
-
 			{
 				title: "Discord",
 				href: "/docs/authentication/discord",
@@ -738,7 +738,26 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					</svg>
 				),
 			},
-
+			{
+				title: "Zoom",
+				isNew: true,
+				href: "/docs/authentication/zoom",
+				icon: (props?: SVGProps<any>) => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 16 16"
+					>
+						<path
+							fill="currentColor"
+							fillRule="evenodd"
+							d="M1.45 3.334C.648 3.334 0 3.982 0 4.783v4.986c0 1.6 1.298 2.898 2.898 2.898h6.986c.8 0 1.45-.649 1.45-1.45V6.233a2.9 2.9 0 0 0-2.899-2.899zM16 4.643v6.715c0 .544-.618.86-1.059.539l-2.059-1.498a1.33 1.33 0 0 1-.549-1.078V6.679c0-.427.204-.827.55-1.078l2.058-1.498a.667.667 0 0 1 1.059.54"
+							clipRule="evenodd"
+						></path>
+					</svg>
+				),
+			},
 			{
 				title: "Others",
 				group: true,
@@ -769,8 +788,8 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="20px"
-				height="20px"
+				width="16px"
+				height="16px"
 				viewBox="0 0 24 24"
 			>
 				<path
@@ -1047,12 +1066,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/nuxt",
 			},
 			{
-				title: "Svelte Kit",
+				title: "SvelteKit",
 				icon: Icons.svelteKit,
 				href: "/docs/integrations/svelte-kit",
 			},
 			{
-				title: "Solid Start",
+				title: "SolidStart",
 				icon: Icons.solidStart,
 				href: "/docs/integrations/solid-start",
 			},
@@ -1071,6 +1090,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Hono",
 				icon: Icons.hono,
 				href: "/docs/integrations/hono",
+			},
+			{
+				title: "Fastify",
+				icon: Icons.fastify,
+				href: "/docs/integrations/fastify",
 			},
 			{
 				title: "Express",
@@ -1314,7 +1338,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Captcha",
 				href: "/docs/plugins/captcha",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1328,6 +1351,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
+			},
+			{
+				title: "Have I Been Pwned",
+				href: "/docs/plugins/have-i-been-pwned",
+				isNew: true,
+				icon: () => <p className="text-xs">';--</p>,
 			},
 			{
 				title: "Multi Session",
@@ -1369,6 +1398,27 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "One-Time Token",
+				href: "/docs/plugins/one-time-token",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1em"
+						height="1em"
+						viewBox="0 0 14 14"
+					>
+						<path
+							fill="none"
+							stroke="currentColor"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="M.5 7A6.5 6.5 0 1 0 7 .5V7Zm2.96-3.54L2.4 2.4"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Open API",
 				href: "/docs/plugins/open-api",
 				icon: () => (
@@ -1395,15 +1445,15 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						viewBox="0 0 256 257"
 					>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="M147.386 69.071L147.129 0h-38.515l.257 69.071l19.257 26.448zm-38.515 118.371v69.328h38.515v-69.328l-19.258-26.447z"
 						></path>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="m147.386 187.442l40.57 55.976l31.069-22.596l-40.57-55.975l-31.069-10.015zM108.871 69.071L68.044 13.095L36.975 35.691l40.57 55.976l31.326 10.014z"
 						></path>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="M77.545 91.667L11.811 70.355L0 106.816l65.733 21.569l31.069-10.271zm81.653 46.732l19.257 26.448l65.734 21.311L256 149.697l-65.733-21.312z"
 						></path>
 						<path
@@ -1593,6 +1643,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Create a Database Adapter",
+				href: "/docs/guides/create-a-db-adapter",
+				icon: () => <Database className="w-4 h-4 text-current" />,
+			},
+			{
 				title: "Browser Extension Guide",
 				href: "/docs/guides/browser-extension-guide",
 				icon: () => (
@@ -1669,6 +1724,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "Resources",
+				href: "/docs/reference/resources",
+				icon: () => <Book className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "Security",
@@ -1763,7 +1823,7 @@ export const examples: Content[] = [
 				icon: Icons.remix,
 			},
 			{
-				title: "Next JS",
+				title: "Next.js",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
 			},
@@ -1773,7 +1833,7 @@ export const examples: Content[] = [
 				icon: Icons.nuxt,
 			},
 			{
-				title: "Svelte Kit",
+				title: "SvelteKit",
 				href: "/docs/examples/svelte-kit",
 				icon: Icons.svelteKit,
 			},

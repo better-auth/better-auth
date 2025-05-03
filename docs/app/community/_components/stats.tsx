@@ -38,12 +38,12 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
-										<span className="uppercase font-mono">
+										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Our Discord
 										</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
 									</Button>
 								</Link>
 							</div>
@@ -63,7 +63,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -80,8 +80,11 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 												d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
 											></path>
 										</svg>
-										<span className="uppercase font-mono">Downloads</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
+
+										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
+											Downloads
+										</span>
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
 									</Button>
 								</Link>
 							</div>
@@ -119,10 +122,12 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
-										<span className="uppercase font-mono">Join Subreddit</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
+										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
+											Join Subreddit
+										</span>
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
 									</Button>
 								</Link>
 							</div>

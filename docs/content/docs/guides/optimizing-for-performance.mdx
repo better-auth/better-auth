@@ -16,7 +16,9 @@ Calling your database every time `useSession` or `getSession` invoked isn’t id
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-const auth = new betterAuth({
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
   session: {
     cookieCache: {
       enabled: true,
@@ -32,7 +34,7 @@ Read more about [cookie caching](/docs/concepts/session-management#cookie-cache)
 
 Here are examples of how you can do caching in different frameworks and environments:
 
-<Tabs items={["NextJs", "Remix", "Solid Start", "React Query"]}>
+<Tabs items={["Next.js", "Remix", "SolidStart", "React Query"]}>
   <Tab value="NextJS">
     Since Next v15, we can use the `"use cache"` directive to cache the response of a server function.
 
@@ -68,8 +70,8 @@ Here are examples of how you can do caching in different frameworks and environm
 
   </Tab>
 
-  <Tab value="Solid Start">
-    In Solid Start, you can use the `query` function to cache data. Here’s an example:
+  <Tab value="SolidStart">
+    In SolidStart, you can use the `query` function to cache data. Here’s an example:
 
     ```tsx
     const getUsers = query(
@@ -78,7 +80,7 @@ Here are examples of how you can do caching in different frameworks and environm
     );
     ```
 
-    Learn more about Solid Start `query` function <Link href="https://docs.solidjs.com/solid-router/reference/data-apis/query">here</Link>.
+    Learn more about SolidStart `query` function <Link href="https://docs.solidjs.com/solid-router/reference/data-apis/query">here</Link>.
 
   </Tab>
   <Tab value="React Query">

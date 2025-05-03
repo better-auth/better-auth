@@ -33,6 +33,21 @@ export const auth = betterAuth({
 })
 ```
 
+### Disable Session Refresh
+
+You can disable session refresh so that the session is not updated regardless of the `updateAge` option.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        disableSessionRefresh: true
+    }
+})
+```
+
 ## Session Freshness
 
 Some endpoints in Better Auth require the session to be **fresh**. A session is considered fresh if its `createdAt` is within the `freshAge` limit. By default, the `freshAge` is set to **1 day** (60 * 60 * 24).  
@@ -149,7 +164,9 @@ When cookie caching is enabled, the server can check session validity from the c
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-const auth = new BetterAuth({
+import { betterAuth } from "better-auth"l
+
+export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
@@ -159,7 +176,7 @@ const auth = new BetterAuth({
 });
 ```
 
-If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true`
+If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true` this will force the server to fetch the session from the database and also refresh the cookie cache.
 
 ```ts title="auth-client.ts"
 const session = await authClient.getSession({ query: {
@@ -170,7 +187,7 @@ const session = await authClient.getSession({ query: {
 or on the server
 
 ```ts title="server.ts"
-auth.api.getSession({
+await auth.api.getSession({
     query: {
         disableCookieCache: true,
     }, 
@@ -215,7 +232,7 @@ const authClient = createAuthClient({
     plugins: [customSessionClient<typeof auth>()],
 });
 
-const { data } = await authClient.useSession();
+const { data } = authClient.useSession();
 const { data: sessionData } = await authClient.getSession();
 // data.roles
 // data.user.newField
@@ -241,7 +258,7 @@ export const auth = betterAuth({
     ...options,
     plugins: [
         ...(options.plugins ?? []),
-        customSession(async ({ user, session }) => {
+        customSession(async ({ user, session }, ctx) => {
             // now both user and session will infer the fields added by plugins and your custom fields
             return {
                 user,

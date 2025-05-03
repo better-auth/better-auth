@@ -90,12 +90,12 @@ Secondary storage configuration used to store session and rate limit data.
 
 ```ts
 import { betterAuth } from "better-auth";
-import { redisStorage } from "better-auth/storage";
 
 export const auth = betterAuth({
-	secondaryStorage: redisStorage({
-		url: "redis://localhost:6379"
-	}),
+	// ... other options
+    secondaryStorage: {
+    	// Your implementation here
+    },
 })
 ```
 
@@ -268,16 +268,17 @@ export const auth = betterAuth({
 		},
 		expiresIn: 604800, // 7 days
 		updateAge: 86400, // 1 day
-		additionalFields: {
+		disableSessionRefresh: true, // Disable session refresh so that the session is not updated regardless of the `updateAge` option. (default: `false`)
+		additionalFields: { // Additional fields for the session table
 			customField: {
 				type: "string",
 				nullable: true
 			}
 		},
-		storeSessionInDatabase: true,
-		preserveSessionInDatabase: false,
+		storeSessionInDatabase: true, // Store session in database when secondary storage is provided (default: `false`)
+		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
-			enabled: true,
+			enabled: true, // Enable caching session in cookie (default: `false`)	
 			maxAge: 300 // 5 minutes
 		}
 	},
@@ -316,6 +317,11 @@ export const auth = betterAuth({
 
 - `modelName`: The model name for the account
 - `fields`: Map fields to different column names
+
+### `updateAccountOnSignIn`
+
+If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
+will be updated on sign in with the latest data from the provider.
 
 ### `accountLinking`
 
@@ -411,13 +417,18 @@ export const auth = betterAuth({
 			secure: true
 		},
 		cookiePrefix: "myapp",
-		generateId: ((options: {
-			model: LiteralUnion<Models, string>;
-			size?: number;
-		}) => {
-			// Generate a unique ID for the model
-			return "my-id";
-		}) 
+		database: {
+			// If your DB is using auto-incrementing IDs, set this to true.
+			useNumberId: false,
+			// Use your own custom id generator, or disable generating IDs as a whole.
+			generateId: (((options: {
+				model: LiteralUnion<Models, string>;
+				size?: number;
+			}) => {
+				return "my-super-unique-id";
+			})) | false,
+			defaultFindManyLimit: 100,
+		}
 	},
 })
 ```

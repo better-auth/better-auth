@@ -3,7 +3,7 @@ title: Email OTP
 description: Email OTP plugin for Better Auth.
 ---
 
-The Email OTP plugin allows user to sign-in, verify their email, or reset their password using a one-time password (OTP) sent to their email address.
+The Email OTP plugin allows user to sign in, verify their email, or reset their password using a one-time password (OTP) sent to their email address.
 
 
 ## Installation
@@ -37,7 +37,7 @@ The Email OTP plugin allows user to sign-in, verify their email, or reset their 
     import { createAuthClient } from "better-auth/client"
     import { emailOTPClient } from "better-auth/client/plugins"
     
-    const authClient =  createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             emailOTPClient()
         ]
@@ -59,7 +59,7 @@ const { data, error } = await authClient.emailOtp.sendVerificationOtp({
 })
 ```
 
-### SignIn with OTP
+### Sign in with OTP
 
 Once the user provides the OTP, you can sign in the user using the `signIn.emailOTP()` method.
 
@@ -149,3 +149,20 @@ export const auth = betterAuth({
 - `disableSignUp`: A boolean value that determines whether to prevent automatic sign-up when the user is not registered. Defaults to `false`.
 
 - `generateOTP`: A function that generates the OTP. Defaults to a random 6-digit number.
+
+- `maxAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            maxAttempts: 5, // Allow 5 attempts before invalidating the OTP
+            expiresIn: 300
+        })
+    ]
+})
+```
+
+When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `MAX_ATTEMPTS_EXCEEDED`.
