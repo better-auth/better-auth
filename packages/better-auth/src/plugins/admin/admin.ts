@@ -409,15 +409,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 					const user =
-						await ctx.context.internalAdapter.createUser<UserWithRole>({
-							email: ctx.body.email,
-							name: ctx.body.name,
-							role:
-								(ctx.body.role && parseRoles(ctx.body.role)) ??
-								options?.defaultRole ??
-								"user",
-							...ctx.body.data,
-						});
+						await ctx.context.internalAdapter.createUser<UserWithRole>(
+							{
+								email: ctx.body.email,
+								name: ctx.body.name,
+								role:
+									(ctx.body.role && parseRoles(ctx.body.role)) ??
+									options?.defaultRole ??
+									"user",
+								...ctx.body.data,
+							},
+							ctx,
+						);
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
