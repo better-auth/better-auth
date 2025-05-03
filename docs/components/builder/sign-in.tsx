@@ -313,7 +313,7 @@ export default function SignIn() {
               {loading ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
-                Login
+                <p> Login </p>
               )}
               </Button>`
 							: ""

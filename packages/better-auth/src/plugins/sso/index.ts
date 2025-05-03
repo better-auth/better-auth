@@ -386,7 +386,7 @@ export const sso = (options?: SSOOptions) => {
 									`${body.issuer}/.well-known/openid-configuration`,
 								mapping: body.mapping,
 								scopes: body.scopes,
-								userinfoEndpoint: body.userInfoEndpoint,
+								userInfoEndpoint: body.userInfoEndpoint,
 								overrideUserInfo:
 									ctx.body.overrideUserInfo ||
 									options?.defaultOverrideUserInfo ||

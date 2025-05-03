@@ -46,7 +46,7 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     import { createAuthClient } from "better-auth/client"
     import { genericOAuthClient } from "better-auth/client/plugins"
     
-    const authClient = createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             genericOAuthClient()
         ]

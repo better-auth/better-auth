@@ -24,7 +24,7 @@ The API Key plugin allows you to create and manage API keys for your application
         import { betterAuth } from "better-auth"
         import { apiKey } from "better-auth/plugins"
 
-        const auth = betterAuth({
+        export const auth = betterAuth({
             plugins: [ // [!code highlight]
                 apiKey() // [!code highlight]
             ] // [!code highlight]
@@ -57,7 +57,7 @@ The API Key plugin allows you to create and manage API keys for your application
         import { createAuthClient } from "better-auth/client"
         import { apiKeyClient } from "better-auth/client/plugins"
 
-        const authClient = createAuthClient({
+        export const authClient = createAuthClient({
             plugins: [ // [!code highlight]
                 apiKeyClient() // [!code highlight]
             ] // [!code highlight]
@@ -489,6 +489,23 @@ export const auth = betterAuth({
   ]
 });
 ```
+
+<Callout>
+If you're **not** using the `length` property provided by `customKeyGenerator`, you **must** set the `defaultKeyLength` property to how long generated keys will be.
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      customKeyGenerator: () => {
+        return crypto.randomUUID();
+      },
+      defaultKeyLength: 36 // Or whatever the length is
+    })
+  ]
+});
+```
+</Callout>
 
 If an API key is validated from your `customAPIKeyValidator`, we still must match that against the database's key.
 However, by providing this custom function, you can improve the performance of the API key verification process,
