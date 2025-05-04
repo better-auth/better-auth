@@ -456,7 +456,6 @@ export const signInEmail = createAuthEndpoint(
 		});
 
 		if (!user) {
-			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
