@@ -74,5 +74,5 @@ export const expo = (options?: ExpoOptions): BetterAuthPlugin => {
 				},
 			],
 		},
-	};
+	} satisfies BetterAuthPlugin;
 };
