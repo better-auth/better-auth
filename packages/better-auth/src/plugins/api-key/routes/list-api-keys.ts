@@ -4,7 +4,7 @@ import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
-
+import { API_KEY_TABLE_NAME } from "..";
 export function listApiKeys({
 	opts,
 	schema,
@@ -165,7 +165,7 @@ export function listApiKeys({
 		async (ctx) => {
 			const session = ctx.context.session;
 			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "userId",

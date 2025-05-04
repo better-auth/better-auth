@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
-import { genericOAuthClient } from "./client";
 import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { genericOAuthClient } from "./client";
 
-import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
+import { OAuth2Server } from "oauth2-mock-server";
 import { parseSetCookieHeader } from "../../cookies";
 
 let server = new OAuth2Server();
@@ -87,16 +87,21 @@ describe("oauth2", async () => {
 		if (!location) throw new Error("No redirect location found");
 
 		let callbackURL = "";
+		const newHeaders = new Headers();
 		await betterFetch(location, {
 			method: "GET",
 			customFetchImpl: fetchImpl || customFetchImpl,
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				newHeaders.set(
+					"cookie",
+					context.response.headers.get("Set-Cookie") || "",
+				);
 			},
 		});
 
-		return callbackURL;
+		return { callbackURL, headers: newHeaders };
 	}
 
 	it("should redirect to the provider and handle the response", async () => {
@@ -110,7 +115,7 @@ describe("oauth2", async () => {
 			url: expect.stringContaining("http://localhost:8081/authorize"),
 			redirect: true,
 		});
-		const callbackURL = await simulateOAuthFlow(
+		const { callbackURL } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
 			headers,
 		);
@@ -139,11 +144,33 @@ describe("oauth2", async () => {
 			url: expect.stringContaining("http://localhost:8081/authorize"),
 			redirect: true,
 		});
-		const callbackURL = await simulateOAuthFlow(
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/new_user");
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		const account = accounts[0];
+		expect(account).toMatchObject({
+			providerId,
+			accountId: "oauth2-2",
+			userId: session.data?.user.id,
+			accessToken: expect.any(String),
+			refreshToken: expect.any(String),
+			accessTokenExpiresAt: expect.any(Date),
+			refreshTokenExpiresAt: null,
+			scope: expect.any(String),
+			idToken: expect.any(String),
+		});
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
@@ -153,7 +180,10 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
-		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 
@@ -202,7 +232,10 @@ describe("oauth2", async () => {
 			},
 		);
 
-		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+		);
 		expect(callbackURL).toContain("?error=");
 	});
 
@@ -240,7 +273,7 @@ describe("oauth2", async () => {
 		});
 		expect(res.data?.url).toContain("http://localhost:8081/authorize");
 		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(
+		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
 			customFetchImpl,
@@ -293,7 +326,7 @@ describe("oauth2", async () => {
 		});
 		expect(res.data?.url).toContain("http://localhost:8081/authorize");
 		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(
+		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
 			customFetchImpl,
@@ -349,11 +382,61 @@ describe("oauth2", async () => {
 		});
 		expect(res.data?.url).toContain("http://localhost:8081/authorize");
 		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(
+		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
 			headers,
 			customFetchImpl,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+	});
+
+	it("should pass authorization headers in oAuth2Callback", async () => {
+		const customHeaders = {
+			"X-Custom-Header": "test-value",
+		};
+
+		let receivedHeaders: Record<string, string> = {};
+		server.service.once("beforeTokenSigning", (token, req) => {
+			receivedHeaders = req.headers as Record<string, string>;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test3",
+							discoveryUrl:
+								"http://localhost:8081/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							authorizationHeaders: customHeaders,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test3",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		const headers = new Headers();
+		await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
+
+		expect(receivedHeaders).toHaveProperty("x-custom-header");
+		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
 	});
 });

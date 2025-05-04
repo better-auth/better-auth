@@ -9,6 +9,7 @@ import { verifyApiKey } from "./verify-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { hasPermissionApiKey } from "./has-permission-api-key";
+import { API_KEY_TABLE_NAME } from "..";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -60,7 +61,7 @@ export function createApiKeyRoutes({
 		lastChecked = new Date();
 		try {
 			return ctx.adapter.deleteMany({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "expiresAt" satisfies keyof ApiKey,

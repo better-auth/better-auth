@@ -5,7 +5,7 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-
+import { API_KEY_TABLE_NAME } from "..";
 export function deleteApiKey({
 	opts,
 	schema,
@@ -79,7 +79,7 @@ export function deleteApiKey({
 				});
 			}
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "id",
@@ -96,7 +96,7 @@ export function deleteApiKey({
 
 			try {
 				await ctx.context.adapter.delete<ApiKey>({
-					model: schema.apikey.modelName,
+					model: API_KEY_TABLE_NAME,
 					where: [
 						{
 							field: "id",

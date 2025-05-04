@@ -10,7 +10,7 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 We need to mount the handler to an API route. Create a file inside `/server/api` called `[...auth].ts` and add the following code:
 
 ```ts title="server/api/[...auth].ts"
-import { auth } from "~/utils/auth"; // import your auth config
+import { auth } from "~/lib/auth"; // import your auth config
 
 export default defineEventHandler((event) => {
 	return auth.handler(toWebRequest(event));

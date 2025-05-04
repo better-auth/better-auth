@@ -22,6 +22,7 @@ import type {
 	Customer,
 	InputSubscription,
 	StripeOptions,
+	StripePlan,
 	Subscription,
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
@@ -761,6 +762,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						return {
 							...sub,
 							limits: plan?.limits,
+							priceId: plan?.priceId,
 						};
 					})
 					.filter((sub) => {
@@ -831,10 +833,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
-											stripeSubscription.current_period_end * 1000,
+											stripeSubscription.items.data[0]?.current_period_end *
+												1000,
 										),
 										periodStart: new Date(
-											stripeSubscription.current_period_start * 1000,
+											stripeSubscription.items.data[0]?.current_period_start *
+												1000,
 										),
 										stripeSubscriptionId: stripeSubscription.id,
 										...(stripeSubscription.trial_start &&
@@ -993,4 +997,4 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type { Subscription };
+export type { Subscription, StripePlan };

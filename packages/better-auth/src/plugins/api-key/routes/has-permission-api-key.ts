@@ -6,7 +6,7 @@ import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { createHash } from "@better-auth/utils/hash";
-import { ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { role } from "../../access";
 import { safeJSONParse } from "../../../utils/json";
 
@@ -117,7 +117,7 @@ export function hasPermissionApiKey({
 			deleteAllExpiredApiKeys(ctx.context);
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "key",
