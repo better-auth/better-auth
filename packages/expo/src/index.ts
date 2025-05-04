@@ -1,5 +1,6 @@
+import type { BetterAuthPlugin } from "better-auth/types";
 import { createAuthMiddleware } from "better-auth/api";
-import { BetterAuthPlugin } from "better-auth/types";
+
 export interface ExpoOptions {
 	/**
 	 * Override origin header for expo API routes
