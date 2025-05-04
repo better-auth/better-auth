@@ -228,7 +228,7 @@ You can use even more authentication methods like [passkey](/docs/plugins/passke
 
 <Step>
 ### Mount Handler
-To handle api requests, you need to set up a route handler on your server.
+To handle API requests, you need to set up a route handler on your server.
 
 Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path).
 
@@ -302,6 +302,18 @@ Better Auth supports any backend framework with standard Request and Response ob
     </Tab>
 
     <Tab value="express">
+    <Callout type="warn">
+        ExpressJS v5 introduced breaking changes to route path matching by switching to `path-to-regexp@6`. Wildcard routes like `*` should now be written using the new named syntax, e.g. `/{*any}`, to properly capture catch-all patterns. This ensures compatibility and predictable behavior across routing scenarios.
+        See the [Express v5 migration guide](https://expressjs.com/en/guide/migrating-5.html) for details.
+
+        As a result, the implementation in ExpressJS v5 should look like this:
+
+        ```ts
+        app.all('/api/auth/{*any}', toNodeHandler(auth));
+        ```
+        *The name any is arbitrary and can be replaced with any identifier you prefer.*
+    </Callout>
+
     ```ts title="server.ts"
     import express from "express";
     import { toNodeHandler } from "better-auth/node";
@@ -320,7 +332,7 @@ Better Auth supports any backend framework with standard Request and Response ob
         console.log(`Better Auth app listening on port ${port}`);
     });
     ```
-    This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
+    This will also work for any other node server framework like express, fastify, hapi, etc., but may require some modifications. See [fastify guide](/docs/integrations/fastify). Note that CommonJS (cjs) isn't supported.
     </Tab>
     <Tab value="astro">
     ```ts title="/pages/api/auth/[...all].ts"
@@ -391,10 +403,10 @@ The client-side library helps you interact with the auth server. Better Auth com
 
 1. Import `createAuthClient` from the package for your framework (e.g., "better-auth/react" for React).
 2. Call the function to create your client.
-3. Pass the base url of your auth server. (If the auth server is running on the same domain as your client, you can skip this step.)
+3. Pass the base URL of your auth server. (If the auth server is running on the same domain as your client, you can skip this step.)
 
 <Callout type="info">
-If you're using a different base path other than `/api/auth` make sure to pass the whole url including the path. (e.g. `http://localhost:3000/custom-path/auth`)
+If you're using a different base path other than `/api/auth` make sure to pass the whole URL including the path. (e.g. `http://localhost:3000/custom-path/auth`)
 </Callout>
 
 <Tabs items={["react", "vue", "svelte", "solid",
@@ -403,7 +415,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/client"
             export const authClient = createAuthClient({
-                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
                 baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
@@ -412,7 +424,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/react"
             export const authClient = createAuthClient({
-                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
                 baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
@@ -421,7 +433,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/vue"
             export const authClient = createAuthClient({
-                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
                 baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
@@ -430,7 +442,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/svelte"
             export const authClient = createAuthClient({
-                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
                 baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```
@@ -439,7 +451,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
             ```ts title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/solid"
             export const authClient = createAuthClient({
-                /** the base url of the server (optional if you're using the same domain) */ // [!code highlight]
+                /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
                 baseURL: "http://localhost:3000" // [!code highlight]
             })
             ```

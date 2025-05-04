@@ -424,7 +424,7 @@ describe("two factor", async () => {
 	});
 });
 
-describe("two factor auth api", async () => {
+describe("two factor auth API", async () => {
 	let OTP = "";
 	const sendOTP = vi.fn();
 	const { auth, signInWithTestUser, testUser } = await getTestInstance({

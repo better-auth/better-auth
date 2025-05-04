@@ -24,6 +24,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
+						callbackURL?: string;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {

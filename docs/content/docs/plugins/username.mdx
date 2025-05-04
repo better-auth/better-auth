@@ -15,7 +15,7 @@ The username plugin wraps the email and password authenticator and adds username
         import { betterAuth } from "better-auth"
         import { username } from "better-auth/plugins"
 
-        const auth = betterAuth({
+        export const auth = betterAuth({
             plugins: [ // [!code highlight]
                 username() // [!code highlight]
             ] // [!code highlight]
@@ -48,7 +48,7 @@ The username plugin wraps the email and password authenticator and adds username
         import { createAuthClient } from "better-auth/client"
         import { usernameClient } from "better-auth/client/plugins"
         
-        const authClient = createAuthClient({
+        export const authClient = createAuthClient({
             plugins: [ // [!code highlight]
                 usernameClient() // [!code highlight]
             ] // [!code highlight]
@@ -59,7 +59,7 @@ The username plugin wraps the email and password authenticator and adds username
 
 ## Usage
 
-### Signup with username
+### Sign up with username
 
 To sign up a user with username, you can use the existing `signUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
 
@@ -72,9 +72,9 @@ const data = await authClient.signUp.email({
 })
 ```
 
-### Signin with username
+### Sign in with username
 
-To signin a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
+To sign in a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
 
 - `username`: The username of the user.
 - `password`: The password of the user.

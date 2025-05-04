@@ -59,7 +59,7 @@ export default function Index() {
 					}}
 				>
 					<Ionicons name="github" size={16} />
-					<Text>Sign In with Github</Text>
+					<Text>Sign In with GitHub</Text>
 				</Button>
 			</View>
 			<View className="flex-row gap-2 w-full items-center px-6 my-4">

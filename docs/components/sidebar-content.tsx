@@ -14,6 +14,7 @@ import {
 	UserSquare2,
 	Database,
 	KeyRound,
+	Book,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
@@ -329,7 +330,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Typescript",
+				title: "TypeScript",
 				href: "/docs/concepts/typescript",
 				icon: () => (
 					<svg
@@ -787,8 +788,8 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="20px"
-				height="20px"
+				width="16px"
+				height="16px"
 				viewBox="0 0 24 24"
 			>
 				<path
@@ -1070,7 +1071,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/svelte-kit",
 			},
 			{
-				title: "Solid Start",
+				title: "SolidStart",
 				icon: Icons.solidStart,
 				href: "/docs/integrations/solid-start",
 			},
@@ -1089,6 +1090,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Hono",
 				icon: Icons.hono,
 				href: "/docs/integrations/hono",
+			},
+			{
+				title: "Fastify",
+				icon: Icons.fastify,
+				href: "/docs/integrations/fastify",
 			},
 			{
 				title: "Express",
@@ -1439,15 +1445,15 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						viewBox="0 0 256 257"
 					>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="M147.386 69.071L147.129 0h-38.515l.257 69.071l19.257 26.448zm-38.515 118.371v69.328h38.515v-69.328l-19.258-26.447z"
 						></path>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="m147.386 187.442l40.57 55.976l31.069-22.596l-40.57-55.975l-31.069-10.015zM108.871 69.071L68.044 13.095L36.975 35.691l40.57 55.976l31.326 10.014z"
 						></path>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="M77.545 91.667L11.811 70.355L0 106.816l65.733 21.569l31.069-10.271zm81.653 46.732l19.257 26.448l65.734 21.311L256 149.697l-65.733-21.312z"
 						></path>
 						<path
@@ -1720,6 +1726,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Resources",
+				href: "/docs/reference/resources",
+				icon: () => <Book className="w-4 h-4 text-current" />,
+			},
+			{
 				title: "Security",
 				href: "/docs/reference/security",
 				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
@@ -1812,7 +1823,7 @@ export const examples: Content[] = [
 				icon: Icons.remix,
 			},
 			{
-				title: "Next JS",
+				title: "Next.js",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
 			},

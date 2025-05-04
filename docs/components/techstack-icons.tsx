@@ -19,7 +19,7 @@ export const techStackIcons: TechStackIconType = {
 		icon: <Icons.svelteKit className="w-10 h-10" />,
 	},
 	solidStart: {
-		name: "Solid Start",
+		name: "SolidStart",
 		icon: <Icons.solidStart className="w-10 h-10" />,
 	},
 	react: {

@@ -114,7 +114,7 @@ If the user clicks the provided verification URL, their email is automatically v
 For manual verification, you can send the user a custom link with the `token` and call the `verifyEmail` function.
 
 ```ts
-authClient.verifyEmail({
+await authClient.verifyEmail({
     query: {
         token: "" // Pass the token here
     }
