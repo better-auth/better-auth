@@ -38,8 +38,8 @@ const grid = [
 		description: "Manage user accounts and sessions with ease",
 	},
 	{
-		title: "Built In Rate Limiter",
-		description: "Built in rate limiter with custom rules",
+		title: "Built-In Rate Limiter",
+		description: "Built-in rate limiter with custom rules",
 	},
 	{
 		title: "Automatic Database Management",

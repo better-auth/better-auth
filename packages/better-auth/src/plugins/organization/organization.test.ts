@@ -661,7 +661,7 @@ describe("organization", async (it) => {
 			name: "name",
 		};
 
-		// test api method
+		// test API method
 		const newUser = await auth.api.signUpEmail({
 			body: {
 				email: userOverLimit.email,

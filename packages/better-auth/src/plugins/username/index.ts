@@ -9,7 +9,7 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import { schema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
-
+export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
 	/**

@@ -55,7 +55,7 @@ export interface PasskeyOptions {
 	rpName?: string;
 	/**
 	 * The URL at which registrations and authentications should occur.
-	 * 'http://localhost' and 'http://localhost:PORT' are also valid.
+	 * `http://localhost` and `http://localhost:PORT` are also valid.
 	 * Do NOT include any trailing /
 	 *
 	 * if this isn't provided. The client itself will
@@ -271,6 +271,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
 						userName: session.user.email || session.user.id,
+						userDisplayName: session.user.email || session.user.id,
 						attestationType: "none",
 						excludeCredentials: userPasskeys.map((passkey) => ({
 							id: passkey.credentialID,

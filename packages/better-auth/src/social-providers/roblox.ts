@@ -13,9 +13,9 @@ export interface RobloxProfile extends Record<string, any> {
 	name: string;
 	/** the account creation date as a unix timestamp in seconds */
 	created_at: number;
-	/** the user's profile url */
+	/** the user's profile URL */
 	profile: string;
-	/** the user's avatar url */
+	/** the user's avatar URL */
 	picture: string;
 }
 

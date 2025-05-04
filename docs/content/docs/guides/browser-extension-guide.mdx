@@ -10,7 +10,7 @@ If you would like to view a completed example, you can check out the <Link href=
 <Callout type="warn">
   The Plasmo framework does not provide a backend for the browser extension.
   This guide assumes you have{" "}
-  <Link href="/docs/integrations/hono">a backend setup</Link> of BetterAuth and
+  <Link href="/docs/integrations/hono">a backend setup</Link> of Better Auth and
   are ready to create a browser extension to connect to it.
 </Callout>
 
@@ -25,7 +25,7 @@ If you would like to view a completed example, you can check out the <Link href=
         pnpm create plasmo --with-tailwindcss --with-src
         ```
 
-        Then, install the BetterAuth package.
+        Then, install the Better Auth package.
 
         ```bash
         pnpm add better-auth
@@ -79,7 +79,7 @@ If you would like to view a completed example, you can check out the <Link href=
         import { createAuthClient } from "better-auth/react"
 
         export const authClient = createAuthClient({
-            baseURL: "http://localhost:3000" /* base url of your Better Auth backend. */,
+            baseURL: "http://localhost:3000" /* Base URL of your Better Auth backend. */,
             plugins: [],
         });
         ```
@@ -88,7 +88,7 @@ If you would like to view a completed example, you can check out the <Link href=
     <Step>
         ## Configure the manifest
 
-        We must ensure the extension knows the URL to the BetterAuth backend.
+        We must ensure the extension knows the URL to the Better Auth backend.
 
         Head to your package.json file, and add the following code.
 
@@ -108,11 +108,11 @@ If you would like to view a completed example, you can check out the <Link href=
     <Step>
         ## You're now ready!
 
-        You have now setup BetterAuth for your browser extension.
+        You have now set up Better Auth for your browser extension.
 
         Add your desired UI and create your dream extension!
 
-        To learn more about the client BetterAuth API, check out the <Link href="/docs/concepts/client">client documentation</Link>.
+        To learn more about the client Better Auth API, check out the <Link href="/docs/concepts/client">client documentation</Link>.
 
 
         Here’s a quick example 😎
@@ -195,9 +195,9 @@ If you would like to view a completed example, you can check out the <Link href=
 
 ## Wrapping Up
 
-Congratulations! You’ve successfully created a browser extension using BetterAuth and Plasmo.
+Congratulations! You’ve successfully created a browser extension using Better Auth and Plasmo.
 We highly recommend you visit the <Link href="https://docs.plasmo.com/">Plasmo documentation</Link> to learn more about the framework.
 
 If you would like to view a completed example, you can check out the <Link href="https://github.com/better-auth/better-auth/tree/main/examples/browser-extension-example">browser extension example</Link>.
 
-If you have any questions, feel free to open an issue on our <Link href="https://github.com/better-auth/better-auth/issues">Github repo</Link>, or join our <Link href="https://discord.gg/6jHcdYMzyq">Discord server</Link> for support.
+If you have any questions, feel free to open an issue on our <Link href="https://github.com/better-auth/better-auth/issues">GitHub repo</Link>, or join our <Link href="https://discord.gg/6jHcdYMzyq">Discord server</Link> for support.

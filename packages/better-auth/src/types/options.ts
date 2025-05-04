@@ -29,7 +29,7 @@ export type BetterAuthOptions = {
 	 */
 	appName?: string;
 	/**
-	 * Base URL for the better auth. This is typically the
+	 * Base URL for the Better Auth. This is typically the
 	 * root URL where your application server is hosted.
 	 * If not explicitly set,
 	 * the system will check the following environment variable:
@@ -40,9 +40,9 @@ export type BetterAuthOptions = {
 	 */
 	baseURL?: string;
 	/**
-	 * Base path for the better auth. This is typically
+	 * Base path for the Better Auth. This is typically
 	 * the path where the
-	 * better auth routes are mounted.
+	 * Better Auth routes are mounted.
 	 *
 	 * @default "/api/auth"
 	 */
@@ -51,7 +51,7 @@ export type BetterAuthOptions = {
 	 * The secret to use for encryption,
 	 * signing and hashing.
 	 *
-	 * By default better auth will look for
+	 * By default Better Auth will look for
 	 * the following environment variables:
 	 * process.env.BETTER_AUTH_SECRET,
 	 * process.env.AUTH_SECRET
@@ -125,7 +125,7 @@ export type BetterAuthOptions = {
 			/**
 			 * @param user the user to send the
 			 * verification email to
-			 * @param url the url to send the verification email to
+			 * @param url the URL to send the verification email to
 			 * it contains the token as well
 			 * @param token the token to send the verification email to
 			 */
@@ -207,7 +207,7 @@ export type BetterAuthOptions = {
 			/**
 			 * @param user the user to send the
 			 * reset password email to
-			 * @param url the url to send the reset password email to
+			 * @param url the URL to send the reset password email to
 			 * @param token the token to send to the user (could be used instead of sending the url
 			 * if you need to redirect the user to custom route)
 			 */
@@ -438,6 +438,16 @@ export type BetterAuthOptions = {
 	account?: {
 		modelName?: string;
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		/**
+		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
+		 * will be updated on sign in with the latest data from the provider.
+		 *
+		 * @default true
+		 */
+		updateAccountOnSignIn?: boolean;
+		/**
+		 * Configuration for account linking.
+		 */
 		accountLinking?: {
 			/**
 			 * Enable account linking
@@ -938,9 +948,9 @@ export type BetterAuthOptions = {
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
 		/**
-		 * The url to redirect to on error
+		 * The URL to redirect to on error
 		 *
-		 * When errorURL is provided, the error will be added to the url as a query parameter
+		 * When errorURL is provided, the error will be added to the URL as a query parameter
 		 * and the user will be redirected to the errorURL.
 		 *
 		 * @default - "/api/auth/error"

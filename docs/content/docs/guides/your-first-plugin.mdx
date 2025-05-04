@@ -74,7 +74,7 @@ export const birthdayPlugin = () =>
             type: "date", // string, number, boolean, date // [!code highlight]
             required: true, // if the field should be required on a new record. (default: false) // [!code highlight]
             unique: false, // if the field should be unique. (default: false) // [!code highlight]
-            reference: null // if the field is a reference to another table. (default: null) // [!code highlight]
+            references: null // if the field is a reference to another table. (default: null) // [!code highlight]
           },// [!code highlight]
         },// [!code highlight]
       },// [!code highlight]
@@ -86,7 +86,7 @@ export const birthdayPlugin = () =>
 
 <Step>
 ### Authorization logic
-For this example guide, we’ll setup authentication logic to check and ensure that the user who signs-up is older than 5.
+For this example guide, we’ll set up authentication logic to check and ensure that the user who signs-up is older than 5.
 But the same concept could be applied for something like verifying users agreeing to the TOS or anything alike.
 
 To do this, we’ll utilize <Link href="/docs/concepts/plugins#hooks">Hooks</Link>, which allows us to run code `before` or `after` an action is performed.

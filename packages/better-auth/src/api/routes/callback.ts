@@ -189,6 +189,7 @@ export const callbackOAuth = createAuthEndpoint(
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
 				provider.options?.disableSignUp,
+			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

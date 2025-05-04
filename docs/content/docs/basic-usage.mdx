@@ -35,8 +35,8 @@ const { data, error } = await authClient.signUp.email({
         email, // user email address
         password, // user password -> min 8 characters by default
         name, // user display name
-        image, // user image url (optional)
-        callbackURL: "/dashboard" // a url to redirect to after the user verifies their email (optional)
+        image, // User image URL (optional)
+        callbackURL: "/dashboard" // A URL to redirect to after the user verifies their email (optional)
     }, {
         onRequest: (ctx) => {
             //show loading
@@ -80,7 +80,7 @@ const { data, error } = await authClient.signIn.email({
          */
         password,
         /**
-         * a url to redirect to after the user verifies their email (optional)
+         * A URL to redirect to after the user verifies their email (optional)
          */
         callbackURL: "/dashboard",
         /**
@@ -134,7 +134,7 @@ export const auth = betterAuth({
 })
 ```
 
-### Signin with social providers
+### Sign in with social providers
 
 To sign in using a social provider you need to call `signIn.social`. It takes an object with the following properties:
 
@@ -148,16 +148,16 @@ await authClient.signIn.social({
      */
     provider: "github",
     /**
-     * a url to redirect after the user authenticates with the provider
+     * A URL to redirect after the user authenticates with the provider
      * @default "/"
      */
     callbackURL: "/dashboard", 
     /**
-     * a url to redirect if an error occurs during the sign in process
+     * A URL to redirect if an error occurs during the sign in process
      */
     errorCallbackURL: "/error",
     /**
-     * a url to redirect if the user is newly registered
+     * A URL to redirect if the user is newly registered
      */
     newUserCallbackURL: "/welcome",
     /**
@@ -296,8 +296,8 @@ The server provides a `session` object that you can use to access the session da
 
 **Example: Using some popular frameworks**
 
-<Tabs items={["NextJs", "Nuxt", "Svelte", "Astro", "Hono", "TanStack"]}>
-    <Tab value="NextJs">
+<Tabs items={["Next.js", "Nuxt", "Svelte", "Astro", "Hono", "TanStack"]}>
+    <Tab value="Next.js">
     ```ts title="server.ts"
     import { auth } from "./auth"; // path to your Better Auth server instance
     import { headers } from "next/headers";
