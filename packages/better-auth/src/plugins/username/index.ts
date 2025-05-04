@@ -137,7 +137,6 @@ export const username = (options?: UsernameOptions) => {
 						],
 					});
 					if (!user) {
-						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
