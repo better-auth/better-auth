@@ -39,7 +39,11 @@ export default function LogoContextMenu({
 		}
 	};
 
-	const copySvgToClipboard = (e: React.MouseEvent, svgContent: string, type: string) => {
+	const copySvgToClipboard = (
+		e: React.MouseEvent,
+		svgContent: string,
+		type: string,
+	) => {
 		e.preventDefault();
 		e.stopPropagation();
 		navigator.clipboard
@@ -57,7 +61,11 @@ export default function LogoContextMenu({
 		setShowMenu(false);
 	};
 
-	const downloadPng = (e: React.MouseEvent, pngData: StaticImageData, fileName: string) => {
+	const downloadPng = (
+		e: React.MouseEvent,
+		pngData: StaticImageData,
+		fileName: string,
+	) => {
 		e.preventDefault();
 		e.stopPropagation();
 		const link = document.createElement("a");
