@@ -628,7 +628,7 @@ getCheckoutSessionParams: async ({ user, session, plan, subscription }, request)
     return {
         params: {
             allow_promotion_codes: true,
-              automatic_tax: {
+            automatic_tax: {
                 enabled: true
             },
             billing_address_collection: "required",
@@ -659,7 +659,7 @@ subscription: {
     getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
         return {
             params: {
-                  automatic_tax: {
+                automatic_tax: {
                     enabled: true
                 }
             }
