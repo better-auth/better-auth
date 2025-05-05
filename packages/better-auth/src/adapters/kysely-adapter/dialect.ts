@@ -94,6 +94,13 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		});
 	}
 
+	if ("fileControl" in db) {
+		const { BunSqliteDialect } = await import("./bun-sqlite-dialect");
+		dialect = new BunSqliteDialect({
+			database: db,
+		});
+	}
+
 	return {
 		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
