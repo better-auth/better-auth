@@ -4,3 +4,4 @@ export * from "./id";
 export * from "../oauth2/state";
 export * from "./id";
 export * from "./logger";
+export * from "./password-validator";
