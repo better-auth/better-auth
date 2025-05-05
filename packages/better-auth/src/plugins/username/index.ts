@@ -137,6 +137,9 @@ export const username = (options?: UsernameOptions) => {
 						],
 					});
 					if (!user) {
+						// Hash password to prevent timing attacks from revealing valid usernames
+						// By hashing passwords for invalid usernames, we ensure consistent response times
+						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
@@ -293,3 +296,4 @@ export const username = (options?: UsernameOptions) => {
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+export { ERROR_CODES as USERNAME_ERROR_CODES };
