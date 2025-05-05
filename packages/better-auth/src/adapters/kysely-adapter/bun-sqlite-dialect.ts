@@ -1,5 +1,6 @@
-///https://github.com/dylanblokhuis/kysely-bun-sqlite - this is a fork of the original kysely-bun-sqlite package by @dylanblokhuis
-
+/**
+ * @see {@link https://github.com/dylanblokhuis/kysely-bun-sqlite} - Fork of the original kysely-bun-sqlite package by @dylanblokhuis
+ */
 import {
 	Kysely,
 	CompiledQuery,
