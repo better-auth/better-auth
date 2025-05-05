@@ -41,7 +41,9 @@ function getDatabaseType(
 	if ("connect" in db) {
 		return "postgres";
 	}
-
+	if ("fileControl" in db) {
+		return "sqlite";
+	}
 	return null;
 }
 
