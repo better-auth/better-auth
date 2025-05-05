@@ -296,4 +296,3 @@ export const username = (options?: UsernameOptions) => {
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
-export { ERROR_CODES as USERNAME_ERROR_CODES };
