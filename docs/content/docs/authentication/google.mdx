@@ -71,3 +71,17 @@ const data = await authClient.signIn.social({
 <Callout>
     If you want to use google one tap, you can use the [One Tap Plugin](/docs/plugins/one-tap) guide.
 </Callout>
+
+### Always ask to select an account
+
+If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.  
+
+```ts
+socialProviders: {
+    google: {
+        prompt: "select_account", // [!code highlight]
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+}
+```

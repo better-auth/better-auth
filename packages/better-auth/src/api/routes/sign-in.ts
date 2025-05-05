@@ -456,6 +456,8 @@ export const signInEmail = createAuthEndpoint(
 		});
 
 		if (!user) {
+			// Hash password to prevent timing attacks from revealing valid email addresses
+			// By hashing passwords for invalid emails, we ensure consistent response times
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {

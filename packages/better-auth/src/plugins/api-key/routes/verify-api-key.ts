@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint } from "../../../api";
-import { apiKey, ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import { base64Url } from "@better-auth/utils/base64";
@@ -25,7 +25,7 @@ export async function validateApiKey({
 	ctx: GenericEndpointContext;
 }) {
 	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-		model: schema.apikey.modelName,
+		model: API_KEY_TABLE_NAME,
 		where: [
 			{
 				field: "key",
@@ -53,7 +53,7 @@ export async function validateApiKey({
 		if (now > expiresAt) {
 			try {
 				ctx.context.adapter.delete({
-					model: schema.apikey.modelName,
+					model: API_KEY_TABLE_NAME,
 					where: [
 						{
 							field: "id",
@@ -105,7 +105,7 @@ export async function validateApiKey({
 		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 		try {
 			ctx.context.adapter.delete({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "id",
@@ -152,7 +152,7 @@ export async function validateApiKey({
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
 	const newApiKey = await ctx.context.adapter.update<ApiKey>({
-		model: schema.apikey.modelName,
+		model: API_KEY_TABLE_NAME,
 		where: [
 			{
 				field: "id",
