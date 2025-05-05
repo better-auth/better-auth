@@ -5,6 +5,7 @@ import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
 import { freshSessionMiddleware, sessionMiddleware } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { symmetricDecrypt } from "../../crypto";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -71,17 +72,42 @@ export const listUserAccounts = createAuthEndpoint(
 			session.user.id,
 		);
 		return c.json(
-			accounts.map((a) => ({
-				id: a.id,
-				provider: a.providerId,
-				createdAt: a.createdAt,
-				updatedAt: a.updatedAt,
-				accountId: a.accountId,
-				scopes: a.scope?.split(",") || [],
-			})),
+			await Promise.all(
+				accounts.map(async (a) => ({
+					id: a.id,
+					provider: a.providerId,
+					createdAt: a.createdAt,
+					updatedAt: a.updatedAt || null,
+					accountId: a.accountId,
+					accessToken:
+						a.accessToken && c.context.options.account?.encryptOAuthTokens
+							? await symmetricDecrypt({
+									key: c.context.secret,
+									data: a.accessToken,
+								}).catch((e) => {
+									c.context.logger.error("Failed to decrypt access token", e);
+									return a.accessToken;
+								})
+							: a.accessToken,
+					refreshToken:
+						a.refreshToken && c.context.options.account?.encryptOAuthTokens
+							? await symmetricDecrypt({
+									key: c.context.secret,
+									data: a.refreshToken,
+								}).catch((e) => {
+									c.context.logger.error("Failed to decrypt refresh token", e);
+									return a.refreshToken;
+								})
+							: a.refreshToken,
+					accessTokenExpiresAt: a.accessTokenExpiresAt,
+					refreshTokenExpiresAt: a.refreshTokenExpiresAt,
+					scopes: a.scope?.split(",") || [],
+				})),
+			),
 		);
 	},
 );
+
 export const linkSocialAccount = createAuthEndpoint(
 	"/link-social",
 	{

@@ -56,6 +56,7 @@ describe("account", async () => {
 			accountLinking: {
 				allowDifferentEmails: true,
 			},
+			encryptOAuthTokens: true,
 		},
 	});
 
@@ -112,12 +113,25 @@ describe("account", async () => {
 				expect(location).toContain("/callback");
 			},
 		});
-
 		const { headers: headers2 } = await signInWithTestUser();
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers2 },
 		});
 		expect(accounts.data?.length).toBe(2);
+	});
+
+	it("should encrypt access token and refresh token", async () => {
+		const { headers: headers2 } = await signInWithTestUser();
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: headers2 },
+		});
+		const fromDb = await ctx.internalAdapter.findAccount(
+			accounts.data![1].accountId,
+		);
+		expect(fromDb?.accessToken).not.toBe("test");
+		expect(fromDb?.refreshToken).not.toBe("test");
+		expect(accounts.data?.[1].accessToken).toBe("test");
+		expect(accounts.data?.[1].refreshToken).toBe("test");
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {

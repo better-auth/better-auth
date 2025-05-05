@@ -55,7 +55,6 @@ export const roblox = (options: RobloxOptions) => {
 				authentication: "post",
 			});
 		},
-
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {

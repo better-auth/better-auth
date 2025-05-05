@@ -441,7 +441,13 @@ export type BetterAuthOptions = {
 		freshAge?: number;
 	};
 	account?: {
+		/**
+		 * The model name for the account. Defaults to "account".
+		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
@@ -481,6 +487,14 @@ export type BetterAuthOptions = {
 			 */
 			allowUnlinkingAll?: boolean;
 		};
+		/**
+		 * Encrypt OAuth token
+		 *
+		 * By default the OAuth tokens are stored in plain text. If you want to encrypt the tokens, set this to true.
+		 *
+		 * @default false
+		 */
+		encryptOAuthTokens?: boolean;
 	};
 	/**
 	 * Verification configuration
