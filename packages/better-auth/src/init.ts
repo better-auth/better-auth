@@ -130,6 +130,11 @@ export const init = async (options: BetterAuthOptions) => {
 			config: {
 				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
+				requireUppercase: options.emailAndPassword?.requireUppercase || false,
+				requireLowercase: options.emailAndPassword?.requireLowercase || false,
+				requireSpecialChar: options.emailAndPassword?.requireSpecialChar || false,
+				requireNumber: options.emailAndPassword?.requireNumber || false,
+				specialCharacters: options.emailAndPassword?.specialCharacters || "!@#$%^&*()_+-=[]{}|;:,.<>?",
 			},
 			checkPassword,
 		},
@@ -213,6 +218,11 @@ export type AuthContext = {
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;
+			requireUppercase: boolean;
+			requireLowercase: boolean;
+			requireSpecialChar: boolean;
+			requireNumber: boolean;
+			specialCharacters: string;
 		};
 		checkPassword: typeof checkPassword;
 	};

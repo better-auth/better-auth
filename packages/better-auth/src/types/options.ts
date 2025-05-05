@@ -201,6 +201,36 @@ export type BetterAuthOptions = {
 		 */
 		minPasswordLength?: number;
 		/**
+		 * Require at least one uppercase letter in password
+		 * 
+		 * @default false
+		 */
+		requireUppercase?: boolean;
+		/**
+		 * Require at least one lowercase letter in password
+		 * 
+		 * @default false
+		 */
+		requireLowercase?: boolean;
+		/**
+		 * Require at least one special character in password
+		 * 
+		 * @default false
+		 */
+		requireSpecialChar?: boolean;
+		/**
+		 * Require at least one number in password
+		 * 
+		 * @default false
+		 */
+		requireNumber?: boolean;
+		/**
+		 * Custom special characters to use for validation
+		 * 
+		 * @default !@#$%^&*()_+-=[]{}|;:,.<>?
+		 */
+		specialCharacters?: string;
+		/**
 		 * send reset password
 		 */
 		sendResetPassword?: (

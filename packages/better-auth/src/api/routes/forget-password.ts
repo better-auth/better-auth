@@ -6,6 +6,7 @@ import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
+import { validatePasswordComplexity } from "../../utils/password-validator";
 
 function redirectError(
 	ctx: AuthContext,
@@ -235,16 +236,12 @@ export const resetPassword = createAuthEndpoint(
 
 		const { newPassword } = ctx.body;
 
-		const minLength = ctx.context.password?.config.minPasswordLength;
-		const maxLength = ctx.context.password?.config.maxPasswordLength;
-		if (newPassword.length < minLength) {
+		// Validate password complexity using the centralized validator
+		const validationResult = validatePasswordComplexity(newPassword, ctx.context);
+
+		if (!validationResult.isValid) {
 			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
-		}
-		if (newPassword.length > maxLength) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+				message: validationResult.errorMessage || BASE_ERROR_CODES.INVALID_PASSWORD,
 			});
 		}
 

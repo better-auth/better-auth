@@ -10,6 +10,7 @@ import type {
 } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { validatePasswordComplexity } from "../../utils/password-validator";
 import { isDevelopment } from "../../utils/env";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
@@ -152,19 +153,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (password.length < minPasswordLength) {
-				ctx.context.logger.error("Password is too short");
+			// Validate password complexity using the centralized validator
+			const validationResult = validatePasswordComplexity(password, ctx.context);
+			
+			if (!validationResult.isValid) {
+				ctx.context.logger.error(`Password validation failed: ${validationResult.errorMessage}`);
 				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-				});
-			}
-
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (password.length > maxPasswordLength) {
-				ctx.context.logger.error("Password is too long");
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+					message: validationResult.errorMessage || BASE_ERROR_CODES.INVALID_PASSWORD,
 				});
 			}
 			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
