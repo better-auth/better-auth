@@ -8,7 +8,7 @@ export interface ExpoOptions {
 	overrideOrigin?: boolean;
 }
 
-export const expo = (options?: ExpoOptions): BetterAuthPlugin => {
+export const expo = (options?: ExpoOptions) => {
 	return {
 		id: "expo",
 		init: (ctx) => {
@@ -17,7 +17,7 @@ export const expo = (options?: ExpoOptions): BetterAuthPlugin => {
 					? [...(ctx.trustedOrigins || []), "exp://"]
 					: ctx.trustedOrigins;
 			return {
-				context: {
+				options: {
 					trustedOrigins,
 				},
 			};
@@ -54,11 +54,11 @@ export const expo = (options?: ExpoOptions): BetterAuthPlugin => {
 						if (!location) {
 							return;
 						}
-						const trustedOrigins = ctx.context.trustedOrigins?.filter(
-							(origin) => origin && !origin.startsWith("http"),
+						const trustedOrigins = ctx.context.trustedOrigins.filter(
+							(origin: string) => !origin.startsWith("http"),
 						);
-						const isTrustedOrigin = trustedOrigins?.some(
-							(origin) => origin && location.startsWith(origin),
+						const isTrustedOrigin = trustedOrigins.some((origin: string) =>
+							location?.startsWith(origin),
 						);
 						if (!isTrustedOrigin) {
 							return;
