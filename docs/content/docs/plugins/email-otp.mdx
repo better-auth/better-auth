@@ -5,7 +5,6 @@ description: Email OTP plugin for Better Auth.
 
 The Email OTP plugin allows user to sign in, verify their email, or reset their password using a one-time password (OTP) sent to their email address.
 
-
 ## Installation
 
 <Steps>
@@ -17,14 +16,14 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { emailOTP } from "better-auth/plugins" // [!code highlight]
-    
+
     export const auth = betterAuth({
         // ... other config options
         plugins: [
             emailOTP({ // [!code highlight]
                     async sendVerificationOTP({ email, otp, type}) { // [!code highlight]
-						// Implement the sendVerificationOTP method to send the OTP to the user's email address // [!code highlight]
-					}, // [!code highlight]
+    					// Implement the sendVerificationOTP method to send the OTP to the user's email address // [!code highlight]
+    				}, // [!code highlight]
             }) // [!code highlight]
         ]
     })
@@ -36,13 +35,14 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
     import { emailOTPClient } from "better-auth/client/plugins"
-    
+
     export const authClient = createAuthClient({
         plugins: [
             emailOTPClient()
         ]
     })
     ```
+
   </Step>
 </Steps>
 
@@ -54,9 +54,9 @@ First, send an OTP to the user's email address.
 
 ```ts title="example.ts"
 const { data, error } = await authClient.emailOtp.sendVerificationOtp({
-    email: "user-email@email.com",
-    type: "sign-in" // or "email-verification", "forget-password"
-})
+  email: "user-email@email.com",
+  type: "sign-in", // or "email-verification", "forget-password"
+});
 ```
 
 ### Sign in with OTP
@@ -65,9 +65,9 @@ Once the user provides the OTP, you can sign in the user using the `signIn.email
 
 ```ts title="example.ts"
 const { data, error } = await authClient.signIn.emailOtp({
-    email: "user-email@email.com",
-    otp: "123456"
-})
+  email: "user-email@email.com",
+  otp: "123456",
+});
 ```
 
 If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the options.
@@ -78,9 +78,9 @@ To verify the user's email address, use the `verifyEmail()` method.
 
 ```ts title="example.ts"
 const { data, error } = await authClient.emailOtp.verifyEmail({
-    email: "user-email@email.com",
-    otp: "123456"
-})
+  email: "user-email@email.com",
+  otp: "123456",
+});
 ```
 
 ### Reset Password
@@ -89,10 +89,29 @@ To reset the user's password, use the `resetPassword()` method.
 
 ```ts title="example.ts"
 const { data, error } = await authClient.emailOtp.resetPassword({
-    email: "user-email@email.com",
-    otp: "123456",
-    password: "password"
-})
+  email: "user-email@email.com",
+  otp: "123456",
+  password: "password",
+});
+```
+
+### Override Default Email Verification
+
+To override the default email verification, you can pass `overrideDefaultEmailVerification` as `true` in the options.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  plugins: [
+    emailOTP({
+      overrideDefaultEmailVerification: true, // [!code highlight]
+      async sendVerificationOTP({ email, otp, type }) {
+        // Implement the sendVerificationOTP method to send the OTP to the user's email address
+      },
+    }),
+  ],
+});
 ```
 
 ## Options
@@ -105,43 +124,39 @@ const { data, error } = await authClient.emailOtp.resetPassword({
 ### Example
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [
-        emailOTP({
-            async sendVerificationOTP({
-                email,
-                otp,
-                type
-            }) {
-                if (type === "sign-in") {
-                    // Send the OTP for sign-in
-                } else if (type === "email-verification") {
-                    // Send the OTP for email verification
-                } else {
-                    // Send the OTP for password reset
-                }
-            },
-        })
-    ]
-})
+  plugins: [
+    emailOTP({
+      async sendVerificationOTP({ email, otp, type }) {
+        if (type === "sign-in") {
+          // Send the OTP for sign-in
+        } else if (type === "email-verification") {
+          // Send the OTP for email verification
+        } else {
+          // Send the OTP for password reset
+        }
+      },
+    }),
+  ],
+});
 ```
 
 - `otpLength`: The length of the OTP. Defaults to `6`.
 - `expiresIn`: The expiry time of the OTP in seconds. Defaults to `300` seconds.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [
-        emailOTP({
-            otpLength: 8,
-            expiresIn: 600
-        })
-    ]
-})
+  plugins: [
+    emailOTP({
+      otpLength: 8,
+      expiresIn: 600,
+    }),
+  ],
+});
 ```
 
 - `sendVerificationOnSignUp`: A boolean value that determines whether to send the OTP when a user signs up. Defaults to `false`.
@@ -153,16 +168,18 @@ export const auth = betterAuth({
 - `maxAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [
-        emailOTP({
-            maxAttempts: 5, // Allow 5 attempts before invalidating the OTP
-            expiresIn: 300
-        })
-    ]
-})
+  plugins: [
+    emailOTP({
+      maxAttempts: 5, // Allow 5 attempts before invalidating the OTP
+      expiresIn: 300,
+    }),
+  ],
+});
 ```
 
 When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `MAX_ATTEMPTS_EXCEEDED`.
+
+- `overrideDefaultEmailVerification`: A boolean value that determines whether to override the default email verification to use email otp instead. Defaults to `false`.
