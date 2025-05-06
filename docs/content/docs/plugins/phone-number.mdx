@@ -210,25 +210,24 @@ export const auth = betterAuth({
 
 The plugin requires 2 fields to be added to the user table 
 
-### User Table
-<DatabaseTable
-    fields={[
-        { 
-            name: "phoneNumber", 
-            type: "string", 
-            description: "The phone number of the user",
-            isUnique: true,
-            isOptional: true
+<SchemaDemo
+    includeDefaultUser
+    plugin="phone-number"
+    schema={{
+        user: {
+            fields: {
+                phoneNumber: { type: "string", required: false, unique: true },
+                phoneNumberVerified: { type: "boolean", required: false, defaultValue: false },
+            },
         },
-        { 
-            name: "phoneNumberVerified", 
-            type: "boolean", 
-            description: "Whether the phone number is verified or not",
-            defaultValue: false,
-            isOptional: true
-        },
-    ]}
-    />
+    }}
+/>
+
+### `user` table fields: 
+
+- `phoneNumber`: The phone number of the user.
+- `phoneNumberVerified`: Whether the phone number is verified or not. (default: `false`)
+
 
 ### OTP Verification Attempts
 
