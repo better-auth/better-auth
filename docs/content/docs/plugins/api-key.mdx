@@ -697,136 +697,120 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
 
 ## Schema
 
-Table: `apiKey`
+<SchemaDemo plugin="api-key" focus="apikey" height="large" includeDefaultUser schema={{
+  apikey: {
+    fields: {
+      name: {
+        type: "string",
+        required: true,
+      },
+      start: {
+        type: "string",
+        required: false,
+      },
+      prefix: {
+        type: "string",
+        required: false,
+      },
+      key: {
+        type: "string",
+        required: true,
+      },
+      userId: {
+        type: "string",
+        required: true,
+        references: {
+          model: "user",
+          field: "id",
+        }
+      },
+      refillInterval: {
+        type: "number",
+        required: false,
+      },
+      refillAmount: {
+        type: "number",
+        required: false,
+      },
+      lastRefillAt: {
+        type: "date",
+        required: false,
+      },
+      enabled: {
+        type: "boolean",
+        required: true,
+      },
+      rateLimitEnabled: {
+        type: "boolean",
+        required: true,
+      },
+      rateLimitTimeWindow: {
+        type: "number",
+        required: false,
+      },
+      rateLimitMax: {
+        type: "number",
+        required: false,
+      },
+      requestCount: {
+        type: "number",
+        required: false,
+      },
+      remaining: {
+        type: "number",
+        required: false,
+      },
+      lastRequest: {
+        type: "date",
+        required: false,
+      },
+      expiresAt: {
+        type: "date",
+        required: false,
+      },
+      createdAt: {
+        type: "date",
+        required: true,
+      },
+      updatedAt: {
+        type: "date",
+        required: true,
+      },
+      permissions: {
+        type: "string",
+        required: false,
+      },
+      metadata: {
+        type: "string",
+        required: false,
+      },
+    }
+  }
+}} />
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "The ID of the API key.",
-      isUnique: true,
-      isPrimaryKey: true,
-    },
-    {
-      name: "name",
-      type: "string",
-      description: "The name of the API key.",
-      isOptional: true,
-    },
-    {
-      name: "start",
-      type: "string",
-      description:
-        "The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
-      isOptional: true,
-    },
-    {
-      name: "prefix",
-      type: "string",
-      description: "The API Key prefix. Stored as plain text.",
-      isOptional: true,
-    },
-    {
-      name: "key",
-      type: "string",
-      description: "The hashed API key itself.",
-    },
-    {
-      name: "userId",
-      type: "string",
-      description: "The id of the user who created the API key.",
-      isForeignKey: true,
-    },
-    {
-      name: "refillInterval",
-      type: "number",
-      description: "The interval to refill the key in milliseconds.",
-      isOptional: true,
-    },
-    {
-      name: "refillAmount",
-      type: "number",
-      description: "The amount to refill the remaining count of the key.",
-      isOptional: true,
-    },
-    {
-      name: "lastRefillAt",
-      type: "Date",
-      description: "The date and time when the key was last refilled.",
-      isOptional: true,
-    },
-    {
-      name: "enabled",
-      type: "boolean",
-      description: "Whether the API key is enabled.",
-    },
-    {
-      name: "rateLimitEnabled",
-      type: "boolean",
-      description: "Whether the API key has rate limiting enabled.",
-    },
-    {
-      name: "rateLimitTimeWindow",
-      type: "number",
-      description: "The time window in milliseconds for the rate limit.",
-      isOptional: true,
-    },
-    {
-      name: "rateLimitMax",
-      type: "number",
-      description:
-        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
-      isOptional: true,
-    },
-    {
-      name: "requestCount",
-      type: "number",
-      description:
-        "The number of requests made within the rate limit time window.",
-    },
-    {
-      name: "remaining",
-      type: "number",
-      description: "The number of requests remaining.",
-      isOptional: true,
-    },
-    {
-      name: "lastRequest",
-      type: "Date",
-      description: "The date and time of the last request made to the key.",
-      isOptional: true,
-    },
-    {
-      name: "expiresAt",
-      type: "Date",
-      description: "The date and time when the key will expire.",
-      isOptional: true,
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "The date and time the API key was created.",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "The date and time the API key was updated.",
-    },
-    {
-      name: "permissions",
-      type: "string",
-      description: "The permissions of the key.",
-      isOptional: true,
-    },
-    {
-      name: "metadata",
-      type: "Object",
-      isOptional: true,
-      description: "Any additional metadata you want to store with the key.",
-    },
-  ]}
-/>
+Fields:
+
+- `name`: The name of the API key.
+- `start`: The starting characters of the API key.
+- `prefix`: The prefix of the API key.
+- `key`: The hashed API key itself.
+- `userId`: The id of the user who created the API key.
+- `refillInterval`: The interval to refill the key in milliseconds.
+- `refillAmount`: The amount to refill the key in milliseconds.
+- `lastRefillAt`: The date and time when the key was last refilled.
+- `enabled`: Whether the API key is enabled.
+- `rateLimitEnabled`: Whether the API key has rate limiting enabled.
+- `rateLimitTimeWindow`: The time window in milliseconds for the rate limit.
+- `rateLimitMax`: The maximum number of requests allowed within the `rateLimitTimeWindow`.
+- `requestCount`: The number of requests made within the rate limit time window.
+- `remaining`: The number of requests remaining.
+- `lastRequest`: The date and time of the last request made to the key.
+- `expiresAt`: The date and time when the key will expire.
+- `createdAt`: The date and time the API key was created.
+- `updatedAt`: The date and time the API key was updated.
+- `permissions`: The permissions of the key.
+- `metadata`: Any additional metadata you want to store with the key.
+
 
 ## Permissions
 
