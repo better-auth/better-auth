@@ -100,22 +100,24 @@ const data = await authClient.updateUser({
 
 The plugin requires 1 field to be added to the user table:
 
-<DatabaseTable
-    fields={[
-        { 
-            name: "username", 
-            type: "string", 
-            description: "The username of the user",
-            isUnique: true
+<SchemaDemo
+    includeDefaultUser
+    plugin="username"
+    schema={{
+        user: {
+            fields: {
+                username: { type: "string", required: false, unique: true },
+                displayUsername: { type: "string", required: false, unique: true },
+            },
         },
-        { 
-            name: "displayUsername", 
-            type: "string", 
-            description: "Non normalized username of the user",
-            isUnique: true
-        },
-    ]}
+    }}
 />
+
+### `user` table fields: 
+
+- `username`: The username of the user.
+- `displayUsername`: The non normalized username of the user.
+
 
 ## Options
 
