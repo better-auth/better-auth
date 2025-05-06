@@ -86,7 +86,7 @@ const createTransform = (options: BetterAuthOptions) => {
 	}
 
 	return {
-		transformInput(
+		async transformInput(
 			data: Record<string, any>,
 			model: string,
 			action: "create" | "update",
@@ -110,11 +110,12 @@ const createTransform = (options: BetterAuthOptions) => {
 				) {
 					continue;
 				}
-				transformedData[fields[field].fieldName || field] = withApplyDefault(
-					serializeID(field, value, model),
-					fields[field],
-					action,
-				);
+				transformedData[fields[field].fieldName || field] =
+					await withApplyDefault(
+						serializeID(field, value, model),
+						fields[field],
+						action,
+					);
 			}
 			return transformedData;
 		},
@@ -232,7 +233,11 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		id: "mongodb-adapter",
 		async create(data) {
 			const { model, data: values, select } = data;
-			const transformedData = transform.transformInput(values, model, "create");
+			const transformedData = await transform.transformInput(
+				values,
+				model,
+				"create",
+			);
 			if (transformedData.id && !hasCustomId) {
 				// biome-ignore lint/performance/noDelete: setting id to undefined will cause the id to be null in the database which is not what we want
 				delete transformedData.id;

@@ -248,7 +248,7 @@ export const createAdapter =
 				required: shouldGenerateId ? true : false,
 				...(shouldGenerateId
 					? {
-							defaultValue() {
+							defaultValue: async () => {
 								if (config.disableIdGeneration) return undefined;
 								const useNumberId = options.advanced?.database?.useNumberId;
 								let generateId = options.advanced?.database?.generateId;
@@ -260,7 +260,7 @@ export const createAdapter =
 								}
 								if (generateId === false || useNumberId) return undefined;
 								if (generateId) {
-									return generateId({
+									return await generateId({
 										model,
 									});
 								}
@@ -329,7 +329,7 @@ export const createAdapter =
 					continue;
 				}
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
-				let newValue = withApplyDefault(value, fieldAttributes, action);
+				let newValue = await withApplyDefault(value, fieldAttributes, action);
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
 				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.

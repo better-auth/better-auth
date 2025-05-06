@@ -42,7 +42,7 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * Note: This will not create a default value on the database level. It will only
 	 * be used when creating a new record.
 	 */
-	defaultValue?: Primitive | (() => Primitive);
+	defaultValue?: Primitive | (() => Primitive | Promise<Primitive>);
 	/**
 	 * transform the value before storing it.
 	 */
