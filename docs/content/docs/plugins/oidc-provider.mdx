@@ -216,195 +216,90 @@ The OIDC Provider plugin adds the following tables to the database:
 
 ### OAuth Application
 
-Table Name: `oauthApplication`
-
-<DatabaseTable
-  fields={[
-   {
-      name: "id",
-      type: "string",
-      description: "Database ID of the OAuth client",
-      isPrimaryKey: true
-   },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true
-    },
-    { 
-      name: "clientSecret", 
-      type: "string", 
-      description: "Secret key for the OAuth client",
-      isRequired: true
-    },
-    { 
-      name: "name", 
-      type: "string", 
-      description: "Name of the OAuth client",
-      isRequired: true
-    },
-    { 
-      name: "redirectURLs", 
-      type: "string", 
-      description: "Comma-separated list of redirect URLs",
-      isRequired: true
-    },
-    { 
-      name: "metadata", 
-      type: "string",
-      description: "Additional metadata for the OAuth client",
-      isOptional: true
-    },
-    { 
-      name: "type", 
-      type: "string",
-      description: "Type of OAuth client (e.g., web, mobile)",
-      isRequired: true
-    },
-    { 
-      name: "disabled", 
-      type: "boolean", 
-      description: "Indicates if the client is disabled",
-      isRequired: true
-    },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user who owns the client. (optional)",
-      isOptional: true
-    },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the OAuth client was created" 
-    },
-   {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the OAuth client was last updated"
-   }
-  ]}
+<SchemaDemo
+    plugin="oidc-provider"
+    includeDefaultUser
+    height="large"
+    schema={{
+        oauthApplication: {
+            fields: {
+                clientId: { type: "string", required: true },
+                clientSecret: { type: "string", required: true },
+                name: { type: "string", required: true },
+                redirectURLs: { type: "string", required: true },
+                metadata: { type: "string", required: false },
+                type: { type: "string", required: true },
+                disabled: { type: "boolean", required: true },
+                userId: { type: "string", required: false, references: { model: "user", field: "id" } },
+                createdAt: { type: "Date", required: true },
+                updatedAt: { type: "Date", required: true },
+            },
+        },
+        oauthAccessToken: {
+            fields: {
+                accessToken: { type: "string", required: true },
+                refreshToken: { type: "string", required: true },
+                accessTokenExpiresAt: { type: "Date", required: true },
+                refreshTokenExpiresAt: { type: "Date", required: true },
+                clientId: { type: "string", required: true, references: { model: "oauthApplication", field: "clientId" } },
+                userId: { type: "string", required: true, references: { model: "user", field: "id" } },
+                scopes: { type: "string", required: true },
+                createdAt: { type: "Date", required: true },
+                updatedAt: { type: "Date", required: true },
+            },
+        },
+        oauthConsent: {
+            fields: {
+                id: { type: "string", required: true },
+                userId: { type: "string", required: true, references: { model: "user", field: "id" } },
+                clientId: { type: "string", required: true, references: { model: "oauthApplication", field: "clientId" } },
+                scopes: { type: "string", required: true },
+                consentGiven: { type: "boolean", required: true },
+                createdAt: { type: "Date", required: true },
+                updatedAt: { type: "Date", required: true },
+            },
+        },
+    }}
 />
 
-### OAuth Access Token
+#### `oauthApplication` table fields: 
 
-Table Name: `oauthAccessToken`
+- `id`: The id of the OAuth application
+- `clientId`: The client id of the OAuth application
+- `clientSecret`: The client secret of the OAuth application
+- `name`: The name of the OAuth application
+- `redirectURLs`: The redirect URLs of the OAuth application
+- `metadata`: The metadata of the OAuth application
+- `type`: The type of the OAuth application
+- `disabled`: Whether the OAuth application is disabled
+- `userId`: The id of the user who owns the OAuth application
+- `createdAt`: The timestamp of when the OAuth application was created
+- `updatedAt`: The timestamp of when the OAuth application was last updated  
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "Database ID of the access token",
-      isPrimaryKey: true
-   },
-    { 
-      name: "accessToken", 
-      type: "string", 
-      description: "Access token issued to the client",
-    },
-    { 
-      name: "refreshToken", 
-      type: "string", 
-      description: "Refresh token issued to the client",
-      isRequired: true
-    },
-    { 
-      name: "accessTokenExpiresAt", 
-      type: "Date", 
-      description: "Expiration date of the access token",
-      isRequired: true
-    },
-    { 
-      name: "refreshTokenExpiresAt", 
-      type: "Date", 
-      description: "Expiration date of the refresh token",
-      isRequired: true
-    },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "ID of the OAuth client",
-      isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
-    },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user associated with the token",
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
-    },
-    { 
-      name: "scopes", 
-      type: "string", 
-      description: "Comma-separated list of scopes granted",
-      isRequired: true
-    },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the access token was created" 
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the access token was last updated"
-    }
-  ]}
-/>
+#### `oauthAccessToken` table fields: 
 
-### OAuth Consent
+- `id`: The id of the OAuth access token
+- `accessToken`: The access token
+- `refreshToken`: The refresh token
+- `accessTokenExpiresAt`: The timestamp of when the access token expires
+- `refreshTokenExpiresAt`: The timestamp of when the refresh token expires
+- `clientId`: The id of the OAuth client
+- `userId`: The id of the user who owns the access token
+- `scopes`: The scopes of the access token
+- `createdAt`: The timestamp of when the access token was created
+- `updatedAt`: The timestamp of when the access token was last updated
 
-Table Name: `oauthConsent`
 
-<DatabaseTable
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Database ID of the consent",
-      isPrimaryKey: true
-    },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user who gave consent",
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
-    },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "ID of the OAuth client",
-      isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
-    },
-    { 
-      name: "scopes", 
-      type: "string", 
-      description: "Comma-separated list of scopes consented to",
-      isRequired: true
-    },
-    { 
-      name: "consentGiven", 
-      type: "boolean", 
-      description: "Indicates if consent was given",
-      isRequired: true
-    },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the consent was given" 
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the consent was last updated"
-    }
-  ]}
-/>
+#### `oauthConsent` table fields:
+
+- `id`: The id of the OAuth consent
+- `userId`: The id of the user who gave consent
+- `clientId`: The id of the OAuth client
+- `scopes`: The scopes of the consent
+- `consentGiven`: Whether the consent was given
+- `createdAt`: The timestamp of when the consent was created
+- `updatedAt`: The timestamp of when the consent was last updated
+
 
 ## Options
 
