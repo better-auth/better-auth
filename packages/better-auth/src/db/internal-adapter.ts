@@ -213,10 +213,7 @@ export const createInternalAdapter = (
 			override?: Partial<Session> & Record<string, any>,
 			overrideAll?: boolean,
 		) => {
-			const headers =
-				ctx.request && "headers" in ctx.request
-					? ctx.request.headers
-					: ctx.request;
+			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
 				ipAddress:
