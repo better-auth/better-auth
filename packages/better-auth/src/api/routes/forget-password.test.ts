@@ -231,4 +231,29 @@ describe("revoke sessions on password reset", async (it) => {
 		});
 		expect(sessionAttempt.data?.user).toBeDefined();
 	});
+	it("should allow callbackURL to have multiple query params", async () => {
+		let url = "";
+
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword(context) {
+					url = context.url;
+					await mockSendEmail();
+				},
+				resetPasswordTokenExpiresIn: 10,
+			},
+		});
+
+		const queryParams = "foo=bar&baz=qux";
+		const redirectTo = `http://localhost:3000?${queryParams}`;
+		const res = await client.forgetPassword({
+			email: testUser.email,
+			redirectTo,
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(url).not.toContain(queryParams);
+		expect(url).toContain(`callbackURL=${encodeURIComponent(redirectTo)}`);
+	});
 });
