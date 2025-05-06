@@ -168,7 +168,7 @@ export async function validateApiKey({
 
 	if (!newApiKey) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: "Failed to update API key",
+			message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
 			code: "INTERNAL_SERVER_ERROR" as const,
 		});
 	}

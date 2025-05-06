@@ -41,6 +41,7 @@ export const ERROR_CODES = {
 		"API Key getter returned an invalid key type. Expected string.",
 	SERVER_ONLY_PROPERTY:
 		"The property you're trying to set can only be set from the server auth instance only.",
+	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
 };
 
 export const API_KEY_TABLE_NAME = "apikey";
