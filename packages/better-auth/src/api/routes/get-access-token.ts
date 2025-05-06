@@ -132,16 +132,15 @@ export const getAccessToken = createAuthEndpoint(
 				});
 			}
 
-			const tokens =
-				newTokens ??
-				({
-					accessToken: account.accessToken ?? undefined,
-					accessTokenExpiresAt: account.accessTokenExpiresAt ?? undefined,
-					refreshToken: account.refreshToken ?? undefined,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt ?? undefined,
-					scopes: account.scope?.split(",") ?? [],
-					idToken: account.idToken ?? undefined,
-				} satisfies OAuth2Tokens);
+			const tokens = {
+				accessToken: newTokens?.accessToken ?? account.accessToken ?? undefined,
+				accessTokenExpiresAt:
+					newTokens?.accessTokenExpiresAt ??
+					account.accessTokenExpiresAt ??
+					undefined,
+				scopes: account.scope?.split(",") ?? [],
+				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+			} satisfies OAuth2Tokens;
 
 			return ctx.json(tokens);
 		} catch (error) {
