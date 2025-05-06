@@ -245,7 +245,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.headers,
+						ctx,
 					);
 
 					if (!session) {
