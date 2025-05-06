@@ -8,8 +8,8 @@ import {
 	type SocialProvider,
 } from "../../social-providers";
 
-export const refreshToken = createAuthEndpoint(
-	"/refresh-token",
+export const getAccessToken = createAuthEndpoint(
+	"/get-access-token",
 	{
 		method: "POST",
 		body: z.object({
@@ -28,11 +28,12 @@ export const refreshToken = createAuthEndpoint(
 				.optional(),
 		}),
 		metadata: {
+			SERVER_ONLY: true,
 			openapi: {
-				description: "Refresh the access token using a refresh token",
+				description: "Get a valid access token, doing a refresh if needed",
 				responses: {
 					200: {
-						description: "Access token refreshed successfully",
+						description: "A Valid access token",
 						content: {
 							"application/json": {
 								schema: {
@@ -114,19 +115,38 @@ export const refreshToken = createAuthEndpoint(
 			});
 		}
 		try {
-			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
-				account.refreshToken as string,
-			);
-			await ctx.context.internalAdapter.updateAccount(account.id, {
-				accessToken: tokens.accessToken,
-				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshToken: tokens.refreshToken,
-				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-			});
+			let newTokens: OAuth2Tokens | null = null;
+
+			if (
+				!account.accessTokenExpiresAt ||
+				account.accessTokenExpiresAt.getTime() - Date.now() < 5_000 // 5 second buffer
+			) {
+				newTokens = await provider.refreshAccessToken(
+					account.refreshToken as string,
+				);
+				await ctx.context.internalAdapter.updateAccount(account.id, {
+					accessToken: newTokens.accessToken,
+					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
+					refreshToken: newTokens.refreshToken,
+					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
+				});
+			}
+
+			const tokens =
+				newTokens ??
+				({
+					accessToken: account.accessToken ?? undefined,
+					accessTokenExpiresAt: account.accessTokenExpiresAt ?? undefined,
+					refreshToken: account.refreshToken ?? undefined,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt ?? undefined,
+					scopes: account.scope?.split(",") ?? [],
+					idToken: account.idToken ?? undefined,
+				} satisfies OAuth2Tokens);
+
 			return ctx.json(tokens);
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Failed to refresh access token",
+				message: "Failed to get a valid access token",
 				cause: error,
 			});
 		}
