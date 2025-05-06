@@ -525,7 +525,7 @@ export const signInEmail = createAuthEndpoint(
 
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
-			ctx.headers,
+			ctx,
 			ctx.body.rememberMe === false,
 		);
 
