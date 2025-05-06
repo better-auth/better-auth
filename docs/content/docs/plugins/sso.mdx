@@ -8,7 +8,8 @@ description: Integrate Single Sign-On (SSO) with your application.
 Single Sign-On (SSO) allows users to authenticate with multiple applications using a single set of credentials. This plugin supports OpenID Connect (OIDC) and OAuth2 providers.
 
 <Callout>
-    SAML support is coming soon. Upvote the feature request on our [GitHub](https://github.com/better-auth/better-auth/issues/96)
+  SAML support is coming soon. Upvote the feature request on our
+  [GitHub](https://github.com/better-auth/better-auth/issues/96)
 </Callout>
 
 ## Installation
@@ -61,6 +62,7 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
         })
         ```
     </Step>
+
 </Steps>
 
 ## Usage
@@ -78,29 +80,30 @@ import { authClient } from "@/lib/auth-client";
 
 // only with issuer if the provider supports discovery
 await authClient.sso.register({
-    issuer: "https://idp.example.com",
-    providerId: "example-provider",
+issuer: "https://idp.example.com",
+providerId: "example-provider",
 });
 
 // with all fields
 await authClient.sso.register({
-    issuer: "https://idp.example.com",
-    domain: "example.com",
-    clientId: "client-id",
-    clientSecret: "client-secret",
-    authorizationEndpoint: "https://idp.example.com/authorize",
-    tokenEndpoint: "https://idp.example.com/token",
-    jwksEndpoint: "https://idp.example.com/jwks",
-    mapping: {
-        id: "sub",
-        email: "email",
-        emailVerified: "email_verified",
-        name: "name",
-        image: "picture",
-    },
-    providerId: "example-provider",
+issuer: "https://idp.example.com",
+domain: "example.com",
+clientId: "client-id",
+clientSecret: "client-secret",
+authorizationEndpoint: "https://idp.example.com/authorize",
+tokenEndpoint: "https://idp.example.com/token",
+jwksEndpoint: "https://idp.example.com/jwks",
+mapping: {
+id: "sub",
+email: "email",
+emailVerified: "email_verified",
+name: "name",
+image: "picture",
+},
+providerId: "example-provider",
 });
-```
+
+````
     </Tab>
 
     <Tab value="server">
@@ -126,8 +129,10 @@ await auth.api.createOIDCProvider({
     },
     headers,
 });
-```
+````
+
     </Tab>
+
 </Tabs>
 
 ### Sign In with SSO
@@ -138,8 +143,8 @@ You can sign in using the email with domain matching:
 
 ```ts title="sign-in.ts"
 const res = await authClient.signIn.sso({
-    email: "user@example.com",
-    callbackURL: "/dashboard",
+  email: "user@example.com",
+  callbackURL: "/dashboard",
 });
 ```
 
@@ -147,8 +152,8 @@ or you can specify the domain:
 
 ```ts title="sign-in-domain.ts"
 const res = await authClient.signIn.sso({
-    domain: "example.com",
-    callbackURL: "/dashboard",
+  domain: "example.com",
+  callbackURL: "/dashboard",
 });
 ```
 
@@ -156,8 +161,8 @@ You can also sign in using the organization slug if a provider is associated wit
 
 ```ts title="sign-in-org.ts"
 const res = await authClient.signIn.sso({
-    organizationSlug: "example-org",
-    callbackURL: "/dashboard",
+  organizationSlug: "example-org",
+  callbackURL: "/dashboard",
 });
 ```
 
@@ -165,8 +170,8 @@ Alternatively, you can sign in using the provider's ID:
 
 ```ts title="sign-in-provider-id.ts"
 const res = await authClient.signIn.sso({
-    providerId: "example-provider-id",
-    callbackURL: "/dashboard",
+  providerId: "example-provider-id",
+  callbackURL: "/dashboard",
 });
 ```
 
@@ -174,32 +179,31 @@ To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
 const res = await auth.api.signInSSO({
-    body: {
-        organizationSlug: "example-org",
-        callbackURL: "/dashboard",
-    }
+  body: {
+    organizationSlug: "example-org",
+    callbackURL: "/dashboard",
+  },
 });
 ```
 
 When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
-
 ```ts title="auth.ts"
 const auth = betterAuth({
-    plugins: [
-        sso({
-            provisionUser: async (user) => {
-                // provision user
-            },
-            organizationProvisioning: {
-                disabled: false,
-                defaultRole: "member",
-                getRole: async (user) => {
-                    // get role if needed
-                },
-            },
-        }),
-    ],
+  plugins: [
+    sso({
+      provisionUser: async (user) => {
+        // provision user
+      },
+      organizationProvisioning: {
+        disabled: false,
+        defaultRole: "member",
+        getRole: async (user) => {
+          // get role if needed
+        },
+      },
+    }),
+  ],
 });
 ```
 
@@ -207,19 +211,50 @@ const auth = betterAuth({
 
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
 
-<DatabaseTable
-    fields={[
-        {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
+<SchemaDemo
+  plugin="sso"
+  includeDefaultUser
+  focus="ssoProvider"
+  schema={{
+    ssoProvider: {
+      fields: {
+        issuer: { type: "string", required: true },
+        domain: { type: "string", required: true },
+        oidcConfig: { type: "string", required: false },
+        userId: {
+          type: "string",
+          required: true,
+          references: { model: "user", field: "id" },
         },
-        { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
-        { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
-        { name: "oidcConfig", type: "string", description: "The OIDC configuration", isRequired: false },
-        { name: "userId", type: "string", description: "The user id", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider id. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
-    ]}
+        providerId: { type: "string", required: true, isUnique: true },
+        organizationId: {
+          type: "string",
+          required: false,
+          references: { model: "organization", field: "id" },
+        },
+      },
+    },
+    organization: {
+      fields: {
+        name: { type: "string", required: true },
+        slug: { type: "string", required: true },
+        logo: { type: "string", required: false },
+        metadata: { type: "string", required: false },
+        createdAt: { type: "date", required: true },
+      },
+    },
+  }}
 />
+
+### `ssoProvider` table fields:
+
+- `issuer`: The issuer identifier.
+- `domain`: The domain of the provider.
+- `oidcConfig`: The OIDC configuration.
+- `userId`: The user id.
+- `providerId`: The provider id. Used to identify a provider and to generate a redirect URL.
+- `organizationId`: The organization Id. If provider is linked to an organization.
+
 
 ## Options
 
@@ -232,29 +267,30 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 <TypeTable
   type={{
     provisionUser: {
-        description: "A custom function to provision a user when they sign in with an SSO provider.",
-        type: "function",
+      description:
+        "A custom function to provision a user when they sign in with an SSO provider.",
+      type: "function",
     },
     organizationProvisioning: {
-        description: "Options for provisioning users to an organization.",
-        type: "object",
-        properties: {
-            disabled: {
-                description: "Disable organization provisioning.",
-                type: "boolean",
-                default: false,
-            },
-            defaultRole: {
-                description: "The default role for new users.",
-                type: "string",
-                enum: ["member", "admin"],
-                default: "member",
-            },
-            getRole: {
-                description: "A custom function to determine the role for new users.",
-                type: "function",
-            },
+      description: "Options for provisioning users to an organization.",
+      type: "object",
+      properties: {
+        disabled: {
+          description: "Disable organization provisioning.",
+          type: "boolean",
+          default: false,
         },
+        defaultRole: {
+          description: "The default role for new users.",
+          type: "string",
+          enum: ["member", "admin"],
+          default: "member",
+        },
+        getRole: {
+          description: "A custom function to determine the role for new users.",
+          type: "function",
+        },
+      },
     },
   }}
 />
