@@ -128,7 +128,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 			[key: string]: any;
 		};
 		data: any;
-	}>;
+	} | null>;
 	/**
 	 * Custom function to refresh a token
 	 */
