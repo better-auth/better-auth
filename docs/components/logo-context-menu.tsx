@@ -32,13 +32,20 @@ export default function LogoContextMenu({
 
 	const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
 		e.preventDefault();
+		e.stopPropagation();
 		const rect = logoRef.current?.getBoundingClientRect();
 		if (rect) {
 			setShowMenu(true);
 		}
 	};
 
-	const copySvgToClipboard = (svgContent: string, type: string) => {
+	const copySvgToClipboard = (
+		e: React.MouseEvent,
+		svgContent: string,
+		type: string,
+	) => {
+		e.preventDefault();
+		e.stopPropagation();
 		navigator.clipboard
 			.writeText(svgContent)
 			.then(() => {
@@ -54,7 +61,13 @@ export default function LogoContextMenu({
 		setShowMenu(false);
 	};
 
-	const downloadPng = (pngData: StaticImageData, fileName: string) => {
+	const downloadPng = (
+		e: React.MouseEvent,
+		pngData: StaticImageData,
+		fileName: string,
+	) => {
+		e.preventDefault();
+		e.stopPropagation();
 		const link = document.createElement("a");
 		link.href = pngData.src;
 		link.download = fileName;
@@ -68,7 +81,9 @@ export default function LogoContextMenu({
 		setShowMenu(false);
 	};
 
-	const downloadAllAssets = () => {
+	const downloadAllAssets = (e: React.MouseEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
 		const link = document.createElement("a");
 		link.href = "/branding/better-auth-brand-assets.zip";
 		link.download = "better-auth-branding-assets.zip";
@@ -80,6 +95,7 @@ export default function LogoContextMenu({
 		toast.success("Downloading all assets...");
 		setShowMenu(false);
 	};
+
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
 			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -115,8 +131,9 @@ export default function LogoContextMenu({
 					<div className="">
 						<div className="flex p-0 gap-1 flex-col text-xs">
 							<button
-								onClick={() =>
+								onClick={(e) =>
 									copySvgToClipboard(
+										e,
 										getAsset(logoAssets.darkSvg, logoAssets.whiteSvg),
 										"Logo SVG",
 									)
@@ -133,8 +150,9 @@ export default function LogoContextMenu({
 							</button>
 							<hr className="border-border/[60%]" />
 							<button
-								onClick={() =>
+								onClick={(e) =>
 									copySvgToClipboard(
+										e,
 										getAsset(logoAssets.darkWordmark, logoAssets.whiteWordmark),
 										"Logo Wordmark",
 									)
@@ -152,8 +170,9 @@ export default function LogoContextMenu({
 
 							<hr className="border-border/[60%]" />
 							<button
-								onClick={() =>
+								onClick={(e) =>
 									downloadPng(
+										e,
 										getAsset(logoAssets.darkPng, logoAssets.whitePng),
 										`better-auth-logo-${theme}.png`,
 									)
@@ -170,7 +189,7 @@ export default function LogoContextMenu({
 							</button>
 							<hr className="borde-border" />
 							<button
-								onClick={downloadAllAssets}
+								onClick={(e) => downloadAllAssets(e)}
 								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
 							>
 								<div className="flex items-center">

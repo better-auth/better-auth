@@ -42,6 +42,8 @@ export const ERROR_CODES = {
 		"The property you're trying to set can only be set from the server auth instance only.",
 };
 
+export const API_KEY_TABLE_NAME = "apikey";
+
 export const apiKey = (options?: ApiKeyOptions) => {
 	const opts = {
 		...options,
@@ -156,7 +158,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 
 						const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-							model: schema.apikey.modelName,
+							model: API_KEY_TABLE_NAME,
 							where: [
 								{
 									field: "key",
@@ -226,6 +228,6 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			deleteApiKey: routes.deleteApiKey,
 			listApiKeys: routes.listApiKeys,
 		},
-		schema: schema,
+		schema,
 	} satisfies BetterAuthPlugin;
 };

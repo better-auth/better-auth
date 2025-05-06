@@ -237,8 +237,15 @@ export type BetterAuthOptions = {
 		};
 		/**
 		 * Automatically sign in the user after sign up
+		 *
+		 * @default true
 		 */
 		autoSignIn?: boolean;
+		/**
+		 * Whether to revoke all other sessions when resetting password
+		 * @default false
+		 */
+		revokeSessionsOnPasswordReset?: boolean;
 	};
 	/**
 	 * list of social providers
