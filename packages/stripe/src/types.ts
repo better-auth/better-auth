@@ -175,6 +175,12 @@ export interface StripeOptions {
 	 */
 	createCustomerOnSignUp?: boolean;
 	/**
+	 * Prevent duplicate customers with the same email address
+	 * If enabled, will check if a customer with the email already exists in Stripe
+	 * and use that instead of creating a new one
+	 */
+	preventDuplicateCustomers?: boolean;
+	/**
 	 * A callback to run after a customer has been created
 	 * @param customer - Customer Data
 	 * @param stripeCustomer - Stripe Customer Data
