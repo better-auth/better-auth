@@ -1493,6 +1493,29 @@ describe("api-key", async () => {
 		expect(result.error).toBeNull();
 	});
 
+	it("should regenerate API key with prefix key", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				prefix: "test-prefix",
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.key).toContain("test-prefix");
+
+		const regeneratedApiKey = await auth.api.regenerateApiKey({
+			body: {
+				keyId: apiKey.id,
+			},
+			headers,
+		});
+
+		expect(regeneratedApiKey).not.toBeNull();
+		expect(regeneratedApiKey.key).toContain("test-prefix");
+		expect(regeneratedApiKey.key).not.toEqual(apiKey.key);
+	});
+
 	// =========================================================================
 	// DELETE API KEY
 	// =========================================================================
