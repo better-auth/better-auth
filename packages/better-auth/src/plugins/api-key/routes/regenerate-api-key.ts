@@ -277,7 +277,7 @@ export function regenerateApiKey({
 			deleteAllExpiredApiKeys(ctx.context);
 
 			return ctx.json({
-				...updatedApiKey,
+				...(updatedApiKey as ApiKey),
 				key: key,
 				metadata: updatedApiKey.metadata
 					? safeJSONParse(
