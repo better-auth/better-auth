@@ -1452,6 +1452,7 @@ describe("api-key", async () => {
 		);
 		expect(apiKey.data).toBeDefined();
 		expect(apiKey.data?.key).not.toEqual(firstApiKey.key);
+		expect(apiKey.data?.id).toEqual(firstApiKey.id);
 		expect(apiKey.error).toBeNull();
 	});
 
