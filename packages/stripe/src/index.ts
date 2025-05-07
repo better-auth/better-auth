@@ -219,13 +219,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						
 						// Check for existing customer if preventDuplicateCustomers is enabled
 						if (options.preventDuplicateCustomers) {
-							const existingCustomers = await client.customers.list({
-								email: user.email,
-								limit: 1,
-							});
-							
-							if (existingCustomers.data.length > 0) {
-								stripeCustomer = existingCustomers.data[0];
+							try {
+								const existingCustomers = await client.customers.list({
+									email: user.email,
+									limit: 1,
+								});
+								
+								if (existingCustomers.data.length > 0) {
+									stripeCustomer = existingCustomers.data[0];
+								}
+							} catch (error) {
+								logger.error("Error checking for existing Stripe customer", error);
 							}
 						}
 						
@@ -983,13 +987,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										
 										// Check for existing customer if preventDuplicateCustomers is enabled
 										if (options.preventDuplicateCustomers) {
-											const existingCustomers = await client.customers.list({
-												email: user.email,
-												limit: 1,
-											});
-											
-											if (existingCustomers.data.length > 0) {
-												stripeCustomer = existingCustomers.data[0];
+											try {
+												const existingCustomers = await client.customers.list({
+													email: user.email,
+													limit: 1,
+												});
+												
+												if (existingCustomers.data.length > 0) {
+													stripeCustomer = existingCustomers.data[0];
+												}
+											} catch (error) {
+												logger.error("Error checking for existing Stripe customer", error);
 											}
 										}
 										
