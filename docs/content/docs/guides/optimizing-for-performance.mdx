@@ -11,7 +11,7 @@ Caching is a powerful technique that can significantly improve the performance o
 
 ### Cookie Cache
 
-Calling your database every time `useSession` or `getSession` invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie—similar to how JWT access tokens are used with refresh tokens.
+Calling your database every time `useSession` or `getSession` invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie similar to how JWT access tokens are used with refresh tokens.
 
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
@@ -34,8 +34,8 @@ Read more about [cookie caching](/docs/concepts/session-management#cookie-cache)
 
 Here are examples of how you can do caching in different frameworks and environments:
 
-<Tabs items={["Next.js", "Remix", "SolidStart", "React Query"]}>
-  <Tab value="NextJS">
+<Tabs items={["Next", "Remix", "SolidStart", "React Query"]}>
+  <Tab value="Next">
     Since Next v15, we can use the `"use cache"` directive to cache the response of a server function.
 
     ```ts
