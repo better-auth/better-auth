@@ -3,6 +3,7 @@ import { z } from "zod";
 import { APIError } from "better-call";
 import type { OAuth2Tokens } from "../../oauth2";
 import { getSessionFromCtx } from "./session";
+import { symmetricEncrypt } from "../../crypto";
 
 export const refreshToken = createAuthEndpoint(
 	"/refresh-token",
@@ -109,9 +110,21 @@ export const refreshToken = createAuthEndpoint(
 				account.refreshToken as string,
 			);
 			await ctx.context.internalAdapter.updateAccount(account.id, {
-				accessToken: tokens.accessToken,
+				accessToken:
+					tokens.accessToken && ctx.context.options.account?.encryptOAuthTokens
+						? await symmetricEncrypt({
+								key: ctx.context.secret,
+								data: tokens.accessToken,
+							})
+						: tokens.accessToken,
+				refreshToken:
+					tokens.refreshToken && ctx.context.options.account?.encryptOAuthTokens
+						? await symmetricEncrypt({
+								key: ctx.context.secret,
+								data: tokens.refreshToken,
+							})
+						: tokens.refreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshToken: tokens.refreshToken,
 				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
 			return ctx.json(tokens);

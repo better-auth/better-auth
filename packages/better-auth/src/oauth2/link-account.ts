@@ -1,4 +1,5 @@
 import { APIError, createEmailVerificationToken } from "../api";
+import { symmetricEncrypt } from "../crypto";
 import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
@@ -68,9 +69,23 @@ export async function handleOAuthUserInfo(
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 						userId: dbUser.user.id,
-						accessToken: account.accessToken,
+						accessToken:
+							account.accessToken &&
+							c.context.options.account?.encryptOAuthTokens
+								? await symmetricEncrypt({
+										key: c.context.secret,
+										data: account.accessToken,
+									})
+								: account.accessToken,
+						refreshToken:
+							account.refreshToken &&
+							c.context.options.account?.encryptOAuthTokens
+								? await symmetricEncrypt({
+										key: c.context.secret,
+										data: account.refreshToken,
+									})
+								: account.refreshToken,
 						idToken: account.idToken,
-						refreshToken: account.refreshToken,
 						accessTokenExpiresAt: account.accessTokenExpiresAt,
 						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 						scope: account.scope,
@@ -88,9 +103,23 @@ export async function handleOAuthUserInfo(
 			if (c.context.options.account?.updateAccountOnSignIn !== false) {
 				const updateData = Object.fromEntries(
 					Object.entries({
-						accessToken: account.accessToken,
 						idToken: account.idToken,
-						refreshToken: account.refreshToken,
+						accessToken:
+							account.accessToken &&
+							c.context.options.account?.encryptOAuthTokens
+								? await symmetricEncrypt({
+										key: c.context.secret,
+										data: account.accessToken,
+									})
+								: account.accessToken,
+						refreshToken:
+							account.refreshToken &&
+							c.context.options.account?.encryptOAuthTokens
+								? await symmetricEncrypt({
+										key: c.context.secret,
+										data: account.refreshToken,
+									})
+								: account.refreshToken,
 						accessTokenExpiresAt: account.accessTokenExpiresAt,
 						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 						scope: account.scope,
@@ -135,9 +164,23 @@ export async function handleOAuthUserInfo(
 						email: userInfo.email.toLowerCase(),
 					},
 					{
-						accessToken: account.accessToken,
+						accessToken:
+							account.accessToken &&
+							c.context.options.account?.encryptOAuthTokens
+								? await symmetricEncrypt({
+										key: c.context.secret,
+										data: account.accessToken,
+									})
+								: account.accessToken,
+						refreshToken:
+							account.refreshToken &&
+							c.context.options.account?.encryptOAuthTokens
+								? await symmetricEncrypt({
+										key: c.context.secret,
+										data: account.refreshToken,
+									})
+								: account.refreshToken,
 						idToken: account.idToken,
-						refreshToken: account.refreshToken,
 						accessTokenExpiresAt: account.accessTokenExpiresAt,
 						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 						scope: account.scope,

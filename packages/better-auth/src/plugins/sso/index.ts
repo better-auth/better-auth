@@ -13,6 +13,7 @@ import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
+import { symmetricEncrypt } from "../../crypto";
 
 export interface SSOOptions {
 	/**
@@ -855,8 +856,22 @@ export const sso = (options?: SSOOptions) => {
 						},
 						account: {
 							idToken: tokenResponse.idToken,
-							accessToken: tokenResponse.accessToken,
-							refreshToken: tokenResponse.refreshToken,
+							accessToken:
+								tokenResponse.accessToken &&
+								ctx.context.options.account?.encryptOAuthTokens
+									? await symmetricEncrypt({
+											key: ctx.context.secret,
+											data: tokenResponse.accessToken,
+										})
+									: tokenResponse.accessToken,
+							refreshToken:
+								tokenResponse.refreshToken &&
+								ctx.context.options.account?.encryptOAuthTokens
+									? await symmetricEncrypt({
+											key: ctx.context.secret,
+											data: tokenResponse.refreshToken,
+										})
+									: tokenResponse.refreshToken,
 							accountId: userInfo.id,
 							providerId: provider.providerId,
 							accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
