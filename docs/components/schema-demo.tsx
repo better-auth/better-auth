@@ -53,7 +53,7 @@ export const SchemaDemo = ({
 	includeDefaultSession,
 	includeDefaultUser,
 	includeDefaultAccount,
-	includeDefaultVarifications,
+	includeDefaultVerifications,
 	height = "default",
 }: {
 	plugin: string;
@@ -67,7 +67,7 @@ export const SchemaDemo = ({
 	includeDefaultSession?: boolean;
 	includeDefaultUser?: boolean;
 	includeDefaultAccount?: boolean;
-	includeDefaultVarifications?: boolean;
+	includeDefaultVerifications?: boolean;
 	/**
 	 * The height of the schema demo.
 	 *
@@ -99,7 +99,7 @@ export const SchemaDemo = ({
 		delete schema.user;
 	}
 
-	if (!includeDefaultVarifications) {
+	if (!includeDefaultVerifications) {
 		// biome-ignore lint/performance/noDelete: <explanation>
 		delete schema.verification;
 	}
@@ -212,7 +212,7 @@ const SchemaFlow = ({
 
 		setNodes([...layouted.nodes]);
 		setEdges([...layouted.edges]);
-		setTimeout(() => {
+		const tid = setTimeout(() => {
 			if (focusedTable && focusedTable !== "all") {
 				reactFlowInstance.fitView({
 					nodes: [layouted.nodes.find((x) => x.id === focusedTable)!],
@@ -221,6 +221,9 @@ const SchemaFlow = ({
 				reactFlowInstance.fitView();
 			}
 		}, 100);
+		return () => {
+			clearTimeout(tid);
+		};
 	}, [initialNodes, initialEdges, setNodes, setEdges]);
 
 	const onNodesChange = useCallback(
