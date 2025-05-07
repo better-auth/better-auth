@@ -18,6 +18,8 @@ import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
+//@ts-ignore - we need to import this to get the type of the database
+import type { Database as BunDatabase } from "bun:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -80,6 +82,7 @@ export type BetterAuthOptions = {
 		| Database
 		| Dialect
 		| AdapterInstance
+		| BunDatabase
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
