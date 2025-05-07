@@ -29,6 +29,7 @@ export const APIMethod = ({
 	requireSession,
 	clientMessage,
 	serverMessage,
+	message,
 }: {
 	/**
 	 * Endpoint path
@@ -70,6 +71,10 @@ export const APIMethod = ({
 	 * A string to display above the server-auth example code-block.
 	 */
 	serverMessage?: string;
+	/**
+	 * A string to display above both the client & server auth example code-blocks.
+	 */
+	message?: string;
 }) => {
 	// These two variables are essentially taking the `children` JSX shiki code, and converting them to
 	// an array string purely of it's code content.
@@ -309,15 +314,21 @@ export const APIMethod = ({
 			) : (
 				<Tabs items={["client", "server"]} className="mb-0 rounded-sm">
 					<Tab value="client">
-						{clientMessage ? (
-							<p className="mb-3 break-words text-wrap">{clientMessage}</p>
+						{clientMessage || message ? (
+							<p className="mb-3 break-words text-wrap text-sm">
+								{message}
+								{clientMessage}
+							</p>
 						) : null}
 						{clientCodeBlock}
 						{clientTable}
 					</Tab>
 					<Tab value="server">
-						{serverMessage ? (
-							<p className="mb-3 break-words text-wrap">{serverMessage}</p>
+						{serverMessage || message ? (
+							<p className="mb-3 break-words text-wrap text-sm">
+								{message}
+								{serverMessage}
+							</p>
 						) : null}
 						{serverCodeBlock}
 						{serverTable}

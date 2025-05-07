@@ -67,7 +67,7 @@ Once you've installed the plugin, you can start using the organization plugin to
 
 ### Create an organization
 
-<APIMethod path="/organization/create" method="POST">
+<APIMethod path="/organization/create" method="POST" requireSession>
 
   ```ts
   const metadata = { someKey: "someValue" };
@@ -94,6 +94,10 @@ Once you've installed the plugin, you can start using the organization plugin to
     * @serverOnly
     */
     userId?: string = "some_user_id",
+    /**
+    * Whether to keep the current active organization active after creating a new one.
+    */
+    keepCurrentActiveOrganization?: boolean = false,
   }
   ```
 </APIMethod>
@@ -123,13 +127,17 @@ const auth = betterAuth({
 
 To check if an organization slug is taken or not you can use the `checkSlug` function provided by the client. The function takes an object with the following properties:
 
-- `slug`: The slug of the organization.
+<APIMethod path="/organization/check-slug" method="POST">
 
-```ts title="auth-client.ts"
-await authClient.organization.checkSlug({
-    slug: "my-org",
-});
-```
+    ```ts
+    type checkOrganizationSlug = {
+      /**
+      * The slug of the organization.
+      /*
+      slug: string = "my-org"
+    }
+    ```
+</APIMethod>
 
 
 #### Organization Creation Hooks
@@ -390,43 +398,26 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 
 ### Get Full Organization
 
-To get the full details of an organization, you can use the `getFullOrganization` function provided by the client. The function takes an object with the following properties:
+To get the full details of an organization, you can use the `getFullOrganization` function.
 
-- `organizationId`: The id of the organization. (Optional) – By default, it will use the active organization.
-- `organizationSlug`: The slug of the organization. (Optional) – To get the organization by slug.
-
-<Tabs items={["client", "server"]}>
-
-  <Tab value="client">
-  ```ts title="auth-client.ts"
-  const organization = await authClient.organization.getFullOrganization({
-      organizationId: "organization-id" // optional, by default it will use the active organization
-  })
-  //you can also use organizationSlug instead of organizationId
-  const organization = await authClient.organization.getFullOrganization({
-      organizationSlug: "organization-slug"
-  })
-  ```
-  </Tab>
-
-  <Tab value="server">
-    ```ts title="api.ts"
-    import { auth } from "@/auth";
-
-    auth.api.getFullOrganization({
-        headers: // pass the headers
-    })
-
-    //  you can also use organizationSlug instead of organizationId
-    auth.api.getFullOrganization({
-        headers: // pass the headers,
-        query: {
-            organizationSlug: "organization-slug"
-        }
-    })
+<APIMethod
+  path="/organization/get-full-organization"
+  message="You can choose to provide an organization ID, or an organization slug. If no properties are provided, it will default to the active organization."
+  requireSession
+  >
+    ```ts
+    type getFullOrganization = {
+        /**
+        * The id of the organization. By default, it will use the active organization.
+        */
+        organizationId?: string
+        /**
+        * The slug of the organization.
+        */
+        organizationSlug?: string
+    }
     ```
-  </Tab>
-</Tabs>
+</APIMethod>
 
 
 ### Update Organization
