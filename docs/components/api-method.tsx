@@ -282,7 +282,7 @@ export const APIMethod = ({
 	let fetchOptions = "";
 	if (requireSession) {
 		fetchOptions +=
-			"\n    fetchOptions: {\n        // This endpoint requires session cookies.\n        headers: await headers(),\n    },";
+			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
 	}
 
 	if (props.length > 0) {
@@ -315,7 +315,7 @@ export const APIMethod = ({
 				<Tabs items={["client", "server"]} className="mb-0 rounded-sm">
 					<Tab value="client">
 						{clientMessage || message ? (
-							<p className="mb-3 break-words text-wrap text-sm">
+							<p className="mb-3 text-sm break-words text-wrap">
 								{message}
 								{clientMessage}
 							</p>
@@ -325,7 +325,7 @@ export const APIMethod = ({
 					</Tab>
 					<Tab value="server">
 						{serverMessage || message ? (
-							<p className="mb-3 break-words text-wrap text-sm">
+							<p className="mb-3 text-sm break-words text-wrap">
 								{message}
 								{serverMessage}
 							</p>
@@ -408,7 +408,7 @@ function TypeTable({
 								) : null}
 							</TableCell>
 							<TableCell className="max-w-[500px] overflow-hidden">
-								<div className="w-full h-fit text-wrap break-words ">
+								<div className="w-full break-words h-fit text-wrap ">
 									{prop.description}
 								</div>
 							</TableCell>
