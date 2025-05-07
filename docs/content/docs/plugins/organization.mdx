@@ -65,37 +65,38 @@ Once you've installed the plugin, you can start using the organization plugin to
 
 ## Organization
 
-
-
----
-
-
-
 ### Create an organization
 
 <APIMethod path="/organization/create" method="POST">
+
   ```ts
+  const metadata = { someKey: "someValue" };
+
   type createOrganization = {
     /**
      * The organization name.
     */
     name: string = "My Organization",
     /**
-     * The organization slug
+     * The organization slug.
     */
     slug: string = "my-org",
     /**
      * The organization logo.
     */
-    logo?: string = "https://example.com/logo.png" 
+    logo?: string = "https://example.com/logo.png",
+    /**
+    * The metadata of the organization.
+    */
+    metadata?: Record<string, any>,
+    /**
+    * The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.
+    * @serverOnly
+    */
+    userId?: string = "some_user_id",
   }
   ```
 </APIMethod>
-
-
----
-
-
 
 #### Restrict who can create an organization
 

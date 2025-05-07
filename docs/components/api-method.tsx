@@ -17,6 +17,7 @@ type Property = {
 	type: string;
 	exampleValue: string | null;
 	comments: string | null;
+	isServerOnly: boolean;
 };
 
 export const APIMethod = ({
@@ -102,6 +103,7 @@ export const APIMethod = ({
 		exampleValue: null,
 		propName: "",
 		type: "",
+		isServerOnly: false,
 	};
 
 	let functionName: string = "";
@@ -109,6 +111,7 @@ export const APIMethod = ({
 
 	let withinApiMethodType = false;
 	let hasAlreadyDefinedApiMethodType = false;
+	let isServerOnly_ = false;
 
 	let code_prefix = "";
 	let code_suffix = "";
@@ -152,8 +155,13 @@ export const APIMethod = ({
 			} else if (line.startsWith("*/")) {
 				continue;
 			} else {
-                if(line === "*" || line === "* ") continue;
-				currentJSDocDescription += line.replace("* ", "") + " ";
+				if (line === "*" || line === "* ") continue;
+				line = line.replace("* ", "");
+				if (line.trim() === "@serverOnly") {
+					isServerOnly_ = true;
+					continue;
+				}
+				currentJSDocDescription += line + " ";
 			}
 		} else {
 			// New property field
@@ -166,9 +174,9 @@ export const APIMethod = ({
 				.replace(propName, "")
 				.replace("?", "")
 				.replace(":", "")
-				.replace("=", " ")
-				.split(" ")
-				.filter((x) => x !== "")[0];
+				.split("=")[0]
+				.trim()!;
+
 			let exampleValue = !line.includes("=")
 				? null
 				: line
@@ -212,15 +220,18 @@ export const APIMethod = ({
 				isOptional,
 				propName,
 				type: propType,
+				isServerOnly: isServerOnly_,
 			};
 
-			console.log(property);
+			if (isServerOnly_ === true) isServerOnly_ = false;
+
 			props.push(property);
 		}
 	}
 
 	let body = ``;
 	for (const prop of props) {
+		if (prop.isServerOnly) continue;
 		if (body === "") body += "{\n";
 		body += `    ${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
@@ -238,7 +249,7 @@ export const APIMethod = ({
 		/>
 	);
 
-	const clientTable = <TypeTable props={props} />;
+	const clientTable = <TypeTable props={props} isServer={false} />;
 
 	let serverBody = "";
 
@@ -247,7 +258,7 @@ export const APIMethod = ({
 		if (body2 === "") body2 += "{\n";
 		body2 += `        ${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		},\n`;
+		},${prop.isServerOnly ? " // Server only property." : ""}\n`;
 	}
 	if (body2 !== "") body2 += "    },";
 
@@ -259,7 +270,7 @@ export const APIMethod = ({
 			serverBody += `    query: ${body2}\n}`;
 		}
 	}
-	const serverTable = <TypeTable props={props} />;
+	const serverTable = <TypeTable props={props} isServer />;
 
 	const serverCodeBlock = (
 		<DynamicCodeBlock
@@ -272,31 +283,35 @@ export const APIMethod = ({
 
 	return (
 		<>
-			<Endpoint
-				method={method || "GET"}
-				path={path}
-				isServerOnly={typeof isServerOnly === "boolean" ? isServerOnly : false}
-				className="mt-4"
-			/>
 			{isServerOnly ? (
 				<>
 					<div className="mt-4" />
 					{serverCodeBlock}
 				</>
 			) : (
-				<Tabs items={["client", "server"]} className="rounded-sm">
+				<Tabs items={["client", "server"]} className="mb-0 rounded-sm">
 					<Tab value="client">
-						{clientMessage ? <p className="mb-3 break-words text-wrap">{clientMessage}</p> : null}
+						{clientMessage ? (
+							<p className="mb-3 break-words text-wrap">{clientMessage}</p>
+						) : null}
 						{clientCodeBlock}
 						{clientTable}
 					</Tab>
 					<Tab value="server">
-						{serverMessage ? <p className="mb-3 break-words text-wrap">{serverMessage}</p> : null}
+						{serverMessage ? (
+							<p className="mb-3 break-words text-wrap">{serverMessage}</p>
+						) : null}
 						{serverCodeBlock}
 						{serverTable}
 					</Tab>
 				</Tabs>
 			)}
+			<Endpoint
+				method={method || "GET"}
+				path={path}
+				isServerOnly={typeof isServerOnly === "boolean" ? isServerOnly : false}
+				className="-mt-px"
+			/>
 		</>
 	);
 };
@@ -335,9 +350,12 @@ function getChildren(
 	}
 }
 
-function TypeTable({ props }: { props: Property[] }) {
+function TypeTable({
+	props,
+	isServer,
+}: { props: Property[]; isServer: boolean }) {
 	return (
-		<Table className="mt-3 mb-0">
+		<Table className="mt-3 mb-0 overflow-hidden">
 			<TableHeader>
 				<TableRow>
 					<TableHead className="text-primary w-[100px]">Prop</TableHead>
@@ -346,22 +364,31 @@ function TypeTable({ props }: { props: Property[] }) {
 				</TableRow>
 			</TableHeader>
 			<TableBody>
-				{props.map((prop, i) => (
-					<TableRow key={i}>
-						<TableCell>
-							<code>{prop.propName}</code>
-							{prop.isOptional ? (
-								<span className="mx-2 text-xs text-muted-foreground">
-									(optional)
-								</span>
-							) : null}
-						</TableCell>
-						<TableCell>{prop.description}</TableCell>
-						<TableCell>
-							<code>{prop.type}</code>
-						</TableCell>
-					</TableRow>
-				))}
+				{props.map((prop, i) =>
+					prop.isServerOnly && isServer === false ? null : (
+						<TableRow key={i}>
+							<TableCell>
+								<code>
+									{prop.propName}
+									{prop.isOptional ? "?" : ""}
+								</code>
+								{prop.isServerOnly ? (
+									<span className="mx-2 text-xs text-muted-foreground">
+										(server-only)
+									</span>
+								) : null}
+							</TableCell>
+							<TableCell className="max-w-[500px] overflow-hidden">
+								<div className="w-full h-fit text-wrap break-words ">
+									{prop.description}
+								</div>
+							</TableCell>
+							<TableCell>
+								<code>{prop.type}</code>
+							</TableCell>
+						</TableRow>
+					),
+				)}
 			</TableBody>
 		</Table>
 	);
