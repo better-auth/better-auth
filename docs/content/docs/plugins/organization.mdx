@@ -65,21 +65,36 @@ Once you've installed the plugin, you can start using the organization plugin to
 
 ## Organization
 
+
+
+---
+
+
+
 ### Create an organization
 
-To create an organization, you need to provide:
+<APIMethod path="/organization/create" method="POST">
+  ```ts
+  type createOrganization = {
+    /**
+     * The organization name.
+    */
+    name: string = "My Organization",
+    /**
+     * The organization slug
+    */
+    slug: string = "my-org",
+    /**
+     * The organization logo.
+    */
+    logo?: string = "https://example.com/logo.png" 
+  }
+  ```
+</APIMethod>
 
-- `name`: The name of the organization.
-- `slug`: The slug of the organization.
-- `logo`: The logo of the organization. (Optional)
 
-```ts title="auth-client.ts"
-await authClient.organization.create({
-    name: "My Organization",
-    slug: "my-org",
-    logo: "https://example.com/logo.png"
-})
-```
+---
+
 
 
 #### Restrict who can create an organization

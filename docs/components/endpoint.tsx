@@ -5,6 +5,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./ui/tooltip";
+import { cn } from "@/lib/utils";
 
 function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
 	return (
@@ -18,13 +19,20 @@ export function Endpoint({
 	path,
 	method,
 	isServerOnly,
+	className,
 }: {
 	path: string;
 	method: "POST" | "GET" | "DELETE" | "PUT";
 	isServerOnly?: boolean;
+	className?: string;
 }) {
 	return (
-		<div className="relative flex items-center w-full gap-2 p-2 border rounded-md border-muted bg-fd-secondary/50">
+		<div
+			className={cn(
+				"relative flex items-center w-full gap-2 p-2 border rounded-md border-muted bg-fd-secondary/50",
+				className,
+			)}
+		>
 			<Method method={method} />
 			<span className="font-mono text-sm text-muted-foreground">{path}</span>
 			{isServerOnly && (

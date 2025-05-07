@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
+import { APIMethod } from "@/components/api-method";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -93,6 +94,7 @@ export default async function Page({
 						Accordion,
 						Accordions,
 						Endpoint,
+						APIMethod,
 						Callout: ({ children, ...props }) => (
 							<defaultMdxComponents.Callout
 								{...props}
