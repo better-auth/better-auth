@@ -278,6 +278,7 @@ export function regenerateApiKey({
 
 			return ctx.json({
 				...updatedApiKey,
+				key: key,
 				metadata: updatedApiKey.metadata
 					? safeJSONParse(
 							//@ts-ignore - from DB, this value is always a string
