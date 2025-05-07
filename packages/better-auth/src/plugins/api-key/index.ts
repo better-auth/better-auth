@@ -248,6 +248,22 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 			/**
 			 * ### Endpoint
 			 *
+			 * POST `/api-key/regenerate`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.regenerateApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.regenerate`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-regenerate)
+			 */
+			regenerateApiKey: routes.regenerateApiKey,
+			/**
+			 * ### Endpoint
+			 *
 			 * POST `/api-key/verify`
 			 *
 			 * ### API Methods

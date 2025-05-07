@@ -9,6 +9,7 @@ import { getApiKey } from "./get-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
+import { regenerateApiKey } from "./regenerate-api-key";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -84,6 +85,12 @@ export function createApiKeyRoutes({
 }) {
 	return {
 		createApiKey: createApiKey({
+			keyGenerator,
+			opts,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
+		regenerateApiKey: regenerateApiKey({
 			keyGenerator,
 			opts,
 			schema,
