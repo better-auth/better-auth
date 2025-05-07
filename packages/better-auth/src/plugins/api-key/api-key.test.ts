@@ -119,6 +119,65 @@ describe("api-key", async () => {
 		expect(apiKey.requestCount).toEqual(0);
 		expect(apiKey.remaining).toBeNull();
 		expect(apiKey.lastRequest).toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
+	});
+
+	it("should have the real value from rateLimitEnabled", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: false,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(false);
+	});
+
+	it("should have true if the rate limit is undefined", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: undefined,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
+	});
+
+	it("should respect rateLimit configuration from plugin options", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						rateLimit: {
+							enabled: false,
+							timeWindow: 1000,
+							maxRequests: 10,
+						},
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		const apiKeyResult = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		expect(apiKeyResult).not.toBeNull();
+		expect(apiKeyResult.rateLimitEnabled).toBe(false);
+		expect(apiKeyResult.rateLimitTimeWindow).toBe(1000);
+		expect(apiKeyResult.rateLimitMax).toBe(10);
 	});
 
 	it("should create the API key with the given name", async () => {
