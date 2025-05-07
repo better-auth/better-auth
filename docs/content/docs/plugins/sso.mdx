@@ -75,64 +75,61 @@ A redirect URL will be automatically generated using the provider ID. For instan
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
-```ts title="register-provider.ts"
-import { authClient } from "@/lib/auth-client";
+      ```ts title="register-provider.ts"
+      import { authClient } from "@/lib/auth-client";
 
-// only with issuer if the provider supports discovery
-await authClient.sso.register({
-issuer: "https://idp.example.com",
-providerId: "example-provider",
-});
+      // only with issuer if the provider supports discovery
+      await authClient.sso.register({
+        issuer: "https://idp.example.com",
+        providerId: "example-provider",
+      });
 
-// with all fields
-await authClient.sso.register({
-issuer: "https://idp.example.com",
-domain: "example.com",
-clientId: "client-id",
-clientSecret: "client-secret",
-authorizationEndpoint: "https://idp.example.com/authorize",
-tokenEndpoint: "https://idp.example.com/token",
-jwksEndpoint: "https://idp.example.com/jwks",
-mapping: {
-id: "sub",
-email: "email",
-emailVerified: "email_verified",
-name: "name",
-image: "picture",
-},
-providerId: "example-provider",
-});
-
-````
-    </Tab>
-
-    <Tab value="server">
-```ts title="register-provider.ts"
-const { headers } = await signInWithTestUser();
-await auth.api.createOIDCProvider({
-    body: {
+      // with all fields
+      await authClient.sso.register({
         issuer: "https://idp.example.com",
         domain: "example.com",
-        clientId: "your-client-id",
-        clientSecret: "your-client-secret",
+        clientId: "client-id",
+        clientSecret: "client-secret",
         authorizationEndpoint: "https://idp.example.com/authorize",
         tokenEndpoint: "https://idp.example.com/token",
         jwksEndpoint: "https://idp.example.com/jwks",
         mapping: {
-            id: "sub",
-            email: "email",
-            emailVerified: "email_verified",
-            name: "name",
-            image: "picture",
+          id: "sub",
+          email: "email",
+          emailVerified: "email_verified",
+          name: "name",
+          image: "picture",
         },
         providerId: "example-provider",
-    },
-    headers,
-});
-````
-
+      });
+      ```
     </Tab>
 
+    <Tab value="server">
+    ```ts title="register-provider.ts"
+    const { headers } = await signInWithTestUser();
+    await auth.api.createOIDCProvider({
+        body: {
+            issuer: "https://idp.example.com",
+            domain: "example.com",
+            clientId: "your-client-id",
+            clientSecret: "your-client-secret",
+            authorizationEndpoint: "https://idp.example.com/authorize",
+            tokenEndpoint: "https://idp.example.com/token",
+            jwksEndpoint: "https://idp.example.com/jwks",
+            mapping: {
+                id: "sub",
+                email: "email",
+                emailVerified: "email_verified",
+                name: "name",
+                image: "picture",
+            },
+            providerId: "example-provider",
+        },
+        headers,
+    });
+    ```
+    </Tab>
 </Tabs>
 
 ### Sign In with SSO
@@ -254,7 +251,6 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 - `userId`: The user id.
 - `providerId`: The provider id. Used to identify a provider and to generate a redirect URL.
 - `organizationId`: The organization Id. If provider is linked to an organization.
-
 
 ## Options
 

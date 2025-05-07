@@ -191,6 +191,7 @@ The plugin require a new table in the database to store passkey data.
                 name: { type: "string", required: false },
                 publicKey: { type: "string", required: true },
                 userId: { type: "string", required: true, references: { model: "user", field: "id" } },
+                credentialID: {type: "string", required: true},
                 counter: { type: "number", required: true },
                 deviceType: { type: "string", required: true },
                 backedUp: { type: "boolean", required: true },
@@ -206,6 +207,7 @@ The plugin require a new table in the database to store passkey data.
 - `name`: The name of the passkey.
 - `publicKey`: The public key of the passkey.
 - `userId`: The id of the user.
+- `credentialID`: The unique identifier of the registered credential.
 - `counter`: The counter of the passkey.
 - `deviceType`: The type of device used to register the passkey.
 - `backedUp`: Whether the passkey is backed up.

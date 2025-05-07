@@ -754,7 +754,7 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
       },
       requestCount: {
         type: "number",
-        required: false,
+        required: true,
       },
       remaining: {
         type: "number",
@@ -796,7 +796,7 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
 - `key`: The hashed API key itself.
 - `userId`: The id of the user who created the API key.
 - `refillInterval`: The interval to refill the key in milliseconds.
-- `refillAmount`: The amount to refill the key in milliseconds.
+- `refillAmount`: The amount to refill the remaining count of the key.
 - `lastRefillAt`: The date and time when the key was last refilled.
 - `enabled`: Whether the API key is enabled.
 - `rateLimitEnabled`: Whether the API key has rate limiting enabled.
