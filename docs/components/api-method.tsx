@@ -22,7 +22,6 @@ type Property = {
 
 export const APIMethod = ({
 	path,
-	fetchOptions,
 	isServerOnly,
 	method,
 	children,
@@ -53,10 +52,6 @@ export const APIMethod = ({
 	 * @default false
 	 */
 	isServerOnly?: boolean;
-	/**
-	 * Fetch options to include in the API call.
-	 */
-	fetchOptions?: Record<string, any>;
 	/**
 	 * The `ts` codeblock which describes the API method.
 	 * I recommend checking other parts of the Better-Auth docs which is using this component to get an idea of how to
@@ -94,7 +89,7 @@ export const APIMethod = ({
 		.join("")
 		.split("\n");
 
-	const props: Property[] = [];
+	let props: Property[] = [];
 
 	const placeholderProperty: Property = {
 		isOptional: false,
@@ -228,11 +223,18 @@ export const APIMethod = ({
 			props.push(property);
 		}
 	}
+	// Sort the order of properties.
+	props = sortProperties(props);
 
 	let body = ``;
+	let isOptionalPropertiesSection = false;
 	for (const prop of props) {
 		if (prop.isServerOnly) continue;
 		if (body === "") body += "{\n";
+		if (!isOptionalPropertiesSection && prop.isOptional) {
+			isOptionalPropertiesSection = true;
+			body += `    // Optional Properties:\n`;
+		}
 		body += `    ${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
 		},\n`;
@@ -254,20 +256,36 @@ export const APIMethod = ({
 	let serverBody = "";
 
 	let body2 = ``;
+	let isOptionalPropertiesSection2 = false;
+	let isServerOnlyPropertiesSection = false;
 	for (const prop of props) {
 		if (body2 === "") body2 += "{\n";
+		if (!isOptionalPropertiesSection2 && prop.isOptional) {
+			isOptionalPropertiesSection2 = true;
+			body2 += `        // Optional Properties:\n`;
+		}
+		if (!isServerOnlyPropertiesSection && prop.isServerOnly) {
+			isServerOnlyPropertiesSection = true;
+			body2 += `        // Server Only Properties:\n`;
+		}
 		body2 += `        ${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		},${prop.isServerOnly ? " // Server only property." : ""}\n`;
+		},${prop.isServerOnly && !prop.isOptional ? " // required" : ""}\n`;
 	}
 	if (body2 !== "") body2 += "    },";
+
+	let fetchOptions = "";
+	if (requireSession) {
+		fetchOptions +=
+			"\n    fetchOptions: {\n        // This endpoint requires session cookies.\n        headers: await headers(),\n    },";
+	}
 
 	if (props.length > 0) {
 		serverBody += "{\n";
 		if (method === "POST") {
-			serverBody += `    body: ${body2}\n}`;
+			serverBody += `    body: ${body2}${fetchOptions}\n}`;
 		} else {
-			serverBody += `    query: ${body2}\n}`;
+			serverBody += `    query: ${body2}${fetchOptions}\n}`;
 		}
 	}
 	const serverTable = <TypeTable props={props} isServer />;
@@ -392,4 +410,15 @@ function TypeTable({
 			</TableBody>
 		</Table>
 	);
+}
+
+function sortProperties(props: Property[]): Property[] {
+	return props.slice().sort((a, b) => {
+		const rank = (p: Property) => {
+			if (p.isServerOnly) return 2; // Return server only props last
+			if (p.isOptional) return 1; // Return optional properties second
+			return 0; // Return all required props first.
+		};
+		return rank(a) - rank(b);
+	});
 }
