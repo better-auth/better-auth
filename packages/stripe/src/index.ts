@@ -215,7 +215,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					try {
-						let stripeCustomer;
+						let stripeCustomer: Stripe.Customer | null = null;
 						
 						// Check for existing customer if preventDuplicateCustomers is enabled
 						if (options.preventDuplicateCustomers) {
@@ -983,7 +983,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							create: {
 								async after(user, ctx) {
 									if (ctx && options.createCustomerOnSignUp) {
-										let stripeCustomer;
+										let stripeCustomer: Stripe.Customer | null = null;
 										
 										// Check for existing customer if preventDuplicateCustomers is enabled
 										if (options.preventDuplicateCustomers) {
