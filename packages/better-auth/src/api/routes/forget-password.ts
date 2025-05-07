@@ -284,6 +284,13 @@ export const resetPassword = createAuthEndpoint(
 			hashedPassword,
 			ctx,
 		);
+
+		await ctx.context.internalAdapter.updateUser(
+			userId,
+			{ emailVerified: true },
+			ctx,
+		);
+
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
