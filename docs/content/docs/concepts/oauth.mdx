@@ -72,7 +72,7 @@ await auth.api.linkSocialAccount({
 
 ### Get Access Token
 
-To get the access token for a social provider, you can use the `getAccessToken` function with the `authClient` or `auth.api` for server-side usage.
+To get the access token for a social provider, you can use the `getAccessToken` function with the `authClient` or `auth.api` for server-side usage. When you use this endpoint, if the access token is expired, it will be refreshed.
 
 ```ts
 const { accessToken } = await authClient.getAccessToken({
