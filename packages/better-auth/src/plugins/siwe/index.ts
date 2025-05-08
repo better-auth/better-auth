@@ -4,26 +4,19 @@ import { SiweMessage, generateNonce } from "siwe";
 import { z } from "zod";
 import type { BetterAuthPlugin } from "../../types";
 import type { SiweUser } from "./types";
+import { schema } from "./schema";
+import { getOrigin } from "../../utils/url";
 
 export interface SIWEPluginOptions {
 	domain: string;
 	suppressSiweExceptions?: boolean;
+	emailDomainName?: string;
 }
 
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
-		schema: {
-			user: {
-				fields: {
-					publicKey: {
-						type: "string",
-						unique: true,
-						required: false,
-					},
-				},
-			},
-		},
+		schema,
 		endpoints: {
 			// Generate nonce endpoint
 			nonce: createAuthEndpoint(
@@ -31,17 +24,18 @@ export const siwe = (options: SIWEPluginOptions) =>
 				{
 					method: "POST",
 					body: z.object({
-						publicKey: z
+						walletAddress: z
 							.string()
 							.regex(/^0x[a-fA-F0-9]{40}$/)
 							.transform((value) => value.toLowerCase()),
 					}),
 				},
 				async (ctx) => {
+					const { walletAddress } = ctx.body;
 					const nonce = generateNonce();
 					// Store nonce with 15-minute expiration
 					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `siwe:${ctx.body.publicKey.toLowerCase()}`,
+						identifier: `siwe:${walletAddress.toLowerCase()}`,
 						value: nonce,
 						expiresAt: new Date(Date.now() + 15 * 60 * 1000),
 					});
@@ -57,12 +51,13 @@ export const siwe = (options: SIWEPluginOptions) =>
 					body: z.object({
 						message: z.string(),
 						signature: z.string(),
-						publicKey: z.string(),
+						walletAddress: z.string(),
+						ensName: z.string().optional(),
 					}),
 					requireRequest: true,
 				},
 				async (ctx) => {
-					const { message, signature } = ctx.body;
+					const { message, signature, walletAddress, ensName } = ctx.body;
 					// Parse and validate SIWE message
 
 					const siweMessage = new SiweMessage(message);
@@ -71,7 +66,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 						// Find stored nonce to check it's validity
 						const verification =
 							await ctx.context.internalAdapter.findVerificationValue(
-								`siwe:${ctx.body.publicKey.toLowerCase()}`,
+								`siwe:${walletAddress.toLowerCase()}`,
 							);
 						// Ensure nonce is valid and not expired
 						if (!verification || new Date() > verification.expiresAt) {
@@ -107,20 +102,20 @@ export const siwe = (options: SIWEPluginOptions) =>
 							model: "user",
 							where: [
 								{
-									field: "publicKey",
+									field: "walletAddress",
 									operator: "eq",
-									value: ctx.body.publicKey,
+									value: walletAddress,
 								},
 							],
 						});
 
 						if (!user) {
-							const tempEmail = `${ctx.body.publicKey}@${process.env.NEXT_PUBLIC_BASE_URL}`;
+							const { emailDomainName = getOrigin(ctx.context.baseURL) } = options || {};
+							const email = `${walletAddress}@${emailDomainName}`;
 							user = await ctx.context.internalAdapter.createUser({
-								name: ctx.body.publicKey,
-								email: tempEmail,
-								publicKey: ctx.body.publicKey,
-								avatar: "",
+								name: ensName ?? walletAddress, // TODO: should fallback to something else other than walletAddress
+								email,
+								walletAddress,
 							});
 						}
 
