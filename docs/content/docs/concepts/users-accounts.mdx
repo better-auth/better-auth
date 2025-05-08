@@ -271,13 +271,13 @@ export const auth = betterAuth({
         account: {
             create: {
                 before(account, context) {
-                     const withEncryptedTokens = { ...account };
+                    const withEncryptedTokens = { ...account };
                     if (account.accessToken) {
-                        const encryptedAccessToken = encrypt(account.accessToken)  // [!code focus]
+                        const encryptedAccessToken = encrypt(account.accessToken)  // [!code highlight]
                         withEncryptedTokens.accessToken = encryptedAccessToken;
                     }
                     if (account.refreshToken) {
-                        const encryptedRefreshToken = encrypt(account.refreshToken); // [!code focus]
+                        const encryptedRefreshToken = encrypt(account.refreshToken); // [!code highlight]
                         withEncryptedTokens.refreshToken = encryptedRefreshToken;
                     }
                     return {
