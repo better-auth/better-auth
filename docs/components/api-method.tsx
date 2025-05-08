@@ -157,8 +157,13 @@ export const APIMethod = ({
 					/>
 					{clientOnlyNote || note ? (
 						<Note>
-							{clientOnlyNote}
 							{note}
+							{clientOnlyNote ? (
+								<>
+									<br />
+									{clientOnlyNote}
+								</>
+							) : null}
 						</Note>
 					) : null}
 					<DynamicCodeBlock
@@ -179,7 +184,12 @@ export const APIMethod = ({
 					{serverOnlyNote || note ? (
 						<Note>
 							{note}
-							{serverOnlyNote}
+							{serverOnlyNote ? (
+								<>
+									<br />
+									{serverOnlyNote}
+								</>
+							) : null}
 						</Note>
 					) : null}
 					{serverCodeBlock}
@@ -446,7 +456,6 @@ const indentationSpace = `    `;
 
 function createClientBody({ props }: { props: Property[] }) {
 	let body = ``;
-	let isOptionalPropertiesSection = false;
 	let currentIndentation = 0;
 
 	let i = -1;
@@ -546,7 +555,7 @@ function Note({ children }: { children: ReactNode }) {
 			<span className="w-full -mb-2 text-xs select-none text-muted-foreground">
 				Notes
 			</span>
-			{children as any}
+			<p className="mt-0 mb-0">{children as any}</p>
 		</div>
 	);
 }
