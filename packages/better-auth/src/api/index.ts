@@ -28,6 +28,7 @@ import {
 	deleteUserCallback,
 	unlinkAccount,
 	refreshToken,
+	getAccessToken,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -112,6 +113,7 @@ export function getEndpoints<
 		deleteUserCallback,
 		unlinkAccount,
 		refreshToken,
+		getAccessToken,
 	};
 	const endpoints = {
 		...baseEndpoints,
