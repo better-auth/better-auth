@@ -238,6 +238,9 @@ function TypeTable({
 	props,
 	isServer,
 }: { props: Property[]; isServer: boolean }) {
+	if (!isServer && !props.filter((x) => !x.isServerOnly).length) return null;
+	else if (!props.length) return null;
+	
 	return (
 		<Table className="mt-2 mb-0 overflow-hidden">
 			<TableHeader>
@@ -306,7 +309,8 @@ function parseCode(children: JSX.Element) {
 	let withinApiMethodType = false;
 	let hasAlreadyDefinedApiMethodType = false;
 	let isServerOnly_ = false;
-	let nestPath: string[] = [];
+	let nestPath: string[] = []; // str arr segmented-path, eg: ["data", "metadata", "something"]
+	let serverOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
 
 	let code_prefix = "";
 	let code_suffix = "";
@@ -385,6 +389,13 @@ function parseCode(children: JSX.Element) {
 				propType = `Object`;
 				isTheStartOfNest = true;
 				nestPath.push(propName);
+				if (isServerOnly_) {
+					serverOnlyPaths.push(nestPath.join("."));
+				}
+			}
+
+			if (serverOnlyPaths.includes(nestPath.join("."))) {
+				isServerOnly_ = true;
 			}
 
 			let exampleValue = !line.includes("=")
@@ -508,10 +519,26 @@ function createServerBody({
 
 		let addComment = false;
 		let comment: string[] = [];
-		if (!prop.isOptional || prop.comments || prop.isServerOnly)
-			addComment = true;
 
-		if (prop.isServerOnly) comment.push("server-only");
+		if (!prop.isOptional || prop.comments) {
+			addComment = true;
+		}
+
+		if (
+			prop.isServerOnly &&
+			!(
+				prop.path.length &&
+				props.find(
+					(x) =>
+						x.path.join(".") ===
+							prop.path.slice(0, prop.path.length - 2).join(".") &&
+						x.propName === prop.path[prop.path.length - 1],
+				)
+			)
+		) {
+			comment.push("server-only");
+			addComment = true;
+		}
 		if (!prop.isOptional) comment.push("required");
 		if (prop.comments) comment.push(prop.comments);
 
