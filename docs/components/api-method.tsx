@@ -20,6 +20,16 @@ type Property = {
 	isServerOnly: boolean;
 };
 
+const placeholderProperty: Property = {
+	isOptional: false,
+	comments: null,
+	description: null,
+	exampleValue: null,
+	propName: "",
+	type: "",
+	isServerOnly: false,
+};
+
 export const APIMethod = ({
 	path,
 	isServerOnly,
@@ -76,6 +86,163 @@ export const APIMethod = ({
 	 */
 	message?: string;
 }) => {
+	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
+
+	props = sortProperties(props);
+
+	const authClientMethodPath = pathToDotNotation(path);
+	const clientBody = createClientBody({ props });
+	const serverBody = createServerBody({
+		props,
+		method: method ?? "GET",
+		requireSession: requireSession ?? false,
+	});
+
+	const serverCodeBlock = (
+		<DynamicCodeBlock
+			code={`${code_prefix}${
+				noResult ? "" : "const data = "
+			}await auth.api.${functionName}(${serverBody});${code_suffix}`}
+			lang="ts"
+		/>
+	);
+
+	return (
+		<>
+			{isServerOnly ? (
+				<>
+					<div className="mt-4" />
+					{serverCodeBlock}
+				</>
+			) : (
+				<Tabs items={["client", "server"]} className="mb-0 rounded-sm">
+					<Tab value="client">
+						{clientMessage || message ? (
+							<p className="mb-3 text-sm break-words text-wrap">
+								{message}
+								{clientMessage}
+							</p>
+						) : null}
+						<DynamicCodeBlock
+							code={`${code_prefix}${
+								noResult ? "" : "const { data, error } = "
+							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
+							lang="ts"
+						/>
+						<TypeTable props={props} isServer={false} />
+					</Tab>
+					<Tab value="server">
+						{serverMessage || message ? (
+							<p className="mb-3 text-sm break-words text-wrap">
+								{message}
+								{serverMessage}
+							</p>
+						) : null}
+						{serverCodeBlock}
+						<TypeTable props={props} isServer />
+					</Tab>
+				</Tabs>
+			)}
+			<Endpoint
+				method={method || "GET"}
+				path={path}
+				isServerOnly={isServerOnly ?? false}
+				className="-mt-px"
+			/>
+		</>
+	);
+};
+
+function pathToDotNotation(input: string): string {
+	return input
+		.split("/") // split into segments
+		.filter(Boolean) // remove empty strings (from leading '/')
+		.map((segment) =>
+			segment
+				.split("-") // split kebab-case
+				.map((word, i) =>
+					i === 0
+						? word.toLowerCase()
+						: word.charAt(0).toUpperCase() + word.slice(1),
+				)
+				.join(""),
+		)
+		.join(".");
+}
+
+function getChildren(
+	x:
+		| ({ props: { children: string } } | string)
+		| ({ props: { children: string } } | string)[],
+): string[] {
+	if (Array.isArray(x)) {
+		const res = [];
+		for (const item of x) {
+			res.push(getChildren(item));
+		}
+		return res.flat();
+	} else {
+		if (typeof x === "string") return [x];
+		return [x.props.children];
+	}
+}
+
+function TypeTable({
+	props,
+	isServer,
+}: { props: Property[]; isServer: boolean }) {
+	return (
+		<Table className="mt-3 mb-0 overflow-hidden">
+			<TableHeader>
+				<TableRow>
+					<TableHead className="text-primary w-[100px]">Prop</TableHead>
+					<TableHead className="text-primary">Description</TableHead>
+					<TableHead className="text-primary w-[100px]">Type</TableHead>
+				</TableRow>
+			</TableHeader>
+			<TableBody>
+				{props.map((prop, i) =>
+					prop.isServerOnly && isServer === false ? null : (
+						<TableRow key={i}>
+							<TableCell>
+								<code>
+									{prop.propName}
+									{prop.isOptional ? "?" : ""}
+								</code>
+								{prop.isServerOnly ? (
+									<span className="mx-2 text-xs text-muted-foreground">
+										(server-only)
+									</span>
+								) : null}
+							</TableCell>
+							<TableCell className="max-w-[500px] overflow-hidden">
+								<div className="w-full break-words h-fit text-wrap ">
+									{prop.description}
+								</div>
+							</TableCell>
+							<TableCell>
+								<code>{prop.type}</code>
+							</TableCell>
+						</TableRow>
+					),
+				)}
+			</TableBody>
+		</Table>
+	);
+}
+
+function sortProperties(props: Property[]): Property[] {
+	return props.slice().sort((a, b) => {
+		const rank = (p: Property) => {
+			if (p.isServerOnly) return 2; // Return server only props last
+			if (p.isOptional) return 1; // Return optional properties second
+			return 0; // Return all required props first.
+		};
+		return rank(a) - rank(b);
+	});
+}
+
+function parseCode(children: JSX.Element) {
 	// These two variables are essentially taking the `children` JSX shiki code, and converting them to
 	// an array string purely of it's code content.
 	const arrayOfJSXCode = children?.props.children.props.children.props.children
@@ -95,16 +262,6 @@ export const APIMethod = ({
 		.split("\n");
 
 	let props: Property[] = [];
-
-	const placeholderProperty: Property = {
-		isOptional: false,
-		comments: null,
-		description: null,
-		exampleValue: null,
-		propName: "",
-		type: "",
-		isServerOnly: false,
-	};
 
 	let functionName: string = "";
 	let currentJSDocDescription: string = "";
@@ -228,9 +385,16 @@ export const APIMethod = ({
 			props.push(property);
 		}
 	}
-	// Sort the order of properties.
-	props = sortProperties(props);
 
+	return {
+		functionName,
+		props,
+		code_prefix,
+		code_suffix,
+	};
+}
+
+function createClientBody({ props }: { props: Property[] }) {
 	let body = ``;
 	let isOptionalPropertiesSection = false;
 	for (const prop of props) {
@@ -246,18 +410,14 @@ export const APIMethod = ({
 	}
 	if (body !== "") body += "}";
 
-	const authClientMethodPath = pathToDotNotation(path);
-	const clientCodeBlock = (
-		<DynamicCodeBlock
-			code={`${code_prefix}${
-				noResult ? "" : "const { data, error } = "
-			}await authClient.${authClientMethodPath}(${body});${code_suffix}`}
-			lang="ts"
-		/>
-	);
+	return body;
+}
 
-	const clientTable = <TypeTable props={props} isServer={false} />;
-
+function createServerBody({
+	props,
+	requireSession,
+	method,
+}: { props: Property[]; requireSession: boolean; method: string }) {
 	let serverBody = "";
 
 	let body2 = ``;
@@ -293,143 +453,5 @@ export const APIMethod = ({
 			serverBody += `    query: ${body2}${fetchOptions}\n}`;
 		}
 	}
-	const serverTable = <TypeTable props={props} isServer />;
-
-	const serverCodeBlock = (
-		<DynamicCodeBlock
-			code={`${code_prefix}${
-				noResult ? "" : "const data = "
-			}await auth.api.${functionName}(${serverBody});${code_suffix}`}
-			lang="ts"
-		/>
-	);
-
-	return (
-		<>
-			{isServerOnly ? (
-				<>
-					<div className="mt-4" />
-					{serverCodeBlock}
-				</>
-			) : (
-				<Tabs items={["client", "server"]} className="mb-0 rounded-sm">
-					<Tab value="client">
-						{clientMessage || message ? (
-							<p className="mb-3 text-sm break-words text-wrap">
-								{message}
-								{clientMessage}
-							</p>
-						) : null}
-						{clientCodeBlock}
-						{clientTable}
-					</Tab>
-					<Tab value="server">
-						{serverMessage || message ? (
-							<p className="mb-3 text-sm break-words text-wrap">
-								{message}
-								{serverMessage}
-							</p>
-						) : null}
-						{serverCodeBlock}
-						{serverTable}
-					</Tab>
-				</Tabs>
-			)}
-			<Endpoint
-				method={method || "GET"}
-				path={path}
-				isServerOnly={typeof isServerOnly === "boolean" ? isServerOnly : false}
-				className="-mt-px"
-			/>
-		</>
-	);
-};
-
-function pathToDotNotation(input: string): string {
-	return input
-		.split("/") // split into segments
-		.filter(Boolean) // remove empty strings (from leading '/')
-		.map((segment) =>
-			segment
-				.split("-") // split kebab-case
-				.map((word, i) =>
-					i === 0
-						? word.toLowerCase()
-						: word.charAt(0).toUpperCase() + word.slice(1),
-				)
-				.join(""),
-		)
-		.join(".");
-}
-
-function getChildren(
-	x:
-		| ({ props: { children: string } } | string)
-		| ({ props: { children: string } } | string)[],
-): string[] {
-	if (Array.isArray(x)) {
-		const res = [];
-		for (const item of x) {
-			res.push(getChildren(item));
-		}
-		return res.flat();
-	} else {
-		if (typeof x === "string") return [x];
-		return [x.props.children];
-	}
-}
-
-function TypeTable({
-	props,
-	isServer,
-}: { props: Property[]; isServer: boolean }) {
-	return (
-		<Table className="mt-3 mb-0 overflow-hidden">
-			<TableHeader>
-				<TableRow>
-					<TableHead className="text-primary w-[100px]">Prop</TableHead>
-					<TableHead className="text-primary">Description</TableHead>
-					<TableHead className="text-primary w-[100px]">Type</TableHead>
-				</TableRow>
-			</TableHeader>
-			<TableBody>
-				{props.map((prop, i) =>
-					prop.isServerOnly && isServer === false ? null : (
-						<TableRow key={i}>
-							<TableCell>
-								<code>
-									{prop.propName}
-									{prop.isOptional ? "?" : ""}
-								</code>
-								{prop.isServerOnly ? (
-									<span className="mx-2 text-xs text-muted-foreground">
-										(server-only)
-									</span>
-								) : null}
-							</TableCell>
-							<TableCell className="max-w-[500px] overflow-hidden">
-								<div className="w-full break-words h-fit text-wrap ">
-									{prop.description}
-								</div>
-							</TableCell>
-							<TableCell>
-								<code>{prop.type}</code>
-							</TableCell>
-						</TableRow>
-					),
-				)}
-			</TableBody>
-		</Table>
-	);
-}
-
-function sortProperties(props: Property[]): Property[] {
-	return props.slice().sort((a, b) => {
-		const rank = (p: Property) => {
-			if (p.isServerOnly) return 2; // Return server only props last
-			if (p.isOptional) return 1; // Return optional properties second
-			return 0; // Return all required props first.
-		};
-		return rank(a) - rank(b);
-	});
+	return serverBody;
 }
