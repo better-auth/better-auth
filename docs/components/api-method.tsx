@@ -140,7 +140,7 @@ export const APIMethod = ({
 						<a href={`#api-method${pathId}`}>
 							<Button
 								variant="ghost"
-								className="transition-all duration-150 ease-in-out scale-90 opacity-0"
+								className="transition-all duration-150 ease-in-out scale-90 opacity-100 md:opacity-0"
 								size={"icon"}
 							>
 								<Link className="size-4" />
@@ -454,15 +454,19 @@ function createClientBody({ props }: { props: Property[] }) {
 		i++;
 		if (prop.isServerOnly) continue;
 		if (body === "") body += "{\n";
-		if (!isOptionalPropertiesSection && prop.isOptional) {
-			isOptionalPropertiesSection = true;
-			body += `${indentationSpace.repeat(
-				prop.path.length + 1,
-			)}// Optional Properties:\n`;
-		}
+
+		let addComment = false;
+		let comment: string[] = [];
+		if (!prop.isOptional || prop.comments) addComment = true;
+
+		if (!prop.isOptional) comment.push("required");
+		if (prop.comments) comment.push(prop.comments);
+
 		body += `${indentationSpace.repeat(prop.path.length + 1)}${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		}${prop.type === "Object" ? ": {" : ","}\n`;
+		}${prop.type === "Object" ? ": {" : ","}${
+			addComment ? ` // ${comment.join(", ")}` : ""
+		}\n`;
 		if (!props[i + 1] || props[i + 1].path.length < currentIndentation) {
 			for (const index of Array(prop.path.length)
 				.fill(0)
@@ -486,25 +490,27 @@ function createServerBody({
 	let serverBody = "";
 
 	let body2 = ``;
-	let isOptionalPropertiesSection2 = false;
-	let isServerOnlyPropertiesSection = false;
 	let currentIndentation = 0;
 
 	let i = -1;
 	for (const prop of props) {
 		i++;
 		if (body2 === "") body2 += "{\n";
-		if (!isOptionalPropertiesSection2 && prop.isOptional) {
-			isOptionalPropertiesSection2 = true;
-			body2 += `${indentationSpace.repeat(prop.path.length + 2)}// Optional Properties:\n`;
-		}
-		if (!isServerOnlyPropertiesSection && prop.isServerOnly) {
-			isServerOnlyPropertiesSection = true;
-			body2 += `${indentationSpace.repeat(2)}// Server Only Properties:\n`;
-		}
+
+		let addComment = false;
+		let comment: string[] = [];
+		if (!prop.isOptional || prop.comments || prop.isServerOnly)
+			addComment = true;
+
+		if (prop.isServerOnly) comment.push("server-only");
+		if (!prop.isOptional) comment.push("required");
+		if (prop.comments) comment.push(prop.comments);
+
 		body2 += `${indentationSpace.repeat(prop.path.length + 2)}${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		}${prop.type === "Object" ? ": {" : ","}${prop.isServerOnly && !prop.isOptional ? " // required" : ""}\n`;
+		}${prop.type === "Object" ? ": {" : ","}${
+			addComment ? ` // ${comment.join(", ")}` : ""
+		}\n`;
 		if (!props[i + 1] || props[i + 1].path.length < currentIndentation) {
 			for (const index of Array(prop.path.length)
 				.fill(0)
@@ -514,7 +520,6 @@ function createServerBody({
 			}
 		}
 		currentIndentation = prop.path.length;
-	
 	}
 	if (body2 !== "") body2 += "    },";
 
