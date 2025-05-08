@@ -111,29 +111,33 @@ export const APIMethod = ({
 		/>
 	);
 
+	let pathId = path.replaceAll("/", "-");
+
 	return (
 		<>
-			{isServerOnly ? (
-				<>
-					<div className="mt-4" />
-					{serverCodeBlock}
-				</>
-			) : (
-				<Tabs defaultValue="client" className="w-full gap-0">
-					<TabsList className="relative flex justify-start w-full gap-2 p-0 mb-1 bg-transparent hover:[&>div>button]:opacity-100">
-						<TabsTrigger
-							value="client"
-							className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
-						>
-							client
-						</TabsTrigger>
-						<TabsTrigger
-							value="server"
-							className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
-						>
-							server
-						</TabsTrigger>
-						<div className="absolute right-0">
+			<div className="relative">
+				<div
+					id={`api-method${pathId}`}
+					aria-hidden
+					className="absolute invisible -top-[100px]"
+				/>
+			</div>
+			<Tabs defaultValue="client" className="w-full gap-0">
+				<TabsList className="relative flex justify-start w-full gap-2 p-0 mb-1 bg-transparent hover:[&>div>a>button]:opacity-100">
+					<TabsTrigger
+						value="client"
+						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
+					>
+						client
+					</TabsTrigger>
+					<TabsTrigger
+						value="server"
+						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
+					>
+						server
+					</TabsTrigger>
+					<div className="absolute right-0">
+						<a href={`#api-method${pathId}`}>
 							<Button
 								variant="ghost"
 								className="transition-all duration-150 ease-in-out scale-90 opacity-0"
@@ -141,47 +145,47 @@ export const APIMethod = ({
 							>
 								<Link className="size-4" />
 							</Button>
-						</div>
-					</TabsList>
-					<TabsContent value="client" className="">
-						<Endpoint
-							method={method || "GET"}
-							path={path}
-							isServerOnly={isServerOnly ?? false}
-							className="mb-2"
-						/>
-						{clientMessage || message ? (
-							<Message>
-								{clientMessage}
-								{message}
-							</Message>
-						) : null}
-						<DynamicCodeBlock
-							code={`${code_prefix}${
-								noResult ? "" : "const { data, error } = "
-							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
-							lang="ts"
-						/>
-						<TypeTable props={props} isServer={false} />
-					</TabsContent>
-					<TabsContent value="server">
-						<Endpoint
-							method={method || "GET"}
-							path={path}
-							isServerOnly={isServerOnly ?? false}
-							className="mb-2"
-						/>
-						{serverMessage || message ? (
-							<Message>
-								{message}
-								{serverMessage}
-							</Message>
-						) : null}
-						{serverCodeBlock}
-						<TypeTable props={props} isServer />
-					</TabsContent>
-				</Tabs>
-			)}
+						</a>
+					</div>
+				</TabsList>
+				<TabsContent value="client" className="">
+					<Endpoint
+						method={method || "GET"}
+						path={path}
+						isServerOnly={isServerOnly ?? false}
+						className="mb-2"
+					/>
+					{clientMessage || message ? (
+						<Message>
+							{clientMessage}
+							{message}
+						</Message>
+					) : null}
+					<DynamicCodeBlock
+						code={`${code_prefix}${
+							noResult ? "" : "const { data, error } = "
+						}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
+						lang="ts"
+					/>
+					<TypeTable props={props} isServer={false} />
+				</TabsContent>
+				<TabsContent value="server">
+					<Endpoint
+						method={method || "GET"}
+						path={path}
+						isServerOnly={isServerOnly ?? false}
+						className="mb-2"
+					/>
+					{serverMessage || message ? (
+						<Message>
+							{message}
+							{serverMessage}
+						</Message>
+					) : null}
+					{serverCodeBlock}
+					<TypeTable props={props} isServer />
+				</TabsContent>
+			</Tabs>
 		</>
 	);
 };
