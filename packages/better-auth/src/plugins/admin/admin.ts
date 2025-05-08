@@ -16,11 +16,12 @@ import {
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type AccessControl, type Role } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export interface UserWithRole extends User {
 	role?: string;
@@ -325,6 +326,71 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					return ctx.json({
 						user: updatedUser as UserWithRole,
 					});
+				},
+			),
+			getUser: createAuthEndpoint(
+				"/admin/get-user",
+				{
+					method: "GET",
+					query: z.object({
+						id: z.string({
+							description: "The id of the User",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "getUser",
+							summary: "Get an existing user",
+							description: "Get an existing user",
+							responses: {
+								200: {
+									description: "User",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { id } = ctx.query;
+
+					const canGetUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["get"],
+						},
+					});
+
+					if (!canGetUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
+							code: "YOU_ARE_NOT_ALLOWED_TO_GET_USER",
+						});
+					}
+
+					const user = await ctx.context.internalAdapter.findUserById(id);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
+					return parseUserOutput(ctx.context.options, user);
 				},
 			),
 			createUser: createAuthEndpoint(

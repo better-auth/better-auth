@@ -17,4 +17,5 @@ export const ADMIN_ERROR_CODES = {
 	YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD:
 		"You are not allowed to set users password",
 	BANNED_USER: "You have been banned from this application",
+	YOU_ARE_NOT_ALLOWED_TO_GET_USER: "You are not allowed to get user",
 } as const;
