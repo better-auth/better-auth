@@ -41,9 +41,9 @@ export const APIMethod = ({
 	children,
 	noResult,
 	requireSession,
-	clientMessage,
-	serverMessage,
-	message,
+	note,
+	clientOnlyNote,
+	serverOnlyNote,
 }: {
 	/**
 	 * Endpoint path
@@ -78,17 +78,17 @@ export const APIMethod = ({
 	 */
 	noResult?: boolean;
 	/**
-	 * A string to display above the client-auth example code-block.
+	 * A small note to display above the client-auth example code-block.
 	 */
-	clientMessage?: string;
+	clientOnlyNote?: string;
 	/**
-	 * A string to display above the server-auth example code-block.
+	 * A small note to display above the server-auth example code-block.
 	 */
-	serverMessage?: string;
+	serverOnlyNote?: string;
 	/**
-	 * A string to display above both the client & server auth example code-blocks.
+	 * A small note to display above both the client & server auth example code-blocks.
 	 */
-	message?: string;
+	note?: string;
 }) => {
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
@@ -155,11 +155,11 @@ export const APIMethod = ({
 						isServerOnly={isServerOnly ?? false}
 						className="mb-2"
 					/>
-					{clientMessage || message ? (
-						<Message>
-							{clientMessage}
-							{message}
-						</Message>
+					{clientOnlyNote || note ? (
+						<Note>
+							{clientOnlyNote}
+							{note}
+						</Note>
 					) : null}
 					<DynamicCodeBlock
 						code={`${code_prefix}${
@@ -176,11 +176,11 @@ export const APIMethod = ({
 						isServerOnly={isServerOnly ?? false}
 						className="mb-2"
 					/>
-					{serverMessage || message ? (
-						<Message>
-							{message}
-							{serverMessage}
-						</Message>
+					{serverOnlyNote || note ? (
+						<Note>
+							{note}
+							{serverOnlyNote}
+						</Note>
 					) : null}
 					{serverCodeBlock}
 					<TypeTable props={props} isServer />
@@ -497,9 +497,12 @@ function createServerBody({
 	return serverBody;
 }
 
-function Message({ children }: { children: ReactNode }) {
+function Note({ children }: { children: ReactNode }) {
 	return (
-		<div className="relative flex items-center w-full gap-2 p-2 mb-2 text-sm break-words border rounded-md text-wrap border-border bg-fd-secondary/50">
+		<div className="relative flex flex-col w-full gap-2 p-3 mb-2 break-words border rounded-md text-md text-wrap border-border bg-fd-secondary/50">
+			<span className="w-full -mb-2 text-xs select-none text-muted-foreground">
+				Notes
+			</span>
 			{children as any}
 		</div>
 	);
