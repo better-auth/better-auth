@@ -22,6 +22,7 @@ type Property = {
 	exampleValue: string | null;
 	comments: string | null;
 	isServerOnly: boolean;
+	path: string[];
 };
 
 const placeholderProperty: Property = {
@@ -32,6 +33,7 @@ const placeholderProperty: Property = {
 	propName: "",
 	type: "",
 	isServerOnly: false,
+	path: [],
 };
 
 export const APIMethod = ({
@@ -91,8 +93,6 @@ export const APIMethod = ({
 	note?: string;
 }) => {
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
-
-	props = sortProperties(props);
 
 	const authClientMethodPath = pathToDotNotation(path);
 	const clientBody = createClientBody({ props });
@@ -243,6 +243,7 @@ function TypeTable({
 						<TableRow key={i}>
 							<TableCell>
 								<code>
+									{prop.path.join(".") + (prop.path.length ? "." : "")}
 									{prop.propName}
 									{prop.isOptional ? "?" : ""}
 								</code>
@@ -266,17 +267,6 @@ function TypeTable({
 			</TableBody>
 		</Table>
 	);
-}
-
-function sortProperties(props: Property[]): Property[] {
-	return props.slice().sort((a, b) => {
-		const rank = (p: Property) => {
-			if (p.isServerOnly) return 2; // Return server only props last
-			if (p.isOptional) return 1; // Return optional properties second
-			return 0; // Return all required props first.
-		};
-		return rank(a) - rank(b);
-	});
 }
 
 function parseCode(children: JSX.Element) {
@@ -306,6 +296,7 @@ function parseCode(children: JSX.Element) {
 	let withinApiMethodType = false;
 	let hasAlreadyDefinedApiMethodType = false;
 	let isServerOnly_ = false;
+	let nestPath: string[] = [];
 
 	let code_prefix = "";
 	let code_suffix = "";
@@ -315,10 +306,15 @@ function parseCode(children: JSX.Element) {
 		const originalLine = line;
 		line = line.trim();
 		console.log(`${line}`);
-		if (line === "}" && withinApiMethodType) {
+		if (line === "}" && withinApiMethodType && !nestPath.length) {
 			withinApiMethodType = false;
 			hasAlreadyDefinedApiMethodType = true;
 			continue;
+		} else {
+			if (line === "}" && withinApiMethodType && nestPath.length) {
+				nestPath.pop();
+				continue;
+			}
 		}
 		if (
 			line.toLowerCase().startsWith("type") &&
@@ -366,12 +362,20 @@ function parseCode(children: JSX.Element) {
 			let propName = line.split(":")[0].trim();
 			const isOptional = propName.endsWith("?") ? true : false;
 			if (isOptional) propName = propName.slice(0, -1); // Remove `?` in propname.
-			const propType = line
+			let propType = line
 				.replace(propName, "")
 				.replace("?", "")
 				.replace(":", "")
 				.split("=")[0]
 				.trim()!;
+
+			let isTheStartOfNest = false;
+			if (propType === "{") {
+				// This means that it's a nested object.
+				propType = `Object`;
+				isTheStartOfNest = true;
+				nestPath.push(propName);
+			}
 
 			let exampleValue = !line.includes("=")
 				? null
@@ -417,6 +421,9 @@ function parseCode(children: JSX.Element) {
 				propName,
 				type: propType,
 				isServerOnly: isServerOnly_,
+				path: isTheStartOfNest
+					? nestPath.slice(0, nestPath.length - 1)
+					: nestPath.slice(),
 			};
 
 			if (isServerOnly_ === true) isServerOnly_ = false;
@@ -435,19 +442,36 @@ function parseCode(children: JSX.Element) {
 	};
 }
 
+const indentationSpace = `    `;
+
 function createClientBody({ props }: { props: Property[] }) {
 	let body = ``;
 	let isOptionalPropertiesSection = false;
+	let currentIndentation = 0;
+
+	let i = -1;
 	for (const prop of props) {
+		i++;
 		if (prop.isServerOnly) continue;
 		if (body === "") body += "{\n";
 		if (!isOptionalPropertiesSection && prop.isOptional) {
 			isOptionalPropertiesSection = true;
-			body += `    // Optional Properties:\n`;
+			body += `${indentationSpace.repeat(
+				prop.path.length + 1,
+			)}// Optional Properties:\n`;
 		}
-		body += `    ${prop.propName}${
+		body += `${indentationSpace.repeat(prop.path.length + 1)}${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		},\n`;
+		}${prop.type === "Object" ? ": {" : ","}\n`;
+		if (!props[i + 1] || props[i + 1].path.length < currentIndentation) {
+			for (const index of Array(prop.path.length)
+				.fill(0)
+				.map((_, i) => i)
+				.reverse()) {
+				body += `${indentationSpace.repeat(index + 1)}},\n`;
+			}
+		}
+		currentIndentation = prop.path.length;
 	}
 	if (body !== "") body += "}";
 
@@ -464,19 +488,33 @@ function createServerBody({
 	let body2 = ``;
 	let isOptionalPropertiesSection2 = false;
 	let isServerOnlyPropertiesSection = false;
+	let currentIndentation = 0;
+
+	let i = -1;
 	for (const prop of props) {
+		i++;
 		if (body2 === "") body2 += "{\n";
 		if (!isOptionalPropertiesSection2 && prop.isOptional) {
 			isOptionalPropertiesSection2 = true;
-			body2 += `        // Optional Properties:\n`;
+			body2 += `${indentationSpace.repeat(prop.path.length + 2)}// Optional Properties:\n`;
 		}
 		if (!isServerOnlyPropertiesSection && prop.isServerOnly) {
 			isServerOnlyPropertiesSection = true;
-			body2 += `        // Server Only Properties:\n`;
+			body2 += `${indentationSpace.repeat(2)}// Server Only Properties:\n`;
 		}
-		body2 += `        ${prop.propName}${
+		body2 += `${indentationSpace.repeat(prop.path.length + 2)}${prop.propName}${
 			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		},${prop.isServerOnly && !prop.isOptional ? " // required" : ""}\n`;
+		}${prop.type === "Object" ? ": {" : ","}${prop.isServerOnly && !prop.isOptional ? " // required" : ""}\n`;
+		if (!props[i + 1] || props[i + 1].path.length < currentIndentation) {
+			for (const index of Array(prop.path.length)
+				.fill(0)
+				.map((_, i) => i)
+				.reverse()) {
+				body2 += `${indentationSpace.repeat(index + 2)}},\n`;
+			}
+		}
+		currentIndentation = prop.path.length;
+	
 	}
 	if (body2 !== "") body2 += "    },";
 
