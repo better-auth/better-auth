@@ -117,6 +117,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								name: ensName ?? walletAddress, // TODO: should fallback to something else other than walletAddress
 								email,
 								walletAddress,
+								avatar: "", // TODO: implement ens avatar (?)
 							});
 						}
 
