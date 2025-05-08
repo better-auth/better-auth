@@ -110,7 +110,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 						});
 
 						if (!user) {
-							const emailDomainName = options.emailDomainName ?? getOrigin(ctx.context.baseURL);
+							const emailDomainName =
+								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
 							const email = `${walletAddress}@${emailDomainName}`;
 							user = await ctx.context.internalAdapter.createUser({
 								name: ensName ?? walletAddress, // TODO: should fallback to something else other than walletAddress

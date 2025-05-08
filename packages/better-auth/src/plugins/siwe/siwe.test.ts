@@ -68,7 +68,9 @@ describe("siwe", async (it) => {
 	});
 
 	it("should reject invalid walletAddress format", async () => {
-		const { error } = await client.siwe.nonce({ walletAddress: "not_a_valid_key" });
+		const { error } = await client.siwe.nonce({
+			walletAddress: "not_a_valid_key",
+		});
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(400);
 	});
