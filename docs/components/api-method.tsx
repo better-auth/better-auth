@@ -1,5 +1,5 @@
 import { Endpoint } from "./endpoint";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+// import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import {
 	Table,
@@ -9,6 +9,10 @@ import {
 	TableHeader,
 	TableRow,
 } from "./ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { ReactNode } from "react";
+import { Link } from "lucide-react";
+import { Button } from "./ui/button";
 
 type Property = {
 	isOptional: boolean;
@@ -115,13 +119,42 @@ export const APIMethod = ({
 					{serverCodeBlock}
 				</>
 			) : (
-				<Tabs items={["client", "server"]} className="mb-0 rounded-sm">
-					<Tab value="client">
+				<Tabs defaultValue="client" className="w-full gap-0">
+					<TabsList className="relative flex justify-start w-full gap-2 p-0 mb-1 bg-transparent hover:[&>div>button]:opacity-100">
+						<TabsTrigger
+							value="client"
+							className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
+						>
+							client
+						</TabsTrigger>
+						<TabsTrigger
+							value="server"
+							className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
+						>
+							server
+						</TabsTrigger>
+						<div className="absolute right-0">
+							<Button
+								variant="ghost"
+								className="transition-all duration-150 ease-in-out scale-90 opacity-0"
+								size={"icon"}
+							>
+								<Link className="size-4" />
+							</Button>
+						</div>
+					</TabsList>
+					<TabsContent value="client" className="">
+						<Endpoint
+							method={method || "GET"}
+							path={path}
+							isServerOnly={isServerOnly ?? false}
+							className="mb-2"
+						/>
 						{clientMessage || message ? (
-							<p className="mb-3 text-sm break-words text-wrap">
-								{message}
+							<Message>
 								{clientMessage}
-							</p>
+								{message}
+							</Message>
 						) : null}
 						<DynamicCodeBlock
 							code={`${code_prefix}${
@@ -130,25 +163,25 @@ export const APIMethod = ({
 							lang="ts"
 						/>
 						<TypeTable props={props} isServer={false} />
-					</Tab>
-					<Tab value="server">
+					</TabsContent>
+					<TabsContent value="server">
+						<Endpoint
+							method={method || "GET"}
+							path={path}
+							isServerOnly={isServerOnly ?? false}
+							className="mb-2"
+						/>
 						{serverMessage || message ? (
-							<p className="mb-3 text-sm break-words text-wrap">
+							<Message>
 								{message}
 								{serverMessage}
-							</p>
+							</Message>
 						) : null}
 						{serverCodeBlock}
 						<TypeTable props={props} isServer />
-					</Tab>
+					</TabsContent>
 				</Tabs>
 			)}
-			<Endpoint
-				method={method || "GET"}
-				path={path}
-				isServerOnly={isServerOnly ?? false}
-				className="-mt-px"
-			/>
 		</>
 	);
 };
@@ -192,7 +225,7 @@ function TypeTable({
 	isServer,
 }: { props: Property[]; isServer: boolean }) {
 	return (
-		<Table className="mt-3 mb-0 overflow-hidden">
+		<Table className="mt-2 mb-0 overflow-hidden">
 			<TableHeader>
 				<TableRow>
 					<TableHead className="text-primary w-[100px]">Prop</TableHead>
@@ -272,10 +305,12 @@ function parseCode(children: JSX.Element) {
 
 	let code_prefix = "";
 	let code_suffix = "";
+	console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
 
 	for (let line of arrayOfCode) {
 		const originalLine = line;
 		line = line.trim();
+		console.log(`${line}`);
 		if (line === "}" && withinApiMethodType) {
 			withinApiMethodType = false;
 			hasAlreadyDefinedApiMethodType = true;
@@ -381,10 +416,12 @@ function parseCode(children: JSX.Element) {
 			};
 
 			if (isServerOnly_ === true) isServerOnly_ = false;
-
+			console.log(property);
 			props.push(property);
 		}
 	}
+
+	console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
 
 	return {
 		functionName,
@@ -454,4 +491,12 @@ function createServerBody({
 		}
 	}
 	return serverBody;
+}
+
+function Message({ children }: { children: ReactNode }) {
+	return (
+		<div className="relative flex items-center w-full gap-2 p-2 mb-2 text-sm break-words border rounded-md text-wrap border-border bg-fd-secondary/50">
+			{children as any}
+		</div>
+	);
 }
