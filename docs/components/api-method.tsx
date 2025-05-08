@@ -153,7 +153,7 @@ export const APIMethod = ({
 						method={method || "GET"}
 						path={path}
 						isServerOnly={isServerOnly ?? false}
-						className="mb-2"
+						className="mt-0.5 mb-2"
 					/>
 					{clientOnlyNote || note ? (
 						<Note>
