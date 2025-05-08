@@ -421,101 +421,54 @@ You can configure trial periods for your plans:
 
 The Stripe plugin adds the following tables to your database:
 
-
-### User
-
-Table Name: `user`
-
-<DatabaseTable
-  fields={[
-    { 
-      name: "stripeCustomerId", 
-      type: "string", 
-      description: "The Stripe customer ID" 
+<SchemaDemo
+  plugin="stripe"
+  includeDefaultUser
+  height="large"
+  schema={{
+    user: {
+      fields: {
+        stripeCustomerId: { type: "string", required: true },
+      },
     },
-  ]}
+    subscription: {
+      fields: {
+        plan: { type: "string", required: true },
+        referenceId: { type: "string", required: true },
+        stripeCustomerId: { type: "string", required: true },
+        stripeSubscriptionId: { type: "string", required: true },
+        status: { type: "string", required: true },
+        periodStart: { type: "Date", required: true },
+        periodEnd: { type: "Date", required: true },
+        cancelAtPeriodEnd: { type: "boolean", required: true },
+        seats: { type: "number", required: true },
+        trialStart: { type: "Date", required: true },
+        trialEnd: { type: "Date", required: true },
+      },
+    },
+  }}
 />
 
-### Subscription
+### `user` table fields:
 
-Table Name: `subscription`
+- `stripeCustomerId`: The Stripe customer ID.
 
-<DatabaseTable
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Unique identifier for each subscription",
-      isPrimaryKey: true
-    },
-    { 
-      name: "plan", 
-      type: "string", 
-      description: "The name of the subscription plan" 
-    },
-    { 
-      name: "referenceId", 
-      type: "string", 
-      description: "The ID this subscription is associated with (user ID by default)",
-      isUnique: true
-    },
-    { 
-      name: "stripeCustomerId", 
-      type: "string", 
-      description: "The Stripe customer ID",
-      isOptional: true
-    },
-    { 
-      name: "stripeSubscriptionId", 
-      type: "string", 
-      description: "The Stripe subscription ID",
-      isOptional: true
-    },
-    { 
-      name: "status", 
-      type: "string", 
-      description: "The status of the subscription (active, canceled, etc.)",
-      defaultValue: "incomplete"
-    },
-    { 
-      name: "periodStart", 
-      type: "Date", 
-      description: "Start date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "periodEnd", 
-      type: "Date", 
-      description: "End date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "cancelAtPeriodEnd", 
-      type: "boolean", 
-      description: "Whether the subscription will be canceled at the end of the period",
-      defaultValue: false,
-      isOptional: true
-    },
-    { 
-      name: "seats", 
-      type: "number", 
-      description: "Number of seats for team plans",
-      isOptional: true
-    },
-    { 
-      name: "trialStart", 
-      type: "Date", 
-      description: "Start date of the trial period",
-      isOptional: true
-    },
-    { 
-      name: "trialEnd", 
-      type: "Date", 
-      description: "End date of the trial period",
-      isOptional: true
-    }
-  ]}
-/>
+### `subscription` table fields:
+
+- `plan`: The name of the subscription plan.
+- `referenceId`: The ID this subscription is associated with (user ID by default).
+- `stripeCustomerId`: The Stripe customer ID.
+- `stripeSubscriptionId`: The Stripe subscription ID.
+- `status`: The status of the subscription (active, canceled, etc.).
+- `periodStart`: The start date of the current billing period.
+- `periodEnd`: The end date of the current billing period.
+- `cancelAtPeriodEnd`: Whether the subscription will be canceled at the end of the period.
+- `seats`: The number of seats for team plans.
+- `trialStart`: The start date of the trial period.
+- `trialEnd`: The end date of the trial period.
+
+
+
 
 ### Customizing the Schema
 

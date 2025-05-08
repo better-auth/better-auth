@@ -1,0 +1,30 @@
+.react-flow.dark {
+	--xy-background-pattern-dots-color-default: color-mix(
+		in oklab,
+		var(--color-fd-muted-foreground) 30%,
+		transparent
+	) !important;
+
+	--xy-node-boxshadow-selected-default: 0 0 0 0.5px transparent !important;
+	--xy-node-boxshadow-hover-default: 0 0 0 0.5px transparent !important;
+	--xy-node-background-color-default: transparent !important;
+}
+
+/* minimap */
+.react-flow__minimap-mask {
+	fill: var(--card) !important;
+}
+
+/* background */
+.react-flow__background {
+	background-color: transparent !important;
+}
+
+.react-flow__node {
+	/* border: 1px solid var(--border) !important; */
+	background-color: var(--color-fd-card) !important;
+}
+
+.react-flow__handle {
+	background-color: var(--color-fd-border) !important;
+}
