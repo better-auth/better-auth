@@ -2,48 +2,38 @@
 import { createAuthEndpoint } from "./index";
 import { z } from "zod";
 
-createAuthEndpoint(
-	"/organization/update",
+// This is here because somethings auth endpoints includes `use` which are an array
+// of middlewares, however those middlewares are often variables which are not
+// defined in this context
+// This is here to act as a placeholder.
+const { orgMiddleware, orgSessionMiddleware } = {
+	orgMiddleware: () => {},
+	orgSessionMiddleware: () => {},
+};
+
+export const getFullOrganization = createAuthEndpoint(
+	"/organization/get-full-organization",
 	{
-		method: "POST",
-		body: z.object({
-			data: z
-				.object(
-					{
-						name: z
-							.string({
-								description: 'The name of the organization. Eg: "updated-name"',
-							})
-							.optional(),
-						slug: z
-							.string({
-								description: 'The slug of the organization. Eg: "updated-slug"',
-							})
-							.optional(),
-						logo: z
-							.string({
-								description: 'The logo of the organization. Eg: "new-logo.url"',
-							})
-							.optional(),
-						metadata: z
-							.record(z.string(), z.any(), {
-								description:
-									'The metadata of the organization. Eg: { customerId: "test" }',
-							})
-							.optional(),
-					},
-					{ description: "A partial list of data to update the organization." },
-				)
-				.partial(),
-			organizationId: z
-				.string({ description: 'The organization ID. Eg: "org-id"' })
-				.optional(),
-		}),
+		method: "GET",
+		query: z.optional(
+			z.object({
+				organizationId: z
+					.string({
+						description: "The organization id to get",
+					})
+					.optional(),
+				organizationSlug: z
+					.string({
+						description: "The organization slug to get",
+					})
+					.optional(),
+			}),
+		),
 		requireHeaders: true,
-		// use: [orgMiddleware],
+		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
-				description: "Update an organization",
+				description: "Get the full organization",
 				responses: {
 					"200": {
 						description: "Success",
@@ -51,7 +41,7 @@ createAuthEndpoint(
 							"application/json": {
 								schema: {
 									type: "object",
-									description: "The updated organization",
+									description: "The organization",
 									$ref: "#/components/schemas/Organization",
 								},
 							},
@@ -62,47 +52,46 @@ createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await ctx.context.getSession(ctx);
-		if (!session) {
-			throw new APIError("UNAUTHORIZED", {
-				message: "User not found",
-			});
-		}
+		const session = ctx.context.session;
 		const organizationId =
-			ctx.body.organizationId || session.session.activeOrganizationId;
+			ctx.query?.organizationSlug ||
+			ctx.query?.organizationId ||
+			session.session.activeOrganizationId;
 		if (!organizationId) {
-			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			return ctx.json(null, {
+				status: 200,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const member = await adapter.findMemberByOrgId({
-			userId: session.user.id,
-			organizationId: organizationId,
+		const organization = await adapter.findFullOrganization({
+			organizationId,
+			isSlug: !!ctx.query?.organizationSlug,
+			includeTeams: ctx.context.orgOptions.teams?.enabled,
 		});
-		if (!member) {
-			throw new APIError("BAD_REQUEST", {
+		const isMember = organization?.members.find(
+			(member) => member.userId === session.user.id,
+		);
+		if (!isMember) {
+			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 			});
 		}
-		const canUpdateOrg = hasPermission({
-			permissions: {
-				organization: ["update"],
-			},
-			role: member.role,
-			options: ctx.context.orgOptions,
-		});
-		if (!canUpdateOrg) {
-			throw new APIError("FORBIDDEN", {
-				message:
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
+		if (!organization) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 			});
 		}
-		const updatedOrg = await adapter.updateOrganization(
-			organizationId,
-			ctx.body.data,
-		);
-		return ctx.json(updatedOrg);
+		type OrganizationReturn = O["teams"] extends { enabled: true }
+			? {
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+					teams: Team[];
+				} & Organization
+			: {
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+				} & Organization;
+		return ctx.json(organization as unknown as OrganizationReturn);
 	},
 );

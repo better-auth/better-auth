@@ -1,35 +1,42 @@
+{/* -------------------------------------------------------- */}
+{/*                   APIMethod component                    */}
+{/* -------------------------------------------------------- */}
+
 <APIMethod
-  path="/organization/update"
-  method="POST"
+  path="/organization/get-full-organization"
+  method="GET"
   requireSession
 >
 ```ts
-type updateOrganization = {
-    /*
-    * A partial list of data to update the organization. 
-    */
-    data: {
-        /*
-        * The name of the organization. 
-        */
-        name?: string = "updated-name"
-        /*
-        * The slug of the organization. 
-        */
-        slug?: string = "updated-slug"
-        /*
-        * The logo of the organization. 
-        */
-        logo?: string = "new-logo.url"
-        /*
-        * The metadata of the organization. 
-        */
-        metadata?: Record<string, any> = { customerId: "test" }
-    }
-    /*
-    * The organization ID. 
-    */
-    organizationId?: string = "org-id"
+type d = {
+    /**
+     * The organization id to get 
+     */
+    organizationId?: string
+    /**
+     * The organization slug to get 
+     */
+    organizationSlug?: string
 }
 ```
 </APIMethod>
+
+{/* -------------------------------------------------------- */}
+{/*                JSDOC For the endpoint                    */}
+{/* -------------------------------------------------------- */}
+
+/**
+ * ### Endpoint
+ * 
+ * GET `/organization/get-full-organization`
+ * 
+ * ### API Methods
+ * 
+ * **server:**
+ * `auth.api.d`
+ * 
+ * **client:**
+ * `authClient.organization.getFullOrganization`
+ * 
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
+ */

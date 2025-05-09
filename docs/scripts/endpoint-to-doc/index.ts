@@ -7,22 +7,40 @@ type CreateAuthEndpointProps = Parameters<typeof BAcreateAuthEndpoint>;
 
 type Options = CreateAuthEndpointProps[1];
 
+const APIMethodsHeader = `{/* -------------------------------------------------------- */}
+{/*                   APIMethod component                    */}
+{/* -------------------------------------------------------- */}`
+
+const JSDocHeader = `{/* -------------------------------------------------------- */}
+{/*                JSDOC For the endpoint                    */}
+{/* -------------------------------------------------------- */}`
+
 export const createAuthEndpoint = async (
 	...params: Partial<CreateAuthEndpointProps>
 ) => {
 	const [path, options] = params;
-	if (!path || !options) return;
+	if (!path || !options) return console.error(`No path or options.`);
 
 	const functionName = await askQuestion(
 		"What's the function name for this endpoint? ",
 	);
+
 	console.log(`function name:`, functionName);
+
+	let jsdoc = generateJSDoc({ path, functionName, options });
+
 	let mdx = `<APIMethod${parseParams(path, options)}>\n\`\`\`ts\n${parseType(
 		functionName,
 		options,
 	)}\n\`\`\`\n</APIMethod>`;
-	console.log(`---------------\n${mdx}`);
-	fs.writeFileSync("./scripts/endpoint-to-doc/output.mdx", mdx, "utf-8");
+	console.log(`\n---------------\n${mdx}\n---------------\n\n`);
+	console.log();
+	console.log(`\n---------------\n${jsdoc}\n---------------\n\n`);
+	fs.writeFileSync(
+		"./scripts/endpoint-to-doc/output.mdx",
+		`${APIMethodsHeader}\n\n${mdx}\n\n${JSDocHeader}\n\n${jsdoc}`,
+		"utf-8",
+	);
 	console.log(`Successfully updated \`output.mdx\`!`);
 };
 
@@ -37,11 +55,13 @@ type Body = {
 };
 
 function parseType(functionName: string, options: Options) {
-	const _ = z.object({ example: z.string() });
-	const body = options.body as typeof _;
-	const parsedBody: Body[] = parseZodShape(body.shape, []);
+	const body: z.ZodAny = (
+		options.method === "GET" ? options.query : options.body
+	) as any;
 
-	console.log(parsedBody);
+	const parsedBody: Body[] = parseZodShape(body, []);
+
+	// console.log(parsedBody);
 
 	let strBody: string = convertBodyToString(parsedBody);
 
@@ -58,13 +78,13 @@ function convertBodyToString(parsedBody: Body[]) {
 		if (body.jsDocComment || body.isServerOnly) {
 			strBody += `${indentationSpaces.repeat(
 				1 + body.path.length,
-			)}/*\n${indentationSpaces.repeat(1 + body.path.length)}* ${
+			)}/**\n${indentationSpaces.repeat(1 + body.path.length)} * ${
 				body.jsDocComment
 			} ${
 				body.isServerOnly
-					? `\n${indentationSpaces.repeat(1 + body.path.length)}* @serverOnly`
+					? `\n${indentationSpaces.repeat(1 + body.path.length)} * @serverOnly`
 					: ""
-			}\n${indentationSpaces.repeat(1 + body.path.length)}*/\n`;
+			}\n${indentationSpaces.repeat(1 + body.path.length)} */\n`;
 		}
 
 		if (body.type === "Object") {
@@ -96,22 +116,33 @@ function convertBodyToString(parsedBody: Body[]) {
 	return strBody;
 }
 
-function parseZodShape(
-	shape: z.ZodObject<
-		{ example: z.ZodString },
-		"strip",
-		z.ZodTypeAny,
-		{ example: string },
-		{ example: string }
-	>["shape"],
-	path: string[],
-) {
+function parseZodShape(zod: z.ZodAny, path: string[]) {
 	const parsedBody: Body[] = [];
+
+	let isRootOptional = undefined;
+	let shape = z.object(
+		{ test: z.string({ description: "" }) },
+		{ description: "some descriptiom" },
+	).shape;
+
+	//@ts-ignore
+	if (zod._def.typeName === "ZodOptional") {
+		isRootOptional = true;
+		const eg = z.optional(z.object({}));
+		const x = zod as never as typeof eg;
+		//@ts-ignore
+		shape = x._def.innerType.shape;
+	} else {
+		const eg = z.object({});
+		const x = zod as never as typeof eg;
+		//@ts-ignore
+		shape = x.shape;
+	}
 
 	for (const [key, value] of Object.entries(shape)) {
 		if (!value) continue;
 		let description = value.description;
-		let { type, isOptional } = getType(value as any);
+		let { type, isOptional } = getType(value as any, isRootOptional);
 
 		let example = description ? description.split(" Eg: ")[1] : null;
 		if (example) description = description?.replace(" Eg: " + example, "");
@@ -134,8 +165,8 @@ function parseZodShape(
 		});
 
 		if (type === "Object") {
-			const v = value as never as z.ZodObject<{ example: z.ZodString }>;
-			parsedBody.push(...parseZodShape(v.shape, [...path, key]));
+			const v = value as never as z.ZodAny;
+			parsedBody.push(...parseZodShape(v, [...path, key]));
 		}
 	}
 	return parsedBody;
@@ -145,6 +176,12 @@ function getType(
 	value: z.ZodAny,
 	forceOptional?: boolean,
 ): { type: string; isOptional: boolean } {
+	if(!value._def){
+		console.error(`Something went wrong during "getType". value._def isn't defined.`)
+		console.error(`value:`);
+		console.log(value)
+		process.exit(1);
+	}
 	switch (value._def.typeName as string) {
 		case "ZodString": {
 			return {
@@ -207,4 +244,64 @@ function askQuestion(question: string): Promise<string> {
 			resolve(answer);
 		});
 	});
+}
+
+function generateJSDoc({
+	path,
+	options,
+	functionName,
+}: { path: string; options: Options; functionName: string }) {
+	/**
+	 * ### Endpoint
+	 *
+	 * POST `/organization/set-active`
+	 *
+	 * ### API Methods
+	 *
+	 * **server:**
+	 * `auth.api.setActiveOrganization`
+	 *
+	 * **client:**
+	 * `authClient.organization.setActive`
+	 *
+	 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
+	 */
+
+	let jsdoc: string[] = [];
+	jsdoc.push(`### Endpoint`);
+	jsdoc.push(``);
+	jsdoc.push(`${options.method} \`${path}\``);
+	jsdoc.push(``);
+	jsdoc.push(`### API Methods`);
+	jsdoc.push(``);
+	jsdoc.push(`**server:**`);
+	jsdoc.push(`\`auth.api.${functionName}\``);
+	jsdoc.push(``);
+	jsdoc.push(`**client:**`);
+	jsdoc.push(`\`authClient.${pathToDotNotation(path)}\``);
+	jsdoc.push(``);
+	jsdoc.push(
+		`@see [Read our docs to learn more.](https://better-auth.com/docs/plugins/${
+			path.split("/")[1]
+		}#api-method${path.replaceAll("/", "-")})`,
+	);
+
+	return `/**\n * ${jsdoc.join("\n * ")}\n */`;
+}
+
+function pathToDotNotation(input: string): string {
+	return input
+		.split("/") // split into segments
+		.filter(Boolean) // remove empty strings (from leading '/')
+		.map((segment) =>
+			segment
+				.split("-") // split kebab-case
+				.map((word, i) =>
+					i === 0
+						? word.toLowerCase()
+						: word.charAt(0).toUpperCase() + word.slice(1),
+				)
+				.join(""),
+		)
+		.join(".");
 }

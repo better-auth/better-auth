@@ -447,11 +447,20 @@ type updateOrganization = {
 
 To remove user owned organization, you can use `organization.delete`
 
-```ts title="org.ts"
-await authClient.organization.delete({
-  organizationId: "test"
-});
+<APIMethod
+  path="/organization/delete"
+  method="POST"
+  requireSession
+>
+```ts
+type deleteOrganization = {
+    /*
+    * The organization id to delete.
+    */
+    organizationId: string = "org-id"
+}
 ```
+</APIMethod>
 
 If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
 
