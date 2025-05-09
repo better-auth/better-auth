@@ -137,6 +137,8 @@ export const username = (options?: UsernameOptions) => {
 						],
 					});
 					if (!user) {
+						// Hash password to prevent timing attacks from revealing valid usernames
+						// By hashing passwords for invalid usernames, we ensure consistent response times
 						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
@@ -191,7 +193,7 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.headers,
+						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {

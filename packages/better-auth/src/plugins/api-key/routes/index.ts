@@ -22,6 +22,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "maximumPrefixLength"
 			| "minimumPrefixLength"
 			| "maximumNameLength"
+			| "disableKeyHashing"
 			| "minimumNameLength"
 			| "enableMetadata"
 			| "disableSessionForAPIKeys"

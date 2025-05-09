@@ -1,5 +1,3 @@
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { APIError, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { mergeSchema } from "../../db";
@@ -9,6 +7,18 @@ import { getDate } from "../../utils/date";
 import type { ApiKey, ApiKeyOptions } from "./types";
 import { createApiKeyRoutes } from "./routes";
 import type { User } from "../../types";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+
+export const defaultKeyHasher = async (key: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(key),
+	);
+	const hashed = base64Url.encode(new Uint8Array(hash), {
+		padding: false,
+	});
+	return hashed;
+};
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
@@ -54,6 +64,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		maximumNameLength: options?.maximumNameLength ?? 32,
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
+		disableKeyHashing: options?.disableKeyHashing ?? false,
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -150,12 +161,9 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						}
 
-						const hash = await createHash("SHA-256").digest(
-							new TextEncoder().encode(key),
-						);
-						const hashed = base64Url.encode(new Uint8Array(hash), {
-							padding: false,
-						});
+						const hashed = opts.disableKeyHashing
+							? key
+							: await defaultKeyHasher(key);
 
 						const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 							model: API_KEY_TABLE_NAME,

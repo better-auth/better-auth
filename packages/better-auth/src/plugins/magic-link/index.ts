@@ -115,13 +115,16 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const verificationToken = options?.generateToken
 						? await options.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: verificationToken,
-						value: JSON.stringify({ email, name: ctx.body.name }),
-						expiresAt: new Date(
-							Date.now() + (options.expiresIn || 60 * 5) * 1000,
-						),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: verificationToken,
+							value: JSON.stringify({ email, name: ctx.body.name }),
+							expiresAt: new Date(
+								Date.now() + (options.expiresIn || 60 * 5) * 1000,
+							),
+						},
+						ctx,
+					);
 					const url = `${
 						ctx.context.baseURL
 					}/magic-link/verify?token=${verificationToken}&callbackURL=${
@@ -245,7 +248,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.headers,
+						ctx,
 					);
 
 					if (!session) {

@@ -134,11 +134,14 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const code = generateRandomString(opts.digits, "0-9");
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}!0`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: new Date(Date.now() + opts.period),
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					value: `${code}!0`,
+					identifier: `2fa-otp-${key}`,
+					expiresAt: new Date(Date.now() + opts.period),
+				},
+				ctx,
+			);
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx.request,
@@ -288,7 +291,7 @@ export const otp2fa = (options?: OTPOptions) => {
 					);
 					const newSession = await ctx.context.internalAdapter.createSession(
 						session.user.id,
-						ctx.headers,
+						ctx,
 						false,
 						session.session,
 					);
