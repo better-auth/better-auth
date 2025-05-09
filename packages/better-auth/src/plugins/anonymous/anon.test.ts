@@ -128,4 +128,29 @@ describe("anonymous", async () => {
 		});
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
+
+	it("should work with generateName", async () => {
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				anonymous({
+					generateName() {
+						return "i-am-anonymous";
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(res.data?.user.name).toBe("i-am-anonymous");
+	});
 });

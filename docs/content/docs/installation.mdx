@@ -302,6 +302,18 @@ Better Auth supports any backend framework with standard Request and Response ob
     </Tab>
 
     <Tab value="express">
+    <Callout type="warn">
+        ExpressJS v5 introduced breaking changes to route path matching by switching to `path-to-regexp@6`. Wildcard routes like `*` should now be written using the new named syntax, e.g. `/{*any}`, to properly capture catch-all patterns. This ensures compatibility and predictable behavior across routing scenarios.
+        See the [Express v5 migration guide](https://expressjs.com/en/guide/migrating-5.html) for details.
+
+        As a result, the implementation in ExpressJS v5 should look like this:
+
+        ```ts
+        app.all('/api/auth/{*any}', toNodeHandler(auth));
+        ```
+        *The name any is arbitrary and can be replaced with any identifier you prefer.*
+    </Callout>
+
     ```ts title="server.ts"
     import express from "express";
     import { toNodeHandler } from "better-auth/node";
@@ -320,7 +332,7 @@ Better Auth supports any backend framework with standard Request and Response ob
         console.log(`Better Auth app listening on port ${port}`);
     });
     ```
-    This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
+    This will also work for any other node server framework like express, fastify, hapi, etc., but may require some modifications. See [fastify guide](/docs/integrations/fastify). Note that CommonJS (cjs) isn't supported.
     </Tab>
     <Tab value="astro">
     ```ts title="/pages/api/auth/[...all].ts"

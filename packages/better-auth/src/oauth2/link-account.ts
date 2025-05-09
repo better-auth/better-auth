@@ -113,7 +113,7 @@ export async function handleOAuthUserInfo(
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
-					userInfo.email.toLocaleLowerCase() === dbUser.user.email
+					userInfo.email.toLowerCase() === dbUser.user.email
 						? dbUser.user.emailVerified || userInfo.emailVerified
 						: userInfo.emailVerified,
 			});
@@ -192,10 +192,7 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(
-		user.id,
-		c.headers,
-	);
+	const session = await c.context.internalAdapter.createSession(user.id, c);
 	if (!session) {
 		return {
 			error: "unable to create session",

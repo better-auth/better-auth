@@ -519,7 +519,6 @@ export const contents: Content[] = [
 			{
 				title: "Kick",
 				href: "/docs/authentication/kick",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -554,7 +553,6 @@ export const contents: Content[] = [
 			{
 				title: "Tiktok",
 				href: "/docs/authentication/tiktok",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -720,7 +718,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 			{
 				title: "VK",
-				isNew: true,
 				href: "/docs/authentication/vk",
 				icon: () => (
 					<svg
@@ -1108,6 +1105,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/hono",
 			},
 			{
+				title: "Fastify",
+				icon: Icons.fastify,
+				href: "/docs/integrations/fastify",
+			},
+			{
 				title: "Express",
 				icon: Icons.express,
 				href: "/docs/integrations/express",
@@ -1282,7 +1284,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "API Key",
 				href: "/docs/plugins/api-key",
-				isNew: true,
 				icon: () => <KeyRound className="size-4" />,
 			},
 			{
@@ -1456,15 +1457,15 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						viewBox="0 0 256 257"
 					>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="M147.386 69.071L147.129 0h-38.515l.257 69.071l19.257 26.448zm-38.515 118.371v69.328h38.515v-69.328l-19.258-26.447z"
 						></path>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="m147.386 187.442l40.57 55.976l31.069-22.596l-40.57-55.975l-31.069-10.015zM108.871 69.071L68.044 13.095L36.975 35.691l40.57 55.976l31.326 10.014z"
 						></path>
 						<path
-							className="fill-foreground opacity-70"
+							className="opacity-70 fill-foreground"
 							d="M77.545 91.667L11.811 70.355L0 106.816l65.733 21.569l31.069-10.271zm81.653 46.732l19.257 26.448l65.734 21.311L256 149.697l-65.733-21.312z"
 						></path>
 						<path
@@ -1486,9 +1487,29 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
+				title: "Stripe",
+				href: "/docs/plugins/stripe",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="none"
+							stroke="currentColor"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="2"
+							d="M11.453 8.056c0-.623.518-.979 1.442-.979c1.69 0 3.41.343 4.605.923l.5-4c-.948-.449-2.82-1-5.5-1c-1.895 0-3.373.087-4.5 1c-1.172.956-2 2.33-2 4c0 3.03 1.958 4.906 5 6c1.961.69 3 .743 3 1.5c0 .735-.851 1.5-2 1.5c-1.423 0-3.963-.609-5.5-1.5l-.5 4c1.321.734 3.474 1.5 6 1.5c2 0 3.957-.468 5.084-1.36C18.347 18.661 19 17.372 19 15.5c0-3.096-1.915-4.547-5-5.637c-1.646-.605-2.544-1.07-2.544-1.807z"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Polar",
 				href: "/docs/plugins/polar",
-				isNew: true,
 				icon: () => (
 					<svg
 						width="1.2em"
@@ -1522,24 +1543,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
-				title: "Stripe",
-				href: "/docs/plugins/stripe",
+				title: "Dub",
+				href: "/docs/plugins/dub",
 				isNew: true,
 				icon: () => (
 					<svg
-						xmlns="http://www.w3.org/2000/svg"
 						width="1.2em"
 						height="1.2em"
-						viewBox="0 0 24 24"
+						viewBox="0 0 65 64"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
 					>
 						<path
-							fill="none"
-							stroke="currentColor"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth="2"
-							d="M11.453 8.056c0-.623.518-.979 1.442-.979c1.69 0 3.41.343 4.605.923l.5-4c-.948-.449-2.82-1-5.5-1c-1.895 0-3.373.087-4.5 1c-1.172.956-2 2.33-2 4c0 3.03 1.958 4.906 5 6c1.961.69 3 .743 3 1.5c0 .735-.851 1.5-2 1.5c-1.423 0-3.963-.609-5.5-1.5l-.5 4c1.321.734 3.474 1.5 6 1.5c2 0 3.957-.468 5.084-1.36C18.347 18.661 19 17.372 19 15.5c0-3.096-1.915-4.547-5-5.637c-1.646-.605-2.544-1.07-2.544-1.807z"
-						></path>
+							fill-rule="evenodd"
+							clip-rule="evenodd"
+							d="M32.5 64C50.1731 64 64.5 49.6731 64.5 32C64.5 20.1555 58.0648 9.81393 48.5 4.28099V31.9999V47.9998H40.5V45.8594C38.1466 47.2207 35.4143 47.9999 32.5 47.9999C23.6634 47.9999 16.5 40.8364 16.5 31.9999C16.5 23.1633 23.6634 15.9999 32.5 15.9999C35.4143 15.9999 38.1466 16.779 40.5 18.1404V1.00812C37.943 0.350018 35.2624 0 32.5 0C14.8269 0 0.500038 14.3269 0.500038 32C0.500038 49.6731 14.8269 64 32.5 64Z"
+							fill="currentColor"
+						/>
 					</svg>
 				),
 			},

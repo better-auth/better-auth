@@ -8,6 +8,15 @@ export interface ApiKeyOptions {
 	 */
 	apiKeyHeaders?: string | string[];
 	/**
+	 * Disable hashing of the API key.
+	 *
+	 * ⚠️ Security Warning: It's strongly recommended to not disable hashing.
+	 * Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+	 *
+	 * @default false
+	 */
+	disableKeyHashing?: boolean;
+	/**
 	 * The function to get the API key from the context
 	 */
 	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;

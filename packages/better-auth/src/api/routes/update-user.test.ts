@@ -162,6 +162,31 @@ describe("updateUser", async () => {
 		expect(signInCurrentPassword.data).toBeNull();
 	});
 
+	it("should not update password if current password is wrong", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			name: "name",
+			email: "new-email-2@email.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess: sessionSetter(newHeaders),
+			},
+		});
+		const res = await client.changePassword({
+			newPassword: "newPassword",
+			currentPassword: "wrongPassword",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(res.data).toBeNull();
+		const signInAttempt = await client.signIn.email({
+			email: "new-email-2@email.com",
+			password: "newPassword",
+		});
+		expect(signInAttempt.data).toBeNull();
+	});
+
 	it("should revoke other sessions", async () => {
 		const newHeaders = new Headers();
 		await client.changePassword({
