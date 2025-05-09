@@ -2,28 +2,39 @@ import readline from "readline";
 import type { createAuthEndpoint as BAcreateAuthEndpoint } from "better-auth/api";
 import { z } from "zod";
 import fs from "fs";
+import path from "path";
 
-type CreateAuthEndpointProps = Parameters<typeof BAcreateAuthEndpoint>;
+playSound("Hero");
 
-type Options = CreateAuthEndpointProps[1];
+const file = path.join(process.cwd(), "./scripts/endpoint-to-doc/input.ts");
 
-const APIMethodsHeader = `{/* -------------------------------------------------------- */}
-{/*                   APIMethod component                    */}
-{/* -------------------------------------------------------- */}`
+function clearImportCache() {
+	const resolved = new URL(file, import.meta.url).pathname;
+	delete (globalThis as any).__dynamicImportCache?.[resolved];
+	delete require.cache[require.resolve(resolved)];
+}
 
-const JSDocHeader = `{/* -------------------------------------------------------- */}
-{/*                JSDOC For the endpoint                    */}
-{/* -------------------------------------------------------- */}`
+console.log(`Watching: ${file}`);
 
-export const createAuthEndpoint = async (
-	...params: Partial<CreateAuthEndpointProps>
-) => {
-	const [path, options] = params;
+fs.watch(file, async () => {
+	playSound();
+	console.log(`Detected file change. Regenerating mdx.`);
+	await generateMDX();
+	playSound("Hero");
+});
+
+async function generateMDX() {
+	const exports = await import("./input");
+	clearImportCache();
+	if (Object.keys(exports).length !== 1)
+		return console.error(`Please provide at least 1 export.`);
+	const start = Date.now();
+	const functionName = Object.keys(exports)[0]! as string;
+
+	const [path, options]: [string, Options] =
+		//@ts-ignore
+		await exports[Object.keys(exports)[0]!];
 	if (!path || !options) return console.error(`No path or options.`);
-
-	const functionName = await askQuestion(
-		"What's the function name for this endpoint? ",
-	);
 
 	console.log(`function name:`, functionName);
 
@@ -33,15 +44,35 @@ export const createAuthEndpoint = async (
 		functionName,
 		options,
 	)}\n\`\`\`\n</APIMethod>`;
-	console.log(`\n---------------\n${mdx}\n---------------\n\n`);
-	console.log();
-	console.log(`\n---------------\n${jsdoc}\n---------------\n\n`);
+
+	console.log(`Generated in ${(Date.now() - start).toFixed(2)}ms!`);
 	fs.writeFileSync(
 		"./scripts/endpoint-to-doc/output.mdx",
 		`${APIMethodsHeader}\n\n${mdx}\n\n${JSDocHeader}\n\n${jsdoc}`,
 		"utf-8",
 	);
 	console.log(`Successfully updated \`output.mdx\`!`);
+}
+
+type CreateAuthEndpointProps = Parameters<typeof BAcreateAuthEndpoint>;
+
+type Options = CreateAuthEndpointProps[1];
+
+const APIMethodsHeader = `{/* -------------------------------------------------------- */}
+{/*                   APIMethod component                    */}
+{/* -------------------------------------------------------- */}`;
+
+const JSDocHeader = `{/* -------------------------------------------------------- */}
+{/*                JSDOC For the endpoint                    */}
+{/* -------------------------------------------------------- */}`;
+
+export const createAuthEndpoint = async (
+	...params: Partial<CreateAuthEndpointProps>
+) => {
+	const [path, options] = params;
+	if (!path || !options) return console.error(`No path or options.`);
+
+	return [path, options];
 };
 
 type Body = {
@@ -52,6 +83,7 @@ type Body = {
 	jsDocComment: string | null;
 	path: string[];
 	example: string | null;
+	isNullable: boolean;
 };
 
 function parseType(functionName: string, options: Options) {
@@ -83,6 +115,10 @@ function convertBodyToString(parsedBody: Body[]) {
 			} ${
 				body.isServerOnly
 					? `\n${indentationSpaces.repeat(1 + body.path.length)} * @serverOnly`
+					: ""
+			} ${
+				body.isNullable
+					? `\n${indentationSpaces.repeat(1 + body.path.length)} * @nullable`
 					: ""
 			}\n${indentationSpaces.repeat(1 + body.path.length)} */\n`;
 		}
@@ -142,7 +178,9 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 	for (const [key, value] of Object.entries(shape)) {
 		if (!value) continue;
 		let description = value.description;
-		let { type, isOptional } = getType(value as any, isRootOptional);
+		let { type, isOptional, isNullable } = getType(value as any, {
+			forceOptional: isRootOptional,
+		});
 
 		let example = description ? description.split(" Eg: ")[1] : null;
 		if (example) description = description?.replace(" Eg: " + example, "");
@@ -162,6 +200,7 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 			isServerOnly,
 			type,
 			example,
+			isNullable,
 		});
 
 		if (type === "Object") {
@@ -174,12 +213,20 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 
 function getType(
 	value: z.ZodAny,
-	forceOptional?: boolean,
-): { type: string; isOptional: boolean } {
-	if(!value._def){
-		console.error(`Something went wrong during "getType". value._def isn't defined.`)
+	{
+		forceNullable,
+		forceOptional,
+	}: {
+		forceOptional?: boolean;
+		forceNullable?: boolean;
+	} = {},
+): { type: string; isOptional: boolean; isNullable: boolean } {
+	if (!value._def) {
+		console.error(
+			`Something went wrong during "getType". value._def isn't defined.`,
+		);
 		console.error(`value:`);
-		console.log(value)
+		console.log(value);
 		process.exit(1);
 	}
 	switch (value._def.typeName as string) {
@@ -187,21 +234,45 @@ function getType(
 			return {
 				type: "string",
 				isOptional: forceOptional ?? value.isOptional(),
+				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodObject": {
 			return {
 				type: "Object",
 				isOptional: forceOptional ?? value.isOptional(),
+				isNullable: forceNullable ?? value.isNullable(),
+			};
+		}
+		case "ZodBoolean": {
+			return {
+				type: "boolean",
+				isOptional: forceOptional ?? value.isOptional(),
+				isNullable: forceNullable ?? value.isNullable(),
+			};
+		}
+		case "ZodDate": {
+			return {
+				type: "date",
+				isOptional: forceOptional ?? value.isOptional(),
+				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodOptional": {
 			const v = value as never as z.ZodOptional<z.ZodAny>;
-			const r = getType(v._def.innerType, true);
-			return { type: r.type, isOptional: forceOptional ?? r.isOptional };
+			const r = getType(v._def.innerType, { forceOptional: true });
+			return {
+				type: r.type,
+				isOptional: forceOptional ?? r.isOptional,
+				isNullable: forceNullable ?? value.isNullable(),
+			};
 		}
 		case "ZodAny": {
-			return { type: "any", isOptional: forceOptional ?? value.isOptional() };
+			return {
+				type: "any",
+				isOptional: forceOptional ?? value.isOptional(),
+				isNullable: forceNullable ?? value.isNullable(),
+			};
 		}
 		case "ZodRecord": {
 			const v = value as never as z.ZodRecord;
@@ -210,6 +281,16 @@ function getType(
 			return {
 				type: `Record<${key}, ${_value}>`,
 				isOptional: forceOptional ?? v.isOptional(),
+				isNullable: forceNullable ?? value.isNullable(),
+			};
+		}
+		case "ZodNullable": {
+			const v = value as never as z.ZodNullable<z.ZodAny>;
+			const r = getType(v._def.innerType, { forceOptional: true });
+			return {
+				type: r.type,
+				isOptional: forceOptional ?? r.isOptional,
+				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 
@@ -304,4 +385,9 @@ function pathToDotNotation(input: string): string {
 				.join(""),
 		)
 		.join(".");
+}
+
+async function playSound(name: string = "Ping") {
+	const path = `/System/Library/Sounds/${name}.aiff`;
+	await Bun.$`afplay ${path}`;
 }

@@ -23,6 +23,7 @@ type Property = {
 	comments: string | null;
 	isServerOnly: boolean;
 	path: string[];
+	isNullable: boolean;
 };
 
 const placeholderProperty: Property = {
@@ -34,6 +35,7 @@ const placeholderProperty: Property = {
 	type: "",
 	isServerOnly: false,
 	path: [],
+	isNullable: false,
 };
 
 export const APIMethod = ({
@@ -272,7 +274,7 @@ function TypeTable({
 								</div>
 							</TableCell>
 							<TableCell>
-								<code>{prop.type}</code>
+								<code>{prop.type}{prop.isNullable ? ' | null' : ""}</code>
 							</TableCell>
 						</TableRow>
 					),
@@ -311,6 +313,7 @@ function parseCode(children: JSX.Element) {
 	let isServerOnly_ = false;
 	let nestPath: string[] = []; // str arr segmented-path, eg: ["data", "metadata", "something"]
 	let serverOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
+	let isNullable = false;
 
 	let code_prefix = "";
 	let code_suffix = "";
@@ -365,6 +368,9 @@ function parseCode(children: JSX.Element) {
 				line = line.replace("* ", "");
 				if (line.trim() === "@serverOnly") {
 					isServerOnly_ = true;
+					continue;
+				} else if (line.trim() === "@nullable") {
+					isNullable = true;
 					continue;
 				}
 				currentJSDocDescription += line + " ";
@@ -445,9 +451,11 @@ function parseCode(children: JSX.Element) {
 				path: isTheStartOfNest
 					? nestPath.slice(0, nestPath.length - 1)
 					: nestPath.slice(),
+				isNullable: isNullable,
 			};
 
-			if (isServerOnly_ === true) isServerOnly_ = false;
+			isServerOnly_ = false;
+			isNullable = false;
 			console.log(property);
 			props.push(property);
 		}

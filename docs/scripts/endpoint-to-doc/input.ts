@@ -2,10 +2,6 @@
 import { createAuthEndpoint } from "./index";
 import { z } from "zod";
 
-// This is here because somethings auth endpoints includes `use` which are an array
-// of middlewares, however those middlewares are often variables which are not
-// defined in this context
-// This is here to act as a placeholder.
 const { orgMiddleware, orgSessionMiddleware } = {
 	orgMiddleware: () => {},
 	orgSessionMiddleware: () => {},
@@ -19,12 +15,12 @@ export const getFullOrganization = createAuthEndpoint(
 			z.object({
 				organizationId: z
 					.string({
-						description: "The organization id to get",
+						description: "The organization id to get. Eg: \"org-id\"",
 					})
 					.optional(),
 				organizationSlug: z
 					.string({
-						description: "The organization slug to get",
+						description: "The organization slug to get. Eg: \"org-slug\"",
 					})
 					.optional(),
 			}),
