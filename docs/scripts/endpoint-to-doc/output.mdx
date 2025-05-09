@@ -1,0 +1,35 @@
+<APIMethod
+  path="/organization/update"
+  method="POST"
+  requireSession
+>
+```ts
+type updateOrganization = {
+    /*
+    * A partial list of data to update the organization. 
+    */
+    data: {
+        /*
+        * The name of the organization. 
+        */
+        name?: string = "updated-name"
+        /*
+        * The slug of the organization. 
+        */
+        slug?: string = "updated-slug"
+        /*
+        * The logo of the organization. 
+        */
+        logo?: string = "new-logo.url"
+        /*
+        * The metadata of the organization. 
+        */
+        metadata?: Record<string, any> = { customerId: "test" }
+    }
+    /*
+    * The organization ID. 
+    */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>

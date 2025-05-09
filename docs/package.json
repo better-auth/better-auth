@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "postinstall": "fumadocs-mdx"
+    "postinstall": "fumadocs-mdx",
+    "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/input.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
