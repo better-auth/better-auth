@@ -240,7 +240,7 @@ function TypeTable({
 }: { props: Property[]; isServer: boolean }) {
 	if (!isServer && !props.filter((x) => !x.isServerOnly).length) return null;
 	else if (!props.length) return null;
-	
+
 	return (
 		<Table className="mt-2 mb-0 overflow-hidden">
 			<TableHeader>
@@ -467,7 +467,6 @@ const indentationSpace = `    `;
 
 function createClientBody({ props }: { props: Property[] }) {
 	let body = ``;
-	let currentIndentation = 0;
 
 	let i = -1;
 	for (const prop of props) {
@@ -487,15 +486,17 @@ function createClientBody({ props }: { props: Property[] }) {
 		}${prop.type === "Object" ? ": {" : ","}${
 			addComment ? ` // ${comment.join(", ")}` : ""
 		}\n`;
-		if (!props[i + 1] || props[i + 1].path.length < currentIndentation) {
-			for (const index of Array(prop.path.length)
+		
+		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
+			const diff = prop.path.length - (props[i + 1]?.path?.length || 0)
+			
+			for (const index of Array(diff)
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
 				body += `${indentationSpace.repeat(index + 1)}},\n`;
 			}
 		}
-		currentIndentation = prop.path.length;
 	}
 	if (body !== "") body += "}";
 
@@ -510,7 +511,6 @@ function createServerBody({
 	let serverBody = "";
 
 	let body2 = ``;
-	let currentIndentation = 0;
 
 	let i = -1;
 	for (const prop of props) {
@@ -547,15 +547,16 @@ function createServerBody({
 		}${prop.type === "Object" ? ": {" : ","}${
 			addComment ? ` // ${comment.join(", ")}` : ""
 		}\n`;
-		if (!props[i + 1] || props[i + 1].path.length < currentIndentation) {
-			for (const index of Array(prop.path.length)
+		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
+			const diff = prop.path.length - (props[i + 1]?.path?.length || 0)
+
+			for (const index of Array(diff)
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
 				body2 += `${indentationSpace.repeat(index + 2)}},\n`;
 			}
 		}
-		currentIndentation = prop.path.length;
 	}
 	if (body2 !== "") body2 += "    },";
 
