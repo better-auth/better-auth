@@ -486,10 +486,10 @@ function createClientBody({ props }: { props: Property[] }) {
 		}${prop.type === "Object" ? ": {" : ","}${
 			addComment ? ` // ${comment.join(", ")}` : ""
 		}\n`;
-		
+
 		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
-			const diff = prop.path.length - (props[i + 1]?.path?.length || 0)
-			
+			const diff = prop.path.length - (props[i + 1]?.path?.length || 0);
+
 			for (const index of Array(diff)
 				.fill(0)
 				.map((_, i) => i)
@@ -548,7 +548,7 @@ function createServerBody({
 			addComment ? ` // ${comment.join(", ")}` : ""
 		}\n`;
 		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
-			const diff = prop.path.length - (props[i + 1]?.path?.length || 0)
+			const diff = prop.path.length - (props[i + 1]?.path?.length || 0);
 
 			for (const index of Array(diff)
 				.fill(0)

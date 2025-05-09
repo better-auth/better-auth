@@ -74,7 +74,9 @@ function convertBodyToString(parsedBody: Body[]) {
 		} else {
 			strBody += `${indentationSpaces.repeat(1 + body.path.length)}${
 				body.propName
-		}${body.isOptional ? "?" : ""}: ${body.type}${body.example ? ` = ${body.example}` : ""}\n`;
+			}${body.isOptional ? "?" : ""}: ${body.type}${
+				body.example ? ` = ${body.example}` : ""
+			}\n`;
 		}
 
 		if (

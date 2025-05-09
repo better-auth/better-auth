@@ -68,7 +68,6 @@ Once you've installed the plugin, you can start using the organization plugin to
 ### Create an organization
 
 <APIMethod path="/organization/create" method="POST" requireSession>
-
   ```ts
   const metadata = { someKey: "someValue" };
 
@@ -76,28 +75,28 @@ Once you've installed the plugin, you can start using the organization plugin to
     /**
      * The organization name.
     */
-    name: string = "My Organization",
+    name: string = "My Organization"
     /**
      * The organization slug.
     */
-    slug: string = "my-org",
+    slug: string = "my-org"
     /**
      * The organization logo.
     */
-    logo?: string = "https://example.com/logo.png",
+    logo?: string = "https://example.com/logo.png"
     /**
     * The metadata of the organization.
     */
-    metadata?: Record<string, any>,
+    metadata?: Record<string, any>
     /**
     * The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.
     * @serverOnly
     */
-    userId?: string = "some_user_id",
+    userId: string = "some_user_id"
     /**
     * Whether to keep the current active organization active after creating a new one.
     */
-    keepCurrentActiveOrganization?: boolean = false,
+    keepCurrentActiveOrganization?: boolean = false
   }
   ```
 </APIMethod>
@@ -128,7 +127,6 @@ const auth = betterAuth({
 To check if an organization slug is taken or not you can use the `checkSlug` function provided by the client. The function takes an object with the following properties:
 
 <APIMethod path="/organization/check-slug" method="POST">
-
     ```ts
     type checkOrganizationSlug = {
       /**
@@ -274,43 +272,27 @@ Active organization is the workspace the user is currently working on. By defaul
 #### Set Active Organization
 
 You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
-<Tabs items={["client", "server"]} defaultValue="client">
-  <Tab value="client">
-  ```ts title="auth-client.ts"
-  import { authClient } from "@/lib/auth-client";
 
-  await authClient.organization.setActive({
-    organizationId: "organization-id"
-  })
-
-  // you can also use organizationSlug instead of organizationId
-  await authClient.organization.setActive({
-    organizationSlug: "organization-slug"
-  })
+<APIMethod
+  path="/organization/set-active"
+  method="POST"
+  note={<>You can choose between <code>organizationId</code> or <code>organizationSlug</code>.</>}
+  requireSession
+>
+  ```ts
+  type setActiveOrganization = {
+    /**
+     * The organization ID.
+    */
+    organizationId?: string = "organization-id"
+    /**
+     * The organization slug.
+    */
+    organizationSlug?: string = "organization-slug"
+  }
   ```
-  </Tab>
+</APIMethod>
 
-  <Tab value="server">
-    ```ts title="api.ts"
-    import { auth } from "@/lib/auth";
-
-    await auth.api.setActiveOrganization({
-      headers: // pass the headers,
-      body: {
-        organizationSlug: "organization-slug"
-      }
-    })
-
-    // you can also use organizationId instead of organizationSlug
-    await auth.api.setActiveOrganization({
-      headers: // pass the headers,
-      body: {
-        organizationId: "organization-id"
-      }
-    })
-    ```
-  </Tab>
-</Tabs>
 
 To set active organization when a session is created you can use [database hooks](/docs/concepts/database#database-hooks).
 
@@ -424,20 +406,42 @@ To get the full details of an organization, you can use the `getFullOrganization
 
 To update organization info, you can use `organization.update`
 
-
+<APIMethod
+  path="/organization/update"
+  method="POST"
+  requireSession
+>
 ```ts
-await authClient.organization.update({
-  data: {
-    name: "updated-name",
-    logo: "new-logo.url",
-    metadata: {
-      customerId: "test"
-    },
-    slug: "updated-slug"
-  },
-  organizationId: 'org-id' //defaults to the current active organization
-})
+type updateOrganization = {
+    /*
+    * A partial list of data to update the organization. 
+    */
+    data: {
+        /*
+        * The name of the organization. 
+        */
+        name?: string = "updated-name"
+        /*
+        * The slug of the organization. 
+        */
+        slug?: string = "updated-slug"
+        /*
+        * The logo of the organization. 
+        */
+        logo?: string = "new-logo.url"
+        /*
+        * The metadata of the organization. 
+        */
+        metadata?: Record<string, any> = { customerId: "test" }
+    }
+    /*
+    * The organization ID. 
+    */
+    organizationId?: string = "org-id"
+}
 ```
+</APIMethod>
+
 
 ### Delete Organization
 

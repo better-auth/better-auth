@@ -248,30 +248,36 @@ export const updateOrganization = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			data: z
-				.object({
-					name: z
-						.string({
-							description: "The name of the organization",
-						})
-						.optional(),
-					slug: z
-						.string({
-							description: "The slug of the organization",
-						})
-						.optional(),
-					logo: z
-						.string({
-							description: "The logo of the organization",
-						})
-						.optional(),
-					metadata: z
-						.record(z.string(), z.any(), {
-							description: "The metadata of the organization",
-						})
-						.optional(),
-				})
+				.object(
+					{
+						name: z
+							.string({
+								description: 'The name of the organization. Eg: "updated-name"',
+							})
+							.optional(),
+						slug: z
+							.string({
+								description: 'The slug of the organization. Eg: "updated-slug"',
+							})
+							.optional(),
+						logo: z
+							.string({
+								description: 'The logo of the organization. Eg: "new-logo.url"',
+							})
+							.optional(),
+						metadata: z
+							.record(z.string(), z.any(), {
+								description:
+									'The metadata of the organization. Eg: { customerId: "test" }',
+							})
+							.optional(),
+					},
+					{ description: "A partial list of data to update the organization." },
+				)
 				.partial(),
-			organizationId: z.string().optional(),
+			organizationId: z
+				.string({ description: 'The organization ID. Eg: "org-id"' })
+				.optional(),
 		}),
 		requireHeaders: true,
 		use: [orgMiddleware],
