@@ -1,11 +1,9 @@
-import readline from "readline";
 import type { createAuthEndpoint as BAcreateAuthEndpoint } from "better-auth/api";
 import { z } from "zod";
 import fs from "fs";
 import path from "path";
 
 playSound("Hero");
-
 
 export const {
 	orgMiddleware,
