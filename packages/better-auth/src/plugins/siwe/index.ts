@@ -1,6 +1,5 @@
 import { APIError, createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { SiweMessage, generateNonce } from "siwe";
 import { z } from "zod";
 import type { BetterAuthPlugin } from "../../types";
 import type { SiweUser } from "./types";
@@ -9,8 +8,11 @@ import { getOrigin } from "../../utils/url";
 
 export interface SIWEPluginOptions {
 	domain: string;
-	suppressSiweExceptions?: boolean;
 	emailDomainName?: string;
+	generateSiweNonce: () => Promise<string>;
+	verifySiweMessage: (message: string, signature: string, nonce: string) => Promise<boolean>;
+	ensLookup?: (walletAddress: string) => Promise<{ name: string; avatar: string }>;
+
 }
 
 export const siwe = (options: SIWEPluginOptions) =>
@@ -32,7 +34,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 				},
 				async (ctx) => {
 					const { walletAddress } = ctx.body;
-					const nonce = generateNonce();
+					const nonce = await options.generateSiweNonce();
 					// Store nonce with 15-minute expiration
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: `siwe:${walletAddress.toLowerCase()}`,
@@ -52,15 +54,11 @@ export const siwe = (options: SIWEPluginOptions) =>
 						message: z.string(),
 						signature: z.string(),
 						walletAddress: z.string(),
-						ensName: z.string().optional(),
 					}),
 					requireRequest: true,
 				},
 				async (ctx) => {
-					const { message, signature, walletAddress, ensName } = ctx.body;
-					// Parse and validate SIWE message
-
-					const siweMessage = new SiweMessage(message);
+					const { message, signature, walletAddress } = ctx.body;
 
 					try {
 						// Find stored nonce to check it's validity
@@ -76,18 +74,10 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						}
 						// Verify SIWE message
-						const verified = await siweMessage.verify(
-							{
-								signature,
-								nonce: verification.value,
-								domain: options.domain,
-							},
-							{
-								suppressExceptions: options.suppressSiweExceptions,
-							},
-						);
+						const { value: nonce } = verification;
+						const verified = await options.verifySiweMessage(message, signature, nonce);
 
-						if (!verified.success) {
+						if (!verified) {
 							throw new APIError("UNAUTHORIZED", {
 								message: "Unauthorized: Invalid SIWE signature",
 								status: 401,
@@ -110,14 +100,14 @@ export const siwe = (options: SIWEPluginOptions) =>
 						});
 
 						if (!user) {
-							const emailDomainName =
-								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
-							const email = `${walletAddress}@${emailDomainName}`;
+							const domain = options.emailDomainName ?? getOrigin(ctx.context.baseURL);
+							const email = `${walletAddress}@${domain}`;
+							const { name, avatar } = await options.ensLookup?.(walletAddress) ?? {};
 							user = await ctx.context.internalAdapter.createUser({
-								name: ensName ?? walletAddress, // TODO: should fallback to something else other than walletAddress
+								name: name ?? walletAddress, // TODO: should fallback to something else other than walletAddress
 								email,
 								walletAddress,
-								avatar: "", // TODO: implement ens avatar (?)
+								avatar: avatar ?? "",
 							});
 						}
 
@@ -127,18 +117,15 @@ export const siwe = (options: SIWEPluginOptions) =>
 						);
 
 						if (!session) {
-							return ctx.json(null, {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message: "Internal Server Error",
 								status: 500,
-								body: {
-									message: "Internal Server Error",
-									status: "500",
-								},
 							});
 						}
 
 						await setSessionCookie(ctx, { session, user });
 
-						return ctx.json({ token: session.token });
+						return ctx.json({ token: session.token, success: true });
 					} catch (error: unknown) {
 						if (error instanceof APIError) throw error;
 						throw new APIError("UNAUTHORIZED", {

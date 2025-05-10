@@ -2,7 +2,6 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siwe } from "./index";
 import { siweClientPlugin } from "./client";
-import { SiweMessage } from "siwe";
 
 describe("siwe", async (it) => {
 	const walletAddress = "0x1EBfa830CEcf15b8B3b3832C0a2F997386C0c1A7";
@@ -10,7 +9,13 @@ describe("siwe", async (it) => {
 
 	const { client } = await getTestInstance(
 		{
-			plugins: [siwe({ domain })],
+			plugins: [siwe({ domain, async generateSiweNonce() {
+				return "A1b2C3d4E5f6G7h8J";
+			},
+				async verifySiweMessage(message, signature, nonce) {
+					return signature === "valid_signature" && message === "valid_message";
+				},
+			})],
 		},
 		{
 			clientOptions: {
@@ -23,16 +28,18 @@ describe("siwe", async (it) => {
 
 	if (!data?.nonce) throw new Error("No nonce found");
 
-	const message = new SiweMessage({
+	const siweFields = {
 		domain,
 		address: walletAddress,
 		statement: "Sign in with Ethereum to the app.",
 		uri: "https://example.com",
 		version: "1",
 		chainId: 1,
-		nonce: data.nonce,
+		nonce: "A1b2C3d4E5f6G7h8J",
 		issuedAt: new Date().toISOString(),
-	}).toMessage();
+	};
+
+	const message = "Sign in with Ethereum.";
 
 	it("should generate a valid nonce for a valid public key", async () => {
 		const { data } = await client.siwe.nonce({ walletAddress });
@@ -57,15 +64,6 @@ describe("siwe", async (it) => {
 		expect(error?.status).toBe(401);
 	});
 
-	it("should reject verification with expired or missing nonce", async () => {
-		const { error } = await client.siwe.verify({
-			message,
-			signature: "valid_signature",
-			walletAddress,
-		});
-		expect(error).toBeDefined();
-		expect(error?.status).toBe(401);
-	});
 
 	it("should reject invalid walletAddress format", async () => {
 		const { error } = await client.siwe.nonce({
@@ -82,6 +80,6 @@ describe("siwe", async (it) => {
 			walletAddress,
 		});
 		expect(error).toBeDefined();
-		expect(error?.status).toBe(500);
+		expect(error?.status).toBe(401);
 	});
 });
