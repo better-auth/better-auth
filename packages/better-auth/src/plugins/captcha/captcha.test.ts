@@ -45,6 +45,41 @@ describe("captcha", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
+	it("Should support custom matcher functions", async () => {
+		const { client } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "cloudflare-turnstile",
+					secretKey: "xx-secret-key",
+					endpoints: [
+						(url) => {
+							return new URL(url).pathname === "/api/auth/sign-in/email";
+						},
+					],
+				}),
+			],
+		});
+
+		mockBetterFetch.mockResolvedValue({
+			data: {
+				success: false,
+				"error-codes": ["invalid-input-response"],
+			},
+		});
+
+		const errorRes = await client.signIn.email({
+			email: "test@test.com",
+			password: "test123456",
+			fetchOptions: {
+				headers: {
+					"x-captcha-response": "invalid-captcha-token",
+				},
+			},
+		});
+
+		expect(errorRes.error?.status).toBe(403);
+	});
+
 	it("Should return a 500 when missing secret key", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
