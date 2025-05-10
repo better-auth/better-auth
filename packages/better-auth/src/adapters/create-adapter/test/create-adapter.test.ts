@@ -1,6 +1,10 @@
 import { describe, test, expect } from "vitest";
 import { createAdapter } from "..";
-import type { AdapterConfig, CreateCustomAdapter } from "../types";
+import type {
+	AdapterConfig,
+	CleanedWhere,
+	CreateCustomAdapter,
+} from "../types";
 import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
 
@@ -559,6 +563,7 @@ describe("Create Adapter Helper", async () => {
 							};
 						},
 					});
+
 					const res = (await adapter.create({
 						model: "user",
 						data: { email: "test@test.com" },
@@ -570,6 +575,33 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(parameters.data).toHaveProperty("email_address");
 				expect(parameters.data.email_address).toEqual("test@test.com");
+			});
+
+			test("Should allow custom transform input to transform the where clause", async () => {
+				const parameters: CleanedWhere[] = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						config: {
+							debugLogs: {},
+							mapKeysTransformInput: {
+								id: "_id",
+							},
+						},
+						adapter(args_0) {
+							return {
+								async findOne({ model, where, select }) {
+									r(where);
+									return {} as any;
+								},
+							};
+						},
+					});
+					adapter.findOne({
+						model: "user",
+						where: [{ field: "id", value: "123" }],
+					});
+				});
+
+				expect(parameters[0]!.field).toEqual("_id");
 			});
 
 			test("Should allow custom map output key transformation", async () => {
