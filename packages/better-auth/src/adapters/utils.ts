@@ -1,6 +1,6 @@
 import type { FieldAttribute } from "../db";
 
-export function withApplyDefault(
+export async function withApplyDefault(
 	value: any,
 	field: FieldAttribute,
 	action: "create" | "update",
@@ -11,7 +11,7 @@ export function withApplyDefault(
 	if (value === undefined || value === null) {
 		if (field.defaultValue) {
 			if (typeof field.defaultValue === "function") {
-				return field.defaultValue();
+				return await field.defaultValue();
 			}
 			return field.defaultValue;
 		}
