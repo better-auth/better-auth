@@ -538,6 +538,38 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		/**
 		 * ### Endpoint
 		 *
+		 * GET `/organization/list-invitations`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listInvitations`
+		 *
+		 * **client:**
+		 * `authClient.organization.listInvitations`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-invitations)
+		 */
+		listInvitations: listInvitations,
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-active-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getActiveMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.getActiveMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member)
+		 */
+		getActiveMember: getActiveMember,
+		/**
+		 * ### Endpoint
+		 *
 		 * POST `/organization/check-slug`
 		 *
 		 * ### API Methods
@@ -551,12 +583,70 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-check-slug)
 		 */
 		checkOrganizationSlug: checkOrganizationSlug,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/add-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.addMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.addMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
+		 */
 		addMember: addMember<O>(),
-		removeMember,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/remove-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.removeMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.removeMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-member)
+		 */
+		removeMember: removeMember,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update-member-role`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateMemberRole`
+		 *
+		 * **client:**
+		 * `authClient.organization.updateMemberRole`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-member-role)
+		 */
 		updateMemberRole: updateMemberRole(options as O),
-		getActiveMember,
-		leaveOrganization,
-		listInvitations,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/leave`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.leaveOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.leave`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
+		 */
+		leaveOrganization: leaveOrganization,
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {

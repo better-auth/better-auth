@@ -3,28 +3,16 @@
 {/* -------------------------------------------------------- */}
 
 <APIMethod
-  path="/organization/add-member"
+  path="/organization/leave"
   method="POST"
-  isServerOnly
+  requireSession
 >
 ```ts
-type addMember = {
+type leaveOrganization = {
     /**
-     * The user Id which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers. 
+     * The organization Id for the member to leave. 
      */
-    userId?: string | null = "user-id"
-    /**
-     * The role(s) to assign to the new member. 
-     */
-    role: string | string[] = ["admin", "sale"]
-    /**
-     * An optional organization ID to pass. If not provided, will default to the user's active organization. 
-     */
-    organizationId?: string = "org-id"
-    /**
-     * An optional team ID to add the member to. 
-     */
-    teamId?: string = "team-id"
+    organizationId: string = "organization-id"
 }
 ```
 </APIMethod>
@@ -36,15 +24,15 @@ type addMember = {
 /**
  * ### Endpoint
  * 
- * POST `/organization/add-member`
+ * POST `/organization/leave`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.addMember`
+ * `auth.api.leaveOrganization`
  * 
  * **client:**
- * `authClient.organization.addMember`
+ * `authClient.organization.leave`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
  */

@@ -631,13 +631,16 @@ type getInvitation = {
 
 To list all invitations you can use the `listInvitations` function provided by the client.
 
-```ts title="auth-client.ts"
-const invitations = await authClient.organization.listInvitations({
-    query: {
-        organizationId: "organization-id" // optional, by default it will use the active organization
-    }
-})
+<APIMethod path="/organization/list-invitations" method="GET">
+```ts
+type listInvitations = {
+    /**
+     * An optional ID of the organization to list invitations for. If not provided, will default to the users active organization. 
+     */
+    organizationId?: string = "organization-id"
+}
 ```
+</APIMethod>
 
 ## Members
 
@@ -645,49 +648,64 @@ const invitations = await authClient.organization.listInvitations({
 
 To remove you can use `organization.removeMember`
 
-```ts title="auth-client.ts"
-//remove member
-await authClient.organization.removeMember({
-    memberIdOrEmail: "member-id", // this can also be the email of the member
-    organizationId: "organization-id" // optional, by default it will use the active organization
-})
+
+<APIMethod path="/organization/remove-member" method="POST">
+```ts
+type removeMember = {
+    /**
+     * The ID or email of the member to remove. 
+     */
+    memberIdOrEmail: string = "user@example.com"
+    /**
+     * The ID of the organization to remove the member from. If not provided, the active organization will be used. 
+     */
+    organizationId?: string = "org-id"
+}
 ```
+</APIMethod>
 
 ### Update Member Role
 
 To update the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
 
-```ts title="auth-client.ts"
-await authClient.organization.updateMemberRole({
-    memberId: "member-id",
-    role: "admin" // this can also be an array for multiple roles (e.g. ["admin", "sale"])
-})
+<APIMethod path="/organization/update-member-role" method="POST" noResult>
+```ts
+type updateMemberRole = {
+    /**
+     * The new role to be applied. This can be a string or array of strings representing the roles. 
+     */
+    role: string | string[] = ["admin", "sale"]
+    /**
+     * The member id to apply the role update to. 
+     */
+    memberId: string = "member-id"
+    /**
+     * An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization. 
+     */
+    organizationId?: string = "organization-id"
+}
 ```
+</APIMethod>
 
 ### Get Active Member
 
 To get the current member of the organization you can use the `organization.getActiveMember` function. This function will return the current active member.
 
-```ts title="auth-client.ts"
-const member = await authClient.organization.getActiveMember()
+<APIMethod
+  path="/organization/get-active-member"
+  method="GET"
+  requireSession
+  resultVariable="member"
+>
+```ts
+type getActiveMember = {
+}
 ```
+</APIMethod>
 
 ### Add Member
 
 If you want to add a member directly to an organization without sending an invitation, you can use the `addMember` function which can only be invoked on the server.
-
-```ts title="api.ts"
-import { auth } from "@/auth";
-
-await auth.api.addMember({
-  body: {
-      userId: "user-id",
-      organizationId: "organization-id",
-      role: "admin", // this can also be an array for multiple roles (e.g. ["admin", "sale"])
-      teamId: "team-id" // Optionally specify a teamId to add the member to a team. (requires teams to be enabled)
-  }
-})
-```
 
 <APIMethod
   path="/organization/add-member"
@@ -720,11 +738,22 @@ type addMember = {
 
 To leave organization you can use `organization.leave` function. This function will remove the current user from the organization.
 
-```ts title="auth-client.ts"
-await authClient.organization.leave({
-    organizationId: "organization-id"
-})
+<APIMethod
+  path="/organization/leave"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+type leaveOrganization = {
+    /**
+     * The organization Id for the member to leave. 
+     */
+    organizationId: string = "organization-id"
+}
 ```
+</APIMethod>
+
 
 ## Access Control
 

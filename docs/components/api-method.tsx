@@ -49,6 +49,7 @@ export const APIMethod = ({
 	note,
 	clientOnlyNote,
 	serverOnlyNote,
+	resultVariable="data"
 }: {
 	/**
 	 * Endpoint path
@@ -94,6 +95,12 @@ export const APIMethod = ({
 	 * A small note to display above both the client & server auth example code-blocks.
 	 */
 	note?: string;
+	/**
+	 * The result output variable name. 
+	 * 
+	 * @default "data"
+	 */
+	resultVariable?: string;
 }) => {
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
@@ -108,7 +115,7 @@ export const APIMethod = ({
 	const serverCodeBlock = (
 		<DynamicCodeBlock
 			code={`${code_prefix}${
-				noResult ? "" : "const data = "
+				noResult ? "" : `const ${resultVariable} = `
 			}await auth.api.${functionName}(${serverBody});${code_suffix}`}
 			lang="ts"
 		/>
@@ -175,7 +182,7 @@ export const APIMethod = ({
 					<div className={cn("w-full relative")}>
 						<DynamicCodeBlock
 							code={`${code_prefix}${
-								noResult ? "" : "const { data, error } = "
+								noResult ? "" : `const { data${resultVariable === "data" ? "" : `: ${resultVariable}`}, error } = `
 							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
 							lang="ts"
 						/>

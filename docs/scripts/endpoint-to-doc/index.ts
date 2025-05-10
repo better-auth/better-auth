@@ -6,6 +6,19 @@ import path from "path";
 
 playSound("Hero");
 
+
+export const {
+	orgMiddleware,
+	orgSessionMiddleware,
+	requestOnlySessionMiddleware,
+	sessionMiddleware,
+} = {
+	orgMiddleware: () => {},
+	orgSessionMiddleware: () => {},
+	requestOnlySessionMiddleware: () => {},
+	sessionMiddleware: () => {},
+};
+
 const file = path.join(process.cwd(), "./scripts/endpoint-to-doc/input.ts");
 
 function clearImportCache() {

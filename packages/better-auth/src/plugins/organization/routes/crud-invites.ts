@@ -649,7 +649,7 @@ export const listInvitations = createAuthEndpoint(
 			.object({
 				organizationId: z
 					.string({
-						description: "The ID of the organization to list invitations for",
+						description: "An optional ID of the organization to list invitations for. If not provided, will default to the users active organization. Eg: \"organization-id\"",
 					})
 					.optional(),
 			})

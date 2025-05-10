@@ -144,7 +144,8 @@ export const removeMember = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			memberIdOrEmail: z.string({
-				description: "The ID or email of the member to remove",
+				description:
+					'The ID or email of the member to remove. Eg: "user@example.com"',
 			}),
 			/**
 			 * If not provided, the active organization will be used
@@ -152,7 +153,7 @@ export const removeMember = createAuthEndpoint(
 			organizationId: z
 				.string({
 					description:
-						"The ID of the organization to remove the member from. If not provided, the active organization will be used",
+						'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
 				})
 				.optional(),
 		}),
@@ -296,9 +297,20 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				role: z.union([z.string(), z.array(z.string())]),
-				memberId: z.string(),
-				organizationId: z.string().optional(),
+				role: z.union([z.string(), z.array(z.string())], {
+					description:
+						'The new role to be applied. This can be a string or array of strings representing the roles. Eg: ["admin", "sale"]',
+				}),
+				memberId: z.string({
+					description:
+						'The member id to apply the role update to. Eg: "member-id"',
+				}),
+				organizationId: z
+					.string({
+						description:
+							'An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization. Eg: "organization-id"',
+					})
+					.optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -445,6 +457,7 @@ export const getActiveMember = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],
+		requireHeaders: true,
 		metadata: {
 			openapi: {
 				description: "Get the active member in the organization",
@@ -511,8 +524,12 @@ export const leaveOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			organizationId: z.string(),
+			organizationId: z.string({
+				description:
+					'The organization Id for the member to leave. Eg: "organization-id"',
+			}),
 		}),
+		requireHeaders: true,
 		use: [sessionMiddleware, orgMiddleware],
 	},
 	async (ctx) => {
