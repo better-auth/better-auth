@@ -650,10 +650,70 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/create-team`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createTeam`
+		 *
+		 * **client:**
+		 * `authClient.organization.createTeam`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create-team)
+		 */
 		createTeam: createTeam(options as O),
-		listOrganizationTeams,
-		removeTeam,
-		updateTeam,
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-teams`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listOrganizationTeams`
+		 *
+		 * **client:**
+		 * `authClient.organization.listTeams`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-teams)
+		 */
+		listOrganizationTeams: listOrganizationTeams,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/remove-team`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.removeTeam`
+		 *
+		 * **client:**
+		 * `authClient.organization.removeTeam`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-team)
+		 */
+		removeTeam: removeTeam,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update-team`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateTeam`
+		 *
+		 * **client:**
+		 * `authClient.organization.updateTeam`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-team)
+		 */
+		updateTeam: updateTeam,
 	};
 	if (teamSupport) {
 		endpoints = {

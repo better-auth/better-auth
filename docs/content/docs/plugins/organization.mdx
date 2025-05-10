@@ -1032,45 +1032,84 @@ export const authClient = createAuthClient({
 #### Create Team
 Create a new team within an organization:
 
+<APIMethod path="/organization/create-team" method="POST">
 ```ts
-const team = await authClient.organization.createTeam({
-    name: "Development Team",
-    organizationId: "org-id" // Optional: defaults to active organization
-})
+type createTeam = {
+    /**
+     * The name of the team. 
+     */
+    name: string = "my-team"
+    /**
+     * The organization ID which the team will be created in. Defaults to the active organization. 
+     */
+    organizationId?: string = "organization-id"
+}
 ```
+</APIMethod>
 
 #### List Teams
 Get all teams in an organization:
 
+<APIMethod
+  path="/organization/list-teams"
+  method="GET"
+  requireSession
+>
 ```ts
-const teams = await authClient.organization.listTeams({
-  query: {
-    organizationId: org.id, // Optional: defaults to active organization
-  },
-});
+type listOrganizationTeams = {
+    /**
+     * The organization ID which the teams are under to list. Defaults to the users active organization. 
+     */
+    organizationId?: string = "organziation-id"
+}
 ```
+</APIMethod>
 
 #### Update Team
 Update a team's details:
 
+<APIMethod
+  path="/organization/update-team"
+  method="POST"
+  requireSession
+>
 ```ts
-const updatedTeam = await authClient.organization.updateTeam({
-    teamId: "team-id",
+type updateTeam = {
+    /**
+     * The ID of the team to be updated. 
+     */
+    teamId: string = "team-id"
+    /**
+     * A partial object containing options for you to update.
+     */
     data: {
-        name: "Updated Team Name"
+        id?: string
+        name?: string
+        organizationId?: string
+        createdAt?: date
+        updatedAt?: date
     }
-})
+}
 ```
+</APIMethod>
 
 #### Remove Team
 Delete a team from an organization:
 
+<APIMethod path="/organization/remove-team" method="POST">
 ```ts
-await authClient.organization.removeTeam({
-    teamId: "team-id",
-    organizationId: "org-id" // Optional: defaults to active organization
-})
+type removeTeam = {
+    /**
+     * The team ID of the team to remove. 
+     */
+    teamId: string = "team-id"
+    /**
+     * The organization ID which the team falls under. If not provided, it will default to the user's active organization. 
+     */
+    organizationId?: string = "organization-id"
+}
 ```
+</APIMethod>
 
 ### Team Permissions
 

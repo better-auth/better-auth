@@ -2,37 +2,9 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod
-  path="/organization/leave"
-  method="POST"
-  requireSession
->
-```ts
-type leaveOrganization = {
-    /**
-     * The organization Id for the member to leave. 
-     */
-    organizationId: string = "organization-id"
-}
-```
-</APIMethod>
+
 
 {/* -------------------------------------------------------- */}
 {/*                JSDOC For the endpoint                    */}
 {/* -------------------------------------------------------- */}
 
-/**
- * ### Endpoint
- * 
- * POST `/organization/leave`
- * 
- * ### API Methods
- * 
- * **server:**
- * `auth.api.leaveOrganization`
- * 
- * **client:**
- * `authClient.organization.leave`
- * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
- */
