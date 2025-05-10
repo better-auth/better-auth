@@ -17,6 +17,7 @@ import { roblox } from "./roblox";
 import { z } from "zod";
 import { vk } from "./vk";
 import { kick } from "./kick";
+import { patreon } from "./patreon";
 import { zoom } from "./zoom";
 export const socialProviders = {
 	apple,
@@ -36,6 +37,7 @@ export const socialProviders = {
 	reddit,
 	roblox,
 	vk,
+	patreon,
 	zoom,
 };
 
@@ -76,5 +78,6 @@ export * from "./roblox";
 export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
+export * from "./patreon";
 
 export type SocialProviderList = typeof socialProviderList;
