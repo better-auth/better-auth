@@ -15,7 +15,7 @@ describe("additionalFields", async () => {
 						type: "string",
 						defaultValue: "default-value",
 					},
-					nonRequiredFiled: {
+					nonRequiredField: {
 						type: "string",
 						required: false,
 					},
@@ -29,7 +29,7 @@ describe("additionalFields", async () => {
 			headers,
 		});
 		expect(res?.user.newField).toBeDefined();
-		expect(res?.user.nonRequiredFiled).toBeNull();
+		expect(res?.user.nonRequiredField).toBeNull();
 	});
 
 	it("should require additional fields on signUp", async () => {

@@ -18,6 +18,7 @@ export * from "./oauth-proxy";
 export * from "./custom-session";
 export * from "./open-api";
 export * from "./oidc-provider";
+export * from "./app-invite";
 export * from "./captcha";
 export * from "./api-key";
 export * from "./haveibeenpwned";
