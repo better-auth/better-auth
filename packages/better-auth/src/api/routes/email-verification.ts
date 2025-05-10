@@ -390,8 +390,8 @@ export const verifyEmail = createAuthEndpoint(
 			},
 			ctx,
 		);
+		const currentSession = await getSessionFromCtx(ctx);
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
-			const currentSession = await getSessionFromCtx(ctx);
 			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
@@ -410,6 +410,16 @@ export const verifyEmail = createAuthEndpoint(
 					},
 				});
 			} else {
+				await setSessionCookie(ctx, {
+					session: currentSession.session,
+					user: {
+						...currentSession.user,
+						emailVerified: true,
+					},
+				});
+			}
+		} else {
+			if (currentSession && currentSession.user.email === parsed.email) {
 				await setSessionCookie(ctx, {
 					session: currentSession.session,
 					user: {
