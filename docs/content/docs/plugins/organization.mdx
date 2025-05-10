@@ -973,7 +973,14 @@ The teams feature supports several configuration options:
       // Dynamic limit based on organization plan
       const plan = await getPlan(organizationId)
       return plan === 'pro' ? 20 : 5
-    }
+    },
+    maximumMembersPerTeam: 10 // Fixed number
+    // OR
+    maximumMembersPerTeam: async ({ teamId, session, organizationId }, request) => {
+      // Dynamic limit based on team plan
+      const plan = await getPlan(organizationId, teamId)
+      return plan === 'pro' ? 50 : 10
+    },
   }
   ```
 
