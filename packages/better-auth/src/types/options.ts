@@ -346,6 +346,10 @@ export type BetterAuthOptions = {
 			 */
 			deleteTokenExpiresIn?: number;
 		};
+		/**
+		 *
+		 */
+		findUser?: (ctx: GenericEndpointContext) => Promise<User>;
 	};
 	session?: {
 		/**

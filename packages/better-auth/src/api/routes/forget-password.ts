@@ -94,7 +94,7 @@ export const forgetPassword = createAuthEndpoint(
 
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 			includeAccounts: true,
-		});
+		}, ctx);
 		if (!user) {
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
