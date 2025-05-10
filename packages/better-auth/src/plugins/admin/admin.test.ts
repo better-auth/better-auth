@@ -824,6 +824,20 @@ describe("access control", async (it) => {
 		});
 		expect(canCreateOrderAndReadUser).toBe(true);
 
+		const canCreateOrderAndReadUserWithMissingPerms =
+			client.admin.checkRolePermission({
+				role: "admin",
+				permissions: {
+					order: ["create"],
+					user: ["read"],
+				},
+				returnMissingPermissions: true,
+			});
+		expect(canCreateOrderAndReadUserWithMissingPerms.success).toBe(true);
+		expect(
+			canCreateOrderAndReadUserWithMissingPerms.missingPermissions,
+		).toBeNull();
+
 		const canCreateUser = client.admin.checkRolePermission({
 			role: "user",
 			permissions: {
@@ -840,6 +854,23 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(canCreateOrderAndCreateUser).toBe(false);
+
+		const canCreateOrderAndCreateUserWithMissingPerms =
+			client.admin.checkRolePermission({
+				role: "user",
+				permissions: {
+					order: ["create"],
+					user: ["create"],
+				},
+				returnMissingPermissions: true,
+			});
+		expect(canCreateOrderAndCreateUserWithMissingPerms.success).toBe(false);
+		expect(
+			canCreateOrderAndCreateUserWithMissingPerms.missingPermissions,
+		).toEqual({
+			order: ["create"],
+			user: ["create"],
+		});
 	});
 
 	it("should validate using userId", async () => {
@@ -864,6 +895,22 @@ describe("access control", async (it) => {
 		});
 		expect(canCreateUserAndCreateOrder.success).toBe(true);
 
+		const canCreateUserAndCreateOrderWithMissingPerms =
+			await auth.api.userHasPermission({
+				body: {
+					userId: user.id,
+					permissions: {
+						user: ["create"],
+						order: ["create"],
+					},
+					returnMissingPermissions: true,
+				},
+			});
+		expect(canCreateUserAndCreateOrderWithMissingPerms.success).toBe(true);
+		expect(
+			canCreateUserAndCreateOrderWithMissingPerms.missingPermissions,
+		).toBeNull();
+
 		const canUpdateManyOrder = await auth.api.userHasPermission({
 			body: {
 				userId: user.id,
@@ -885,6 +932,27 @@ describe("access control", async (it) => {
 				},
 			});
 		expect(canUpdateManyOrderAndBulkDeleteUser.success).toBe(false);
+
+		const canUpdateManyOrderAndBulkDeleteUserWithMissingPerms =
+			await auth.api.userHasPermission({
+				body: {
+					userId: user.id,
+					permissions: {
+						user: ["bulk-delete"],
+						order: ["update-many"],
+					},
+					returnMissingPermissions: true,
+				},
+			});
+		expect(canUpdateManyOrderAndBulkDeleteUserWithMissingPerms.success).toBe(
+			false,
+		);
+		expect(
+			canUpdateManyOrderAndBulkDeleteUserWithMissingPerms.missingPermissions,
+		).toEqual({
+			user: ["bulk-delete"],
+			order: ["update-many"],
+		});
 	});
 
 	it("should validate using role", async () => {

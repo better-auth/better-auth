@@ -5,11 +5,13 @@ describe("access", () => {
 	const ac = createAccessControl({
 		project: ["create", "update", "delete", "delete-many"],
 		ui: ["view", "edit", "comment", "hide"],
+		video: ["create"],
 	});
 
 	const role1 = ac.newRole({
 		project: ["create", "update", "delete"],
 		ui: ["view", "edit", "comment"],
+		video: [],
 	});
 
 	it("should validate permissions", async () => {
@@ -60,6 +62,35 @@ describe("access", () => {
 			"OR",
 		);
 		expect(response.success).toBe(true);
+	});
+
+	it("should return missing permissions on failure and undefined on success", () => {
+		const response = role1.authorize({
+			project: ["create", "delete"],
+			ui: ["view", "edit"],
+		});
+		expect(response.success).toBe(true);
+		expect(response.missingPermissions).toBeUndefined();
+
+		const failedResponse = role1.authorize({
+			project: ["create", "delete-many"],
+			ui: ["view", "edit"],
+		});
+		expect(failedResponse.success).toBe(false);
+		expect(failedResponse.missingPermissions).toEqual({
+			project: ["delete-many"],
+		});
+
+		const failedResponseMany = role1.authorize({
+			project: ["create", "delete-many"],
+			ui: ["view", "edit"],
+			video: ["create"],
+		});
+		expect(failedResponseMany.success).toBe(false);
+		expect(failedResponseMany.missingPermissions).toEqual({
+			project: ["delete-many"],
+			video: ["create"],
+		});
 	});
 
 	it("should validate using or connector for a specific resource", () => {

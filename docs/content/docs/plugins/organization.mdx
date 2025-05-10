@@ -820,6 +820,19 @@ await auth.api.hasPermission({
       }
     }
 });
+
+// `hasPermission` can also return missing permissions
+await auth.api.hasPermission({
+  headers: await headers(),
+    body: {
+      permissions: {
+        project: ["create"], // This must match the structure in your access control
+        sale: ["create"]
+      },
+      returnMissingPermissions: true
+    }
+});
+// ^? { success: boolean; missingPermissions?: { [key: string]: string[] } }
 ```
 
 If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client.
@@ -838,6 +851,16 @@ const canCreateProjectAndCreateSale = await authClient.organization.hasPermissio
         sale: ["create"]
     }
 })
+
+// `hasPermission` can also return missing permissions
+const canCreateProjectAndCreateSaleWithMissingPerms = await authClient.organization.hasPermission({
+    permissions: {
+        project: ["create"],
+        sale: ["create"]
+    },
+    returnMissingPermissions: true
+})
+// ^? { success: boolean; missingPermissions?: { [key: string]: string[] } }
 ```
 
 **Check Role Permission**:
@@ -860,6 +883,17 @@ const canCreateProjectAndCreateSale = await authClient.organization.checkRolePer
 	},
 	role: "admin",
 });
+
+// `checkRolePermission` can also return missing permissions
+const canCreateProjectAndCreateSaleWithMissingPerms = client.organization.checkRolePermission({
+	permissions: {
+		organization: ["delete"],
+    member: ["delete"]
+  },
+  role: "admin",
+  returnMissingPermissions: true
+})
+// ^? { success: boolean; missingPermissions?: { [key: string]: string[] } }
 ```
 
 ## Teams

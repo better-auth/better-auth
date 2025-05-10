@@ -1,76 +1,151 @@
 import { BetterAuthError } from "../../error";
-import type { Statements, Subset } from "./types";
+import type { AuthorizeRequest, Statements, Subset } from "./types";
 
-export type AuthortizeResponse =
-	| { success: false; error: string }
-	| { success: true; error?: never };
+export type MissingPermissions<TReq> = Partial<
+	Record<keyof TReq, AuthorizeRequest<Statements>[keyof Statements]>
+>;
+
+export type AuthorizeResponse<TReq> =
+	| {
+			success: false;
+			missingPermissions: MissingPermissions<TReq>;
+			error: string;
+	  }
+	| { success: true; missingPermissions?: never };
+
+function checkArrayActions<TResourceKey extends keyof TStatements, TStatements>(
+	allowedActions: readonly string[],
+	requestedActions: readonly string[],
+	missingPermissions: MissingPermissions<TStatements>,
+	requestedResource: TResourceKey,
+): boolean {
+	let allAllowed = true;
+	const missingActions: string[] = [];
+
+	for (let i = 0; i < requestedActions.length; i++) {
+		if (!allowedActions.includes(requestedActions[i])) {
+			missingActions.push(requestedActions[i]);
+			allAllowed = false;
+		}
+	}
+
+	if (!allAllowed) {
+		missingPermissions[requestedResource] = missingActions;
+	}
+
+	return allAllowed;
+}
+
+function checkObjectActions<
+	TResourceKey extends keyof TStatements,
+	TStatements,
+>(
+	allowedActions: readonly string[],
+	requestedActions: { actions: readonly string[]; connector: "OR" | "AND" },
+	missingPermissions: MissingPermissions<TStatements>,
+	requestedResource: TResourceKey,
+): boolean {
+	const { actions, connector } = requestedActions;
+
+	if (connector === "OR") {
+		const hasAtLeastOneAction = actions.some((action) =>
+			allowedActions.includes(action),
+		);
+		if (!hasAtLeastOneAction) {
+			missingPermissions[requestedResource] = requestedActions;
+			return false;
+		}
+
+		return true;
+	} else {
+		let allAllowed = true;
+		const missingActions: string[] = [];
+		for (let i = 0; i < actions.length; i++) {
+			if (!allowedActions.includes(actions[i])) {
+				missingActions.push(actions[i]);
+				allAllowed = false;
+			}
+		}
+
+		if (!allAllowed) {
+			missingPermissions[requestedResource] = {
+				...requestedActions,
+				actions: missingActions,
+			};
+		}
+
+		return allAllowed;
+	}
+}
 
 export function role<TStatements extends Statements>(statements: TStatements) {
 	return {
-		authorize<K extends keyof TStatements>(
-			request: {
-				[key in K]?:
-					| TStatements[key]
-					| {
-							actions: TStatements[key];
-							connector: "OR" | "AND";
-					  };
-			},
+		authorize(
+			request: AuthorizeRequest<TStatements>,
 			connector: "OR" | "AND" = "AND",
-		): AuthortizeResponse {
-			let success = false;
-			for (const [requestedResource, requestedActions] of Object.entries(
-				request,
-			)) {
-				const allowedActions = statements[requestedResource];
-				if (!allowedActions) {
-					return {
-						success: false,
-						error: `You are not allowed to access resource: ${requestedResource}`,
-					};
-				}
-				if (Array.isArray(requestedActions)) {
-					success = (requestedActions as string[]).every((requestedAction) =>
-						allowedActions.includes(requestedAction),
-					);
-				} else {
-					if (typeof requestedActions === "object") {
-						const actions = requestedActions as {
-							actions: string[];
-							connector: "OR" | "AND";
-						};
-						if (actions.connector === "OR") {
-							success = actions.actions.some((requestedAction) =>
-								allowedActions.includes(requestedAction),
-							);
-						} else {
-							success = actions.actions.every((requestedAction) =>
-								allowedActions.includes(requestedAction),
-							);
-						}
+		): AuthorizeResponse<typeof request> {
+			const missingPermissions: MissingPermissions<typeof request> = {};
+			let overallSuccess = connector === "AND";
+
+			if (!statements) statements = {} as TStatements;
+
+			for (const requestedResource in request) {
+				if (!Object.hasOwn(request, requestedResource)) continue;
+				const requestedValue = request[requestedResource];
+				let resourceSuccess = true;
+				const allowed = statements[requestedResource];
+				const currentlyAllowed = Array.isArray(allowed) ? allowed : [];
+
+				if (!allowed) {
+					missingPermissions[requestedResource] = requestedValue;
+					resourceSuccess = false;
+				} else if (requestedValue !== undefined) {
+					if (Array.isArray(requestedValue)) {
+						resourceSuccess = checkArrayActions(
+							currentlyAllowed,
+							requestedValue as readonly string[],
+							missingPermissions,
+							requestedResource,
+						);
+					} else if (
+						typeof requestedValue === "object" &&
+						"actions" in requestedValue &&
+						"connector" in requestedValue
+					) {
+						resourceSuccess = checkObjectActions(
+							currentlyAllowed,
+							requestedValue,
+							missingPermissions,
+							requestedResource,
+						);
 					} else {
-						throw new BetterAuthError("Invalid access control request");
+						throw new BetterAuthError(
+							`Invalid request format for resource: ${String(
+								requestedResource,
+							)}`,
+						);
 					}
 				}
-				if (success && connector === "OR") {
-					return { success };
-				}
-				if (!success && connector === "AND") {
-					return {
-						success: false,
-						error: `unauthorized to access resource "${requestedResource}"`,
-					};
-				}
+
+				overallSuccess =
+					connector === "AND"
+						? overallSuccess && resourceSuccess
+						: overallSuccess || resourceSuccess;
 			}
-			if (success) {
+
+			if (overallSuccess) {
+				return { success: true };
+			}
+
+			if (Object.keys(request).length === 0 && connector === "OR") {
 				return {
-					success,
+					success: false,
+					missingPermissions: {},
+					error: "Not authorized",
 				};
 			}
-			return {
-				success: false,
-				error: "Not authorized",
-			};
+
+			return { success: false, missingPermissions, error: "Not authorized" };
 		},
 		statements,
 	};
