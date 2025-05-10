@@ -180,7 +180,7 @@ export const APIMethod = ({
 							lang="ts"
 						/>
 						{isServerOnly ? (
-							<div className="absolute inset-0 flex items-center justify-center w-full h-full rounded-sm backdrop-blur-xs">
+							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-blur-xs border-border">
 								<span>This is a server-only endpoint!</span>
 							</div>
 						) : null}
