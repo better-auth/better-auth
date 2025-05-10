@@ -237,6 +237,8 @@ export type BetterAuthOptions = {
 		};
 		/**
 		 * Automatically sign in the user after sign up
+		 *
+		 * @default true
 		 */
 		autoSignIn?: boolean;
 		/**

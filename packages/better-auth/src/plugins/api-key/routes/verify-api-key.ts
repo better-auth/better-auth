@@ -3,13 +3,12 @@ import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { isRateLimited } from "../rate-limit";
 import type { AuthContext, GenericEndpointContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
+import { defaultKeyHasher } from "../";
 
 export async function validateApiKey({
 	hashedKey,
@@ -243,12 +242,7 @@ export function verifyApiKey({
 				});
 			}
 
-			const hash = await createHash("SHA-256").digest(
-				new TextEncoder().encode(key),
-			);
-			const hashed = base64Url.encode(new Uint8Array(hash), {
-				padding: false,
-			});
+			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
 			let apiKey: ApiKey | null = null;
 
