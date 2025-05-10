@@ -90,5 +90,6 @@ export function createApiKeyRoutes({
 		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
 			deleteAllExpiredApiKeys,
 		}),
+		_deleteAllExpiredApiKeys: deleteAllExpiredApiKeys,
 	};
 }
