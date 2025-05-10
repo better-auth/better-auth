@@ -164,8 +164,8 @@ subscription: {
     plans: [
         {
             name: "basic", // the name of the plan, it'll be automatically lower cased when stored in the database
-            priceId: "price_1234567890", // the price id from stripe
-            annualDiscountPriceId: "price_1234567890", // (optional) the price id for annual billing with a discount
+            priceId: "price_1234567890", // the price ID from stripe
+            annualDiscountPriceId: "price_1234567890", // (optional) the price ID for annual billing with a discount
             limits: {
                 projects: 5,
                 storage: 10
@@ -211,7 +211,7 @@ await client.subscription.upgrade({
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
     annual: true, // Optional: upgrade to an annual plan
-    referenceId: "org_123" // Optional: defaults to the current logged in user id
+    referenceId: "org_123" // Optional: defaults to the current logged in user ID
     seats: 5 // Optional: for team plans
 });
 ```

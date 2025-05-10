@@ -215,8 +215,8 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
         { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
         { name: "oidcConfig", type: "string", description: "The OIDC configuration", isRequired: false },
-        { name: "userId", type: "string", description: "The user id", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider id. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
+        { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
+        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
         { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
     ]}
 />

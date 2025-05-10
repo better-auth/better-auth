@@ -7,7 +7,7 @@ type TechStackIconType = {
 };
 export const techStackIcons: TechStackIconType = {
 	nextJs: {
-		name: "Nextjs",
+		name: "Next.js",
 		icon: <Icons.nextJS className="w-10 h-10" />,
 	},
 	nuxt: {
