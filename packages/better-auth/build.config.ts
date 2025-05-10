@@ -68,6 +68,7 @@ export default defineBuildConfig({
 		"./src/adapters/prisma-adapter/index.ts",
 		"./src/adapters/drizzle-adapter/index.ts",
 		"./src/adapters/mongodb-adapter/index.ts",
+		"./src/adapters/pouchdb-adapter/index.ts",
 		"./src/adapters/kysely-adapter/index.ts",
 		"./src/adapters/memory-adapter/index.ts",
 		"./src/adapters/test.ts",

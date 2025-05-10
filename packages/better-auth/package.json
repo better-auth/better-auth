@@ -264,6 +264,16 @@
         "default": "./dist/adapters/mongodb-adapter/index.cjs"
       }
     },
+    "./adapters/pouchdb": {
+      "import": {
+        "types": "./dist/adapters/pouchdb-adapter/index.d.ts",
+        "default": "./dist/adapters/pouchdb-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/pouchdb-adapter/index.d.cts",
+        "default": "./dist/adapters/pouchdb-adapter/index.cjs"
+      }
+    },
     "./adapters/memory": {
       "import": {
         "types": "./dist/adapters/memory-adapter/index.d.ts",
@@ -586,6 +596,9 @@
       "adapters/mongodb": [
         "./dist/adapters/mongodb-adapter/index.d.ts"
       ],
+      "adapters/pouchdb": [
+        "./dist/adapters/pouchdb-adapter/index.d.ts"
+      ],
       "adapters/memory": [
         "./dist/adapters/memory-adapter/index.d.ts"
       ],
@@ -659,6 +672,8 @@
     "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
+    "@types/pouchdb": "^6.4.2",
+    "@types/pouchdb-find": "^7.3.3",
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.14",
     "better-sqlite3": "^11.6.0",
@@ -672,6 +687,9 @@
     "next": "^15.2.3",
     "oauth2-mock-server": "^7.2.0",
     "pg": "^8.13.1",
+    "pouchdb": "^9.0.0",
+    "pouchdb-adapter-memory": "^9.0.0",
+    "pouchdb-find": "^9.0.0",
     "prisma": "^5.22.0",
     "react": "^19.0.0",
     "react-native": "~0.74.6",
