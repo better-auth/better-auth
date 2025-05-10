@@ -127,14 +127,14 @@ const auth = betterAuth({
 To check if an organization slug is taken or not you can use the `checkSlug` function provided by the client. The function takes an object with the following properties:
 
 <APIMethod path="/organization/check-slug" method="POST">
-    ```ts
-    type checkOrganizationSlug = {
-      /**
-      * The slug of the organization.
-      /*
-      slug: string = "my-org"
-    }
-    ```
+```ts
+type checkOrganizationSlug = {
+    /**
+     * The organization slug to check.  
+     */
+    slug: string = "my-org"
+}
+```
 </APIMethod>
 
 
@@ -260,6 +260,15 @@ export default {
 </Tab>
 </Tabs>
 
+Or alternatively, you can call `organization.list` if you don't want to use a hook.
+
+<APIMethod path="/organization/list" method="GET">
+```ts
+type listOrganizations = {
+}
+```
+</APIMethod>
+
 
 ### Active Organization
 
@@ -273,24 +282,19 @@ Active organization is the workspace the user is currently working on. By defaul
 
 You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
 
-<APIMethod
-  path="/organization/set-active"
-  method="POST"
-  note={<>You can choose between <code>organizationId</code> or <code>organizationSlug</code>.</>}
-  requireSession
->
-  ```ts
-  type setActiveOrganization = {
+<APIMethod path="/organization/set-active" method="POST">
+```ts
+type setActiveOrganization = {
     /**
-     * The organization ID.
-    */
-    organizationId?: string = "organization-id"
+     * The organization id to set as active. It can be null to unset the active organization.  
+     */
+    organizationId?: string | null = "org-id"
     /**
-     * The organization slug.
-    */
-    organizationSlug?: string = "organization-slug"
-  }
-  ```
+     * The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided.  
+     */
+    organizationSlug?: string = "org-slug"
+}
+```
 </APIMethod>
 
 
@@ -381,24 +385,25 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 ### Get Full Organization
 
 To get the full details of an organization, you can use the `getFullOrganization` function.
+By default, if you don't pass any properties, it will use the active organization.
 
 <APIMethod
   path="/organization/get-full-organization"
-  message="You can choose to provide an organization ID, or an organization slug. If no properties are provided, it will default to the active organization."
+  method="GET"
   requireSession
-  >
-    ```ts
-    type getFullOrganization = {
-        /**
-        * The id of the organization. By default, it will use the active organization.
-        */
-        organizationId?: string
-        /**
-        * The slug of the organization.
-        */
-        organizationSlug?: string
-    }
-    ```
+>
+```ts
+type getFullOrganization = {
+    /**
+     * The organization id to get. By default, it will use the active organization.  
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The organization slug to get.  
+     */
+    organizationSlug?: string = "org-slug"
+}
+```
 </APIMethod>
 
 
@@ -413,30 +418,30 @@ To update organization info, you can use `organization.update`
 >
 ```ts
 type updateOrganization = {
-    /*
-    * A partial list of data to update the organization. 
-    */
+    /**
+     * A partial list of data to update the organization. 
+     */
     data: {
-        /*
-        * The name of the organization. 
-        */
+        /**
+         * The name of the organization. 
+         */
         name?: string = "updated-name"
-        /*
-        * The slug of the organization. 
-        */
+        /**
+         * The slug of the organization. 
+         */
         slug?: string = "updated-slug"
-        /*
-        * The logo of the organization. 
-        */
+        /**
+         * The logo of the organization. 
+         */
         logo?: string = "new-logo.url"
-        /*
-        * The metadata of the organization. 
-        */
-        metadata?: Record<string, any> = { customerId: "test" }
+        /**
+         * The metadata of the organization. 
+         */
+        metadata?: Record<string, any> | null = { customerId: "test" }
     }
-    /*
-    * The organization ID. 
-    */
+    /**
+     * The organization ID. 
+     */
     organizationId?: string = "org-id"
 }
 ```
@@ -520,16 +525,32 @@ export const auth = betterAuth({
 
 To invite users to an organization, you can use the `invite` function provided by the client. The `invite` function takes an object with the following properties:
 
-- `email`: The email address of the user.
-- `role`: The role of the user in the organization. It can be `admin`, `member`, or `guest`.
-- `organizationId`: The id of the organization. this is optional by default it will use the active organization. (Optional)
-
-```ts title="invitation.ts"
-await authClient.organization.inviteMember({
-    email: "test@email.com",
-    role: "admin", //this can also be an array for multiple roles (e.g. ["admin", "sale"])
-})
+<APIMethod path="/organization/invite-member" method="POST">
+```ts
+type createInvitation = {
+    /**
+     * The email address of the user to invite.  
+     */
+    email: string = "example@gmail.com"
+    /**
+     * The role(s) to assign to the user. It can be `admin`, `member`, or `guest`.  
+     */
+    role: string | string[] = "member"
+    /**
+     * The organization ID to invite the user to. Defaults to the active organization.  
+     */
+    organizationId?: string = "org-id"
+    /**
+     * Resend the invitation email, if the user is already invited.  
+     */
+    resend?: boolean = true
+    /**
+     * The team ID to invite the user to.  
+     */
+    teamId?: string = "team-id"
+}
 ```
+</APIMethod>
 
 <Callout>
   - If the user is already a member of the organization, the invitation will be canceled.
@@ -543,40 +564,68 @@ When a user receives an invitation email, they can click on the invitation link 
 
 Make sure to call the `acceptInvitation` function after the user is logged in.
 
-```ts title="auth-client.ts"
-await authClient.organization.acceptInvitation({
-    invitationId: "invitation-id"
-})
+<APIMethod path="/organization/accept-invitation" method="POST">
+```ts
+type acceptInvitation = {
+    /**
+     * The ID of the invitation to accept.  
+     */
+    invitationId: string = "invitation-id"
+}
 ```
+</APIMethod>
 
-### Update Invitation Status
 
-To update the status of invitation you can use the `acceptInvitation`, `cancelInvitation`, `rejectInvitation` functions provided by the client. The functions take the invitation id as an argument.
+### Cancel Invitation
 
-```ts title="auth-client.ts"
-//cancel invitation
-await authClient.organization.cancelInvitation({
-    invitationId: "invitation-id"
-})
+If a user has sent out an invitation, you can use this method to cancel it.
 
-//reject invitation (needs to be called when the user who received the invitation is logged in)
-await authClient.organization.rejectInvitation({
-    invitationId: "invitation-id"
-})
+If you're looking for how a user can reject an invitation, you can find that [here](#reject-invitation).
+
+<APIMethod path="/organization/cancel-invitation" method="POST">
+```ts
+type cancelInvitation = {
+    /**
+     * The ID of the invitation to cancel.  
+     */
+    invitationId: string = "invitation-id"
+}
 ```
+</APIMethod>
 
+### Reject Invitation
+
+If this user has recieved an invitation, but wants to decline it, this method will allow you to do so by rejecting it.
+
+<APIMethod path="/organization/reject-invitation" method="POST">
+```ts
+type rejectInvitation = {
+    /**
+     * The ID of the invitation to reject.  
+     */
+    invitationId: string = "invitation-id"
+}
+```
+</APIMethod>
 
 ### Get Invitation
 
-To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
+To get an invitation you can use the `organization.getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
 
-```ts title="auth-client.ts"
-await authClient.organization.getInvitation({
-    query: {
-        id: params.id
-    }
-})
+<APIMethod
+  path="/organization/get-invitation"
+  method="GET"
+  requireSession
+>
+```ts
+type getInvitation = {
+    /**
+     * The ID of the invitation to get.  
+     */
+    id: string = "invitation-id"
+}
 ```
+</APIMethod>
 
 ### List Invitations
 
@@ -639,6 +688,33 @@ await auth.api.addMember({
   }
 })
 ```
+
+<APIMethod
+  path="/organization/add-member"
+  method="POST"
+  isServerOnly
+>
+```ts
+type addMember = {
+    /**
+     * The user Id which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers. 
+     */
+    userId?: string | null = "user-id"
+    /**
+     * The role(s) to assign to the new member. 
+     */
+    role: string | string[] = ["admin", "sale"]
+    /**
+     * An optional organization ID to pass. If not provided, will default to the user's active organization. 
+     */
+    organizationId?: string = "org-id"
+    /**
+     * An optional team ID to add the member to. 
+     */
+    teamId?: string = "team-id"
+}
+```
+</APIMethod>
 
 ### Leave Organization
 
