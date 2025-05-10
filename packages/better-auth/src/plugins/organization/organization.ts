@@ -359,18 +359,198 @@ export interface OrganizationOptions {
  */
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	let endpoints = {
-		createOrganization,
-		updateOrganization,
-		deleteOrganization,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/create`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.create`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create)
+		 */
+		createOrganization: createOrganization,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.update`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update)
+		 */
+		updateOrganization: updateOrganization,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/delete`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.deleteOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.delete`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
+		 */
+		deleteOrganization: deleteOrganization,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/set-active`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.setActiveOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.setActive`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
+		 */
 		setActiveOrganization: setActiveOrganization<O>(),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-full-organization`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getFullOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.getFullOrganization`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
+		 */
 		getFullOrganization: getFullOrganization<O>(),
-		listOrganizations,
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listOrganizations`
+		 *
+		 * **client:**
+		 * `authClient.organization.list`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list)
+		 */
+		listOrganizations: listOrganizations,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/invite-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.inviteMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-invite-member)
+		 */
 		createInvitation: createInvitation(options as O),
-		cancelInvitation,
-		acceptInvitation,
-		getInvitation,
-		rejectInvitation,
-		checkOrganizationSlug,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/cancel-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.cancelInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.cancelInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-cancel-invitation)
+		 */
+		cancelInvitation: cancelInvitation,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/accept-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.acceptInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.acceptInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-accept-invitation)
+		 */
+		acceptInvitation: acceptInvitation,
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.getInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-invitation)
+		 */
+		getInvitation: getInvitation,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/reject-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.rejectInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.rejectInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-reject-invitation)
+		 */
+		rejectInvitation: rejectInvitation,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/check-slug`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.checkOrganizationSlug`
+		 *
+		 * **client:**
+		 * `authClient.organization.checkSlug`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-check-slug)
+		 */
+		checkOrganizationSlug: checkOrganizationSlug,
 		addMember: addMember<O>(),
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),

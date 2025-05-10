@@ -19,32 +19,39 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
 				email: z.string({
-					description: "The email address of the user to invite",
+					description:
+						'The email address of the user to invite. Eg: "example@gmail.com"',
 				}),
-				role: z.union([
-					z.string({
-						description: "The role to assign to the user",
-					}),
-					z.array(
+				role: z.union(
+					[
 						z.string({
-							description: "The roles to assign to the user",
+							description: "The role to assign to the user.",
 						}),
-					),
-				]),
+						z.array(
+							z.string({
+								description: "The roles to assign to the user.",
+							}),
+						),
+					],
+					{
+						description: 'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
+					},
+				),
 				organizationId: z
 					.string({
-						description: "The organization ID to invite the user to",
+						description:
+							'The organization ID to invite the user to. Defaults to the active organization. Eg: "org-id"',
 					})
 					.optional(),
 				resend: z
 					.boolean({
 						description:
-							"Resend the invitation email, if the user is already invited",
+							"Resend the invitation email, if the user is already invited. Eg: true",
 					})
 					.optional(),
 				teamId: z
 					.string({
-						description: "The team ID to invite the user to",
+						description: 'The team ID to invite the user to. Eg: "team-id"',
 					})
 					.optional(),
 			}),
@@ -274,7 +281,7 @@ export const acceptInvitation = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			invitationId: z.string({
-				description: "The ID of the invitation to accept",
+				description: "The ID of the invitation to accept. Eg: \"invitation-id\"",
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -371,13 +378,14 @@ export const acceptInvitation = createAuthEndpoint(
 		});
 	},
 );
+
 export const rejectInvitation = createAuthEndpoint(
 	"/organization/reject-invitation",
 	{
 		method: "POST",
 		body: z.object({
 			invitationId: z.string({
-				description: "The ID of the invitation to reject",
+				description: "The ID of the invitation to reject. Eg: \"invitation-id\"",
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -443,7 +451,7 @@ export const cancelInvitation = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			invitationId: z.string({
-				description: "The ID of the invitation to cancel",
+				description: "The ID of the invitation to cancel. Eg: \"invitation-id\"",
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -515,7 +523,7 @@ export const getInvitation = createAuthEndpoint(
 		requireHeaders: true,
 		query: z.object({
 			id: z.string({
-				description: "The ID of the invitation to get",
+				description: "The ID of the invitation to get. Eg: \"invitation-id\"",
 			}),
 		}),
 		metadata: {

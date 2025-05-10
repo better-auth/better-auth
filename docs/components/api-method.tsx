@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { ReactNode } from "react";
 import { Link } from "lucide-react";
 import { Button } from "./ui/button";
+import { cn } from "@/lib/utils";
 
 type Property = {
 	isOptional: boolean;
@@ -124,7 +125,10 @@ export const APIMethod = ({
 					className="absolute invisible -top-[100px]"
 				/>
 			</div>
-			<Tabs defaultValue="client" className="w-full gap-0">
+			<Tabs
+				defaultValue={isServerOnly ? "server" : "client"}
+				className="w-full gap-0"
+			>
 				<TabsList className="relative flex justify-start w-full gap-2 p-0 mb-1 bg-transparent hover:[&>div>a>button]:opacity-100">
 					<TabsTrigger
 						value="client"
@@ -150,7 +154,7 @@ export const APIMethod = ({
 						</a>
 					</div>
 				</TabsList>
-				<TabsContent value="client" className="">
+				<TabsContent value="client">
 					<Endpoint
 						method={method || "GET"}
 						path={path}
@@ -168,13 +172,20 @@ export const APIMethod = ({
 							) : null}
 						</Note>
 					) : null}
-					<DynamicCodeBlock
-						code={`${code_prefix}${
-							noResult ? "" : "const { data, error } = "
-						}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
-						lang="ts"
-					/>
-					<TypeTable props={props} isServer={false} />
+					<div className={cn("w-full relative")}>
+						<DynamicCodeBlock
+							code={`${code_prefix}${
+								noResult ? "" : "const { data, error } = "
+							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
+							lang="ts"
+						/>
+						{isServerOnly ? (
+							<div className="absolute inset-0 flex items-center justify-center w-full h-full rounded-sm backdrop-blur-xs">
+								<span>This is a server-only endpoint!</span>
+							</div>
+						) : null}
+					</div>
+					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
 				</TabsContent>
 				<TabsContent value="server">
 					<Endpoint
@@ -270,17 +281,37 @@ function TypeTable({
 							</TableCell>
 							<TableCell className="max-w-[500px] overflow-hidden">
 								<div className="w-full break-words h-fit text-wrap ">
-									{prop.description}
+									{tsxifyBackticks(prop.description ?? "")}
 								</div>
 							</TableCell>
 							<TableCell>
-								<code>{prop.type}{prop.isNullable ? ' | null' : ""}</code>
+								<code>
+									{prop.type}
+									{prop.isNullable ? " | null" : ""}
+								</code>
 							</TableCell>
 						</TableRow>
 					),
 				)}
 			</TableBody>
 		</Table>
+	);
+}
+
+function tsxifyBackticks(input: string): JSX.Element {
+	const parts = input.split(/(`[^`]+`)/g); // Split by backtick sections
+
+	return (
+		<>
+			{parts.map((part, index) => {
+				if (part.startsWith("`") && part.endsWith("`")) {
+					const content = part.slice(1, -1); // remove backticks
+					return <code key={index}>{content}</code>;
+				} else {
+					return <span key={index}>{part}</span>;
+				}
+			})}
+		</>
 	);
 }
 
@@ -317,12 +348,12 @@ function parseCode(children: JSX.Element) {
 
 	let code_prefix = "";
 	let code_suffix = "";
-	console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
+	// console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
 
 	for (let line of arrayOfCode) {
 		const originalLine = line;
 		line = line.trim();
-		console.log(`${line}`);
+		// console.log(`${line}`);
 		if (line === "}" && withinApiMethodType && !nestPath.length) {
 			withinApiMethodType = false;
 			hasAlreadyDefinedApiMethodType = true;
@@ -415,11 +446,6 @@ function parseCode(children: JSX.Element) {
 						.trim();
 
 			if (exampleValue?.endsWith(",")) exampleValue = exampleValue.slice(0, -1);
-			if (exampleValue) {
-				try {
-					exampleValue = JSON.stringify(JSON.parse(exampleValue), null, 4);
-				} catch (err) {}
-			}
 
 			// const comments =
 			// 	line
@@ -456,12 +482,12 @@ function parseCode(children: JSX.Element) {
 
 			isServerOnly_ = false;
 			isNullable = false;
-			console.log(property);
+			// console.log(property);
 			props.push(property);
 		}
 	}
 
-	console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
+	// console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
 
 	return {
 		functionName,

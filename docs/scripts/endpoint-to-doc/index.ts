@@ -77,13 +77,12 @@ export const createAuthEndpoint = async (
 
 type Body = {
 	propName: string;
-	type: string;
+	type: string[];
 	isOptional: boolean;
 	isServerOnly: boolean;
 	jsDocComment: string | null;
 	path: string[];
 	example: string | null;
-	isNullable: boolean;
 };
 
 function parseType(functionName: string, options: Options) {
@@ -116,21 +115,17 @@ function convertBodyToString(parsedBody: Body[]) {
 				body.isServerOnly
 					? `\n${indentationSpaces.repeat(1 + body.path.length)} * @serverOnly`
 					: ""
-			} ${
-				body.isNullable
-					? `\n${indentationSpaces.repeat(1 + body.path.length)} * @nullable`
-					: ""
 			}\n${indentationSpaces.repeat(1 + body.path.length)} */\n`;
 		}
 
-		if (body.type === "Object") {
+		if (body.type[0] === "Object") {
 			strBody += `${indentationSpaces.repeat(1 + body.path.length)}${
 				body.propName
 			}${body.isOptional ? "?" : ""}: {\n`;
 		} else {
 			strBody += `${indentationSpaces.repeat(1 + body.path.length)}${
 				body.propName
-			}${body.isOptional ? "?" : ""}: ${body.type}${
+			}${body.isOptional ? "?" : ""}: ${body.type.join(" | ")}${
 				body.example ? ` = ${body.example}` : ""
 			}\n`;
 		}
@@ -155,6 +150,10 @@ function convertBodyToString(parsedBody: Body[]) {
 function parseZodShape(zod: z.ZodAny, path: string[]) {
 	const parsedBody: Body[] = [];
 
+	if (!zod || !zod._def) {
+		return parsedBody;
+	}
+
 	let isRootOptional = undefined;
 	let shape = z.object(
 		{ test: z.string({ description: "" }) },
@@ -178,7 +177,7 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 	for (const [key, value] of Object.entries(shape)) {
 		if (!value) continue;
 		let description = value.description;
-		let { type, isOptional, isNullable } = getType(value as any, {
+		let { type, isOptional } = getType(value as any, {
 			forceOptional: isRootOptional,
 		});
 
@@ -200,10 +199,9 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 			isServerOnly,
 			type,
 			example,
-			isNullable,
 		});
 
-		if (type === "Object") {
+		if (type[0] === "Object") {
 			const v = value as never as z.ZodAny;
 			parsedBody.push(...parseZodShape(v, [...path, key]));
 		}
@@ -220,7 +218,7 @@ function getType(
 		forceOptional?: boolean;
 		forceNullable?: boolean;
 	} = {},
-): { type: string; isOptional: boolean; isNullable: boolean } {
+): { type: string[]; isOptional: boolean } {
 	if (!value._def) {
 		console.error(
 			`Something went wrong during "getType". value._def isn't defined.`,
@@ -229,33 +227,30 @@ function getType(
 		console.log(value);
 		process.exit(1);
 	}
+	const _null: string[] = value?.isNullable() ? ["null"] : [];
 	switch (value._def.typeName as string) {
 		case "ZodString": {
 			return {
-				type: "string",
+				type: ["string", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
-				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodObject": {
 			return {
-				type: "Object",
+				type: ["Object", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
-				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodBoolean": {
 			return {
-				type: "boolean",
+				type: ["boolean", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
-				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodDate": {
 			return {
-				type: "date",
+				type: ["date", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
-				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodOptional": {
@@ -264,24 +259,39 @@ function getType(
 			return {
 				type: r.type,
 				isOptional: forceOptional ?? r.isOptional,
-				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodAny": {
 			return {
-				type: "any",
+				type: ["any", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
-				isNullable: forceNullable ?? value.isNullable(),
 			};
 		}
 		case "ZodRecord": {
 			const v = value as never as z.ZodRecord;
-			const key: string = getType(v._def.keyType as any).type;
-			const _value: string = getType(v._def.valueType as any).type;
+			const keys: string[] = getType(v._def.keyType as any).type;
+			const values: string[] = getType(v._def.valueType as any).type;
 			return {
-				type: `Record<${key}, ${_value}>`,
+				type: keys.map((key, i) => `Record<${key}, ${values[i]}>`),
 				isOptional: forceOptional ?? v.isOptional(),
-				isNullable: forceNullable ?? value.isNullable(),
+			};
+		}
+		case "ZodNumber": {
+			return {
+				type: ['number', ..._null],
+				isOptional: forceOptional ?? value.isOptional()
+			}
+		}
+		case "ZodUnion": {
+			const v = value as never as z.ZodUnion<[z.ZodAny]>;
+			const types: string[] = [];
+			for (const option of v.options) {
+				const t = getType(option as any).type;
+				types.push(t.length === 0 ? t[0] : `${t.join(" | ")}`);
+			}
+			return {
+				type: types,
+				isOptional: forceOptional ?? v.isOptional(),
 			};
 		}
 		case "ZodNullable": {
@@ -290,7 +300,22 @@ function getType(
 			return {
 				type: r.type,
 				isOptional: forceOptional ?? r.isOptional,
-				isNullable: forceNullable ?? value.isNullable(),
+			};
+		}
+
+		case "ZodArray": {
+			const v = value as never as z.ZodArray<z.ZodAny>;
+			const types = getType(v._def.type as any);
+			return {
+				type: [
+					`${
+						types.type.length === 1
+							? types.type[0]
+							: `(${types.type.join(" | ")})`
+					}[]`,
+					..._null,
+				],
+				isOptional: forceOptional ?? v.isOptional(),
 			};
 		}
 
@@ -308,24 +333,12 @@ function parseParams(path: string, options: Options): string {
 	params.push(`method="${options.method}"`);
 
 	if (options.requireHeaders) params.push("requireSession");
+	if(options.metadata?.SERVER_ONLY) params.push('isServerOnly')
 
 	if (params.length === 2) return " " + params.join(" ");
 	return "\n  " + params.join("\n  ") + "\n";
 }
 
-function askQuestion(question: string): Promise<string> {
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
-
-	return new Promise<string>((resolve) => {
-		rl.question(question, (answer) => {
-			rl.close();
-			resolve(answer);
-		});
-	});
-}
 
 function generateJSDoc({
 	path,

@@ -16,37 +16,38 @@ import type {
 } from "../schema";
 import { hasPermission } from "../has-permission";
 
+
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
 	{
 		method: "POST",
 		body: z.object({
 			name: z.string({
-				description: "The name of the organization",
+				description: "The name of the organization. Eg: \"My Organization\"",
 			}),
 			slug: z.string({
-				description: "The slug of the organization",
+				description: "The slug of the organization. Eg: \"my-org\"",
 			}),
 			userId: z.coerce
 				.string({
 					description:
-						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
+						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: \"user-id\"",
 				})
 				.optional(),
 			logo: z
 				.string({
-					description: "The logo of the organization",
+					description: "The logo of the organization. Eg: \"my-logo.url\"",
 				})
 				.optional(),
 			metadata: z
 				.record(z.string(), z.any(), {
-					description: "The metadata of the organization",
+					description: "The metadata of the organization. Eg: { customerId: \"123\" }",
 				})
 				.optional(),
 			keepCurrentActiveOrganization: z
 				.boolean({
 					description:
-						"Whether to keep the current active organization active after creating a new one",
+						"Whether to keep the current active organization active after creating a new one. Eg: true",
 				})
 				.optional(),
 		}),
@@ -224,7 +225,9 @@ export const checkOrganizationSlug = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			slug: z.string(),
+			slug: z.string({
+				description: "The organization slug to check. Eg: \"my-org\""
+			}),
 		}),
 		use: [requestOnlySessionMiddleware, orgMiddleware],
 	},
@@ -353,7 +356,7 @@ export const deleteOrganization = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			organizationId: z.string({
-				description: "The organization id to delete",
+				description: "The organization id to delete. Eg: \"org-id\"",
 			}),
 		}),
 		requireHeaders: true,
@@ -460,12 +463,12 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 				z.object({
 					organizationId: z
 						.string({
-							description: "The organization id to get",
+							description: "The organization id to get. By default, it will use the active organization. Eg: \"org-id\"",
 						})
 						.optional(),
 					organizationSlug: z
 						.string({
-							description: "The organization slug to get",
+							description: "The organization slug to get. Eg: \"org-slug\"",
 						})
 						.optional(),
 				}),
@@ -546,14 +549,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 				organizationId: z
 					.string({
 						description:
-							"The organization id to set as active. It can be null to unset the active organization",
+							"The organization id to set as active. It can be null to unset the active organization. Eg: \"org-id\"",
 					})
 					.nullable()
 					.optional(),
 				organizationSlug: z
 					.string({
 						description:
-							"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
+							"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided. Eg: \"org-slug\"",
 					})
 					.optional(),
 			}),

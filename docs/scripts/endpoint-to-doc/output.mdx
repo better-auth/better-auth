@@ -3,20 +3,28 @@
 {/* -------------------------------------------------------- */}
 
 <APIMethod
-  path="/organization/get-full-organization"
-  method="GET"
-  requireSession
+  path="/organization/add-member"
+  method="POST"
+  isServerOnly
 >
 ```ts
-type d = {
+type addMember = {
     /**
-     * The organization id to get 
+     * The user Id which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers. 
      */
-    organizationId?: string
+    userId?: string | null = "user-id"
     /**
-     * The organization slug to get 
+     * The role(s) to assign to the new member. 
      */
-    organizationSlug?: string
+    role: string | string[] = ["admin", "sale"]
+    /**
+     * An optional organization ID to pass. If not provided, will default to the user's active organization. 
+     */
+    organizationId?: string = "org-id"
+    /**
+     * An optional team ID to add the member to. 
+     */
+    teamId?: string = "team-id"
 }
 ```
 </APIMethod>
@@ -28,15 +36,15 @@ type d = {
 /**
  * ### Endpoint
  * 
- * GET `/organization/get-full-organization`
+ * POST `/organization/add-member`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.d`
+ * `auth.api.addMember`
  * 
  * **client:**
- * `authClient.organization.getFullOrganization`
+ * `authClient.organization.addMember`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
  */

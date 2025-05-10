@@ -16,9 +16,26 @@ export const addMember = <O extends OrganizationOptions>() =>
 		{
 			method: "POST",
 			body: z.object({
-				userId: z.coerce.string(),
-				role: z.union([z.string(), z.array(z.string())]),
-				organizationId: z.string().optional(),
+				userId: z.coerce.string({
+					description:
+						'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
+				}),
+				role: z.union([z.string(), z.array(z.string())], {
+					description:
+						'The role(s) to assign to the new member. Eg: ["admin", "sale"]',
+				}),
+				organizationId: z
+					.string({
+						description:
+							'An optional organization ID to pass. If not provided, will default to the user\'s active organization. Eg: "org-id"',
+					})
+					.optional(),
+				teamId: z
+					.string({
+						description:
+							'An optional team ID to add the member to. Eg: "team-id"',
+					})
+					.optional(),
 			}),
 			use: [orgMiddleware],
 			metadata: {
