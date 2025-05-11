@@ -70,7 +70,7 @@ describe("username", async (it) => {
 		expect(session?.user.username).toBe("new_username_2.1");
 	});
 
-	it("should fail on duplicate username", async () => {
+	it("should fail on duplicate username in sign-up", async () => {
 		const res = await client.signUp.email({
 			email: "new-email-2@gamil.com",
 			username: "New_username_2.1",
@@ -78,6 +78,43 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
+	});
+
+	it("should fail on duplicate username in update-user if user is different", async () => {
+		await client.signUp.email({
+			email: "new-email-2@gamil.com",
+			username: "new_username1",
+			password: "new_password",
+			name: "new-name",
+			fetchOptions: {
+				headers: new Headers(),
+			}
+		});
+
+		const res = await client.updateUser({
+			username: "new_username1",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error?.status).toBe(422);
+	});
+
+	it("should succeed on duplicate username in update-user if user is the same", async () => {
+		const res = await client.updateUser({
+			username: "new_username",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("new_username");
 	});
 
 	it("should fail on invalid username", async () => {
