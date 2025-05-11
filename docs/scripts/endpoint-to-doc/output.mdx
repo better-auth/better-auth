@@ -2,18 +2,21 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod
-  path="/two-factor/view-backup-codes"
-  method="GET"
-  isServerOnly
-  forceAsBody
->
+<APIMethod path="/phone-number/reset-password" method="POST">
 ```ts
-type viewBackupCodes = {
+type resetPasswordPhoneNumber = {
     /**
-     * The user ID to view all backup codes. 
+     * The one time password to reset the password. 
      */
-    userId?: string | null = "user-id"
+    otp: string = "123456"
+    /**
+     * The phone number to the account which intends to reset the password for. 
+     */
+    phoneNumber: string = "+1234567890"
+    /**
+     * The new password. 
+     */
+    newPassword: string = "new-and-secure-password"
 }
 ```
 </APIMethod>
@@ -25,15 +28,15 @@ type viewBackupCodes = {
 /**
  * ### Endpoint
  * 
- * GET `/two-factor/view-backup-codes`
+ * POST `/phone-number/reset-password`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.viewBackupCodes`
+ * `auth.api.resetPasswordPhoneNumber`
  * 
  * **client:**
- * `authClient.twoFactor.viewBackupCodes`
+ * `authClient.phoneNumber.resetPassword`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/two-factor#api-method-two-factor-view-backup-codes)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/phone-number#api-method-phone-number-reset-password)
  */
