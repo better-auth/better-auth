@@ -13,6 +13,7 @@ export const {
 	requestOnlySessionMiddleware,
 	sessionMiddleware,
 	originCheck,
+	adminMiddleware,
 } = {
 	orgMiddleware: () => {},
 	orgSessionMiddleware: () => {},
@@ -21,6 +22,9 @@ export const {
 		isUsingSessionMiddleware = true;
 	},
 	originCheck: (cb: (x: any) => void) => () => {},
+	adminMiddleware: () => {
+		isUsingSessionMiddleware = true;
+	},
 };
 
 const file = path.join(process.cwd(), "./scripts/endpoint-to-doc/input.ts");
@@ -37,6 +41,9 @@ fs.watch(file, async () => {
 	isUsingSessionMiddleware = false;
 	playSound();
 	console.log(`Detected file change. Regenerating mdx.`);
+	const inputCode = fs.readFileSync(file, "utf-8");
+	if (inputCode.includes(".coerce"))
+		fs.writeFileSync(file, inputCode.replaceAll(".coerce", ""), "utf-8");
 	await generateMDX();
 	playSound("Hero");
 });

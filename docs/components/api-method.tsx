@@ -656,6 +656,8 @@ function createServerBody({
 		} else {
 			serverBody += `    query: ${body2}${fetchOptions}\n}`;
 		}
+	} else if (fetchOptions.length) {
+		serverBody += `{${fetchOptions}\n}`;
 	}
 	return serverBody;
 }

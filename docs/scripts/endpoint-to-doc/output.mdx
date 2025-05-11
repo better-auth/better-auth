@@ -3,20 +3,20 @@
 {/* -------------------------------------------------------- */}
 
 <APIMethod
-  path="/oauth2/link"
+  path="/admin/set-user-password"
   method="POST"
   requireSession
 >
 ```ts
-type oAuth2LinkAccount = {
+type setUserPassword = {
     /**
-     * The OAuth provider ID. 
+     * The new password. 
      */
-    providerId: string = "my-provider-id"
+    newPassword: string = 'new-password'
     /**
-     * The URL to redirect to once the account linking was complete. 
+     * The user id. 
      */
-    callbackURL: string = "/successful-link"
+    userId: string = 'user-id'
 }
 ```
 </APIMethod>
@@ -28,15 +28,15 @@ type oAuth2LinkAccount = {
 /**
  * ### Endpoint
  * 
- * POST `/oauth2/link`
+ * POST `/admin/set-user-password`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.oAuth2LinkAccount`
+ * `auth.api.setUserPassword`
  * 
  * **client:**
- * `authClient.oauth2.link`
+ * `authClient.admin.setUserPassword`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oauth2#api-method-oauth2-link)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-set-user-password)
  */

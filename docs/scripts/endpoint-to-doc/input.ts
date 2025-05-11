@@ -1,46 +1,37 @@
 //@ts-nocheck
-import { createAuthEndpoint, sessionMiddleware } from "./index";
+import { createAuthEndpoint, adminMiddleware } from "./index";
 import { z } from "zod";
 
-export const oAuth2LinkAccount = createAuthEndpoint(
-	"/oauth2/link",
+export const setUserPassword = createAuthEndpoint(
+	"/admin/set-user-password",
 	{
 		method: "POST",
 		body: z.object({
-			providerId: z.string({
-				description: `The OAuth provider ID. Eg: \"my-provider-id\"`
+			newPassword: z.string({
+				description: "The new password. Eg: 'new-password'",
 			}),
-			callbackURL: z.string({
-				description: `The URL to redirect to once the account linking was complete. Eg: "/successful-link"`
+			userId: z.string({
+				description: "The user id. Eg: 'user-id'",
 			}),
 		}),
-		use: [sessionMiddleware],
+		use: [adminMiddleware],
 		metadata: {
 			openapi: {
-				description: "Link an OAuth2 account to the current user session",
+				operationId: "setUserPassword",
+				summary: "Set a user's password",
+				description: "Set a user's password",
 				responses: {
-					"200": {
-						description:
-							"Authorization URL generated successfully for linking an OAuth2 account",
+					200: {
+						description: "Password set",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
-										url: {
-											type: "string",
-											format: "uri",
-											description:
-												"The authorization URL to redirect the user to for linking the OAuth2 account",
-										},
-										redirect: {
+										status: {
 											type: "boolean",
-											description:
-												"Indicates that the client should redirect to the provided URL",
-											enum: [true],
 										},
 									},
-									required: ["url", "redirect"],
 								},
 							},
 						},
@@ -49,87 +40,30 @@ export const oAuth2LinkAccount = createAuthEndpoint(
 			},
 		},
 	},
-	async (c) => {
-		const session = c.context.session;
-		const provider = options.config.find(
-			(p) => p.providerId === c.body.providerId,
-		);
-		if (!provider) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
-			});
-		}
-		const {
-			providerId,
-			clientId,
-			clientSecret,
-			redirectURI,
-			authorizationUrl,
-			discoveryUrl,
-			pkce,
-			scopes,
-			prompt,
-			accessType,
-			authorizationUrlParams,
-		} = provider;
-
-		let finalAuthUrl = authorizationUrl;
-		if (!finalAuthUrl) {
-			if (!discoveryUrl) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
-				});
-			}
-			const discovery = await betterFetch<{
-				authorization_endpoint: string;
-				token_endpoint: string;
-			}>(discoveryUrl, {
-				method: "GET",
-				headers: provider.discoveryHeaders,
-				onError(context) {
-					c.context.logger.error(context.error.message, context.error, {
-						discoveryUrl,
-					});
-				},
-			});
-			if (discovery.data) {
-				finalAuthUrl = discovery.data.authorization_endpoint;
-			}
-		}
-
-		if (!finalAuthUrl) {
-			throw new APIError("BAD_REQUEST", {
-				message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
-			});
-		}
-
-		const state = await generateState(c, {
-			userId: session.user.id,
-			email: session.user.email,
-		});
-
-		const url = await createAuthorizationURL({
-			id: providerId,
-			options: {
-				clientId,
-				clientSecret,
-				redirectURI:
-					redirectURI ||
-					`${c.context.baseURL}/oauth2/callback/${providerId}`,
+	async (ctx) => {
+		const canSetUserPassword = hasPermission({
+			userId: ctx.context.session.user.id,
+			role: ctx.context.session.user.role,
+			options: opts,
+			permissions: {
+				user: ["set-password"],
 			},
-			authorizationEndpoint: finalAuthUrl,
-			state: state.state,
-			codeVerifier: pkce ? state.codeVerifier : undefined,
-			scopes: scopes || [],
-			redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
-			prompt,
-			accessType,
-			additionalParams: authorizationUrlParams,
 		});
-
-		return c.json({
-			url: url.toString(),
-			redirect: true,
+		if (!canSetUserPassword) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
+			});
+		}
+		const hashedPassword = await ctx.context.password.hash(
+			ctx.body.newPassword,
+		);
+		await ctx.context.internalAdapter.updatePassword(
+			ctx.body.userId,
+			hashedPassword,
+		);
+		return ctx.json({
+			status: true,
 		});
 	},
 )
