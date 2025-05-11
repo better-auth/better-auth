@@ -180,7 +180,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 			method: "POST",
 			body: z.object({
 				code: z.string({
-					description: "The otp code to verify. Eg: \"012345\"",
+					description: 'The otp code to verify. Eg: "012345"',
 				}),
 				/**
 				 * if true, the device will be trusted

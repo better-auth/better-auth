@@ -1,17 +1,5 @@
 //@ts-nocheck
-import {
-	// biome-ignore lint/correctness/noUnusedImports: <explanation>
-	createAuthEndpoint,
-	// biome-ignore lint/correctness/noUnusedImports: <explanation>
-	orgMiddleware,
-	// biome-ignore lint/correctness/noUnusedImports: <explanation>
-	orgSessionMiddleware,
-	// biome-ignore lint/correctness/noUnusedImports: <explanation>
-	requestOnlySessionMiddleware,
-	// biome-ignore lint/correctness/noUnusedImports: <explanation>
-	sessionMiddleware,
-} from "./index";
-// biome-ignore lint/correctness/noUnusedImports: <explanation>
+import { createAuthEndpoint } from "./index";
 import { z } from "zod";
 
 export const resetPasswordPhoneNumber = createAuthEndpoint(
@@ -20,13 +8,15 @@ export const resetPasswordPhoneNumber = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			otp: z.string({
-				description: "The one time password to reset the password. Eg: \"123456\""
+				description:
+					'The one time password to reset the password. Eg: "123456"',
 			}),
 			phoneNumber: z.string({
-				description: "The phone number to the account which intends to reset the password for. Eg: \"+1234567890\""
+				description:
+					'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
 			}),
 			newPassword: z.string({
-				description: `The new password. Eg: "new-and-secure-password"`
+				description: `The new password. Eg: "new-and-secure-password"`,
 			}),
 		}),
 		metadata: {
@@ -109,12 +99,9 @@ export const resetPasswordPhoneNumber = createAuthEndpoint(
 		const hashedPassword = await ctx.context.password.hash(
 			ctx.body.newPassword,
 		);
-		await ctx.context.internalAdapter.updatePassword(
-			user.id,
-			hashedPassword,
-		);
+		await ctx.context.internalAdapter.updatePassword(user.id, hashedPassword);
 		return ctx.json({
 			status: true,
 		});
 	},
-)
+);

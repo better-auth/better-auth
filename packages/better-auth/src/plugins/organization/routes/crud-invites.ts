@@ -34,7 +34,8 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						),
 					],
 					{
-						description: 'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
+						description:
+							'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
 					},
 				),
 				organizationId: z
@@ -281,7 +282,7 @@ export const acceptInvitation = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			invitationId: z.string({
-				description: "The ID of the invitation to accept. Eg: \"invitation-id\"",
+				description: 'The ID of the invitation to accept. Eg: "invitation-id"',
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -385,7 +386,7 @@ export const rejectInvitation = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			invitationId: z.string({
-				description: "The ID of the invitation to reject. Eg: \"invitation-id\"",
+				description: 'The ID of the invitation to reject. Eg: "invitation-id"',
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -451,7 +452,7 @@ export const cancelInvitation = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			invitationId: z.string({
-				description: "The ID of the invitation to cancel. Eg: \"invitation-id\"",
+				description: 'The ID of the invitation to cancel. Eg: "invitation-id"',
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -523,7 +524,7 @@ export const getInvitation = createAuthEndpoint(
 		requireHeaders: true,
 		query: z.object({
 			id: z.string({
-				description: "The ID of the invitation to get. Eg: \"invitation-id\"",
+				description: 'The ID of the invitation to get. Eg: "invitation-id"',
 			}),
 		}),
 		metadata: {
@@ -649,7 +650,8 @@ export const listInvitations = createAuthEndpoint(
 			.object({
 				organizationId: z
 					.string({
-						description: "An optional ID of the organization to list invitations for. If not provided, will default to the users active organization. Eg: \"organization-id\"",
+						description:
+							'An optional ID of the organization to list invitations for. If not provided, will default to the users active organization. Eg: "organization-id"',
 					})
 					.optional(),
 			})

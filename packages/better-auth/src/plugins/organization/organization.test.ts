@@ -36,8 +36,6 @@ describe("organization", async (it) => {
 			},
 		});
 
-
-
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [organizationClient()],

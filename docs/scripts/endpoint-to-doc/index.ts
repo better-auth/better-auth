@@ -353,8 +353,8 @@ function parseParams(path: string, options: Options): string {
 	if (options.requireHeaders || isUsingSessionMiddleware)
 		params.push("requireSession");
 	if (options.metadata?.SERVER_ONLY) params.push("isServerOnly");
-	if(options.method === "GET" && options.body) params.push('forceAsBody');
-	if(options.method === "POST" && options.query) params.push('forceAsQuery');
+	if (options.method === "GET" && options.body) params.push("forceAsBody");
+	if (options.method === "POST" && options.query) params.push("forceAsQuery");
 
 	if (params.length === 2) return " " + params.join(" ");
 	return "\n  " + params.join("\n  ") + "\n";

@@ -317,7 +317,7 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 /**
  * This middleware forces the endpoint to require a valid session,
  * as well as making sure the session is fresh before proceeding.
- * 
+ *
  * Session freshness check will be skipped if the session config's freshAge
  * is set to 0
  */
