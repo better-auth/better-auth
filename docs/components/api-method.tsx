@@ -42,6 +42,7 @@ const placeholderProperty: Property = {
 export const APIMethod = ({
 	path,
 	isServerOnly,
+	isClientOnly,
 	method,
 	children,
 	noResult,
@@ -75,6 +76,12 @@ export const APIMethod = ({
 	 * @default false
 	 */
 	isServerOnly?: boolean;
+	/**
+	 * Wether the code example is client-only, thus maening it's an endpoint.
+	 *
+	 * @default false
+	 */
+	isClientOnly?: boolean;
 	/**
 	 * The `ts` codeblock which describes the API method.
 	 * I recommend checking other parts of the Better-Auth docs which is using this component to get an idea of how to
@@ -174,12 +181,14 @@ export const APIMethod = ({
 					</div>
 				</TabsList>
 				<TabsContent value="client">
-					<Endpoint
-						method={method || "GET"}
-						path={path}
-						isServerOnly={isServerOnly ?? false}
-						className="mt-0.5 mb-2"
-					/>
+					{isClientOnly ? null : (
+						<Endpoint
+							method={method || "GET"}
+							path={path}
+							isServerOnly={isServerOnly ?? false}
+							className="mt-0.5 mb-2"
+						/>
+					)}
 					{clientOnlyNote || note ? (
 						<Note>
 							{note}
@@ -211,12 +220,14 @@ export const APIMethod = ({
 					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
 				</TabsContent>
 				<TabsContent value="server">
-					<Endpoint
-						method={method || "GET"}
-						path={path}
-						isServerOnly={isServerOnly ?? false}
-						className="mt-0.5 mb-2"
-					/>
+					{isClientOnly ? null : (
+						<Endpoint
+							method={method || "GET"}
+							path={path}
+							isServerOnly={isServerOnly ?? false}
+							className="mt-0.5 mb-2"
+						/>
+					)}
 					{serverOnlyNote || note ? (
 						<Note>
 							{note}
@@ -228,8 +239,15 @@ export const APIMethod = ({
 							) : null}
 						</Note>
 					) : null}
-					{serverCodeBlock}
-					<TypeTable props={props} isServer />
+					<div className={cn("w-full relative")}>
+						{serverCodeBlock}
+						{isClientOnly ? (
+							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-blur-xs border-border">
+								<span>This is a client-only method!</span>
+							</div>
+						) : null}
+					</div>
+					{!isClientOnly ? <TypeTable props={props} isServer /> : null}
 				</TabsContent>
 			</Tabs>
 		</>

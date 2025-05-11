@@ -2,21 +2,21 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod path="/email-otp/reset-password" method="POST">
+<APIMethod
+  path="/passkey/update-passkey"
+  method="POST"
+  requireSession
+>
 ```ts
-type resetPasswordEmailOTP = {
+type updatePasskey = {
     /**
-     * Email address to reset the password. 
+     * The ID of the passkey which will be updated. 
      */
-    email: string = "user@example.com"
+    id: string = "passkey-id"
     /**
-     * OTP sent to the email. 
+     * The new name which the passkey will be updated to. 
      */
-    otp: string = "123456"
-    /**
-     * New password. 
-     */
-    password: string = "new-secure-password"
+    name: string = "my-new-passkey-name"
 }
 ```
 </APIMethod>
@@ -28,15 +28,15 @@ type resetPasswordEmailOTP = {
 /**
  * ### Endpoint
  * 
- * POST `/email-otp/reset-password`
+ * POST `/passkey/update-passkey`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.resetPasswordEmailOTP`
+ * `auth.api.updatePasskey`
  * 
  * **client:**
- * `authClient.emailOtp.resetPassword`
+ * `authClient.passkey.updatePasskey`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-reset-password)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-update-passkey)
  */

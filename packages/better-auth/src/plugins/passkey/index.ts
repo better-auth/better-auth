@@ -764,6 +764,21 @@ export const passkey = (options?: PasskeyOptions) => {
 					}
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/passkey/list-user-passkeys`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.listPasskeys`
+			 *
+			 * **client:**
+			 * `authClient.passkey.listUserPasskeys`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-list-user-passkeys)
+			 */
 			listPasskeys: createAuthEndpoint(
 				"/passkey/list-user-passkeys",
 				{
@@ -809,12 +824,30 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/passkey/delete-passkey`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deletePasskey`
+			 *
+			 * **client:**
+			 * `authClient.passkey.deletePasskey`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-delete-passkey)
+			 */
 			deletePasskey: createAuthEndpoint(
 				"/passkey/delete-passkey",
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string(),
+						id: z.string({
+							description:
+								'The ID of the passkey to delete. Eg: "some-passkey-id"',
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -858,13 +891,32 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/passkey/update-passkey`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.updatePasskey`
+			 *
+			 * **client:**
+			 * `authClient.passkey.updatePasskey`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-update-passkey)
+			 */
 			updatePasskey: createAuthEndpoint(
 				"/passkey/update-passkey",
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string(),
-						name: z.string(),
+						id: z.string({
+							description: `The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
+						}),
+						name: z.string({
+							description: `The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
