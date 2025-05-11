@@ -65,7 +65,6 @@ export const linear = (options: LinearOptions) => {
 					});
 				},
 		async getUserInfo(token) {
-			console.log("token", token);
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
@@ -105,10 +104,10 @@ export const linear = (options: LinearOptions) => {
 
 			return {
 				user: {
-					id: userData.id,
-					name: userData.name,
-					email: userData.email,
-					image: userData.avatarUrl,
+					id: profile.data.viewer.id,
+					name: profile.data.viewer.name,
+					email: profile.data.viewer.email,
+					image: profile.data.viewer.avatarUrl,
 					emailVerified: true,
 					...userMap,
 				},
