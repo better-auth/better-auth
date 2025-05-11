@@ -3,20 +3,20 @@
 {/* -------------------------------------------------------- */}
 
 <APIMethod
-  path="/passkey/update-passkey"
+  path="/oauth2/link"
   method="POST"
   requireSession
 >
 ```ts
-type updatePasskey = {
+type oAuth2LinkAccount = {
     /**
-     * The ID of the passkey which will be updated. 
+     * The OAuth provider ID. 
      */
-    id: string = "passkey-id"
+    providerId: string = "my-provider-id"
     /**
-     * The new name which the passkey will be updated to. 
+     * The URL to redirect to once the account linking was complete. 
      */
-    name: string = "my-new-passkey-name"
+    callbackURL: string = "/successful-link"
 }
 ```
 </APIMethod>
@@ -28,15 +28,15 @@ type updatePasskey = {
 /**
  * ### Endpoint
  * 
- * POST `/passkey/update-passkey`
+ * POST `/oauth2/link`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.updatePasskey`
+ * `auth.api.oAuth2LinkAccount`
  * 
  * **client:**
- * `authClient.passkey.updatePasskey`
+ * `authClient.oauth2.link`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-update-passkey)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oauth2#api-method-oauth2-link)
  */
