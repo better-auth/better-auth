@@ -663,10 +663,10 @@ function createServerBody({
 function Note({ children }: { children: ReactNode }) {
 	return (
 		<div className="relative flex flex-col w-full gap-2 p-3 mb-2 break-words border rounded-md text-md text-wrap border-border bg-fd-secondary/50">
-			<span className="w-full -mb-2 text-xs select-none text-muted-foreground">
+			<span className="w-full -mb-1 text-xs select-none text-muted-foreground">
 				Notes
 			</span>
-			<p className="mt-0 mb-0">{children as any}</p>
+			<p className="mt-0 mb-0 text-sm">{children as any}</p>
 		</div>
 	);
 }
