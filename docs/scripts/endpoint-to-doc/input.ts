@@ -1,43 +1,42 @@
 //@ts-nocheck
-import { createAuthEndpoint } from "./index";
+import { createAuthEndpoint, originCheck} from "./index";
 import { z } from "zod";
 
-export const resetPasswordPhoneNumber = createAuthEndpoint(
-	"/phone-number/reset-password",
+export const magicLinkVerify = createAuthEndpoint(
+	"/magic-link/verify",
 	{
-		method: "POST",
-		body: z.object({
-			otp: z.string({
-				description:
-					'The one time password to reset the password. Eg: "123456"',
+		method: "GET",
+		query: z.object({
+			token: z.string({
+				description: "Verification token. Eg: \"123456\"",
 			}),
-			phoneNumber: z.string({
-				description:
-					'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
-			}),
-			newPassword: z.string({
-				description: `The new password. Eg: "new-and-secure-password"`,
-			}),
+			callbackURL: z
+				.string({
+					description:
+						"URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: \"/dashboard\"",
+				})
+				.optional(),
 		}),
+		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		requireHeaders: true,
 		metadata: {
 			openapi: {
-				description: "Reset password using phone number OTP",
+				description: "Verify magic link",
 				responses: {
-					"200": {
-						description: "Password reset successfully",
+					200: {
+						description: "Success",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
-										status: {
-											type: "boolean",
-											description:
-												"Indicates if the password was reset successfully",
-											enum: [true],
+										session: {
+											$ref: "#/components/schemas/Session",
+										},
+										user: {
+											$ref: "#/components/schemas/User",
 										},
 									},
-									required: ["status"],
 								},
 							},
 						},
@@ -47,61 +46,94 @@ export const resetPasswordPhoneNumber = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(
-				`${ctx.body.phoneNumber}-forget-password`,
-			);
-		if (!verification) {
-			throw new APIError("BAD_REQUEST", {
-				message: ERROR_CODES.OTP_NOT_FOUND,
-			});
+		const { token, callbackURL } = ctx.query;
+		const toRedirectTo = callbackURL?.startsWith("http")
+			? callbackURL
+			: callbackURL
+				? `${ctx.context.options.baseURL}${callbackURL}`
+				: ctx.context.options.baseURL;
+		const tokenValue =
+			await ctx.context.internalAdapter.findVerificationValue(token);
+		if (!tokenValue) {
+			throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
 		}
-		if (verification.expiresAt < new Date()) {
-			throw new APIError("BAD_REQUEST", {
-				message: ERROR_CODES.OTP_EXPIRED,
-			});
-		}
-		const [otpValue, attempts] = verification.value.split(":");
-		const allowedAttempts = options?.allowedAttempts || 3;
-		if (attempts && parseInt(attempts) >= allowedAttempts) {
+		if (tokenValue.expiresAt < new Date()) {
 			await ctx.context.internalAdapter.deleteVerificationValue(
-				verification.id,
+				tokenValue.id,
 			);
-			throw new APIError("FORBIDDEN", {
-				message: "Too many attempts",
-			});
+			throw ctx.redirect(`${toRedirectTo}?error=EXPIRED_TOKEN`);
 		}
-		if (ctx.body.otp !== otpValue) {
-			await ctx.context.internalAdapter.updateVerificationValue(
-				verification.id,
-				{
-					value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-				},
-			);
-			throw new APIError("BAD_REQUEST", {
-				message: ERROR_CODES.INVALID_OTP,
-			});
-		}
-		const user = await ctx.context.adapter.findOne<User>({
-			model: "user",
-			where: [
-				{
-					field: "phoneNumber",
-					value: ctx.body.phoneNumber,
-				},
-			],
-		});
-		if (!user) {
-			throw new APIError("BAD_REQUEST", {
-				message: ERROR_CODES.UNEXPECTED_ERROR,
-			});
-		}
-		const hashedPassword = await ctx.context.password.hash(
-			ctx.body.newPassword,
+		await ctx.context.internalAdapter.deleteVerificationValue(
+			tokenValue.id,
 		);
-		await ctx.context.internalAdapter.updatePassword(user.id, hashedPassword);
-		return ctx.json({
-			status: true,
+		const { email, name } = JSON.parse(tokenValue.value) as {
+			email: string;
+			name?: string;
+		};
+		let user = await ctx.context.internalAdapter
+			.findUserByEmail(email)
+			.then((res) => res?.user);
+
+		if (!user) {
+			if (!options.disableSignUp) {
+				const newUser = await ctx.context.internalAdapter.createUser(
+					{
+						email: email,
+						emailVerified: true,
+						name: name || "",
+					},
+					ctx,
+				);
+				user = newUser;
+				if (!user) {
+					throw ctx.redirect(
+						`${toRedirectTo}?error=failed_to_create_user`,
+					);
+				}
+			} else {
+				throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
+			}
+		}
+
+		if (!user.emailVerified) {
+			await ctx.context.internalAdapter.updateUser(
+				user.id,
+				{
+					emailVerified: true,
+				},
+				ctx,
+			);
+		}
+
+		const session = await ctx.context.internalAdapter.createSession(
+			user.id,
+			ctx,
+		);
+
+		if (!session) {
+			throw ctx.redirect(
+				`${toRedirectTo}?error=failed_to_create_session`,
+			);
+		}
+
+		await setSessionCookie(ctx, {
+			session,
+			user,
 		});
+		if (!callbackURL) {
+			return ctx.json({
+				token: session.token,
+				user: {
+					id: user.id,
+					email: user.email,
+					emailVerified: user.emailVerified,
+					name: user.name,
+					image: user.image,
+					createdAt: user.createdAt,
+					updatedAt: user.updatedAt,
+				},
+			});
+		}
+		throw ctx.redirect(callbackURL);
 	},
-);
+)

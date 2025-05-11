@@ -12,6 +12,7 @@ export const {
 	orgSessionMiddleware,
 	requestOnlySessionMiddleware,
 	sessionMiddleware,
+	originCheck,
 } = {
 	orgMiddleware: () => {},
 	orgSessionMiddleware: () => {},
@@ -19,6 +20,7 @@ export const {
 	sessionMiddleware: () => {
 		isUsingSessionMiddleware = true;
 	},
+	originCheck: (cb: (x: any) => void) => () => {}
 };
 
 const file = path.join(process.cwd(), "./scripts/endpoint-to-doc/input.ts");
