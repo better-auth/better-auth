@@ -34,17 +34,33 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/enable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.enableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.enable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-enable)
+			 */
 			enableTwoFactor: createAuthEndpoint(
 				"/two-factor/enable",
 				{
 					method: "POST",
 					body: z.object({
 						password: z.string({
-							description: "User password",
+							description: "User password.",
 						}),
 						issuer: z
 							.string({
-								description: "Custom issuer for the TOTP URI",
+								description:
+									'An optional custom issuer for the TOTP URI. Defaults to app-name defined in your auth config. Eg: "my-app-name"',
 							})
 							.optional(),
 					}),
@@ -156,13 +172,28 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/disable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.disableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.disable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-disable)
+			 */
 			disableTwoFactor: createAuthEndpoint(
 				"/two-factor/disable",
 				{
 					method: "POST",
 					body: z.object({
 						password: z.string({
-							description: "User password",
+							description: "User password.",
 						}),
 					}),
 					use: [sessionMiddleware],

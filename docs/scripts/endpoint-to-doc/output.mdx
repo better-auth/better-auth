@@ -2,9 +2,38 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-
+<APIMethod
+  path="/two-factor/view-backup-codes"
+  method="GET"
+  isServerOnly
+  forceAsBody
+>
+```ts
+type viewBackupCodes = {
+    /**
+     * The user ID to view all backup codes. 
+     */
+    userId?: string | null = "user-id"
+}
+```
+</APIMethod>
 
 {/* -------------------------------------------------------- */}
 {/*                JSDOC For the endpoint                    */}
 {/* -------------------------------------------------------- */}
 
+/**
+ * ### Endpoint
+ * 
+ * GET `/two-factor/view-backup-codes`
+ * 
+ * ### API Methods
+ * 
+ * **server:**
+ * `auth.api.viewBackupCodes`
+ * 
+ * **client:**
+ * `authClient.twoFactor.viewBackupCodes`
+ * 
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/two-factor#api-method-two-factor-view-backup-codes)
+ */

@@ -49,7 +49,9 @@ export const APIMethod = ({
 	note,
 	clientOnlyNote,
 	serverOnlyNote,
-	resultVariable="data"
+	resultVariable = "data",
+	forceAsBody,
+	forceAsQuery,
 }: {
 	/**
 	 * Endpoint path
@@ -96,11 +98,19 @@ export const APIMethod = ({
 	 */
 	note?: string;
 	/**
-	 * The result output variable name. 
-	 * 
+	 * The result output variable name.
+	 *
 	 * @default "data"
 	 */
 	resultVariable?: string;
+	/**
+	 * Force the server auth API to use `body`, rather than auto choosing
+	 */
+	forceAsBody?: boolean;
+	/**
+	 * Force the server auth API to use `query`, rather than auto choosing
+	 */
+	forceAsQuery?: boolean;
 }) => {
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
@@ -110,6 +120,8 @@ export const APIMethod = ({
 		props,
 		method: method ?? "GET",
 		requireSession: requireSession ?? false,
+		forceAsQuery,
+		forceAsBody,
 	});
 
 	const serverCodeBlock = (
@@ -182,7 +194,11 @@ export const APIMethod = ({
 					<div className={cn("w-full relative")}>
 						<DynamicCodeBlock
 							code={`${code_prefix}${
-								noResult ? "" : `const { data${resultVariable === "data" ? "" : `: ${resultVariable}`}, error } = `
+								noResult
+									? ""
+									: `const { data${
+											resultVariable === "data" ? "" : `: ${resultVariable}`
+										}, error } = `
 							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
 							lang="ts"
 						/>
@@ -548,7 +564,15 @@ function createServerBody({
 	props,
 	requireSession,
 	method,
-}: { props: Property[]; requireSession: boolean; method: string }) {
+	forceAsBody,
+	forceAsQuery,
+}: {
+	props: Property[];
+	requireSession: boolean;
+	method: string;
+	forceAsQuery: boolean | undefined;
+	forceAsBody: boolean | undefined;
+}) {
 	let serverBody = "";
 
 	let body2 = ``;
@@ -609,7 +633,7 @@ function createServerBody({
 
 	if (props.length > 0) {
 		serverBody += "{\n";
-		if (method === "POST") {
+		if ((method === "POST" || forceAsBody) && !forceAsQuery) {
 			serverBody += `    body: ${body2}${fetchOptions}\n}`;
 		} else {
 			serverBody += `    query: ${body2}${fetchOptions}\n}`;

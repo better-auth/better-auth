@@ -108,7 +108,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 			use: [sessionMiddleware],
 			body: z.object({
 				password: z.string({
-					description: "User password",
+					description: "User password.",
 				}),
 			}),
 			metadata: {
@@ -180,7 +180,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 			method: "POST",
 			body: z.object({
 				code: z.string({
-					description: "The otp code to verify",
+					description: "The otp code to verify. Eg: \"012345\"",
 				}),
 				/**
 				 * if true, the device will be trusted
@@ -190,7 +190,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 				trustDevice: z
 					.boolean({
 						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
+							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
 					})
 					.optional(),
 			}),
@@ -284,10 +284,41 @@ export const totp2fa = (options?: TOTPOptions) => {
 			return valid(ctx);
 		},
 	);
+
 	return {
 		id: "totp",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/totp/generate`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.generateTOTP`
+			 *
+			 * **client:**
+			 * `authClient.totp.generate`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/totp#api-method-totp-generate)
+			 */
 			generateTOTP: generateTOTP,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/get-totp-uri`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getTOTPURI`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.getTotpUri`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/two-factor#api-method-two-factor-get-totp-uri)
+			 */
 			getTOTPURI: getTOTPURI,
 			verifyTOTP,
 		},

@@ -5,6 +5,8 @@ import path from "path";
 
 playSound("Hero");
 
+let isUsingSessionMiddleware = false;
+
 export const {
 	orgMiddleware,
 	orgSessionMiddleware,
@@ -14,7 +16,9 @@ export const {
 	orgMiddleware: () => {},
 	orgSessionMiddleware: () => {},
 	requestOnlySessionMiddleware: () => {},
-	sessionMiddleware: () => {},
+	sessionMiddleware: () => {
+		isUsingSessionMiddleware = true;
+	},
 };
 
 const file = path.join(process.cwd(), "./scripts/endpoint-to-doc/input.ts");
@@ -28,6 +32,7 @@ function clearImportCache() {
 console.log(`Watching: ${file}`);
 
 fs.watch(file, async () => {
+	isUsingSessionMiddleware = false;
 	playSound();
 	console.log(`Detected file change. Regenerating mdx.`);
 	await generateMDX();
@@ -46,6 +51,10 @@ async function generateMDX() {
 		//@ts-ignore
 		await exports[Object.keys(exports)[0]!];
 	if (!path || !options) return console.error(`No path or options.`);
+
+	if (options.use) {
+		options.use.forEach((fn) => fn());
+	}
 
 	console.log(`function name:`, functionName);
 
@@ -97,9 +106,7 @@ type Body = {
 };
 
 function parseType(functionName: string, options: Options) {
-	const body: z.ZodAny = (
-		options.method === "GET" ? options.query : options.body
-	) as any;
+	const body: z.ZodAny = (options.query ?? options.body) as any;
 
 	const parsedBody: Body[] = parseZodShape(body, []);
 
@@ -289,9 +296,9 @@ function getType(
 		}
 		case "ZodNumber": {
 			return {
-				type: ['number', ..._null],
-				isOptional: forceOptional ?? value.isOptional()
-			}
+				type: ["number", ..._null],
+				isOptional: forceOptional ?? value.isOptional(),
+			};
 		}
 		case "ZodUnion": {
 			const v = value as never as z.ZodUnion<[z.ZodAny]>;
@@ -343,13 +350,15 @@ function parseParams(path: string, options: Options): string {
 	params.push(`path="${path}"`);
 	params.push(`method="${options.method}"`);
 
-	if (options.requireHeaders) params.push("requireSession");
-	if(options.metadata?.SERVER_ONLY) params.push('isServerOnly')
+	if (options.requireHeaders || isUsingSessionMiddleware)
+		params.push("requireSession");
+	if (options.metadata?.SERVER_ONLY) params.push("isServerOnly");
+	if(options.method === "GET" && options.body) params.push('forceAsBody');
+	if(options.method === "POST" && options.query) params.push('forceAsQuery');
 
 	if (params.length === 2) return " " + params.join(" ");
 	return "\n  " + params.join("\n  ") + "\n";
 }
-
 
 function generateJSDoc({
 	path,
