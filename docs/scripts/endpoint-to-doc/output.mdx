@@ -2,21 +2,21 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod
-  path="/magic-link/verify"
-  method="GET"
-  requireSession
->
+<APIMethod path="/email-otp/reset-password" method="POST">
 ```ts
-type magicLinkVerify = {
+type resetPasswordEmailOTP = {
     /**
-     * Verification token. 
+     * Email address to reset the password. 
      */
-    token: string = "123456"
+    email: string = "user@example.com"
     /**
-     * URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. 
+     * OTP sent to the email. 
      */
-    callbackURL?: string = "/dashboard"
+    otp: string = "123456"
+    /**
+     * New password. 
+     */
+    password: string = "new-secure-password"
 }
 ```
 </APIMethod>
@@ -28,15 +28,15 @@ type magicLinkVerify = {
 /**
  * ### Endpoint
  * 
- * GET `/magic-link/verify`
+ * POST `/email-otp/reset-password`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.magicLinkVerify`
+ * `auth.api.resetPasswordEmailOTP`
  * 
  * **client:**
- * `authClient.magicLink.verify`
+ * `authClient.emailOtp.resetPassword`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/magic-link#api-method-magic-link-verify)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-reset-password)
  */

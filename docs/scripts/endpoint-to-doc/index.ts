@@ -20,7 +20,7 @@ export const {
 	sessionMiddleware: () => {
 		isUsingSessionMiddleware = true;
 	},
-	originCheck: (cb: (x: any) => void) => () => {}
+	originCheck: (cb: (x: any) => void) => () => {},
 };
 
 const file = path.join(process.cwd(), "./scripts/endpoint-to-doc/input.ts");
@@ -60,7 +60,12 @@ async function generateMDX() {
 
 	console.log(`function name:`, functionName);
 
-	let jsdoc = generateJSDoc({ path, functionName, options });
+	let jsdoc = generateJSDoc({
+		path,
+		functionName,
+		options,
+		isServerOnly: options.metadata?.SERVER_ONLY ?? false,
+	});
 
 	let mdx = `<APIMethod${parseParams(path, options)}>\n\`\`\`ts\n${parseType(
 		functionName,
@@ -273,6 +278,17 @@ function getType(
 				isOptional: forceOptional ?? value.isOptional(),
 			};
 		}
+		case "ZodEnum": {
+			const v = value as never as z.ZodEnum<["hello", "world"]>;
+			const types: string[] = [];
+			for (const value of v._def.values) {
+				types.push(JSON.stringify(value));
+			}
+			return {
+				type: types,
+				isOptional: forceOptional ?? v.isOptional(),
+			};
+		}
 		case "ZodOptional": {
 			const v = value as never as z.ZodOptional<z.ZodAny>;
 			const r = getType(v._def.innerType, { forceOptional: true });
@@ -366,7 +382,13 @@ function generateJSDoc({
 	path,
 	options,
 	functionName,
-}: { path: string; options: Options; functionName: string }) {
+	isServerOnly,
+}: {
+	path: string;
+	options: Options;
+	functionName: string;
+	isServerOnly: boolean;
+}) {
 	/**
 	 * ### Endpoint
 	 *
@@ -393,9 +415,11 @@ function generateJSDoc({
 	jsdoc.push(`**server:**`);
 	jsdoc.push(`\`auth.api.${functionName}\``);
 	jsdoc.push(``);
-	jsdoc.push(`**client:**`);
-	jsdoc.push(`\`authClient.${pathToDotNotation(path)}\``);
-	jsdoc.push(``);
+	if (!isServerOnly) {
+		jsdoc.push(`**client:**`);
+		jsdoc.push(`\`authClient.${pathToDotNotation(path)}\``);
+		jsdoc.push(``);
+	}
 	jsdoc.push(
 		`@see [Read our docs to learn more.](https://better-auth.com/docs/plugins/${
 			path.split("/")[1]

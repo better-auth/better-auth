@@ -1,27 +1,27 @@
 //@ts-nocheck
-import { createAuthEndpoint, originCheck} from "./index";
+import { createAuthEndpoint, originCheck } from "./index";
 import { z } from "zod";
 
-export const magicLinkVerify = createAuthEndpoint(
-	"/magic-link/verify",
+const types = ["email-verification", "sign-in", "forget-password"] as const;
+
+export const resetPasswordEmailOTP = createAuthEndpoint(
+	"/email-otp/reset-password",
 	{
-		method: "GET",
-		query: z.object({
-			token: z.string({
-				description: "Verification token. Eg: \"123456\"",
+		method: "POST",
+		body: z.object({
+			email: z.string({
+				description: "Email address to reset the password. Eg: \"user@example.com\"",
 			}),
-			callbackURL: z
-				.string({
-					description:
-						"URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: \"/dashboard\"",
-				})
-				.optional(),
+			otp: z.string({
+				description: "OTP sent to the email. Eg: \"123456\"",
+			}),
+			password: z.string({
+				description: "New password. Eg: \"new-secure-password\"",
+			}),
 		}),
-		use: [originCheck((ctx) => ctx.query.callbackURL)],
-		requireHeaders: true,
 		metadata: {
 			openapi: {
-				description: "Verify magic link",
+				description: "Reset password with email OTP",
 				responses: {
 					200: {
 						description: "Success",
@@ -30,11 +30,8 @@ export const magicLinkVerify = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
-										session: {
-											$ref: "#/components/schemas/Session",
-										},
-										user: {
-											$ref: "#/components/schemas/User",
+										success: {
+											type: "boolean",
 										},
 									},
 								},
@@ -46,94 +43,85 @@ export const magicLinkVerify = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const { token, callbackURL } = ctx.query;
-		const toRedirectTo = callbackURL?.startsWith("http")
-			? callbackURL
-			: callbackURL
-				? `${ctx.context.options.baseURL}${callbackURL}`
-				: ctx.context.options.baseURL;
-		const tokenValue =
-			await ctx.context.internalAdapter.findVerificationValue(token);
-		if (!tokenValue) {
-			throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
+		const email = ctx.body.email;
+		const user = await ctx.context.internalAdapter.findUserByEmail(
+			email,
+			{
+				includeAccounts: true,
+			},
+		);
+		if (!user) {
+			throw new APIError("BAD_REQUEST", {
+				message: ERROR_CODES.USER_NOT_FOUND,
+			});
 		}
-		if (tokenValue.expiresAt < new Date()) {
-			await ctx.context.internalAdapter.deleteVerificationValue(
-				tokenValue.id,
+		const verificationValue =
+			await ctx.context.internalAdapter.findVerificationValue(
+				`forget-password-otp-${email}`,
 			);
-			throw ctx.redirect(`${toRedirectTo}?error=EXPIRED_TOKEN`);
+		if (!verificationValue) {
+			throw new APIError("BAD_REQUEST", {
+				message: ERROR_CODES.INVALID_OTP,
+			});
+		}
+		if (verificationValue.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verificationValue.id,
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: ERROR_CODES.OTP_EXPIRED,
+			});
+		}
+		const [otpValue, attempts] = verificationValue.value.split(":");
+		const allowedAttempts = options?.allowedAttempts || 3;
+		if (attempts && parseInt(attempts) >= allowedAttempts) {
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verificationValue.id,
+			);
+			throw new APIError("FORBIDDEN", {
+				message: ERROR_CODES.TOO_MANY_ATTEMPTS,
+			});
+		}
+		if (ctx.body.otp !== otpValue) {
+			await ctx.context.internalAdapter.updateVerificationValue(
+				verificationValue.id,
+				{
+					value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+				},
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: ERROR_CODES.INVALID_OTP,
+			});
 		}
 		await ctx.context.internalAdapter.deleteVerificationValue(
-			tokenValue.id,
+			verificationValue.id,
 		);
-		const { email, name } = JSON.parse(tokenValue.value) as {
-			email: string;
-			name?: string;
-		};
-		let user = await ctx.context.internalAdapter
-			.findUserByEmail(email)
-			.then((res) => res?.user);
-
-		if (!user) {
-			if (!options.disableSignUp) {
-				const newUser = await ctx.context.internalAdapter.createUser(
-					{
-						email: email,
-						emailVerified: true,
-						name: name || "",
-					},
-					ctx,
-				);
-				user = newUser;
-				if (!user) {
-					throw ctx.redirect(
-						`${toRedirectTo}?error=failed_to_create_user`,
-					);
-				}
-			} else {
-				throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
-			}
-		}
-
-		if (!user.emailVerified) {
-			await ctx.context.internalAdapter.updateUser(
-				user.id,
+		const passwordHash = await ctx.context.password.hash(
+			ctx.body.password,
+		);
+		const account = user.accounts.find(
+			(account) => account.providerId === "credential",
+		);
+		if (!account) {
+			await ctx.context.internalAdapter.createAccount(
 				{
-					emailVerified: true,
+					userId: user.user.id,
+					providerId: "credential",
+					accountId: user.user.id,
+					password: passwordHash,
 				},
+				ctx,
+			);
+		} else {
+			await ctx.context.internalAdapter.updatePassword(
+				user.user.id,
+				passwordHash,
 				ctx,
 			);
 		}
 
-		const session = await ctx.context.internalAdapter.createSession(
-			user.id,
-			ctx,
-		);
-
-		if (!session) {
-			throw ctx.redirect(
-				`${toRedirectTo}?error=failed_to_create_session`,
-			);
-		}
-
-		await setSessionCookie(ctx, {
-			session,
-			user,
+		return ctx.json({
+			success: true,
 		});
-		if (!callbackURL) {
-			return ctx.json({
-				token: session.token,
-				user: {
-					id: user.id,
-					email: user.email,
-					emailVerified: user.emailVerified,
-					name: user.name,
-					image: user.image,
-					createdAt: user.createdAt,
-					updatedAt: user.updatedAt,
-				},
-			});
-		}
-		throw ctx.redirect(callbackURL);
 	},
 )
