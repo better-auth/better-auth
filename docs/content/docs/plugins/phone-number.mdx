@@ -138,13 +138,24 @@ export const auth = betterAuth({
 
 In addition to signing in a user using send-verify flow, you can also use phone number as an identifier and sign in a user using phone number and password.
 
+<APIMethod path="/sign-in/phone-number" method="POST">
 ```ts
-await authClient.signIn.phoneNumber({
-    phoneNumber: "+123456789",
-    password: "password",
-    rememberMe: true //optional defaults to true
-})
+type signInPhoneNumber = {
+    /**
+     * Phone number to sign in. 
+     */
+    phoneNumber: string = "+1234567890"
+    /**
+     * Password to use for sign in. 
+     */
+    password: string
+    /**
+     * Remember the session. 
+     */
+    rememberMe?: boolean = true
+}
 ```
+</APIMethod>
 
 ### Update Phone Number
 
