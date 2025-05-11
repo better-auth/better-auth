@@ -9,6 +9,7 @@ import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	type OAuth2Tokens,
+	type OAuthOverrideUserInfoFunction,
 	type OAuthProvider,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -144,7 +145,9 @@ export interface GenericOAuthConfig {
 	 * when the user signs in with the provider.
 	 * @default false
 	 */
-	overrideUserInfo?: boolean;
+	overrideUserInfo?:
+		| boolean
+		| OAuthOverrideUserInfoFunction<Record<string, any>>;
 }
 
 interface GenericOAuthOptions {

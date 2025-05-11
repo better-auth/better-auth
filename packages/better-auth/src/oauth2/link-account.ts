@@ -3,6 +3,7 @@ import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
 import { isDevelopment } from "../utils/env";
+import type { OAuthOverrideUserInfoFunction } from "./types";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
@@ -17,7 +18,7 @@ export async function handleOAuthUserInfo(
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
 		disableSignUp?: boolean;
-		overrideUserInfo?: boolean;
+		overrideUserInfo?: boolean | OAuthOverrideUserInfoFunction;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -106,17 +107,21 @@ export async function handleOAuthUserInfo(
 				}
 			}
 		}
+		// update user info from the provider if overrideUserInfo is set
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
-			// update user info from the provider if overrideUserInfo is true
-			await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
-			});
+			// provide the updater function the email information
+			const payload =
+				typeof overrideUserInfo === "function"
+					? overrideUserInfo(restUserInfo, {
+							email: userInfo.email.toLowerCase(),
+							emailVerified:
+								userInfo.email.toLowerCase() === dbUser.user.email
+									? dbUser.user.emailVerified || userInfo.emailVerified
+									: userInfo.emailVerified,
+						})
+					: restUserInfo;
+			await c.context.internalAdapter.updateUser(dbUser.user.id, payload);
 		}
 	} else {
 		if (disableSignUp) {

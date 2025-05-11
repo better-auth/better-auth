@@ -77,6 +77,16 @@ export interface OAuthProvider<
 	options?: ProviderOptions;
 }
 
+export type OAuthOverrideUserInfoFunction<
+	Profile extends Record<string, any> = {},
+> = (
+	profile: Profile,
+	data: {
+		email: string;
+		emailVerified: boolean;
+	},
+) => Record<string, any>;
+
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client ID of your application
@@ -182,5 +192,5 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 *
 	 * @default false
 	 */
-	overrideUserInfoOnSignIn?: boolean;
+	overrideUserInfoOnSignIn?: boolean | OAuthOverrideUserInfoFunction<Profile>;
 };
