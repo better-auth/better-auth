@@ -88,7 +88,7 @@ describe("username", async (it) => {
 			name: "new-name",
 			fetchOptions: {
 				headers: new Headers(),
-			}
+			},
 		});
 
 		const res = await client.updateUser({
