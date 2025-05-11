@@ -275,7 +275,8 @@ export const username = (options?: UsernameOptions) => {
 							const blockChangeUpdateUser =
 								ctx.path === "/update-user" &&
 								user &&
-								user.id !== ctx.context.session?.session.userId;
+								ctx.context.session &&
+								user.id !== ctx.context.session.session.userId;
 							if (blockChangeSignUp || blockChangeUpdateUser) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
