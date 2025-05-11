@@ -127,9 +127,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 					);
 					const url = `${
 						ctx.context.baseURL
-					}/magic-link/verify?token=${verificationToken}&callbackURL=${
+					}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
 						ctx.body.callbackURL || "/"
-					}`;
+					)}`;
 					await options.sendMagicLink(
 						{
 							email,
@@ -158,7 +158,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 							})
 							.optional(),
 					}),
-					use: [originCheck((ctx) => ctx.query.callbackURL)],
+					use: [
+						originCheck((ctx) => decodeURIComponent(ctx.query.callbackURL))
+					],
 					requireHeaders: true,
 					metadata: {
 						openapi: {
@@ -187,7 +189,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { token, callbackURL } = ctx.query;
+					const { token, encodedCallbackURL = "/" } = ctx.query;
+					const callbackURL = encodedCallbackURL ? decodeURIComponent(encodedCallbackURL) : "/";
 					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
