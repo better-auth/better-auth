@@ -5,7 +5,7 @@ import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
 import type { ApiKeyOptions } from "./types";
-import { createApiKeyRoutes } from "./routes";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import type { User } from "../../types";
 import { validateApiKey } from "./routes/verify-api-key";
 import { base64Url } from "@better-auth/utils/base64";
@@ -174,7 +174,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							schema,
 						});
 
-						await routes._deleteAllExpiredApiKeys(ctx.context);
+						await deleteAllExpiredApiKeys(ctx.context);
 
 						let user: User;
 						try {
