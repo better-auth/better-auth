@@ -31,10 +31,10 @@ export function createApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				name: z.string({ description: "Name of the Api Key" }).optional(),
+				name: z.string({ description: "Name of the Api Key. Eg: 'project-api-key'" }).optional(),
 				expiresIn: z
 					.number({
-						description: "Expiration time of the Api Key in seconds",
+						description: "Expiration time of the Api Key in seconds. Eg: 3600",
 					})
 					.min(1)
 					.optional()
@@ -44,11 +44,11 @@ export function createApiKey({
 				userId: z.coerce
 					.string({
 						description:
-							"User Id of the user that the Api Key belongs to. Useful for server-side only.",
+							"User Id of the user that the Api Key belongs to. Useful for server-side only. Eg: \"user-id\"",
 					})
 					.optional(),
 				prefix: z
-					.string({ description: "Prefix of the Api Key" })
+					.string({ description: "Prefix of the Api Key. Eg: 'project-api-key'" })
 					.regex(/^[a-zA-Z0-9_-]+$/, {
 						message:
 							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
@@ -56,45 +56,47 @@ export function createApiKey({
 					.optional(),
 				remaining: z
 					.number({
-						description: "Remaining number of requests. Server side only",
+						description: "Remaining number of requests. Server side only. Eg: 100",
 					})
 					.min(0)
 					.optional()
 					.nullable()
 					.default(null),
-				metadata: z.any({ description: "Metadata of the Api Key" }).optional(),
+				metadata: z.any({ description: "Metadata of the Api Key. Eg: { someKey: 'someValue' }" }).optional(),
 				refillAmount: z
 					.number({
 						description:
-							"Amount to refill the remaining count of the Api Key. Server Only Property",
+							"Amount to refill the remaining count of the Api Key. Server Only Property. Eg: 100",
 					})
 					.min(1)
 					.optional(),
 				refillInterval: z
 					.number({
 						description:
-							"Interval to refill the Api Key in milliseconds. Server Only Property.",
+							"Interval to refill the Api Key in milliseconds. Server Only Property. Eg: 1000",
 					})
 					.optional(),
 				rateLimitTimeWindow: z
 					.number({
 						description:
-							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
+							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property. Eg: 1000",
 					})
 					.optional(),
 				rateLimitMax: z
 					.number({
 						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property. Eg: 100",
 					})
 					.optional(),
 				rateLimitEnabled: z
 					.boolean({
 						description:
-							"Whether the key has rate limiting enabled. Server Only Property.",
+							"Whether the key has rate limiting enabled. Server Only Property. Eg: true",
 					})
 					.optional(),
-				permissions: z.record(z.string(), z.array(z.string())).optional(),
+				permissions: z.record(z.string(), z.array(z.string()), {
+					description: "Permissions of the Api Key.",
+				}).optional(),
 			}),
 			metadata: {
 				openapi: {
