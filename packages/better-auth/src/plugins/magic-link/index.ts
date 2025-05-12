@@ -193,13 +193,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const encodedCallbackURL = ctx.query.callbackURL;
 					let callbackURL: string;
 					try {
-						callbackURL = encodedCallbackURL 
-						? decodeURIComponent(encodedCallbackURL) 
-						: "/";
+						callbackURL = encodedCallbackURL
+							? decodeURIComponent(encodedCallbackURL)
+							: "/";
 					} catch (e) {
 						callbackURL = "/";
 					}
-					
 					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
