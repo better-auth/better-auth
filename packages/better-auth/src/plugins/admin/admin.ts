@@ -518,7 +518,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte"], {
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"], {
 								description: "The operator to use for the filter",
 							})
 							.optional(),
