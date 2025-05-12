@@ -384,12 +384,12 @@ To get the full details of an organization, you can use the `getFullOrganization
   <Tab value="client">
   ```ts title="auth-client.ts"
   const organization = await authClient.organization.getFullOrganization({
-      organizationId: "organization-id" // optional, by default it will use the active organization
+      query: { organizationId: "organization-id" } // optional, by default it will use the active organization
   })
-  //you can also use organizationSlug instead of organizationId
+  // you can also use organizationSlug instead of organizationId
   const organization = await authClient.organization.getFullOrganization({
-      organizationSlug: "organization-slug"
-  })
+      query: { organizationSlug: "organization-slug" }
+  })  
   ```
   </Tab>
 
