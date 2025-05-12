@@ -150,7 +150,7 @@ export const auth = betterAuth({
 
 - `generateOTP`: A function that generates the OTP. Defaults to a random 6-digit number.
 
-- `maxAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
+- `allowedAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -158,7 +158,7 @@ import { betterAuth } from "better-auth"
 export const auth = betterAuth({
     plugins: [
         emailOTP({
-            maxAttempts: 5, // Allow 5 attempts before invalidating the OTP
+            allowedAttempts: 5, // Allow 5 attempts before invalidating the OTP
             expiresIn: 300
         })
     ]
