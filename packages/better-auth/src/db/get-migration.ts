@@ -64,8 +64,38 @@ export function matchType(
 	fieldType: FieldType,
 	dbType: KyselyDatabaseType,
 ) {
+	const lowerColumnDataType = columnDataType.toLowerCase();
+
+	if (dbType === "postgres") {
+		if (fieldType === "string[]") {
+			if (
+				lowerColumnDataType === "_text" ||
+				lowerColumnDataType === "text[]" ||
+				lowerColumnDataType === "_varchar" ||
+				lowerColumnDataType === "varchar[]" ||
+				lowerColumnDataType === "_char" ||
+				lowerColumnDataType === "char[]" ||
+				lowerColumnDataType === "_bpchar" ||
+				lowerColumnDataType === "bpchar[]"
+			) {
+				return true;
+			}
+		} else if (fieldType === "number[]") {
+			if (
+				lowerColumnDataType === "_int4" || lowerColumnDataType === "integer[]" ||
+				lowerColumnDataType === "_int8" || lowerColumnDataType === "bigint[]" ||
+				lowerColumnDataType === "_int2" || lowerColumnDataType === "smallint[]" ||
+				lowerColumnDataType === "_float4" || lowerColumnDataType === "real[]" ||
+				lowerColumnDataType === "_float8" || lowerColumnDataType === "double precision[]" ||
+				lowerColumnDataType === "_numeric" || lowerColumnDataType === "numeric[]"
+			) {
+				return true;
+			}
+		}
+	}
+
 	if (fieldType === "string[]" || fieldType === "number[]") {
-		return columnDataType.toLowerCase().includes("json");
+		return lowerColumnDataType.includes("json");
 	}
 	const types = map[dbType];
 	const type = Array.isArray(fieldType)
