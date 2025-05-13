@@ -10,6 +10,10 @@ function redirectErrorURL(url: string, error: string, description: string) {
 	}error=${error}&error_description=${description}`;
 }
 
+function getDefaultOrCustomErrorURL(ctx: GenericEndpointContext) {
+	return ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
+}
+
 export async function authorize(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,
@@ -54,10 +58,12 @@ export async function authorize(
 
 	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		const errorURL = getDefaultOrCustomErrorURL(ctx);
+		throw ctx.redirect(`${errorURL}?error=invalid_client`);
 	}
 
 	if (!query.response_type) {
+		const errorURL = getDefaultOrCustomErrorURL(ctx);
 		throw ctx.redirect(
 			redirectErrorURL(
 				`${ctx.context.baseURL}/error`,
@@ -88,7 +94,8 @@ export async function authorize(
 			} as Client;
 		});
 	if (!client) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		const errorURL = getDefaultOrCustomErrorURL(ctx);
+		throw ctx.redirect(`${errorURL}?error=invalid_client`);
 	}
 	const redirectURI = client.redirectURLs.find(
 		(url) => url === ctx.query.redirect_uri,
@@ -103,12 +110,14 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=client_disabled`);
+		const errorURL = getDefaultOrCustomErrorURL(ctx);
+		throw ctx.redirect(`${errorURL}?error=client_disabled`);
 	}
 
 	if (query.response_type !== "code") {
+		const errorURL = getDefaultOrCustomErrorURL(ctx);
 		throw ctx.redirect(
-			`${ctx.context.baseURL}/error?error=unsupported_response_type`,
+			`${errorURL}?error=unsupported_response_type`,
 		);
 	}
 
