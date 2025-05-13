@@ -125,7 +125,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 						ctx,
 					);
-
 					const url = `${
 						ctx.context.baseURL
 					}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
@@ -161,27 +160,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}),
 					use: [
 						originCheck((ctx) => {
-							const functionName = "magicLink.magicLinkVerify.originCheck";
-							const encodedCbFromQuery = ctx.query.callbackURL;
-							if (typeof encodedCbFromQuery === "string") {
-								try {
-									return decodeURIComponent(encodedCbFromQuery);
-								} catch (e) {
-									return "::malformed_callback_url_for_origin_check::";
-								}
-							}
-
-							let pathForOriginCheck = "/";
-							if (
-								typeof ctx.context.options.basePath === "string" &&
-								ctx.context.options.basePath.trim() !== ""
-							) {
-								pathForOriginCheck =
-									ctx.context.options.basePath.replace(/\/$/, "") + "/";
-							} else if (ctx.context.options.basePath) {
-								pathForOriginCheck = "/api/auth/";
-							}
-							return `${ctx.context.options.basePath}${pathForOriginCheck}`;
+							return ctx.query.callbackURL
+								? decodeURIComponent(ctx.query.callbackURL)
+								: "/";
 						}),
 					],
 					requireHeaders: true,
@@ -213,21 +194,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const token = ctx.query.token;
-					const encodedCallbackURLFromQuery = ctx.query.callbackURL;
-
-					let callbackURL: string;
-
-					if (typeof encodedCallbackURLFromQuery === "string") {
-						try {
-							callbackURL = decodeURIComponent(encodedCallbackURLFromQuery);
-						} catch (e) {
-							throw ctx.redirect(
-								`${ctx.context.options.baseURL}/?error=INVALID_CALLBACK_URL_FORMAT`,
-							);
-						}
-					} else {
-						callbackURL = "/";
-					}
+					const callbackURL = ctx.query.callbackURL
+						? decodeURIComponent(ctx.query.callbackURL)
+						: "/";
 
 					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
@@ -304,7 +273,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						session,
 						user,
 					});
-					if (encodedCallbackURLFromQuery === undefined) {
+					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,
 							user: {
