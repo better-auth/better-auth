@@ -277,38 +277,25 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}
 					const appFullBaseURL = `${appHostBaseURL}${appPathPrefix}`;
 
-					let decodedEffectiveCallbackURL: string;
+					let callbackURL: string;
 
 					if (typeof encodedCallbackURLFromQuery === "string") {
 						try {
-							decodedEffectiveCallbackURL = decodeURIComponent(
-								encodedCallbackURLFromQuery,
-							);
+							callbackURL = decodeURIComponent(encodedCallbackURLFromQuery);
 						} catch (e) {
 							throw ctx.redirect(
 								`${appFullBaseURL}/?error=INVALID_CALLBACK_URL_FORMAT`,
 							);
 						}
 					} else {
-						decodedEffectiveCallbackURL = "/";
+						callbackURL = "/";
 					}
 
-					const buildFullRedirectURL = (pathOrUrl: string): string => {
-						if (
-							pathOrUrl.toLowerCase().startsWith("http://") ||
-							pathOrUrl.toLowerCase().startsWith("https://")
-						) {
-							return pathOrUrl;
-						}
-						const path = pathOrUrl.startsWith("/")
-							? pathOrUrl
-							: `/${pathOrUrl}`;
-						return `${appFullBaseURL}${path}`;
-					};
-
-					const toRedirectTo = buildFullRedirectURL(
-						decodedEffectiveCallbackURL,
-					);
+					const toRedirectTo = callbackURL?.startsWith("http")
+						? callbackURL
+						: callbackURL
+							? `${ctx.context.options.baseURL}${callbackURL}`
+							: ctx.context.options.baseURL;
 
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(token);
@@ -355,7 +342,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}
 					}
 
-					if (user && !user.emailVerified) {
+					if (!user.emailVerified) {
 						await ctx.context.internalAdapter.updateUser(
 							user.id,
 							{
@@ -363,10 +350,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 							},
 							ctx,
 						);
-						user.emailVerified = true;
-					}
-					if (!user) {
-						throw ctx.redirect(`${toRedirectTo}?error=USER_PROCESSING_ERROR`);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -384,7 +367,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 						session,
 						user,
 					});
-
 					if (encodedCallbackURLFromQuery === undefined) {
 						return ctx.json({
 							token: session.token,
@@ -399,10 +381,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							},
 						});
 					} else {
-						const finalRedirectURL = buildFullRedirectURL(
-							decodedEffectiveCallbackURL,
-						);
-						throw ctx.redirect(finalRedirectURL);
+						throw ctx.redirect(callbackURL);
 					}
 				},
 			),
