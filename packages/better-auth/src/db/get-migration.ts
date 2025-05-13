@@ -82,12 +82,18 @@ export function matchType(
 			}
 		} else if (fieldType === "number[]") {
 			if (
-				lowerColumnDataType === "_int4" || lowerColumnDataType === "integer[]" ||
-				lowerColumnDataType === "_int8" || lowerColumnDataType === "bigint[]" ||
-				lowerColumnDataType === "_int2" || lowerColumnDataType === "smallint[]" ||
-				lowerColumnDataType === "_float4" || lowerColumnDataType === "real[]" ||
-				lowerColumnDataType === "_float8" || lowerColumnDataType === "double precision[]" ||
-				lowerColumnDataType === "_numeric" || lowerColumnDataType === "numeric[]"
+				lowerColumnDataType === "_int4" ||
+				lowerColumnDataType === "integer[]" ||
+				lowerColumnDataType === "_int8" ||
+				lowerColumnDataType === "bigint[]" ||
+				lowerColumnDataType === "_int2" ||
+				lowerColumnDataType === "smallint[]" ||
+				lowerColumnDataType === "_float4" ||
+				lowerColumnDataType === "real[]" ||
+				lowerColumnDataType === "_float8" ||
+				lowerColumnDataType === "double precision[]" ||
+				lowerColumnDataType === "_numeric" ||
+				lowerColumnDataType === "numeric[]"
 			) {
 				return true;
 			}
