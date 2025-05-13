@@ -144,9 +144,8 @@ export default function Hero() {
 										</Link>
 									</div>
 								</GradientBG>
-								
 							</div>
-							
+
 							{
 								<>
 									<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
@@ -160,11 +159,18 @@ export default function Hero() {
 									</div>
 								</>
 							}
-						<div className="mt-4 md:w-40 w-32">
-							<a href='https://www.ycombinator.com/launches/NUm-better-auth-the-authentication-framework-for-typescript' target="_blank"><img src='https://www.ycombinator.com/launches/NUm-better-auth-the-authentication-framework-for-typescript/upvote_embed.svg' alt='Launch YC: Better Auth - The Authentication Framework for TypeScript'/ ></a>
+							<div className="mt-4 md:w-40 w-32">
+								<a
+									href="https://www.ycombinator.com/launches/NUm-better-auth-the-authentication-framework-for-typescript"
+									target="_blank"
+								>
+									<img
+										src="https://www.ycombinator.com/launches/NUm-better-auth-the-authentication-framework-for-typescript/upvote_embed.svg"
+										alt="Launch YC: Better Auth - The Authentication Framework for TypeScript"
+									/>
+								</a>
+							</div>
 						</div>
-						</div>
-						
 					</div>
 
 					<div className="relative hidden md:block lg:static xl:pl-10">
