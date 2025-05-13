@@ -197,7 +197,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const callbackURL = ctx.query.callbackURL
 						? decodeURIComponent(ctx.query.callbackURL)
 						: "/";
-
 					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
@@ -243,7 +242,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							}
 						} else {
 							throw ctx.redirect(
-								`${toRedirectTo}?error=user_not_found_or_signup_disabled`,
+								`${toRedirectTo}?error=new_user_signup_disabled`,
 							);
 						}
 					}
