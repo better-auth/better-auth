@@ -6,6 +6,7 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../../api";
+import { redirectErrorURL } from "./utils";
 
 interface MagicLinkOptions {
 	/**
@@ -74,6 +75,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 								description: "URL to redirect after magic link verification",
 							})
 							.optional(),
+						errorCallbackURL: z
+							.string({
+								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
+						newUserCallbackURL: z
+							.string({
+								description:
+									"The URL to redirect to after login if the user is new",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -99,7 +111,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, callbackURL, errorCallbackURL, newUserCallbackURL } =
+						ctx.body;
 
 					if (options.disableSignUp) {
 						const user =
@@ -125,11 +138,15 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 						ctx,
 					);
-					const url = `${
-						ctx.context.baseURL
-					}/magic-link/verify?token=${verificationToken}&callbackURL=${
-						ctx.body.callbackURL || "/"
-					}`;
+					const url =
+						`${ctx.context.baseURL}/magic-link/verify?token=${verificationToken}` +
+						`&callbackURL=${encodeURIComponent(callbackURL || "/")}` +
+						(errorCallbackURL
+							? `&errorCallbackURL=${encodeURIComponent(errorCallbackURL)}`
+							: "") +
+						(newUserCallbackURL
+							? `&newUserCallbackURL=${encodeURIComponent(newUserCallbackURL)}`
+							: "");
 					await options.sendMagicLink(
 						{
 							email,
@@ -157,8 +174,28 @@ export const magicLink = (options: MagicLinkOptions) => {
 									"URL to redirect after magic link verification, if not provided will return session",
 							})
 							.optional(),
+						errorCallbackURL: z
+							.string({
+								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
+						newUserCallbackURL: z
+							.string({
+								description:
+									"The URL to redirect to after login if the user is new",
+							})
+							.optional(),
 					}),
-					use: [originCheck((ctx) => ctx.query.callbackURL)],
+					// Extended originCheck to validate all redirect URLs
+					use: [
+						originCheck((ctx) =>
+							[
+								ctx.query.callbackURL,
+								ctx.query.errorCallbackURL,
+								ctx.query.newUserCallbackURL,
+							].filter(Boolean),
+						),
+					],
 					requireHeaders: true,
 					metadata: {
 						openapi: {
@@ -187,22 +224,30 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { token, callbackURL } = ctx.query;
-					const toRedirectTo = callbackURL?.startsWith("http")
+					const { token, callbackURL, errorCallbackURL, newUserCallbackURL } =
+						ctx.query;
+
+					const defaultRedirectURL = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
 							? `${ctx.context.options.baseURL}${callbackURL}`
-							: ctx.context.options.baseURL;
+							: (ctx.context.options.baseURL as string);
+					const toRedirectTo = errorCallbackURL?.startsWith("http")
+						? errorCallbackURL
+						: errorCallbackURL
+							? `${ctx.context.options.baseURL}${errorCallbackURL}`
+							: defaultRedirectURL;
+
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(token);
 					if (!tokenValue) {
-						throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
+						throw ctx.redirect(redirectErrorURL(toRedirectTo, "INVALID_TOKEN"));
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						throw ctx.redirect(`${toRedirectTo}?error=EXPIRED_TOKEN`);
+						throw ctx.redirect(redirectErrorURL(toRedirectTo, "EXPIRED_TOKEN"));
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -215,6 +260,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						.findUserByEmail(email)
 						.then((res) => res?.user);
 
+					let isNewUser = false;
 					if (!user) {
 						if (!options.disableSignUp) {
 							const newUser = await ctx.context.internalAdapter.createUser(
@@ -226,13 +272,16 @@ export const magicLink = (options: MagicLinkOptions) => {
 								ctx,
 							);
 							user = newUser;
+							isNewUser = true;
 							if (!user) {
 								throw ctx.redirect(
-									`${toRedirectTo}?error=failed_to_create_user`,
+									redirectErrorURL(toRedirectTo, "failed_to_create_user"),
 								);
 							}
 						} else {
-							throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
+							throw ctx.redirect(
+								redirectErrorURL(toRedirectTo, "failed_to_create_user"),
+							);
 						}
 					}
 
@@ -253,7 +302,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!session) {
 						throw ctx.redirect(
-							`${toRedirectTo}?error=failed_to_create_session`,
+							redirectErrorURL(toRedirectTo, "failed_to_create_session"),
 						);
 					}
 
@@ -261,6 +310,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 						session,
 						user,
 					});
+					if (isNewUser && newUserCallbackURL) {
+						throw ctx.redirect(newUserCallbackURL);
+					}
+
 					if (!callbackURL) {
 						return ctx.json({
 							token: session.token,
@@ -275,6 +328,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							},
 						});
 					}
+
 					throw ctx.redirect(callbackURL);
 				},
 			),
