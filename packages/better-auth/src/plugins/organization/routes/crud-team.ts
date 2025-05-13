@@ -201,7 +201,7 @@ export const removeTeam = createAuthEndpoint(
 			if (!member || member.teamId === ctx.body.teamId) {
 				throw new APIError("FORBIDDEN", {
 					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM,
 				});
 			}
 

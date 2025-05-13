@@ -49,7 +49,7 @@ export const auth = betterAuth({
     import { createAuthClient } from "better-auth/client"
     import { organizationClient } from "better-auth/client/plugins"
 
-    const authClient = createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [ // [!code highlight]
             organizationClient() // [!code highlight]
         ] // [!code highlight]
@@ -384,12 +384,12 @@ To get the full details of an organization, you can use the `getFullOrganization
   <Tab value="client">
   ```ts title="auth-client.ts"
   const organization = await authClient.organization.getFullOrganization({
-      organizationId: "organization-id" // optional, by default it will use the active organization
+      query: { organizationId: "organization-id" } // optional, by default it will use the active organization
   })
-  //you can also use organizationSlug instead of organizationId
+  // you can also use organizationSlug instead of organizationId
   const organization = await authClient.organization.getFullOrganization({
-      organizationSlug: "organization-slug"
-  })
+      query: { organizationSlug: "organization-slug" }
+  })  
   ```
   </Tab>
 
@@ -470,7 +470,7 @@ To add a member to an organization, we first need to send an invitation to the u
 
 ### Setup Invitation Email
 
-For member invitation to work we first need to provider `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
+For member invitation to work we first need to provide `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
 
 You'll need to construct and send the invitation link to the user. The link should include the invitation ID, which will be used with the acceptInvitation function when the user clicks on it.
 
@@ -551,7 +551,7 @@ await authClient.organization.rejectInvitation({
 To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
 
 ```ts title="auth-client.ts"
-authClient.organization.getInvitation({
+await authClient.organization.getInvitation({
     query: {
         id: params.id
     }
@@ -610,7 +610,7 @@ If you want to add a member directly to an organization without sending an invit
 ```ts title="api.ts"
 import { auth } from "@/auth";
 
-auth.api.addMember({
+await auth.api.addMember({
   body: {
       userId: "user-id",
       organizationId: "organization-id",
@@ -800,7 +800,8 @@ You can use the `hasPermission` action provided by the `api` to check the permis
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-auth.api.hasPermission({
+
+await auth.api.hasPermission({
   headers: await headers(),
     body: {
       permissions: {
@@ -810,7 +811,7 @@ auth.api.hasPermission({
 });
 
 // You can also check multiple resource permissions at the same time
-auth.api.hasPermission({
+await auth.api.hasPermission({
   headers: await headers(),
     body: {
       permissions: {
@@ -844,7 +845,7 @@ const canCreateProjectAndCreateSale = await authClient.organization.hasPermissio
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
 
 ```ts title="auth-client.ts"
-const canCreateProject = authClient.organization.checkRolePermission({
+const canCreateProject = await authClient.organization.checkRolePermission({
 	permissions: {
 		organization: ["delete"],
 	},
@@ -852,7 +853,7 @@ const canCreateProject = authClient.organization.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndCreateSale = authClient.organization.checkRolePermission({
+const canCreateProjectAndCreateSale = await authClient.organization.checkRolePermission({
 	permissions: {
 		organization: ["delete"],
     member: ["delete"]

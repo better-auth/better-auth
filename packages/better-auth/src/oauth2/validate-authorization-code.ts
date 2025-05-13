@@ -1,8 +1,8 @@
+import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
-import { jwtVerify } from "jose";
-import { base64Url } from "@better-auth/utils/base64";
 
 export async function validateAuthorizationCode({
 	code,
@@ -12,6 +12,7 @@ export async function validateAuthorizationCode({
 	tokenEndpoint,
 	authentication,
 	deviceId,
+	headers,
 }: {
 	code: string;
 	redirectURI: string;
@@ -20,12 +21,14 @@ export async function validateAuthorizationCode({
 	deviceId?: string;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
+	headers?: Record<string, string>;
 }) {
 	const body = new URLSearchParams();
-	const headers: Record<string, any> = {
+	const requestHeaders: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 		"user-agent": "better-auth",
+		...headers,
 	};
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
@@ -37,7 +40,7 @@ export async function validateAuthorizationCode({
 		const encodedCredentials = base64Url.encode(
 			`${options.clientId}:${options.clientSecret}`,
 		);
-		headers["authorization"] = `Basic ${encodedCredentials}`;
+		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
@@ -45,7 +48,7 @@ export async function validateAuthorizationCode({
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
-		headers,
+		headers: requestHeaders,
 	});
 
 	if (error) {

@@ -202,8 +202,8 @@ export const signInSocial = createAuthEndpoint(
 												],
 											},
 										},
-										required: ["redirect", "token", "user"],
 									},
+									required: ["redirect", "token", "user"],
 								},
 							},
 						},
@@ -456,6 +456,8 @@ export const signInEmail = createAuthEndpoint(
 		});
 
 		if (!user) {
+			// Hash password to prevent timing attacks from revealing valid email addresses
+			// By hashing passwords for invalid emails, we ensure consistent response times
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
@@ -523,7 +525,7 @@ export const signInEmail = createAuthEndpoint(
 
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
-			ctx.headers,
+			ctx,
 			ctx.body.rememberMe === false,
 		);
 

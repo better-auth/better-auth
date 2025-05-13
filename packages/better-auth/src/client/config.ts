@@ -100,7 +100,10 @@ export const getClientConfig = (options?: ClientOptions) => {
 
 	for (const plugin of plugins) {
 		if (plugin.getActions) {
-			Object.assign(pluginsActions, plugin.getActions?.($fetch, $store));
+			Object.assign(
+				pluginsActions,
+				plugin.getActions?.($fetch, $store, options),
+			);
 		}
 	}
 	return {
