@@ -132,6 +132,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (options.disableSignUp) {
 						const user =
 							await ctx.context.internalAdapter.findUserByEmail(email);
+
 						if (!user) {
 							throw new APIError("BAD_REQUEST", {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
@@ -190,8 +191,15 @@ export const magicLink = (options: MagicLinkOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string(),
-						callbackURL: z.string().optional(),
+						token: z.string({
+							description: "Verification token",
+						}),
+						callbackURL: z
+							.string({
+								description:
+									"URL to redirect after magic link verification, if not provided will return session",
+							})
+							.optional(),
 					}),
 					use: [
 						originCheck((ctx) => {
@@ -298,20 +306,20 @@ export const magicLink = (options: MagicLinkOptions) => {
 						return `${appFullBaseURL}${path}`;
 					};
 
-					const toRedirectToOnError = buildFullRedirectURL(
+					const toRedirectTo = buildFullRedirectURL(
 						decodedEffectiveCallbackURL,
 					);
 
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(token);
 					if (!tokenValue) {
-						throw ctx.redirect(`${toRedirectToOnError}?error=INVALID_TOKEN`);
+						throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						throw ctx.redirect(`${toRedirectToOnError}?error=EXPIRED_TOKEN`);
+						throw ctx.redirect(`${toRedirectTo}?error=EXPIRED_TOKEN`);
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -337,12 +345,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 							user = newUser;
 							if (!user) {
 								throw ctx.redirect(
-									`${toRedirectToOnError}?error=failed_to_create_user`,
+									`${toRedirectTo}?error=failed_to_create_user`,
 								);
 							}
 						} else {
 							throw ctx.redirect(
-								`${toRedirectToOnError}?error=USER_NOT_FOUND_OR_SIGNUP_DISABLED`,
+								`${toRedirectTo}?error=USER_NOT_FOUND_OR_SIGNUP_DISABLED`,
 							);
 						}
 					}
@@ -358,9 +366,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						user.emailVerified = true;
 					}
 					if (!user) {
-						throw ctx.redirect(
-							`${toRedirectToOnError}?error=USER_PROCESSING_ERROR`,
-						);
+						throw ctx.redirect(`${toRedirectTo}?error=USER_PROCESSING_ERROR`);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -370,7 +376,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!session) {
 						throw ctx.redirect(
-							`${toRedirectToOnError}?error=failed_to_create_session`,
+							`${toRedirectTo}?error=failed_to_create_session`,
 						);
 					}
 
@@ -385,7 +391,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							user: {
 								id: user.id,
 								email: user.email,
-								emailVerified: user.emailVerified ?? false,
+								emailVerified: user.emailVerified,
 								name: user.name,
 								image: user.image,
 								createdAt: user.createdAt,
