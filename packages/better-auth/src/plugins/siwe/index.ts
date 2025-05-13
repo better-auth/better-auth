@@ -12,7 +12,7 @@ export interface SIWEPluginOptions {
 	generateSiweNonce: () => Promise<string>;
 	verifySiweMessage: (message: string, signature: string, nonce: string) => Promise<boolean>;
 	ensLookup?: (walletAddress: string) => Promise<{ name: string; avatar: string }>;
-
+	anonymous?: boolean;
 }
 
 export const siwe = (options: SIWEPluginOptions) =>
@@ -54,11 +54,27 @@ export const siwe = (options: SIWEPluginOptions) =>
 						message: z.string(),
 						signature: z.string(),
 						walletAddress: z.string(),
-					}),
+						email: z.string().email().optional(),
+					})
+					.refine(
+						(data) => options.anonymous !== false || !!data.email,
+						{
+							message: "Email is required when the anonymous plugin option is disabled.",
+							path: ["email"],
+						}
+					),
 					requireRequest: true,
 				},
 				async (ctx) => {
-					const { message, signature, walletAddress } = ctx.body;
+					const { message, signature, walletAddress, email } = ctx.body;
+					const isAnon = options.anonymous ?? true;
+
+					if (!isAnon && !email) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Email is required when anonymous is disabled.",
+							status: 400,
+						});
+					}
 
 					try {
 						// Find stored nonce to check it's validity
@@ -101,11 +117,11 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						if (!user) {
 							const domain = options.emailDomainName ?? getOrigin(ctx.context.baseURL);
-							const email = `${walletAddress}@${domain}`;
+							const userEmail = !isAnon && email ? email : `${walletAddress}@${domain}`;
 							const { name, avatar } = await options.ensLookup?.(walletAddress) ?? {};
 							user = await ctx.context.internalAdapter.createUser({
-								name: name ?? walletAddress, // TODO: should fallback to something else other than walletAddress
-								email,
+								name: name ?? walletAddress,
+								email: userEmail,
 								walletAddress,
 								avatar: avatar ?? "",
 							});
