@@ -48,33 +48,6 @@ interface MagicLinkOptions {
 	generateToken?: (email: string) => Promise<string> | string;
 }
 
-function getSafeBaseURL(
-	ctx: any,
-	{
-		required = false,
-		forFunction,
-	}: { required?: boolean; forFunction: string } = {
-		forFunction: "unknown operation",
-	},
-): string {
-	const baseURL = ctx.context.options.baseURL;
-
-	if (typeof baseURL === "string" && baseURL.trim() !== "") {
-		return baseURL.replace(/\/$/, "");
-	}
-
-	if (required) {
-		throw new Error(
-			`Configuration error: 'options.baseURL' is undefined or empty, but it is required for ${forFunction}. Please set a valid baseURL in your BetterAuth options.`,
-		);
-	}
-
-	console.warn(
-		`Warning: 'options.baseURL' is undefined or empty. ${forFunction} will use relative paths or may not function as expected with absolute URLs.`,
-	);
-	return "";
-}
-
 export const magicLink = (options: MagicLinkOptions) => {
 	return {
 		id: "magic-link",
@@ -127,7 +100,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
-					const functionName = "magicLink.signInMagicLink";
 
 					if (options.disableSignUp) {
 						const user =
@@ -154,23 +126,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx,
 					);
 
-					const hostBaseURL = getSafeBaseURL(ctx, {
-						required: true,
-						forFunction: `${functionName} (host part of URL)`,
-					});
-
-					let apiPathPrefix = "/api/auth";
-					if (
-						typeof ctx.context.options.basePath === "string" &&
-						ctx.context.options.basePath.trim() !== ""
-					) {
-						apiPathPrefix = ctx.context.options.basePath;
-					}
-					const normalizedApiPathPrefix = apiPathPrefix.replace(/\/$/, "");
-
-					const fullPublicBaseURL = `${hostBaseURL}${normalizedApiPathPrefix}`;
-
-					const url = `${fullPublicBaseURL}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
+					const url = `${
+						ctx.context.baseURL
+					}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
 						ctx.body.callbackURL || "/",
 					)}`;
 					await options.sendMagicLink(
@@ -213,10 +171,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 								}
 							}
 
-							const hostForOriginCheck = getSafeBaseURL(ctx, {
-								required: false,
-								forFunction: functionName,
-							});
 							let pathForOriginCheck = "/";
 							if (
 								typeof ctx.context.options.basePath === "string" &&
@@ -224,10 +178,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 							) {
 								pathForOriginCheck =
 									ctx.context.options.basePath.replace(/\/$/, "") + "/";
-							} else if (hostForOriginCheck) {
+							} else if (ctx.context.options.basePath) {
 								pathForOriginCheck = "/api/auth/";
 							}
-							return `${hostForOriginCheck}${pathForOriginCheck}`;
+							return `${ctx.context.options.basePath}${pathForOriginCheck}`;
 						}),
 					],
 					requireHeaders: true,
@@ -260,22 +214,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 				async (ctx) => {
 					const token = ctx.query.token;
 					const encodedCallbackURLFromQuery = ctx.query.callbackURL;
-					const functionName = "magicLink.magicLinkVerify";
-
-					const appHostBaseURL = getSafeBaseURL(ctx, {
-						required: false,
-						forFunction: functionName,
-					});
-					let appPathPrefix = "";
-					if (
-						typeof ctx.context.options.basePath === "string" &&
-						ctx.context.options.basePath.trim() !== ""
-					) {
-						appPathPrefix = ctx.context.options.basePath.replace(/\/$/, "");
-					} else if (appHostBaseURL) {
-						appPathPrefix = "/api/auth";
-					}
-					const appFullBaseURL = `${appHostBaseURL}${appPathPrefix}`;
 
 					let callbackURL: string;
 
@@ -284,7 +222,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							callbackURL = decodeURIComponent(encodedCallbackURLFromQuery);
 						} catch (e) {
 							throw ctx.redirect(
-								`${appFullBaseURL}/?error=INVALID_CALLBACK_URL_FORMAT`,
+								`${ctx.context.options.baseURL}/?error=INVALID_CALLBACK_URL_FORMAT`,
 							);
 						}
 					} else {
@@ -296,7 +234,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 						: callbackURL
 							? `${ctx.context.options.baseURL}${callbackURL}`
 							: ctx.context.options.baseURL;
-
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(token);
 					if (!tokenValue) {
@@ -337,7 +274,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							}
 						} else {
 							throw ctx.redirect(
-								`${toRedirectTo}?error=USER_NOT_FOUND_OR_SIGNUP_DISABLED`,
+								`${toRedirectTo}?error=user_not_found_or_signup_disabled`,
 							);
 						}
 					}
@@ -380,9 +317,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 								updatedAt: user.updatedAt,
 							},
 						});
-					} else {
-						throw ctx.redirect(callbackURL);
 					}
+					throw ctx.redirect(callbackURL);
 				},
 			),
 		},
