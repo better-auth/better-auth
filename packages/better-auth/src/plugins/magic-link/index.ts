@@ -48,6 +48,33 @@ interface MagicLinkOptions {
 	generateToken?: (email: string) => Promise<string> | string;
 }
 
+function getSafeBaseURL(
+	ctx: any,
+	{
+		required = false,
+		forFunction,
+	}: { required?: boolean; forFunction: string } = {
+		forFunction: "unknown operation",
+	},
+): string {
+	const baseURL = ctx.context.options.baseURL;
+
+	if (typeof baseURL === "string" && baseURL.trim() !== "") {
+		return baseURL.replace(/\/$/, "");
+	}
+
+	if (required) {
+		throw new Error(
+			`Configuration error: 'options.baseURL' is undefined or empty, but it is required for ${forFunction}. Please set a valid baseURL in your BetterAuth options.`,
+		);
+	}
+
+	console.warn(
+		`Warning: 'options.baseURL' is undefined or empty. ${forFunction} will use relative paths or may not function as expected with absolute URLs.`,
+	);
+	return "";
+}
+
 export const magicLink = (options: MagicLinkOptions) => {
 	return {
 		id: "magic-link",
@@ -100,11 +127,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
+					const functionName = "magicLink.signInMagicLink";
 
 					if (options.disableSignUp) {
 						const user =
 							await ctx.context.internalAdapter.findUserByEmail(email);
-
 						if (!user) {
 							throw new APIError("BAD_REQUEST", {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
@@ -125,9 +152,24 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 						ctx,
 					);
-					const url = `${
-						ctx.context.baseURL
-					}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
+
+					const hostBaseURL = getSafeBaseURL(ctx, {
+						required: true,
+						forFunction: `${functionName} (host part of URL)`,
+					});
+
+					let apiPathPrefix = "/api/auth";
+					if (
+						typeof ctx.context.options.basePath === "string" &&
+						ctx.context.options.basePath.trim() !== ""
+					) {
+						apiPathPrefix = ctx.context.options.basePath;
+					}
+					const normalizedApiPathPrefix = apiPathPrefix.replace(/\/$/, "");
+
+					const fullPublicBaseURL = `${hostBaseURL}${normalizedApiPathPrefix}`;
+
+					const url = `${fullPublicBaseURL}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
 						ctx.body.callbackURL || "/",
 					)}`;
 					await options.sendMagicLink(
@@ -148,18 +190,37 @@ export const magicLink = (options: MagicLinkOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string({
-							description: "Verification token",
-						}),
-						callbackURL: z
-							.string({
-								description:
-									"URL to redirect after magic link verification, if not provided will return session",
-							})
-							.optional(),
+						token: z.string(),
+						callbackURL: z.string().optional(),
 					}),
 					use: [
-						originCheck((ctx) => decodeURIComponent(ctx.query.callbackURL)),
+						originCheck((ctx) => {
+							const functionName = "magicLink.magicLinkVerify.originCheck";
+							const encodedCbFromQuery = ctx.query.callbackURL;
+							if (typeof encodedCbFromQuery === "string") {
+								try {
+									return decodeURIComponent(encodedCbFromQuery);
+								} catch (e) {
+									return "::malformed_callback_url_for_origin_check::";
+								}
+							}
+
+							const hostForOriginCheck = getSafeBaseURL(ctx, {
+								required: false,
+								forFunction: functionName,
+							});
+							let pathForOriginCheck = "/";
+							if (
+								typeof ctx.context.options.basePath === "string" &&
+								ctx.context.options.basePath.trim() !== ""
+							) {
+								pathForOriginCheck =
+									ctx.context.options.basePath.replace(/\/$/, "") + "/";
+							} else if (hostForOriginCheck) {
+								pathForOriginCheck = "/api/auth/";
+							}
+							return `${hostForOriginCheck}${pathForOriginCheck}`;
+						}),
 					],
 					requireHeaders: true,
 					metadata: {
@@ -190,30 +251,67 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const token = ctx.query.token;
-					const encodedCallbackURL = ctx.query.callbackURL;
-					let callbackURL: string;
-					try {
-						callbackURL = encodedCallbackURL
-							? decodeURIComponent(encodedCallbackURL)
-							: "/";
-					} catch (e) {
-						callbackURL = "/";
+					const encodedCallbackURLFromQuery = ctx.query.callbackURL;
+					const functionName = "magicLink.magicLinkVerify";
+
+					const appHostBaseURL = getSafeBaseURL(ctx, {
+						required: false,
+						forFunction: functionName,
+					});
+					let appPathPrefix = "";
+					if (
+						typeof ctx.context.options.basePath === "string" &&
+						ctx.context.options.basePath.trim() !== ""
+					) {
+						appPathPrefix = ctx.context.options.basePath.replace(/\/$/, "");
+					} else if (appHostBaseURL) {
+						appPathPrefix = "/api/auth";
 					}
-					const toRedirectTo = callbackURL?.startsWith("http")
-						? callbackURL
-						: callbackURL
-							? `${ctx.context.options.baseURL}${callbackURL}`
-							: ctx.context.options.baseURL;
+					const appFullBaseURL = `${appHostBaseURL}${appPathPrefix}`;
+
+					let decodedEffectiveCallbackURL: string;
+
+					if (typeof encodedCallbackURLFromQuery === "string") {
+						try {
+							decodedEffectiveCallbackURL = decodeURIComponent(
+								encodedCallbackURLFromQuery,
+							);
+						} catch (e) {
+							throw ctx.redirect(
+								`${appFullBaseURL}/?error=INVALID_CALLBACK_URL_FORMAT`,
+							);
+						}
+					} else {
+						decodedEffectiveCallbackURL = "/";
+					}
+
+					const buildFullRedirectURL = (pathOrUrl: string): string => {
+						if (
+							pathOrUrl.toLowerCase().startsWith("http://") ||
+							pathOrUrl.toLowerCase().startsWith("https://")
+						) {
+							return pathOrUrl;
+						}
+						const path = pathOrUrl.startsWith("/")
+							? pathOrUrl
+							: `/${pathOrUrl}`;
+						return `${appFullBaseURL}${path}`;
+					};
+
+					const toRedirectToOnError = buildFullRedirectURL(
+						decodedEffectiveCallbackURL,
+					);
+
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(token);
 					if (!tokenValue) {
-						throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
+						throw ctx.redirect(`${toRedirectToOnError}?error=INVALID_TOKEN`);
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						throw ctx.redirect(`${toRedirectTo}?error=EXPIRED_TOKEN`);
+						throw ctx.redirect(`${toRedirectToOnError}?error=EXPIRED_TOKEN`);
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -239,21 +337,29 @@ export const magicLink = (options: MagicLinkOptions) => {
 							user = newUser;
 							if (!user) {
 								throw ctx.redirect(
-									`${toRedirectTo}?error=failed_to_create_user`,
+									`${toRedirectToOnError}?error=failed_to_create_user`,
 								);
 							}
 						} else {
-							throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
+							throw ctx.redirect(
+								`${toRedirectToOnError}?error=USER_NOT_FOUND_OR_SIGNUP_DISABLED`,
+							);
 						}
 					}
 
-					if (!user.emailVerified) {
+					if (user && !user.emailVerified) {
 						await ctx.context.internalAdapter.updateUser(
 							user.id,
 							{
 								emailVerified: true,
 							},
 							ctx,
+						);
+						user.emailVerified = true;
+					}
+					if (!user) {
+						throw ctx.redirect(
+							`${toRedirectToOnError}?error=USER_PROCESSING_ERROR`,
 						);
 					}
 
@@ -264,7 +370,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!session) {
 						throw ctx.redirect(
-							`${toRedirectTo}?error=failed_to_create_session`,
+							`${toRedirectToOnError}?error=failed_to_create_session`,
 						);
 					}
 
@@ -272,21 +378,26 @@ export const magicLink = (options: MagicLinkOptions) => {
 						session,
 						user,
 					});
-					if (!callbackURL) {
+
+					if (encodedCallbackURLFromQuery === undefined) {
 						return ctx.json({
 							token: session.token,
 							user: {
 								id: user.id,
 								email: user.email,
-								emailVerified: user.emailVerified,
+								emailVerified: user.emailVerified ?? false,
 								name: user.name,
 								image: user.image,
 								createdAt: user.createdAt,
 								updatedAt: user.updatedAt,
 							},
 						});
+					} else {
+						const finalRedirectURL = buildFullRedirectURL(
+							decodedEffectiveCallbackURL,
+						);
+						throw ctx.redirect(finalRedirectURL);
 					}
-					throw ctx.redirect(callbackURL);
 				},
 			),
 		},
