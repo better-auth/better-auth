@@ -23,6 +23,8 @@ export * from "./error-code";
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
+		// Use the same logic as the sign-in after hook for consistency for the pending 2FA cookie/verification value maxAge
+		pending2faVerificationMaxAge: options?.otpOptions?.period || 60 * 5, // Default 5 minutes (300 seconds)
 	};
 	const totp = totp2fa(options?.totpOptions);
 	const backupCode = backupCode2fa(options?.backupCodeOptions);
@@ -103,7 +105,30 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						ctx.context.secret,
 						options?.backupCodeOptions,
 					);
+
+					// Delete existing two factor data for the user first
+					await ctx.context.adapter.deleteMany({
+						model: opts.twoFactorTable,
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
+					});
+
+					// Create the new 2FA record (stores secret and backup codes)
+					await ctx.context.adapter.create({
+						model: opts.twoFactorTable,
+						data: {
+							secret: encryptedSecret,
+							backupCodes: backupCodes.encryptedBackupCodes,
+							userId: user.id,
+						},
+					});
+
 					if (options?.skipVerificationOnEnable) {
+						// If skipping verification, enable 2FA immediately and update session
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							user.id,
 							{
@@ -129,30 +154,47 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						await ctx.context.internalAdapter.deleteSession(
 							ctx.context.session.session.token,
 						);
-					}
-					//delete existing two factor
-					await ctx.context.adapter.deleteMany({
-						model: opts.twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-						],
-					});
+					} else {
+						// *** FIX: When NOT skipping verification, set the pending 2FA state ***
+						const maxAge = opts.pending2faVerificationMaxAge; // Use the consistent maxAge
 
-					await ctx.context.adapter.create({
-						model: opts.twoFactorTable,
-						data: {
-							secret: encryptedSecret,
-							backupCodes: backupCodes.encryptedBackupCodes,
-							userId: user.id,
-						},
-					});
+						// Create the config for the pending 2FA cookie
+						const twoFactorCookieConfig = ctx.context.createAuthCookie(
+							TWO_FACTOR_COOKIE_NAME,
+							{ maxAge }, // Pass maxAge to potentially influence cookie expiry attribute
+						);
+
+						// Create a unique identifier for this specific pending verification attempt
+						const identifier = `2fa-setup-${generateRandomString(20)}`;
+
+						// Store this identifier in the DB, linked to the user, with an expiry time
+						await ctx.context.internalAdapter.createVerificationValue(
+							{
+								value: user.id, // User ID for whom 2FA setup is pending
+								identifier,
+								expiresAt: new Date(Date.now() + maxAge * 1000), // Expiry based on maxAge
+							},
+							ctx,
+						);
+
+						// Set the signed cookie on the client containing the identifier
+						await ctx.setSignedCookie(
+							twoFactorCookieConfig.name, // e.g., 'better-auth.two_factor_pending_verification'
+							identifier,                 // The unique string linking to the DB record
+							ctx.context.secret,         // Secret for signing
+							twoFactorCookieConfig.attributes, // Cookie attributes (path, secure, httpOnly, sameSite, maxAge)
+						);
+						// The user's main session (ctx.context.session) remains valid.
+						// The user's twoFactorEnabled flag remains false for now.
+					}
+
+					// Generate the TOTP URI regardless of the skipVerificationOnEnable setting
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
 					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
+
+					// Return the URI and backup codes. Client uses these for the next steps.
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
