@@ -14,6 +14,11 @@ export async function authorize(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,
 ) {
+	ctx.context.logger.debug("[OIDC Authorize] Request received", {
+		query: ctx.query,
+		url: ctx.request?.url,
+	});
+
 	const opts = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
@@ -27,6 +32,9 @@ export async function authorize(
 		],
 	};
 	if (!ctx.request) {
+		ctx.context.logger.error(
+			"[OIDC Authorize] Critical error: Request object not found in context.",
+		);
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "request not found",
 			error: "invalid_request",
@@ -34,6 +42,10 @@ export async function authorize(
 	}
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
+		ctx.context.logger.debug(
+			"[OIDC Authorize] No active session. Redirecting to login.",
+			{ loginPage: options.loginPage },
+		);
 		/**
 		 * If the user is not logged in, we need to redirect them to the
 		 * login page.
@@ -52,12 +64,25 @@ export async function authorize(
 		throw ctx.redirect(`${options.loginPage}?${queryFromURL}`);
 	}
 
+	ctx.context.logger.debug("[OIDC Authorize] Active session found for user:", {
+		userId: session.user.id,
+	});
+
 	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] client_id missing. Redirecting to error.",
+		);
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
+	ctx.context.logger.debug("[OIDC Authorize] Processing client_id:", {
+		clientId: query.client_id,
+	});
 
 	if (!query.response_type) {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] response_type missing. Redirecting to error.",
+		);
 		throw ctx.redirect(
 			redirectErrorURL(
 				`${ctx.context.baseURL}/error`,
@@ -79,6 +104,10 @@ export async function authorize(
 		})
 		.then((res) => {
 			if (!res) {
+				ctx.context.logger.warn(
+					"[OIDC Authorize] Client not found in DB for client_id:",
+					{ clientId: ctx.query.client_id },
+				);
 				return null;
 			}
 			return {
@@ -95,6 +124,10 @@ export async function authorize(
 	);
 
 	if (!redirectURI || !query.redirect_uri) {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] Invalid or missing redirect_uri.",
+			{ provided: query.redirect_uri, expected: client.redirectURLs },
+		);
 		/**
 		 * show UI error here warning the user that the redirect URI is invalid
 		 */
@@ -103,10 +136,18 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] Client is disabled. Redirecting to error.",
+			{ clientId: client.clientId },
+		);
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=client_disabled`);
 	}
 
 	if (query.response_type !== "code") {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] Unsupported response_type. Redirecting to error.",
+			{ responseType: query.response_type },
+		);
 		throw ctx.redirect(
 			`${ctx.context.baseURL}/error?error=unsupported_response_type`,
 		);
@@ -121,6 +162,10 @@ export async function authorize(
 		return isInvalid;
 	});
 	if (invalidScopes.length) {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] Invalid scopes requested. Redirecting.",
+			{ invalidScopes, redirect_uri: query.redirect_uri },
+		);
 		throw ctx.redirect(
 			redirectErrorURL(
 				query.redirect_uri,
@@ -134,6 +179,10 @@ export async function authorize(
 		(!query.code_challenge || !query.code_challenge_method) &&
 		options.requirePKCE
 	) {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] PKCE required but missing params. Redirecting.",
+			{ redirect_uri: query.redirect_uri },
+		);
 		throw ctx.redirect(
 			redirectErrorURL(
 				query.redirect_uri,
@@ -153,6 +202,10 @@ export async function authorize(
 			options.allowPlainCodeChallengeMethod ? "plain" : "s256",
 		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
+		ctx.context.logger.warn(
+			"[OIDC Authorize] Invalid code_challenge_method. Redirecting.",
+			{ method: query.code_challenge_method, redirect_uri: query.redirect_uri },
+		);
 		throw ctx.redirect(
 			redirectErrorURL(
 				query.redirect_uri,
@@ -165,6 +218,10 @@ export async function authorize(
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const codeExpiresInMs = opts.codeExpiresIn * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
+	ctx.context.logger.debug("[OIDC Authorize] Generated auth code.", {
+		codeId: code.substring(0, 6) + "...",
+		requireConsent: query.prompt === "consent",
+	});
 	try {
 		/**
 		 * Save the code in the database
@@ -201,6 +258,10 @@ export async function authorize(
 			ctx,
 		);
 	} catch (e) {
+		ctx.context.logger.error(
+			"[OIDC Authorize] Error saving auth code to DB. Redirecting.",
+			{ error: e, redirect_uri: query.redirect_uri },
+		);
 		throw ctx.redirect(
 			redirectErrorURL(
 				query.redirect_uri,
@@ -215,9 +276,16 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
+		ctx.context.logger.debug(
+			"[OIDC Authorize] Prompt is not 'consent'. Redirecting client with code.",
+			{ redirectTo: redirectURIWithCode.toString().substring(0, 50) + "..." },
+		);
 		throw ctx.redirect(redirectURIWithCode.toString());
 	}
 
+	ctx.context.logger.debug(
+		"[OIDC Authorize] Consent flow: evaluating consent status.",
+	);
 	const hasAlreadyConsented = await ctx.context.adapter
 		.findOne<{
 			consentGiven: boolean;
@@ -237,9 +305,14 @@ export async function authorize(
 		.then((res) => !!res?.consentGiven);
 
 	if (hasAlreadyConsented) {
+		ctx.context.logger.debug(
+			"[OIDC Authorize] Consent flow: User has already consented. Redirecting client with code.",
+			{ redirectTo: redirectURIWithCode.toString().substring(0, 50) + "..." },
+		);
 		throw ctx.redirect(redirectURIWithCode.toString());
 	}
 
+	ctx.context.logger.debug("[OIDC Authorize] Consent flow: Consent needed.");
 	if (options?.consentPage) {
 		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
 			maxAge: 600,
@@ -249,16 +322,26 @@ export async function authorize(
 		const conceptURI = `${options.consentPage}?client_id=${
 			client.clientId
 		}&scope=${requestScope.join(" ")}`;
+		ctx.context.logger.debug(
+			"[OIDC Authorize] Consent flow: Redirecting to custom consent page.",
+			{ consentPage: options.consentPage },
+		);
 		throw ctx.redirect(conceptURI);
 	}
 	const htmlFn = options?.getConsentHTML;
 
 	if (!htmlFn) {
+		ctx.context.logger.error(
+			"[OIDC Authorize] Consent flow: No consent page or HTML function provided.",
+		);
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message: "No consent page provided",
 		});
 	}
 
+	ctx.context.logger.debug(
+		"[OIDC Authorize] Consent flow: Returning consent HTML.",
+	);
 	return new Response(
 		htmlFn({
 			scopes: requestScope,
