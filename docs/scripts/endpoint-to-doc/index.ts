@@ -116,7 +116,7 @@ type Body = {
 	isServerOnly: boolean;
 	jsDocComment: string | null;
 	path: string[];
-	example: string | null;
+	example: string | undefined;
 };
 
 function parseType(functionName: string, options: Options) {
@@ -158,7 +158,7 @@ function convertBodyToString(parsedBody: Body[]) {
 			strBody += `${indentationSpaces.repeat(1 + body.path.length)}${
 				body.propName
 			}${body.isOptional ? "?" : ""}: ${body.type.join(" | ")}${
-				body.example ? ` = ${body.example}` : ""
+				typeof body.example !== "undefined" ? ` = ${body.example}` : ""
 			}\n`;
 		}
 
@@ -209,11 +209,11 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 	for (const [key, value] of Object.entries(shape)) {
 		if (!value) continue;
 		let description = value.description;
-		let { type, isOptional } = getType(value as any, {
+		let { type, isOptional, defaultValue } = getType(value as any, {
 			forceOptional: isRootOptional,
 		});
 
-		let example = description ? description.split(" Eg: ")[1] : null;
+		let example = description ? description.split(" Eg: ")[1] : undefined;
 		if (example) description = description?.replace(" Eg: " + example, "");
 
 		let isServerOnly = description
@@ -230,7 +230,7 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 			path,
 			isServerOnly,
 			type,
-			example,
+			example: example ?? defaultValue ?? undefined,
 		});
 
 		if (type[0] === "Object") {
@@ -246,11 +246,13 @@ function getType(
 	{
 		forceNullable,
 		forceOptional,
+		forceDefaultValue,
 	}: {
 		forceOptional?: boolean;
 		forceNullable?: boolean;
+		forceDefaultValue?: string;
 	} = {},
-): { type: string[]; isOptional: boolean } {
+): { type: string[]; isOptional: boolean; defaultValue?: string } {
 	if (!value._def) {
 		console.error(
 			`Something went wrong during "getType". value._def isn't defined.`,
@@ -265,24 +267,28 @@ function getType(
 			return {
 				type: ["string", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodObject": {
 			return {
 				type: ["Object", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodBoolean": {
 			return {
 				type: ["boolean", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodDate": {
 			return {
 				type: ["date", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodEnum": {
@@ -294,20 +300,39 @@ function getType(
 			return {
 				type: types,
 				isOptional: forceOptional ?? v.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodOptional": {
 			const v = value as never as z.ZodOptional<z.ZodAny>;
-			const r = getType(v._def.innerType, { forceOptional: true });
+			const r = getType(v._def.innerType, {
+				forceOptional: true,
+				forceNullable: forceNullable,
+			});
 			return {
 				type: r.type,
 				isOptional: forceOptional ?? r.isOptional,
+				defaultValue: forceDefaultValue,
+			};
+		}
+		case "ZodDefault": {
+			const v = value as never as z.ZodDefault<z.ZodAny>;
+			const r = getType(v._def.innerType, {
+				forceOptional: forceOptional,
+				forceDefaultValue: JSON.stringify(v._def.defaultValue()),
+				forceNullable: forceNullable,
+			});
+			return {
+				type: r.type,
+				isOptional: forceOptional ?? r.isOptional,
+				defaultValue: forceDefaultValue ?? r.defaultValue,
 			};
 		}
 		case "ZodAny": {
 			return {
 				type: ["any", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodRecord": {
@@ -317,12 +342,14 @@ function getType(
 			return {
 				type: keys.map((key, i) => `Record<${key}, ${values[i]}>`),
 				isOptional: forceOptional ?? v.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodNumber": {
 			return {
 				type: ["number", ..._null],
 				isOptional: forceOptional ?? value.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodUnion": {
@@ -335,6 +362,7 @@ function getType(
 			return {
 				type: types,
 				isOptional: forceOptional ?? v.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 		case "ZodNullable": {
@@ -343,6 +371,7 @@ function getType(
 			return {
 				type: r.type,
 				isOptional: forceOptional ?? r.isOptional,
+				defaultValue: forceDefaultValue,
 			};
 		}
 
@@ -359,6 +388,7 @@ function getType(
 					..._null,
 				],
 				isOptional: forceOptional ?? v.isOptional(),
+				defaultValue: forceDefaultValue,
 			};
 		}
 

@@ -10,7 +10,7 @@ export const createApiKey = createAuthEndpoint(
 			name: z.string({ description: "Name of the Api Key. Eg: 'project-api-key'" }).optional(),
 			expiresIn: z
 				.number({
-					description: "Expiration time of the Api Key in seconds. Eg: 3600",
+					description: "Expiration time of the Api Key in seconds. Eg: 60 * 60 * 24 * 7",
 				})
 				.min(1)
 				.optional()
@@ -20,7 +20,7 @@ export const createApiKey = createAuthEndpoint(
 			userId: z
 				.string({
 					description:
-						"User Id of the user that the Api Key belongs to. Useful for server-side only. Eg: \"user-id\"",
+						"User Id of the user that the Api Key belongs to. server-only. Eg: \"user-id\"",
 				})
 				.optional(),
 			prefix: z
@@ -32,7 +32,7 @@ export const createApiKey = createAuthEndpoint(
 				.optional(),
 			remaining: z
 				.number({
-					description: "Remaining number of requests. Server side only. Eg: 100",
+					description: "Remaining number of requests. server-only. Eg: 100",
 				})
 				.min(0)
 				.optional()
@@ -42,32 +42,32 @@ export const createApiKey = createAuthEndpoint(
 			refillAmount: z
 				.number({
 					description:
-						"Amount to refill the remaining count of the Api Key. Server Only Property. Eg: 100",
+						"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
 				})
 				.min(1)
 				.optional(),
 			refillInterval: z
 				.number({
 					description:
-						"Interval to refill the Api Key in milliseconds. Server Only Property. Eg: 1000",
+						"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
 				})
 				.optional(),
 			rateLimitTimeWindow: z
 				.number({
 					description:
-						"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property. Eg: 1000",
+						"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
 				})
 				.optional(),
 			rateLimitMax: z
 				.number({
 					description:
-						"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property. Eg: 100",
+						"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
 				})
 				.optional(),
 			rateLimitEnabled: z
 				.boolean({
 					description:
-						"Whether the key has rate limiting enabled. Server Only Property. Eg: true",
+						"Whether the key has rate limiting enabled. server-only. Eg: true",
 				})
 				.optional(),
 			permissions: z.record(z.string(), z.array(z.string()), {
@@ -417,4 +417,4 @@ export const createApiKey = createAuthEndpoint(
 				: null,
 		});
 	},
-);
+)
