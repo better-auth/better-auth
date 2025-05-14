@@ -292,7 +292,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 					},
 				);
 			if (!res) return null;
-			return transform.transformOutput(res.value, model);
+			return transform.transformOutput(res.value || res, model);
 		},
 		async updateMany(data) {
 			const { model, where, update: values } = data;
@@ -310,7 +310,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 				.collection(transform.getModelName(model))
 				.findOneAndDelete(clause);
 			if (!res) return null;
-			return transform.transformOutput(res.value, model);
+			return transform.transformOutput(res.value || res, model);
 		},
 		async deleteMany(data) {
 			const { model, where } = data;
