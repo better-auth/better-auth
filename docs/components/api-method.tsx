@@ -191,11 +191,11 @@ export const APIMethod = ({
 					)}
 					{clientOnlyNote || note ? (
 						<Note>
-							{note}
+							{note && tsxifyBackticks(note)}
 							{clientOnlyNote ? (
 								<>
-									<br />
-									{clientOnlyNote}
+									{note ? <br /> : null}
+									{tsxifyBackticks(clientOnlyNote)}
 								</>
 							) : null}
 						</Note>
@@ -230,11 +230,11 @@ export const APIMethod = ({
 					)}
 					{serverOnlyNote || note ? (
 						<Note>
-							{note}
+							{note && tsxifyBackticks(note)}
 							{serverOnlyNote ? (
 								<>
-									<br />
-									{serverOnlyNote}
+									{note ? <br /> : null}
+									{tsxifyBackticks(serverOnlyNote)}
 								</>
 							) : null}
 						</Note>
