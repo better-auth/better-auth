@@ -236,15 +236,14 @@ type upgradeSubscription = {
     /**
      * Callback URL to redirect back after successful subscription. 
      */
-    successUrl: string = "https://example.com/success"
+    successUrl: string
     /**
      * Callback URL to redirect back after successful subscription. 
      */
-    cancelUrl: string = "https://example.com/success"
-    /**
+    cancelUrl: string 
      * Return URL to redirect back after successful subscription. 
      */
-    returnUrl?: string = "https://example.com/success"
+    returnUrl?: string
     /**
      * Disable redirect after successful subscription. 
      */

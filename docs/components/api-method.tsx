@@ -389,12 +389,10 @@ function parseCode(children: JSX.Element) {
 
 	let code_prefix = "";
 	let code_suffix = "";
-	// console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
 
 	for (let line of arrayOfCode) {
 		const originalLine = line;
 		line = line.trim();
-		// console.log(`${line}`);
 		if (line === "}" && withinApiMethodType && !nestPath.length) {
 			withinApiMethodType = false;
 			hasAlreadyDefinedApiMethodType = true;
@@ -528,7 +526,6 @@ function parseCode(children: JSX.Element) {
 		}
 	}
 
-	// console.log(`\n\n\n\n\n\n\n\n\n\n=================================`);
 
 	return {
 		functionName,

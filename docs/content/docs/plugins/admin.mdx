@@ -579,7 +579,7 @@ type userHasPermission = {
     /**
      * Optionally check if multiple permissions are granted. Must use this, or permission. 
      */
-    permissions?: Record<string, string[]> = [{ "project": ["create", "update"] }, { "sale": ["create"] }] /* Must use this, or permission */,
+    permissions?: Record<string, string[]>
 }
 ```
 </APIMethod>

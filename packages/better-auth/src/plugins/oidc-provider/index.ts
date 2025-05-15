@@ -816,12 +816,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.registerOAuthApplicatio`
+			 * `auth.api.registerOAuthApplication`
 			 *
 			 * **client:**
 			 * `authClient.oauth2.register`
 			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oauth2#api-method-oauth2-register)
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oidc-provider#api-method-oauth2-register)
 			 */
 			registerOAuthApplication: createAuthEndpoint(
 				"/oauth2/register",

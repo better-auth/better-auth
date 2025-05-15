@@ -103,7 +103,7 @@ type magicLinkVerify = {
      */
     token: string = "123456"
     /**
-     * URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. 
+     * URL to redirect after magic link verification, if not provided will return the session. 
      */
     callbackURL?: string = "/dashboard"
 }
