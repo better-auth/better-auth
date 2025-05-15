@@ -180,7 +180,7 @@ export const APIMethod = ({
 						</a>
 					</div>
 				</TabsList>
-				<TabsContent value="client" className="animate-fade-right">
+				<TabsContent value="client">
 					{isClientOnly ? null : (
 						<Endpoint
 							method={method || "GET"}
@@ -219,7 +219,7 @@ export const APIMethod = ({
 					</div>
 					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
 				</TabsContent>
-				<TabsContent value="server" className="animate-fade-left">
+				<TabsContent value="server">
 					{isClientOnly ? null : (
 						<Endpoint
 							method={method || "GET"}
