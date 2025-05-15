@@ -2,17 +2,13 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod
-  path="/multi-session/revoke"
-  method="POST"
-  requireSession
->
+<APIMethod path="/one-time-token/verify" method="POST">
 ```ts
-type revokeDeviceSession = {
+type verifyOneTimeToken = {
     /**
-     * The session token to revoke. 
+     * The token to verify. 
      */
-    sessionToken: string = "some-session-token"
+    token: string = "some-token"
 }
 ```
 </APIMethod>
@@ -24,15 +20,15 @@ type revokeDeviceSession = {
 /**
  * ### Endpoint
  * 
- * POST `/multi-session/revoke`
+ * POST `/one-time-token/verify`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.revokeDeviceSession`
+ * `auth.api.verifyOneTimeToken`
  * 
  * **client:**
- * `authClient.multiSession.revoke`
+ * `authClient.oneTimeToken.verify`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/multi-session#api-method-multi-session-revoke)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/one-time-token#api-method-one-time-token-verify)
  */

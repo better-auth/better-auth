@@ -20,6 +20,21 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 	return {
 		id: "one-time-token",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/one-time-token/generate`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.generateOneTimeToken`
+			 *
+			 * **client:**
+			 * `authClient.oneTimeToken.generate`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/one-time-token#api-method-one-time-token-generate)
+			 */
 			generateOneTimeToken: createAuthEndpoint(
 				"/one-time-token/generate",
 				{
@@ -46,12 +61,29 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 					return c.json({ token });
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/one-time-token/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyOneTimeToken`
+			 *
+			 * **client:**
+			 * `authClient.oneTimeToken.verify`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/one-time-token#api-method-one-time-token-verify)
+			 */
 			verifyOneTimeToken: createAuthEndpoint(
 				"/one-time-token/verify",
 				{
 					method: "POST",
 					body: z.object({
-						token: z.string(),
+						token: z.string({
+							description: 'The token to verify. Eg: "some-token"',
+						}),
 					}),
 				},
 				async (c) => {
