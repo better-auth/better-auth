@@ -94,6 +94,26 @@ await auth.api.getAccessToken({
 });
 ```
 
+### Get Account Info Provided by the provider
+
+To get provider specific account info you can use the `accountInfo` function with the `authClient` or `auth.api` for server-side usage.
+
+```ts
+const info = await authClient.accountInfo({
+  accountId: "accountId", // here you pass in the provider given account id, the provider is automatically detected from the account id
+})
+```
+
+server-side usage:
+
+```ts
+await auth.api.accountInfo({
+  body: { accountId: "accountId" },
+  headers: // pass headers with authenticated token
+});
+```
+
+
 ### Other Provider Configurations
 
 **scope** The scope of the access request. For example, `email` or `profile`.

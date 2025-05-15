@@ -519,3 +519,98 @@ export const refreshToken = createAuthEndpoint(
 		}
 	},
 );
+
+export const accountInfo = createAuthEndpoint(
+	"/account-info",
+	{
+		method: "POST",
+		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Get the account info provided by the provider",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+												},
+												name: {
+													type: "string",
+												},
+												email: {
+													type: "string",
+												},
+												image: {
+													type: "string",
+												},
+												emailVerified: {
+													type: "boolean",
+												},
+											},
+											required: ["id", "emailVerified"],
+										},
+										data: {
+											type: "object",
+											properties: {},
+											additionalProperties: true,
+										},
+									},
+									required: ["user", "data"],
+									additionalProperties: false,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		body: z.object({
+			accountId: z.string({
+				description:
+					"The provider given account id for which to get the account info",
+			}),
+		}),
+	},
+	async (ctx) => {
+		const account = await ctx.context.internalAdapter.findAccount(
+			ctx.body.accountId,
+		);
+
+		if (!account || account.userId !== ctx.context.session.user.id) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
+		}
+
+		const provider = ctx.context.socialProviders.find(
+			(p) => p.id === account.providerId,
+		);
+
+		if (!provider) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: `Provider account provider is ${account.providerId} but it is not configured`,
+			});
+		}
+
+		const tokens = await getAccessToken({
+			...ctx,
+			body: {
+				accountId: account.id,
+				providerId: account.providerId,
+			},
+			returnHeaders: false,
+		});
+
+		const info = await provider.getUserInfo(tokens);
+
+		return ctx.json(info);
+	},
+);
