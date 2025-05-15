@@ -716,6 +716,13 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
   </Accordion>
 </Accordions>
 
+`disableKeyHashing` <span className="opacity-70">`boolean`</span>
+
+Disable hashing of the API key.
+
+⚠️ Security Warning: It's strongly recommended to not disable hashing.
+Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+
 ---
 
 ## Schema
@@ -758,7 +765,7 @@ Table: `apiKey`
     {
       name: "userId",
       type: "string",
-      description: "The id of the user who created the API key.",
+      description: "The ID of the user who created the API key.",
       isForeignKey: true,
     },
     {

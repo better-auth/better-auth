@@ -164,8 +164,8 @@ subscription: {
     plans: [
         {
             name: "basic", // the name of the plan, it'll be automatically lower cased when stored in the database
-            priceId: "price_1234567890", // the price id from stripe
-            annualDiscountPriceId: "price_1234567890", // (optional) the price id for annual billing with a discount
+            priceId: "price_1234567890", // the price ID from stripe
+            annualDiscountPriceId: "price_1234567890", // (optional) the price ID for annual billing with a discount
             limits: {
                 projects: 5,
                 storage: 10
@@ -261,7 +261,7 @@ await client.subscription.upgrade({
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
     annual: true, // Optional: upgrade to an annual plan
-    referenceId: "org_123" // Optional: defaults to the current logged in user id
+    referenceId: "org_123" // Optional: defaults to the current logged in user ID
     seats: 5 // Optional: for team plans
 });
 ```
@@ -524,7 +524,8 @@ Table Name: `user`
     { 
       name: "stripeCustomerId", 
       type: "string", 
-      description: "The Stripe customer ID" 
+      description: "The Stripe customer ID",
+      isOptional: true
     },
   ]}
 />
@@ -664,7 +665,9 @@ Each plan can have the following properties:
 
 **lookupKey**: `string` - The Stripe price lookup key. Alternative to `priceId`.
 
-**annualDiscountPriceId**: `string` - A price ID for annual billing with a discount.
+**annualDiscountPriceId**: `string` - A price ID for annual billing.
+
+**annualDiscountLookupKey**: `string` - The Stripe price lookup key for annual billing. Alternative to `annualDiscountPriceId`.
 
 **limits**: `Record<string, number>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`).
 

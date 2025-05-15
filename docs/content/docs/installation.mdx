@@ -133,7 +133,8 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
-        import { PrismaClient } from "@prisma/client";
+        // If your Prisma file is located elsewhere, you can change the path
+        import { PrismaClient } from "@/generated/prisma";
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
