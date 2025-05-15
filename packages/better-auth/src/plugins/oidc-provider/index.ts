@@ -808,6 +808,21 @@ export const oidcProvider = (options: OIDCOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/oauth2/register`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.registerOAuthApplicatio`
+			 *
+			 * **client:**
+			 * `authClient.oauth2.register`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oauth2#api-method-oauth2-register)
+			 */
 			registerOAuthApplication: createAuthEndpoint(
 				"/oauth2/register",
 				{
