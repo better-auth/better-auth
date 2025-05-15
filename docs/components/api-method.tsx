@@ -526,7 +526,6 @@ function parseCode(children: JSX.Element) {
 		}
 	}
 
-
 	return {
 		functionName,
 		props,
