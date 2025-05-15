@@ -3,20 +3,12 @@
 {/* -------------------------------------------------------- */}
 
 <APIMethod
-  path="/api-key/verify"
+  path="/api-key/delete-all-expired-api-keys"
   method="POST"
   isServerOnly
 >
 ```ts
-type verifyApiKey = {
-    /**
-     * The key to verify. 
-     */
-    key: string = "your_api_key_here"
-    /**
-     * The permissions to verify. 
-     */
-    permissions?: Record<string, string[]>
+type deleteAllExpiredApiKeys = {
 }
 ```
 </APIMethod>
@@ -28,12 +20,12 @@ type verifyApiKey = {
 /**
  * ### Endpoint
  * 
- * POST `/api-key/verify`
+ * POST `/api-key/delete-all-expired-api-keys`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.verifyApiKey`
+ * `auth.api.deleteAllExpiredApiKeys`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-verify)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-delete-all-expired-api-keys)
  */

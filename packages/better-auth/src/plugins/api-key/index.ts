@@ -250,10 +250,83 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-verify)
 			 */
 			verifyApiKey: routes.verifyApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/api-key/get`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.get`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-get)
+			 */
 			getApiKey: routes.getApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/update`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.updateApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.update`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-update)
+			 */
 			updateApiKey: routes.updateApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/delete`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deleteApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.delete`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-delete)
+			 */
 			deleteApiKey: routes.deleteApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/api-key/list`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.listApiKeys`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.list`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-list)
+			 */
 			listApiKeys: routes.listApiKeys,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/delete-all-expired-api-keys`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deleteAllExpiredApiKeys`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-delete-all-expired-api-keys)
+			 */
+			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
 	} satisfies BetterAuthPlugin;

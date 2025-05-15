@@ -15,6 +15,7 @@ export function deleteAllExpiredApiKeysEndpoint({
 			method: "POST",
 			metadata: {
 				SERVER_ONLY: true,
+				client: false,
 			},
 		},
 		async (ctx) => {

@@ -25,7 +25,7 @@ export function getApiKey({
 			method: "GET",
 			query: z.object({
 				id: z.string({
-					description: "The id of the Api Key",
+					description: "The id of the Api Key. Eg: \"some-api-key-id\"",
 				}),
 			}),
 			use: [sessionMiddleware],
