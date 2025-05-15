@@ -271,7 +271,6 @@ export const getAccessToken = createAuthEndpoint(
 				.optional(),
 		}),
 		metadata: {
-			SERVER_ONLY: true,
 			openapi: {
 				description: "Get a valid access token, doing a refresh if needed",
 				responses: {
