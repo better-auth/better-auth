@@ -2,45 +2,17 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod path="/sign-in/sso" method="POST">
+<APIMethod
+  path="/multi-session/revoke"
+  method="POST"
+  requireSession
+>
 ```ts
-type signInSSO = {
+type revokeDeviceSession = {
     /**
-     * The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided. 
+     * The session token to revoke. 
      */
-    email?: string = "john@example.com"
-    /**
-     * The slug of the organization to sign in with. 
-     */
-    organizationSlug?: string = "example-org"
-    /**
-     * The ID of the provider to sign in with. This can be provided instead of email or issuer. 
-     */
-    providerId?: string = "example-provider"
-    /**
-     * The domain of the provider. 
-     */
-    domain?: string = "example.com"
-    /**
-     * The URL to redirect to after login. 
-     */
-    callbackURL: string = "https://example.com/callback"
-    /**
-     * The URL to redirect to after login. 
-     */
-    errorCallbackURL?: string = "https://example.com/callback"
-    /**
-     * The URL to redirect to after login if the user is new. 
-     */
-    newUserCallbackURL?: string = "https://example.com/new-user"
-    /**
-     * Scopes to request from the provider. 
-     */
-    scopes?: string[] = ["openid", "email", "profile", "offline_access"]
-    /**
-     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
-     */
-    requestSignUp?: boolean = true
+    sessionToken: string = "some-session-token"
 }
 ```
 </APIMethod>
@@ -52,15 +24,15 @@ type signInSSO = {
 /**
  * ### Endpoint
  * 
- * POST `/sign-in/sso`
+ * POST `/multi-session/revoke`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.signInSSO`
+ * `auth.api.revokeDeviceSession`
  * 
  * **client:**
- * `authClient.signIn.sso`
+ * `authClient.multiSession.revoke`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sign-in#api-method-sign-in-sso)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/multi-session#api-method-multi-session-revoke)
  */
