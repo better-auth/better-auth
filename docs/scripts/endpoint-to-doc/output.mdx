@@ -2,62 +2,19 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod path="/api-key/create" method="POST">
+<APIMethod
+  path="/api-key/verify"
+  method="POST"
+  isServerOnly
+>
 ```ts
-type createApiKey = {
+type verifyApiKey = {
     /**
-     * Name of the Api Key. 
+     * The key to verify. 
      */
-    name?: string = 'project-api-key'
+    key: string = "your_api_key_here"
     /**
-     * Expiration time of the Api Key in seconds. 
-     */
-    expiresIn?: number = 60 * 60 * 24 * 7
-    /**
-     * User Id of the user that the Api Key belongs to. server-only. 
-     * @serverOnly
-     */
-    userId?: string = "user-id"
-    /**
-     * Prefix of the Api Key. 
-     */
-    prefix?: string = 'project-api-key'
-    /**
-     * Remaining number of requests. server-only. 
-     * @serverOnly
-     */
-    remaining?: number = 100
-    /**
-     * Metadata of the Api Key. 
-     */
-    metadata?: any | null = { someKey: 'someValue' }
-    /**
-     * Amount to refill the remaining count of the Api Key. server-only. 
-     * @serverOnly
-     */
-    refillAmount?: number = 100
-    /**
-     * Interval to refill the Api Key in milliseconds. server-only. 
-     * @serverOnly
-     */
-    refillInterval?: number = 1000
-    /**
-     * The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
-     * @serverOnly
-     */
-    rateLimitTimeWindow?: number = 1000
-    /**
-     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
-     * @serverOnly
-     */
-    rateLimitMax?: number = 100
-    /**
-     * Whether the key has rate limiting enabled. server-only. 
-     * @serverOnly
-     */
-    rateLimitEnabled?: boolean = true
-    /**
-     * Permissions of the Api Key. 
+     * The permissions to verify. 
      */
     permissions?: Record<string, string[]>
 }
@@ -71,15 +28,12 @@ type createApiKey = {
 /**
  * ### Endpoint
  * 
- * POST `/api-key/create`
+ * POST `/api-key/verify`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.createApiKey`
+ * `auth.api.verifyApiKey`
  * 
- * **client:**
- * `authClient.apiKey.create`
- * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-create)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-verify)
  */

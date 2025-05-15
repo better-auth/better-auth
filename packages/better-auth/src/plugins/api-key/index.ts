@@ -221,7 +221,34 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			],
 		},
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/create`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.createApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.create`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-create)
+			 */
 			createApiKey: routes.createApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyApiKey`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-verify)
+			 */
 			verifyApiKey: routes.verifyApiKey,
 			getApiKey: routes.getApiKey,
 			updateApiKey: routes.updateApiKey,

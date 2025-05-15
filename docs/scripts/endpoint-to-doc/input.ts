@@ -2,419 +2,284 @@
 import { createAuthEndpoint, adminMiddleware } from "./index";
 import { z } from "zod";
 
-export const createApiKey = createAuthEndpoint(
-	"/api-key/create",
+export const verifyApiKey = createAuthEndpoint(
+	"/api-key/verify",
 	{
 		method: "POST",
 		body: z.object({
-			name: z.string({ description: "Name of the Api Key. Eg: 'project-api-key'" }).optional(),
-			expiresIn: z
-				.number({
-					description: "Expiration time of the Api Key in seconds. Eg: 60 * 60 * 24 * 7",
-				})
-				.min(1)
-				.optional()
-				.nullable()
-				.default(null),
-
-			userId: z
-				.string({
-					description:
-						"User Id of the user that the Api Key belongs to. server-only. Eg: \"user-id\"",
+			key: z.string({
+				description: 'The key to verify. Eg: "your_api_key_here"',
+			}),
+			permissions: z
+				.record(z.string(), z.array(z.string()), {
+					description: "The permissions to verify.",
 				})
 				.optional(),
-			prefix: z
-				.string({ description: "Prefix of the Api Key. Eg: 'project-api-key'" })
-				.regex(/^[a-zA-Z0-9_-]+$/, {
-					message:
-						"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
-				})
-				.optional(),
-			remaining: z
-				.number({
-					description: "Remaining number of requests. server-only. Eg: 100",
-				})
-				.min(0)
-				.optional()
-				.nullable()
-				.default(null),
-			metadata: z.any({ description: "Metadata of the Api Key. Eg: { someKey: 'someValue' }" }).optional(),
-			refillAmount: z
-				.number({
-					description:
-						"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
-				})
-				.min(1)
-				.optional(),
-			refillInterval: z
-				.number({
-					description:
-						"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
-				})
-				.optional(),
-			rateLimitTimeWindow: z
-				.number({
-					description:
-						"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
-				})
-				.optional(),
-			rateLimitMax: z
-				.number({
-					description:
-						"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
-				})
-				.optional(),
-			rateLimitEnabled: z
-				.boolean({
-					description:
-						"Whether the key has rate limiting enabled. server-only. Eg: true",
-				})
-				.optional(),
-			permissions: z.record(z.string(), z.array(z.string()), {
-				description: "Permissions of the Api Key.",
-			}).optional(),
 		}),
 		metadata: {
-			openapi: {
-				description: "Create a new API key for a user",
-				responses: {
-					"200": {
-						description: "API key created successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										id: {
-											type: "string",
-											description: "Unique identifier of the API key",
-										},
-										createdAt: {
-											type: "string",
-											format: "date-time",
-											description: "Creation timestamp",
-										},
-										updatedAt: {
-											type: "string",
-											format: "date-time",
-											description: "Last update timestamp",
-										},
-										name: {
-											type: "string",
-											nullable: true,
-											description: "Name of the API key",
-										},
-										prefix: {
-											type: "string",
-											nullable: true,
-											description: "Prefix of the API key",
-										},
-										start: {
-											type: "string",
-											nullable: true,
-											description:
-												"Starting characters of the key (if configured)",
-										},
-										key: {
-											type: "string",
-											description:
-												"The full API key (only returned on creation)",
-										},
-										enabled: {
-											type: "boolean",
-											description: "Whether the key is enabled",
-										},
-										expiresAt: {
-											type: "string",
-											format: "date-time",
-											nullable: true,
-											description: "Expiration timestamp",
-										},
-										userId: {
-											type: "string",
-											description: "ID of the user owning the key",
-										},
-										lastRefillAt: {
-											type: "string",
-											format: "date-time",
-											nullable: true,
-											description: "Last refill timestamp",
-										},
-										lastRequest: {
-											type: "string",
-											format: "date-time",
-											nullable: true,
-											description: "Last request timestamp",
-										},
-										metadata: {
-											type: "object",
-											nullable: true,
-											additionalProperties: true,
-											description: "Metadata associated with the key",
-										},
-										rateLimitMax: {
-											type: "number",
-											nullable: true,
-											description: "Maximum requests in time window",
-										},
-										rateLimitTimeWindow: {
-											type: "number",
-											nullable: true,
-											description: "Rate limit time window in milliseconds",
-										},
-										remaining: {
-											type: "number",
-											nullable: true,
-											description: "Remaining requests",
-										},
-										refillAmount: {
-											type: "number",
-											nullable: true,
-											description: "Amount to refill",
-										},
-										refillInterval: {
-											type: "number",
-											nullable: true,
-											description: "Refill interval in milliseconds",
-										},
-										rateLimitEnabled: {
-											type: "boolean",
-											description: "Whether rate limiting is enabled",
-										},
-										requestCount: {
-											type: "number",
-											description: "Current request count in window",
-										},
-										permissions: {
-											type: "object",
-											nullable: true,
-											additionalProperties: {
-												type: "array",
-												items: { type: "string" },
-											},
-											description: "Permissions associated with the key",
-										},
-									},
-									required: [
-										"id",
-										"createdAt",
-										"updatedAt",
-										"key",
-										"enabled",
-										"userId",
-										"rateLimitEnabled",
-										"requestCount",
-									],
-								},
-							},
-						},
-					},
-				},
-			},
+			SERVER_ONLY: true,
 		},
 	},
 	async (ctx) => {
-		const {
-			name,
-			expiresIn,
-			prefix,
-			remaining,
-			metadata,
-			refillAmount,
-			refillInterval,
-			permissions,
-			rateLimitMax,
-			rateLimitTimeWindow,
-			rateLimitEnabled,
-		} = ctx.body;
+		const { key } = ctx.body;
 
-		const session = await getSessionFromCtx(ctx);
-		const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
-		const user =
-			session?.user ?? (authRequired ? null : { id: ctx.body.userId });
-		if (!user?.id) {
-			throw new APIError("UNAUTHORIZED", {
-				message: ERROR_CODES.UNAUTHORIZED_SESSION,
+		if (key.length < opts.defaultKeyLength) {
+			// if the key is shorter than the default key length, than we know the key is invalid.
+			// we can't check if the key is exactly equal to the default key length, because
+			// a prefix may be added to the key.
+			return ctx.json({
+				valid: false,
+				error: {
+					message: ERROR_CODES.INVALID_API_KEY,
+					code: "KEY_NOT_FOUND" as const,
+				},
+				key: null,
 			});
 		}
 
-		if (authRequired) {
-			// if this endpoint was being called from the client,
-			// we must make sure they can't use server-only properties.
-			if (
-				refillAmount !== undefined ||
-				refillInterval !== undefined ||
-				rateLimitMax !== undefined ||
-				rateLimitTimeWindow !== undefined ||
-				rateLimitEnabled !== undefined ||
-				permissions !== undefined ||
-				remaining !== null
-			) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.SERVER_ONLY_PROPERTY,
-				});
-			}
-		}
-
-		// if metadata is defined, than check that it's an object.
-		if (metadata) {
-			if (opts.enableMetadata === false) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.METADATA_DISABLED,
-				});
-			}
-			if (typeof metadata !== "object") {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_METADATA_TYPE,
-				});
-			}
-		}
-
-		// make sure that if they pass a refill amount, they also pass a refill interval
-		if (refillAmount && !refillInterval) {
-			throw new APIError("BAD_REQUEST", {
-				message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-			});
-		}
-		// make sure that if they pass a refill interval, they also pass a refill amount
-		if (refillInterval && !refillAmount) {
-			throw new APIError("BAD_REQUEST", {
-				message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+		if (
+			opts.customAPIKeyValidator &&
+			!opts.customAPIKeyValidator({ ctx, key })
+		) {
+			return ctx.json({
+				valid: false,
+				error: {
+					message: ERROR_CODES.INVALID_API_KEY,
+					code: "KEY_NOT_FOUND" as const,
+				},
+				key: null,
 			});
 		}
 
-		if (expiresIn) {
-			if (opts.keyExpiration.disableCustomExpiresTime === true) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
-				});
-			}
-
-			const expiresIn_in_days = expiresIn / (60 * 60 * 24);
-
-			if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-				});
-			} else if (opts.keyExpiration.maxExpiresIn < expiresIn_in_days) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-				});
-			}
-		}
-		if (prefix) {
-			if (prefix.length < opts.minimumPrefixLength) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-				});
-			}
-			if (prefix.length > opts.maximumPrefixLength) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-				});
-			}
-		}
-
-		if (name) {
-			if (name.length < opts.minimumNameLength) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_NAME_LENGTH,
-				});
-			}
-			if (name.length > opts.maximumNameLength) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_NAME_LENGTH,
-				});
-			}
-		}
-
-		deleteAllExpiredApiKeys(ctx.context);
-
-		const key = await keyGenerator({
-			length: opts.defaultKeyLength,
-			prefix: prefix || opts.defaultPrefix,
-		});
-
-		const hash = await createHash("SHA-256").digest(key);
-		const hashed = base64Url.encode(hash, {
+		const hash = await createHash("SHA-256").digest(
+			new TextEncoder().encode(key),
+		);
+		const hashed = base64Url.encode(new Uint8Array(hash), {
 			padding: false,
 		});
 
-		let start: string | null = null;
-
-		if (opts.startingCharactersConfig.shouldStore) {
-			start = key.substring(
-				0,
-				opts.startingCharactersConfig.charactersLength,
-			);
-		}
-
-		const defaultPermissions = opts.permissions?.defaultPermissions
-			? typeof opts.permissions.defaultPermissions === "function"
-				? await opts.permissions.defaultPermissions(user.id, ctx)
-				: opts.permissions.defaultPermissions
-			: undefined;
-		const permissionsToApply = permissions
-			? JSON.stringify(permissions)
-			: defaultPermissions
-				? JSON.stringify(defaultPermissions)
-				: undefined;
-
-		let data: Omit<ApiKey, "id"> = {
-			createdAt: new Date(),
-			updatedAt: new Date(),
-			name: name ?? null,
-			prefix: prefix ?? opts.defaultPrefix ?? null,
-			start: start,
-			key: hashed,
-			enabled: true,
-			expiresAt: expiresIn
-				? getDate(expiresIn, "sec")
-				: opts.keyExpiration.defaultExpiresIn
-					? getDate(opts.keyExpiration.defaultExpiresIn, "sec")
-					: null,
-			userId: user.id,
-			lastRefillAt: null,
-			lastRequest: null,
-			metadata: null,
-			rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
-			rateLimitTimeWindow:
-				rateLimitTimeWindow ?? opts.rateLimit.timeWindow ?? null,
-			remaining: remaining || refillAmount || null,
-			refillAmount: refillAmount ?? null,
-			refillInterval: refillInterval ?? null,
-			rateLimitEnabled:
-				rateLimitEnabled ?? opts.rateLimit.enabled === undefined
-					? true
-					: opts.rateLimit.enabled,
-			requestCount: 0,
-			//@ts-ignore - we intentionally save the permissions as string on DB.
-			permissions: permissionsToApply,
-		};
-
-		if (metadata) {
-			//@ts-expect-error - we intentionally save the metadata as string on DB.
-			data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
-		}
-
-		const apiKey = await ctx.context.adapter.create<
-			Omit<ApiKey, "id">,
-			ApiKey
-		>({
+		const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
-			data: data,
+			where: [
+				{
+					field: "key",
+					value: hashed,
+				},
+			],
 		});
 
+		// No API key found
+		if (!apiKey) {
+			return ctx.json({
+				valid: false,
+				error: {
+					message: ERROR_CODES.KEY_NOT_FOUND,
+					code: "KEY_NOT_FOUND" as const,
+				},
+				key: null,
+			});
+		}
+
+		// key is disabled
+		if (apiKey.enabled === false) {
+			return ctx.json({
+				valid: false,
+				error: {
+					message: ERROR_CODES.USAGE_EXCEEDED,
+					code: "KEY_DISABLED" as const,
+				},
+				key: null,
+			});
+		}
+
+		// key is expired
+		if (apiKey.expiresAt) {
+			const now = new Date().getTime();
+			const expiresAt = apiKey.expiresAt.getTime();
+			if (now > expiresAt) {
+				try {
+					ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				} catch (error) {
+					ctx.context.logger.error(
+						`Failed to delete expired API keys:`,
+						error,
+					);
+				}
+
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.KEY_EXPIRED,
+						code: "KEY_EXPIRED" as const,
+					},
+					key: null,
+				});
+			}
+		}
+
+		const requiredPermissions = ctx.body.permissions;
+		const apiKeyPermissions = apiKey.permissions
+			? safeJSONParse<{
+					[key: string]: string[];
+				}>(
+					//@ts-ignore - from DB, this value is always a string
+					apiKey.permissions,
+				)
+			: null;
+
+		if (requiredPermissions) {
+			if (!apiKeyPermissions) {
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.KEY_NOT_FOUND,
+						code: "KEY_NOT_FOUND" as const,
+					},
+					key: null,
+				});
+			}
+			const r = role(apiKeyPermissions as any);
+			const result = r.authorize(requiredPermissions);
+			if (!result.success) {
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.KEY_NOT_FOUND,
+						code: "KEY_NOT_FOUND" as const,
+					},
+					key: null,
+				});
+			}
+		}
+
+		let remaining = apiKey.remaining;
+		let lastRefillAt = apiKey.lastRefillAt;
+
+		if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
+			// if there is no more remaining requests, and there is no refill amount, than the key is revoked
+			try {
+				ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
+						},
+					],
+				});
+			} catch (error) {
+				ctx.context.logger.error(`Failed to delete expired API keys:`, error);
+			}
+
+			return ctx.json({
+				valid: false,
+				error: {
+					message: ERROR_CODES.USAGE_EXCEEDED,
+					code: "USAGE_EXCEEDED" as const,
+				},
+				key: null,
+			});
+		} else if (remaining !== null) {
+			let now = new Date().getTime();
+			const refillInterval = apiKey.refillInterval;
+			const refillAmount = apiKey.refillAmount;
+			let lastTime = (lastRefillAt ?? apiKey.createdAt).getTime();
+
+			if (refillInterval && refillAmount) {
+				// if they provide refill info, then we should refill once the interval is reached.
+
+				const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
+				if (timeSinceLastRequest > refillInterval) {
+					remaining = refillAmount;
+					lastRefillAt = new Date();
+				}
+			}
+
+			if (remaining === 0) {
+				// if there are no more remaining requests, than the key is invalid
+
+				// throw new APIError("FORBIDDEN", {
+				// 	message: ERROR_CODES.USAGE_EXCEEDED,
+				// });
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.USAGE_EXCEEDED,
+						code: "USAGE_EXCEEDED" as const,
+					},
+					key: null,
+				});
+			} else {
+				remaining--;
+			}
+		}
+
+		const { message, success, update, tryAgainIn } = isRateLimited(
+			apiKey,
+			opts,
+		);
+		const newApiKey = await ctx.context.adapter.update<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{
+					field: "id",
+					value: apiKey.id,
+				},
+			],
+			update: {
+				...update,
+				remaining,
+				lastRefillAt,
+			},
+		});
+		if (success === false) {
+			return ctx.json({
+				valid: false,
+				error: {
+					message,
+					code: "RATE_LIMITED" as const,
+					details: {
+						tryAgainIn,
+					},
+				},
+				key: null,
+			});
+		}
+		deleteAllExpiredApiKeys(ctx.context);
+
+		const { key: _, ...returningApiKey } = newApiKey ?? {
+			key: 1,
+			permissions: undefined,
+		};
+		if ("metadata" in returningApiKey) {
+			returningApiKey.metadata =
+				schema.apikey.fields.metadata.transform.output(
+					returningApiKey.metadata as never as string,
+				);
+		}
+
+		returningApiKey.permissions = returningApiKey.permissions
+			? safeJSONParse<{
+					[key: string]: string[];
+				}>(
+					//@ts-ignore - from DB, this value is always a string
+					returningApiKey.permissions,
+				)
+			: null;
+
 		return ctx.json({
-			...(apiKey as ApiKey),
-			key: key,
-			metadata: metadata ?? null,
-			permissions: apiKey.permissions
-				? safeJSONParse(
-						//@ts-ignore - from DB, this value is always a string
-						apiKey.permissions,
-					)
-				: null,
+			valid: true,
+			error: null,
+			key:
+				newApiKey === null ? null : (returningApiKey as Omit<ApiKey, "key">),
 		});
 	},
 )

@@ -29,9 +29,13 @@ export function verifyApiKey({
 			method: "POST",
 			body: z.object({
 				key: z.string({
-					description: "The key to verify",
+					description: 'The key to verify. Eg: "your_api_key_here"',
 				}),
-				permissions: z.record(z.string(), z.array(z.string())).optional(),
+				permissions: z
+					.record(z.string(), z.array(z.string()), {
+						description: "The permissions to verify.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
