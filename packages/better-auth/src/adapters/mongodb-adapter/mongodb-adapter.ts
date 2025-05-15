@@ -291,7 +291,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 						returnDocument: "after",
 					},
 				);
-			const output = res?.value ?? res
+			const output = res?.value ?? res;
 			if (!output) return null;
 			return transform.transformOutput(output, model);
 		},
@@ -310,7 +310,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOneAndDelete(clause);
-			const output = res?.value ?? res
+			const output = res?.value ?? res;
 			if (!output) return null;
 			return transform.transformOutput(output, model);
 		},
