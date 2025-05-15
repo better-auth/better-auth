@@ -55,6 +55,10 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
+	/**
+	 * Custom message to be shown when the password is compromised.
+	 * @default "The password you entered has been compromised. Please choose a different password."
+	 */
 	customPasswordCompromisedMessage?: string;
 }
 
