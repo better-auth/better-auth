@@ -14,8 +14,10 @@ export const {
 	sessionMiddleware,
 	originCheck,
 	adminMiddleware,
+	referenceMiddleware,
 } = {
 	orgMiddleware: () => {},
+	referenceMiddleware: (cb: (x: any) => void) => () => {},
 	orgSessionMiddleware: () => {},
 	requestOnlySessionMiddleware: () => {},
 	sessionMiddleware: () => {

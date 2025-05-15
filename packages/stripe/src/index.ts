@@ -93,6 +93,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		});
 
 	const subscriptionEndpoints = {
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/subscription/upgrade`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.upgradeSubscription`
+		 *
+		 * **client:**
+		 * `authClient.subscription.upgrade`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/stripe#api-method-subscription-upgrade)
+		 */
 		upgradeSubscription: createAuthEndpoint(
 			"/subscription/upgrade",
 			{
@@ -102,14 +117,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * The name of the plan to subscribe
 					 */
 					plan: z.string({
-						description: "The name of the plan to upgrade to",
+						description: 'The name of the plan to upgrade to. Eg: "pro"',
 					}),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
 						.boolean({
-							description: "Whether to upgrade to an annual plan",
+							description: "Whether to upgrade to an annual plan. Eg: true",
 						})
 						.optional(),
 					/**
@@ -119,7 +134,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					referenceId: z
 						.string({
-							description: "Reference id of the subscription to upgrade",
+							description:
+								'Reference id of the subscription to upgrade. Eg: "123"',
 						})
 						.optional(),
 					/**
@@ -129,7 +145,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					subscriptionId: z
 						.string({
-							description: "The id of the subscription to upgrade",
+							description:
+								'The id of the subscription to upgrade. Eg: "sub_123"',
 						})
 						.optional(),
 					/**
@@ -142,7 +159,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					seats: z
 						.number({
-							description: "Number of seats to upgrade to (if applicable)",
+							description:
+								"Number of seats to upgrade to (if applicable). Eg: 1",
 						})
 						.optional(),
 					/**
@@ -151,7 +169,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					successUrl: z
 						.string({
 							description:
-								"Callback URL to redirect back after successful subscription",
+								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
 						})
 						.default("/"),
 					/**
@@ -160,17 +178,27 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					cancelUrl: z
 						.string({
 							description:
-								"Callback URL to redirect back after successful subscription",
+								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
 						})
 						.default("/"),
 					/**
 					 * Return URL
 					 */
-					returnUrl: z.string().optional(),
+					returnUrl: z
+						.string({
+							description:
+								'Return URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+						})
+						.optional(),
 					/**
 					 * Disable Redirect
 					 */
-					disableRedirect: z.boolean().default(false),
+					disableRedirect: z
+						.boolean({
+							description:
+								"Disable redirect after successful subscription. Eg: true",
+						})
+						.default(false),
 				}),
 				use: [
 					sessionMiddleware,
@@ -497,14 +525,42 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			},
 		),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/subscription/cancel`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.cancelSubscription`
+		 *
+		 * **client:**
+		 * `authClient.subscription.cancel`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/stripe#api-method-subscription-cancel)
+		 */
 		cancelSubscription: createAuthEndpoint(
 			"/subscription/cancel",
 			{
 				method: "POST",
 				body: z.object({
-					referenceId: z.string().optional(),
-					subscriptionId: z.string().optional(),
-					returnUrl: z.string(),
+					referenceId: z
+						.string({
+							description:
+								"Reference id of the subscription to cancel. Eg: '123'",
+						})
+						.optional(),
+					subscriptionId: z
+						.string({
+							description:
+								"The id of the subscription to cancel. Eg: 'sub_123'",
+						})
+						.optional(),
+					returnUrl: z.string({
+						description:
+							"Return URL to redirect back after successful subscription. Eg: 'https://example.com/success'",
+					}),
 				}),
 				use: [
 					sessionMiddleware,
@@ -631,8 +687,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					referenceId: z.string().optional(),
-					subscriptionId: z.string().optional(),
+					referenceId: z
+						.string({
+							description:
+								"Reference id of the subscription to restore. Eg: '123'",
+						})
+						.optional(),
+					subscriptionId: z.string({
+						description: "The id of the subscription to restore. Eg: 'sub_123'",
+					}).optional(),
 				}),
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
@@ -732,13 +795,33 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 			},
 		),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/subscription/list`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listActiveSubscriptions`
+		 *
+		 * **client:**
+		 * `authClient.subscription.list`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/stripe#api-method-subscription-list)
+		 */
 		listActiveSubscriptions: createAuthEndpoint(
 			"/subscription/list",
 			{
 				method: "GET",
 				query: z.optional(
 					z.object({
-						referenceId: z.string().optional(),
+						referenceId: z
+							.string({
+								description:
+									"Reference id of the subscription to list. Eg: '123'",
+							})
+							.optional(),
 					}),
 				),
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],

@@ -2,13 +2,21 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod path="/one-time-token/verify" method="POST">
+<APIMethod
+  path="/subscription/restore"
+  method="POST"
+  requireSession
+>
 ```ts
-type verifyOneTimeToken = {
+type restoreSubscription = {
     /**
-     * The token to verify. 
+     * Reference id of the subscription to restore. 
      */
-    token: string = "some-token"
+    referenceId?: string = '123'
+    /**
+     * The id of the subscription to restore. 
+     */
+    subscriptionId: string = 'sub_123'
 }
 ```
 </APIMethod>
@@ -20,15 +28,15 @@ type verifyOneTimeToken = {
 /**
  * ### Endpoint
  * 
- * POST `/one-time-token/verify`
+ * POST `/subscription/restore`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.verifyOneTimeToken`
+ * `auth.api.restoreSubscription`
  * 
  * **client:**
- * `authClient.oneTimeToken.verify`
+ * `authClient.subscription.restore`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/one-time-token#api-method-one-time-token-verify)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/subscription#api-method-subscription-restore)
  */
