@@ -325,7 +325,7 @@ function TypeTable({
 									{tsxifyBackticks(prop.description ?? "")}
 								</div>
 							</TableCell>
-							<TableCell>
+							<TableCell className="max-w-[200px] overflow-auto">
 								<code>
 									{prop.type}
 									{prop.isNullable ? " | null" : ""}
