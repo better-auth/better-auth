@@ -789,7 +789,7 @@ By default, there are three resources, and these have two to three actions.
 
     `create` `cancel`
 
-The owner have full control over all the resources and actions. The admin have full control over all the resources except for deleting the organization or changing the owner. The member have no control over any of those action other than reading the data.
+The owner has full control over all the resources and actions. The admin has full control over all the resources except for deleting the organization or changing the owner. The member has no control over any of those actions other than reading the data.
 
 ### Custom Permissions
 
@@ -1183,7 +1183,7 @@ When teams are enabled, a new `team` table is added with the following structure
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1260,13 +1260,13 @@ Table Name: `member`
     {
       name: "userId",
       type: "string",
-      description: "The id of the user",
+      description: "The ID of the user",
       isForeignKey: true
     },
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1302,13 +1302,13 @@ Table Name: `invitation`
     {
       name: "inviterId",
       type: "string",
-      description: "The id of the inviter",
+      description: "The ID of the inviter",
       isForeignKey: true
     },
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1338,14 +1338,14 @@ Table Name: `invitation`
 
 Table Name: `session`
 
-You need to add one more field to the session table to store the active organization id.
+You need to add one more field to the session table to store the active organization ID.
 
 <DatabaseTable
   fields={[
     {
       name: "activeOrganizationId",
       type: "string",
-      description: "The id of the active organization",
+      description: "The ID of the active organization",
       isOptional: true
     },
   ]}
@@ -1371,7 +1371,7 @@ Table Name: `team`
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1395,7 +1395,7 @@ Table Name: `team`
     {
       name: "teamId",
       type: "string",
-      description: "The id of the team",
+      description: "The ID of the team",
       isOptional: true
     },
   ]}
@@ -1408,7 +1408,7 @@ Table Name: `team`
     {
       name: "teamId",
       type: "string",
-      description: "The id of the team",
+      description: "The ID of the team",
       isOptional: true
     },
   ]}

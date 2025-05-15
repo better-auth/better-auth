@@ -225,15 +225,21 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (opts.requireVerification) {
 						if (!user.phoneNumberVerified) {
 							const otp = generateOTP(opts.otpLength);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: otp,
-								identifier: phoneNumber,
-								expiresAt: getDate(opts.expiresIn, "sec"),
-							});
-							await opts.sendOTP?.({
-								phoneNumber,
-								code: otp,
-							});
+							await ctx.context.internalAdapter.createVerificationValue(
+								{
+									value: otp,
+									identifier: phoneNumber,
+									expiresAt: getDate(opts.expiresIn, "sec"),
+								},
+								ctx,
+							);
+							await opts.sendOTP?.(
+								{
+									phoneNumber,
+									code: otp,
+								},
+								ctx.request,
+							);
 							throw new APIError("UNAUTHORIZED", {
 								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
 							});
@@ -373,11 +379,14 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: `${code}:0`,
-						identifier: ctx.body.phoneNumber,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: ctx.body.phoneNumber,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
 					await options.sendOTP(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -798,11 +807,14 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						});
 					}
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: `${code}:0`,
-						identifier: `${ctx.body.phoneNumber}-forget-password`,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: `${ctx.body.phoneNumber}-forget-password`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
 					await options?.sendForgetPasswordOTP?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,
