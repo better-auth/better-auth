@@ -2,77 +2,45 @@
 {/*                   APIMethod component                    */}
 {/* -------------------------------------------------------- */}
 
-<APIMethod path="/oauth2/register" method="POST">
+<APIMethod path="/sign-in/sso" method="POST">
 ```ts
-type registerOAuthApplicatio = {
+type signInSSO = {
     /**
-     * A list of redirect URIs. 
+     * The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided. 
      */
-    redirect_uris: string[] = ["https://client.example.com/callback"]
+    email?: string = "john@example.com"
     /**
-     * The authentication method for the token endpoint. 
+     * The slug of the organization to sign in with. 
      */
-    token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" = "client_secret_basic"
+    organizationSlug?: string = "example-org"
     /**
-     * The grant types supported by the application. 
+     * The ID of the provider to sign in with. This can be provided instead of email or issuer. 
      */
-    grant_types?: ("authorization_code" | "implicit" | "password" | "client_credentials" | "refresh_token" | "urn:ietf:params:oauth:grant-type:jwt-bearer" | "urn:ietf:params:oauth:grant-type:saml2-bearer")[] = ["authorization_code"]
+    providerId?: string = "example-provider"
     /**
-     * The response types supported by the application. 
+     * The domain of the provider. 
      */
-    response_types?: ("code" | "token")[] = ["code"]
+    domain?: string = "example.com"
     /**
-     * The name of the application. 
+     * The URL to redirect to after login. 
      */
-    client_name?: string = "My App"
+    callbackURL: string = "https://example.com/callback"
     /**
-     * The URI of the application. 
+     * The URL to redirect to after login. 
      */
-    client_uri?: string = "https://client.example.com"
+    errorCallbackURL?: string = "https://example.com/callback"
     /**
-     * The URI of the application logo. 
+     * The URL to redirect to after login if the user is new. 
      */
-    logo_uri?: string = "https://client.example.com/logo.png"
+    newUserCallbackURL?: string = "https://example.com/new-user"
     /**
-     * The scopes supported by the application. Separated by spaces. 
+     * Scopes to request from the provider. 
      */
-    scope?: string = "profile email"
+    scopes?: string[] = ["openid", "email", "profile", "offline_access"]
     /**
-     * The contact information for the application. 
+     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
      */
-    contacts?: string[] = ["admin@example.com"]
-    /**
-     * The URI of the application terms of service. 
-     */
-    tos_uri?: string = "https://client.example.com/tos"
-    /**
-     * The URI of the application privacy policy. 
-     */
-    policy_uri?: string = "https://client.example.com/policy"
-    /**
-     * The URI of the application JWKS. 
-     */
-    jwks_uri?: string = "https://client.example.com/jwks"
-    /**
-     * The JWKS of the application. 
-     */
-    jwks?: Record<string, any> = {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}
-    /**
-     * The metadata of the application. 
-     */
-    metadata?: Record<string, any> = {"key": "value"}
-    /**
-     * The software ID of the application. 
-     */
-    software_id?: string = "my-software"
-    /**
-     * The software version of the application. 
-     */
-    software_version?: string = "1.0.0"
-    /**
-     * The software statement of the application. 
-     */
-    software_statement?: string
+    requestSignUp?: boolean = true
 }
 ```
 </APIMethod>
@@ -84,15 +52,15 @@ type registerOAuthApplicatio = {
 /**
  * ### Endpoint
  * 
- * POST `/oauth2/register`
+ * POST `/sign-in/sso`
  * 
  * ### API Methods
  * 
  * **server:**
- * `auth.api.registerOAuthApplicatio`
+ * `auth.api.signInSSO`
  * 
  * **client:**
- * `authClient.oauth2.register`
+ * `authClient.signIn.sso`
  * 
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oauth2#api-method-oauth2-register)
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sign-in#api-method-sign-in-sso)
  */

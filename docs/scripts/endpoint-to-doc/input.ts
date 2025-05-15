@@ -2,208 +2,131 @@
 import { createAuthEndpoint, sessionMiddleware } from "./index";
 import { z } from "zod";
 
-export const registerOAuthApplicatio =  createAuthEndpoint(
-	"/oauth2/register",
+export const signInSSO = createAuthEndpoint(
+	"/sign-in/sso",
 	{
 		method: "POST",
 		body: z.object({
-			redirect_uris: z.array(z.string(), {
+			email: z
+				.string({
+					description:
+						'The email address to sign in with. This is used to identify the issuer to sign in with. It\'s optional if the issuer is provided. Eg: "john@example.com"',
+				})
+				.optional(),
+			organizationSlug: z
+				.string({
+					description:
+						'The slug of the organization to sign in with. Eg: "example-org"',
+				})
+				.optional(),
+			providerId: z
+				.string({
+					description:
+						'The ID of the provider to sign in with. This can be provided instead of email or issuer. Eg: "example-provider"',
+				})
+				.optional(),
+			domain: z
+				.string({
+					description: 'The domain of the provider. Eg: "example.com"',
+				})
+				.optional(),
+			callbackURL: z.string({
 				description:
-					'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+					'The URL to redirect to after login. Eg: "https://example.com/callback"',
 			}),
-			token_endpoint_auth_method: z
-				.enum(["none", "client_secret_basic", "client_secret_post"], {
-					description:
-						'The authentication method for the token endpoint. Eg: "client_secret_basic"',
-				})
-				.default("client_secret_basic")
-				.optional(),
-			grant_types: z
-				.array(
-					z.enum([
-						"authorization_code",
-						"implicit",
-						"password",
-						"client_credentials",
-						"refresh_token",
-						"urn:ietf:params:oauth:grant-type:jwt-bearer",
-						"urn:ietf:params:oauth:grant-type:saml2-bearer",
-					]),
-					{
-						description:
-							'The grant types supported by the application. Eg: ["authorization_code"]',
-					},
-				)
-				.default(["authorization_code"])
-				.optional(),
-			response_types: z
-				.array(z.enum(["code", "token"]), {
-					description:
-						'The response types supported by the application. Eg: ["code"]',
-				})
-				.default(["code"])
-				.optional(),
-			client_name: z
-				.string({
-					description: 'The name of the application. Eg: "My App"',
-				})
-				.optional(),
-			client_uri: z
+			errorCallbackURL: z
 				.string({
 					description:
-						'The URI of the application. Eg: "https://client.example.com"',
+						'The URL to redirect to after login. Eg: "https://example.com/callback"',
 				})
 				.optional(),
-			logo_uri: z
+			newUserCallbackURL: z
 				.string({
 					description:
-						'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
+						'The URL to redirect to after login if the user is new. Eg: "https://example.com/new-user"',
 				})
 				.optional(),
-			scope: z
-				.string({
-					description:
-						'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
-				})
-				.optional(),
-			contacts: z
+			scopes: z
 				.array(z.string(), {
 					description:
-						'The contact information for the application. Eg: ["admin@example.com"]',
+						'Scopes to request from the provider. Eg: ["openid", "email", "profile", "offline_access"]',
 				})
 				.optional(),
-			tos_uri: z
-				.string({
+			requestSignUp: z
+				.boolean({
 					description:
-						'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
-				})
-				.optional(),
-			policy_uri: z
-				.string({
-					description:
-						'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
-				})
-				.optional(),
-			jwks_uri: z
-				.string({
-					description:
-						'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
-				})
-				.optional(),
-			jwks: z
-				.record(z.any(), {
-					description:
-						'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
-				})
-				.optional(),
-			metadata: z
-				.record(z.any(), {
-					description:
-						'The metadata of the application. Eg: {"key": "value"}',
-				})
-				.optional(),
-			software_id: z
-				.string({
-					description:
-						'The software ID of the application. Eg: "my-software"',
-				})
-				.optional(),
-			software_version: z
-				.string({
-					description:
-						'The software version of the application. Eg: "1.0.0"',
-				})
-				.optional(),
-			software_statement: z
-				.string({
-					description: "The software statement of the application.",
+						"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: true",
 				})
 				.optional(),
 		}),
 		metadata: {
 			openapi: {
-				description: "Register an OAuth2 application",
+				summary: "Sign in with SSO provider",
+				description:
+					"This endpoint is used to sign in with an SSO provider. It redirects to the provider's authorization URL",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									email: {
+										type: "string",
+										description:
+											"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+									},
+									issuer: {
+										type: "string",
+										description:
+											"The issuer identifier, this is the URL of the provider and can be used to verify the provider and identify the provider during login. It's optional if the email is provided",
+									},
+									providerId: {
+										type: "string",
+										description:
+											"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+									},
+									callbackURL: {
+										type: "string",
+										description: "The URL to redirect to after login",
+									},
+									errorCallbackURL: {
+										type: "string",
+										description: "The URL to redirect to after login",
+									},
+									newUserCallbackURL: {
+										type: "string",
+										description:
+											"The URL to redirect to after login if the user is new",
+									},
+								},
+								required: ["callbackURL"],
+							},
+						},
+					},
+				},
 				responses: {
 					"200": {
-						description: "OAuth2 application registered successfully",
+						description:
+							"Authorization URL generated successfully for SSO sign-in",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
-										name: {
+										url: {
 											type: "string",
-											description: "Name of the OAuth2 application",
-										},
-										icon: {
-											type: "string",
-											nullable: true,
-											description: "Icon URL for the application",
-										},
-										metadata: {
-											type: "object",
-											additionalProperties: true,
-											nullable: true,
+											format: "uri",
 											description:
-												"Additional metadata for the application",
+												"The authorization URL to redirect the user to for SSO sign-in",
 										},
-										clientId: {
-											type: "string",
-											description: "Unique identifier for the client",
-										},
-										clientSecret: {
-											type: "string",
-											description: "Secret key for the client",
-										},
-										redirectURLs: {
-											type: "array",
-											items: { type: "string", format: "uri" },
-											description: "List of allowed redirect URLs",
-										},
-										type: {
-											type: "string",
-											description: "Type of the client",
-											enum: ["web"],
-										},
-										authenticationScheme: {
-											type: "string",
-											description:
-												"Authentication scheme used by the client",
-											enum: ["client_secret"],
-										},
-										disabled: {
+										redirect: {
 											type: "boolean",
-											description: "Whether the client is disabled",
-											enum: [false],
-										},
-										userId: {
-											type: "string",
-											nullable: true,
 											description:
-												"ID of the user who registered the client, null if registered anonymously",
-										},
-										createdAt: {
-											type: "string",
-											format: "date-time",
-											description: "Creation timestamp",
-										},
-										updatedAt: {
-											type: "string",
-											format: "date-time",
-											description: "Last update timestamp",
+												"Indicates that the client should redirect to the provided URL",
+											enum: [true],
 										},
 									},
-									required: [
-										"name",
-										"clientId",
-										"clientSecret",
-										"redirectURLs",
-										"type",
-										"authenticationScheme",
-										"disabled",
-										"createdAt",
-										"updatedAt",
-									],
+									required: ["url", "redirect"],
 								},
 							},
 						},
@@ -214,115 +137,82 @@ export const registerOAuthApplicatio =  createAuthEndpoint(
 	},
 	async (ctx) => {
 		const body = ctx.body;
-		const session = await getSessionFromCtx(ctx);
-
-		// Check authorization
-		if (!session && !options.allowDynamicClientRegistration) {
-			throw new APIError("UNAUTHORIZED", {
-				error: "invalid_token",
-				error_description:
-					"Authentication required for client registration",
-			});
-		}
-
-		// Validate redirect URIs for redirect-based flows
-		if (
-			(!body.grant_types ||
-				body.grant_types.includes("authorization_code") ||
-				body.grant_types.includes("implicit")) &&
-			(!body.redirect_uris || body.redirect_uris.length === 0)
-		) {
+		let { email, organizationSlug, providerId, domain } = body;
+		if (!email && !organizationSlug && !domain && !providerId) {
 			throw new APIError("BAD_REQUEST", {
-				error: "invalid_redirect_uri",
-				error_description:
-					"Redirect URIs are required for authorization_code and implicit grant types",
+				message: "email, organizationSlug, domain or providerId is required",
 			});
 		}
-
-		// Validate correlation between grant_types and response_types
-		if (body.grant_types && body.response_types) {
-			if (
-				body.grant_types.includes("authorization_code") &&
-				!body.response_types.includes("code")
-			) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_client_metadata",
-					error_description:
-						"When 'authorization_code' grant type is used, 'code' response type must be included",
+		domain = body.domain || email?.split("@")[1];
+		let orgId = "";
+		if (organizationSlug) {
+			orgId = await ctx.context.adapter
+				.findOne<{ id: string }>({
+					model: "organization",
+					where: [
+						{
+							field: "slug",
+							value: organizationSlug,
+						},
+					],
+				})
+				.then((res) => {
+					if (!res) {
+						return "";
+					}
+					return res.id;
 				});
-			}
-			if (
-				body.grant_types.includes("implicit") &&
-				!body.response_types.includes("token")
-			) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_client_metadata",
-					error_description:
-						"When 'implicit' grant type is used, 'token' response type must be included",
-				});
-			}
 		}
-
-		const clientId =
-			options.generateClientId?.() ||
-			generateRandomString(32, "a-z", "A-Z");
-		const clientSecret =
-			options.generateClientSecret?.() ||
-			generateRandomString(32, "a-z", "A-Z");
-
-		// Create the client with the existing schema
-		const client: Client = await ctx.context.adapter.create({
-			model: modelName.oauthClient,
-			data: {
-				name: body.client_name,
-				icon: body.logo_uri,
-				metadata: body.metadata ? JSON.stringify(body.metadata) : null,
-				clientId: clientId,
-				clientSecret: clientSecret,
-				redirectURLs: body.redirect_uris.join(","),
-				type: "web",
-				authenticationScheme:
-					body.token_endpoint_auth_method || "client_secret_basic",
-				disabled: false,
-				userId: session?.session.userId,
-				createdAt: new Date(),
-				updatedAt: new Date(),
+		const provider = await ctx.context.adapter
+			.findOne<SSOProvider>({
+				model: "ssoProvider",
+				where: [
+					{
+						field: providerId
+							? "providerId"
+							: orgId
+								? "organizationId"
+								: "domain",
+						value: providerId || orgId || domain!,
+					},
+				],
+			})
+			.then((res) => {
+				if (!res) {
+					return null;
+				}
+				return {
+					...res,
+					oidcConfig: JSON.parse(res.oidcConfig as unknown as string),
+				};
+			});
+		if (!provider) {
+			throw new APIError("NOT_FOUND", {
+				message: "No provider found for the issuer",
+			});
+		}
+		const state = await generateState(ctx);
+		const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
+		const authorizationURL = await createAuthorizationURL({
+			id: provider.issuer,
+			options: {
+				clientId: provider.oidcConfig.clientId,
+				clientSecret: provider.oidcConfig.clientSecret,
 			},
+			redirectURI,
+			state: state.state,
+			codeVerifier: provider.oidcConfig.pkce ? state.codeVerifier : undefined,
+			scopes: ctx.body.scopes || [
+				"openid",
+				"email",
+				"profile",
+				"offline_access",
+			],
+			authorizationEndpoint: provider.oidcConfig.authorizationEndpoint,
 		});
-
-		// Format the response according to RFC7591
-		return ctx.json(
-			{
-				client_id: clientId,
-				client_secret: clientSecret,
-				client_id_issued_at: Math.floor(Date.now() / 1000),
-				client_secret_expires_at: 0, // 0 means it doesn't expire
-				redirect_uris: body.redirect_uris,
-				token_endpoint_auth_method:
-					body.token_endpoint_auth_method || "client_secret_basic",
-				grant_types: body.grant_types || ["authorization_code"],
-				response_types: body.response_types || ["code"],
-				client_name: body.client_name,
-				client_uri: body.client_uri,
-				logo_uri: body.logo_uri,
-				scope: body.scope,
-				contacts: body.contacts,
-				tos_uri: body.tos_uri,
-				policy_uri: body.policy_uri,
-				jwks_uri: body.jwks_uri,
-				jwks: body.jwks,
-				software_id: body.software_id,
-				software_version: body.software_version,
-				software_statement: body.software_statement,
-				metadata: body.metadata,
-			},
-			{
-				status: 201,
-				headers: {
-					"Cache-Control": "no-store",
-					Pragma: "no-cache",
-				},
-			},
-		);
+		return ctx.json({
+			url: authorizationURL.toString(),
+			redirect: true,
+		});
 	},
-)
+);
