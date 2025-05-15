@@ -1371,17 +1371,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			),
 			/**
 			 * ### Endpoint
-			 * 
+			 *
 			 * POST `/admin/set-user-password`
-			 * 
+			 *
 			 * ### API Methods
-			 * 
+			 *
 			 * **server:**
 			 * `auth.api.setUserPassword`
-			 * 
+			 *
 			 * **client:**
 			 * `authClient.admin.setUserPassword`
-			 * 
+			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-set-user-password)
 			 */
 			setUserPassword: createAuthEndpoint(

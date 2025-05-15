@@ -31,10 +31,13 @@ export function createApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				name: z.string({ description: "Name of the Api Key. Eg: 'project-api-key'" }).optional(),
+				name: z
+					.string({ description: "Name of the Api Key. Eg: 'project-api-key'" })
+					.optional(),
 				expiresIn: z
 					.number({
-						description: "Expiration time of the Api Key in seconds. Eg: 60 * 60 * 24 * 7",
+						description:
+							"Expiration time of the Api Key in seconds. Eg: 60 * 60 * 24 * 7",
 					})
 					.min(1)
 					.optional()
@@ -44,11 +47,13 @@ export function createApiKey({
 				userId: z.coerce
 					.string({
 						description:
-							"User Id of the user that the Api Key belongs to. server-only. Eg: \"user-id\"",
+							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
 					})
 					.optional(),
 				prefix: z
-					.string({ description: "Prefix of the Api Key. Eg: 'project-api-key'" })
+					.string({
+						description: "Prefix of the Api Key. Eg: 'project-api-key'",
+					})
 					.regex(/^[a-zA-Z0-9_-]+$/, {
 						message:
 							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
@@ -62,7 +67,12 @@ export function createApiKey({
 					.optional()
 					.nullable()
 					.default(null),
-				metadata: z.any({ description: "Metadata of the Api Key. Eg: { someKey: 'someValue' }" }).optional(),
+				metadata: z
+					.any({
+						description:
+							"Metadata of the Api Key. Eg: { someKey: 'someValue' }",
+					})
+					.optional(),
 				refillAmount: z
 					.number({
 						description:
@@ -94,9 +104,11 @@ export function createApiKey({
 							"Whether the key has rate limiting enabled. server-only. Eg: true",
 					})
 					.optional(),
-				permissions: z.record(z.string(), z.array(z.string()), {
-					description: "Permissions of the Api Key.",
-				}).optional(),
+				permissions: z
+					.record(z.string(), z.array(z.string()), {
+						description: "Permissions of the Api Key.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				openapi: {

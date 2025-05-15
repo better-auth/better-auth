@@ -693,9 +693,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								"Reference id of the subscription to restore. Eg: '123'",
 						})
 						.optional(),
-					subscriptionId: z.string({
-						description: "The id of the subscription to restore. Eg: 'sub_123'",
-					}).optional(),
+					subscriptionId: z
+						.string({
+							description:
+								"The id of the subscription to restore. Eg: 'sub_123'",
+						})
+						.optional(),
 				}),
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},

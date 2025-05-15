@@ -3,19 +3,17 @@ import {
 	createAuthEndpoint,
 	sessionMiddleware,
 	referenceMiddleware,
-	originCheck,
 } from "./index";
 import { z } from "zod";
 
-export const restoreSubscription= createAuthEndpoint(
+export const restoreSubscription = createAuthEndpoint(
 	"/subscription/restore",
 	{
 		method: "POST",
 		body: z.object({
 			referenceId: z
 				.string({
-					description:
-						"Reference id of the subscription to restore. Eg: '123'",
+					description: "Reference id of the subscription to restore. Eg: '123'",
 				})
 				.optional(),
 			subscriptionId: z.string({
@@ -25,8 +23,7 @@ export const restoreSubscription= createAuthEndpoint(
 		use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 	},
 	async (ctx) => {
-		const referenceId =
-			ctx.body?.referenceId || ctx.context.session.user.id;
+		const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
 
 		const subscription = ctx.body.subscriptionId
 			? await ctx.context.adapter.findOne<Subscription>({
@@ -58,18 +55,14 @@ export const restoreSubscription= createAuthEndpoint(
 				message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 			});
 		}
-		if (
-			subscription.status != "active" &&
-			subscription.status != "trialing"
-		) {
+		if (subscription.status != "active" && subscription.status != "trialing") {
 			throw ctx.error("BAD_REQUEST", {
 				message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 			});
 		}
 		if (!subscription.cancelAtPeriodEnd) {
 			throw ctx.error("BAD_REQUEST", {
-				message:
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+				message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 			});
 		}
 
@@ -90,12 +83,9 @@ export const restoreSubscription= createAuthEndpoint(
 		}
 
 		try {
-			const newSub = await client.subscriptions.update(
-				activeSubscription.id,
-				{
-					cancel_at_period_end: false,
-				},
-			);
+			const newSub = await client.subscriptions.update(activeSubscription.id, {
+				cancel_at_period_end: false,
+			});
 
 			await ctx.context.adapter.update({
 				model: "subscription",
@@ -119,4 +109,4 @@ export const restoreSubscription= createAuthEndpoint(
 			});
 		}
 	},
-)
+);
