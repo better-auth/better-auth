@@ -4,7 +4,6 @@ import {
 	createAuthMiddleware,
 	type BetterAuthPlugin,
 } from "..";
-import { authorize } from "../oidc-provider/authorize";
 import {
 	oidcProvider,
 	type Client,
@@ -19,7 +18,7 @@ import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
 import { subtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
-import type { GenericEndpointContext, Session } from "../../types";
+import type { GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
@@ -140,14 +139,26 @@ export const mcp = (options: MCPOptions) => {
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
 						ctx.context.session = session;
-						const response = await authorizeMCPOAuth(ctx, opts);
+						const response = await authorizeMCPOAuth(ctx, opts).catch((e) => {
+							if (e instanceof APIError) {
+								console.log(e);
+								if (e.statusCode === 302) {
+									return ctx.json({
+										redirect: true,
+										//@ts-expect-error
+										url: e.headers.get("location"),
+									});
+								}
+							}
+							throw e;
+						});
 						return response;
 					}),
 				},
 			],
 		},
 		endpoints: {
-			getMCPOAuthConfig: createAuthEndpoint(
+			getMcpOAuthConfig: createAuthEndpoint(
 				"/.well-known/oauth-authorization-server",
 				{
 					method: "GET",
@@ -222,6 +233,7 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 					let { client_id, client_secret } = body;
+					console.log({ client_id, client_secret });
 					const authorization =
 						ctx.request?.headers.get("authorization") || null;
 					if (
@@ -544,7 +556,7 @@ export const mcp = (options: MCPOptions) => {
 							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
 						)
 						.sign(secretKey.key);
-
+					console.log({ idToken });
 					return ctx.json(
 						{
 							access_token: accessToken,
@@ -567,7 +579,7 @@ export const mcp = (options: MCPOptions) => {
 					);
 				},
 			),
-			registerMCPClient: createAuthEndpoint(
+			registerMcpClient: createAuthEndpoint(
 				"/mcp/register",
 				{
 					method: "POST",
@@ -800,6 +812,36 @@ export const mcp = (options: MCPOptions) => {
 					);
 				},
 			),
+			getMcpSession: createAuthEndpoint(
+				"/mcp/get-session",
+				{
+					method: "GET",
+					requireHeaders: true,
+				},
+				async (c) => {
+					const accessToken = c.headers
+						?.get("Authorization")
+						?.replace("Bearer ", "");
+					if (!accessToken) {
+						c.headers?.set("WWW-Authenticate", "Bearer");
+						return c.json(null);
+					}
+					const accessTokenData =
+						await c.context.adapter.findOne<OAuthAccessToken>({
+							model: modelName.oauthAccessToken,
+							where: [
+								{
+									field: "accessToken",
+									value: accessToken,
+								},
+							],
+						});
+					if (!accessTokenData) {
+						return c.json(null);
+					}
+					return c.json(accessTokenData);
+				},
+			),
 		},
 		schema,
 	} satisfies BetterAuthPlugin;
@@ -808,28 +850,25 @@ export const mcp = (options: MCPOptions) => {
 export const withMcpAuth = <
 	Auth extends {
 		api: {
-			getSession: (options: { headers: Headers }) => Promise<any>;
+			getMcpSession: (...args: any) => Promise<OAuthAccessToken | null>;
 		};
 	},
 >(
 	auth: Auth,
-	handler: (
-		req: Request,
-		session: Awaited<ReturnType<Auth["api"]["getSession"]>>,
-	) => Promise<Response>,
+	handler: (req: Request) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
-		const session = await auth.api.getSession({
+		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
 		if (!session) {
 			return new Response(null, {
 				status: 401,
 				headers: {
-					"WWW-Authenticate": "Bearer",
+					"WWW-Authenticate": "Bearer ",
 				},
 			});
 		}
-		return handler(req, session);
+		return handler(req);
 	};
 };

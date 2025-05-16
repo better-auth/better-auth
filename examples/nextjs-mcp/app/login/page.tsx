@@ -51,6 +51,14 @@ export default function Login() {
 			>
 				<p>Sign Up</p>
 			</button>
+			<button
+				className="border-white text-whtie"
+				onClick={async () => {
+					const { error } = await authClient.signOut();
+				}}
+			>
+				<p>Logout</p>
+			</button>
 		</div>
 	);
 }

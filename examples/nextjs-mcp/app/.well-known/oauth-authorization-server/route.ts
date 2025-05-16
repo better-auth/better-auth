@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "../../../lib/auth";
 
 export const GET = async (req: Request) => {
-	const res = await auth.api.getMCPOAuthConfig();
+	const res = await auth.api.getMcpOAuthConfig();
 	return new NextResponse(JSON.stringify(res), {
 		status: 200,
 		headers: {
