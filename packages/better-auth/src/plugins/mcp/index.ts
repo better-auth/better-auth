@@ -141,7 +141,6 @@ export const mcp = (options: MCPOptions) => {
 						ctx.context.session = session;
 						const response = await authorizeMCPOAuth(ctx, opts).catch((e) => {
 							if (e instanceof APIError) {
-								console.log(e);
 								if (e.statusCode === 302) {
 									return ctx.json({
 										redirect: true,
@@ -233,7 +232,6 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 					let { client_id, client_secret } = body;
-					console.log({ client_id, client_secret });
 					const authorization =
 						ctx.request?.headers.get("authorization") || null;
 					if (
@@ -556,7 +554,6 @@ export const mcp = (options: MCPOptions) => {
 							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
 						)
 						.sign(secretKey.key);
-					console.log({ idToken });
 					return ctx.json(
 						{
 							access_token: accessToken,
@@ -855,7 +852,10 @@ export const withMcpAuth = <
 	},
 >(
 	auth: Auth,
-	handler: (req: Request) => Response | Promise<Response>,
+	handler: (
+		req: Request,
+		sesssion: OAuthAccessToken,
+	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
 		const session = await auth.api.getMcpSession({
@@ -869,6 +869,6 @@ export const withMcpAuth = <
 				},
 			});
 		}
-		return handler(req);
+		return handler(req, session);
 	};
 };
