@@ -3,17 +3,18 @@ import { createMcpHandler } from "@vercel/mcp-adapter";
 import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
-const handler = withMcpAuth(
-	auth,
+const handler = withMcpAuth(auth, async (req, session) =>
 	createMcpHandler(
 		(server) => {
 			server.tool(
 				"echo",
 				"Echo a message",
 				{ message: z.string() },
-				async ({ message }) => ({
-					content: [{ type: "text", text: `Tool echo: ${message}` }],
-				}),
+				async ({ message }) => {
+					return {
+						content: [{ type: "text", text: `Tool echo: ${message}` }],
+					};
+				},
 			);
 		},
 		{
@@ -31,7 +32,7 @@ const handler = withMcpAuth(
 			verboseLogs: true,
 			maxDuration: 60,
 		},
-	),
+	)(req),
 );
 
 export { handler as GET, handler as POST, handler as DELETE };
