@@ -193,7 +193,7 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.headers,
+						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {

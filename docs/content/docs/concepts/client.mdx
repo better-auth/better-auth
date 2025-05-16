@@ -334,7 +334,7 @@ const { error } = await authClient.signUp.email({
 	name: "User",
 });
 if(error?.code){
-    alert(getErrorMessage(error.code), "en");
+    alert(getErrorMessage(error.code, "en"));
 }
 ```
 

@@ -1,5 +1,9 @@
 import type { ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode, createAuthorizationURL } from "../oauth2";
+import {
+	validateAuthorizationCode,
+	createAuthorizationURL,
+	refreshAccessToken,
+} from "../oauth2";
 import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../utils/logger";
@@ -112,6 +116,19 @@ export const microsoft = (options: MicrosoftOptions) => {
 				data: user,
 			};
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint,
+					});
+				},
 		options,
 	} satisfies OAuthProvider;
 };

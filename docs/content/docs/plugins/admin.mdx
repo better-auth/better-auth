@@ -120,7 +120,7 @@ const users = await authClient.admin.listUsers({
         limit: 10,
         offset: 0,
         sortBy: "createdAt",
-        sortDirection: "desc"
+        sortDirection: "desc",
         filterField: "role",
         filterOperator: "eq",
         filterValue: "admin"
@@ -363,7 +363,7 @@ The plugin provides an easy way to define your own set of permissions for each r
     <Step>
         #### Pass Roles to the Plugin
 
-        Once you have created the roles you can pass them to the organization plugin both on the client and the server.
+        Once you have created the roles you can pass them to the admin plugin both on the client and the server.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
