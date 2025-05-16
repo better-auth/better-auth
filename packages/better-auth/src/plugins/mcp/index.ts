@@ -215,6 +215,15 @@ export const mcp = (options: MCPOptions) => {
 					},
 				},
 				async (ctx) => {
+					//cors
+					ctx.setHeader("Access-Control-Allow-Origin", "*");
+					ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+					ctx.setHeader(
+						"Access-Control-Allow-Headers",
+						"Content-Type, Authorization",
+					);
+					ctx.setHeader("Access-Control-Max-Age", "86400");
+
 					let { body } = ctx;
 					if (!body) {
 						throw ctx.error("BAD_REQUEST", {
@@ -713,6 +722,14 @@ export const mcp = (options: MCPOptions) => {
 				async (ctx) => {
 					const body = ctx.body;
 					const session = await getSessionFromCtx(ctx);
+					ctx.setHeader("Access-Control-Allow-Origin", "*");
+					ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+					ctx.setHeader(
+						"Access-Control-Allow-Headers",
+						"Content-Type, Authorization",
+					);
+					ctx.setHeader("Access-Control-Max-Age", "86400");
+					ctx.headers?.set("Access-Control-Max-Age", "86400");
 					if (
 						(!body.grant_types ||
 							body.grant_types.includes("authorization_code") ||
@@ -861,14 +878,51 @@ export const withMcpAuth = <
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
+		const wwwAuthenticateValue =
+			"Bearer resource_metadata=http://localhost:3000/api/auth/.well-known/oauth-authorization-server";
 		if (!session) {
-			return new Response(null, {
-				status: 401,
-				headers: {
-					"WWW-Authenticate": "Bearer ",
+			return Response.json(
+				{
+					jsonrpc: "2.0",
+					error: {
+						code: -32000,
+						message: "Unauthorized: Authentication required",
+						"www-authenticate": wwwAuthenticateValue,
+					},
+					id: null,
 				},
-			});
+				{
+					status: 401,
+					headers: {
+						"WWW-Authenticate": wwwAuthenticateValue,
+					},
+				},
+			);
 		}
 		return handler(req, session);
+	};
+};
+
+export const oAuthDiscoveryMetadata = <
+	Auth extends {
+		api: {
+			getMcpOAuthConfig: (...args: any) => any;
+		};
+	},
+>(
+	auth: Auth,
+) => {
+	return async (request: Request) => {
+		const res = await auth.api.getMcpOAuthConfig();
+		return new Response(JSON.stringify(res), {
+			status: 200,
+			headers: {
+				"Content-Type": "application/json",
+				"Access-Control-Allow-Origin": "*",
+				"Access-Control-Allow-Methods": "POST, OPTIONS",
+				"Access-Control-Allow-Headers": "Content-Type, Authorization",
+				"Access-Control-Max-Age": "86400",
+			},
+		});
 	};
 };

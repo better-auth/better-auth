@@ -18,6 +18,10 @@ export async function authorizeMCPOAuth(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,
 ) {
+	ctx.setHeader("Access-Control-Allow-Origin", "*");
+	ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+	ctx.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+	ctx.setHeader("Access-Control-Max-Age", "86400");
 	const opts = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
@@ -57,6 +61,7 @@ export async function authorizeMCPOAuth(
 	}
 
 	const query = ctx.query as AuthorizationQuery;
+	console.log(query);
 	if (!query.client_id) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -91,6 +96,7 @@ export async function authorizeMCPOAuth(
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
+	console.log(client);
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
