@@ -1,17 +1,9 @@
 import { auth } from "@/lib/auth";
 import { createMcpHandler } from "@vercel/mcp-adapter";
-import { NextRequest } from "next/server";
+import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
-const handler = async (req: NextRequest) => {
-	const session = await auth.api.getMcpSession({
-		headers: req.headers,
-	});
-	if (!session) {
-		return new Response(null, {
-			status: 401,
-		});
-	}
+const handler = withMcpAuth(auth, (req, sesssion) => {
 	return createMcpHandler(
 		(server) => {
 			server.tool(
@@ -41,6 +33,6 @@ const handler = async (req: NextRequest) => {
 			maxDuration: 60,
 		},
 	)(req);
-};
+});
 
 export { handler as GET, handler as POST, handler as DELETE };
