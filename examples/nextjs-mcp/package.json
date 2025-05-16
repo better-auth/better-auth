@@ -9,8 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/better-sqlite3": "^7.6.12",
     "@vercel/mcp-adapter": "^0.4.1",
     "better-auth": "workspace:^",
+    "better-sqlite3": "^11.6.0",
     "next": "15.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

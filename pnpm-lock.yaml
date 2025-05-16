@@ -892,12 +892,18 @@ importers:
 
   examples/nextjs-mcp:
     dependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.12
       '@vercel/mcp-adapter':
         specifier: ^0.4.1
         version: 0.4.1(next@15.3.2(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(sass@1.85.1))
       better-auth:
         specifier: workspace:^
         version: link:../../packages/better-auth
+      better-sqlite3:
+        specifier: ^11.6.0
+        version: 11.8.1
       next:
         specifier: 15.3.2
         version: 15.3.2(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(sass@1.85.1)

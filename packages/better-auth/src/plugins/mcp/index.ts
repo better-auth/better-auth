@@ -192,16 +192,7 @@ export const mcp = (options: MCPOptions) => {
 					},
 				},
 				async (ctx) => {
-					return authorizeMCPOAuth(
-						{
-							...ctx,
-							query: {
-								...ctx.query,
-								consent: "xyz",
-							},
-						},
-						opts,
-					);
+					return authorizeMCPOAuth(ctx, opts);
 				},
 			),
 			mcpOAuthToken: createAuthEndpoint(
