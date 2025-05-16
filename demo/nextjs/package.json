@@ -51,7 +51,7 @@
     "@react-three/fiber": "^8.17.10",
     "@tanstack/react-query": "^5.62.3",
     "@types/better-sqlite3": "^7.6.12",
-    "better-auth": "../../packages/better-auth",
+    "better-auth": "workspace:*",
     "better-call": "catalog:",
     "better-sqlite3": "^11.6.0",
     "canvas-confetti": "^1.9.3",

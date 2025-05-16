@@ -682,7 +682,7 @@
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
     "listhen": "^1.9.0",
-    "mongodb": "^6.14.2",
+    "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
     "next": "^15.2.3",
     "oauth2-mock-server": "^7.2.0",
