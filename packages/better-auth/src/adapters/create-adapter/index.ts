@@ -159,8 +159,8 @@ export const createAdapter =
 		 * then we should return the model name ending with an `s`.
 		 */
 		const getModelName = (model: string) => {
-			return schema[model].modelName !== model
-				? schema[model].modelName
+			return schema[getDefaultModelName(model)].modelName !== model
+				? schema[getDefaultModelName(model)].modelName
 				: config.usePlural
 					? `${model}s`
 					: model;
