@@ -139,6 +139,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							if (attr.defaultValue) {
 								if (typeof attr.defaultValue === "function") {
 									type += `.$defaultFn(${attr.defaultValue})`;
+								} else if (typeof attr.defaultValue === "string") {
+									type += `.default("${attr.defaultValue}")`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
 								}
