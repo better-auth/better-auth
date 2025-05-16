@@ -29,6 +29,7 @@ import {
 	unlinkAccount,
 	refreshToken,
 	getAccessToken,
+	verifyPassword,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -114,6 +115,7 @@ export function getEndpoints<
 		unlinkAccount,
 		refreshToken,
 		getAccessToken,
+		verifyPassword,
 	};
 	const endpoints = {
 		...baseEndpoints,
