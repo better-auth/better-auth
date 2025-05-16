@@ -101,6 +101,24 @@ describe("magic link", async () => {
 		);
 	});
 
+	it("should redirect to custom error url if provided", async () => {
+		await client.magicLink.verify(
+			{
+				query: {
+					token: "invalid-token",
+					errorCallbackURL: "/auth-error",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("/auth-error?error=INVALID_TOKEN");
+				},
+			},
+		);
+	});
+
 	it("should sign up with magic link", async () => {
 		const email = "new-email@email.com";
 		await client.signIn.magicLink({
@@ -114,7 +132,7 @@ describe("magic link", async () => {
 			),
 		});
 		const headers = new Headers();
-		const response = await client.magicLink.verify({
+		await client.magicLink.verify({
 			query: {
 				token: new URL(verificationEmail.url).searchParams.get("token") || "",
 			},
@@ -131,6 +149,36 @@ describe("magic link", async () => {
 			name: "test",
 			email: "new-email@email.com",
 			emailVerified: true,
+		});
+	});
+
+	it("should redirect to new user callback if provided", async () => {
+		const email = "first-time-user@email.com";
+		await client.signIn.magicLink({
+			email,
+			name: "test",
+			newUserCallbackURL: "/onboarding",
+		});
+		const verificationUrl = new URL(verificationEmail.url);
+		const onRedirect = vi.fn();
+		await client.magicLink.verify({
+			query: {
+				token: verificationUrl.searchParams.get("token") || "",
+				newUserCallbackURL:
+					verificationUrl.searchParams.get("newUserCallbackURL") || "",
+			},
+			fetchOptions: {
+				onError(context) {
+					onRedirect({
+						status: context.response.status,
+						location: context.response.headers.get("location"),
+					});
+				},
+			},
+		});
+		expect(onRedirect).toHaveBeenCalledWith({
+			status: 302,
+			location: "/onboarding",
 		});
 	});
 
@@ -162,6 +210,21 @@ describe("magic link", async () => {
 
 		expect(customGenerateToken).toHaveBeenCalled();
 		expect(verificationEmail.token).toBe("custom_token");
+	});
+
+	it("should send magic link with custom callback urls", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+			callbackURL: "/callback",
+			errorCallbackURL: "/error",
+			newUserCallbackURL: "/new-user",
+		});
+		expect(verificationEmail).toMatchObject({
+			email: testUser.email,
+			url: expect.stringContaining(
+				"&callbackURL=%2Fcallback&errorCallbackURL=%2Ferror&newUserCallbackURL=%2Fnew-user",
+			),
+		});
 	});
 });
 
