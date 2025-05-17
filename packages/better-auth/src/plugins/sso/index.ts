@@ -8,6 +8,7 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 	type OAuth2Tokens,
+	type OAuthOverrideUserInfoFunction,
 } from "../../oauth2";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
@@ -172,10 +173,24 @@ export const sso = (options?: SSOOptions) => {
 							})
 							.optional(),
 						overrideUserInfo: z
-							.boolean({
-								description:
-									"Override user info with the provider info. Defaults to false",
-							})
+							.union([
+								z.boolean({
+									description:
+										"Override user info with the provider info. Defaults to false",
+								}),
+								z
+									.function()
+									.args(
+										z
+											.object({
+												email: z.string(),
+												emailVerified: z.boolean(),
+											})
+											.passthrough(),
+									)
+									.returns(z.record(z.string(), z.any()))
+									.describe("Override user info with an updater function"),
+							])
 							.default(false)
 							.optional(),
 					}),
@@ -995,7 +1010,9 @@ export interface OIDCConfig {
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string;
 	scopes?: string[];
-	overrideUserInfo?: boolean;
+	overrideUserInfo?:
+		| boolean
+		| OAuthOverrideUserInfoFunction<Record<string, any>>;
 	tokenEndpoint?: string;
 	tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic";
 	jwksEndpoint?: string;

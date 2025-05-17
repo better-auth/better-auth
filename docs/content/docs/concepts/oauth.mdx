@@ -112,6 +112,30 @@ await auth.api.getAccessToken({
 
 **overrideUserInfoOnSignIn**: A boolean value that determines whether to override the user information in the database when signing in. By default, it is set to `false`, meaning that the user information will not be overridden during sign-in. If you want to update the user information every time they sign in, set this to `true`.
 
+Optionally, this can also be a custom function if you want to choose what gets updated. The callback receives the user's information and an object containing the new `email` and `emailVerified` values. These can be passed back through, or excluded in case you don't want email addresses to be updated on sign-in.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Other configurations...
+  socialProviders: {
+    discord: {
+      clientId: "YOUR_DISCORD_CLIENT_ID",
+      clientSecret: "YOUR_DISCORD_CLIENT_SECRET",
+      overrideUserInfoOnSignIn: (profile, data) => {
+        return {
+          name: profile.name,
+          discordHandle: profile.username,
+          // email will not be updated
+          // email: data.email
+        };
+      },
+    },
+  },
+});
+```
+
 **refreshAccessToken**: A custom function to refresh the token. This feature is only supported for built-in social providers (Google, Facebook, GitHub, etc.) and is not currently supported for custom OAuth providers configured through the Generic OAuth Plugin. For built-in providers, you can provide a custom function to refresh the token if needed.
 
 **mapProfileToUser** A custom function to map the user profile returned from the provider to the user object in your database.
