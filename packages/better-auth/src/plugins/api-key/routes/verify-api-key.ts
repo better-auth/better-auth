@@ -1,14 +1,189 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../../../api";
+import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import { isRateLimited } from "../rate-limit";
-import type { AuthContext } from "../../../types";
+import type { AuthContext, GenericEndpointContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { defaultKeyHasher } from "../";
+
+export async function validateApiKey({
+	hashedKey,
+	ctx,
+	opts,
+	schema,
+	permissions,
+}: {
+	hashedKey: string;
+	opts: PredefinedApiKeyOptions;
+	schema: ReturnType<typeof apiKeySchema>;
+	permissions?: Record<string, string[]>;
+	ctx: GenericEndpointContext;
+}) {
+	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+		model: API_KEY_TABLE_NAME,
+		where: [
+			{
+				field: "key",
+				value: hashedKey,
+			},
+		],
+	});
+
+	if (!apiKey) {
+		throw new APIError("UNAUTHORIZED", {
+			message: ERROR_CODES.INVALID_API_KEY,
+		});
+	}
+
+	if (apiKey.enabled === false) {
+		throw new APIError("UNAUTHORIZED", {
+			message: ERROR_CODES.KEY_DISABLED,
+			code: "KEY_DISABLED" as const,
+		});
+	}
+
+	if (apiKey.expiresAt) {
+		const now = new Date().getTime();
+		const expiresAt = apiKey.expiresAt.getTime();
+		if (now > expiresAt) {
+			try {
+				ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
+						},
+					],
+				});
+			} catch (error) {
+				ctx.context.logger.error(`Failed to delete expired API keys:`, error);
+			}
+
+			throw new APIError("UNAUTHORIZED", {
+				message: ERROR_CODES.KEY_EXPIRED,
+				code: "KEY_EXPIRED" as const,
+			});
+		}
+	}
+
+	if (permissions) {
+		const apiKeyPermissions = apiKey.permissions
+			? safeJSONParse<{
+					[key: string]: string[];
+				}>(
+					//@ts-ignore - from DB, this value is always a string
+					apiKey.permissions,
+				)
+			: null;
+
+		if (!apiKeyPermissions) {
+			throw new APIError("UNAUTHORIZED", {
+				message: ERROR_CODES.KEY_NOT_FOUND,
+				code: "KEY_NOT_FOUND" as const,
+			});
+		}
+		const r = role(apiKeyPermissions as any);
+		const result = r.authorize(permissions);
+		if (!result.success) {
+			throw new APIError("UNAUTHORIZED", {
+				message: ERROR_CODES.KEY_NOT_FOUND,
+				code: "KEY_NOT_FOUND" as const,
+			});
+		}
+	}
+
+	let remaining = apiKey.remaining;
+	let lastRefillAt = apiKey.lastRefillAt;
+
+	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
+		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
+		try {
+			ctx.context.adapter.delete({
+				model: API_KEY_TABLE_NAME,
+				where: [
+					{
+						field: "id",
+						value: apiKey.id,
+					},
+				],
+			});
+		} catch (error) {
+			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
+		}
+
+		throw new APIError("UNAUTHORIZED", {
+			message: ERROR_CODES.USAGE_EXCEEDED,
+			code: "USAGE_EXCEEDED" as const,
+		});
+	} else if (remaining !== null) {
+		let now = new Date().getTime();
+		const refillInterval = apiKey.refillInterval;
+		const refillAmount = apiKey.refillAmount;
+		let lastTime = (lastRefillAt ?? apiKey.createdAt).getTime();
+
+		if (refillInterval && refillAmount) {
+			// if they provide refill info, then we should refill once the interval is reached.
+
+			const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
+			if (timeSinceLastRequest > refillInterval) {
+				remaining = refillAmount;
+				lastRefillAt = new Date();
+			}
+		}
+
+		if (remaining === 0) {
+			// if there are no more remaining requests, than the key is invalid
+
+			throw new APIError("UNAUTHORIZED", {
+				message: ERROR_CODES.USAGE_EXCEEDED,
+				code: "USAGE_EXCEEDED" as const,
+			});
+		} else {
+			remaining--;
+		}
+	}
+
+	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
+
+	const newApiKey = await ctx.context.adapter.update<ApiKey>({
+		model: API_KEY_TABLE_NAME,
+		where: [
+			{
+				field: "id",
+				value: apiKey.id,
+			},
+		],
+		update: {
+			...update,
+			remaining,
+			lastRefillAt,
+		},
+	});
+
+	if (!newApiKey) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+			code: "INTERNAL_SERVER_ERROR" as const,
+		});
+	}
+
+	if (success === false) {
+		throw new APIError("UNAUTHORIZED", {
+			message: message ?? undefined,
+			code: "RATE_LIMITED" as const,
+			details: {
+				tryAgainIn,
+			},
+		});
+	}
+
+	return newApiKey;
+}
 
 export function verifyApiKey({
 	opts,
@@ -69,204 +244,40 @@ export function verifyApiKey({
 
 			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "key",
-						value: hashed,
-					},
-				],
-			});
+			let apiKey: ApiKey | null = null;
 
-			// No API key found
-			if (!apiKey) {
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.KEY_NOT_FOUND,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
+			try {
+				apiKey = await validateApiKey({
+					hashedKey: hashed,
+					permissions: ctx.body.permissions,
+					ctx,
+					opts,
+					schema,
 				});
-			}
-
-			// key is disabled
-			if (apiKey.enabled === false) {
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.USAGE_EXCEEDED,
-						code: "KEY_DISABLED" as const,
-					},
-					key: null,
-				});
-			}
-
-			// key is expired
-			if (apiKey.expiresAt) {
-				const now = new Date().getTime();
-				const expiresAt = apiKey.expiresAt.getTime();
-				if (now > expiresAt) {
-					try {
-						ctx.context.adapter.delete({
-							model: API_KEY_TABLE_NAME,
-							where: [
-								{
-									field: "id",
-									value: apiKey.id,
-								},
-							],
-						});
-					} catch (error) {
-						ctx.context.logger.error(
-							`Failed to delete expired API keys:`,
-							error,
-						);
-					}
-
+				await deleteAllExpiredApiKeys(ctx.context);
+			} catch (error) {
+				if (error instanceof APIError) {
 					return ctx.json({
 						valid: false,
 						error: {
-							message: ERROR_CODES.KEY_EXPIRED,
-							code: "KEY_EXPIRED" as const,
+							message: error.body?.message,
+							code: error.body?.code as string,
 						},
 						key: null,
 					});
-				}
-			}
-
-			const requiredPermissions = ctx.body.permissions;
-			const apiKeyPermissions = apiKey.permissions
-				? safeJSONParse<{
-						[key: string]: string[];
-					}>(
-						//@ts-ignore - from DB, this value is always a string
-						apiKey.permissions,
-					)
-				: null;
-
-			if (requiredPermissions) {
-				if (!apiKeyPermissions) {
-					return ctx.json({
-						valid: false,
-						error: {
-							message: ERROR_CODES.KEY_NOT_FOUND,
-							code: "KEY_NOT_FOUND" as const,
-						},
-						key: null,
-					});
-				}
-				const r = role(apiKeyPermissions as any);
-				const result = r.authorize(requiredPermissions);
-				if (!result.success) {
-					return ctx.json({
-						valid: false,
-						error: {
-							message: ERROR_CODES.KEY_NOT_FOUND,
-							code: "KEY_NOT_FOUND" as const,
-						},
-						key: null,
-					});
-				}
-			}
-
-			let remaining = apiKey.remaining;
-			let lastRefillAt = apiKey.lastRefillAt;
-
-			if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
-				// if there is no more remaining requests, and there is no refill amount, than the key is revoked
-				try {
-					ctx.context.adapter.delete({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-					});
-				} catch (error) {
-					ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 				}
 
 				return ctx.json({
 					valid: false,
 					error: {
-						message: ERROR_CODES.USAGE_EXCEEDED,
-						code: "USAGE_EXCEEDED" as const,
-					},
-					key: null,
-				});
-			} else if (remaining !== null) {
-				let now = new Date().getTime();
-				const refillInterval = apiKey.refillInterval;
-				const refillAmount = apiKey.refillAmount;
-				let lastTime = (lastRefillAt ?? apiKey.createdAt).getTime();
-
-				if (refillInterval && refillAmount) {
-					// if they provide refill info, then we should refill once the interval is reached.
-
-					const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
-					if (timeSinceLastRequest > refillInterval) {
-						remaining = refillAmount;
-						lastRefillAt = new Date();
-					}
-				}
-
-				if (remaining === 0) {
-					// if there are no more remaining requests, than the key is invalid
-
-					// throw new APIError("FORBIDDEN", {
-					// 	message: ERROR_CODES.USAGE_EXCEEDED,
-					// });
-					return ctx.json({
-						valid: false,
-						error: {
-							message: ERROR_CODES.USAGE_EXCEEDED,
-							code: "USAGE_EXCEEDED" as const,
-						},
-						key: null,
-					});
-				} else {
-					remaining--;
-				}
-			}
-
-			const { message, success, update, tryAgainIn } = isRateLimited(
-				apiKey,
-				opts,
-			);
-			const newApiKey = await ctx.context.adapter.update<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: apiKey.id,
-					},
-				],
-				update: {
-					...update,
-					remaining,
-					lastRefillAt,
-				},
-			});
-			if (success === false) {
-				return ctx.json({
-					valid: false,
-					error: {
-						message,
-						code: "RATE_LIMITED" as const,
-						details: {
-							tryAgainIn,
-						},
+						message: ERROR_CODES.INVALID_API_KEY,
+						code: "INVALID_API_KEY" as const,
 					},
 					key: null,
 				});
 			}
-			deleteAllExpiredApiKeys(ctx.context);
 
-			const { key: _, ...returningApiKey } = newApiKey ?? {
+			const { key: _, ...returningApiKey } = apiKey ?? {
 				key: 1,
 				permissions: undefined,
 			};
@@ -289,8 +300,7 @@ export function verifyApiKey({
 			return ctx.json({
 				valid: true,
 				error: null,
-				key:
-					newApiKey === null ? null : (returningApiKey as Omit<ApiKey, "key">),
+				key: apiKey === null ? null : (returningApiKey as Omit<ApiKey, "key">),
 			});
 		},
 	);
