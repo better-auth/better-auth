@@ -1,4 +1,4 @@
-import { type GenericEndpointContext, logger } from "better-auth";
+import { type GenericEndpointContext, logger, type User } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceId } from "./utils";
@@ -49,6 +49,9 @@ export async function onCheckoutSessionCompleted(
 							),
 							stripeSubscriptionId: checkoutSession.subscription as string,
 							seats,
+							// Set metered billing properties if plan has metering
+							metered: plan.metered ? plan.metered.meterId : undefined,
+							meteredUsage: plan.metered ? 0 : undefined,
 							...trial,
 						},
 						where: [
@@ -107,7 +110,12 @@ export async function onSubscriptionUpdated(
 			model: "subscription",
 			where: subscriptionId
 				? [{ field: "id", value: subscriptionId }]
-				: [{ field: "stripeSubscriptionId", value: subscriptionUpdated.id }],
+				: [
+						{
+							field: "stripeSubscriptionId",
+							value: subscriptionUpdated.id,
+						},
+					],
 		});
 		if (!subscription) {
 			const subs = await ctx.context.adapter.findMany<Subscription>({
@@ -241,6 +249,74 @@ export async function onSubscriptionDeleted(
 			logger.warn(
 				`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
 			);
+		}
+	} catch (error: any) {
+		logger.error(`Stripe webhook failed. Error: ${error}`);
+	}
+}
+
+export async function onAlertTriggered(
+	ctx: GenericEndpointContext,
+	options: StripeOptions,
+	event: Stripe.Event,
+) {
+	if (!options.subscription?.enabled) {
+		return;
+	}
+	try {
+		if ("alert" in event.data.object) {
+			const alertEvent = event.data.object.alert as Stripe.Billing.Alert;
+			if (
+				alertEvent.alert_type === "usage_threshold" &&
+				alertEvent.usage_threshold
+			) {
+				const meterId = alertEvent.usage_threshold.meter;
+				const customerId = alertEvent.usage_threshold?.filters?.find(
+					(f) => f.type === "customer",
+				)?.customer as string;
+
+				const client = options.stripeClient;
+				await client.billing.alerts.archive(alertEvent.id);
+				if (meterId && customerId) {
+					// Find the subscription
+					const subscription = await ctx.context.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [{ field: "stripeCustomerId", value: customerId }],
+					});
+
+					if (subscription) {
+						// Also clear the stored alert ID since it's now triggered and archived
+						await ctx.context.adapter.update({
+							model: "subscription",
+							update: {
+								meteredAlertId: null,
+							},
+							where: [{ field: "id", value: subscription.id }],
+						});
+
+						ctx.context.logger.info("Usage alert triggered", {
+							meterId,
+							customerId,
+							threshold: alertEvent.usage_threshold.gte,
+							currentUsage: subscription.meteredUsage,
+						});
+						// Find the customer information
+						const user = await ctx.context.adapter.findOne<User>({
+							model: "user",
+							where: [{ field: "stripeCustomerId", value: customerId }],
+						});
+
+						if (user) {
+							await options.subscription?.onAlertTriggered?.({
+								event,
+								subscription,
+								user,
+								alertData: alertEvent,
+							});
+						}
+					}
+				}
+			}
 		}
 	} catch (error: any) {
 		logger.error(`Stripe webhook failed. Error: ${error}`);
