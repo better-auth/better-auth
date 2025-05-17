@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "../types";
-import { isTest } from "../utils/env";
+import { isTest, isDevelopment } from "../utils/env";
 
 export function getIp(
 	req: Request | Headers,
@@ -10,6 +10,9 @@ export function getIp(
 	}
 	const testIP = "127.0.0.1";
 	if (isTest) {
+		return testIP;
+	}
+	if (isDevelopment) {
 		return testIP;
 	}
 
