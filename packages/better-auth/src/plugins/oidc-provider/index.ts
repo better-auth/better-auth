@@ -22,6 +22,7 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
+import { introspection } from "./introspection";
 
 const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -807,6 +808,62 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...userClaims,
 					});
 				},
+			),
+			introspection: createAuthEndpoint(
+				"/oauth2/introspection",
+				{
+					method: "POST",
+					body: z.object({
+						token: z.string(),
+						token_type_hint: z.enum(["access_token", "refresh_token"]).optional(),
+					}),
+					metadata: {
+						openapi: {
+							description: "The token introspection endpoint",
+							responses: {
+								"200": {
+									description: "The token introspection result",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													active: {
+														type: "boolean",
+														description: "Whether or not the token is active"
+													},
+													scope: {
+														type: "string",
+														description: "The token scopes"
+													},
+													client_id: {
+														type: "string",
+														description: "The token client ID"
+													},
+													username: {
+														type: "string",
+														description: "Human friendly user identifier"
+													},
+													token_type: {
+														type: "string",
+														description: "The type of token"
+													},
+													exp: {
+														type: "string",
+														description: "Token expiry timestamp, measured in the number of seconds"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				},
+				async (ctx) => {
+					return introspection(ctx)
+				}
 			),
 			registerOAuthApplication: createAuthEndpoint(
 				"/oauth2/register",
