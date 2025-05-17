@@ -106,36 +106,100 @@ export const oidcProvider = (options: OIDCOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookie = await ctx.getSignedCookie(
+						const oidcLoginPromptCookieValue = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const sessionCookieName = ctx.context.authCookies.sessionToken.name;
+						const responseSetCookieHeader =
+							ctx.context.responseHeaders?.get("set-cookie") || "";
 						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
+							responseSetCookieHeader,
 						);
-						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
-							return;
+						const newSessionTokenWasSet =
+							parsedSetCookieHeader.has(sessionCookieName);
+
+						if (!oidcLoginPromptCookieValue || !newSessionTokenWasSet) {
+							return; // Not an OIDC post-login continuation.
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
-						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
-						if (!sessionToken) {
-							return;
+
+						ctx.context.logger.info(
+							"[OIDC Provider] After hook: Detected OIDC post-login continuation.",
+						);
+
+						ctx.setCookie("oidc_login_prompt", "", { maxAge: 0, path: "/" }); // Clear the prompt cookie
+
+						let originalOidcParams: Record<string, string>;
+						try {
+							originalOidcParams = JSON.parse(oidcLoginPromptCookieValue);
+						} catch (e) {
+							ctx.context.logger.error(
+								"[OIDC Provider] After hook: Failed to parse oidc_login_prompt cookie.",
+								{ error: e },
+							);
+							return; // Critical data missing, let original response (likely error/empty) pass.
 						}
-						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
-						if (!session) {
-							return;
+
+						if (
+							!ctx.context.newSession?.user ||
+							!ctx.context.newSession?.session
+						) {
+							ctx.context.logger.error(
+								"[OIDC Provider] After hook: newSession data (user or session token) not found in context after login.",
+							);
+							return; // Session data missing.
 						}
-						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
-						ctx.context.session = session;
-						const response = await authorize(ctx, opts);
-						return response;
+
+						const { user, session } = ctx.context.newSession;
+
+						const authorizeBaseUrl = `${ctx.context.baseURL}/oauth2/authorize`;
+						const oidcAuthorizeURL = new URL(authorizeBaseUrl);
+						let originalPromptIsNone = false;
+
+						for (const key in originalOidcParams) {
+							if (
+								Object.prototype.hasOwnProperty.call(originalOidcParams, key)
+							) {
+								const value = originalOidcParams[key];
+								if (key.toLowerCase() === "prompt" && value === "none") {
+									oidcAuthorizeURL.searchParams.set(key, value);
+									originalPromptIsNone = true;
+								} else if (key.toLowerCase() !== "prompt") {
+									oidcAuthorizeURL.searchParams.set(key, value);
+								}
+							}
+						}
+
+						if (!originalPromptIsNone) {
+							oidcAuthorizeURL.searchParams.set("prompt", "consent");
+							ctx.context.logger.info(
+								"[OIDC Provider] After hook: Setting prompt=consent for OIDC continuation.",
+								{ finalAuthUrl: oidcAuthorizeURL.toString() },
+							);
+						} else {
+							ctx.context.logger.info(
+								"[OIDC Provider] After hook: Preserving original prompt=none for OIDC continuation.",
+								{ finalAuthUrl: oidcAuthorizeURL.toString() },
+							);
+						}
+
+						const responseData = {
+							user: {
+								id: user.id,
+								email: user.email,
+								name: user.name,
+								image: user.image,
+								emailVerified: user.emailVerified,
+								createdAt: user.createdAt,
+								updatedAt: user.updatedAt,
+							},
+							token: session.token,
+							oidcContinuation: true,
+							oidcAuthorizeURL: oidcAuthorizeURL.toString(),
+						};
+
+						// Return JSON response. Framework handles merging Set-Cookie headers.
+						return ctx.json(responseData, { status: 200 });
 					}),
 				},
 			],
