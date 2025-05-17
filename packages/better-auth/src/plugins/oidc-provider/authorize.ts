@@ -184,7 +184,7 @@ export async function authorize(
 					 * This means the code now needs to be treated as a
 					 * consent request.
 					 *
-					 * once the user consents, teh code will be updated
+					 * once the user consents, the code will be updated
 					 * with the actual code. This is to prevent the
 					 * client from using the code before the user
 					 * consents.
