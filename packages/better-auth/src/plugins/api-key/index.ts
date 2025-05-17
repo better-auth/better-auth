@@ -230,6 +230,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		},
 		endpoints: {
 			createApiKey: routes.createApiKey,
+			regenerateApiKey: routes.regenerateApiKey,
 			verifyApiKey: routes.verifyApiKey,
 			getApiKey: routes.getApiKey,
 			updateApiKey: routes.updateApiKey,
