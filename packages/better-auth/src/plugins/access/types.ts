@@ -1,5 +1,5 @@
 import type { LiteralString } from "../../types/helper";
-import type { AuthortizeResponse, createAccessControl } from "./access";
+import type { AuthorizeResponse, createAccessControl } from "./access";
 
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =
 	T[number][];
@@ -21,7 +21,18 @@ export type Statements = {
 export type AccessControl<TStatements extends Statements = Statements> =
 	ReturnType<typeof createAccessControl<TStatements>>;
 
-export type Role<TStatements extends Statements = Record<string, any>> = {
-	authorize: (request: any, connector?: "OR" | "AND") => AuthortizeResponse;
+export type ResourceRequest<TActionType> =
+	| TActionType
+	| { actions: TActionType; connector: "OR" | "AND" };
+
+export type AuthorizeRequest<TStatements extends Statements> = {
+	[P in keyof TStatements]?: ResourceRequest<TStatements[P]>;
+};
+
+export type Role<TStatements extends Statements = Statements> = {
+	authorize: (
+		request: AuthorizeRequest<TStatements>,
+		connector?: "OR" | "AND",
+	) => AuthorizeResponse<typeof request>;
 	statements: TStatements;
 };
