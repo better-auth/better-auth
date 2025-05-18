@@ -110,17 +110,22 @@ export async function handleOAuthUserInfo(
 		// update user info from the provider if overrideUserInfo is set
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
+			// normalize email data
+			const emailData = {
+				email: userInfo.email.toLowerCase(),
+				emailVerified:
+					userInfo.email.toLowerCase() === dbUser.user.email
+						? dbUser.user.emailVerified || userInfo.emailVerified
+						: userInfo.emailVerified,
+			};
 			// provide the updater function the email information
 			const payload =
 				typeof overrideUserInfo === "function"
-					? overrideUserInfo(restUserInfo, {
-							email: userInfo.email.toLowerCase(),
-							emailVerified:
-								userInfo.email.toLowerCase() === dbUser.user.email
-									? dbUser.user.emailVerified || userInfo.emailVerified
-									: userInfo.emailVerified,
-						})
-					: restUserInfo;
+					? overrideUserInfo(restUserInfo, emailData)
+					: {
+							...restUserInfo,
+							...emailData,
+						};
 			await c.context.internalAdapter.updateUser(dbUser.user.id, payload);
 		}
 	} else {
