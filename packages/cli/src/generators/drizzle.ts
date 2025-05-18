@@ -62,6 +62,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				| "number"
 				| "boolean"
 				| "date"
+				| "decimal"
 				| `${"string" | "number"}[]`;
 
 			const typeMap: Record<
@@ -109,6 +110,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					sqlite: `text('${name}').array()`,
 					pg: `text('${name}').array()`,
 					mysql: `text('${name}').array()`,
+				},
+				decimal: {
+					sqlite: `real('${name}')`,
+					pg: `numeric('${name}', { precision: ${field.precision ?? 18}, scale: ${field.scale ?? 2} })`,
+					mysql: `decimal('${name}', { precision: ${field.precision ?? 18}, scale: ${field.scale ?? 2} })`,
 				},
 			} as const;
 			return typeMap[type][databaseType];
