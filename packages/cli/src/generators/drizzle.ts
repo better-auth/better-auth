@@ -189,6 +189,9 @@ function generateImport({
 	const hasBigint = Object.values(tables).some((table) =>
 		Object.values(table.fields).some((field) => field.bigint),
 	);
+	const hasDecimal = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.type === "decimal"),
+	);
 
 	imports.push(`${databaseType}Table`);
 	imports.push(
@@ -201,6 +204,15 @@ function generateImport({
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
 	imports.push(databaseType === "mysql" ? "int" : "integer");
+	if (hasDecimal) {
+		imports.push(
+			databaseType === "mysql"
+				? "decimal"
+				: databaseType === "pg"
+					? "numeric"
+					: "real",
+		);
+	}
 
 	return `import { ${imports
 		.map((x) => x.trim())
