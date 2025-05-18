@@ -278,7 +278,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				const type = getType(field, fieldName);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
-					if (field.defaultValue) {
+					if (typeof field.defaultValue !== "function") {
 						col = col.defaultTo(field.defaultValue);
 					}
 					if (field.references) {
