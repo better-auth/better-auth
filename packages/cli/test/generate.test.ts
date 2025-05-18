@@ -16,14 +16,14 @@ describe("generate", async () => {
 				{},
 				{
 					provider: "postgresql",
-				}
+				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: prismaAdapter(
 					{},
 					{
 						provider: "postgresql",
-					}
+					},
 				),
 				plugins: [twoFactor(), username()],
 			},
@@ -38,14 +38,14 @@ describe("generate", async () => {
 				{},
 				{
 					provider: "postgresql",
-				}
+				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: prismaAdapter(
 					{},
 					{
 						provider: "postgresql",
-					}
+					},
 				),
 				plugins: [twoFactor(), username()],
 				advanced: {
@@ -56,7 +56,7 @@ describe("generate", async () => {
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/schema-numberid.prisma"
+			"./__snapshots__/schema-numberid.prisma",
 		);
 	});
 
@@ -67,20 +67,20 @@ describe("generate", async () => {
 				{},
 				{
 					provider: "mongodb",
-				}
+				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: prismaAdapter(
 					{},
 					{
 						provider: "mongodb",
-					}
+					},
 				),
 				plugins: [twoFactor(), username()],
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/schema-mongodb.prisma"
+			"./__snapshots__/schema-mongodb.prisma",
 		);
 	});
 
@@ -91,20 +91,20 @@ describe("generate", async () => {
 				{},
 				{
 					provider: "mysql",
-				}
+				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: prismaAdapter(
 					{},
 					{
 						provider: "mongodb",
-					}
+					},
 				),
 				plugins: [twoFactor(), username()],
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/schema-mysql.prisma"
+			"./__snapshots__/schema-mysql.prisma",
 		);
 	});
 
@@ -116,7 +116,7 @@ describe("generate", async () => {
 				{
 					provider: "pg",
 					schema: {},
-				}
+				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: drizzleAdapter(
@@ -124,7 +124,7 @@ describe("generate", async () => {
 					{
 						provider: "pg",
 						schema: {},
-					}
+					},
 				),
 				plugins: [twoFactor(), username()],
 			},
@@ -151,7 +151,7 @@ describe("generate", async () => {
 				{
 					provider: "pg",
 					schema: {},
-				}
+				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: drizzleAdapter(
@@ -159,7 +159,7 @@ describe("generate", async () => {
 					{
 						provider: "pg",
 						schema: {},
-					}
+					},
 				),
 				user: {
 					additionalFields: {
@@ -173,10 +173,12 @@ describe("generate", async () => {
 			},
 		});
 
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema-with-decimal.txt");
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-with-decimal.txt",
+		);
 	});
 
-		it("should generate drizzle schema with decimal different precision and scale", async () => {
+	it("should generate drizzle schema with decimal different precision and scale", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
 			adapter: drizzleAdapter(
@@ -184,7 +186,7 @@ describe("generate", async () => {
 				{
 					provider: "pg",
 					schema: {},
-				}
+				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: drizzleAdapter(
@@ -192,7 +194,7 @@ describe("generate", async () => {
 					{
 						provider: "pg",
 						schema: {},
-					}
+					},
 				),
 				user: {
 					additionalFields: {
@@ -208,6 +210,8 @@ describe("generate", async () => {
 			},
 		});
 
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema-with-decimal-precision.txt");
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-with-decimal-precision.txt",
+		);
 	});
 });
