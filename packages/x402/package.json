@@ -1,0 +1,52 @@
+{
+  "name": "@better-auth/x402",
+  "author": "Bereket Engida",
+  "version": "1.2.8",
+  "main": "dist/index.cjs",
+  "license": "MIT",
+  "keywords": [
+    "x402",
+    "auth"
+  ],
+  "module": "dist/index.mjs",
+  "description": "X402 plugin for Better Auth",
+  "scripts": {
+    "test": "vitest",
+    "build": "unbuild",
+    "typecheck": "tsc --noEmit",
+    "dev": "unbuild --watch"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.mjs",
+      "require": "./dist/client.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
+    }
+  },
+  "dependencies": {
+    "better-auth": "workspace:^",
+    "x402": "^0.3.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "better-call": "catalog:",
+    "better-sqlite3": "^11.6.0",
+    "vitest": "^1.6.0"
+  }
+}
