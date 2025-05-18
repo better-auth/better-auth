@@ -76,7 +76,7 @@ To get the access token for a social provider, you can use the `getAccessToken` 
 
 ```ts
 const { accessToken } = await authClient.getAccessToken({
-  provider: "google", // or any other provider id
+  providerId: "google", // or any other provider id
   accountId: "accountId", // optional, if you want to get the access token for a specific account
 })
 ```
@@ -86,7 +86,7 @@ server-side usage:
 ```ts
 await auth.api.getAccessToken({
   body: {
-    provider: "google", // or any other provider id
+    providerId: "google", // or any other provider id
     accountId: "accountId", // optional, if you want to get the access token for a specific account
     userId: "userId", // optional, if you don't provide headers with authenticated token
   },
