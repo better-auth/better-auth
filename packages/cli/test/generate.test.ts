@@ -175,4 +175,39 @@ describe("generate", async () => {
 
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema-with-decimal.txt");
 	});
+
+		it("should generate drizzle schema with decimal different precision and scale", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+				}
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+					}
+				),
+				user: {
+					additionalFields: {
+						test: {
+							type: "decimal",
+							required: false,
+							precision: 10,
+							scale: 3,
+						},
+					},
+				},
+				plugins: [twoFactor()],
+			},
+		});
+
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema-with-decimal-precision.txt");
+	});
 });
