@@ -64,6 +64,29 @@ export const auth = betterAuth({
 });
 ```
 
+### Example: Custom Password Validation
+
+This hook allows custom password validation for email and password authentication:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+import { validatePassword } from "@/lib/password"
+
+export const auth = betterAuth({
+    hooks: {
+        before: createAuthMiddleware(async (ctx) => {
+            if (ctx.path === '/sign-up/email') {
+                const { passed, message } = validatePassword(ctx.body.password);
+                if (!passed) {
+                    throw new APIError('BAD_REQUEST', { message });
+                }
+            }
+        }),
+    },
+});
+```
+
 ## After Hooks
 
 **After hooks** run *after* an endpoint is executed. Use them to modify responses.
