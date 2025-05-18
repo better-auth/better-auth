@@ -113,8 +113,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				},
 				decimal: {
 					sqlite: `real('${name}')`,
-					pg: `numeric('${name}', { precision: ${field.precision ?? 18}, scale: ${field.scale ?? 2} })`,
-					mysql: `decimal('${name}', { precision: ${field.precision ?? 18}, scale: ${field.scale ?? 2} })`,
+					pg: `numeric('${name}', { precision: ${
+						field.precision ?? 18
+					}, scale: ${field.scale ?? 2} })`,
+					mysql: `decimal('${name}', { precision: ${
+						field.precision ?? 18
+					}, scale: ${field.scale ?? 2} })`,
 				},
 			} as const;
 			return typeMap[type][databaseType];
