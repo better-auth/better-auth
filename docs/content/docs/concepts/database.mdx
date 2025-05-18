@@ -389,7 +389,7 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 
 - `type`: The data type of the field (e.g., "string", "number", "boolean").
 - `required`: A boolean indicating if the field is mandatory.
-- `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
+- `defaultValue`: The default value for the field.
 - `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
 
 Here's an example of how to extend the user schema with additional fields:
