@@ -121,6 +121,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					}, scale: ${field.scale ?? 2} })`,
 				},
 			} as const;
+
+			if (type === "decimal") {
+				console.log("🚀 ~ getType ~ type:", type, databaseType, field);
+			}
 			return typeMap[type][databaseType];
 		}
 
@@ -145,6 +149,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field]!;
+
+							if (attr.type === "decimal") {
+								console.log("🚀 ~ .map ~ attr:", attr);
+							}
+
 							let type = getType(field, attr);
 							if (attr.defaultValue) {
 								if (typeof attr.defaultValue === "function") {

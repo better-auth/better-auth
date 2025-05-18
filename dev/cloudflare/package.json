@@ -10,7 +10,8 @@
 	"dependencies": {
 		"better-auth": "workspace:^",
 		"drizzle-orm": "^0.39.3",
-		"hono": "^4.7.2"
+		"hono": "^4.7.2",
+		"postgres": "^3.4.5"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.7.1",
