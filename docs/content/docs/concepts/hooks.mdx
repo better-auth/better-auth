@@ -71,7 +71,7 @@ This hook enables custom password validation for email and password authenticati
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
-import { validatePassword } from "@/lib/password"
+import { validatePassword } from "@/lib/password";
 
 export const auth = betterAuth({
     hooks: {
