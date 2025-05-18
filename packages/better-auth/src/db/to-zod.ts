@@ -27,7 +27,7 @@ export function toZodSchema(fields: Record<string, FieldAttribute>) {
 			if (field?.returned === false) {
 				return acc;
 			}
-			if(field?.defaultValue) {
+			if (field?.defaultValue) {
 				schema = schema.default(field.defaultValue);
 			}
 			return {
