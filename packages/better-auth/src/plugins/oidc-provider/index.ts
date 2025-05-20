@@ -287,7 +287,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					});
 					const redirectURI = new URL(value.redirectURI);
 					redirectURI.searchParams.set("code", code);
-					if(value.state) redirectURI.searchParams.set("state", value.state);
+					if (value.state) redirectURI.searchParams.set("state", value.state);
 					return ctx.json({
 						redirectURI: redirectURI.toString(),
 					});
