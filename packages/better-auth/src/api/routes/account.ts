@@ -1,9 +1,5 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
-import {
-	socialProviderList,
-	type SocialProvider,
-} from "../../social-providers";
 import { APIError } from "better-call";
 import { generateState, type OAuth2Tokens } from "../../oauth2";
 import {
@@ -12,6 +8,7 @@ import {
 	sessionMiddleware,
 } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { SocialProviderListEnum } from "../../social-providers";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -106,9 +103,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			/**
 			 * OAuth2 provider to use
 			 */
-			provider: z.enum(socialProviderList, {
-				description: "The OAuth2 provider to use",
-			}),
+			provider: SocialProviderListEnum,
 			/**
 			 * Additional scopes to request when linking the account.
 			 * This is useful for requesting additional permissions when
@@ -326,7 +321,7 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Either userId or session is required`,
 			});
 		}
-		if (!socialProviderList.includes(providerId as SocialProvider)) {
+		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
 			throw new APIError("BAD_REQUEST", {
 				message: `Provider ${providerId} is not supported.`,
 			});
@@ -469,7 +464,7 @@ export const refreshToken = createAuthEndpoint(
 				message: `Either userId or session is required`,
 			});
 		}
-		if (!socialProviderList.includes(providerId as SocialProvider)) {
+		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
 			throw new APIError("BAD_REQUEST", {
 				message: `Provider ${providerId} is not supported.`,
 			});
