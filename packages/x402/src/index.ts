@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin, Session, User } from "better-auth";
 import { getHooks, x402Middleware as x402MiddlewareUtils } from "./utils";
 import { useFacilitator } from "x402/verify";
+import { createAuthEndpoint, createAuthMiddleware, type AuthEndpoint } from "better-auth/api";
 
 export const PAYMENT_ERRORS = {
 	MISSING_PAYMENT_HEADER: "X-PAYMENT header is required",
@@ -79,19 +80,28 @@ export type X402Config = {
 	 * @default "https://x402.org/facilitator" // Facilitator URL for Base Sepolia testnet.
 	 */
 	facilitatorURL?: `https://${string}`;
+	/**
+	 * Whether the x402 plugin is running in a test environment.
+	 * This allows the `wallet` to be "0x0000000000000000000000000000000000000000" for testing purposes.
+	 * Same goes for the payment wallet.
+	 *
+	 * @default false
+	 */
+	isUnitTest?: boolean;
 };
 
 export const x402 = (endpoints: X402Endpoints, config: X402Config) => {
 	const { verify, settle } = useFacilitator({
 		url: config.facilitatorURL || "https://x402.org/facilitator",
 	});
+
 	return {
 		id: "x402",
 		init(ctx) {
 			return {
 				options: {
 					hooks: {
-						before: getHooks(endpoints, verify, settle),
+						before: getHooks(endpoints, verify, settle, config),
 					},
 				},
 			};

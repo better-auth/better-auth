@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { APIError, logger } from "better-auth";
-import { PAYMENT_ERRORS, type X402Endpoints } from "./index";
+import { logger } from "better-auth";
+import { PAYMENT_ERRORS, type X402Config, type X402Endpoints } from "./index";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getSessionFromCtx,
-	type AuthMiddleware,
+	APIError,
+	type AuthEndpoint,
 } from "better-auth/api";
 import {
 	type Network,
@@ -28,14 +29,16 @@ export const getHooks = (
 	endpoints: X402Endpoints,
 	verify: Verify,
 	settle: Settle,
-): AuthMiddleware => {
+	config: X402Config
+) => {
 	return createAuthMiddleware(async (ctx) => {
 		for (const path in endpoints) {
 			const endpoint = endpoints[path as keyof X402Endpoints];
 			const url = ctx.request?.url as `${string}://${string}` | undefined;
+			if(!url) return;
+			const pathname = new URL(url).pathname;
 			const session = await getSessionFromCtx(ctx);
-
-			if (url === `${path}`) {
+			if (pathname === `${path}`) {
 				if (endpoint.protect && !session) {
 					throw new APIError("UNAUTHORIZED", {
 						message: "You must be logged in to access this resource.",
@@ -52,6 +55,7 @@ export const getHooks = (
 						price,
 						endpoint.network || "base-sepolia",
 						url,
+						config.wallet,
 						endpoint.description || "",
 					),
 				];
@@ -66,9 +70,11 @@ export const getHooks = (
 
 				if (result.isSuccessful === false) {
 					logger.error(`[x402] Payment verification failed:`, result);
-					return ctx.error("PAYMENT_REQUIRED", {
+					throw new APIError("PAYMENT_REQUIRED", {
 						message: result.error,
 						code: result.errorCode,
+						accepts: result.accepts,
+						x402Version: result.x402Version,
 					});
 				}
 
@@ -86,7 +92,7 @@ export const getHooks = (
 				);
 
 				if (error) {
-					return ctx.error("PAYMENT_REQUIRED", {
+					throw new APIError("PAYMENT_REQUIRED", {
 						message: error?.message,
 					});
 				}
@@ -144,7 +150,7 @@ export const x402Middleware = (
 				);
 
 				if (result.isSuccessful === false) {
-					return ctx.error("PAYMENT_REQUIRED", {
+					throw new APIError("PAYMENT_REQUIRED", {
 						message: result.error,
 						code: result.errorCode,
 					});
