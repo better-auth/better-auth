@@ -245,7 +245,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
-					if (!value.requireConsent || !value.state) {
+					if (!value.requireConsent) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Consent not required",
 							error: "invalid_request",
@@ -287,7 +287,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					});
 					const redirectURI = new URL(value.redirectURI);
 					redirectURI.searchParams.set("code", code);
-					redirectURI.searchParams.set("state", value.state);
+					if (value.state) redirectURI.searchParams.set("state", value.state);
 					return ctx.json({
 						redirectURI: redirectURI.toString(),
 					});
