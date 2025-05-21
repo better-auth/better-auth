@@ -106,7 +106,7 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key#api
             rateLimitTimeWindow: 1000 * 60 * 60 * 24, // everyday
             rateLimitMax: 100, // every day, they can use up to 100 requests
             rateLimitEnabled: true,
-            userId: user.id, // the user id to create the API key for
+            userId: user.id, // the user ID to create the API key for
           },
       });
       ```
@@ -203,7 +203,7 @@ const key = await auth.api.getApiKey({
 
 #### Properties
 
-- `keyId`: The API Key id to get information on.
+- `keyId`: The API key ID to get information on.
 
 #### Result
 
@@ -255,10 +255,10 @@ type Result = Omit<ApiKey, "key">;
 
 #### Properties
 
-<DividerText>Client</DividerText>- `keyId`: The API key Id to update on. -
+<DividerText>Client</DividerText>- `keyId`: The API key ID to update on. -
 `name`?: Update the key name.
 
-<DividerText>Server Only</DividerText>- `userId`?: Update the user id who owns
+<DividerText>Server Only</DividerText>- `userId`?: Update the user ID who owns
 this key. - `name`?: Update the key name. - `enabled`?: Update whether the API
 key is enabled or not. - `remaining`?: Update the remaining count. -
 `refillAmount`?: Update the amount to refill the `remaining` count every
@@ -301,7 +301,7 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
 
 #### Properties
 
-- `keyId`: The API Key id to delete.
+- `keyId`: The API key ID to delete.
 
 #### Result
 
@@ -588,7 +588,7 @@ Customize the starting characters configuration.
   <Accordion title="startingCharactersConfig Options">
     `shouldStore` <span className="opacity-70">`boolean`</span>
 
-    Wether to store the starting characters in the database.
+    Whether to store the starting characters in the database.
     If false, we will set `start` to `null`.
     Default is `true`.
 
@@ -645,7 +645,7 @@ Customize the key expiration.
 
     `disableCustomExpiresTime` <span className="opacity-70">`boolean`</span>
 
-    Wether to disable the expires time passed from the client.
+    Whether to disable the expires time passed from the client.
     If `true`, the expires time will be based on the default values.
     Default is `false`.
 
@@ -757,7 +757,7 @@ Table: `apiKey`
     {
       name: "userId",
       type: "string",
-      description: "The id of the user who created the API key.",
+      description: "The ID of the user who created the API key.",
       isForeignKey: true,
     },
     {

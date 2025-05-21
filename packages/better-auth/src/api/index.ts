@@ -127,7 +127,6 @@ export function getEndpoints<
 		middlewares,
 	};
 }
-
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
 	options: Option,

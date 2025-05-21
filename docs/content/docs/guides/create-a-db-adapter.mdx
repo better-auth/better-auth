@@ -62,7 +62,7 @@ export const myAdapter = (config: CustomAdapterConfig = {}) =>
       supportsJSON: false, // Whether the database supports JSON. (Default: false)
       supportsDates: true, // Whether the database supports dates. (Default: true)
       supportsBooleans: true, // Whether the database supports booleans. (Default: true)
-      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric ids. (Default: true)
+      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric IDs. (Default: true)
     },
     // ...
   });
@@ -156,7 +156,7 @@ The `create` method is used to create a new record in the database.
 
 <Callout>
 Note:
-If the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better-Auth config,
+If the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better Auth config,
 then it's expected that the `id` is provided in the `data` object. Otherwise, the `id` will be automatically generated.
 
 Additionally, it's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
@@ -384,7 +384,7 @@ describe("My Adapter Tests", async () => {
 
 ### Numeric ID tests
 
-If your database supports numeric ids, then you should run this test as well:
+If your database supports numeric IDs, then you should run this test as well:
 
 ```ts title="my-adapter.number-id.test.ts"
 import { expect, test, describe } from "vitest";
@@ -430,7 +430,7 @@ The name of the adapter.
 
 ### `supportsNumericIds`
 
-Whether the database supports numeric ids. If this is set to `false` and the users config has enabled `useNumberId`, then we will throw an error.
+Whether the database supports numeric IDs. If this is set to `false` and the user's config has enabled `useNumberId`, then we will throw an error.
 
 ### `supportsJSON`
 
@@ -480,11 +480,11 @@ const adapter = myAdapter({
 
 ### `disableIdGeneration`
 
-Whether to disable id generation. If this is set to `true`, then the user's `generateId` option will be ignored.
+Whether to disable ID generation. If this is set to `true`, then the user's `generateId` option will be ignored.
 
 ### `customIdGenerator`
 
-If your database only supports a specific custom id generation, then you can use this option to generate your own IDs.
+If your database only supports a specific custom ID generation, then you can use this option to generate your own IDs.
 
 ### `mapKeysTransformInput`
 
@@ -546,7 +546,7 @@ The `customTransformInput` function runs at every key in the data object of a gi
 ```ts title="Example"
 customTransformInput: ({ field, data }) => {
   if (field === "id") {
-    return "123"; // Force the id to be "123"
+    return "123"; // Force the ID to be "123"
   }
 
   return data;
