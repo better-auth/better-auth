@@ -1,5 +1,5 @@
-import { SignJWT } from "jose";
 import { z } from "zod";
+import { SignJWT } from "jose";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -22,12 +22,24 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
+import { getJwtToken } from "../jwt/sign";
+import type { JwtOptions } from "../jwt";
+
+const getJwtPlugin = (ctx: GenericEndpointContext) => {
+	return ctx.context.options.plugins?.find(
+		(plugin) => plugin.id === "jwt",
+	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
+};
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
+	const jwtPlugin = getJwtPlugin(ctx);
+	const issuer =
+		jwtPlugin && jwtPlugin.options?.jwt && jwtPlugin.options.jwt.issuer
+			? jwtPlugin.options.jwt.issuer
+			: (ctx.context.options.baseURL as string);
 	const baseURL = ctx.context.baseURL;
 	return {
 		issuer,
@@ -596,17 +608,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
-						alg: "HS256",
-						key: await subtle.generateKey(
-							{
-								name: "HMAC",
-								hash: "SHA-256",
-							},
-							true,
-							["sign", "verify"],
-						),
-					};
+
 					const profile = {
 						given_name: user.name.split(" ")[0],
 						family_name: user.name.split(" ")[1],
@@ -627,7 +629,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
-					const idToken = await new SignJWT({
+					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
@@ -636,13 +638,45 @@ export const oidcProvider = (options: OIDCOptions) => {
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 						...additionalUserClaims,
-					})
-						.setProtectedHeader({ alg: secretKey.alg })
-						.setIssuedAt()
-						.setExpirationTime(
-							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
-						)
-						.sign(secretKey.key);
+					};
+					const expirationTime =
+						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+
+					let idToken: string;
+
+					// The JWT plugin is enabled, so we use the JWKS keys to sign
+					const jwtPlugin = getJwtPlugin(ctx);
+					if (jwtPlugin) {
+						idToken = await getJwtToken(
+							ctx,
+							{
+								payload,
+								issuedAt: true,
+								expirationTime,
+							},
+							jwtPlugin.options,
+						);
+
+						// If the JWT token is not enabled, create a key and use it to sign
+					} else {
+						let secretKey = {
+							alg: "HS256",
+							key: await subtle.generateKey(
+								{
+									name: "HMAC",
+									hash: "SHA-256",
+								},
+								true,
+								["sign", "verify"],
+							),
+						};
+
+						idToken = await new SignJWT(payload)
+							.setProtectedHeader({ alg: secretKey.alg })
+							.setIssuedAt()
+							.setExpirationTime(expirationTime)
+							.sign(secretKey.key);
+					}
 
 					return ctx.json(
 						{
