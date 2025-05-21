@@ -138,7 +138,7 @@ export const twitter = (options: TwitterOption) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://api.twitter.com/2/oauth2/token",
+						tokenEndpoint: "https://api.x.com/2/oauth2/token",
 					});
 				},
 		async getUserInfo(token) {
