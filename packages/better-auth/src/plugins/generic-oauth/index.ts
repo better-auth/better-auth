@@ -706,6 +706,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						callbackURL: callbackURL,
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,
