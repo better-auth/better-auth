@@ -94,6 +94,25 @@ await auth.api.getAccessToken({
 });
 ```
 
+### Requesting Additional Scopes
+
+Sometimes your application may need additional OAuth scopes after the user has already signed up (e.g., for accessing GitHub repositories or Google Drive). Users may not want to grant extensive permissions initially, preferring to start with minimal permissions and grant additional access as needed.
+
+You can request additional scopes by using the `linkSocial` method with the same provider. This will trigger a new OAuth flow that requests the additional scopes while maintaining the existing account connection.
+
+```ts
+const requestAdditionalScopes = async () => {
+    await authClient.linkSocial({
+        provider: "google",
+        scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+};
+```
+
+<Callout>
+Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
+</Callout>
+
 ### Other Provider Configurations
 
 **scope** The scope of the access request. For example, `email` or `profile`.
