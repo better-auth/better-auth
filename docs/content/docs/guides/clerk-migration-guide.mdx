@@ -41,7 +41,7 @@ export const auth = betterAuth({
 Enable the email and password in your auth config and implement your own logic for sending verification emails, reset password emails, etc.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -52,8 +52,7 @@ export const auth = betterAuth({
     }, // [!code highlight]
     emailVerification: {
       sendVerificationEmail: async({ user, url })=>{
-        // send email verification email
-        // implement your own logic here
+        // implement your logic here to send email verification
       }
 	},
 })
@@ -67,7 +66,7 @@ See [Email and Password](/docs/authentication/email-password) for more configura
 Add social providers you have enabled in your Clerk project in your auth config.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -142,7 +141,7 @@ export const auth = betterAuth({
   <Step>
   ### Create the migration script
 
-  Create a new file called `migrate-clerk.ts` in your project and add the following code:
+  Create a new file called `migrate-clerk.ts` in the `scripts` folder and add the following code:
 
   ```ts title="scripts/migrate-clerk.ts"
 import { symmetricEncrypt } from "better-auth/crypto";
@@ -406,7 +405,6 @@ migrateFromClerk()
         console.error(error);
         return;
       }
-      
       // Handle successful sign in
     };
 
