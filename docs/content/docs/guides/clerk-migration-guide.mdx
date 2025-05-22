@@ -59,14 +59,6 @@ export const auth = betterAuth({
   // Configure email and password if needed
   emailAndPassword: {
     enabled: true,
-    // Optional: Configure password requirements
-    passwordRequirements: {
-      minLength: 8,
-      requireUppercase: true,
-      requireLowercase: true,
-      requireNumbers: true,
-      requireSpecialChars: true
-    }
   },
   // Configure your providers
   socialProviders: {
@@ -77,27 +69,6 @@ export const auth = betterAuth({
     },
     // Add more providers as needed
   },
-  // Configure session settings
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  // Configure rate limiting
-  rateLimit: {
-    enabled: true,
-    window: 60, // 1 minute
-    max: 100 // max requests per window
-  },
-  // Configure forceId settings
-  forceId: {
-    enabled: true,
-    // Optional: Configure custom ID generation
-    generateId: async (user) => {
-      // You can implement custom ID generation logic here
-      // For example, using the Clerk ID during migration
-      return user.metadata?.clerkId || crypto.randomUUID();
-    }
-  }
 });
 ```
 
@@ -110,15 +81,7 @@ import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
     baseURL: process.env.NEXT_PUBLIC_URL,
-    // Optional: Configure client settings
-    defaultOptions: {
-        // Configure default options for all requests
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    }
-});
-```
+}); ```
 
 ## 4. Set up the database
 
