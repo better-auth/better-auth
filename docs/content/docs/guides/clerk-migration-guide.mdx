@@ -11,7 +11,7 @@ This migration will invalidate all active sessions. This guide doesn't currently
 
 ## Before You Begin
 
-Before starting the migration process, set up Better Auth in your project. Follow the [installation guide](/docs/installation) to get started.
+Before starting the migration process, set up Better Auth in your project. Follow the [installation guide](/docs/installation) to get started. And go to 
 
 <Steps>
 <Step>
@@ -134,10 +134,13 @@ export const auth = betterAuth({
   ```sh
   npx @better-auth/cli migrate
   ```
-
-
+  </Step>
   <Step>
-### Create the migration script
+  ### Export Clerk Users
+  Go to the Clerk dashboard and export the users. Check how to do it [here](https://clerk.com/docs/deployments/exporting-users#export-your-users-data-from-the-clerk-dashboard). It will download a CSV file with the users data. You need to save it as `exported_users.csv` and put it in the root of your project.
+  </Step>
+  <Step>
+  ### Create the migration script
 
   Create a new file called `migrate-clerk.ts` in your project and add the following code:
 
@@ -175,7 +178,7 @@ function getCSVData(csv: string) {
     }>;
 }
 
-const exportedUserCSV = await Bun.file("exported_users.csv").text();
+const exportedUserCSV = await Bun.file("exported_users.csv").text(); // this is the file you downloaded from Clerk // [!code highlight] 
 
 
 async function getClerkUsers(totalUsers: number) {
@@ -358,12 +361,9 @@ migrateFromClerk()
         process.exit(1);
     });
   ```
-
-  <Callout type="warning">
-  The migration script requires Clerk to be fully functional to access user data and accounts.
-  </Callout>
+  Make sure to replace the `process.env.CLERK_SECRET_KEY` with your own Clerk secret key. And replace the `import { auth } from "./auth";` with your own auth instance. Feel free to customize the script to your needs.
  </Step>
-
+  
 <Step>
   ### Run the migration
 
@@ -381,6 +381,7 @@ migrateFromClerk()
   4. Keep Clerk installed and configured until the migration is complete
   </Callout>
 
+  </Step>
   <Step>
   ### Verify the migration
 
@@ -417,7 +418,6 @@ migrateFromClerk()
   };
   ```
   </Step>
-</Step>
 <Step>
   ### Update the middleware
 
@@ -453,7 +453,6 @@ migrateFromClerk()
   pnpm remove @clerk/nextjs @clerk/themes @clerk/types
   ```
     </Step>
-  </Step>
 </Steps>
 
 
