@@ -6,9 +6,8 @@ description: A step-by-step guide to transitioning from Clerk to Better Auth.
 In this guide, we'll walk through the steps to migrate a project from Clerk to Better Auth — including email/password with proper hashing, social/external accounts, phone number, two-factor data, and more.
 
 <Callout type="warn">
-This migration will invalidate all active sessions. This guide doesn't currently how to migrate Organization but it should be possible with additional steps.
+This migration will invalidate all active sessions. This guide doesn't currently show you how to migrate Organization but it should be possible with additional steps and the [Organization](/docs/plugins/organization) Plugin.
 </Callout>
-
 
 ## Before You Begin
 
@@ -305,7 +304,7 @@ async function migrateFromClerk() {
                 const { id, provider, identification_id, provider_user_id, approved_scopes, email_address, first_name, last_name, image_url, created_at, updated_at } = externalAccount;
                 if (externalAccount.provider === "credential") {
                     await ctx.adapter.create({
-                        model: "externalAccount",
+                        model: "account",
                         data: {
                             id,
                             providerId: provider,
@@ -319,7 +318,7 @@ async function migrateFromClerk() {
                     })
                 } else {
                     await ctx.adapter.create({
-                        model: "externalAccount",
+                        model: "account",
                         data: {
                             id,
                             providerId: provider.replace("oauth_", ""),
