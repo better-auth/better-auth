@@ -49,6 +49,12 @@ export const auth = betterAuth({
     database: new Pool({ 
         connectionString: process.env.DATABASE_URL 
     }),
+	emailVerification: {
+		sendEmailVerification: async(user)=>{
+			// send email verification email
+			// implement your own logic here
+		}
+	},
     emailAndPassword: { // [!code highlight]
         enabled: true, // [!code highlight]
     } // [!code highlight]
