@@ -121,6 +121,28 @@ Expo is a popular framework for building cross-platform apps with React Native. 
             trustedOrigins: ["myapp://"]
         })
         ```
+
+        If you have multiple schemes or need to support deep linking with various paths, you can use specific patterns or wildcards:
+
+        ```ts title="auth.ts"
+        export const auth = betterAuth({
+            trustedOrigins: [
+                // Basic scheme
+                "myapp://", 
+                
+                // Production & staging schemes
+                "myapp-prod://",
+                "myapp-staging://",
+                
+                // Wildcard support for all paths following the scheme
+                "myapp://*"
+            ]
+        })
+        ```
+
+        <Callout>
+          The wildcard pattern can be particularly useful if your app uses different URL formats for deep linking based on features or screens.
+        </Callout>
     </Step>
  
     <Step>
