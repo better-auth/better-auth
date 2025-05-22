@@ -277,5 +277,10 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 	if (envTrustedOrigins) {
 		trustedOrigins.push(...envTrustedOrigins.split(","));
 	}
+	if (trustedOrigins.filter((x) => !x).length) {
+		throw new BetterAuthError(
+			"A provided trusted origin is invalid, make sure your trusted origins list is properly defined.",
+		);
+	}
 	return trustedOrigins;
 }
