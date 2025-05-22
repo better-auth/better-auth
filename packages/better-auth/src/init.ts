@@ -227,7 +227,7 @@ function runPluginInit(ctx: AuthContext) {
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = plugin.init(ctx);
+			const result = plugin.init(context);
 			if (typeof result === "object") {
 				if (result.options) {
 					const { databaseHooks, ...restOpts } = result.options;
