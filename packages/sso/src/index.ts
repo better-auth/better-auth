@@ -867,6 +867,7 @@ const sso = (options?: SSOOptions) => {
 							refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
 							scope: tokenResponse.scopes?.join(","),
 						},
+						callbackURL,
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 						overrideUserInfo: config.overrideUserInfo,
 					});
