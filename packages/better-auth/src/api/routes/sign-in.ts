@@ -285,6 +285,7 @@ export const signInSocial = createAuthEndpoint(
 					accountId: userInfo.user.id,
 					accessToken: c.body.idToken.accessToken,
 				},
+				callbackURL: c.body.callbackURL,
 				disableSignUp:
 					(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 					provider.disableSignUp,
