@@ -205,6 +205,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							session.session.token,
 							{
 								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
+								updatedAt: new Date(),
 							},
 						);
 					if (!updatedSession) {
