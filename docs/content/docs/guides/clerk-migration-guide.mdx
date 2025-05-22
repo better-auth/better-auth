@@ -144,10 +144,9 @@ export const auth = betterAuth({
   Create a new file called `migrate-clerk.ts` in the `scripts` folder and add the following code:
 
   ```ts title="scripts/migrate-clerk.ts"
-import { symmetricEncrypt } from "better-auth/crypto";
-import { generateRandomString } from "better-auth/crypto";
-import { auth } from "./auth"; // import your auth instance
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 
+import { auth } from "@/lib/auth"; // import your auth instance
 
 function getCSVData(csv: string) {
     const lines = csv.split('\n').filter(line => line.trim());
@@ -177,8 +176,7 @@ function getCSVData(csv: string) {
     }>;
 }
 
-const exportedUserCSV = await Bun.file("exported_users.csv").text(); // this is the file you downloaded from Clerk // [!code highlight] 
-
+const exportedUserCSV = await Bun.file("exported_users.csv").text(); // this is the file you downloaded from Clerk
 
 async function getClerkUsers(totalUsers: number) {
     const clerkUsers: {
@@ -242,6 +240,29 @@ export async function generateBackupCodes(
     return encCodes
 }
 
+// Helper function to safely convert timestamp to Date
+function safeDateConversion(timestamp?: number): Date {
+    if (!timestamp) return new Date();
+
+    // Convert seconds to milliseconds
+    const date = new Date(timestamp * 1000);
+
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+        console.warn(`Invalid timestamp: ${timestamp}, falling back to current date`);
+        return new Date();
+    }
+
+    // Check for unreasonable dates (before 2000 or after 2100)
+    const year = date.getFullYear();
+    if (year < 2000 || year > 2100) {
+        console.warn(`Suspicious date year: ${year}, falling back to current date`);
+        return new Date();
+    }
+
+    return date;
+}
+
 async function migrateFromClerk() {
     const jsonData = getCSVData(exportedUserCSV);
     const clerkUsers = await getClerkUsers(jsonData.length);
@@ -265,8 +286,8 @@ async function migrateFromClerk() {
                 emailVerified: verified_email_addresses.length > 0,
                 name: `${first_name} ${last_name}`,
                 image: clerkUser?.image_url,
-                createdAt: clerkUser?.created_at,
-                updatedAt: clerkUser?.updated_at,
+                createdAt: safeDateConversion(clerkUser?.created_at),
+                updatedAt: safeDateConversion(clerkUser?.updated_at),
                 // # Two Factor (if you enabled two factor plugin)
                 ...(isTwoFactorEnabled ? {
                     twoFactorEnabled: clerkUser?.two_factor_enabled
@@ -313,8 +334,8 @@ async function migrateFromClerk() {
                             accountId: externalAccount.provider_user_id,
                             scope: approved_scopes,
                             userId: createdUser?.id,
-                            createdAt: created_at,
-                            updatedAt: updated_at,
+                            createdAt: safeDateConversion(created_at),
+                            updatedAt: safeDateConversion(updated_at),
                             password: password_digest,
                         }
                     })
@@ -327,8 +348,8 @@ async function migrateFromClerk() {
                             accountId: externalAccount.provider_user_id,
                             scope: approved_scopes,
                             userId: createdUser?.id,
-                            createdAt: created_at,
-                            updatedAt: updated_at,
+                            createdAt: safeDateConversion(created_at),
+                            updatedAt: safeDateConversion(updated_at),
                         },
                         forceAllowId: true
                     })
@@ -453,9 +474,12 @@ migrateFromClerk()
     </Step>
 </Steps>
 
+## Additional Resources
 
-  ## Wrapping Up
+[Goodbye Clerk, Hello Better Auth – Full Migration Guide!](https://www.youtube.com/watch?v=Za_QihbDSuk)
 
-  Congratulations! You've successfully migrated from Clerk to Better Auth.
+## Wrapping Up
 
-  Better Auth offers greater flexibility and more features—be sure to explore the [documentation](/docs) to unlock its full potential.
+Congratulations! You've successfully migrated from Clerk to Better Auth.
+
+Better Auth offers greater flexibility and more features—be sure to explore the [documentation](/docs) to unlock its full potential.
