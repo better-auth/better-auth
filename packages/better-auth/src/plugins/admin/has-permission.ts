@@ -25,7 +25,14 @@ export const hasPermission = (
 	if (input.userId && input.options?.adminUserIds?.includes(input.userId)) {
 		return true;
 	}
-	if (input.email && input.options?.adminEmails?.some((email) => typeof email === 'string' ? email === input.email : email.test(input.email!))) {
+	if (
+		input.email &&
+		input.options?.adminEmails?.some((email) =>
+			typeof email === "string"
+				? email === input.email
+				: email.test(input.email!),
+		)
+	) {
 		return true;
 	}
 	if (!input.permissions && !input.permission) {
