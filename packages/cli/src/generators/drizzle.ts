@@ -10,6 +10,12 @@ export function convertToSnakeCase(str: string) {
 	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
+export function convertToCamelCase(str: string) {
+	return str
+		.toLowerCase()
+		.replace(/[^a-zA-Z0-9]+(.)/g, (_, char) => char.toUpperCase());
+}
+
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
@@ -41,6 +47,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 				);
 			}
+
 			name = convertToSnakeCase(name);
 
 			if (field.references?.field === "id") {
@@ -111,6 +118,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `text('${name}').array()`,
 				},
 			} as const;
+			if (Array.isArray(field.type)) {
+				const enumValues = field.type.map((t) => `'${t}'`).join(", ");
+				if (databaseType === "pg") {
+					const enumConstName = convertToCamelCase(name) + "Enum";
+					const pgEnum = `export const ${enumConstName} = pgEnum("${convertToSnakeCase(
+						name,
+					)}", [${enumValues}]);`;
+					code += `\n${pgEnum}\n`;
+
+					return `${enumConstName}('${name}')`;
+				} else if (databaseType === "mysql") {
+					return `mysqlEnum('${name}', [${enumValues}])`;
+				} else {
+					return `text('${name}', { enum: [${enumValues}] })`;
+				}
+			}
 			return typeMap[type][databaseType];
 		}
 
@@ -162,7 +185,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				});`;
 		code += `\n${schema}\n`;
 	}
-
 	return {
 		code: code,
 		fileName: filePath,
@@ -180,6 +202,10 @@ function generateImport({
 		Object.values(table.fields).some((field) => field.bigint),
 	);
 
+	const isArray = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => Array.isArray(field.type)),
+	);
+
 	imports.push(`${databaseType}Table`);
 	imports.push(
 		databaseType === "mysql"
@@ -188,10 +214,13 @@ function generateImport({
 				? "text"
 				: "text",
 	);
+
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
 	imports.push(databaseType === "mysql" ? "int" : "integer");
 
+	imports.push(isArray ? (databaseType === "mysql" ? "mysqlEnum" : "") : "");
+	imports.push(isArray ? (databaseType === "pg" ? "pgEnum" : "") : "");
 	return `import { ${imports
 		.map((x) => x.trim())
 		.filter((x) => x !== "")
