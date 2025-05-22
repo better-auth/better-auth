@@ -168,7 +168,7 @@ async function migrateFromClerk() {
                 data: {
                     id: user.id,
                     email: primaryEmail.emailAddress,
-                    name: `${user.firstName} ${user.lastName}`.trim(),
+                    name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
                     role: (user.publicMetadata?.role as "admin" | "user") || "user",
                     emailVerified: primaryEmail.verification?.status === "verified",
                     image: user.imageUrl,
