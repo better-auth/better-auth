@@ -1,0 +1,359 @@
+---
+title: Switch to Better Auth
+description: How to migrate from Clerk to Better Auth
+---
+
+Here's how to switch from Clerk to Better Auth. This guide will help you migrate your data safely before removing Clerk.
+
+## 1. Prepare for Migration
+
+First, let's set up Better Auth while keeping Clerk installed. This allows us to migrate data without service interruption.
+
+### Install Better Auth
+
+Install Better Auth alongside Clerk:
+
+```package-install
+pnpm add better-auth
+```
+
+### Install CLI Tools
+
+Install the Better Auth CLI for managing your authentication system:
+
+```package-install
+pnpm add -D @better-auth/cli
+```
+
+## 2. Initialize Better Auth
+
+### Generate a Secret
+
+Better Auth requires a random value secret for encryption and token generation. Generate one using the CLI:
+
+```sh
+npx @better-auth/cli secret
+```
+
+This will automatically add a `BETTER_AUTH_SECRET` environment variable to your `.env` file.
+
+### Set up Environment Variables
+
+Add the following to your `.env` file:
+
+```env
+BETTER_AUTH_SECRET=your_generated_secret
+BETTER_AUTH_URL=http://localhost:3000
+```
+
+## 3. Create the auth configuration
+
+### Server Configuration
+
+Create a new `auth.ts` file in your project (typically in `lib/` or `utils/`):
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Configure email and password if needed
+  emailAndPassword: {
+    enabled: true,
+    // Optional: Configure password requirements
+    passwordRequirements: {
+      minLength: 8,
+      requireUppercase: true,
+      requireLowercase: true,
+      requireNumbers: true,
+      requireSpecialChars: true
+    }
+  },
+  // Configure your providers
+  socialProviders: {
+    // Add your OAuth providers here
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    },
+    // Add more providers as needed
+  },
+  // Configure session settings
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  // Configure rate limiting
+  rateLimit: {
+    enabled: true,
+    window: 60, // 1 minute
+    max: 100 // max requests per window
+  },
+  // Configure forceId settings
+  forceId: {
+    enabled: true,
+    // Optional: Configure custom ID generation
+    generateId: async (user) => {
+      // You can implement custom ID generation logic here
+      // For example, using the Clerk ID during migration
+      return user.metadata?.clerkId || crypto.randomUUID();
+    }
+  }
+});
+```
+
+### Client Configuration
+
+Create a new `auth-client.ts` file in your project (typically in `lib/` or `utils/`):
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+
+export const authClient = createAuthClient({
+    baseURL: process.env.NEXT_PUBLIC_URL,
+    // Optional: Configure client settings
+    defaultOptions: {
+        // Configure default options for all requests
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    }
+});
+```
+
+## 4. Set up the database
+
+### Initialize Database
+
+Better Auth requires a database to store user data. Run the following command to set up your database:
+
+```sh
+npx @better-auth/cli migrate
+```
+
+### Generate Schema
+
+If you're using a custom database adapter, generate the schema:
+
+```sh
+npx @better-auth/cli generate
+```
+
+## 5. Create the migration script
+
+Create a new file called `migrate-clerk.ts` in your project:
+
+```ts title="scripts/migrate-clerk.ts"
+import { auth } from "@/lib/auth"
+import { createClerkClient } from '@clerk/backend'
+
+async function migrateFromClerk() {
+    const ctx = await auth.$context;
+    const clerk = createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY as string,
+    })
+    const users = await clerk.users.getUserList();
+    console.log(`Found ${users?.data.length} users to migrate`);
+    for (const user of users.data) {
+        try {
+            const primaryEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId);
+
+            if (!primaryEmail) {
+                console.warn(`Skipping user ${user.id} - no primary email found`);
+                continue;
+            }
+
+            // Create the user in your auth system
+            const result = await ctx.adapter.create({
+                model: "user",
+                data: {
+                    id: user.id,
+                    email: primaryEmail.emailAddress,
+                    name: `${user.firstName} ${user.lastName}`.trim(),
+                    role: (user.publicMetadata?.role as "admin" | "user") || "user",
+                    emailVerified: primaryEmail.verification?.status === "verified",
+                    image: user.imageUrl,
+                    createdAt: new Date(user.createdAt),
+                    updatedAt: new Date(user.updatedAt),
+                    isAnonymous: user.publicMetadata?.isAnonymous || false,
+                },
+                forceAllowId: true
+            });
+
+            // Handle OAuth accounts
+            for (const oauthAccount of user.externalAccounts) {
+                const existingAccounts = await ctx.internalAdapter.findAccounts(user.id);
+                const hasAccount = existingAccounts.find(
+                    (account) => account.providerId === oauthAccount.provider
+                );
+
+                if (!hasAccount) {
+                    const providerId = oauthAccount.provider.split("_")[1]
+                    console.log("Provider ID: ", providerId)
+                    const result = await ctx.adapter.create({
+                        model: "account",
+                        data: {
+                            userId: user.id,
+                            providerId: providerId,
+                            accountId: oauthAccount.id,
+                            createdAt: new Date(user.createdAt),
+                            updatedAt: new Date(user.updatedAt),
+                        },
+                    });
+                }
+            }
+            // Handle email/password account if it exists
+            if (user.passwordEnabled) {
+                const existingAccounts = await ctx.internalAdapter.findAccounts(user.id);
+                const hasCredential = existingAccounts.find(
+                    (account) => account.providerId === "credential"
+                );
+
+                if (!hasCredential) {
+                    const result = await ctx.adapter.create({
+                        model: "account",
+                        data: {
+                            userId: user.id,
+                            providerId: "credential",
+                            accountId: user.id,
+                            createdAt: new Date(user.createdAt),
+                            updatedAt: new Date(user.updatedAt),
+                        },
+                    });
+                }
+            }
+            console.log(`Successfully migrated user: ${primaryEmail.emailAddress}`);
+        } catch (error) {
+            console.error(`Failed to migrate user ${user.id}:`, error);
+        }
+    }
+}
+
+migrateFromClerk()
+    .then(() => {
+        console.log('Migration completed');
+        process.exit(0);
+    })
+    .catch((error) => {
+        console.error('Migration failed:', error);
+        process.exit(1);
+    });
+```
+
+<Callout type="warning">
+The migration script requires Clerk to be fully functional to access user data and accounts.
+</Callout>
+
+## 6. Run the migration
+
+Run the migration:
+
+```sh
+bun run script/migrate-clerk.ts
+```
+
+<Callout type="warning">
+Make sure to:
+1. Back up your database before running the migration
+2. Test the migration in a development environment first
+3. Monitor the migration process for any errors
+4. Verify the migrated data in Better Auth before proceeding
+5. Keep Clerk installed and configured until the migration is complete
+</Callout>
+
+## 7. Verify the migration
+
+After running the migration, verify that all users have been properly migrated:
+
+```ts
+const users = await auth.api.listUsers();
+console.log(`Total users in Better Auth: ${users.length}`);
+```
+
+## 8. Update your components
+
+Now that the data is migrated, you can start updating your components to use Better Auth. Here's an example for the sign-in component:
+
+```tsx title="components/auth/sign-in.tsx"
+import { authClient } from "better-auth/client";
+
+export const SignIn = () => {
+  const handleSignIn = async () => {
+    const { data, error } = await authClient.signIn.email({
+      email: "user@example.com",
+      password: "password",
+    });
+    
+    if (error) {
+      console.error(error);
+      return;
+    }
+    
+    // Handle successful sign in
+  };
+
+  return (
+    <form onSubmit={handleSignIn}>
+      <button type="submit">Sign in</button>
+    </form>
+  );
+};
+```
+
+## 9. Update the middleware
+
+Replace your Clerk middleware with Better Auth's middleware:
+
+```ts title="middleware.ts"
+
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
+export async function middleware(request: NextRequest) {
+  const sessionCookie = getSessionCookie(request);
+  const { pathname } = request.nextUrl;
+  if (sessionCookie && ["/login", "/signup"].includes(pathname)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  if (!sessionCookie && pathname.startsWith("/dashboard")) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/dashboard", "/login", "/signup"],
+};
+```
+
+## 10. Create auth API routes
+
+Create the necessary API routes for Better Auth:
+
+```ts title="app/api/auth/[...auth]/route.ts"
+import { auth } from "~/lib/auth";
+
+export const { GET, POST } = auth.handlers;
+```
+
+## 11. Update environment variables
+
+Update your `.env` file with the required Better Auth variables:
+
+```env
+BETTER_AUTH_SECRET=your_secret_here
+BETTER_AUTH_URL=http://localhost:3000
+```
+
+## 12. Remove Clerk
+
+Once you've verified that everything is working correctly with Better Auth, you can remove Clerk:
+
+```package-install
+pnpm remove @clerk/nextjs @clerk/themes @clerk/types
+```
+
+## Wrapping Up
+
+Congratulations! You've successfully migrated from Clerk to Better Auth.
+
+Better Auth offers greater flexibility and more features—be sure to explore the [documentation](/docs) to unlock its full potential.
+
