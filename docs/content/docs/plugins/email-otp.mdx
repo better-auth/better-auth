@@ -157,8 +157,6 @@ export const auth = betterAuth({
 
 - `allowedAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
 
-- `customTypes`: An array of additional OTP types that extend (rather than overwrite) the default set (`"sign-in"`, `"email-verification"`, `"forget-password"`). Any of your custom types can then be used wherever you supply `type`. 
-
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
@@ -173,3 +171,44 @@ export const auth = betterAuth({
 ```
 
 When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `MAX_ATTEMPTS_EXCEEDED`.
+
+- `customTypes`: An array of additional OTP types that extend (rather than overwrite) the default set (`"sign-in"`, `"email-verification"`, `"forget-password"`). Any of your custom types can then be used wherever you supply `type`. 
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { emailOTP } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    // ... other config options
+    plugins: [
+        emailOTP({ 
+            customTypes: ["your-own-type", "set-password"] // [!code highlight]
+            async sendVerificationOTP({
+                email,  // string
+                otp,    // string
+                type,   // "sign-in" | "email-verification" | "forget-password" | "your-own-type" | "set-password" // [!code highlight]
+            }) {
+                // Send the OTP for your custom flow
+            },
+        })
+    ]
+})
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { emailOTPClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    plugins: [
+        emailOTPClient({
+            customTypes: ["your-own-type", "set-password"] // You have to set your custom types in the client to get type inference // [!code highlight]
+        })
+    ]
+})
+
+await authClient.emailOtp.sendVerificationOtp({
+  email: "foo@example.com",
+  type:  "set-password", // "sign-in" | "email-verification" | "forget-password" | "your-own-type" | "set-password" // [!code highlight]
+})
+```
