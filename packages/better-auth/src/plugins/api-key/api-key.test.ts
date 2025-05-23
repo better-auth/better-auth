@@ -119,6 +119,65 @@ describe("api-key", async () => {
 		expect(apiKey.requestCount).toEqual(0);
 		expect(apiKey.remaining).toBeNull();
 		expect(apiKey.lastRequest).toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
+	});
+
+	it("should have the real value from rateLimitEnabled", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: false,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(false);
+	});
+
+	it("should have true if the rate limit is undefined", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: undefined,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
+	});
+
+	it("should respect rateLimit configuration from plugin options", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						rateLimit: {
+							enabled: false,
+							timeWindow: 1000,
+							maxRequests: 10,
+						},
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		const apiKeyResult = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		expect(apiKeyResult).not.toBeNull();
+		expect(apiKeyResult.rateLimitEnabled).toBe(false);
+		expect(apiKeyResult.rateLimitTimeWindow).toBe(1000);
+		expect(apiKeyResult.rateLimitMax).toBe(10);
 	});
 
 	it("should create the API key with the given name", async () => {
@@ -251,6 +310,65 @@ describe("api-key", async () => {
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.expiresAt).toBeDefined();
 		expect(apiKey.expiresAt?.getTime()).toBeGreaterThanOrEqual(expectedResult);
+	});
+
+	it("should support disabling key hashing", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						disableKeyHashing: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const apiKey2 = await auth.api.createApiKey({
+			body: {},
+			headers,
+		});
+		const res = await (await auth.$context).adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: apiKey2.id,
+				},
+			],
+		});
+		expect(res?.key).toEqual(apiKey2.key);
+	});
+
+	it("should be able to verify with key hashing disabled", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						disableKeyHashing: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const apiKey2 = await auth.api.createApiKey({
+			body: {},
+			headers,
+		});
+
+		const result = await auth.api.verifyApiKey({ body: { key: apiKey2.key } });
+		expect(result.valid).toEqual(true);
 	});
 
 	it("should fail to create a key with a custom expiresIn value when customExpiresTime is disabled", async () => {

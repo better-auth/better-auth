@@ -142,3 +142,93 @@ describe("forget password", async (it) => {
 		expect(res2.error?.status).toBe(400);
 	});
 });
+
+describe("revoke sessions on password reset", async (it) => {
+	const mockSendEmail = vi.fn();
+	let token = "";
+
+	const { client, testUser, signInWithTestUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword({ url }) {
+					token = url.split("?")[0].split("/").pop() || "";
+					await mockSendEmail();
+				},
+				revokeSessionsOnPasswordReset: true,
+			},
+		},
+		{
+			testWith: "sqlite",
+		},
+	);
+
+	it("should revoke other sessions when revokeSessionsOnPasswordReset is enabled", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+
+		await client.resetPassword(
+			{
+				newPassword: "new-password",
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+
+		const sessionAttempt = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionAttempt.data).toBeNull();
+	});
+
+	it("should not revoke other sessions by default", async () => {
+		const { client, testUser, signInWithTestUser } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					async sendResetPassword({ url }) {
+						token = url.split("?")[0].split("/").pop() || "";
+						await mockSendEmail();
+					},
+				},
+			},
+			{
+				testWith: "sqlite",
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+
+		await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+
+		await client.resetPassword(
+			{
+				newPassword: "new-password",
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+
+		const sessionAttempt = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionAttempt.data?.user).toBeDefined();
+	});
+});

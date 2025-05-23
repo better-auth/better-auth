@@ -1,0 +1,178 @@
+---
+title: Authenicating MCP servers
+description: A deep dive into how to implement MCP auth with Better Auth & Vercel MCP adapter
+date: 2025-05-19
+image: /images/blogs/mcp-auth.png
+author:
+  name: Bereket Engida
+  avatar: /avatars/beka.jpg
+  twitter: imbereket
+tags:
+  - mcp
+  - vercel
+  - ai
+  - nextjs
+  - neon
+---
+
+## Introduction
+
+[MCP](https://modelcontextprotocol.io) is an open protocol that standardizes how applications provide context to LLMs. It provides a standardized way to connect AI models to different data sources and tools. It's been sometime since the MCP spec by anthropic become a standard for building LLM based apps.
+
+The protocol covers both client and server implementations. When you make a server for MCP clients to connect to, one of the requirements is to have a proper way to authenticate and authorize them. The MCP spec recommends using [OAuth 2.0](https://oauth.net/2/) for this purpose with some additional requirements.
+
+In this article, we'll see how Better Auth MCP plugin integrates with your MCP server to authenticate and authorize MCP clients.
+
+## How Better Auth MCP Plugin Works
+
+The Better Auth MCP plugin implements the OAuth 2.0 authorization flow with some MCP-specific modifications. Let's break down how it works:
+
+### 1. OAuth Discovery Endpoint
+
+First, the plugin helps you expose an OAuth discovery endpoint at `/.well-known/oauth-authorization-server` that provides metadata about the authorization server:
+
+
+```ts title=".well-known/oauth-authorization-server/route.ts"
+import { oAuthDiscoveryMetadata } from "better-auth/plugins";
+import { auth } from "../../../lib/auth";
+
+export const GET = oAuthDiscoveryMetadata(auth);
+```
+
+This endpoint returns standard OAuth metadata including:
+- Authorization endpoint (`/mcp/authorize`)
+- Token endpoint (`/mcp/token`) 
+- Supported scopes (`openid`, `profile`, `email`, `offline_access`)
+- Supported response types (`code`)
+- PKCE challenge methods (`S256`)
+
+### 2. Authorization Flow
+
+When an MCP client (like Claude Desktop) wants to connect to your server, it initiates the OAuth flow:
+
+1. The client makes a request to your authorization endpoint with:
+   - `client_id`: Unique identifier for the client
+   - `redirect_uri`: Where to send the authorization code
+   - `response_type`: Always "code" for MCP
+   - `code_challenge`: PKCE challenge for security
+   - `scope`: Requested permissions (e.g. "openid profile")
+
+2. If the client isn't registered yet (no `client_id`), it first needs to register using the dynamic client registration endpoint:
+
+```ts
+// Client sends POST request to /mcp/register
+{
+  "redirect_uris": ["https://client.example.com/callback"],
+  "client_name": "My MCP Client",
+  "logo_uri": "https://client.example.com/logo.png",
+  "token_endpoint_auth_method": "client_secret_basic",
+  "grant_types": ["authorization_code"],
+  "response_types": ["code"],
+  "scope": "openid profile"
+}
+
+// Server validates and responds with:
+{
+  "client_id": "generated-client-id",
+  "client_secret": "generated-client-secret",
+  "client_id_issued_at": 1683900000,
+  "client_secret_expires_at": 0
+}
+```
+
+3. Once registered (or if already registered), if the user isn't logged in, they're redirected to your login page:
+```ts
+await ctx.setSignedCookie(
+    'oidc_login_prompt',
+    JSON.stringify(ctx.query),
+    ctx.context.secret,
+    {
+        maxAge: 600,
+        path: '/',
+        sameSite: 'lax',
+    }
+);
+throw ctx.redirect(`${options.loginPage}?${queryFromURL}`);
+```
+
+4. After login, the plugin validates:
+   - Client ID exists and is enabled
+   - Redirect URI matches registered URIs
+   - Requested scopes are valid
+   - PKCE challenge is present (if required)
+
+5. If everything is valid, it generates an authorization code:
+```ts
+const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+const codeExpiresInMs = opts.codeExpiresIn * 1000;
+const expiresAt = new Date(Date.now() + codeExpiresInMs);
+```
+
+### 3. Protecting Your MCP Server
+
+The plugin provides a `withMcpAuth` middleware to protect your MCP server routes:
+
+```ts
+import { withMcpAuth } from "better-auth/plugins";
+
+const handler = withMcpAuth(auth, (req, session) => {
+    // session contains the access token with scopes and user ID
+    return createMcpHandler(
+        (server) => {
+            // Define your MCP tools here
+            server.tool("echo", "Echo a message", 
+                { message: z.string() },
+                async ({ message }) => {
+                    return {
+                        content: [{ type: "text", text: message }],
+                    };
+                }
+            );
+        },
+        // ... rest of your MCP config
+    )(req);
+});
+```
+
+
+or you can use `auth.api.getMcpSession` to get the session from the request headers.
+
+```ts
+const session = await auth.api.getMcpSession({
+    headers: req.headers
+});
+```
+
+Make sure to handle the unauthenticated case properly by returning a 401 status code.
+
+```ts
+if (!session) {
+    return new Response(null, {
+        status: 401,
+        headers: {
+            "WWW-Authenticate": "Bearer"
+        }
+    });
+}
+```
+
+### 4. Configuration Options
+
+The plugin is highly configurable through the `mcp()` function:
+
+```ts
+mcp({
+    loginPage: "/sign-in",  // Where to redirect for auth
+    oidcConfig: {
+        codeExpiresIn: 600,  // Auth code expiry in seconds
+        accessTokenExpiresIn: 3600,  // Access token expiry
+        refreshTokenExpiresIn: 604800,  // Refresh token expiry
+        scopes: ["openid", "profile", "email"],  // Supported scopes
+        requirePKCE: true,  // Require PKCE security
+    }
+})
+```
+
+## Conclusion
+
+The Better Auth MCP plugin provides a secure and flexible way to authenticate and authorize MCP clients. It handles the OAuth flow, client registration, and session management, allowing you to focus on building your MCP server.
