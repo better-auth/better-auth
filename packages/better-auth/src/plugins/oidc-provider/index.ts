@@ -463,7 +463,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					if (!client_id || !client_secret) {
+					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "client_id and client_secret are required",
 							error: "invalid_client",
@@ -513,14 +513,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					if (client.disabled) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "client is disabled",
-							error: "invalid_client",
-						});
-					}
-					const isValidSecret =
-						client.clientSecret === client_secret.toString();
-					if (!isValidSecret) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_secret",
 							error: "invalid_client",
 						});
 					}
