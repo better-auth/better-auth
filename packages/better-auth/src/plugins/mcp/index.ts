@@ -1,41 +1,53 @@
-import { SignJWT } from "jose";
 import { z } from "zod";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
-import { generateRandomString } from "../../crypto";
-import { subtle } from "@better-auth/utils";
-import { schema } from "./schema";
-import type {
-	Client,
-	CodeVerificationValue,
-	OAuthAccessToken,
-	OIDCMetadata,
-	OIDCOptions,
-} from "./types";
-import { authorize } from "./authorize";
-import { parseSetCookieHeader } from "../../cookies";
-import { createHash } from "@better-auth/utils/hash";
+	type BetterAuthPlugin,
+} from "..";
+import {
+	oidcProvider,
+	type Client,
+	type CodeVerificationValue,
+	type OAuthAccessToken,
+	type OIDCMetadata,
+	type OIDCOptions,
+} from "../oidc-provider";
+import { APIError, getSessionFromCtx } from "../../api";
 import { base64 } from "@better-auth/utils/base64";
+import { generateRandomString } from "../../crypto";
+import { createHash } from "@better-auth/utils/hash";
+import { subtle } from "@better-auth/utils";
+import { SignJWT } from "jose";
+import type { GenericEndpointContext } from "../../types";
+import { parseSetCookieHeader } from "../../cookies";
+import { schema } from "../oidc-provider/schema";
+import { authorizeMCPOAuth } from "./authorize";
 
-export const getMetadata = (
+interface MCPOptions {
+	loginPage: string;
+	oidcConfig?: OIDCOptions;
+}
+
+export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
 ): OIDCMetadata => {
 	const issuer = ctx.context.options.baseURL as string;
 	const baseURL = ctx.context.baseURL;
+	if (!issuer || !baseURL) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "invalid_issuer",
+			error_description:
+				"issuer or baseURL is not set. If you're the app developer, please make sure to set the `baseURL` in your auth config.",
+		});
+	}
 	return {
 		issuer,
-		authorization_endpoint: `${baseURL}/oauth2/authorize`,
-		token_endpoint: `${baseURL}/oauth2/token`,
-		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
-		jwks_uri: `${baseURL}/jwks`,
-		registration_endpoint: `${baseURL}/oauth2/register`,
+		authorization_endpoint: `${baseURL}/mcp/authorize`,
+		token_endpoint: `${baseURL}/mcp/token`,
+		userinfo_endpoint: `${baseURL}/mcp/userinfo`,
+		jwks_uri: `${baseURL}/mcp/jwks`,
+		registration_endpoint: `${baseURL}/mcp/register`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
@@ -67,39 +79,31 @@ export const getMetadata = (
 	};
 };
 
-/**
- * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
- * authorization code flow and the token exchange flow. It also implements the
- * userinfo endpoint.
- *
- * @param options - The options for the OIDC plugin.
- * @returns A Better Auth plugin.
- */
-export const oidcProvider = (options: OIDCOptions) => {
-	const modelName = {
-		oauthClient: "oauthApplication",
-		oauthAccessToken: "oauthAccessToken",
-		oauthConsent: "oauthConsent",
-	};
-
+export const mcp = (options: MCPOptions) => {
 	const opts = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
 		allowPlainCodeChallengeMethod: true,
-		...options,
+		...options.oidcConfig,
+		loginPage: options.loginPage,
 		scopes: [
 			"openid",
 			"profile",
 			"email",
 			"offline_access",
-			...(options?.scopes || []),
+			...(options.oidcConfig?.scopes || []),
 		],
 	};
-
+	const modelName = {
+		oauthClient: "oauthApplication",
+		oauthAccessToken: "oauthAccessToken",
+		oauthConsent: "oauthConsent",
+	};
+	const provider = oidcProvider(opts);
 	return {
-		id: "oidc",
+		id: "mcp",
 		hooks: {
 			after: [
 				{
@@ -135,34 +139,50 @@ export const oidcProvider = (options: OIDCOptions) => {
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
 						ctx.context.session = session;
-						const response = await authorize(ctx, opts);
+						const response = await authorizeMCPOAuth(ctx, opts).catch((e) => {
+							if (e instanceof APIError) {
+								if (e.statusCode === 302) {
+									return ctx.json({
+										redirect: true,
+										//@ts-expect-error
+										url: e.headers.get("location"),
+									});
+								}
+							}
+							throw e;
+						});
 						return response;
 					}),
 				},
 			],
 		},
 		endpoints: {
-			getOpenIdConfig: createAuthEndpoint(
-				"/.well-known/openid-configuration",
+			getMcpOAuthConfig: createAuthEndpoint(
+				"/.well-known/oauth-authorization-server",
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						client: false,
 					},
 				},
-				async (ctx) => {
-					const metadata = getMetadata(ctx, options);
-					return ctx.json(metadata);
+				async (c) => {
+					try {
+						const metadata = getMCPProviderMetadata(c, options);
+						return c.json(metadata);
+					} catch (e) {
+						console.log(e);
+						return c.json(null);
+					}
 				},
 			),
-			oAuth2authorize: createAuthEndpoint(
-				"/oauth2/authorize",
+			mcpOAuthAuthroize: createAuthEndpoint(
+				"/mcp/authorize",
 				{
 					method: "GET",
 					query: z.record(z.string(), z.any()),
 					metadata: {
 						openapi: {
-							description: "Authorize an OAuth2 request",
+							description: "Authorize an OAuth2 request using MCP",
 							responses: {
 								"200": {
 									description: "Authorization response generated successfully",
@@ -182,120 +202,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					return authorize(ctx, opts);
+					return authorizeMCPOAuth(ctx, opts);
 				},
 			),
-			oAuthConsent: createAuthEndpoint(
-				"/oauth2/consent",
-				{
-					method: "POST",
-					body: z.object({
-						accept: z.boolean(),
-					}),
-					use: [sessionMiddleware],
-					metadata: {
-						openapi: {
-							description: "Handle OAuth2 consent",
-							responses: {
-								"200": {
-									description: "Consent processed successfully",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													redirectURI: {
-														type: "string",
-														format: "uri",
-														description:
-															"The URI to redirect to, either with an authorization code or an error",
-													},
-												},
-												required: ["redirectURI"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					const storedCode = await ctx.getSignedCookie(
-						"oidc_consent_prompt",
-						ctx.context.secret,
-					);
-					if (!storedCode) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "No consent prompt found",
-							error: "invalid_request",
-						});
-					}
-					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(storedCode);
-					if (!verification) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Invalid code",
-							error: "invalid_request",
-						});
-					}
-					if (verification.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Code expired",
-							error: "invalid_request",
-						});
-					}
-					const value = JSON.parse(verification.value) as CodeVerificationValue;
-					if (!value.requireConsent) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Consent not required",
-							error: "invalid_request",
-						});
-					}
-
-					if (!ctx.body.accept) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
-						);
-						return ctx.json({
-							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
-						});
-					}
-					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-					const codeExpiresInMs = opts.codeExpiresIn * 1000;
-					const expiresAt = new Date(Date.now() + codeExpiresInMs);
-					await ctx.context.internalAdapter.updateVerificationValue(
-						verification.id,
-						{
-							value: JSON.stringify({
-								...value,
-								requireConsent: false,
-							}),
-							identifier: code,
-							expiresAt,
-						},
-					);
-					await ctx.context.adapter.create({
-						model: modelName.oauthConsent,
-						data: {
-							clientId: value.clientId,
-							userId: value.userId,
-							scopes: value.scope.join(" "),
-							consentGiven: true,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-					});
-					const redirectURI = new URL(value.redirectURI);
-					redirectURI.searchParams.set("code", code);
-					if (value.state) redirectURI.searchParams.set("state", value.state);
-					return ctx.json({
-						redirectURI: redirectURI.toString(),
-					});
-				},
-			),
-			oAuth2token: createAuthEndpoint(
-				"/oauth2/token",
+			mcpOAuthToken: createAuthEndpoint(
+				"/mcp/token",
 				{
 					method: "POST",
 					body: z.record(z.any()),
@@ -304,9 +215,18 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
+					//cors
+					ctx.setHeader("Access-Control-Allow-Origin", "*");
+					ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+					ctx.setHeader(
+						"Access-Control-Allow-Headers",
+						"Content-Type, Authorization",
+					);
+					ctx.setHeader("Access-Control-Max-Age", "86400");
+
 					let { body } = ctx;
 					if (!body) {
-						throw new APIError("BAD_REQUEST", {
+						throw ctx.error("BAD_REQUEST", {
 							error_description: "request body not found",
 							error: "invalid_request",
 						});
@@ -369,7 +289,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 						const token = await ctx.context.adapter.findOne<OAuthAccessToken>({
-							model: modelName.oauthAccessToken,
+							model: "oauthAccessToken",
 							where: [
 								{
 									field: "refreshToken",
@@ -433,7 +353,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					if (options.requirePKCE && !code_verifier) {
+					if (opts.requirePKCE && !code_verifier) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "code verifier is missing",
 							error: "invalid_request",
@@ -623,8 +543,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...(requestedScopes.includes("email") ? email : {}),
 					};
 
-					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+					const additionalUserClaims = opts.getAdditionalUserInfoClaim
+						? opts.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
 					const idToken = await new SignJWT({
@@ -643,7 +563,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
 						)
 						.sign(secretKey.key);
-
 					return ctx.json(
 						{
 							access_token: accessToken,
@@ -666,151 +585,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 				},
 			),
-			oAuth2userInfo: createAuthEndpoint(
-				"/oauth2/userinfo",
-				{
-					method: "GET",
-
-					metadata: {
-						isAction: false,
-						openapi: {
-							description: "Get OAuth2 user information",
-							responses: {
-								"200": {
-									description: "User information retrieved successfully",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													sub: {
-														type: "string",
-														description: "Subject identifier (user ID)",
-													},
-													email: {
-														type: "string",
-														format: "email",
-														nullable: true,
-														description:
-															"User's email address, included if 'email' scope is granted",
-													},
-													name: {
-														type: "string",
-														nullable: true,
-														description:
-															"User's full name, included if 'profile' scope is granted",
-													},
-													picture: {
-														type: "string",
-														format: "uri",
-														nullable: true,
-														description:
-															"User's profile picture URL, included if 'profile' scope is granted",
-													},
-													given_name: {
-														type: "string",
-														nullable: true,
-														description:
-															"User's given name, included if 'profile' scope is granted",
-													},
-													family_name: {
-														type: "string",
-														nullable: true,
-														description:
-															"User's family name, included if 'profile' scope is granted",
-													},
-													email_verified: {
-														type: "boolean",
-														nullable: true,
-														description:
-															"Whether the email is verified, included if 'email' scope is granted",
-													},
-												},
-												required: ["sub"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					if (!ctx.request) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "request not found",
-							error: "invalid_request",
-						});
-					}
-					const authorization = ctx.request.headers.get("authorization");
-					if (!authorization) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "authorization header not found",
-							error: "invalid_request",
-						});
-					}
-					const token = authorization.replace("Bearer ", "");
-					const accessToken =
-						await ctx.context.adapter.findOne<OAuthAccessToken>({
-							model: modelName.oauthAccessToken,
-							where: [
-								{
-									field: "accessToken",
-									value: token,
-								},
-							],
-						});
-					if (!accessToken) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid access token",
-							error: "invalid_token",
-						});
-					}
-					if (accessToken.accessTokenExpiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "The Access Token expired",
-							error: "invalid_token",
-						});
-					}
-
-					const user = await ctx.context.internalAdapter.findUserById(
-						accessToken.userId,
-					);
-					if (!user) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "user not found",
-							error: "invalid_token",
-						});
-					}
-					const requestedScopes = accessToken.scopes.split(" ");
-					const baseUserClaims = {
-						sub: user.id,
-						email: requestedScopes.includes("email") ? user.email : undefined,
-						name: requestedScopes.includes("profile") ? user.name : undefined,
-						picture: requestedScopes.includes("profile")
-							? user.image
-							: undefined,
-						given_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[0]
-							: undefined,
-						family_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[1]
-							: undefined,
-						email_verified: requestedScopes.includes("email")
-							? user.emailVerified
-							: undefined,
-					};
-					const userClaims = options.getAdditionalUserInfoClaim
-						? options.getAdditionalUserInfoClaim(user, requestedScopes)
-						: baseUserClaims;
-					return ctx.json({
-						...baseUserClaims,
-						...userClaims,
-					});
-				},
-			),
-			registerOAuthApplication: createAuthEndpoint(
-				"/oauth2/register",
+			registerMcpClient: createAuthEndpoint(
+				"/mcp/register",
 				{
 					method: "POST",
 					body: z.object({
@@ -946,17 +722,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 				async (ctx) => {
 					const body = ctx.body;
 					const session = await getSessionFromCtx(ctx);
-
-					// Check authorization
-					if (!session && !options.allowDynamicClientRegistration) {
-						throw new APIError("UNAUTHORIZED", {
-							error: "invalid_token",
-							error_description:
-								"Authentication required for client registration",
-						});
-					}
-
-					// Validate redirect URIs for redirect-based flows
+					ctx.setHeader("Access-Control-Allow-Origin", "*");
+					ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+					ctx.setHeader(
+						"Access-Control-Allow-Headers",
+						"Content-Type, Authorization",
+					);
+					ctx.setHeader("Access-Control-Max-Age", "86400");
+					ctx.headers?.set("Access-Control-Max-Age", "86400");
 					if (
 						(!body.grant_types ||
 							body.grant_types.includes("authorization_code") ||
@@ -970,7 +743,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					// Validate correlation between grant_types and response_types
 					if (body.grant_types && body.response_types) {
 						if (
 							body.grant_types.includes("authorization_code") &&
@@ -995,14 +767,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const clientId =
-						options.generateClientId?.() ||
-						generateRandomString(32, "a-z", "A-Z");
+						opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
 					const clientSecret =
-						options.generateClientSecret?.() ||
+						opts.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
-					// Create the client with the existing schema
-					const client: Client = await ctx.context.adapter.create({
+					await ctx.context.adapter.create({
 						model: modelName.oauthClient,
 						data: {
 							name: body.client_name,
@@ -1021,7 +791,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						},
 					});
 
-					// Format the response according to RFC7591
 					return ctx.json(
 						{
 							client_id: clientId,
@@ -1057,67 +826,103 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 				},
 			),
-			getOAuthClient: createAuthEndpoint(
-				"/oauth2/client/:id",
+			getMcpSession: createAuthEndpoint(
+				"/mcp/get-session",
 				{
 					method: "GET",
-					use: [sessionMiddleware],
-					metadata: {
-						openapi: {
-							description: "Get OAuth2 client details",
-							responses: {
-								"200": {
-									description: "OAuth2 client retrieved successfully",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													clientId: {
-														type: "string",
-														description: "Unique identifier for the client",
-													},
-													name: {
-														type: "string",
-														description: "Name of the OAuth2 application",
-													},
-													icon: {
-														type: "string",
-														nullable: true,
-														description: "Icon URL for the application",
-													},
-												},
-												required: ["clientId", "name"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
+					requireHeaders: true,
 				},
-				async (ctx) => {
-					const client = await ctx.context.adapter.findOne<Record<string, any>>(
-						{
-							model: modelName.oauthClient,
-							where: [{ field: "clientId", value: ctx.params.id }],
-						},
-					);
-					if (!client) {
-						throw new APIError("NOT_FOUND", {
-							error_description: "client not found",
-							error: "not_found",
-						});
+				async (c) => {
+					const accessToken = c.headers
+						?.get("Authorization")
+						?.replace("Bearer ", "");
+					if (!accessToken) {
+						c.headers?.set("WWW-Authenticate", "Bearer");
+						return c.json(null);
 					}
-					return ctx.json({
-						clientId: client.clientId as string,
-						name: client.name as string,
-						icon: client.icon as string,
-					});
+					const accessTokenData =
+						await c.context.adapter.findOne<OAuthAccessToken>({
+							model: modelName.oauthAccessToken,
+							where: [
+								{
+									field: "accessToken",
+									value: accessToken,
+								},
+							],
+						});
+					if (!accessTokenData) {
+						return c.json(null);
+					}
+					return c.json(accessTokenData);
 				},
 			),
 		},
 		schema,
 	} satisfies BetterAuthPlugin;
 };
-export type * from "./types";
+
+export const withMcpAuth = <
+	Auth extends {
+		api: {
+			getMcpSession: (...args: any) => Promise<OAuthAccessToken | null>;
+		};
+	},
+>(
+	auth: Auth,
+	handler: (
+		req: Request,
+		sesssion: OAuthAccessToken,
+	) => Response | Promise<Response>,
+) => {
+	return async (req: Request) => {
+		const session = await auth.api.getMcpSession({
+			headers: req.headers,
+		});
+		const wwwAuthenticateValue =
+			"Bearer resource_metadata=http://localhost:3000/api/auth/.well-known/oauth-authorization-server";
+		if (!session) {
+			return Response.json(
+				{
+					jsonrpc: "2.0",
+					error: {
+						code: -32000,
+						message: "Unauthorized: Authentication required",
+						"www-authenticate": wwwAuthenticateValue,
+					},
+					id: null,
+				},
+				{
+					status: 401,
+					headers: {
+						"WWW-Authenticate": wwwAuthenticateValue,
+					},
+				},
+			);
+		}
+		return handler(req, session);
+	};
+};
+
+export const oAuthDiscoveryMetadata = <
+	Auth extends {
+		api: {
+			getMcpOAuthConfig: (...args: any) => any;
+		};
+	},
+>(
+	auth: Auth,
+) => {
+	return async (request: Request) => {
+		const res = await auth.api.getMcpOAuthConfig();
+		return new Response(JSON.stringify(res), {
+			status: 200,
+			headers: {
+				"Content-Type": "application/json",
+				"Access-Control-Allow-Origin": "*",
+				"Access-Control-Allow-Methods": "POST, OPTIONS",
+				"Access-Control-Allow-Headers": "Content-Type, Authorization",
+				"Access-Control-Max-Age": "86400",
+			},
+		});
+	};
+};
