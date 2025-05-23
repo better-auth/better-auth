@@ -1,0 +1,114 @@
+---
+title: X402
+description: X402 plugin
+---
+
+The X402 plugin allows you to protect and paywall endpoints that usually represent a resource.
+Under the hood, it uses the [X402 open protocol](https://www.x402.org/) developed by Coinbase for internet native payments.
+
+The purpose of this plugin is to provide a simple and easy way to paywall any endpoints that come from the Better Auth instance,
+with the additional benefit of being able to set prices based on the user's session.
+
+<Callout type="warn">
+This plugin is currently in beta. We're actively collecting feedback and exploring additional features. If you have feature requests or suggestions, please join our [Discord community](https://discord.gg/better-auth) to discuss them.
+</Callout>
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Install the plugin
+
+        First, install the plugin:
+
+        ```package-install
+        @better-auth/x402
+        ```
+    </Step>
+    <Step>
+        ### Add the plugin to your auth config
+
+        Add the plugin to your auth config, set up endpoints which you wish to paywall, and provide your receiving wallet address.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { x402 } from "@better-auth/x402"
+
+        export const auth = betterAuth({
+            plugins: [
+                x402(
+                    {
+                        "/api/auth/sign-up/email": {
+                            price: "$0.005", // Price in USDC
+                        },
+                        "/api/auth/organization/create": {
+                            protect: true, // Force this endpoint to require a valid session
+                            price: async (session) => {
+                                const plan = await getPlan(session.user.id); // Get the plan from DB
+                                if (plan === "pro") return "$0.01";
+                                return "$0.001";
+                            },
+                        },
+                    },
+                    { wallet: process.env.PAYMENT_WALLET_ADDRESS! },
+                ),
+            ],
+        });
+        ```
+    </Step>
+    <Step>
+        ### Add the client plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { x402Client } from "@better-auth/x402/client"
+        
+        import { createWalletClient, http } from "viem";
+        import { privateKeyToAccount } from "viem/accounts";
+        import { baseSepolia } from "viem/chains";
+
+        export const client = createAuthClient({
+            plugins: [
+                x402Client({
+                    // This will then be used for any subsequent paywalled requests
+                    walletClient: () => {
+                        // Create a wallet client
+                        const account = privateKeyToAccount("0xTheUsersWalletPrivateKey");
+                        const client = createWalletClient({
+                            account,
+                            transport: http(),
+                            chain: baseSepolia,
+                        });
+                        return client;
+                    }
+                })
+            ]
+        })
+        ```
+    </Step>
+</Steps>
+
+
+## Why use x402?
+
+x402 addresses key limitations of existing payment systems:
+
+* High fees and friction with traditional credit cards and fiat payment processors
+* Incompatibility with machine-to-machine payments, such as AI agents
+* Lack of support for micropayments, making it difficult to monetize usage-based services
+
+Learn more about this in the [x402 docs](https://x402.gitbook.io/x402#why-use-x402).
+
+## Who is x402 for?
+
+* **Sellers**: Service providers who want to monetize their APIs or content. x402 enables direct, programmatic payments from clients with minimal setup.
+* **Buyers**: Human developers and AI agents seeking to access paid services without accounts or manual payment flows.
+
+Both sellers and buyers interact directly through HTTP requests, with payment handled transparently through the protocol.
+
+Learn more about this in the [x402 docs](https://x402.gitbook.io/x402#who-is-x402-for).
+
+
+## Usage
+
+By adding the `x402Client` plugin, any request to a protected endpoint will automatically trigger a payment flow.
