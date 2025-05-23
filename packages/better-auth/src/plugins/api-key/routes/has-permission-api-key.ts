@@ -100,13 +100,8 @@ export function hasPermissionApiKey({
 				// if the key is shorter than the default key length, than we know the key is invalid.
 				// we can't check if the key is exactly equal to the default key length, because
 				// a prefix may be added to the key.
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
+				throw new APIError("BAD_REQUEST", {
+					message: ERROR_CODES.INVALID_API_KEY,
 				});
 			}
 
@@ -114,13 +109,8 @@ export function hasPermissionApiKey({
 				opts.customAPIKeyValidator &&
 				!opts.customAPIKeyValidator({ ctx, key })
 			) {
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
+				throw new APIError("BAD_REQUEST", {
+					message: ERROR_CODES.INVALID_API_KEY,
 				});
 			}
 
