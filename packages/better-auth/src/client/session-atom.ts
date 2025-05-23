@@ -8,9 +8,15 @@ export function getSessionAtom<T = { user: User; session: Session }>(
 	initialSession?: T | null,
 ) {
 	const $signal = atom<boolean>(false);
-	const session = useAuthQuery<T>($signal, "/get-session", $fetch, {
-		method: "GET",
-	}, initialSession || undefined);
+	const session = useAuthQuery<T>(
+		$signal,
+		"/get-session",
+		$fetch,
+		{
+			method: "GET",
+		},
+		initialSession || undefined,
+	);
 	return {
 		session,
 		$sessionSignal: $signal,

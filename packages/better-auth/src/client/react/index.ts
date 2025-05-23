@@ -81,7 +81,10 @@ export function createAuthClient<Option extends ClientOptions>(
 	};
 	function useSession(initialSession?: SessionData | null) {
 		if (initialSession !== undefined) {
-			const clientConfigWithInitial = getClientConfig<SessionData | null>(options, initialSession);
+			const clientConfigWithInitial = getClientConfig<SessionData | null>(
+				options,
+				initialSession,
+			);
 			return useStore(clientConfigWithInitial.pluginsAtoms.session);
 		}
 		return resolvedHooks.useSession();
@@ -101,7 +104,6 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
-
 
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &

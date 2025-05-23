@@ -38,12 +38,9 @@ describe("Initial Data Feature Demo", () => {
 
 		// Without initial data - should start pending
 		const $signal1 = atom<boolean>(false);
-		const queryAtom1 = useAuthQuery(
-			$signal1,
-			"/get-session",
-			$fetch,
-			{ method: "GET" }
-		);
+		const queryAtom1 = useAuthQuery($signal1, "/get-session", $fetch, {
+			method: "GET",
+		});
 
 		expect(queryAtom1.get().isPending).toBe(true);
 		expect(queryAtom1.get().data).toBe(null);
@@ -55,7 +52,7 @@ describe("Initial Data Feature Demo", () => {
 			"/get-session",
 			$fetch,
 			{ method: "GET" },
-			mockSessionData
+			mockSessionData,
 		);
 
 		expect(queryAtom2.get().isPending).toBe(false);
@@ -66,7 +63,7 @@ describe("Initial Data Feature Demo", () => {
 		let fetchCallCount = 0;
 		const updatedData = {
 			...mockSessionData,
-			user: { ...mockSessionData.user, name: "Updated User" }
+			user: { ...mockSessionData.user, name: "Updated User" },
 		};
 
 		const $fetch = createFetch({
@@ -83,7 +80,7 @@ describe("Initial Data Feature Demo", () => {
 			"/get-session",
 			$fetch,
 			{ method: "GET" },
-			mockSessionData
+			mockSessionData,
 		);
 
 		// Should start with initial data
@@ -124,4 +121,4 @@ describe("Initial Data Feature Demo", () => {
 		// No fetch calls should have been made yet
 		expect(fetchCallCount).toBe(0);
 	});
-}); 
+});
