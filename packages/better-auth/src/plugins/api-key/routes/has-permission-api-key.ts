@@ -1,12 +1,10 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint } from "../../../api";
-import { base64Url } from "@better-auth/utils/base64";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { createHash } from "@better-auth/utils/hash";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, defaultKeyHasher, ERROR_CODES } from "..";
 import { role } from "../../access";
 import { safeJSONParse } from "../../../utils/json";
 
@@ -102,17 +100,31 @@ export function hasPermissionApiKey({
 				// if the key is shorter than the default key length, than we know the key is invalid.
 				// we can't check if the key is exactly equal to the default key length, because
 				// a prefix may be added to the key.
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_API_KEY,
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.INVALID_API_KEY,
+						code: "KEY_NOT_FOUND" as const,
+					},
+					key: null,
 				});
 			}
 
-			const hash = await createHash("SHA-256").digest(
-				new TextEncoder().encode(key),
-			);
-			const hashed = base64Url.encode(new Uint8Array(hash), {
-				padding: false,
-			});
+			if (
+				opts.customAPIKeyValidator &&
+				!opts.customAPIKeyValidator({ ctx, key })
+			) {
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.INVALID_API_KEY,
+						code: "KEY_NOT_FOUND" as const,
+					},
+					key: null,
+				});
+			}
+
+			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
 			deleteAllExpiredApiKeys(ctx.context);
 
