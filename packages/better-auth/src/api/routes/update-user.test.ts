@@ -267,12 +267,15 @@ describe("updateUser", async () => {
 });
 
 describe("delete user", async () => {
-	it("should delete the user", async () => {
+	it("should delete the user with a fresh session", async () => {
 		const { auth, client, signInWithTestUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
 				},
+			},
+			session: {
+				freshAge: 1000,
 			},
 		});
 		const { headers } = await signInWithTestUser();
@@ -292,9 +295,9 @@ describe("delete user", async () => {
 		expect(session.data).toBeNull();
 	});
 
-	it("should delete with verification flow", async () => {
+	it("should delete with verification flow and password", async () => {
 		let token = "";
-		const { client, signInWithTestUser } = await getTestInstance({
+		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -306,6 +309,7 @@ describe("delete user", async () => {
 		});
 		const { headers } = await signInWithTestUser();
 		const res = await client.deleteUser({
+			password: testUser.password,
 			fetchOptions: {
 				headers,
 			},
