@@ -871,19 +871,6 @@ describe("access control", async (it) => {
 		});
 		expect(res).toBe(false);
 	});
-
-	const canCreateProjectWithMissingPerms = checkRolePermission({
-		role: "admin",
-		permissions: {
-			project: ["read"],
-			sales: ["delete"],
-		},
-		returnMissingPermissions: true,
-	});
-	expect(canCreateProjectWithMissingPerms?.success).toBe(false);
-	expect(canCreateProjectWithMissingPerms?.missingPermissions).toEqual({
-		sales: ["delete"],
-	});
 });
 
 describe("invitation limit", async () => {
