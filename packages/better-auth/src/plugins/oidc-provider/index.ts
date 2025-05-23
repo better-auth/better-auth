@@ -465,7 +465,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "client_id and client_secret are required",
+							error_description: "client_id is are required",
 							error: "invalid_client",
 						});
 					}
