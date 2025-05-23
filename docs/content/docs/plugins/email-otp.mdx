@@ -55,7 +55,7 @@ First, send an OTP to the user's email address.
 ```ts title="example.ts"
 const { data, error } = await authClient.emailOtp.sendVerificationOtp({
     email: "user-email@email.com",
-    type: "sign-in" // or "email-verification", "forget-password"
+    type: "sign-in" // or "email-verification", "forget-password", or any of your `customTypes`
 })
 ```
 
@@ -100,7 +100,7 @@ const { data, error } = await authClient.emailOtp.resetPassword({
 - `sendVerificationOTP`: A function that sends the OTP to the user's email address. The function receives an object with the following properties:
   - `email`: The user's email address.
   - `otp`: The OTP to send.
-  - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
+  - `type`: The type of OTP. Can be `"sign-in"`, `"email-verification"`, `"forget-password"`, or any of your supplied `customTypes`.
 
 ### Example
 
@@ -110,6 +110,7 @@ import { betterAuth } from "better-auth"
 export const auth = betterAuth({
     plugins: [
         emailOTP({
+            customTypes: ["your-own-type", "set-password"]
             async sendVerificationOTP({
                 email,
                 otp,
@@ -119,8 +120,12 @@ export const auth = betterAuth({
                     // Send the OTP for sign-in
                 } else if (type === "email-verification") {
                     // Send the OTP for email verification
-                } else {
+                } else if (type === "forget-password") {
                     // Send the OTP for password reset
+                } else if (type === "set-password") {
+                    // Send the OTP for setting password for the first time
+                } else {
+                    // Send the OTP for your custom flow
                 }
             },
         })
@@ -166,3 +171,44 @@ export const auth = betterAuth({
 ```
 
 When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `MAX_ATTEMPTS_EXCEEDED`.
+
+- `customTypes`: An array of additional OTP types that extend (rather than overwrite) the default set (`"sign-in"`, `"email-verification"`, `"forget-password"`). Any of your custom types can then be used wherever you supply `type`. 
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { emailOTP } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    // ... other config options
+    plugins: [
+        emailOTP({ 
+            customTypes: ["your-own-type", "set-password"] // [!code highlight]
+            async sendVerificationOTP({
+                email,  // string
+                otp,    // string
+                type,   // "sign-in" | "email-verification" | "forget-password" | "your-own-type" | "set-password" // [!code highlight]
+            }) {
+                // Send the OTP for your custom flow
+            },
+        })
+    ]
+})
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { emailOTPClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    plugins: [
+        emailOTPClient({
+            customTypes: ["your-own-type", "set-password"] // You have to set your custom types in the client to get type inference // [!code highlight]
+        })
+    ]
+})
+
+await authClient.emailOtp.sendVerificationOtp({
+  email: "foo@example.com",
+  type:  "set-password", // "sign-in" | "email-verification" | "forget-password" | "your-own-type" | "set-password" // [!code highlight]
+})
+```

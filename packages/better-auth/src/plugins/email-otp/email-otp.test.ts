@@ -483,3 +483,58 @@ describe("custom generate otpFn", async () => {
 		expect(res.data?.status).toBe(true);
 	});
 });
+
+describe("custom otp type 'set-password'", async () => {
+	const otpFnCustom = vi.fn();
+	let otp = "";
+	const customTypes = ["set-password"];
+	const {
+		client: clientCustom,
+		testUser: testUserCustom,
+		auth: authCustom,
+	} = await getTestInstance(
+		{
+			plugins: [
+				bearer(),
+				emailOTP({
+					async sendVerificationOTP({ email, otp: _otp, type }) {
+						otp = _otp;
+						otpFnCustom(email, _otp, type);
+					},
+					customTypes,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient({ customTypes })],
+			},
+		},
+	);
+
+	it("should send OTP with correct type via client", async () => {
+		await clientCustom.emailOtp.sendVerificationOtp({
+			email: testUserCustom.email,
+			type: "set-password",
+		});
+		expect(otpFnCustom).toHaveBeenCalledWith(
+			testUserCustom.email,
+			otp,
+			"set-password",
+		);
+	});
+
+	it("should send OTP with correct type via server api", async () => {
+		await authCustom.api.sendVerificationOTP({
+			body: {
+				email: testUserCustom.email,
+				type: "set-password",
+			},
+		});
+		expect(otpFnCustom).toHaveBeenCalledWith(
+			testUserCustom.email,
+			otp,
+			"set-password",
+		);
+	});
+});
