@@ -389,7 +389,7 @@ To get the full details of an organization, you can use the `getFullOrganization
   // you can also use organizationSlug instead of organizationId
   const organization = await authClient.organization.getFullOrganization({
       query: { organizationSlug: "organization-slug" }
-  })  
+  })
   ```
   </Tab>
 
@@ -883,17 +883,6 @@ const canCreateProjectAndCreateSale = await authClient.organization.checkRolePer
 	},
 	role: "admin",
 });
-
-// `checkRolePermission` can also return missing permissions
-const canCreateProjectAndCreateSaleWithMissingPerms = client.organization.checkRolePermission({
-	permissions: {
-		organization: ["delete"],
-    member: ["delete"]
-  },
-  role: "admin",
-  returnMissingPermissions: true
-})
-// ^? { success: boolean; missingPermissions?: { [key: string]: string[] } }
 ```
 
 ## Teams

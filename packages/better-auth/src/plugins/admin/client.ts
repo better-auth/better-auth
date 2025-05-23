@@ -75,7 +75,6 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 				>(
 					data: PermissionExclusive & {
 						role: R;
-						returnMissingPermissions?: T;
 					},
 				): T extends true ? CheckPermissionResult : boolean => {
 					const isAuthorized = hasPermission({
@@ -85,8 +84,6 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 							roles: roles,
 						},
 						permissions: (data.permissions ?? data.permission) as any,
-						returnMissingPermissions:
-							data.returnMissingPermissions ?? undefined,
 					});
 					return isAuthorized as T extends true
 						? CheckPermissionResult

@@ -510,17 +510,6 @@ const canCreateProjectAndRevokeSession = await authClient.admin.checkRolePermiss
   },
   role: "admin",
 });
-
-// `checkRolePermission` can also return missing permissions
-const canCreateProjectAndRevokeSessionWithMissingPerms = await authClient.admin.checkRolePermission({
-  permissions: {
-    user: ["delete"],
-    session: ["revoke"]
-  },
-  returnMissingPermissions: true,
-  role: "admin",
-});
-// ^? { success: boolean; missingPermissions?: { [key: string]: string[] } }
 ```
 
 ## Schema

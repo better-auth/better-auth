@@ -824,20 +824,6 @@ describe("access control", async (it) => {
 		});
 		expect(canCreateOrderAndReadUser).toBe(true);
 
-		const canCreateOrderAndReadUserWithMissingPerms =
-			client.admin.checkRolePermission({
-				role: "admin",
-				permissions: {
-					order: ["create"],
-					user: ["read"],
-				},
-				returnMissingPermissions: true,
-			});
-		expect(canCreateOrderAndReadUserWithMissingPerms.success).toBe(true);
-		expect(
-			canCreateOrderAndReadUserWithMissingPerms.missingPermissions,
-		).toBeNull();
-
 		const canCreateUser = client.admin.checkRolePermission({
 			role: "user",
 			permissions: {
@@ -854,23 +840,6 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(canCreateOrderAndCreateUser).toBe(false);
-
-		const canCreateOrderAndCreateUserWithMissingPerms =
-			client.admin.checkRolePermission({
-				role: "user",
-				permissions: {
-					order: ["create"],
-					user: ["create"],
-				},
-				returnMissingPermissions: true,
-			});
-		expect(canCreateOrderAndCreateUserWithMissingPerms.success).toBe(false);
-		expect(
-			canCreateOrderAndCreateUserWithMissingPerms.missingPermissions,
-		).toEqual({
-			order: ["create"],
-			user: ["create"],
-		});
 	});
 
 	it("should validate using userId", async () => {
