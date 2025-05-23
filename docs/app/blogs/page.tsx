@@ -1,6 +1,5 @@
 import { formatBlogDate } from "@/lib/blog";
 import Link from "next/link";
-import Image from "next/image";
 import { blogs } from "@/lib/source";
 import { IconLink } from "../blog/_components/changelog-layout";
 import { GitHubIcon, BookIcon, XIcon } from "../blog/_components/icons";
