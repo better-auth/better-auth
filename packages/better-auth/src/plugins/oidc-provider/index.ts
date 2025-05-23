@@ -45,7 +45,7 @@ const getMetadata = (
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256", "none"],
+		id_token_signing_alg_values_supported: ["HS256", "none"],
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
