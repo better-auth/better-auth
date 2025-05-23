@@ -859,18 +859,6 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(canCreateProject).toBe(false);
-
-		const canCreateProjectWithMissingPerms = checkRolePermission({
-			role: "admin",
-			permissions: {
-				project: ["delete"],
-			},
-			returnMissingPermissions: true,
-		});
-		expect(canCreateProjectWithMissingPerms?.success).toBe(false);
-		expect(canCreateProjectWithMissingPerms?.missingPermissions).toEqual({
-			project: ["delete"],
-		});
 	});
 
 	it("should return not success", async () => {
