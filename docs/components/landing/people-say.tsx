@@ -33,11 +33,12 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Jonathan Wilke",
-		profession: "Creator of Supastarter",
-		link: "https://x.com/jonathan_wilke/status/1853086900279562329",
-		description: "fuck, @better_auth is just so good",
-		avatar: "/people-say/jonathan-wilke.png",
+		name: "kitze",
+		profession: "http://sizzy.co",
+		link: "https://x.com/thekitze/status/1911524156115476831",
+		description:
+			"I rarely stumble upon a framework/library that makes me rethink things. @better_auth is a rare exception. it literally delayed @zerotoshipped for a week...",
+		avatar: "/people-say/kitze.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -59,6 +60,56 @@ const testimonials = [
 		description:
 			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed...",
 		avatar: "/people-say/dax.png",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "SaltyAtom",
+		profession: "Creator of ElysiaJS",
+		link: "https://x.com/saltyAom/status/1916919136565051491",
+		description: `Strategies to win at Auth:
+1. Copy Better Auth - 
+2. Go back to 1`,
+		avatar: "/people-say/saltyatom.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Josh Tried Coding",
+		profession: "devrel @upstash",
+		description: `using better-auth for the first time
+
+holy sh** is it good, works so nice with typescript + drizzle`,
+		avatar: "/people-say/josh-tried-coding.jpg",
+		image: "",
+		link: "https://x.com/joshtriedcoding/status/1916108678672900301",
+		social: <Icons.x />,
+	},
+	{
+		name: "Xavier Pladevall",
+		profession: "Founder of IndexBI",
+		description: `We've been using @better_auth in prod @IndexBI and absolutely love it. Super comprehensive from day one.👏`,
+		avatar: "/people-say/xavier-pladevall.jpg",
+		image: "",
+		link: "https://x.com/xavierpladevall/status/1915490484891341211",
+		social: <Icons.x />,
+	},
+	{
+		name: "Code with Antonio",
+		profession: "Content Creator",
+		description: `i swear @polar_sh and @better_auth developer experience should be mandatory teaching for all CS students`,
+		link: "https://x.com/YTCodeAntonio/status/1920214390680236396",
+		avatar: "/people-say/code-with-antonio.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Ryan Vogel",
+		profession: "Founder of exon",
+		description:
+			"i have been using better-auth for exon todo and it is like so fast, I set it up once and it just works",
+		link: "https://x.com/ryandavogel/status/1914789770451964150",
+		avatar: "/people-say/ryan-vogEL.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -209,7 +260,7 @@ export const Testimonial = () => {
 				>
 					<PeopleSay
 						reverse
-						testimonials={Array(10)
+						testimonials={Array(15)
 							.fill(testimonials.slice(0, Math.floor(testimonials.length / 2)))
 							.flat()}
 					/>
@@ -222,7 +273,7 @@ export const Testimonial = () => {
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
 					<PeopleSay
-						testimonials={Array(10)
+						testimonials={Array(15)
 							.fill(
 								testimonials.slice(
 									Math.floor(testimonials.length / 2) + 1,

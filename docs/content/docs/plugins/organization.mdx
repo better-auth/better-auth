@@ -482,14 +482,14 @@ export const auth = betterAuth({
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-                const inviteLink = `https://example.com/accept-invitation/${data.id}`
+        const inviteLink = `https://example.com/accept-invitation/${data.id}`
 				sendOrganizationInvitation({
-					    email: data.email,
+					  email: data.email,
 						invitedByUsername: data.inviter.user.name,
 						invitedByEmail: data.inviter.user.email,
 						teamName: data.organization.name,
 						inviteLink
-					})
+				})
 			},
 		}),
 	],
