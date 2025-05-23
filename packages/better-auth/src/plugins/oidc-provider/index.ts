@@ -623,7 +623,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
 					const idToken = await new SignJWT({
