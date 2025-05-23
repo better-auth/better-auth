@@ -623,7 +623,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
 					const idToken = await new SignJWT({
@@ -800,7 +800,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 					};
 					const userClaims = options.getAdditionalUserInfoClaim
-						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: baseUserClaims;
 					return ctx.json({
 						...baseUserClaims,
