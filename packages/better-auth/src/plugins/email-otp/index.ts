@@ -14,7 +14,7 @@ export interface EmailOTPOptions<CustomType extends string = never> {
 		data: {
 			email: string;
 			otp: string;
-			type: DefaultEmailOtpType | CustomType
+			type: DefaultEmailOtpType | CustomType;
 		},
 		request?: Request,
 	) => Promise<void>;
@@ -69,9 +69,11 @@ const defaultTypes = [
 	"sign-in",
 	"forget-password",
 ] as const;
-export type DefaultEmailOtpType = typeof defaultTypes[number];
+export type DefaultEmailOtpType = (typeof defaultTypes)[number];
 
-export const emailOTP = <CustomType extends string = never>(options: EmailOTPOptions<CustomType>) => {
+export const emailOTP = <CustomType extends string = never>(
+	options: EmailOTPOptions<CustomType>,
+) => {
 	const opts = {
 		expiresIn: 5 * 60,
 		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
@@ -79,7 +81,9 @@ export const emailOTP = <CustomType extends string = never>(options: EmailOTPOpt
 	} satisfies EmailOTPOptions<CustomType>;
 
 	type Types = DefaultEmailOtpType | CustomType;
-	const types = (opts.customTypes ? [...defaultTypes, ...opts.customTypes] : defaultTypes) as readonly [Types, ...Types[]];
+	const types = (
+		opts.customTypes ? [...defaultTypes, ...opts.customTypes] : defaultTypes
+	) as readonly [Types, ...Types[]];
 	const typesEnum = z.enum(types).describe("Type of the OTP");
 
 	const ERROR_CODES = {
@@ -196,7 +200,7 @@ export const emailOTP = <CustomType extends string = never>(options: EmailOTPOpt
 					method: "POST",
 					body: z.object({
 						email: z.string().describe("Email address to send the OTP"),
-						type: typesEnum
+						type: typesEnum,
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -240,7 +244,7 @@ export const emailOTP = <CustomType extends string = never>(options: EmailOTPOpt
 					method: "GET",
 					query: z.object({
 						email: z.string().describe("Email address to get the OTP"),
-						type: typesEnum
+						type: typesEnum,
 					}),
 					metadata: {
 						SERVER_ONLY: true,
