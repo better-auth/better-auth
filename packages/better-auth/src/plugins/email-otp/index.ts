@@ -65,23 +65,22 @@ export interface EmailOTPOptions<CustomType extends string = never> {
 }
 
 const defaultTypes = [
-  "email-verification",
-  "sign-in",
-  "forget-password",
+	"email-verification",
+	"sign-in",
+	"forget-password",
 ] as const;
 export type DefaultEmailOtpType = typeof defaultTypes[number];
 
 export const emailOTP = <CustomType extends string = never>(options: EmailOTPOptions<CustomType>) => {
-  const opts = {
-    expiresIn: 5 * 60,
-    generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
-    ...options,
-  } satisfies EmailOTPOptions<CustomType>;
+	const opts = {
+		expiresIn: 5 * 60,
+		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
+		...options,
+	} satisfies EmailOTPOptions<CustomType>;
 
-  type Types = DefaultEmailOtpType | CustomType;
-  const types = [...defaultTypes, ...(opts.customTypes ?? [])] as readonly [Types, ...Types[]];
-  const typesEnum = z.enum(types).describe("Type of the OTP");
-
+	type Types = DefaultEmailOtpType | CustomType;
+	const types = (opts.customTypes ? [...defaultTypes, ...opts.customTypes] : defaultTypes) as readonly [Types, ...Types[]];
+	const typesEnum = z.enum(types).describe("Type of the OTP");
 
 	const ERROR_CODES = {
 		OTP_EXPIRED: "OTP expired",
