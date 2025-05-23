@@ -73,7 +73,14 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 			| "set null"
 			| "set default";
 	};
+	/**
+	 * If the value must be unique.
+	 */
 	unique?: boolean;
+	/**
+	 * If the value can be null.
+	 */
+	nullable?: boolean;
 	/**
 	 * If the field should be a bigint on the database instead of integer.
 	 */
