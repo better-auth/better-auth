@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types";
 import { generateRandomString } from "../../crypto";
@@ -6,7 +6,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 
-export interface EmailOTPOptions {
+export interface EmailOTPOptions<CustomType extends string = never> {
 	/**
 	 * Function to send email verification
 	 */
@@ -14,7 +14,7 @@ export interface EmailOTPOptions {
 		data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type: DefaultEmailOtpType | CustomType
 		},
 		request?: Request,
 	) => Promise<void>;
@@ -36,7 +36,7 @@ export interface EmailOTPOptions {
 	generateOTP?: (
 		data: {
 			email: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type: DefaultEmailOtpType | CustomType;
 		},
 		request?: Request,
 	) => string;
@@ -58,18 +58,33 @@ export interface EmailOTPOptions {
 	 * @default 3
 	 */
 	allowedAttempts?: number;
+	/**
+	 * Custom types for the OTP. It does not override the default types.
+	 */
+	customTypes?: readonly CustomType[];
 }
 
-const types = ["email-verification", "sign-in", "forget-password"] as const;
+const defaultTypes = [
+  "email-verification",
+  "sign-in",
+  "forget-password",
+] as const;
+export type DefaultEmailOtpType = typeof defaultTypes[number];
 
-export const emailOTP = (options: EmailOTPOptions) => {
-	const opts = {
-		expiresIn: 5 * 60,
-		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
-		...options,
-	} satisfies EmailOTPOptions;
+export const emailOTP = <CustomType extends string = never>(options: EmailOTPOptions<CustomType>) => {
+  const opts = {
+    expiresIn: 5 * 60,
+    generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
+    ...options,
+  } satisfies EmailOTPOptions<CustomType>;
+
+  type Types = DefaultEmailOtpType | CustomType;
+  const types = [...defaultTypes, ...(opts.customTypes ?? [])] as readonly [Types, ...Types[]];
+  const typesEnum = z.enum(types).describe("Type of the OTP");
+
+
 	const ERROR_CODES = {
-		OTP_EXPIRED: "otp expired",
+		OTP_EXPIRED: "OTP expired",
 		INVALID_OTP: "Invalid OTP",
 		INVALID_EMAIL: "Invalid email",
 		USER_NOT_FOUND: "User not found",
@@ -83,12 +98,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: "Email address to send the OTP",
-						}),
-						type: z.enum(types, {
-							description: "Type of the OTP",
-						}),
+						email: z.string().describe("Email address to send the OTP"),
+						type: typesEnum,
 					}),
 					metadata: {
 						openapi: {
@@ -185,12 +196,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: "Email address to send the OTP",
-						}),
-						type: z.enum(types, {
-							description: "Type of the OTP",
-						}),
+						email: z.string().describe("Email address to send the OTP"),
+						type: typesEnum
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -233,10 +240,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string({
-							description: "Email address to get the OTP",
-						}),
-						type: z.enum(types),
+						email: z.string().describe("Email address to get the OTP"),
+						type: typesEnum
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -288,12 +293,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: "Email address to verify",
-						}),
-						otp: z.string({
-							description: "OTP to verify",
-						}),
+						email: z.string().describe("Email address to verify"),
+						otp: z.string().describe("OTP to verify"),
 					}),
 					metadata: {
 						openapi: {
@@ -439,12 +440,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: "Email address to sign in",
-						}),
-						otp: z.string({
-							description: "OTP sent to the email",
-						}),
+						email: z.string().describe("Email address to sign in"),
+						otp: z.string().describe("OTP sent to the email"),
 					}),
 					metadata: {
 						openapi: {
@@ -589,9 +586,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: "Email address to send the OTP",
-						}),
+						email: z.string().describe("Email address to send the OTP"),
 					}),
 					metadata: {
 						openapi: {
@@ -656,15 +651,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: "Email address to reset the password",
-						}),
-						otp: z.string({
-							description: "OTP sent to the email",
-						}),
-						password: z.string({
-							description: "New password",
-						}),
+						email: z.string().describe("Email address to reset the password"),
+						otp: z.string().describe("OTP sent to the email"),
+						password: z.string().describe("New password"),
 					}),
 					metadata: {
 						openapi: {
