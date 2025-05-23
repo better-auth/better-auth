@@ -58,9 +58,39 @@ export function createAuthClient<Option extends ClientOptions>(
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
 
+	type ClientAPI = InferClientAPI<Option>;
+	type SessionData = ClientAPI extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res
+		: never;
+
+	function useSession(): {
+		data: SessionData;
+		isPending: boolean;
+		error: BetterFetchError | null;
+		refetch: () => void;
+	};
+	function useSession(initialSession: SessionData | null): {
+		data: SessionData;
+		isPending: boolean;
+		error: BetterFetchError | null;
+		refetch: () => void;
+	};
+	function useSession(initialSession?: SessionData | null) {
+		if (initialSession !== undefined) {
+			const clientConfigWithInitial = getClientConfig<SessionData | null>(options, initialSession);
+			return useStore(clientConfigWithInitial.pluginsAtoms.session);
+		}
+		return resolvedHooks.useSession();
+	}
+
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		useSession,
 		$fetch,
 		$store,
 	};
@@ -72,25 +102,13 @@ export function createAuthClient<Option extends ClientOptions>(
 		atomListeners,
 	);
 
-	type ClientAPI = InferClientAPI<Option>;
-	type Session = ClientAPI extends {
-		getSession: () => Promise<infer Res>;
-	}
-		? Res extends BetterFetchResponse<infer S>
-			? S
-			: Res
-		: never;
+
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
-			useSession: () => {
-				data: Session;
-				isPending: boolean;
-				error: BetterFetchError | null;
-				refetch: () => void;
-			};
+			useSession: typeof useSession;
 			$Infer: {
-				Session: NonNullable<Session>;
+				Session: NonNullable<SessionData>;
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;

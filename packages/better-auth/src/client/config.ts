@@ -6,7 +6,10 @@ import { redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
 
-export const getClientConfig = (options?: ClientOptions) => {
+export const getClientConfig = <T = { user: any; session: any }>(
+	options?: ClientOptions,
+	initialSession?: T | null,
+) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
 	const baseURL = getBaseURL(options?.baseURL, options?.basePath);
@@ -42,7 +45,7 @@ export const getClientConfig = (options?: ClientOptions) => {
 					...pluginsFetchPlugins,
 				],
 	});
-	const { $sessionSignal, session } = getSessionAtom($fetch);
+	const { $sessionSignal, session } = getSessionAtom<T>($fetch, initialSession);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
