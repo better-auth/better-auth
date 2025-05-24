@@ -127,9 +127,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 					);
 					const url = `${
 						ctx.context.baseURL
-					}/magic-link/verify?token=${verificationToken}&callbackURL=${
-						ctx.body.callbackURL || "/"
-					}`;
+					}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
+						ctx.body.callbackURL || "/",
+					)}`;
 					await options.sendMagicLink(
 						{
 							email,
@@ -158,7 +158,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 							})
 							.optional(),
 					}),
-					use: [originCheck((ctx) => ctx.query.callbackURL)],
+					use: [
+						originCheck((ctx) => {
+							return ctx.query.callbackURL
+								? decodeURIComponent(ctx.query.callbackURL)
+								: "/";
+						}),
+					],
 					requireHeaders: true,
 					metadata: {
 						openapi: {
@@ -187,7 +193,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { token, callbackURL } = ctx.query;
+					const token = ctx.query.token;
+					const callbackURL = ctx.query.callbackURL
+						? decodeURIComponent(ctx.query.callbackURL)
+						: "/";
 					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
@@ -232,7 +241,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 								);
 							}
 						} else {
-							throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
+							throw ctx.redirect(
+								`${toRedirectTo}?error=new_user_signup_disabled`,
+							);
 						}
 					}
 
@@ -261,7 +272,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						session,
 						user,
 					});
-					if (!callbackURL) {
+					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,
 							user: {

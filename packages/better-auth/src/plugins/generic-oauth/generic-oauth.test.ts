@@ -439,4 +439,90 @@ describe("oauth2", async () => {
 		expect(receivedHeaders).toHaveProperty("x-custom-header");
 		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
 	});
+
+	it("should delete oauth user with verification flow without password", async () => {
+		let token = "";
+		const { customFetchImpl } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data, _) {
+						token = data.token;
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test",
+							discoveryUrl:
+								"http://localhost:8081/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+						},
+					],
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const signInRes = await client.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("http://localhost:8081/authorize"),
+			redirect: true,
+		});
+
+		const { headers } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			new Headers(),
+			customFetchImpl,
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const deleteRes = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(deleteRes.data).toMatchObject({
+			success: true,
+		});
+
+		expect(token.length).toBe(32);
+
+		const deleteCallbackRes = await client.deleteUser({
+			token,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(deleteCallbackRes.data).toMatchObject({
+			success: true,
+		});
+		const nullSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(nullSession.data).toBeNull();
+	});
 });
