@@ -12,14 +12,17 @@ export const subscriptions = {
 			referenceId: {
 				type: "string",
 				required: true,
+				shouldIndex: true,
 			},
 			stripeCustomerId: {
 				type: "string",
 				required: false,
+				shouldIndex: true,
 			},
 			stripeSubscriptionId: {
 				type: "string",
 				required: false,
+				shouldIndex: true,
 			},
 			status: {
 				type: "string",
@@ -52,6 +55,7 @@ export const user = {
 			stripeCustomerId: {
 				type: "string",
 				required: false,
+				shouldIndex: true,
 			},
 		},
 	},
