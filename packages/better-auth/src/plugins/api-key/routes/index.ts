@@ -34,6 +34,36 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 		>;
 	};
 
+let lastChecked: Date | null = null;
+
+export function deleteAllExpiredApiKeys(
+	ctx: AuthContext,
+	byPassLastCheckTime = false,
+) {
+	if (lastChecked && !byPassLastCheckTime) {
+		const now = new Date();
+		const diff = now.getTime() - lastChecked.getTime();
+		if (diff < 10000) {
+			return;
+		}
+	}
+	lastChecked = new Date();
+	try {
+		return ctx.adapter.deleteMany({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{
+					field: "expiresAt" satisfies keyof ApiKey,
+					operator: "lt",
+					value: new Date(),
+				},
+			],
+		});
+	} catch (error) {
+		ctx.logger.error(`Failed to delete expired API keys:`, error);
+	}
+}
+
 export function createApiKeyRoutes({
 	keyGenerator,
 	opts,
@@ -45,36 +75,6 @@ export function createApiKeyRoutes({
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 }) {
-	let lastChecked: Date | null = null;
-
-	function deleteAllExpiredApiKeys(
-		ctx: AuthContext,
-		byPassLastCheckTime = false,
-	) {
-		if (lastChecked && !byPassLastCheckTime) {
-			const now = new Date();
-			const diff = now.getTime() - lastChecked.getTime();
-			if (diff < 10000) {
-				return;
-			}
-		}
-		lastChecked = new Date();
-		try {
-			return ctx.adapter.deleteMany({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "expiresAt" satisfies keyof ApiKey,
-						operator: "lt",
-						value: new Date(),
-					},
-				],
-			});
-		} catch (error) {
-			ctx.logger.error(`Failed to delete expired API keys:`, error);
-		}
-	}
-
 	return {
 		createApiKey: createApiKey({
 			keyGenerator,
