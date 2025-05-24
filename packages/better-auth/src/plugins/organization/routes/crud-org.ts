@@ -77,11 +77,9 @@ export const createOrganization = createAuthEndpoint(
 		if (!session && (ctx.request || ctx.headers)) {
 			throw new APIError("UNAUTHORIZED");
 		}
+		
 		let user = session?.user || null;
-		if (!user) {
-			if (!ctx.body.userId) {
-				throw new APIError("UNAUTHORIZED");
-			}
+		if (ctx.body.userId) {
 			user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
 		}
 		if (!user) {
