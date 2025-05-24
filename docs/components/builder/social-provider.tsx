@@ -210,6 +210,7 @@ export const socialProviders = {
 				width="1em"
 				height="1em"
 				viewBox="0 0 256 256"
+				{...props}
 			>
 				<g transform="translate(1.4 1.4) scale(2.81 2.81)">
 					<path
