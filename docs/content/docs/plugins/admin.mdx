@@ -260,6 +260,26 @@ const deletedUser = await authClient.admin.removeUser({
 });
 ```
 
+### List Roles
+
+Allows an admin to list all the roles in the system.
+
+```ts title="admin.ts"
+const roles = await authClient.admin.listRoles();
+```
+
+### List Role Permissions
+
+Allows an admin to list the permissions for a role.
+
+```ts title="admin.ts"
+const permissions = await authClient.admin.listRolePermissions({
+  query: {
+    role: "admin",
+  },
+});
+```
+
 ## Access Control
 
 The admin plugin offers a highly flexible access control system, allowing you to manage user permissions based on their role. You can define custom permission sets to fit your needs.
@@ -285,6 +305,9 @@ By default, there are two resources with up to six permissions.
 
 **session**:
   `list` `revoke` `delete`
+
+**role**:
+  `list` `view`
 
 Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
