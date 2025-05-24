@@ -5,6 +5,9 @@ import {
 } from "@better-fetch/fetch";
 import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
 
+// SSR detection
+const isServer = typeof window === "undefined";
+
 export const useAuthQuery = <T>(
 	initializedAtom:
 		| PreinitializedWritableAtom<any>
@@ -48,16 +51,13 @@ export const useAuthQuery = <T>(
 		return $fetch<T>(path, {
 			...opts,
 			async onSuccess(context) {
-				//to avoid hydration error
-				if (typeof window !== "undefined") {
-					value.set({
-						data: context.data,
-						error: null,
-						isPending: false,
-						isRefetching: false,
-						refetch: value.value.refetch,
-					});
-				}
+				value.set({
+					data: context.data,
+					error: null,
+					isPending: false,
+					isRefetching: false,
+					refetch: value.value.refetch,
+				});
 				await opts?.onSuccess?.(context);
 			},
 			async onError(context) {
@@ -94,13 +94,29 @@ export const useAuthQuery = <T>(
 		? initializedAtom
 		: [initializedAtom];
 	let isMounted = false;
+	let hasInitialFetch = false;
+
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(() => {
 			if (isMounted) {
 				fn();
 			} else {
+				// SSR-safe mounting behavior
+				if (isServer) {
+					// On server, don't trigger fetch immediately
+					isMounted = true;
+					return;
+				}
+				
 				onMount(value, () => {
-					fn();
+					// Only fetch once on initial mount to prevent hydration issues
+					if (!hasInitialFetch) {
+						hasInitialFetch = true;
+						// Small delay to ensure hydration is complete
+						setTimeout(() => {
+							fn();
+						}, 0);
+					}
 					isMounted = true;
 					return () => {
 						value.off();
