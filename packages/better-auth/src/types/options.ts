@@ -118,8 +118,6 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debugLogs?: AdapterDebugLogs;
-				
-
 		  };
 	/**
 	 * Secondary storage configuration
