@@ -57,6 +57,17 @@ export const user = {
 	},
 } satisfies AuthPluginSchema;
 
+export const organization = {
+	organization: {
+		fields: {
+			stripeCustomerId: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+} satisfies AuthPluginSchema;
+
 export const getSchema = (options: StripeOptions) => {
 	if (
 		options.schema &&
@@ -69,6 +80,7 @@ export const getSchema = (options: StripeOptions) => {
 		{
 			...(options.subscription?.enabled ? subscriptions : {}),
 			...user,
+			...organization
 		},
 		options.schema,
 	);

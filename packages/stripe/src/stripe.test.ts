@@ -2,7 +2,8 @@ import { betterAuth, type User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization, type Organization } from "better-auth/plugins";
+import { organizationClient } from "better-auth/client/plugins";
 import Stripe from "stripe";
 import { vi } from "vitest";
 import { stripe } from ".";
@@ -50,12 +51,16 @@ describe("stripe", async () => {
 		account: [],
 		customer: [],
 		subscription: [],
+		organization: [],
+		member: [],
+		invitation: [],
 	};
 	const memory = memoryAdapter(data);
 	const stripeOptions = {
 		stripeClient: _stripe,
 		stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 		createCustomerOnSignUp: true,
+		createOrganizationCustomer: true,
 		subscription: {
 			enabled: true,
 			plans: [
@@ -79,13 +84,14 @@ describe("stripe", async () => {
 		emailAndPassword: {
 			enabled: true,
 		},
-		plugins: [stripe(stripeOptions)],
+		plugins: [organization(), stripe(stripeOptions)],
 	});
 	const ctx = await auth.$context;
 	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
 		plugins: [
 			bearer(),
+			organizationClient(),
 			stripeClient({
 				subscription: true,
 			}),
@@ -110,6 +116,9 @@ describe("stripe", async () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
+		data.organization = [];
+		data.invitation = [];
+		data.member = [];
 
 		vi.clearAllMocks();
 	});
@@ -816,5 +825,184 @@ describe("stripe", async () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	// Organization tests
+	it("should create a customer when organization is created", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "list-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "list-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		const organization = await authClient.organization.create({
+			name: "My Organization",
+			slug: "my-org-001",
+			logo: "https://example.com/logo.png",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(organization.data?.id).toBeDefined();
+
+		const res = await ctx.adapter.findOne<
+			Organization & { stripeCustomerId: string }
+		>({
+			model: "organization",
+			where: [
+				{
+					field: "id",
+					value: organization?.data?.id ?? "",
+				},
+			],
+		});
+
+		expect(res).toMatchObject({
+			id: expect.any(String),
+			stripeCustomerId: expect.any(String),
+		});
+	});
+
+	it("should create a subscription for organization customer", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "list-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "list-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		const organization = await authClient.organization.create({
+			name: "My Organization",
+			slug: "my-org-002",
+			logo: "https://example.com/logo.png",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(organization.data?.id).toBeDefined();
+
+		const res = await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data?.url).toBeDefined();
+
+		const subscription = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: organization?.data?.id ?? "",
+				},
+			],
+		});
+
+		expect(subscription).toMatchObject({
+			id: expect.any(String),
+			plan: "starter",
+			referenceId: organization?.data?.id ?? "",
+			stripeCustomerId: expect.any(String),
+			status: "incomplete",
+			periodStart: undefined,
+			cancelAtPeriodEnd: undefined,
+		});
+	});
+
+	it("should list active subscriptions for organization customer", async () => {
+		await authClient.signUp.email(testUser, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		const organization = await authClient.organization.create({
+			name: "My Organization",
+			slug: "my-org-003",
+			logo: "https://example.com/logo.png",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const listRes = await authClient.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(Array.isArray(listRes.data)).toBe(true);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		const listBeforeActive = await authClient.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(listBeforeActive.data?.length).toBe(0);
+		// Update the subscription status to active
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: organization?.data?.id ?? "",
+				},
+			],
+		});
+		const listAfterRes = await authClient.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(listAfterRes.data?.length).toBeGreaterThan(0);
 	});
 });

@@ -1,6 +1,7 @@
 import type { InferOptionSchema, Session, User } from "better-auth";
 import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
+import type { Organization } from "better-auth/plugins";
 
 export type StripePlan = {
 	/**
@@ -175,6 +176,12 @@ export interface StripeOptions {
 	 */
 	createCustomerOnSignUp?: boolean;
 	/**
+	 * Enable customer creation when a new organization is created
+	 * @description This will is especially useful for B2B platforms
+	 * where you want to create a customer for each organization/entity
+	 */
+	createOrganizationCustomer?: boolean;
+	/**
 	 * A callback to run after a customer has been created
 	 * @param customer - Customer Data
 	 * @param stripeCustomer - Stripe Customer Data
@@ -184,8 +191,10 @@ export interface StripeOptions {
 		data: {
 			customer: Customer;
 			stripeCustomer: Stripe.Customer;
-			user: User;
-		},
+		} & (
+			| { type: "user"; user: User }
+			| { type: "organization"; organization: Organization }
+		),
 		request?: Request,
 	) => Promise<void>;
 	/**
@@ -295,7 +304,8 @@ export interface StripeOptions {
 				session: Session & Record<string, any>;
 				plan: StripePlan;
 				subscription: Subscription;
-			},
+				organization: Organization & Record<string, any> | null;
+			} ,
 			request?: Request,
 		) =>
 			| Promise<{
@@ -323,9 +333,11 @@ export interface StripeOptions {
 export interface Customer {
 	id: string;
 	stripeCustomerId?: string;
-	userId: string;
+	// TODO: Make this exchangeable with user id
+	referenceId: string;
 	createdAt: Date;
 	updatedAt: Date;
+	// type: "user" | "organization";
 }
 
 export interface InputSubscription extends Omit<Subscription, "id"> {}
