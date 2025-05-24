@@ -83,9 +83,6 @@ export async function parseState(c: GenericEndpointContext) {
 		})
 		.parse(JSON.parse(data.value));
 
-	if (!parsedData.errorURL) {
-		parsedData.errorURL = `${c.context.baseURL}/error`;
-	}
 	if (parsedData.expiresAt < Date.now()) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
 		throw c.redirect(
