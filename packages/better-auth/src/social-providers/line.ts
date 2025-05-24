@@ -97,7 +97,6 @@ export const line = (options: LineOptions) => {
 						refreshToken,
 						options: {
 							clientId: options.clientId,
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint: "https://api.line.me/oauth2/v2.1/token",
