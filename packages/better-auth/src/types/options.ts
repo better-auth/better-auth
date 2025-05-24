@@ -19,6 +19,8 @@ import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
+//@ts-ignore - we need to import this to get the type of the database
+import type { Database as BunDatabase } from "bun:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -81,6 +83,7 @@ export type BetterAuthOptions = {
 		| Database
 		| Dialect
 		| AdapterInstance
+		| BunDatabase
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -250,8 +253,15 @@ export type BetterAuthOptions = {
 		};
 		/**
 		 * Automatically sign in the user after sign up
+		 *
+		 * @default true
 		 */
 		autoSignIn?: boolean;
+		/**
+		 * Whether to revoke all other sessions when resetting password
+		 * @default false
+		 */
+		revokeSessionsOnPasswordReset?: boolean;
 	};
 	/**
 	 * list of social providers

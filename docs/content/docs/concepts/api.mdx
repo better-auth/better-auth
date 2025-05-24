@@ -21,7 +21,7 @@ export const auth = betterAuth({
 
 // calling get session on the server
 await auth.api.getSession({
-    headers: headers() //some endpoint might require headers
+    headers: await headers() // some endpoint might require headers
 })
 ```
 
@@ -31,7 +31,7 @@ Unlike the client, the server needs the values to be passed as an object with th
 
 ```ts title="server.ts"
 await auth.api.getSession({
-    headers: headers()
+    headers: await headers()
 })
 
 await auth.api.signInEmail({
@@ -39,7 +39,7 @@ await auth.api.signInEmail({
         email: "john@doe.com",
         password: "password"
     },
-    headers: headers() // optional but would be useful to get the user IP, user agent, etc.
+    headers: await headers() // optional but would be useful to get the user IP, user agent, etc.
 })
 
 await auth.api.verifyEmail({

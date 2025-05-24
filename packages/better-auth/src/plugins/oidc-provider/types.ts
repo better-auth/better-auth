@@ -513,4 +513,12 @@ export interface OIDCMetadata {
 	 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "email", "email_verified", "name"]
 	 */
 	claims_supported: string[];
+	/**
+	 * Supported code challenge methods.
+	 *
+	 * only `S256` is supported.
+	 *
+	 * @default ["S256"]
+	 */
+	code_challenge_methods_supported: ["S256"];
 }

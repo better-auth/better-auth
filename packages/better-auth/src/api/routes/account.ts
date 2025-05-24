@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
-import { socialProviderList } from "../../social-providers";
 import { APIError } from "better-call";
-import { generateState } from "../../oauth2";
-import { freshSessionMiddleware, sessionMiddleware } from "./session";
+import { generateState, type OAuth2Tokens } from "../../oauth2";
+import {
+	freshSessionMiddleware,
+	getSessionFromCtx,
+	sessionMiddleware,
+} from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { SocialProviderListEnum } from "../../social-providers";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -99,9 +103,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			/**
 			 * OAuth2 provider to use
 			 */
-			provider: z.enum(socialProviderList, {
-				description: "The OAuth2 provider to use",
-			}),
+			provider: SocialProviderListEnum,
 			/**
 			 * Additional scopes to request when linking the account.
 			 * This is useful for requesting additional permissions when
@@ -241,5 +243,366 @@ export const unlinkAccount = createAuthEndpoint(
 		return ctx.json({
 			status: true,
 		});
+	},
+);
+
+export const getAccessToken = createAuthEndpoint(
+	"/get-access-token",
+	{
+		method: "POST",
+		body: z.object({
+			providerId: z.string({
+				description: "The provider ID for the OAuth provider",
+			}),
+			accountId: z
+				.string({
+					description: "The account ID associated with the refresh token",
+				})
+				.optional(),
+			userId: z
+				.string({
+					description: "The user ID associated with the account",
+				})
+				.optional(),
+		}),
+		metadata: {
+			openapi: {
+				description: "Get a valid access token, doing a refresh if needed",
+				responses: {
+					200: {
+						description: "A Valid access token",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										tokenType: {
+											type: "string",
+										},
+										idToken: {
+											type: "string",
+										},
+										accessToken: {
+											type: "string",
+										},
+										refreshToken: {
+											type: "string",
+										},
+										accessTokenExpiresAt: {
+											type: "string",
+											format: "date-time",
+										},
+										refreshTokenExpiresAt: {
+											type: "string",
+											format: "date-time",
+										},
+									},
+								},
+							},
+						},
+					},
+					400: {
+						description: "Invalid refresh token or provider configuration",
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { providerId, accountId, userId } = ctx.body;
+		const req = ctx.request;
+		const session = await getSessionFromCtx(ctx);
+		if (req && !session) {
+			throw ctx.error("UNAUTHORIZED");
+		}
+		let resolvedUserId = session?.user?.id || userId;
+		if (!resolvedUserId) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Either userId or session is required`,
+			});
+		}
+		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Provider ${providerId} is not supported.`,
+			});
+		}
+		const accounts =
+			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+		const account = accounts.find((acc) =>
+			accountId
+				? acc.id === accountId && acc.providerId === providerId
+				: acc.providerId === providerId,
+		);
+		if (!account) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
+		}
+		const provider = ctx.context.socialProviders.find(
+			(p) => p.id === providerId,
+		);
+		if (!provider) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Provider ${providerId} not found.`,
+			});
+		}
+
+		try {
+			let newTokens: OAuth2Tokens | null = null;
+
+			if (
+				account.refreshToken &&
+				(!account.accessTokenExpiresAt ||
+					account.accessTokenExpiresAt.getTime() - Date.now() < 5_000) &&
+				provider.refreshAccessToken
+			) {
+				newTokens = await provider.refreshAccessToken(
+					account.refreshToken as string,
+				);
+				await ctx.context.internalAdapter.updateAccount(account.id, {
+					accessToken: newTokens.accessToken,
+					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
+					refreshToken: newTokens.refreshToken,
+					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
+				});
+			}
+
+			const tokens = {
+				accessToken: newTokens?.accessToken ?? account.accessToken ?? undefined,
+				accessTokenExpiresAt:
+					newTokens?.accessTokenExpiresAt ??
+					account.accessTokenExpiresAt ??
+					undefined,
+				scopes: account.scope?.split(",") ?? [],
+				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+			} satisfies OAuth2Tokens;
+
+			return ctx.json(tokens);
+		} catch (error) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Failed to get a valid access token",
+				cause: error,
+			});
+		}
+	},
+);
+
+export const refreshToken = createAuthEndpoint(
+	"/refresh-token",
+	{
+		method: "POST",
+		body: z.object({
+			providerId: z.string({
+				description: "The provider ID for the OAuth provider",
+			}),
+			accountId: z
+				.string({
+					description: "The account ID associated with the refresh token",
+				})
+				.optional(),
+			userId: z
+				.string({
+					description: "The user ID associated with the account",
+				})
+				.optional(),
+		}),
+		metadata: {
+			openapi: {
+				description: "Refresh the access token using a refresh token",
+				responses: {
+					200: {
+						description: "Access token refreshed successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										tokenType: {
+											type: "string",
+										},
+										idToken: {
+											type: "string",
+										},
+										accessToken: {
+											type: "string",
+										},
+										refreshToken: {
+											type: "string",
+										},
+										accessTokenExpiresAt: {
+											type: "string",
+											format: "date-time",
+										},
+										refreshTokenExpiresAt: {
+											type: "string",
+											format: "date-time",
+										},
+									},
+								},
+							},
+						},
+					},
+					400: {
+						description: "Invalid refresh token or provider configuration",
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { providerId, accountId, userId } = ctx.body;
+		const req = ctx.request;
+		const session = await getSessionFromCtx(ctx);
+		if (req && !session) {
+			throw ctx.error("UNAUTHORIZED");
+		}
+		let resolvedUserId = session?.user?.id || userId;
+		if (!resolvedUserId) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Either userId or session is required`,
+			});
+		}
+		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Provider ${providerId} is not supported.`,
+			});
+		}
+		const accounts =
+			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+		const account = accounts.find((acc) =>
+			accountId
+				? acc.id === accountId && acc.providerId === providerId
+				: acc.providerId === providerId,
+		);
+		if (!account) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
+		}
+		const provider = ctx.context.socialProviders.find(
+			(p) => p.id === providerId,
+		);
+		if (!provider) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Provider ${providerId} not found.`,
+			});
+		}
+		if (!provider.refreshAccessToken) {
+			throw new APIError("BAD_REQUEST", {
+				message: `Provider ${providerId} does not support token refreshing.`,
+			});
+		}
+		try {
+			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
+				account.refreshToken as string,
+			);
+			await ctx.context.internalAdapter.updateAccount(account.id, {
+				accessToken: tokens.accessToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshToken: tokens.refreshToken,
+				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+			});
+			return ctx.json(tokens);
+		} catch (error) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Failed to refresh access token",
+				cause: error,
+			});
+		}
+	},
+);
+
+export const accountInfo = createAuthEndpoint(
+	"/account-info",
+	{
+		method: "POST",
+		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Get the account info provided by the provider",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+												},
+												name: {
+													type: "string",
+												},
+												email: {
+													type: "string",
+												},
+												image: {
+													type: "string",
+												},
+												emailVerified: {
+													type: "boolean",
+												},
+											},
+											required: ["id", "emailVerified"],
+										},
+										data: {
+											type: "object",
+											properties: {},
+											additionalProperties: true,
+										},
+									},
+									required: ["user", "data"],
+									additionalProperties: false,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		body: z.object({
+			accountId: z.string({
+				description:
+					"The provider given account id for which to get the account info",
+			}),
+		}),
+	},
+	async (ctx) => {
+		const account = await ctx.context.internalAdapter.findAccount(
+			ctx.body.accountId,
+		);
+
+		if (!account || account.userId !== ctx.context.session.user.id) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
+		}
+
+		const provider = ctx.context.socialProviders.find(
+			(p) => p.id === account.providerId,
+		);
+
+		if (!provider) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: `Provider account provider is ${account.providerId} but it is not configured`,
+			});
+		}
+
+		const tokens = await getAccessToken({
+			...ctx,
+			body: {
+				accountId: account.id,
+				providerId: account.providerId,
+			},
+			returnHeaders: false,
+		});
+
+		const info = await provider.getUserInfo(tokens);
+
+		return ctx.json(info);
 	},
 );

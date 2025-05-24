@@ -6,7 +6,7 @@ description: Stripe plugin for Better Auth to manage subscriptions and payments.
 The Stripe plugin integrates Stripe's payment and subscription functionality with Better Auth. Since payment and authentication are often tightly coupled, this plugin simplifies the integration of stripe into your application, handling customer creation, subscription management, and webhook processing.
 
 <Callout type="warn">
-This plugin is currently in beta. We're actively collecting feedback and exploring additional features. If you have feature requests or suggestions, please join our [Discord community](https://discord.com/invite/Mh3DaacaFs) to discuss them.
+This plugin is currently in beta. We're actively collecting feedback and exploring additional features. If you have feature requests or suggestions, please join our [Discord community](https://discord.gg/better-auth) to discuss them.
 </Callout>
 
 ## Features
@@ -41,7 +41,7 @@ This plugin is currently in beta. We're actively collecting feedback and explori
         Next, install the Stripe SDK on your server:
 
         ```package-install
-        stripe@17.7.0
+        stripe@^18.0.0
         ```
     </Step>
     <Step>
@@ -164,8 +164,8 @@ subscription: {
     plans: [
         {
             name: "basic", // the name of the plan, it'll be automatically lower cased when stored in the database
-            priceId: "price_1234567890", // the price id from stripe
-            annualDiscountPriceId: "price_1234567890", // (optional) the price id for annual billing with a discount
+            priceId: "price_1234567890", // the price ID from stripe
+            annualDiscountPriceId: "price_1234567890", // (optional) the price ID for annual billing with a discount
             limits: {
                 projects: 5,
                 storage: 10
@@ -211,7 +211,7 @@ await client.subscription.upgrade({
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
     annual: true, // Optional: upgrade to an annual plan
-    referenceId: "org_123" // Optional: defaults to the current logged in user id
+    referenceId: "org_123" // Optional: defaults to the current logged in user ID
     seats: 5 // Optional: for team plans
 });
 ```
@@ -431,7 +431,8 @@ Table Name: `user`
     { 
       name: "stripeCustomerId", 
       type: "string", 
-      description: "The Stripe customer ID" 
+      description: "The Stripe customer ID",
+      isOptional: true
     },
   ]}
 />
@@ -571,7 +572,9 @@ Each plan can have the following properties:
 
 **lookupKey**: `string` - The Stripe price lookup key. Alternative to `priceId`.
 
-**annualDiscountPriceId**: `string` - A price ID for annual billing with a discount.
+**annualDiscountPriceId**: `string` - A price ID for annual billing.
+
+**annualDiscountLookupKey**: `string` - The Stripe price lookup key for annual billing. Alternative to `annualDiscountPriceId`.
 
 **limits**: `Record<string, number>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`).
 

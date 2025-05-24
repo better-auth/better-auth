@@ -1,8 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import { decodeJwt } from "jose";
 import { z } from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { BASE_ERROR_CODES } from "../../error/codes";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
@@ -10,11 +12,9 @@ import {
 	type OAuthProvider,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
-import { decodeJwt } from "jose";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -133,6 +133,11 @@ export interface GenericOAuthConfig {
 	 */
 	discoveryHeaders?: Record<string, string>;
 	/**
+	 * Custom headers to include in the authorization request.
+	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
+	 */
+	authorizationHeaders?: Record<string, string>;
+	/**
 	 * Override user info with the provider info.
 	 *
 	 * This will update the user info with the provider info,
@@ -250,6 +255,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						return validateAuthorizationCode({
+							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
 							redirectURI: data.redirectURI,
@@ -293,9 +299,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 
 					async getUserInfo(tokens) {
-						if (!finalUserInfoUrl) {
-							return null;
-						}
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
@@ -590,6 +593,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						tokens = await validateAuthorizationCode({
+							headers: provider.authorizationHeaders,
 							code,
 							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
@@ -702,6 +706,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						callbackURL: callbackURL,
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,

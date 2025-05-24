@@ -1,15 +1,14 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api";
-import { ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { isRateLimited } from "../rate-limit";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
+import { defaultKeyHasher } from "../";
 
 export function verifyApiKey({
 	opts,
@@ -68,15 +67,10 @@ export function verifyApiKey({
 				});
 			}
 
-			const hash = await createHash("SHA-256").digest(
-				new TextEncoder().encode(key),
-			);
-			const hashed = base64Url.encode(new Uint8Array(hash), {
-				padding: false,
-			});
+			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "key",
@@ -116,7 +110,7 @@ export function verifyApiKey({
 				if (now > expiresAt) {
 					try {
 						ctx.context.adapter.delete({
-							model: schema.apikey.modelName,
+							model: API_KEY_TABLE_NAME,
 							where: [
 								{
 									field: "id",
@@ -184,7 +178,7 @@ export function verifyApiKey({
 				// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 				try {
 					ctx.context.adapter.delete({
-						model: schema.apikey.modelName,
+						model: API_KEY_TABLE_NAME,
 						where: [
 							{
 								field: "id",
@@ -244,7 +238,7 @@ export function verifyApiKey({
 				opts,
 			);
 			const newApiKey = await ctx.context.adapter.update<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "id",
