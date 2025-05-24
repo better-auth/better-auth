@@ -71,6 +71,8 @@ To register an OIDC provider, use the `createOIDCProvider` endpoint and provide 
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
+#### Example
+
 <Tabs items={["client", "server"]}>
     <Tab value="client">
 ```ts title="register-provider.ts"
@@ -130,6 +132,99 @@ await auth.api.createOIDCProvider({
     </Tab>
 </Tabs>
 
+
+#### Full method
+<APIMethod
+  path="/sso/register"
+  method="POST"
+  requireSession
+>
+```ts
+type createOIDCProvider = {
+    /**
+     * The ID of the provider. This is used to identify the provider during login and callback. 
+     */
+    providerId: string = "example-provider"
+    /**
+     * The issuer url of the provider. 
+     */
+    issuer: string = "https://idp.example.com"
+    /**
+     * The domain of the provider. This is used for email matching. 
+     */
+    domain: string = "example.com"
+    /**
+     * The client ID. 
+     */
+    clientId: string = "1234567890"
+    /**
+     * The client secret. 
+     */
+    clientSecret: string = "1234567890"
+    /**
+     * The authorization endpoint. 
+     */
+    authorizationEndpoint?: string = "https://idp.example.com/authorize"
+    /**
+     * The token endpoint. 
+     */
+    tokenEndpoint?: string = "https://idp.example.com/token"
+    /**
+     * The user info endpoint. 
+     */
+    userInfoEndpoint?: string = "https://idp.example.com/userinfo"
+    /**
+     * The authentication method for the token endpoint. Defaults to 'client_secret_post'. 
+     */
+    tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic" = "client_secret_post"
+    /**
+     * The JWKS endpoint. 
+     */
+    jwksEndpoint?: string = "https://idp.example.com/.well-known/jwks.json"
+    discoveryEndpoint?: string
+    /**
+     * The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']. 
+     */
+    scopes?: string[] = ['openid', 'email', 'profile']
+    /**
+     * Whether to use PKCE for the authorization flow. 
+     */
+    pkce?: boolean = true
+    mapping?: {
+        /**
+         * The field in the user info response that contains the id. Defaults to 'sub'. 
+         */
+        id?: string = "sub"
+        /**
+         * The field in the user info response that contains the email. Defaults to 'email'. 
+         */
+        email?: string = "email"
+        /**
+         * The field in the user info response that contains whether the email is verified. defaults to 'email_verified'. 
+         */
+        emailVerified?: string = "email_verified"
+        /**
+         * The field in the user info response that contains the name. Defaults to 'name'. 
+         */
+        name?: string = "name"
+        /**
+         * The field in the user info response that contains the image. Defaults to 'picture'. 
+         */
+        image?: string = "picture"
+        extraFields?: Record<string, string>
+    }
+    /**
+     * If organization plugin is enabled, the organization id to link the provider to. 
+     */
+    organizationId?: string = "some-org-id"
+    /**
+     * Override user info with the provider info. Defaults to false 
+     */
+    overrideUserInfo?: boolean
+}
+```
+</APIMethod>
+
 ### Sign In with SSO
 
 To sign in with an SSO provider, you can call `signIn.sso`
@@ -180,6 +275,51 @@ const res = await auth.api.signInSSO({
     }
 });
 ```
+
+#### Full method
+
+<APIMethod path="/sign-in/sso" method="POST">
+```ts
+type signInSSO = {
+    /**
+     * The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided. 
+     */
+    email?: string = "john@example.com"
+    /**
+     * The slug of the organization to sign in with. 
+     */
+    organizationSlug?: string = "example-org"
+    /**
+     * The ID of the provider to sign in with. This can be provided instead of email or issuer. 
+     */
+    providerId?: string = "example-provider"
+    /**
+     * The domain of the provider. 
+     */
+    domain?: string = "example.com"
+    /**
+     * The URL to redirect to after login. 
+     */
+    callbackURL: string = "https://example.com/callback"
+    /**
+     * The URL to redirect to after login. 
+     */
+    errorCallbackURL?: string = "https://example.com/callback"
+    /**
+     * The URL to redirect to after login if the user is new. 
+     */
+    newUserCallbackURL?: string = "https://example.com/new-user"
+    /**
+     * Scopes to request from the provider. 
+     */
+    scopes?: string[] = ["openid", "email", "profile", "offline_access"]
+    /**
+     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
+     */
+    requestSignUp?: boolean = true
+}
+```
+</APIMethod>
 
 When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
