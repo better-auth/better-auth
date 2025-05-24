@@ -135,6 +135,7 @@ export const auth = betterAuth({
 		enabled: true,
 		disableSignUp: false,
 		requireEmailVerification: true,
+		sendVerificationOnSignIn: true,
 		minPasswordLength: 8,
 		maxPasswordLength: 128,
 		autoSignIn: true,
@@ -159,6 +160,7 @@ export const auth = betterAuth({
 - `enabled`: Enable email and password authentication (default: `false`)
 - `disableSignUp`: Disable email and password sign up (default: `false`)
 - `requireEmailVerification`: Require email verification before a session can be created
+- `sendVerificationOnSignIn`: Whether to automatically send verification emails during sign-in attempts when requireEmailVerification is true (default: `true`)
 - `minPasswordLength`: Minimum password length (default: `8`)
 - `maxPasswordLength`: Maximum password length (default: `128`)
 - `autoSignIn`: Automatically sign in the user after sign up
