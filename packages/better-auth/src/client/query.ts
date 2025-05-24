@@ -94,29 +94,20 @@ export const useAuthQuery = <T>(
 		? initializedAtom
 		: [initializedAtom];
 	let isMounted = false;
-	let hasInitialFetch = false;
 
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(() => {
+			if (isServer) {
+				// On server, don't trigger fetch
+				return;
+			}
 			if (isMounted) {
 				fn();
 			} else {
-				// SSR-safe mounting behavior
-				if (isServer) {
-					// On server, don't trigger fetch immediately
-					isMounted = true;
-					return;
-				}
-				
 				onMount(value, () => {
-					// Only fetch once on initial mount to prevent hydration issues
-					if (!hasInitialFetch) {
-						hasInitialFetch = true;
-						// Small delay to ensure hydration is complete
-						setTimeout(() => {
-							fn();
-						}, 0);
-					}
+					setTimeout(() => {
+						fn();
+					}, 0);
 					isMounted = true;
 					return () => {
 						value.off();
