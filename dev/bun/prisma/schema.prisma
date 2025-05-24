@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,14 +14,16 @@ model User {
   email         String
   emailVerified Boolean
   image         String?
-  createdAt     DateTime
-  updatedAt     DateTime
-  Session       Session[]
-  Account       Account[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  sessions      Session[]
+  accounts      Account[]
 
   twoFactorEnabled     Boolean?
   twoFactorSecret      String?
   twoFactorBackupCodes String?
+
+  ssoproviders SsoProvider[]
 
   @@unique([email])
   @@map("user")
@@ -34,7 +37,12 @@ model Session {
   userId    String
   users     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
   @@map("session")
+  @@unique([token])
 }
 
 model Account {
@@ -49,5 +57,37 @@ model Account {
   expiresAt    DateTime?
   password     String?
 
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+
   @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @default(now()) @updatedAt
+
+  @@map("verification")
+}
+
+model SsoProvider {
+  id             String  @id
+  issuer         String
+  oidcConfig     String?
+  samlConfig     String?
+  userId         String?
+  user           User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId     String
+  organizationId String?
+  domain         String
+
+  @@unique([providerId])
+  @@map("ssoProvider")
 }
