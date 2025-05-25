@@ -197,7 +197,7 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
         import { View, TextInput, Button } from "react-native";
         import { authClient } from "@/lib/auth-client";
 
-        export default function App() {
+        export default function SignIn() {
             const [email, setEmail] = useState("");
             const [password, setPassword] = useState("");
 
@@ -232,7 +232,7 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
         import { View, TextInput, Button } from "react-native";
         import { authClient } from "@/lib/auth-client";
 
-        export default function App() {
+        export default function SignUp() {
             const [email, setEmail] = useState("");
             const [name, setName] = useState("");
             const [password, setPassword] = useState("");
@@ -274,10 +274,10 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
 
 For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL.
 
-```tsx title="app/socialSignIn.tsx"
+```tsx title="app/social-sign-in.tsx"
 import { Button } from "react-native";
 
-export default function App() {
+export default function SocialSignIn() {
     const handleLogin = async () => {
         await authClient.signIn.social({
             provider: "google",
@@ -292,10 +292,10 @@ export default function App() {
 
 If you want to make provider request on the mobile device and then verify the id token on the server, you can use the `authClient.signIn.social` method with the `idToken` option.
 
-```tsx title="app/socialSignIn.tsx"
+```tsx title="app/social-sign-in.tsx"
 import { Button } from "react-native";
 
-export default function App() {
+export default function SocialSignIn() {
     const handleLogin = async () => {
         await authClient.signIn.social({
             provider: "google", // only google, apple and facebook are supported for idToken signIn
@@ -314,11 +314,11 @@ export default function App() {
 
 Better Auth provides a `useSession` hook to access the current user's session in your app.
 
-```tsx title="app/App.tsx"
+```tsx title="app/index.tsx"
 import { Text } from "react-native";
 import { authClient } from "@/lib/auth-client";
 
-export default function App() {
+export default function Index() {
     const { data: session } = authClient.useSession();
 
     return <Text>Welcome, {session?.user.name}</Text>;
@@ -348,7 +348,7 @@ const makeAuthenticatedRequest = async () => {
 
 **Example: Usage With TRPC**
     
-```tsx title="lib/trpcProvider.tsx"
+```tsx title="lib/trpc-provider.tsx"
 //...other imports
 import { authClient } from "@/lib/auth-client"; // [!code highlight]
 
