@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.2.8",
+  "version": "1.2.9-beta.5",
   "main": "dist/index.cjs",
   "license": "MIT",
   "keywords": [

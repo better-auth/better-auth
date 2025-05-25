@@ -1,9 +1,5 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
-import {
-	socialProviderList,
-	type SocialProvider,
-} from "../../social-providers";
 import { APIError } from "better-call";
 import { generateState, type OAuth2Tokens } from "../../oauth2";
 import {
@@ -12,6 +8,7 @@ import {
 	sessionMiddleware,
 } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { SocialProviderListEnum } from "../../social-providers";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -106,9 +103,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			/**
 			 * OAuth2 provider to use
 			 */
-			provider: z.enum(socialProviderList, {
-				description: "The OAuth2 provider to use",
-			}),
+			provider: SocialProviderListEnum,
 			/**
 			 * Additional scopes to request when linking the account.
 			 * This is useful for requesting additional permissions when
@@ -326,7 +321,7 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Either userId or session is required`,
 			});
 		}
-		if (!socialProviderList.includes(providerId as SocialProvider)) {
+		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
 			throw new APIError("BAD_REQUEST", {
 				message: `Provider ${providerId} is not supported.`,
 			});
@@ -351,17 +346,15 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Provider ${providerId} not found.`,
 			});
 		}
-		if (!provider.refreshAccessToken) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} does not support token refreshing.`,
-			});
-		}
+
 		try {
 			let newTokens: OAuth2Tokens | null = null;
 
 			if (
-				!account.accessTokenExpiresAt ||
-				account.accessTokenExpiresAt.getTime() - Date.now() < 5_000 // 5 second buffer
+				account.refreshToken &&
+				(!account.accessTokenExpiresAt ||
+					account.accessTokenExpiresAt.getTime() - Date.now() < 5_000) &&
+				provider.refreshAccessToken
 			) {
 				newTokens = await provider.refreshAccessToken(
 					account.refreshToken as string,
@@ -469,7 +462,7 @@ export const refreshToken = createAuthEndpoint(
 				message: `Either userId or session is required`,
 			});
 		}
-		if (!socialProviderList.includes(providerId as SocialProvider)) {
+		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
 			throw new APIError("BAD_REQUEST", {
 				message: `Provider ${providerId} is not supported.`,
 			});
@@ -516,5 +509,100 @@ export const refreshToken = createAuthEndpoint(
 				cause: error,
 			});
 		}
+	},
+);
+
+export const accountInfo = createAuthEndpoint(
+	"/account-info",
+	{
+		method: "POST",
+		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Get the account info provided by the provider",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+												},
+												name: {
+													type: "string",
+												},
+												email: {
+													type: "string",
+												},
+												image: {
+													type: "string",
+												},
+												emailVerified: {
+													type: "boolean",
+												},
+											},
+											required: ["id", "emailVerified"],
+										},
+										data: {
+											type: "object",
+											properties: {},
+											additionalProperties: true,
+										},
+									},
+									required: ["user", "data"],
+									additionalProperties: false,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		body: z.object({
+			accountId: z.string({
+				description:
+					"The provider given account id for which to get the account info",
+			}),
+		}),
+	},
+	async (ctx) => {
+		const account = await ctx.context.internalAdapter.findAccount(
+			ctx.body.accountId,
+		);
+
+		if (!account || account.userId !== ctx.context.session.user.id) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
+		}
+
+		const provider = ctx.context.socialProviders.find(
+			(p) => p.id === account.providerId,
+		);
+
+		if (!provider) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: `Provider account provider is ${account.providerId} but it is not configured`,
+			});
+		}
+
+		const tokens = await getAccessToken({
+			...ctx,
+			body: {
+				accountId: account.id,
+				providerId: account.providerId,
+			},
+			returnHeaders: false,
+		});
+
+		const info = await provider.getUserInfo(tokens);
+
+		return ctx.json(info);
 	},
 );

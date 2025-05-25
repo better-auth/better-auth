@@ -18,6 +18,7 @@ import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
+import type { AdapterDebugLogs } from "../adapters";
 //@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
 
@@ -92,6 +93,12 @@ export type BetterAuthOptions = {
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  }
 		| {
 				/**
@@ -108,6 +115,12 @@ export type BetterAuthOptions = {
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  };
 	/**
 	 * Secondary storage configuration
