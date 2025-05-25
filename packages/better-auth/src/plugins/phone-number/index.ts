@@ -568,6 +568,10 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							},
 							ctx,
 						);
+						await setSessionCookie(ctx, {
+							session: session.session,
+							user: user,
+						});
 						return ctx.json({
 							status: true,
 							token: session.session.token,
