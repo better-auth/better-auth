@@ -71,7 +71,6 @@ describe("passkey", async () => {
 				updatedAt: new Date(),
 			},
 		});
-
 		const passkeys = await auth.api.listPasskeys({
 			headers: headers,
 		});
