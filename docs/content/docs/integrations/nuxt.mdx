@@ -7,9 +7,9 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 
 ### Create API Route
 
-We need to mount the handler to an API route. Create a file inside `/server/api` called `[...auth].ts` and add the following code:
+We need to mount the handler to an API route. Create a file inside `/server/api/auth` called `[...all].ts` and add the following code:
 
-```ts title="server/api/[...auth].ts"
+```ts title="server/api/auth/[...all].ts"
 import { auth } from "~/lib/auth"; // import your auth config
 
 export default defineEventHandler((event) => {
@@ -17,7 +17,7 @@ export default defineEventHandler((event) => {
 });
 ```
 <Callout type="info">
- You can change the path on your better-auth configuration but it's recommended to keep it as `/api/[...auth]`
+ You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
 </Callout>
 
 ### Migrate the database

@@ -3,7 +3,7 @@ title: Browser Extension Guide
 description: A step-by-step guide to creating a browser extension with Better Auth.
 ---
 
-In this guide, we’ll walk you through the steps of creating a browser extension using <Link href="https://docs.plasmo.com/">Plasmo</Link> with Better Auth for authentication.
+In this guide, we'll walk you through the steps of creating a browser extension using <Link href="https://docs.plasmo.com/">Plasmo</Link> with Better Auth for authentication.
 
 If you would like to view a completed example, you can check out the <Link href="https://github.com/better-auth/better-auth/tree/main/examples/browser-extension-example">browser extension example</Link>.
 
@@ -115,7 +115,7 @@ If you would like to view a completed example, you can check out the <Link href=
         To learn more about the client Better Auth API, check out the <Link href="/docs/concepts/client">client documentation</Link>.
 
 
-        Here’s a quick example 😎
+        Here's a quick example 😎
 
         ```tsx title="src/popup.tsx"
         import { authClient } from "./auth/auth-client"
@@ -182,6 +182,25 @@ If you would like to view a completed example, you can check out the <Link href=
             trustedOrigins: ["chrome-extension://YOUR_EXTENSION_ID"],
         })
         ```
+
+        If you're developing multiple extensions or need to support different browser extensions with different IDs, you can use wildcard patterns:
+
+        ```ts title="server.ts"
+        export const auth = betterAuth({
+            trustedOrigins: [
+                // Support a specific extension ID
+                "chrome-extension://YOUR_EXTENSION_ID",
+                
+                // Or support multiple extensions with wildcard (less secure)
+                "chrome-extension://*"
+            ],
+        })
+        ```
+
+        <Callout type="warn">
+          Using wildcards for extension origins (`chrome-extension://*`) reduces security by trusting all extensions. 
+          It's safer to explicitly list each extension ID you trust. Only use wildcards for development and testing.
+        </Callout>
     </Step>
 
     <Step>
@@ -195,9 +214,9 @@ If you would like to view a completed example, you can check out the <Link href=
 
 ## Wrapping Up
 
-Congratulations! You’ve successfully created a browser extension using Better Auth and Plasmo.
+Congratulations! You've successfully created a browser extension using Better Auth and Plasmo.
 We highly recommend you visit the <Link href="https://docs.plasmo.com/">Plasmo documentation</Link> to learn more about the framework.
 
 If you would like to view a completed example, you can check out the <Link href="https://github.com/better-auth/better-auth/tree/main/examples/browser-extension-example">browser extension example</Link>.
 
-If you have any questions, feel free to open an issue on our <Link href="https://github.com/better-auth/better-auth/issues">GitHub repo</Link>, or join our <Link href="https://discord.gg/6jHcdYMzyq">Discord server</Link> for support.
+If you have any questions, feel free to open an issue on our <Link href="https://github.com/better-auth/better-auth/issues">GitHub repo</Link>, or join our <Link href="https://discord.gg/better-auth">Discord server</Link> for support.

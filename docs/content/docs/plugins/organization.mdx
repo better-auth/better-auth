@@ -376,7 +376,7 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 
 To get the full details of an organization, you can use the `getFullOrganization` function provided by the client. The function takes an object with the following properties:
 
-- `organizationId`: The id of the organization. (Optional) – By default, it will use the active organization.
+- `organizationId`: The ID of the organization. (Optional) – By default, it will use the active organization.
 - `organizationSlug`: The slug of the organization. (Optional) – To get the organization by slug.
 
 <Tabs items={["client", "server"]}>
@@ -384,12 +384,12 @@ To get the full details of an organization, you can use the `getFullOrganization
   <Tab value="client">
   ```ts title="auth-client.ts"
   const organization = await authClient.organization.getFullOrganization({
-      organizationId: "organization-id" // optional, by default it will use the active organization
+      query: { organizationId: "organization-id" } // optional, by default it will use the active organization
   })
-  //you can also use organizationSlug instead of organizationId
+  // you can also use organizationSlug instead of organizationId
   const organization = await authClient.organization.getFullOrganization({
-      organizationSlug: "organization-slug"
-  })
+      query: { organizationSlug: "organization-slug" }
+  })  
   ```
   </Tab>
 
@@ -482,14 +482,14 @@ export const auth = betterAuth({
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-                const inviteLink = `https://example.com/accept-invitation/${data.id}`
+        const inviteLink = `https://example.com/accept-invitation/${data.id}`
 				sendOrganizationInvitation({
-					    email: data.email,
+					  email: data.email,
 						invitedByUsername: data.inviter.user.name,
 						invitedByEmail: data.inviter.user.email,
 						teamName: data.organization.name,
 						inviteLink
-					})
+				})
 			},
 		}),
 	],
@@ -502,7 +502,7 @@ To invite users to an organization, you can use the `invite` function provided b
 
 - `email`: The email address of the user.
 - `role`: The role of the user in the organization. It can be `admin`, `member`, or `guest`.
-- `organizationId`: The id of the organization. this is optional by default it will use the active organization. (Optional)
+- `organizationId`: The ID of the organization. this is optional by default it will use the active organization. (Optional)
 
 ```ts title="invitation.ts"
 await authClient.organization.inviteMember({
@@ -531,7 +531,7 @@ await authClient.organization.acceptInvitation({
 
 ### Update Invitation Status
 
-To update the status of invitation you can use the `acceptInvitation`, `cancelInvitation`, `rejectInvitation` functions provided by the client. The functions take the invitation id as an argument.
+To update the status of invitation you can use the `acceptInvitation`, `cancelInvitation`, `rejectInvitation` functions provided by the client. The functions take the invitation ID as an argument.
 
 ```ts title="auth-client.ts"
 //cancel invitation
@@ -548,7 +548,7 @@ await authClient.organization.rejectInvitation({
 
 ### Get Invitation
 
-To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
+To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation ID as a query parameter.
 
 ```ts title="auth-client.ts"
 await authClient.organization.getInvitation({
@@ -664,7 +664,7 @@ By default, there are three resources, and these have two to three actions.
 
     `create` `cancel`
 
-The owner have full control over all the resources and actions. The admin have full control over all the resources except for deleting the organization or changing the owner. The member have no control over any of those action other than reading the data.
+The owner has full control over all the resources and actions. The admin has full control over all the resources except for deleting the organization or changing the owner. The member has no control over any of those actions other than reading the data.
 
 ### Custom Permissions
 
@@ -1019,7 +1019,7 @@ When teams are enabled, a new `team` table is added with the following structure
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1096,13 +1096,13 @@ Table Name: `member`
     {
       name: "userId",
       type: "string",
-      description: "The id of the user",
+      description: "The ID of the user",
       isForeignKey: true
     },
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1138,13 +1138,13 @@ Table Name: `invitation`
     {
       name: "inviterId",
       type: "string",
-      description: "The id of the inviter",
+      description: "The ID of the inviter",
       isForeignKey: true
     },
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1174,14 +1174,14 @@ Table Name: `invitation`
 
 Table Name: `session`
 
-You need to add one more field to the session table to store the active organization id.
+You need to add one more field to the session table to store the active organization ID.
 
 <DatabaseTable
   fields={[
     {
       name: "activeOrganizationId",
       type: "string",
-      description: "The id of the active organization",
+      description: "The ID of the active organization",
       isOptional: true
     },
   ]}
@@ -1207,7 +1207,7 @@ Table Name: `team`
     {
       name: "organizationId",
       type: "string",
-      description: "The id of the organization",
+      description: "The ID of the organization",
       isForeignKey: true
     },
     {
@@ -1231,7 +1231,7 @@ Table Name: `team`
     {
       name: "teamId",
       type: "string",
-      description: "The id of the team",
+      description: "The ID of the team",
       isOptional: true
     },
   ]}
@@ -1244,7 +1244,7 @@ Table Name: `team`
     {
       name: "teamId",
       type: "string",
-      description: "The id of the team",
+      description: "The ID of the team",
       isOptional: true
     },
   ]}

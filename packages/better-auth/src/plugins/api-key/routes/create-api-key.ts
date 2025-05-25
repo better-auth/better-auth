@@ -1,14 +1,13 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
-import { ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { getDate } from "../../../utils/date";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
-import { createHash } from "@better-auth/utils/hash";
-import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
+import { defaultKeyHasher } from "../";
 
 export function createApiKey({
 	keyGenerator,
@@ -357,10 +356,7 @@ export function createApiKey({
 				prefix: prefix || opts.defaultPrefix,
 			});
 
-			const hash = await createHash("SHA-256").digest(key);
-			const hashed = base64Url.encode(hash, {
-				padding: false,
-			});
+			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
 			let start: string | null = null;
 
@@ -406,9 +402,9 @@ export function createApiKey({
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled:
-					rateLimitEnabled ?? opts.rateLimit.enabled === undefined
-						? true
-						: opts.rateLimit.enabled,
+					rateLimitEnabled === undefined
+						? opts.rateLimit.enabled ?? true
+						: rateLimitEnabled,
 				requestCount: 0,
 				//@ts-ignore - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
@@ -423,7 +419,7 @@ export function createApiKey({
 				Omit<ApiKey, "id">,
 				ApiKey
 			>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				data: data,
 			});
 

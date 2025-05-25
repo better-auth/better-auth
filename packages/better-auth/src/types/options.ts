@@ -29,6 +29,10 @@ import type { AuthContext, GenericEndpointContext } from ".";
 import type { CookieOptions } from "better-call";
 import type { AuthMiddleware } from "../plugins";
 import type { Logger } from "../utils";
+import type { LiteralUnion, OmitId } from "./helper";
+import type { AdapterDebugLogs } from "../adapters";
+//@ts-ignore - we need to import this to get the type of the database
+import type { Database as BunDatabase } from "bun:sqlite";
 
 export type BetterAuthOptions<
 	// Plugin inference
@@ -115,6 +119,7 @@ export type BetterAuthOptions<
 		| Database
 		| Dialect
 		| AdapterInstance
+		| BunDatabase
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -124,6 +129,12 @@ export type BetterAuthOptions<
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  }
 		| {
 				/**
@@ -140,6 +151,12 @@ export type BetterAuthOptions<
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -272,8 +289,15 @@ export type BetterAuthOptions<
 		};
 		/**
 		 * Automatically sign in the user after sign up
+		 *
+		 * @default true
 		 */
 		autoSignIn?: boolean;
+		/**
+		 * Whether to revoke all other sessions when resetting password
+		 * @default false
+		 */
+		revokeSessionsOnPasswordReset?: boolean;
 	};
 	/**
 	 * list of social providers

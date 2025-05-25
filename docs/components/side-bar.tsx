@@ -39,7 +39,7 @@ export default function ArticleLayout() {
 			<aside
 				className={cn(
 					"md:transition-all",
-					"border-r border-lines top-[43px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(92dvh-7px)] flex-col justify-between w-[var(--fd-sidebar-width)]",
+					"border-r border-lines top-[53px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
 				)}
 			>
 				<div>

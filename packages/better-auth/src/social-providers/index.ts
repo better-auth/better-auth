@@ -44,9 +44,9 @@ export const socialProviderList = Object.keys(socialProviders) as [
 	...(keyof typeof socialProviders)[],
 ];
 
-export const SocialProviderListEnum = z.enum(socialProviderList, {
-	description: "OAuth2 provider to use",
-});
+export const SocialProviderListEnum = z
+	.enum(socialProviderList)
+	.or(z.string()) as z.ZodType<SocialProviderList[number] | (string & {})>;
 
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 

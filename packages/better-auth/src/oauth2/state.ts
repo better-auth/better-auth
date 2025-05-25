@@ -33,11 +33,14 @@ export async function generateState(
 	});
 	const expiresAt = new Date();
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: data,
-		identifier: state,
-		expiresAt,
-	});
+	const verification = await c.context.internalAdapter.createVerificationValue(
+		{
+			value: data,
+			identifier: state,
+			expiresAt,
+		},
+		c,
+	);
 	if (!verification) {
 		c.context.logger.error(
 			"Unable to create verification. Make sure the database adapter is properly working and there is a verification table in the database",

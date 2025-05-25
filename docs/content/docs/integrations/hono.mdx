@@ -155,7 +155,7 @@ export const auth = createAuth({
 When using the Hono client (`@hono/client`) to make requests to your Better Auth-protected endpoints, you need to configure it to send credentials (cookies) with cross-origin requests.
 
 ```ts title="api.ts"
-import { hc } from "@hono/client";
+import { hc } from "hono/client";
 import type { AppType } from "./server"; // Your Hono app type
 
 const client = hc<AppType>("http://localhost:8787/", {
