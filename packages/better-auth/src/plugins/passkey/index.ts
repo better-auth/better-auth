@@ -92,6 +92,7 @@ export type Passkey = {
 	backedUp: boolean;
 	transports?: string;
 	createdAt: Date;
+	updatedAt: Date;
 };
 
 export const passkey = (options?: PasskeyOptions) => {
@@ -595,6 +596,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							transports: resp.response.transports.join(","),
 							backedUp: credentialBackedUp,
 							createdAt: new Date(),
+							updatedAt: new Date(),
 						};
 						const newPasskeyRes = await ctx.context.adapter.create<
 							Omit<Passkey, "id">,
@@ -731,6 +733,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							],
 							update: {
 								counter: verification.authenticationInfo.newCounter,
+								updatedAt: new Date(),
 							},
 						});
 						const s = await ctx.context.internalAdapter.createSession(
@@ -930,6 +933,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						],
 						update: {
 							name: ctx.body.name,
+							updatedAt: new Date(),
 						},
 					});
 
@@ -994,6 +998,10 @@ const schema = {
 				required: false,
 			},
 			createdAt: {
+				type: "date",
+				required: false,
+			},
+			updatedAt: {
 				type: "date",
 				required: false,
 			},

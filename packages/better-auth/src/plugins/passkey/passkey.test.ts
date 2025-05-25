@@ -68,13 +68,14 @@ describe("passkey", async () => {
 				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
+				updatedAt: new Date(),
 			},
 		});
 
 		const passkeys = await auth.api.listPasskeys({
 			headers: headers,
 		});
-
+		console.log(passkeys);
 		expect(Array.isArray(passkeys)).toBe(true);
 		expect(passkeys[0]).toHaveProperty("id");
 		expect(passkeys[0]).toHaveProperty("userId");
@@ -95,7 +96,7 @@ describe("passkey", async () => {
 				name: "newName",
 			},
 		});
-
+		console.log(updateResult);
 		expect(updateResult.passkey.name).toBe("newName");
 	});
 
