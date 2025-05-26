@@ -297,7 +297,7 @@ This will reactivate a subscription that was previously set to cancel at the end
 
 ### Reference System
 
-By default, subscriptions are associated with the user ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
+By default, subscriptions are associated with the user ID or the active organization ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
 
 ```ts title="client.ts"
 // Create a subscription for an organization
@@ -453,6 +453,22 @@ Table Name: `user`
   ]}
 />
 
+
+### Organization (if enabled)
+
+Table Name: `organization
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "stripeCustomerId", 
+      type: "string", 
+      description: "The Stripe customer ID",
+      isOptional: true
+    },
+  ]}
+/>
+
 ### Subscription
 
 Table Name: `subscription`
@@ -562,6 +578,8 @@ stripe({
 
 **createCustomerOnSignUp**: `boolean` - Whether to automatically create a Stripe customer when a user signs up. Default: `false`.
 
+**createOrganizationCustomer**: `boolean` - Whether to automatically create a Stripe customer when a new organization is created. Default: `false`.
+
 **onCustomerCreate**: `(data: { customer: Customer, stripeCustomer: Stripe.Customer, user: User }, request?: Request) => Promise<void>` - A function called after a customer is created.
 
 **getCustomerCreateParams**: `(data: { user: User, session: Session }, request?: Request) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
@@ -605,21 +623,34 @@ Each plan can have the following properties:
 ## Advanced Usage
 
 ### Using with Organizations
+The Stripe plugin works well with the organization plugin. You can associate a Stripe customer to an organization instead of a user. This is useful for B2B applications where you want to manage subscriptions at the organization level.
 
-The Stripe plugin works well with the organization plugin. You can associate subscriptions with organizations instead of individual users:
+This is especially useful for apps, where:
+- Each organization needs its own billing entity.
+- One user might be the admin/payer for Org A, but a member (non-payer) in Org B.
+- Each organization wants its own invoices, card, and tax info (especially if orgs are legal entities).
+
+You can enable this by setting the `createOrganizationCustomer` option to `true` and/or implementing the `authorizeReference` function to check if the user has permission to manage subscriptions for the organization.
+
+
+```ts title="auth.ts"
+stripe({
+    // ... other options
+    createCustomerOnSignUp: false,
+    createOrganizationCustomer: true,
+})
+```
+
+You can then create subscriptions for organizations similarly to how you would for users. The `referenceId` is inferred from the active organization if not provided, or you can specify it explicitly.
 
 ```ts title="client.ts"
-// Get the active organization
-const { data: activeOrg } = client.useActiveOrganization();
-
-// Create a subscription for the organization
+// Create a subscription for an organization
 await client.subscription.upgrade({
-    plan: "team",
-    referenceId: activeOrg.id,
-    seats: 10,
-    annual: true, // upgrade to an annual plan (optional)
-    successUrl: "/org/billing/success",
-    cancelUrl: "/org/billing"
+    plan: "pro",
+    // referenceId: "org_123", Inferred from the active organization id
+    successUrl: "/dashboard",
+    cancelUrl: "/pricing",
+    seats: 10, // Number of seats for team plans
 });
 ```
 
