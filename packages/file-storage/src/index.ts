@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { schema, type FileStorageEntry } from "./schema";
 import type { FileStorageOptions } from "./types";
+import { formatBytes } from "./utils";
 
 export * from "./client";
 export * from "./storage-providers/uploadthing";
@@ -236,6 +237,160 @@ export const fileStorage = (options: FileStorageOptions) => {
 					}
 
 					return ctx.json({ success: true });
+				},
+			),
+
+			getStorageUsage: createAuthEndpoint(
+				"/files/usage",
+				{
+					method: "POST",
+					body: z.object({
+						fileType: z.string().optional(),
+						fromDate: z.string().datetime().optional(),
+						toDate: z.string().datetime().optional(),
+						namePattern: z.string().optional(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const user = ctx.context.session.user;
+					const { fileType, fromDate, toDate, namePattern } = ctx.body;
+
+					// Build where clause for filtering
+					const whereClause: Record<string, any> = {
+						userId: user.id,
+					};
+
+					if (fileType) {
+						whereClause.type = fileType;
+					}
+
+					if (fromDate || toDate) {
+						whereClause.createdAt = {};
+						if (fromDate) {
+							whereClause.createdAt.gte = new Date(fromDate);
+						}
+						if (toDate) {
+							whereClause.createdAt.lte = new Date(toDate);
+						}
+					}
+
+					if (namePattern) {
+						whereClause.name = {
+							contains: namePattern,
+						};
+					}
+
+					// Get all files matching the criteria
+					const files = await ctx.context.adapter.findMany({
+						model: modelName,
+						where: whereClause,
+					});
+
+					// Calculate total size
+					const totalSize = files.reduce((sum: number, file: any) => sum + (file.size || 0), 0);
+					const fileCount = files.length;
+
+					return ctx.json({
+						totalSize,
+						fileCount,
+						totalSizeFormatted: formatBytes(totalSize),
+					});
+				},
+			),
+
+			listFiles: createAuthEndpoint(
+				"/files/list",
+				{
+					method: "POST",
+					body: z.object({
+						fileType: z.string().optional(),
+						fromDate: z.string().datetime().optional(),
+						toDate: z.string().datetime().optional(),
+						namePattern: z.string().optional(),
+						limit: z.number().min(1).max(100).default(20),
+						offset: z.number().min(0).default(0),
+						sortBy: z.enum(["name", "type", "size", "createdAt"]).default("createdAt"),
+						sortOrder: z.enum(["asc", "desc"]).default("desc"),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const user = ctx.context.session.user;
+					const { 
+						fileType, 
+						fromDate, 
+						toDate, 
+						namePattern, 
+						limit, 
+						offset, 
+						sortBy, 
+						sortOrder 
+					} = ctx.body;
+
+					// Build where clause for filtering
+					const whereClause: Record<string, any> = {
+						userId: user.id,
+					};
+
+					if (fileType) {
+						whereClause.type = fileType;
+					}
+
+					if (fromDate || toDate) {
+						whereClause.createdAt = {};
+						if (fromDate) {
+							whereClause.createdAt.gte = new Date(fromDate);
+						}
+						if (toDate) {
+							whereClause.createdAt.lte = new Date(toDate);
+						}
+					}
+
+					if (namePattern) {
+						whereClause.name = {
+							contains: namePattern,
+						};
+					}
+
+					// Get files with pagination and sorting
+					const files = await ctx.context.adapter.findMany({
+						model: modelName,
+						where: whereClause,
+						limit,
+						offset,
+						sortBy: {
+							field: sortBy,
+							direction: sortOrder,
+						},
+					});
+
+					// Get total count for pagination info
+					const totalCount = await ctx.context.adapter.count({
+						model: modelName,
+						where: whereClause,
+					});
+
+					return ctx.json({
+						files: files.map((file: any) => ({
+							id: file.id,
+							name: file.name,
+							type: file.type,
+							size: file.size,
+							sizeFormatted: formatBytes(file.size),
+							url: file.url,
+							createdAt: file.createdAt,
+							...Object.fromEntries(
+								Object.keys(opts.additionalFields).map(key => [key, file[key]])
+							),
+						})),
+						pagination: {
+							total: totalCount,
+							limit,
+							offset,
+							hasMore: offset + limit < totalCount,
+						},
+					});
 				},
 			),
 		},

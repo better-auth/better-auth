@@ -99,3 +99,113 @@ export interface FileStorageOptions {
 	 */
 	additionalFields?: Record<string, FieldAttribute>;
 }
+
+/**
+ * Filter options for file queries
+ */
+export interface FileFilter {
+	/**
+	 * Filter by file type (MIME type)
+	 */
+	fileType?: string;
+	
+	/**
+	 * Filter files created after this date (ISO string)
+	 */
+	fromDate?: string;
+	
+	/**
+	 * Filter files created before this date (ISO string)
+	 */
+	toDate?: string;
+	
+	/**
+	 * Filter by file name pattern (partial match)
+	 */
+	namePattern?: string;
+}
+
+/**
+ * Options for listing files
+ */
+export interface ListFilesOptions extends FileFilter {
+	/**
+	 * Maximum number of files to return
+	 * @default 20
+	 * @min 1
+	 * @max 100
+	 */
+	limit?: number;
+	
+	/**
+	 * Number of files to skip
+	 * @default 0
+	 */
+	offset?: number;
+	
+	/**
+	 * Field to sort by
+	 * @default "createdAt"
+	 */
+	sortBy?: "name" | "type" | "size" | "createdAt";
+	
+	/**
+	 * Sort order
+	 * @default "desc"
+	 */
+	sortOrder?: "asc" | "desc";
+}
+
+/**
+ * Response for storage usage endpoint
+ */
+export interface StorageUsageResponse {
+	/**
+	 * Total size in bytes
+	 */
+	totalSize: number;
+	
+	/**
+	 * Number of files
+	 */
+	fileCount: number;
+	
+	/**
+	 * Human-readable formatted size
+	 */
+	totalSizeFormatted: string;
+}
+
+/**
+ * File entry with formatted size
+ */
+export interface FileEntry {
+	id: string;
+	name: string;
+	type: string;
+	size: number;
+	sizeFormatted: string;
+	url: string;
+	createdAt: Date;
+	[key: string]: any; // For additional fields
+}
+
+/**
+ * Response for list files endpoint
+ */
+export interface ListFilesResponse {
+	/**
+	 * Array of file entries
+	 */
+	files: FileEntry[];
+	
+	/**
+	 * Pagination information
+	 */
+	pagination: {
+		total: number;
+		limit: number;
+		offset: number;
+		hasMore: boolean;
+	};
+}

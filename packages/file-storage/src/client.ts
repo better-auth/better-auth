@@ -3,7 +3,7 @@ import type { fileStorage } from ".";
 
 export const fileStorageClient = () => {
 	return {
-		id: "file-storage",
+		id: "file-storage-client",
 		$InferServerPlugin: {} as ReturnType<typeof fileStorage>,
 	} satisfies BetterAuthClientPlugin;
 };
