@@ -114,7 +114,6 @@ describe("stripe", async () => {
 		data.organization = [];
 		data.invitation = [];
 		data.member = [];
-		
 
 		vi.clearAllMocks();
 	});

@@ -80,7 +80,7 @@ export const getSchema = (options: StripeOptions) => {
 		{
 			...(options.subscription?.enabled ? subscriptions : {}),
 			...user,
-			...organization
+			...organization,
 		},
 		options.schema,
 	);
