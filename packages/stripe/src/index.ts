@@ -210,7 +210,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				let organization: (Organization & { stripeCustomerId: string }) | null =
 					null;
 
-				if (activeOrganizationId) {
+				if (activeOrganizationId && options.createOrganizationCustomer) {
 					organization = await ctx.context.adapter.findOne<
 						Organization & { stripeCustomerId: string }
 					>({
@@ -272,7 +272,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					try {
-						if (organization) {
+						if (organization && options.createOrganizationCustomer) {
 							const stripeCustomer = await client.customers.create(
 								{
 									email: user.email,
@@ -510,7 +510,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								subscriptionId: subscription.id,
 								referenceId,
 								...params?.params?.metadata,
-								...(organization ? { organizationId: organization.id } : {}),
+								...(organization && options.createOrganizationCustomer
+									? { organizationId: organization.id }
+									: {}),
 							},
 						},
 						params?.options,
@@ -621,10 +623,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				],
 			},
 			async (ctx) => {
-				const referenceId =
-					ctx.body?.referenceId ||
-					ctx.context?.session?.session?.activeOrganizationId ||
-					ctx.context.session.user.id;
+				let referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+
+				if (options.createOrganizationCustomer) {
+					referenceId =
+						ctx.context.session.session.activeOrganizationId || referenceId;
+				}
 
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
@@ -748,10 +752,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
 			async (ctx) => {
-				const referenceId =
-					ctx.body?.referenceId ||
-					ctx.context?.session?.session?.activeOrganizationId ||
-					ctx.context.session.user.id;
+				let referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+
+				if (options.createOrganizationCustomer) {
+					referenceId =
+						ctx.context.session.session.activeOrganizationId || referenceId;
+				}
 
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
@@ -857,15 +863,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
 			},
 			async (ctx) => {
+				let referenceId = ctx.query?.referenceId || ctx.context.session.user.id;
+
+				if (options.createOrganizationCustomer) {
+					referenceId =
+						ctx.context.session.session.activeOrganizationId || referenceId;
+				}
+
 				const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 					model: "subscription",
 					where: [
 						{
 							field: "referenceId",
-							value:
-								ctx.query?.referenceId ||
-								ctx.context?.session?.session?.activeOrganizationId ||
-								ctx.context.session.user.id,
+							value: referenceId,
 						},
 					],
 				});
@@ -917,17 +927,22 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const { user } = session;
 				const { callbackURL, subscriptionId } = ctx.query;
 
-				const organization = await ctx.context.adapter.findOne<
-					Organization & { stripeCustomerId: string }
-				>({
-					model: "organization",
-					where: [
-						{
-							field: "id",
-							value: activeOrganizationId ?? "",
-						},
-					],
-				});
+				let organization: (Organization & { stripeCustomerId: string }) | null =
+					null;
+
+				if (activeOrganizationId && options.createOrganizationCustomer) {
+					organization = await ctx.context.adapter.findOne<
+						Organization & { stripeCustomerId: string }
+					>({
+						model: "organization",
+						where: [
+							{
+								field: "id",
+								value: activeOrganizationId ?? "",
+							},
+						],
+					});
+				}
 
 				const subscription = await ctx.context.adapter.findOne<Subscription>({
 					model: "subscription",
@@ -1102,8 +1117,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								| null
 								| undefined;
 
-							console.log("✅ Organization created", organization);
-
 							if (!organization || organization instanceof APIError) {
 								return logger.error(
 									"#BETTER_AUTH: Organization create hook returned an error or null",
@@ -1186,7 +1199,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												],
 											},
 										);
-										console.log("✅ Customer created", customer);
+
 										if (!customer) {
 											logger.error("#BETTER_AUTH: Failed to create  customer");
 										} else {
