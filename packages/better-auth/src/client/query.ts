@@ -18,6 +18,7 @@ export const useAuthQuery = <T>(
 				isPending: boolean;
 		  }) => BetterFetchOption)
 		| BetterFetchOption,
+	initialData?: T,
 ) => {
 	const value = atom<{
 		data: null | T;
@@ -26,9 +27,9 @@ export const useAuthQuery = <T>(
 		isRefetching: boolean;
 		refetch: () => void;
 	}>({
-		data: null,
+		data: initialData || null,
 		error: null,
-		isPending: true,
+		isPending: !initialData,
 		isRefetching: false,
 		refetch: () => {
 			return fn();
@@ -94,13 +95,16 @@ export const useAuthQuery = <T>(
 		? initializedAtom
 		: [initializedAtom];
 	let isMounted = false;
+	let hasInitialData = !!initialData;
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(() => {
 			if (isMounted) {
 				fn();
 			} else {
 				onMount(value, () => {
-					fn();
+					if (!hasInitialData) {
+						fn();
+					}
 					isMounted = true;
 					return () => {
 						value.off();
