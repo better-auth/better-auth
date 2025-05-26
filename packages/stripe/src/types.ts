@@ -333,11 +333,9 @@ export interface StripeOptions {
 export interface Customer {
 	id: string;
 	stripeCustomerId?: string;
-	// TODO: Make this exchangeable with user id
 	referenceId: string;
 	createdAt: Date;
 	updatedAt: Date;
-	// type: "user" | "organization";
 }
 
 export interface InputSubscription extends Omit<Subscription, "id"> {}
