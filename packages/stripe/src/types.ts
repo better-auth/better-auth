@@ -304,8 +304,8 @@ export interface StripeOptions {
 				session: Session & Record<string, any>;
 				plan: StripePlan;
 				subscription: Subscription;
-				organization: Organization & Record<string, any> | null;
-			} ,
+				organization: (Organization & Record<string, any>) | null;
+			},
 			request?: Request,
 		) =>
 			| Promise<{
