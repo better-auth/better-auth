@@ -73,7 +73,7 @@ export const forgetPassword = createAuthEndpoint(
 											type: "boolean",
 										},
                     message:{
-                      type:string
+                      type:"string"
                     }
 									},
 								},
