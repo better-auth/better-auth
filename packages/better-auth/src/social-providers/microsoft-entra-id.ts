@@ -45,7 +45,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 		createAuthorizationURL(data) {
 			const scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email", "User.Read"];
+				: ["openid", "profile", "email", "User.Read", "offline_access"];
 			options.scope && scopes.push(...options.scope);
 			data.scopes && scopes.push(...scopes);
 			return createAuthorizationURL({
