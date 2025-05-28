@@ -27,6 +27,18 @@ export type BetterAuthDbSchema = Record<
 export const getAuthTables = (
 	options: BetterAuthOptions,
 ): BetterAuthDbSchema => {
+	const multiTenancy: Record<string, FieldAttribute> = options.multiTenancy
+		?.enabled
+		? {
+				tenantId: {
+					type: "string",
+					required: true,
+					fieldName: options.multiTenancy?.tableFieldName ?? "tenantId",
+					sortable: false,
+				},
+			}
+		: {};
+
 	const pluginSchema = options.plugins?.reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -117,6 +129,7 @@ export const getAuthTables = (
 					},
 					required: true,
 				},
+				...(options.multiTenancy?.injectIntoSession ? multiTenancy : {}),
 				...session?.fields,
 				...options.session?.additionalFields,
 			},
@@ -128,6 +141,7 @@ export const getAuthTables = (
 		user: {
 			modelName: options.user?.modelName || "user",
 			fields: {
+				...multiTenancy,
 				name: {
 					type: "string",
 					required: true,
@@ -136,7 +150,7 @@ export const getAuthTables = (
 				},
 				email: {
 					type: "string",
-					unique: true,
+					unique: !options.multiTenancy?.enabled, // Remove unique constraint in multi-tenant mode
 					required: true,
 					fieldName: options.user?.fields?.email || "email",
 					sortable: true,
@@ -252,6 +266,7 @@ export const getAuthTables = (
 		verification: {
 			modelName: options.verification?.modelName || "verification",
 			fields: {
+				...multiTenancy,
 				identifier: {
 					type: "string",
 					required: true,

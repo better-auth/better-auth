@@ -13,6 +13,7 @@ import { getBaseURL, getOrigin } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";
 import { BetterAuthError } from "./error";
+import { tenantAsyncStore } from "./plugins/multi-tenancy/async-context";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
@@ -54,7 +55,10 @@ export const betterAuth = <O extends BetterAuthOptions>(
 				ctx.options.baseURL!,
 			];
 			const { handler } = router(ctx, options);
-			return handler(request);
+
+			// start an async context for tenanId. we don't know the value now
+			// but will add it later during plugin onRequest()
+			return tenantAsyncStore.run({}, () => handler(request));
 		},
 		api: api as InferAPI<typeof api>,
 		options: options as O,
