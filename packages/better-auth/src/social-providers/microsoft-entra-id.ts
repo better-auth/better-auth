@@ -128,7 +128,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 						refreshToken,
 						options: {
 							clientId: options.clientId,
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						extraParams: {
