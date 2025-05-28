@@ -108,6 +108,7 @@ export async function setCookieCache(
 		const filteredSession = Object.entries(session.session).reduce(
 			(acc, [key, value]) => {
 				const fieldConfig =
+					//@ts-expect-error
 					ctx.context.options.session?.additionalFields?.[key];
 				if (!fieldConfig || fieldConfig.returned !== false) {
 					acc[key] = value;

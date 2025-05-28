@@ -29,7 +29,6 @@ import type { AuthContext, GenericEndpointContext } from ".";
 import type { CookieOptions } from "better-call";
 import type { AuthMiddleware } from "../plugins";
 import type { Logger } from "../utils";
-import type { LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
 //@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
