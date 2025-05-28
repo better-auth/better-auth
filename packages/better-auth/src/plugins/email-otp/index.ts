@@ -132,7 +132,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 					if (ctx.body.type === "forget-password" || opts.disableSignUp) {
 						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
+							await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 						if (!user) {
 							return ctx.json({
 								success: true,
@@ -378,7 +378,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					const user = await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.USER_NOT_FOUND,
@@ -515,7 +515,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					const user = await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 					if (!user) {
 						if (opts.disableSignUp) {
 							throw new APIError("BAD_REQUEST", {
@@ -620,7 +620,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					const user = await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.USER_NOT_FOUND,
@@ -696,6 +696,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						{
 							includeAccounts: true,
 						},
+						ctx
 					);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
