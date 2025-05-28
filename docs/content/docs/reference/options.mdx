@@ -532,3 +532,16 @@ export const auth = betterAuth({
 })
 ```
 
+## `customPaths`
+
+Customize specific auth paths. This allows you to map any existing route to a custom path.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	customPaths: {
+		"/ok": "/okay",
+	},
+})
+```
+
