@@ -249,6 +249,7 @@ export const createAdapter =
 				!options.advanced?.database?.useNumberId &&
 				!forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
+
 			return {
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
 				required: shouldGenerateId ? true : false,
@@ -310,7 +311,7 @@ export const createAdapter =
 			action,
 			data,
 			unsafe_model,
-			forceAllowId,
+			forceAllowId = false,
 		}: {
 			data: T;
 			unsafe_model: string;
@@ -621,7 +622,7 @@ export const createAdapter =
 					data: unsafeData,
 					unsafe_model: unsafeModel,
 					action: "create",
-					forceAllowId: true,
+					forceAllowId,
 				});
 				debugLog(
 					{ method: "create" },
