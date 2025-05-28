@@ -94,6 +94,25 @@ await auth.api.getAccessToken({
 });
 ```
 
+### Get Account Info Provided by the provider
+
+To get provider specific account info you can use the `accountInfo` function with the `authClient` or `auth.api` for server-side usage.
+
+```ts
+const info = await authClient.accountInfo({
+  accountId: "accountId", // here you pass in the provider given account id, the provider is automatically detected from the account id
+})
+```
+
+server-side usage:
+
+```ts
+await auth.api.accountInfo({
+  body: { accountId: "accountId" },
+  headers: // pass headers with authenticated token
+});
+```
+
 ### Requesting Additional Scopes
 
 Sometimes your application may need additional OAuth scopes after the user has already signed up (e.g., for accessing GitHub repositories or Google Drive). Users may not want to grant extensive permissions initially, preferring to start with minimal permissions and grant additional access as needed.

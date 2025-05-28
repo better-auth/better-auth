@@ -72,6 +72,9 @@ export const forgetPassword = createAuthEndpoint(
 										status: {
 											type: "boolean",
 										},
+										message: {
+											type: "string",
+										},
 									},
 								},
 							},
@@ -99,6 +102,8 @@ export const forgetPassword = createAuthEndpoint(
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
 				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
 			});
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
@@ -116,7 +121,8 @@ export const forgetPassword = createAuthEndpoint(
 			},
 			ctx,
 		);
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
+		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			{
 				user: user.user,
