@@ -223,7 +223,6 @@ export const auth = betterAuth({
 		additionalFields: {
 			customField: {
 				type: "string",
-				nullable: true
 			}
 		},
 		changeEmail: {
@@ -272,7 +271,6 @@ export const auth = betterAuth({
 		additionalFields: { // Additional fields for the session table
 			customField: {
 				type: "string",
-				nullable: true
 			}
 		},
 		storeSessionInDatabase: true, // Store session in database when secondary storage is provided (default: `false`)
