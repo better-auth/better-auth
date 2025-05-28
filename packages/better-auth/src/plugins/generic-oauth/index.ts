@@ -299,9 +299,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 
 					async getUserInfo(tokens) {
-						if (!finalUserInfoUrl) {
-							return null;
-						}
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
@@ -709,6 +706,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						callbackURL: callbackURL,
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,

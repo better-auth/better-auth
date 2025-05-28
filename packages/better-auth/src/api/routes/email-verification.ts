@@ -262,8 +262,8 @@ export const verifyEmail = createAuthEndpoint(
 											description:
 												"Indicates if the email was verified successfully",
 										},
-										required: ["user", "status"],
 									},
+									required: ["user", "status"],
 								},
 							},
 						},
