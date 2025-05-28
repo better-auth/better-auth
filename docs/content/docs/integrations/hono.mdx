@@ -93,7 +93,7 @@ serve(app);
 This will allow you to access the `user` and `session` object in all of your routes.
 
 ```ts
-app.get("/session", async (c) => {
+app.get("/session", (c) => {
 	const session = c.get("session")
 	const user = c.get("user")
 	
