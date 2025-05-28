@@ -45,7 +45,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 		createAuthorizationURL(data) {
 			const scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email", "User.Read"];
+				: ["openid", "profile", "email", "User.Read", "offline_access"];
 			options.scope && scopes.push(...options.scope);
 			data.scopes && scopes.push(...scopes);
 			return createAuthorizationURL({
@@ -119,12 +119,19 @@ export const microsoft = (options: MicrosoftOptions) => {
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
+					const scopes = options.disableDefaultScope
+						? []
+						: ["openid", "profile", "email", "User.Read", "offline_access"];
+					options.scope && scopes.push(...options.scope);
+
 					return refreshAccessToken({
 						refreshToken,
 						options: {
 							clientId: options.clientId,
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
+						},
+						extraParams: {
+							scope: scopes.join(" "), // Include the scopes in request to microsoft
 						},
 						tokenEndpoint,
 					});
