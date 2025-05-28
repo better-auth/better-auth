@@ -205,6 +205,15 @@ export type BetterAuthOptions = {
 		 */
 		requireEmailVerification?: boolean;
 		/**
+		 * Controls whether verification emails are sent during sign-in 
+		 * attempts when requireEmailVerification is true.
+		 * When set to false, verification emails won't be sent automatically
+		 * during sign-in, giving developers more control over the flow.
+		 * 
+		 * @default true
+		 */
+		sendVerificationOnSignIn?: boolean;
+		/**
 		 * The maximum length of the password.
 		 *
 		 * @default 128
