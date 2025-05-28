@@ -146,7 +146,6 @@ describe("Create Adapter Helper", async () => {
 				advanced: {
 					database: {
 						generateId(options) {
-							console.log('test')
 							return "HARD-CODED-ID";
 						},
 					},
