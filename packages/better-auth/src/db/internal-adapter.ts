@@ -17,6 +17,7 @@ import type {
 	GenericEndpointContext,
 	Where,
 } from "../types";
+import { tenantAsyncStore } from "../plugins/multi-tenancy/async-context";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -39,10 +40,12 @@ export const createInternalAdapter = (
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
 			const createdUser = await createWithHooks(
 				{
 					createdAt: new Date(),
 					updatedAt: new Date(),
+					tenantId,
 					...user,
 				},
 				"user",
@@ -71,6 +74,7 @@ export const createInternalAdapter = (
 				Record<string, any>,
 			context?: GenericEndpointContext,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
 			const createdUser = await createWithHooks(
 				{
 					createdAt: new Date(),
@@ -78,6 +82,7 @@ export const createInternalAdapter = (
 					emailVerified: false,
 					...user,
 					email: user.email?.toLowerCase(),
+					tenantId,
 				},
 				"user",
 				undefined,
@@ -151,6 +156,18 @@ export const createInternalAdapter = (
 			},
 			where?: Where[],
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			if (tenantId) {
+				where = [
+					...(where ?? []),
+					{
+						field: "tenantId",
+						operator: "eq",
+						value: tenantId,
+					},
+				];
+			}
+
 			const users = await adapter.findMany<User>({
 				model: "user",
 				limit,
@@ -161,6 +178,17 @@ export const createInternalAdapter = (
 			return users;
 		},
 		countTotalUsers: async (where?: Where[]) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			if (tenantId) {
+				where = [
+					...(where ?? []),
+					{
+						field: "tenantId",
+						operator: "eq",
+						value: tenantId,
+					},
+				];
+			}
 			const total = await adapter.count({
 				model: "user",
 				where,
@@ -213,9 +241,13 @@ export const createInternalAdapter = (
 			override?: Partial<Session> & Record<string, any>,
 			overrideAll?: boolean,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			const shouldAddTenant =
+				ctx.context.options.multiTenancy?.enabled &&
+				ctx.context.options.multiTenancy?.injectIntoSession;
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
-			const data: Omit<Session, "id"> = {
+			const data: Omit<Session, "id"> & { tenantId?: string } = {
 				ipAddress:
 					ctx.request || ctx.headers
 						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
@@ -236,6 +268,7 @@ export const createInternalAdapter = (
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),
 			};
+			if (shouldAddTenant) data.tenantId = tenantId;
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -532,6 +565,16 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			const tenantWhere = tenantId
+				? [
+						{
+							field: "tenantId",
+							value: tenantId,
+						},
+					]
+				: [];
+
 			const account = await adapter.findOne<Account>({
 				model: "account",
 				where: [
@@ -571,6 +614,7 @@ export const createInternalAdapter = (
 							value: email.toLowerCase(),
 							field: "email",
 						},
+						...tenantWhere,
 					],
 				});
 				if (user) {
@@ -596,6 +640,15 @@ export const createInternalAdapter = (
 			email: string,
 			options?: { includeAccounts: boolean },
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			const tenantWhere = tenantId
+				? [
+						{
+							field: "tenantId",
+							value: tenantId,
+						},
+					]
+				: [];
 			const user = await adapter.findOne<User>({
 				model: "user",
 				where: [
@@ -603,6 +656,7 @@ export const createInternalAdapter = (
 						value: email.toLowerCase(),
 						field: "email",
 					},
+					...tenantWhere,
 				],
 			});
 			if (!user) return null;
@@ -679,6 +733,15 @@ export const createInternalAdapter = (
 			data: Partial<User & Record<string, any>>,
 			context?: GenericEndpointContext,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			const tenantWhere = tenantId
+				? [
+						{
+							field: "tenantId",
+							value: tenantId,
+						},
+					]
+				: [];
 			const user = await updateWithHooks<User>(
 				data,
 				[
@@ -686,6 +749,7 @@ export const createInternalAdapter = (
 						field: "email",
 						value: email.toLowerCase(),
 					},
+					...tenantWhere,
 				],
 				"user",
 				undefined,
@@ -788,11 +852,15 @@ export const createInternalAdapter = (
 				Partial<Verification>,
 			context?: GenericEndpointContext,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+
 			const verification = await createWithHooks(
 				{
 					createdAt: new Date(),
 					updatedAt: new Date(),
+
 					...data,
+					...(tenantId ? { tenantId } : {}),
 				},
 				"verification",
 				undefined,
@@ -801,6 +869,15 @@ export const createInternalAdapter = (
 			return verification as Verification;
 		},
 		findVerificationValue: async (identifier: string) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			const tenantWhere = tenantId
+				? [
+						{
+							field: "tenantId",
+							value: tenantId,
+						},
+					]
+				: [];
 			const verification = await adapter.findMany<Verification>({
 				model: "verification",
 				where: [
@@ -808,6 +885,7 @@ export const createInternalAdapter = (
 						field: "identifier",
 						value: identifier,
 					},
+					...tenantWhere,
 				],
 				sortBy: {
 					field: "createdAt",
@@ -842,6 +920,15 @@ export const createInternalAdapter = (
 			});
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			const tenantWhere = tenantId
+				? [
+						{
+							field: "tenantId",
+							value: tenantId,
+						},
+					]
+				: [];
 			await adapter.delete<Verification>({
 				model: "verification",
 				where: [
@@ -849,6 +936,7 @@ export const createInternalAdapter = (
 						field: "identifier",
 						value: identifier,
 					},
+					...tenantWhere,
 				],
 			});
 		},
@@ -857,9 +945,18 @@ export const createInternalAdapter = (
 			data: Partial<Verification>,
 			context?: GenericEndpointContext,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
+			const tenantWhere = tenantId
+				? [
+						{
+							field: "tenantId",
+							value: tenantId,
+						},
+					]
+				: [];
 			const verification = await updateWithHooks<Verification>(
 				data,
-				[{ field: "id", value: id }],
+				[{ field: "id", value: id }, ...tenantWhere],
 				"verification",
 				undefined,
 				context,

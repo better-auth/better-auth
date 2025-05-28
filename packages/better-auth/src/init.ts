@@ -27,6 +27,7 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
+import { multiTenant } from "./plugins/multi-tenancy";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -218,6 +219,7 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
+	tenantId?: string;
 };
 
 function runPluginInit(ctx: AuthContext) {
@@ -260,6 +262,10 @@ function getInternalPlugins(options: BetterAuthOptions) {
 	const plugins: BetterAuthPlugin[] = [];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
 		//TODO: add internal plugin
+	}
+
+	if (options.multiTenancy?.enabled) {
+		plugins.push(multiTenant());
 	}
 	return plugins;
 }
