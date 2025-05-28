@@ -120,8 +120,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 			? options.refreshAccessToken
 			: async (refreshToken) => {
 					const scopes = options.disableDefaultScope
-					? []
-					: ["openid", "profile", "email", "User.Read", "offline_access"];
+						? []
+						: ["openid", "profile", "email", "User.Read", "offline_access"];
 					options.scope && scopes.push(...options.scope);
 
 					return refreshAccessToken({
@@ -131,7 +131,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 							clientSecret: options.clientSecret,
 						},
 						extraParams: {
-							scope: scopes.join(' ') //Include the scopes in request to microsoft
+							scope: scopes.join(" "), // Include the scopes in request to microsoft
 						},
 						tokenEndpoint,
 					});
