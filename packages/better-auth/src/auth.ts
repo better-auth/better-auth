@@ -56,7 +56,7 @@ export const betterAuth = <O extends BetterAuthOptions>(
 			];
 			const { handler } = router(ctx, options);
 
-			// start an async context for tenanId. we don't know the value now
+			// start an async context for tenantId. we don't know the value now
 			// but will add it later during plugin onRequest()
 			return tenantAsyncStore.run({}, () => handler(request));
 		},
