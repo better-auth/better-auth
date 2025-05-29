@@ -17,7 +17,7 @@ import type {
 	GenericEndpointContext,
 	Where,
 } from "../types";
-import { tenantAsyncStore } from "../plugins/multi-tenancy/async-context";
+import { tenantAsyncStore } from "../api/async-context";
 
 export const createInternalAdapter = (
 	adapter: Adapter,

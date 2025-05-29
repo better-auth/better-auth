@@ -1014,13 +1014,6 @@ export type BetterAuthOptions = {
 		 */
 		tableFieldName?: string;
 		/**
-		 * Function to resolve the tenant id on each request.
-		 * @param request - The incoming request object (standard node Request object)
-		 * @param ctx - Auth context
-		 * @returns tenantId
-		 */
-		tenantResolver: (request: Request, ctx: AuthContext) => string;
-		/**
 		 * If true, also store tenantId in session
 		 */
 		injectIntoSession?: boolean;

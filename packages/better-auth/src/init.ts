@@ -27,7 +27,6 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
-import { multiTenant } from "./plugins/multi-tenancy";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -264,9 +263,6 @@ function getInternalPlugins(options: BetterAuthOptions) {
 		//TODO: add internal plugin
 	}
 
-	if (options.multiTenancy?.enabled) {
-		plugins.push(multiTenant());
-	}
 	return plugins;
 }
 
