@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getAuthTables } from "../../db/get-tables";
-import { organization } from "../organization";
-import type { BetterAuthOptions } from "../../types";
+import { getAuthTables } from "../db/get-tables";
+import { organization } from "../plugins/organization";
+import type { BetterAuthOptions } from "../types";
 
 describe("multi-tenancy schema generation", () => {
 	it("should add tenantId to all tables when multi-tenancy is enabled", () => {
@@ -9,7 +9,6 @@ describe("multi-tenancy schema generation", () => {
 			database: {} as any,
 			multiTenancy: {
 				enabled: true,
-				tenantResolver: () => "tenant-1",
 			},
 		};
 
@@ -29,7 +28,6 @@ describe("multi-tenancy schema generation", () => {
 			database: {} as any,
 			multiTenancy: {
 				enabled: true,
-				tenantResolver: () => "tenant-1",
 				injectIntoSession: true,
 			},
 		};
@@ -58,7 +56,6 @@ describe("multi-tenancy schema generation", () => {
 			database: {} as any,
 			multiTenancy: {
 				enabled: true,
-				tenantResolver: () => "tenant-1",
 				tableFieldName: "tenant_id",
 				injectIntoSession: true,
 			},

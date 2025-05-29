@@ -1,23 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from "../organization";
-import { createAuthClient } from "../../client";
-import { organizationClient } from "../organization/client";
+import { getTestInstance } from "../test-utils/test-instance";
+import { organization } from "../plugins/organization";
+import { createAuthClient } from "../client";
+import { organizationClient } from "../plugins/organization/client";
 
 describe("multi-tenancy", async () => {
-	const tenantResolver = (request: Request) => {
-		const url = new URL(request.url);
-		const tenantId = url.searchParams.get("tenantId") || "tenant-1";
-		return tenantId;
-	};
-
-	const { customFetchImpl } = await getTestInstance({
-		multiTenancy: {
-			enabled: true,
-			tenantResolver,
+	const { customFetchImpl } = await getTestInstance(
+		{
+			multiTenancy: {
+				enabled: true,
+			},
+			plugins: [organization()],
 		},
-		plugins: [organization()],
-	});
+		{ disableTestUser: true },
+	);
 
 	const createTenantClient = (tenantId: string) => {
 		return createAuthClient({
@@ -25,22 +21,26 @@ describe("multi-tenancy", async () => {
 			plugins: [organizationClient()],
 			fetchOptions: {
 				customFetchImpl: async (url, init) => {
+					if (!init) {
+						init = {
+							headers: new Headers(),
+						};
+					}
+					const headers = new Headers(init.headers);
+					headers.set("x-internal-tenantid", tenantId);
+					// validInit.headers = headers;
+					init.headers = headers;
+
 					if (url instanceof Request) {
 						return customFetchImpl(url, init);
 					}
 					const urlWithTenant = new URL(url);
-					urlWithTenant.searchParams.set("tenantId", tenantId);
+
 					return customFetchImpl(urlWithTenant.toString(), init);
 				},
 			},
 		});
 	};
-
-	it("should resolve tenant from request", async () => {
-		const request = new Request("http://localhost:3000?tenantId=test-tenant");
-		const resolvedTenant = tenantResolver(request);
-		expect(resolvedTenant).toBe("test-tenant");
-	});
 
 	it("should create users with different tenantIds", async () => {
 		const tenant1Client = createTenantClient("tenant-1");

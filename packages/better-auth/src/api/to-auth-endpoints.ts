@@ -8,6 +8,7 @@ import {
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import defu from "defu";
+import { tenantAsyncStore } from "./async-context";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
@@ -46,6 +47,10 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				path: endpoint.path,
 				headers: context?.headers ? new Headers(context?.headers) : undefined,
 			};
+			// get tenantId and remove internal header
+			const tenantId = internalContext.headers?.get("x-internal-tenantid");
+			internalContext.headers?.delete("x-internal-tenantid");
+
 			const { beforeHooks, afterHooks } = getHooks(authContext);
 			const before = await runBeforeHooks(internalContext, beforeHooks);
 			/**
@@ -78,7 +83,24 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 
 			internalContext.asResponse = false;
 			internalContext.returnHeaders = true;
-			const result = (await endpoint(internalContext as any).catch((e: any) => {
+
+			let endpointPromise: Promise<any>;
+			// This is the highest place in the call chain where we have request specific data
+			// and can handle both handler() and direct .api.xyz() calls
+			// If we have multi-tenancy enabled, run the endpoint through AsyncLocalStorage
+			// to make tenantId deeply available
+			if (authContext.options.multiTenancy?.enabled) {
+				if (!tenantId) {
+					throw new Error("x-internal-tenantid is missing");
+				}
+				endpointPromise = tenantAsyncStore.run({ tenantId }, () =>
+					endpoint(internalContext as any),
+				);
+			} else {
+				endpointPromise = endpoint(internalContext as any);
+			}
+
+			const result = (await endpointPromise.catch((e: any) => {
 				if (e instanceof APIError) {
 					/**
 					 * API Errors from response are caught

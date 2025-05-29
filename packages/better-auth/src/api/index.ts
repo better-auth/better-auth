@@ -40,7 +40,6 @@ import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
-import { tenantAsyncStore } from "../plugins/multi-tenancy/async-context";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -167,15 +166,6 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					if (response && "response" in response) {
 						return response.response;
 					}
-				}
-			}
-			// It's only at this point that the multiTenant plugin has executed its onRequest
-			// and we have the ctx.tenantId.
-			// So we set the tenantId in the current async context store
-			if (ctx.tenantId) {
-				const store = tenantAsyncStore.getStore();
-				if (store) {
-					store.tenantId = ctx.tenantId;
 				}
 			}
 			return onRequestRateLimit(req, ctx);
