@@ -244,9 +244,6 @@ export const createInternalAdapter = (
 			overrideAll?: boolean,
 		) => {
 			const { tenantId } = tenantAsyncStore.getStore() || {};
-			const shouldAddTenant =
-				ctx.context.options.multiTenancy?.enabled &&
-				ctx.context.options.multiTenancy?.injectIntoSession;
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> & { tenantId?: string } = {
@@ -265,12 +262,13 @@ export const createInternalAdapter = (
 					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
 				userId,
+				...(tenantId ? { tenantId } : {}),
 				token: generateId(32),
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),
 			};
-			if (shouldAddTenant) data.tenantId = tenantId;
+
 			const res = await createWithHooks(
 				data,
 				"session",

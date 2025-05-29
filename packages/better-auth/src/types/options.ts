@@ -1013,9 +1013,5 @@ export type BetterAuthOptions = {
 		 * Name of the tenant id field, defaults to `tenantId`
 		 */
 		tableFieldName?: string;
-		/**
-		 * If true, also store tenantId in session
-		 */
-		injectIntoSession?: boolean;
 	};
 };
