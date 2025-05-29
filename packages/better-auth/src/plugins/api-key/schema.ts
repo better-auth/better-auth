@@ -6,7 +6,7 @@ export const apiKeySchema = ({
 	rateLimitMax,
 }: { timeWindow: number; rateLimitMax: number }) =>
 	({
-		apikey: {
+		apiKey: {
 			fields: {
 				/**
 				 * The name of the key.

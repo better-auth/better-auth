@@ -334,7 +334,7 @@ describe("api-key", async () => {
 			headers,
 		});
 		const res = await (await auth.$context).adapter.findOne<ApiKey>({
-			model: "apikey",
+			model: "apiKey",
 			where: [
 				{
 					field: "id",
