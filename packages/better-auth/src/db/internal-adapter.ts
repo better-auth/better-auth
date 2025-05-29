@@ -96,11 +96,13 @@ export const createInternalAdapter = (
 				Record<string, any>,
 			context?: GenericEndpointContext,
 		) => {
+			const { tenantId } = tenantAsyncStore.getStore() || {};
 			const createdAccount = await createWithHooks(
 				{
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...account,
+					tenantId,
 				},
 				"account",
 				undefined,

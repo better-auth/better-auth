@@ -35,6 +35,7 @@ export const accountSchema = z.object({
 
 export const userSchema = z.object({
 	id: z.string(),
+	tenantId: z.string().optional(),
 	email: z.string().transform((val) => val.toLowerCase()),
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
