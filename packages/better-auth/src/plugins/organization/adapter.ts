@@ -495,10 +495,11 @@ export const getOrgAdapter = (
 			if (!team) return null;
 			return {
 				...team,
-				metadata: team.metadata ? JSON.parse(team.metadata) : undefined,
+				metadata: data.metadata
+					? parseJSON<Record<string, any>>(data.metadata)
+					: undefined,
 			};
 		},
-
 		deleteTeam: async (teamId: string) => {
 			const team = await adapter.delete<Team>({
 				model: "team",

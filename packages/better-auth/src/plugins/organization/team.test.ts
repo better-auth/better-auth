@@ -213,7 +213,7 @@ describe("team", async (it) => {
 			expect(error).toBeDefined();
 		}
 	});
-	it("should create a team with metadata and update its metadata", async () => {
+	it("should create a team with metadata and update it", async () => {
 		const createTeamResponse = await client.organization.createTeam(
 			{
 				name: "QA Team",
@@ -228,5 +228,15 @@ describe("team", async (it) => {
 		expect(createTeamResponse.data?.metadata).toBeDefined();
 		expect(createTeamResponse.data?.metadata.foo).toBe("bar");
 		expect(createTeamResponse.data?.metadata.count).toBe("1");
+		const updatedTeamResponse = await client.organization.updateTeam({
+			teamId: createTeamResponse.data?.id as string,
+			data: {
+				metadata: { foo: "baz" },
+				name: "Updated QA Team",
+			},
+			fetchOptions: { headers },
+		});
+		expect(updatedTeamResponse.data?.metadata).toBeDefined();
+		expect(updatedTeamResponse.data?.metadata.foo).toBe("baz");
 	});
 });

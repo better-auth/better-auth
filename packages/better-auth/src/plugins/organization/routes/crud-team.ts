@@ -364,7 +364,10 @@ export const updateTeam = createAuthEndpoint(
 			});
 		}
 		const updatedTeam = await adapter.updateTeam(team.id, ctx.body.data);
-		return ctx.json(updatedTeam);
+		return ctx.json({
+			...updatedTeam,
+			metadata: ctx.body.data.metadata,
+		});
 	},
 );
 
