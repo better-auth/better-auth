@@ -211,6 +211,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					null;
 
 				if (activeOrganizationId && options.createOrganizationCustomer) {
+					// Find the organization
 					organization = await ctx.context.adapter.findOne<
 						Organization & { stripeCustomerId: string }
 					>({
@@ -222,6 +223,38 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							},
 						],
 					});
+
+					// If the organization doesn't have a customer, create one
+					if (organization && !organization.stripeCustomerId) {
+						const stripeCustomer = await client.customers.create(
+							{
+								email: user.email,
+								name: organization.name,
+								metadata: {
+									...ctx.body.metadata,
+									organizationId: organization.id,
+								},
+							},
+							{
+								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
+							},
+						);
+
+						organization = await ctx.context.adapter.update<
+							Organization & { stripeCustomerId: string }
+						>({
+							model: "organization",
+							update: {
+								stripeCustomerId: stripeCustomer.id,
+							},
+							where: [
+								{
+									field: "id",
+									value: organization.id,
+								},
+							],
+						});
+					}
 				}
 
 				if (
@@ -272,61 +305,32 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					try {
-						if (organization && options.createOrganizationCustomer) {
-							const stripeCustomer = await client.customers.create(
+						const stripeCustomer = await client.customers.create(
+							{
+								email: user.email,
+								name: user.name,
+								metadata: {
+									...ctx.body.metadata,
+									userId: user.id,
+								},
+							},
+							{
+								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
+							},
+						);
+						await ctx.context.adapter.update({
+							model: "user",
+							update: {
+								stripeCustomerId: stripeCustomer.id,
+							},
+							where: [
 								{
-									email: user.email,
-									name: organization.name,
-									metadata: {
-										...ctx.body.metadata,
-										organizationId: organization.id,
-									},
+									field: "id",
+									value: user.id,
 								},
-								{
-									idempotencyKey: generateRandomString(32, "a-z", "0-9"),
-								},
-							);
-							await ctx.context.adapter.update({
-								model: "organization",
-								update: {
-									stripeCustomerId: stripeCustomer.id,
-								},
-								where: [
-									{
-										field: "id",
-										value: organization.id,
-									},
-								],
-							});
-							customerId = stripeCustomer.id;
-						} else {
-							const stripeCustomer = await client.customers.create(
-								{
-									email: user.email,
-									name: user.name,
-									metadata: {
-										...ctx.body.metadata,
-										userId: user.id,
-									},
-								},
-								{
-									idempotencyKey: generateRandomString(32, "a-z", "0-9"),
-								},
-							);
-							await ctx.context.adapter.update({
-								model: "user",
-								update: {
-									stripeCustomerId: stripeCustomer.id,
-								},
-								where: [
-									{
-										field: "id",
-										value: user.id,
-									},
-								],
-							});
-							customerId = stripeCustomer.id;
-						}
+							],
+						});
+						customerId = stripeCustomer.id;
 					} catch (e: any) {
 						ctx.context.logger.error(e);
 						throw new APIError("BAD_REQUEST", {
