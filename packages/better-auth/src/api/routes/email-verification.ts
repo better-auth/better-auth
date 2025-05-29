@@ -3,7 +3,11 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
-import type { GenericEndpointContext, User } from "../../types";
+import type {
+	GenericEndpointContext,
+	InferTenantIdFromOptions,
+	User,
+} from "../../types";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
@@ -38,7 +42,7 @@ export async function createEmailVerificationToken(
  */
 export async function sendVerificationEmailFn(
 	ctx: GenericEndpointContext,
-	user: User,
+	user: User & InferTenantIdFromOptions<typeof ctx.context.options>,
 ) {
 	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 		ctx.context.logger.error("Verification email isn't enabled.");

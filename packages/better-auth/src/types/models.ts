@@ -24,13 +24,24 @@ export type Models =
 	| "passkey"
 	| "two-factor";
 
+export type InferTenantIdFromOptions<Options> = Options extends {
+	multiTenancy: {
+		enabled: infer E;
+	};
+}
+	? E extends true
+		? { tenantId: string }
+		: {}
+	: {};
+
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user", "input"> &
 		InferFieldsFromOptions<Options, "user", "input">;
 
 export type AdditionalUserFieldsOutput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user"> &
-		InferFieldsFromOptions<Options, "user">;
+		InferFieldsFromOptions<Options, "user"> &
+		InferTenantIdFromOptions<Options>;
 
 export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "session", "input"> &
@@ -38,7 +49,8 @@ export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
 
 export type AdditionalSessionFieldsOutput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "session"> &
-		InferFieldsFromOptions<Options, "session">;
+		InferFieldsFromOptions<Options, "session"> &
+		InferTenantIdFromOptions<Options>;
 
 export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 	StripEmptyObjects<

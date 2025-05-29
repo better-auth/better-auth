@@ -26,3 +26,40 @@ export function convertSetCookieToCookie(headers: Headers): Headers {
 
 	return headers;
 }
+
+/**
+ * Creates headers with tenant ID for multi-tenancy testing
+ */
+export function createHeadersWithTenantId(
+	tenantId: string,
+	additionalHeaders?: Record<string, string> | Headers
+): Headers {
+	const headers = new Headers();
+	headers.set("x-internal-tenantid", tenantId);
+
+	if (additionalHeaders) {
+		if (additionalHeaders instanceof Headers) {
+			additionalHeaders.forEach((value, name) => {
+				headers.set(name, value);
+			});
+		} else {
+			Object.entries(additionalHeaders).forEach(([key, value]) => {
+				headers.set(key, value);
+			});
+		}
+	}
+
+	return headers;
+}
+
+/**
+ * Adds tenant ID to existing headers
+ */
+export function addTenantIdToHeaders(
+	headers: Headers,
+	tenantId: string
+): Headers {
+	const newHeaders = new Headers(headers);
+	newHeaders.set("x-internal-tenantid", tenantId);
+	return newHeaders;
+}

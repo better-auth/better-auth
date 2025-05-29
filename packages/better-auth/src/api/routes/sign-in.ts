@@ -7,6 +7,7 @@ import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
+import type { InferUser } from "../../types";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -302,13 +303,16 @@ export const signInSocial = createAuthEndpoint(
 				url: undefined,
 				user: {
 					id: data.data!.user.id,
+					...((data.data!.user as any).tenantId
+						? { tenantId: (data.data!.user as any).tenantId as string }
+						: {}),
 					email: data.data!.user.email,
 					name: data.data!.user.name,
 					image: data.data!.user.image,
 					emailVerified: data.data!.user.emailVerified,
 					createdAt: data.data!.user.createdAt,
 					updatedAt: data.data!.user.updatedAt,
-				},
+				} as InferUser<typeof c.context.options>,
 			});
 		}
 
@@ -551,13 +555,16 @@ export const signInEmail = createAuthEndpoint(
 			url: ctx.body.callbackURL,
 			user: {
 				id: user.user.id,
+				...((user.user as any).tenantId
+					? { tenantId: (user.user as any).tenantId as string }
+					: {}),
 				email: user.user.email,
 				name: user.user.name,
 				image: user.user.image,
 				emailVerified: user.user.emailVerified,
 				createdAt: user.user.createdAt,
 				updatedAt: user.user.updatedAt,
-			},
+			} as InferUser<typeof ctx.context.options>,
 		});
 	},
 );
