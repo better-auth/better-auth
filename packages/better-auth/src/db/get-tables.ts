@@ -129,7 +129,7 @@ export const getAuthTables = (
 					},
 					required: true,
 				},
-				...(options.multiTenancy?.injectIntoSession ? multiTenancy : {}),
+				...(options.multiTenancy?.enabled ? multiTenancy : {}),
 				...session?.fields,
 				...options.session?.additionalFields,
 			},

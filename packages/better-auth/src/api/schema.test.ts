@@ -19,21 +19,6 @@ describe("multi-tenancy schema generation", () => {
 		expect(tables.user.fields.tenantId?.type).toBe("string");
 		expect(tables.user.fields.tenantId?.required).toBe(true);
 		expect(tables.verification.fields.tenantId).toBeDefined();
-
-		// options.multiTenancy.injectIntoSession is not true, so this should not exist
-		expect(tables.session.fields.tenantId).toBeUndefined();
-	});
-	it("should add tenantId session table when injectIntoSession is enabled", () => {
-		const options: BetterAuthOptions = {
-			database: {} as any,
-			multiTenancy: {
-				enabled: true,
-				injectIntoSession: true,
-			},
-		};
-
-		const tables = getAuthTables(options);
-
 		expect(tables.session.fields.tenantId).toBeDefined();
 	});
 
@@ -57,7 +42,6 @@ describe("multi-tenancy schema generation", () => {
 			multiTenancy: {
 				enabled: true,
 				tableFieldName: "tenant_id",
-				injectIntoSession: true,
 			},
 			plugins: [organization()],
 		};
