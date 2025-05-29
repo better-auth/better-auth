@@ -414,9 +414,15 @@ export const getOrgAdapter = (
 		createTeam: async (data: Omit<TeamInput, "id">) => {
 			const team = await adapter.create<Omit<TeamInput, "id">, Team>({
 				model: "team",
-				data,
+				data: {
+					...data,
+					metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
+				},
 			});
-			return team;
+			return {
+				...team,
+				metadata: team.metadata ? JSON.parse(team.metadata) : undefined,
+			};
 		},
 		findTeamById: async <IncludeMembers extends boolean>({
 			teamId,
@@ -469,10 +475,7 @@ export const getOrgAdapter = (
 			return team as Team &
 				(IncludeMembers extends true ? { members: Member[] } : {});
 		},
-		updateTeam: async (
-			teamId: string,
-			data: { name?: string; description?: string; status?: string },
-		) => {
+		updateTeam: async (teamId: string, data: Partial<Team>) => {
 			const team = await adapter.update<Team>({
 				model: "team",
 				where: [
@@ -483,9 +486,17 @@ export const getOrgAdapter = (
 				],
 				update: {
 					...data,
+					metadata:
+						typeof data.metadata === "object"
+							? JSON.stringify(data.metadata)
+							: data.metadata,
 				},
 			});
-			return team;
+			if (!team) return null;
+			return {
+				...team,
+				metadata: team.metadata ? JSON.parse(team.metadata) : undefined,
+			};
 		},
 
 		deleteTeam: async (teamId: string) => {

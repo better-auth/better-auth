@@ -19,6 +19,10 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			body: z.object({
 				organizationId: z.string().optional(),
 				name: z.string(),
+				metadata: z
+					.record(z.string(), z.any())
+					.or(z.string().transform((v) => JSON.parse(v)))
+					.optional(),
 			}),
 			use: [orgMiddleware],
 			metadata: {
@@ -32,37 +36,14 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 									schema: {
 										type: "object",
 										properties: {
-											id: {
-												type: "string",
-												description: "Unique identifier of the created team",
-											},
-											name: {
-												type: "string",
-												description: "Name of the team",
-											},
-											organizationId: {
-												type: "string",
-												description:
-													"ID of the organization the team belongs to",
-											},
-											createdAt: {
-												type: "string",
-												format: "date-time",
-												description: "Timestamp when the team was created",
-											},
-											updatedAt: {
-												type: "string",
-												format: "date-time",
-												description: "Timestamp when the team was last updated",
-											},
+											id: { type: "string", description: "Unique identifier of the created team" },
+											name: { type: "string", description: "Name of the team" },
+											organizationId: { type: "string", description: "ID of the organization the team belongs to" },
+											createdAt: { type: "string", format: "date-time", description: "Timestamp when the team was created" },
+											updatedAt: { type: "string", format: "date-time", description: "Timestamp when the team was last updated" },
+											metadata: { type: "object", description: "Metadata for the team" },
 										},
-										required: [
-											"id",
-											"name",
-											"organizationId",
-											"createdAt",
-											"updatedAt",
-										],
+										required: ["id", "name", "organizationId", "createdAt", "updatedAt"],
 									},
 								},
 							},
@@ -115,12 +96,12 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			const maximum =
 				typeof ctx.context.orgOptions.teams?.maximumTeams === "function"
 					? await ctx.context.orgOptions.teams?.maximumTeams(
-							{
-								organizationId,
-								session,
-							},
-							ctx.request,
-						)
+						{
+							organizationId,
+							session,
+						},
+						ctx.request,
+					)
 					: ctx.context.orgOptions.teams?.maximumTeams;
 
 			const maxTeamsReached = maximum ? existingTeams.length >= maximum : false;
@@ -135,8 +116,12 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				organizationId,
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				metadata: ctx.body.metadata,
 			});
-			return ctx.json(createdTeam);
+			return ctx.json({
+				...createdTeam,
+				metadata: ctx.body.metadata,
+			});
 		},
 	);
 
@@ -263,36 +248,14 @@ export const updateTeam = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
-										id: {
-											type: "string",
-											description: "Unique identifier of the updated team",
-										},
-										name: {
-											type: "string",
-											description: "Updated name of the team",
-										},
-										organizationId: {
-											type: "string",
-											description: "ID of the organization the team belongs to",
-										},
-										createdAt: {
-											type: "string",
-											format: "date-time",
-											description: "Timestamp when the team was created",
-										},
-										updatedAt: {
-											type: "string",
-											format: "date-time",
-											description: "Timestamp when the team was last updated",
-										},
+										id: { type: "string", description: "Unique identifier of the updated team" },
+										name: { type: "string", description: "Updated name of the team" },
+										organizationId: { type: "string", description: "ID of the organization the team belongs to" },
+										createdAt: { type: "string", format: "date-time", description: "Timestamp when the team was created" },
+										updatedAt: { type: "string", format: "date-time", description: "Timestamp when the team was last updated" },
+										metadata: { type: "object", description: "Metadata for the team" },
 									},
-									required: [
-										"id",
-										"name",
-										"organizationId",
-										"createdAt",
-										"updatedAt",
-									],
+									required: ["id", "name", "organizationId", "createdAt", "updatedAt"],
 								},
 							},
 						},
@@ -350,11 +313,7 @@ export const updateTeam = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
 			});
 		}
-
-		const updatedTeam = await adapter.updateTeam(team.id, {
-			name: ctx.body.data.name,
-		});
-
+		const updatedTeam = await adapter.updateTeam(team.id, ctx.body.data);
 		return ctx.json(updatedTeam);
 	},
 );

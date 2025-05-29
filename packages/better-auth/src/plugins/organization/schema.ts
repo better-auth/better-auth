@@ -44,6 +44,10 @@ export const teamSchema = z.object({
 	organizationId: z.string(),
 	createdAt: z.date(),
 	updatedAt: z.date().optional(),
+	metadata: z
+		.record(z.string())
+		.or(z.string().transform((v) => JSON.parse(v)))
+		.optional(),
 });
 export type Organization = z.infer<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
