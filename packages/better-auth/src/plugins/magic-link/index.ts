@@ -230,7 +230,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 								{
 									email: email,
 									emailVerified: true,
-									name: name || "",
+									name: undefined,
+								 	// ...(name != null ? { name } : {}),
+
 								},
 								ctx,
 							);
