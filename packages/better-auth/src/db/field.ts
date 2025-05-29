@@ -8,6 +8,7 @@ export type FieldType =
 	| "boolean"
 	| "date"
 	| `${"string" | "number"}[]`
+	| "decimal"
 	| Array<LiteralString>;
 
 type Primitive =
@@ -96,6 +97,16 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * It's useful to mark fields varchar instead of text.
 	 */
 	sortable?: boolean;
+	/**
+	 * The precision of the decimal field.
+	 * @default 18
+	 */
+	precision?: number;
+	/**
+	 * The scale of the decimal field.
+	 * @default 2
+	 */
+	scale?: number;
 };
 
 export type FieldAttribute<T extends FieldType = FieldType> = {
@@ -119,17 +130,19 @@ export type InferValueType<T extends FieldType> = T extends "string"
 	? string
 	: T extends "number"
 		? number
-		: T extends "boolean"
-			? boolean
-			: T extends "date"
-				? Date
-				: T extends `${infer T}[]`
-					? T extends "string"
-						? string[]
-						: number[]
-					: T extends Array<any>
-						? T[number]
-						: never;
+		: T extends "decimal"
+			? number
+			: T extends "boolean"
+				? boolean
+				: T extends "date"
+					? Date
+					: T extends `${infer T}[]`
+						? T extends "string"
+							? string[]
+							: number[]
+						: T extends Array<any>
+							? T[number]
+							: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
