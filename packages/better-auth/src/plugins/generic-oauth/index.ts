@@ -631,13 +631,19 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const mapUser = provider.mapProfileToUser
 						? await provider.mapProfileToUser(userInfo)
 						: userInfo;
-					if (!link && ctx.context.options.account?.accountLinking?.allowDifferentEmails !== true && !mapUser?.email) {
+					if (
+						!link &&
+						ctx.context.options.account?.accountLinking
+							?.allowDifferentEmails !== true &&
+						!mapUser?.email
+					) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
 						throw redirectOnError("email_is_missing");
 					}
 					if (link) {
 						if (
-							ctx.context.options.account?.accountLinking?.allowDifferentEmails !== true &&
+							ctx.context.options.account?.accountLinking
+								?.allowDifferentEmails !== true &&
 							link.email !== mapUser.email?.toLowerCase()
 						) {
 							return redirectOnError("email_doesn't_match");
