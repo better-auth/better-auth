@@ -349,7 +349,9 @@ export const getOrgAdapter = (
 
 			if (!org) return null;
 
-			const userIds = members.map((member) => member.userId);
+			const userIds = members
+				.filter((member) => !!member.userId)
+				.map((member) => member.userId);
 			const users = await adapter.findMany<User>({
 				model: "user",
 				where: [{ field: "id", value: userIds, operator: "in" }],
