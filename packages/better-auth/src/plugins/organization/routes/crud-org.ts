@@ -345,20 +345,26 @@ export const updateOrganization = createAuthEndpoint(
 					data: Omit<Organization, "id" | "createdAt">;
 			  }
 			| undefined = undefined;
-		let updates: Partial<Omit<Organization, "id" | "createdAt">> & { [key: string]: any } = {};
+		let updates: Partial<Omit<Organization, "id" | "createdAt">> & {
+			[key: string]: any;
+		} = {};
 		if (ctx.body.data.name !== undefined) updates.name = ctx.body.data.name;
 		if (ctx.body.data.slug !== undefined) updates.slug = ctx.body.data.slug;
 		if (ctx.body.data.logo !== undefined) updates.logo = ctx.body.data.logo;
-		if (ctx.body.data.metadata !== undefined) updates.metadata = ctx.body.data.metadata;
+		if (ctx.body.data.metadata !== undefined)
+			updates.metadata = ctx.body.data.metadata;
 
 		if (orgOptions.organizationUpdate?.beforeUpdate) {
-			const result = await orgOptions.organizationUpdate.beforeUpdate({
-				previous: previousOrg,
-				updates,
-				user: session.user,
-			}, ctx.request);
+			const result = await orgOptions.organizationUpdate.beforeUpdate(
+				{
+					previous: previousOrg,
+					updates,
+					user: session.user,
+				},
+				ctx.request,
+			);
 			if (result && typeof result === "object" && "data" in result) {
-				updates = { ...updates, ...result.data};
+				updates = { ...updates, ...result.data };
 				Object.keys(updates).forEach((key) => {
 					if (updates[key] === undefined) delete updates[key];
 				});
@@ -375,11 +381,14 @@ export const updateOrganization = createAuthEndpoint(
 			});
 		}
 		if (orgOptions.organizationUpdate?.afterUpdate) {
-			await orgOptions.organizationUpdate.afterUpdate({
-				previous: previousOrg,
-				updated: updatedOrg,
-				user: session.user,
-			}, ctx.request);
+			await orgOptions.organizationUpdate.afterUpdate(
+				{
+					previous: previousOrg,
+					updated: updatedOrg,
+					user: session.user,
+				},
+				ctx.request,
+			);
 		}
 
 		return ctx.json({
