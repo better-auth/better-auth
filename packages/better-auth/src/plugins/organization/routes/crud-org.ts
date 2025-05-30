@@ -333,11 +333,59 @@ export const updateOrganization = createAuthEndpoint(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 			});
 		}
+		const orgOptions = ctx.context.orgOptions;
+		const previousOrg = await adapter.findOrganizationById(organizationId);
+		if (!previousOrg) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			});
+		}
+		let hookResponse:
+			| {
+					data: Omit<Organization, "id" | "createdAt">;
+			  }
+			| undefined = undefined;
+		let updates: Partial<Omit<Organization, "id" | "createdAt">> & { [key: string]: any } = {};
+		if (ctx.body.data.name !== undefined) updates.name = ctx.body.data.name;
+		if (ctx.body.data.slug !== undefined) updates.slug = ctx.body.data.slug;
+		if (ctx.body.data.logo !== undefined) updates.logo = ctx.body.data.logo;
+		if (ctx.body.data.metadata !== undefined) updates.metadata = ctx.body.data.metadata;
+
+		if (orgOptions.organizationUpdate?.beforeUpdate) {
+			const result = await orgOptions.organizationUpdate.beforeUpdate({
+				previous: previousOrg,
+				updates,
+				user: session.user,
+			}, ctx.request);
+			if (result && typeof result === "object" && "data" in result) {
+				updates = { ...updates, ...result.data};
+				Object.keys(updates).forEach((key) => {
+					if (updates[key] === undefined) delete updates[key];
+				});
+			}
+		}
 		const updatedOrg = await adapter.updateOrganization(
 			organizationId,
-			ctx.body.data,
+			updates,
 		);
-		return ctx.json(updatedOrg);
+
+		if (!updatedOrg) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			});
+		}
+		if (orgOptions.organizationUpdate?.afterUpdate) {
+			await orgOptions.organizationUpdate.afterUpdate({
+				previous: previousOrg,
+				updated: updatedOrg,
+				user: session.user,
+			}, ctx.request);
+		}
+
+		return ctx.json({
+			...updatedOrg,
+			metadata: updatedOrg.metadata,
+		});
 	},
 );
 
