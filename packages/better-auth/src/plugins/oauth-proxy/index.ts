@@ -1,6 +1,5 @@
 import { z } from "zod";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	originCheck,
@@ -109,12 +108,13 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/callback");
+						return (
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const response = ctx.context.returned;
-						const headers =
-							response instanceof APIError ? response.headers : null;
+						const headers = ctx.context.responseHeaders;
 						const location = headers?.get("location");
 						if (location?.includes("/oauth-proxy-callback?callbackURL")) {
 							if (!location.startsWith("http")) {
@@ -155,9 +155,12 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			before: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/sign-in/social");
+						return (
+							context.path?.startsWith("/sign-in/social") ||
+							context.path?.startsWith("/sign-in/oauth2")
+						);
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						const url = new URL(
 							opts?.currentURL ||
 								ctx.request?.url ||
@@ -176,7 +179,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						return {
 							context: ctx,
 						};
-					},
+					}),
 				},
 			],
 		},

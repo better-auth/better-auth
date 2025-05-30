@@ -1,0 +1,85 @@
+---
+title: One-Time Token Plugin
+description: Generate and verify single-use token
+---
+
+The One-Time Token (OTT) plugin provides functionality to generate and verify secure, single-use session tokens. These are commonly used for across domains authentication.
+
+## Installation
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oneTimeToken } from "better-auth/plugins/one-time-token";
+
+export const auth = betterAuth({
+    plugins: [
+      oneTimeToken()
+    ]
+    // ... other auth config
+});
+```
+
+## Usage
+
+### 1. Generate a Token
+
+Generate a token using `auth.api.generateOneTimeToken` or `authClient.oneTimeToken.generate`
+
+<Tabs items={["Server", "Client"]}>
+    <Tab value="Server">
+        ```ts
+        const response = await auth.api.generateOneTimeToken({
+            headers: await headers() // pass the request headers
+        })
+        ```
+    </Tab>
+    <Tab value="Client">
+        ```ts
+        const response = await authClient.oneTimeToken.generate()
+        ```
+    </Tab>
+</Tabs>
+
+This will return a `token` that is attached to the current session which can be used to verify the one-time token. By default, the token will expire in 3 minutes.
+
+### 2. Verify the Token
+
+When the user clicks the link or submits the token, use the `auth.api.verifyOneTimeToken` or `authClient.oneTimeToken.verify` method in another API route to validate it.
+
+<Tabs items={["Server", "Client"]}>
+    <Tab value="Server">
+        ```ts
+        const token = request.query.token as string; //retrieve a token
+        const response = await auth.api.verifyOneTimeToken({
+            body: {
+                token
+            }
+        })
+        ```
+    </Tab>
+    <Tab value="Client">
+        ```ts
+        const url = window.location.href;
+        const token = url.split("token=")[1]; //retrieve a token
+        const response = await authClient.oneTimeToken.verify({
+            token
+        })
+        ```
+    </Tab>
+</Tabs>
+
+This will return the session that was attached to the token.
+
+## Options
+
+These options can be configured when adding the `oneTimeToken` plugin:
+
+*   **`disableClientRequest`** (boolean): Optional. If `true`, the token will only be generated on the server side. Default: `false`.
+*   **`expiresIn`** (number): Optional. The duration for which the token is valid in minutes. Default: `3`.
+
+```ts
+oneTimeToken({
+    expiresIn: 10 // 10 minutes
+})
+```
+* **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as paramters.

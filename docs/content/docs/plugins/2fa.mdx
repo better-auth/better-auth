@@ -67,7 +67,7 @@ This plugin offers two main methods to do a second factor verification:
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
 
-        const authClient = createAuthClient({
+        export const authClient = createAuthClient({
             plugins: [
                 twoFactorClient()
             ]
@@ -80,12 +80,13 @@ This plugin offers two main methods to do a second factor verification:
 
 ### Enabling 2FA
 
-To enable two-factor authentication, call `twoFactor.enable` with the user's password:
+To enable two-factor authentication, call `twoFactor.enable` with the user's password and issuer (optional):
 
 ```ts title="two-factor.ts"
 const { data } = await authClient.twoFactor.enable({
-    password: "password" // user password required
-})
+  password: "password", // user password required
+  issuer: "my-app-name", // Optional, defaults to the app name
+});
 ```
 
 When 2FA is enabled:
@@ -157,6 +158,16 @@ const response = await auth.api.signInEmail({
     email: "my-email@email.com",
     password: "secure-password",
     asResponse: true
+})
+```
+
+### Disabling 2FA
+
+To disable two-factor authentication, call `twoFactor.disable` with the user's password:
+
+```ts title="two-factor.ts"
+const { data } = await authClient.twoFactor.disable({
+    password: "password" // user password required
 })
 ```
 
@@ -353,7 +364,8 @@ Table: `twoFactor`
 
 <DatabaseTable
     fields={[
-        { name: "userId", type: "string", description: "The id of the user", isForeignKey: true },
+        { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
+        { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
         { name: "secret", type: "string", description: "The secret used to generate the TOTP code.", isOptional: true },
         { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email.", isOptional: true },
     ]}

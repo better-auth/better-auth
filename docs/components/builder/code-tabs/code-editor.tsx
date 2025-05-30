@@ -25,55 +25,59 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
 	};
 
 	return (
-		<div className="relative w-full">
-			<Highlight theme={theme} code={code} language={language}>
-				{({ className, style, tokens, getLineProps, getTokenProps }) => (
-					<pre
-						className={`${className} text-sm p-4 w-fit overflow-scroll  max-h-[400px] rounded-md`}
-						style={style}
-					>
-						{tokens.map((line, i) => {
-							const lineProps = getLineProps({ line, key: i });
-							return (
-								<div
-									key={i}
-									className={lineProps.className}
-									style={lineProps.style}
-								>
-									<span className="inline-block w-4 mr-3 text-gray-500 select-none">
-										{i + 1}
-									</span>
-									{line.map((token, key) => {
-										const tokenProps = getTokenProps({ token, key });
-										return (
-											<span
-												key={key}
-												className={tokenProps.className}
-												style={tokenProps.style}
-											>
-												{tokenProps.children}
+		<div className="relative">
+			<div className="dark:bg-bg-white rounded-md overflow-hidden">
+				<Highlight theme={theme} code={code} language={language}>
+					{({ className, style, tokens, getLineProps, getTokenProps }) => (
+						<div className="overflow-auto max-h-[400px]">
+							<pre
+								className={`${className} relative text-sm p-4 w-full min-w-fit rounded-md`}
+								style={style}
+							>
+								{tokens.map((line, i) => {
+									const lineProps = getLineProps({ line, key: i });
+									return (
+										<div
+											key={i}
+											className={lineProps.className}
+											style={lineProps.style}
+										>
+											<span className="inline-block w-8 pr-2 text-right mr-4 text-gray-500 select-none sticky left-0 bg-black">
+												{i + 1}
 											</span>
-										);
-									})}
-								</div>
-							);
-						})}
-					</pre>
-				)}
-			</Highlight>
-			<Button
-				variant="outline"
-				size="icon"
-				className="absolute top-2 right-2"
-				onClick={copyToClipboard}
-				aria-label="Copy code"
-			>
-				{isCopied ? (
-					<Check className="h-4 w-4" />
-				) : (
-					<Copy className="h-4 w-4" />
-				)}
-			</Button>
+											{line.map((token, key) => {
+												const tokenProps = getTokenProps({ token, key });
+												return (
+													<span
+														key={key}
+														className={tokenProps.className}
+														style={tokenProps.style}
+													>
+														{tokenProps.children}
+													</span>
+												);
+											})}
+										</div>
+									);
+								})}
+							</pre>
+						</div>
+					)}
+				</Highlight>
+				<Button
+					variant="outline"
+					size="icon"
+					className="absolute top-2 right-2"
+					onClick={copyToClipboard}
+					aria-label="Copy code"
+				>
+					{isCopied ? (
+						<Check className="h-4 w-4" />
+					) : (
+						<Copy className="h-4 w-4" />
+					)}
+				</Button>
+			</div>
 		</div>
 	);
 }

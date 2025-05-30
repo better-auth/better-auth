@@ -85,14 +85,44 @@ Once installed, you can utilize the OIDC Provider to manage authentication flows
 
 To register a new OIDC client, use the `oauth2.register` method.
 
+<Endpoint path="/oauth2/register" method="POST" />
+
 ```ts title="client.ts"
 const application = await client.oauth2.register({
     name: "My Client",
-    redirectURLs: ["https://client.example.com/callback"],
+    redirect_uris: ["https://client.example.com/callback"],
 });
 ```
 
-Once the application is created, you will receive a `clientId` and `clientSecret` that you can display to the user.
+Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
+
+This Endpoint support [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
+
+### UserInfo Endpoint
+
+The OIDC Provider includes a UserInfo endpoint that allows clients to retrieve information about the authenticated user. This endpoint is available at `/oauth2/userinfo` and requires a valid access token.
+
+<Endpoint path="/oauth2/userinfo" method="GET" />
+
+```ts title="client-app.ts"
+// Example of how a client would use the UserInfo endpoint
+const response = await fetch('https://your-domain.com/api/auth/oauth2/userinfo', {
+  headers: {
+    'Authorization': 'Bearer ACCESS_TOKEN'
+  }
+});
+
+const userInfo = await response.json();
+// userInfo contains user details based on the scopes granted
+```
+
+The UserInfo endpoint returns different claims based on the scopes that were granted during authorization:
+
+- With `openid` scope: Returns the user's ID (`sub` claim)
+- With `profile` scope: Returns name, picture, given_name, family_name
+- With `email` scope: Returns email and email_verified
+
+The `getAdditionalUserInfoClaim` function receives the user object and the requested scopes array, allowing you to conditionally include claims based on the scopes granted during authorization. These additional claims will be included in both the UserInfo endpoint response and the ID token.
 
 ### Consent Screen
 
@@ -109,6 +139,8 @@ export const auth = betterAuth({
 ```
 
 The plugin will redirect the user to the specified path with a `client_id` and `scope` query parameter. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
+
+<Endpoint path="/oauth2/consent" method="POST" />
 
 ```ts title="server.ts"
 const res = await client.oauth2.consent({
@@ -384,3 +416,4 @@ Table Name: `oauthConsent`
 
 **consentPage**: `string` - Path to the custom consent page.
 
+**getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.

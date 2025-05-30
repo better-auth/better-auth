@@ -7,7 +7,6 @@ const ogSchema = z.object({
 	mode: z.string(),
 	type: z.string(),
 });
-
 export async function GET(req: Request) {
 	try {
 		const geist = await fetch(
@@ -28,7 +27,7 @@ export async function GET(req: Request) {
 		const fontSize = trueHeading.length > 100 ? "30px" : "60px";
 		return new ImageResponse(
 			<div
-				tw="flex w-full relative flex-col p-9"
+				tw="flex w-full relative flex-col p-12"
 				style={{
 					color: paint,
 					backgroundColor: "transparent",
@@ -38,7 +37,7 @@ export async function GET(req: Request) {
 				}}
 			>
 				<div
-					tw={`relative flex flex-col w-full h-full border-2 border-[${paint}]/20 p-8}`}
+					tw={`relative flex flex-col w-full h-full border-2 border-[${paint}]/20 p-10}`}
 				>
 					<svg
 						style={{
@@ -111,9 +110,9 @@ export async function GET(req: Request) {
 							xmlns="http://www.w3.org/2000/svg"
 						>
 							<path
-								fill-rule="evenodd"
+								fillRule="evenodd"
 								stroke={paint}
-								clip-rule="evenodd"
+								clipRule="evenodd"
 								d="M0 0H15V15H30V30H15V45H0V30V15V0ZM45 30V15H30V0H45H60V15V30V45H45H30V30H45Z"
 								fill="white"
 							/>
@@ -122,7 +121,7 @@ export async function GET(req: Request) {
 							style={{ fontFamily: "GeistMono", fontWeight: "normal" }}
 							tw="relative flex mt-10 text-xl uppercase font-bold gap-2 items-center"
 						>
-							{type === "documentaiton" ? (
+							{type === "documentation" ? (
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="1.2em"

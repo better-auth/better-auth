@@ -89,6 +89,25 @@ describe("updateUser", async () => {
 			},
 		});
 		expect(session.user.email).toBe(newEmail);
+		expect(session.user.emailVerified).toBe(false);
+	});
+
+	it("should verify email", async () => {
+		await client.verifyEmail({
+			query: {
+				token: emailVerificationToken,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session.user.emailVerified).toBe(true);
 	});
 
 	it("should send email verification before update", async () => {
@@ -141,6 +160,31 @@ describe("updateUser", async () => {
 			password: testUser.password,
 		});
 		expect(signInCurrentPassword.data).toBeNull();
+	});
+
+	it("should not update password if current password is wrong", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			name: "name",
+			email: "new-email-2@email.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess: sessionSetter(newHeaders),
+			},
+		});
+		const res = await client.changePassword({
+			newPassword: "newPassword",
+			currentPassword: "wrongPassword",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(res.data).toBeNull();
+		const signInAttempt = await client.signIn.email({
+			email: "new-email-2@email.com",
+			password: "newPassword",
+		});
+		expect(signInAttempt.data).toBeNull();
 	});
 
 	it("should revoke other sessions", async () => {
@@ -223,12 +267,15 @@ describe("updateUser", async () => {
 });
 
 describe("delete user", async () => {
-	it("should delete the user", async () => {
+	it("should delete the user with a fresh session", async () => {
 		const { auth, client, signInWithTestUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
 				},
+			},
+			session: {
+				freshAge: 1000,
 			},
 		});
 		const { headers } = await signInWithTestUser();
@@ -248,9 +295,9 @@ describe("delete user", async () => {
 		expect(session.data).toBeNull();
 	});
 
-	it("should delete with verification flow", async () => {
+	it("should delete with verification flow and password", async () => {
 		let token = "";
-		const { client, signInWithTestUser } = await getTestInstance({
+		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -262,6 +309,7 @@ describe("delete user", async () => {
 		});
 		const { headers } = await signInWithTestUser();
 		const res = await client.deleteUser({
+			password: testUser.password,
 			fetchOptions: {
 				headers,
 			},

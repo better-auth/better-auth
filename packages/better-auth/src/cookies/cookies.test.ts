@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { getCookies, type BetterAuthOptions } from "../index";
+import { getCookies, getSessionCookie } from "../cookies";
+import type { BetterAuthOptions } from "../types/options";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -13,7 +14,6 @@ describe("cookies", async () => {
 			{
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
-					console;
 					expect(setCookie).toBeDefined();
 					expect(setCookie).toContain("Path=/");
 					expect(setCookie).toContain("HttpOnly");
@@ -149,5 +149,96 @@ describe("cookie configuration", () => {
 		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
 		expect(cookies.sessionData.options.sameSite).toBe("lax");
 		expect(cookies.sessionData.options.domain).toBe("example.com");
+	});
+});
+
+describe("getSessionCookie", async () => {
+	it("should return the correct session cookie", async () => {
+		const { client, testUser, signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+		const request = new Request("http://localhost:3000/api/auth/session", {
+			headers,
+		});
+		const cookies = getSessionCookie(request);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should return the correct session cookie on production", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			baseURL: "https://example.com",
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cookies = getSessionCookie(request);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should allow override cookie prefix", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			advanced: {
+				useSecureCookies: true,
+				cookiePrefix: "test-prefix",
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cookies = getSessionCookie(request, {
+			cookiePrefix: "test-prefix",
+		});
+		expect(cookies).not.toBeNull();
+	});
+
+	it("should allow override cookie name", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			advanced: {
+				useSecureCookies: true,
+				cookiePrefix: "test",
+				cookies: {
+					session_token: {
+						name: "test-session-token",
+					},
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cookies = getSessionCookie(request, {
+			cookieName: "session-token",
+			cookiePrefix: "test",
+		});
+		expect(cookies).not.toBeNull();
 	});
 });

@@ -1,0 +1,69 @@
+---
+title: Drizzle ORM Adapter
+description: Integrate Better Auth with Drizzle ORM.
+---
+
+Drizzle ORM is a powerful and flexible ORM for Node.js and TypeScript. It provides a simple and intuitive API for working with databases, and supports a wide range of databases including MySQL, PostgreSQL, SQLite, and more.
+Read more here: [Drizzle ORM](https://orm.drizzle.team/).
+
+## Example Usage
+
+Make sure you have Drizzle installed and configured.
+Then, you can use the Drizzle adapter to connect to your database.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db } from "./database.ts";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    // [!code highlight]
+    provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
+  }), // [!code highlight]
+  //... the rest of your config
+});
+```
+
+## Schema generation & migration
+
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
+
+To generate the schema required by Better Auth, run the following command:
+
+```bash title="Schema Generation"
+npx @better-auth/cli@latest generate
+```
+
+To generate and apply the migration, run the following commands:
+
+```bash title="Schema Migration"
+npx drizzle-kit generate # generate the migration file
+npx drizzle-kit migrate # apply the migration
+```
+
+## Additional Information
+
+The Drizzle adapter expects the schema you define to match the table names. For example, if your Drizzle schema maps the `user` table to `users`, you need to manually pass the schema and map it to the user table.
+
+```ts
+import { betterAuth } from "better-auth";
+import { db } from "./drizzle";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { schema } from "./schema";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "sqlite", // or "pg" or "mysql"
+    schema: {
+      ...schema,
+      user: schema.users,
+    },
+    //if all of them are just using plural form, you can just pass the option below
+    usePlural: true,
+  }),
+});
+```
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

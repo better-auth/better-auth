@@ -5,7 +5,7 @@ description: Passkey
 
 Passkeys are a secure, passwordless authentication method using cryptographic key pairs, supported by WebAuthn and FIDO2 standards in web browsers. They replace passwords with unique key pairs: a private key stored on the user’s device and a public key shared with the website. Users can log in using biometrics, PINs, or security keys, providing strong, phishing-resistant authentication without traditional passwords.
 
-The passkey plugin implementation is powered by [simple-web-authn](https://simplewebauthn.dev/) behind the scenes.
+The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplewebauthn.dev/) behind the scenes.
 
 ## Installation
 
@@ -20,8 +20,25 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
         `rpName`: Human-readable title for your website
 
-        `origin`: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do **NOT** include any trailing /
+        `origin`: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do **NOT** include any trailing /
 
+        `authenticatorSelection`: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
+            - `authenticatorAttachment`: Specifies the type of authenticator
+                - `platform`: Authenticator is attached to the platform (e.g., fingerprint reader)
+                - `cross-platform`: Authenticator is not attached to the platform (e.g., security key)
+                - Default: `not set` (both platform and cross-platform allowed, with platform preferred)
+            - `residentKey`: Determines credential storage behavior.
+                - `required`: User MUST store credentials on the authenticator (highest security)
+                - `preferred`: Encourages credential storage but not mandatory
+                - `discouraged`: No credential storage required (fastest experience)
+                - Default: `preferred`
+            - `userVerification`: Controls biometric/PIN verification during authentication:
+                - `required`: User MUST verify identity (highest security)
+                - `preferred`: Verification encouraged but not mandatory
+                - `discouraged`: No verification required (fastest experience)
+                - Default: `preferred`
+            
+           
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
         import { passkey } from "better-auth/plugins/passkey" // [!code highlight]
@@ -55,16 +72,16 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
     <Step>
         ### Add the client plugin
 
-         ```ts title="auth-client.ts"
-            import { createAuthClient } from "better-auth/client"
-            import { passkeyClient } from "better-auth/client/plugins"
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { passkeyClient } from "better-auth/client/plugins"
 
-            const authClient =  createAuthClient({
-                plugins: [ // [!code highlight]
-                    passkeyClient() // [!code highlight]
-                ] // [!code highlight]
-            })
-            ```
+        export const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                passkeyClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
     </Step>
 
 </Steps>
@@ -75,24 +92,26 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
 To add or register a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
 
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client";
-import { passkeyClient } from "better-auth/client/plugins";
-
-const authClient = createAuthClient({
-  plugins: [
-    // [!code highlight]
-    passkeyClient(), // [!code highlight]
-  ], // [!code highlight]
-});
-const data = await authClient.passkey.addPasskey();
+```ts
+// Default behavior allows both platform and cross-platform passkeys
+const { data, error } = await authClient.passkey.addPasskey();
 ```
 
 This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
 
-### Signin with a passkey
+You can also specify the type of authenticator you want to register. The `authenticatorAttachment` can be either `platform` or `cross-platform`.
 
-To signin with a passkey you can use the passkeySignIn method. This will prompt the user to sign in with their passkey.
+```ts
+// Register a cross-platform passkey showing only a QR code
+// for the user to scan as well as the option to plug in a security key
+const { data, error } = await authClient.passkey.addPasskey({
+  authenticatorAttachment: 'cross-platform'
+});
+```
+
+### Sign in with a passkey
+
+To sign in with a passkey you can use the passkeySignIn method. This will prompt the user to sign in with their passkey.
 
 Signin method accepts:
 
@@ -100,16 +119,7 @@ Signin method accepts:
 
 `callbackURL`: The URL to redirect to after the user has signed in. (optional)
 
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client";
-import { passkeyClient } from "better-auth/client/plugins";
-
-const authClient = createAuthClient({
-  plugins: [
-    // [!code highlight]
-    passkeyClient(), // [!code highlight]
-  ], // [!code highlight]
-});
+```ts
 const data = await authClient.signIn.passkey();
 ```
 
@@ -196,7 +206,7 @@ Table Name: `passkey`
         { 
             name: "userId", 
             type: "string", 
-            description: "The id of the user",
+            description: "The ID of the user",
             isForeignKey: true
         },
         {
@@ -238,4 +248,6 @@ Table Name: `passkey`
 
 **rpName**: Human-readable title for your website.
 
-**origin**: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do NOT include any trailing /.
+**origin**: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
+
+**authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. When unspecified, both platform and cross-platform authenticators are allowed with `preferred` settings for `residentKey` and `userVerification`.

@@ -1,8 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import { decodeJwt } from "jose";
 import { z } from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { BASE_ERROR_CODES } from "../../error/codes";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
@@ -10,15 +12,14 @@ import {
 	type OAuthProvider,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
-import { decodeJwt } from "jose";
-import { BASE_ERROR_CODES } from "../../error/codes";
 
 /**
  * Configuration interface for generic OAuth providers.
  */
-interface GenericOAuthConfig {
+export interface GenericOAuthConfig {
 	/** Unique identifier for the OAuth provider */
 	providerId: string;
 	/**
@@ -60,6 +61,11 @@ interface GenericOAuthConfig {
 	 * @default "code"
 	 */
 	responseType?: string;
+	/**
+	 * The response mode to use for the authorization code request.
+
+	 */
+	responseMode?: "query" | "form_post";
 	/**
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
@@ -107,6 +113,38 @@ interface GenericOAuthConfig {
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	authorizationUrlParams?: Record<string, string>;
+	/**
+	 * Disable implicit sign up for new users. When set to true for the provider,
+	 * sign-in need to be called with with requestSignUp as true to create new users.
+	 */
+	disableImplicitSignUp?: boolean;
+	/**
+	 * Disable sign up for new users.
+	 */
+	disableSignUp?: boolean;
+	/**
+	 * Authentication method for token requests.
+	 * @default "post"
+	 */
+	authentication?: "basic" | "post";
+	/**
+	 * Custom headers to include in the discovery request.
+	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
+	 */
+	discoveryHeaders?: Record<string, string>;
+	/**
+	 * Custom headers to include in the authorization request.
+	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
+	 */
+	authorizationHeaders?: Record<string, string>;
+	/**
+	 * Override user info with the provider info.
+	 *
+	 * This will update the user info with the provider info,
+	 * when the user signs in with the provider.
+	 * @default false
+	 */
+	overrideUserInfo?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -204,6 +242,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								userinfo_endpoint: string;
 							}>(c.discoveryUrl, {
 								method: "GET",
+								headers: c.discoveryHeaders,
 							});
 							if (discovery.data) {
 								finalTokenUrl = discovery.data.token_endpoint;
@@ -216,6 +255,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						return validateAuthorizationCode({
+							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
 							redirectURI: data.redirectURI,
@@ -227,10 +267,38 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
-					async getUserInfo(tokens) {
-						if (!finalUserInfoUrl) {
-							return null;
+					async refreshAccessToken(
+						refreshToken: string,
+					): Promise<OAuth2Tokens> {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+								headers: c.discoveryHeaders,
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+							}
 						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return refreshAccessToken({
+							refreshToken,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							authentication: c.authentication,
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
+
+					async getUserInfo(tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
@@ -287,6 +355,18 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "Disable redirect",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								message:
+									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
+						requestSignUp: z
+							.boolean({
+								description:
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -337,6 +417,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						prompt,
 						accessType,
 						authorizationUrlParams,
+						responseMode,
+						authentication,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -345,6 +427,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authorization_endpoint: string;
 							token_endpoint: string;
 						}>(discoveryUrl, {
+							method: "GET",
+							headers: config.discoveryHeaders,
 							onError(context) {
 								ctx.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
@@ -382,22 +466,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state,
 						codeVerifier: pkce ? codeVerifier : undefined,
-						scopes: scopes || [],
+						scopes: ctx.body.scopes
+							? [...ctx.body.scopes, ...(scopes || [])]
+							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						responseType,
+						responseMode,
+						additionalParams: authorizationUrlParams,
 					});
-
-					if (responseType && responseType !== "code") {
-						authUrl.searchParams.set("response_type", responseType);
-					}
-
-					if (prompt) {
-						authUrl.searchParams.set("prompt", prompt);
-					}
-
-					if (accessType) {
-						authUrl.searchParams.set("access_type", accessType);
-					}
-
 					return ctx.json({
 						url: authUrl.toString(),
 						redirect: !ctx.body.disableRedirect,
@@ -417,6 +495,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						error: z
 							.string({
 								description: "The error message, if any",
+							})
+							.optional(),
+						error_description: z
+							.string({
+								description: "The error description, if any",
 							})
 							.optional(),
 						state: z
@@ -449,11 +532,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					const defaultErrorURL =
+						ctx.context.options.onAPIError?.errorURL ||
+						`${ctx.context.baseURL}/error`;
 					if (ctx.query.error || !ctx.query.code) {
 						throw ctx.redirect(
-							`${ctx.context.options.baseURL}?error=${
+							`${defaultErrorURL}?error=${
 								ctx.query.error || "oAuth_code_missing"
-							}`,
+							}&error_description=${ctx.query.error_description}`,
 						);
 					}
 					const provider = options.config.find(
@@ -468,9 +554,22 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
 
-					const { callbackURL, codeVerifier, errorURL, newUserURL, link } =
-						parsedState;
+					const {
+						callbackURL,
+						codeVerifier,
+						errorURL,
+						requestSignUp,
+						newUserURL,
+						link,
+					} = parsedState;
 					const code = ctx.query.code;
+
+					function redirectOnError(error: string) {
+						const defaultErrorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.baseURL}/error`;
+						throw ctx.redirect(`${errorURL || defaultErrorURL}?error=${error}`);
+					}
 
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
@@ -480,6 +579,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							userinfo_endpoint: string;
 						}>(provider.discoveryUrl, {
 							method: "GET",
+							headers: provider.discoveryHeaders,
 						});
 						if (discovery.data) {
 							finalTokenUrl = discovery.data.token_endpoint;
@@ -493,6 +593,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						tokens = await validateAuthorizationCode({
+							headers: provider.authorizationHeaders,
 							code,
 							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
@@ -502,6 +603,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authentication: provider.authentication,
 						});
 					} catch (e) {
 						ctx.context.logger.error(
@@ -510,9 +612,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								: "",
 							e,
 						);
-						throw ctx.redirect(
-							`${errorURL}?error=oauth_code_verification_failed`,
-						);
+						throw redirectOnError("oauth_code_verification_failed");
 					}
 
 					if (!tokens) {
@@ -525,33 +625,65 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? await provider.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as User | null;
-
-					if (!userInfo?.email) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=email_is_missing`,
-						);
+					if (!userInfo) {
+						throw redirectOnError("user_info_is_missing");
 					}
-
 					const mapUser = provider.mapProfileToUser
 						? await provider.mapProfileToUser(userInfo)
-						: null;
-
+						: userInfo;
+					if (!mapUser?.email) {
+						ctx.context.logger.error("Unable to get user info", userInfo);
+						throw redirectOnError("email_is_missing");
+					}
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== userInfo.email.toLowerCase()
+							link.email !== mapUser.email.toLowerCase()
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
-						const newAccount = await ctx.context.internalAdapter.createAccount({
-							userId: link.userId,
-							providerId: provider.providerId,
-							accountId: userInfo.id,
-						});
-						if (!newAccount) {
-							return redirectOnError("unable_to_link_account");
+						const existingAccount =
+							await ctx.context.internalAdapter.findAccountByProviderId(
+								userInfo.id,
+								provider.providerId,
+							);
+						if (existingAccount) {
+							if (existingAccount.userId !== link.userId) {
+								return redirectOnError(
+									"account_already_linked_to_different_user",
+								);
+							}
+							const updateData = Object.fromEntries(
+								Object.entries({
+									accessToken: tokens.accessToken,
+									idToken: tokens.idToken,
+									refreshToken: tokens.refreshToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								}).filter(([_, value]) => value !== undefined),
+							);
+							await ctx.context.internalAdapter.updateAccount(
+								existingAccount.id,
+								updateData,
+							);
+						} else {
+							const newAccount =
+								await ctx.context.internalAdapter.createAccount({
+									userId: link.userId,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									accessToken: tokens.accessToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+									refreshToken: tokens.refreshToken,
+									idToken: tokens.idToken,
+								});
+							if (!newAccount) {
+								return redirectOnError("unable_to_link_account");
+							}
 						}
 						let toRedirectTo: string;
 						try {
@@ -574,15 +706,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						callbackURL: callbackURL,
+						disableSignUp:
+							(provider.disableImplicitSignUp && !requestSignUp) ||
+							provider.disableSignUp,
+						overrideUserInfo: provider.overrideUserInfo,
 					});
 
-					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
-					}
 					if (result.error) {
 						return redirectOnError(result.error.split(" ").join("_"));
 					}
@@ -614,20 +744,42 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						callbackURL: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Link an OAuth2 account to the current user session",
+							responses: {
+								"200": {
+									description:
+										"Authorization URL generated successfully for linking an OAuth2 account",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+														format: "uri",
+														description:
+															"The authorization URL to redirect the user to for linking the OAuth2 account",
+													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Indicates that the client should redirect to the provided URL",
+														enum: [true],
+													},
+												},
+												required: ["url", "redirect"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (c) => {
 					const session = c.context.session;
-					const account = await c.context.internalAdapter.findAccounts(
-						session.user.id,
-					);
-					const existingAccount = account.find(
-						(a) => a.providerId === c.body.providerId,
-					);
-					if (existingAccount) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
-						});
-					}
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
 					);
@@ -645,6 +797,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						discoveryUrl,
 						pkce,
 						scopes,
+						prompt,
+						accessType,
+						authorizationUrlParams,
 					} = provider;
 
 					let finalAuthUrl = authorizationUrl;
@@ -658,6 +813,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authorization_endpoint: string;
 							token_endpoint: string;
 						}>(discoveryUrl, {
+							method: "GET",
+							headers: provider.discoveryHeaders,
 							onError(context) {
 								c.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
@@ -686,13 +843,17 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							clientId,
 							clientSecret,
 							redirectURI:
-								redirectURI || `${c.context.baseURL}/oauth2/callback`,
+								redirectURI ||
+								`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state: state.state,
 						codeVerifier: pkce ? state.codeVerifier : undefined,
 						scopes: scopes || [],
 						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+						prompt,
+						accessType,
+						additionalParams: authorizationUrlParams,
 					});
 
 					return c.json({

@@ -1,5 +1,5 @@
 import type { Endpoint } from "better-call";
-import type { PrettifyDeep, UnionToIntersection } from ".";
+import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
 
 export type FilteredAPI<API> = Omit<
 	API,
@@ -36,6 +36,7 @@ export type InferSessionAPI<API> = API extends {
 								headers: Headers;
 								query?: {
 									disableCookieCache?: boolean;
+									disableRefresh?: boolean;
 								};
 								asResponse?: R;
 							}) => false extends R

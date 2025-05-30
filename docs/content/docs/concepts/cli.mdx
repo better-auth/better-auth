@@ -1,9 +1,9 @@
 ---
 title: CLI
-description: Built in CLI for managing your project.
+description: Built-in CLI for managing your project.
 ---
 
-Better Auth comes with a built-in CLI to help you manage the database schema needed for both core functionality and plugins.
+Better Auth comes with a built-in CLI to help you manage the database schemas, initialize your project, and generate a secret key for your application.
 
 ## Generate
 
@@ -16,13 +16,13 @@ npx @better-auth/cli@latest generate
 ### Options
 
 - `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
-- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
 - `--y` - Skip the confirmation prompt and generate the schema directly.
 
 
 ## Migrate
 
-The migrate command applies the Better Auth schema directly to your database. This is available if you’re using the built-in Kysely adapter.
+The migrate command applies the Better Auth schema directly to your database. This is available if you’re using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
 
 ```bash title="Terminal"
 npx @better-auth/cli@latest migrate
@@ -30,18 +30,24 @@ npx @better-auth/cli@latest migrate
 
 ### Options
 
-- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
 - `--y` - Skip the confirmation prompt and apply the schema directly.
 
+## Init
 
-## Common Issues
+The `init` command allows you to initialize Better Auth in your project.
 
-**Error: Cannot find module X**
+```bash title="Terminal"
+npx @better-auth/cli@latest init
+```
 
-If you see this error, it means the CLI can’t resolve imported modules in your Better Auth config file. We're working on a fix for many of these issues, but in the meantime, you can try the following:
+### Options
 
-- Remove any import aliases in your config file and use relative paths instead. After running the CLI, you can revert to using aliases.
-
+- `--name` - The name of your application. (Defaults to your `package.json`'s `name` property.)
+- `--framework` - The framework your codebase is using. Currently, the only supported framework is `nextjs`.
+- `--plugins` - The plugins you want to use. You can specify multiple plugins by separating them with a comma.
+- `--database` - The database you want to use. Currently, the only supported database is `sqlite`.
+- `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun`. (Defaults to the manager you used to initialize the CLI.)
 
 ## Secret
 
@@ -50,3 +56,11 @@ The CLI also provides a way to generate a secret key for your Better Auth instan
 ```bash title="Terminal"
 npx @better-auth/cli@latest secret
 ```
+
+## Common Issues
+
+**Error: Cannot find module X**
+
+If you see this error, it means the CLI can’t resolve imported modules in your Better Auth config file. We're working on a fix for many of these issues, but in the meantime, you can try the following:
+
+- Remove any import aliases in your config file and use relative paths instead. After running the CLI, you can revert to using aliases.

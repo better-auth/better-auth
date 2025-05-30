@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
-
+import { refreshAccessToken } from "../oauth2";
 export interface FacebookProfile {
 	id: string;
 	name: string;
@@ -25,15 +25,23 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	 * @default ["id", "name", "email", "picture"]
 	 */
 	fields?: string[];
+
+	/**
+	 * The config id to use when undergoing oauth
+	 */
+	configId?: string;
 }
 
 export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = scopes || ["email", "public_profile"];
+		async createAuthorizationURL({ state, scopes, redirectURI, loginHint }) {
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["email", "public_profile"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,
@@ -41,6 +49,12 @@ export const facebook = (options: FacebookOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
+				loginHint,
+				additionalParams: options.configId
+					? {
+							config_id: options.configId,
+						}
+					: {},
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -89,7 +103,20 @@ export const facebook = (options: FacebookOptions) => {
 			/* access_token */
 			return true;
 		},
-
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint:
+							"https://graph.facebook.com/v18.0/oauth/access_token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -165,5 +192,6 @@ export const facebook = (options: FacebookOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<FacebookProfile>;
 };

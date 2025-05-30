@@ -10,10 +10,14 @@ export async function handleOAuthUserInfo(
 		userInfo,
 		account,
 		callbackURL,
+		disableSignUp,
+		overrideUserInfo,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
+		disableSignUp?: boolean;
+		overrideUserInfo?: boolean;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -59,17 +63,20 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount({
-					providerId: account.providerId,
-					accountId: userInfo.id.toString(),
-					userId: dbUser.user.id,
-					accessToken: account.accessToken,
-					idToken: account.idToken,
-					refreshToken: account.refreshToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-				});
+				await c.context.internalAdapter.linkAccount(
+					{
+						providerId: account.providerId,
+						accountId: userInfo.id.toString(),
+						userId: dbUser.user.id,
+						accessToken: account.accessToken,
+						idToken: account.idToken,
+						refreshToken: account.refreshToken,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
+					},
+					c,
+				);
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
@@ -78,32 +85,54 @@ export async function handleOAuthUserInfo(
 				};
 			}
 		} else {
-			const updateData = Object.fromEntries(
-				Object.entries({
-					accessToken: account.accessToken,
-					idToken: account.idToken,
-					refreshToken: account.refreshToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-				}).filter(([_, value]) => value !== undefined),
-			);
-
-			if (Object.keys(updateData).length > 0) {
-				await c.context.internalAdapter.updateAccount(
-					hasBeenLinked.id,
-					updateData,
+			if (c.context.options.account?.updateAccountOnSignIn !== false) {
+				const updateData = Object.fromEntries(
+					Object.entries({
+						accessToken: account.accessToken,
+						idToken: account.idToken,
+						refreshToken: account.refreshToken,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
+					}).filter(([_, value]) => value !== undefined),
 				);
+
+				if (Object.keys(updateData).length > 0) {
+					await c.context.internalAdapter.updateAccount(
+						hasBeenLinked.id,
+						updateData,
+						c,
+					);
+				}
 			}
 		}
+		if (overrideUserInfo) {
+			const { id: _, ...restUserInfo } = userInfo;
+			// update user info from the provider if overrideUserInfo is true
+			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				...restUserInfo,
+				email: userInfo.email.toLowerCase(),
+				emailVerified:
+					userInfo.email.toLowerCase() === dbUser.user.email
+						? dbUser.user.emailVerified || userInfo.emailVerified
+						: userInfo.emailVerified,
+			});
+		}
 	} else {
+		if (disableSignUp) {
+			return {
+				error: "signup disabled",
+				data: null,
+				isRegister: false,
+			};
+		}
 		try {
+			const { id: _, ...restUserInfo } = userInfo;
 			user = await c.context.internalAdapter
 				.createOAuthUser(
 					{
-						...userInfo,
+						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
-						id: undefined,
 					},
 					{
 						accessToken: account.accessToken,
@@ -115,6 +144,7 @@ export async function handleOAuthUserInfo(
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 					},
+					c,
 				)
 				.then((res) => res?.user);
 			if (
@@ -162,10 +192,7 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(
-		user.id,
-		c.request,
-	);
+	const session = await c.context.internalAdapter.createSession(user.id, c);
 	if (!session) {
 		return {
 			error: "unable to create session",

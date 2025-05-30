@@ -1,0 +1,31 @@
+{
+	"compilerOptions": {
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"declarationMap": true,
+		"outDir": "dist",
+		"noEmit": false,
+		"composite": false,
+		"target": "es2022",
+		"incremental": true,
+		"moduleResolution": "Bundler",
+		"strict": true,
+		"moduleDetection": "force",
+		"module": "Preserve",
+		"skipLibCheck": true,
+		"types": ["node"],
+		"isolatedModules": true,
+		"preserveSymlinks": true,
+		"noImplicitOverride": true
+	},
+	"exclude": [
+		"node_modules",
+		"dist",
+		"**/*.test.ts",
+		"**/*.spec.ts",
+		"**/test/**/*.ts",
+		"**/test-utils/**/*.ts"
+	],
+	"references": [],
+	"include": ["src/**/*"]
+}

@@ -24,16 +24,30 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```
     </Step>
     <Step>
-        ## Install Better Auth and Expo Plugin
+        ## Install Server Dependencies
 
-        Install both the expo plugin in your server and both the Better Auth package and the Expo plugin in your Expo app.
+        Install both the Better Auth package and expo plugin into your server application.
 
         ```package-install
-        @better-auth/expo
+        @better-auth/expo better-auth
         ```
 
+    </Step>
+
+    <Step>
+        ## Install Client Dependencies
+
+        You also need to install both the Better Auth package and Expo plugin into your Expo application.
+
         ```package-install
-        better-auth
+        better-auth @better-auth/expo 
+        ```
+
+        If you plan on using our social integrations (Google, Apple etc.) then there are a few more dependencies that are required in your Expo app. In the default Expo template these are already installed so you may be able to skip this step if you have these dependencies already.
+
+        ```package-install
+        expo-linking expo-web-browser expo-constants
+        
         ```
     </Step>
     
@@ -47,9 +61,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { expo } from "@better-auth/expo";
 
         export const auth = betterAuth({
-            plugins: [
-                expo()
-            ]
+            plugins: [expo()]
         });
         ```
     </Step>
@@ -57,7 +69,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Step>
         ## Initialize Better Auth Client
         
-        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
+        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base URL of your Better Auth backend. Make sure to import the client from `/react`.
 
         You need to also import client plugin from `@better-auth/expo/client` and pass it to the `plugins` array when initializing the auth client.
 
@@ -72,7 +84,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import * as SecureStore from "expo-secure-store";
 
         export const authClient = createAuthClient({
-            baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
+            baseURL: "http://localhost:8081", /* Base URL of your Better Auth backend. */
             plugins: [
                 expoClient({
                     scheme: "myapp",
@@ -109,12 +121,34 @@ Expo is a popular framework for building cross-platform apps with React Native. 
             trustedOrigins: ["myapp://"]
         })
         ```
+
+        If you have multiple schemes or need to support deep linking with various paths, you can use specific patterns or wildcards:
+
+        ```ts title="auth.ts"
+        export const auth = betterAuth({
+            trustedOrigins: [
+                // Basic scheme
+                "myapp://", 
+                
+                // Production & staging schemes
+                "myapp-prod://",
+                "myapp-staging://",
+                
+                // Wildcard support for all paths following the scheme
+                "myapp://*"
+            ]
+        })
+        ```
+
+        <Callout>
+          The wildcard pattern can be particularly useful if your app uses different URL formats for deep linking based on features or screens.
+        </Callout>
     </Step>
  
     <Step>
         ## Configure Metro Bundler
 
-        To resolve better auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
+        To resolve Better Auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
 
         ```js title="metro.config.js"
         const { getDefaultConfig } = require("expo/metro-config");
@@ -130,16 +164,18 @@ Expo is a popular framework for building cross-platform apps with React Native. 
 
         ```ts title="babel.config.js"
         module.exports = function (api) {
+            api.cache(true);
             return {
+                presets: ["babel-preset-expo"],
                 plugins: [
                     [
                         "module-resolver",
                         {
                             alias: {
-                                "better-auth/react": "path/to/node_modules/better-auth/dist/react.js"
-                                "@better-auth/expo/client": "path/to/node_modules/@better-auth/expo/dist/client.js",
+                                "better-auth/react": "./node_modules/better-auth/dist/client/react/index.cjs",
+                                "better-auth/client/plugins": "./node_modules/better-auth/dist/client/plugins/index.cjs",
+                                "@better-auth/expo/client": "./node_modules/@better-auth/expo/dist/client.cjs",
                             },
-                            extensions: [".js", ".jsx", ".ts", ".tsx"],
                         },
                     ],
                 ],
@@ -175,10 +211,10 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
             const [password, setPassword] = useState("");
 
             const handleLogin = async () => {
-            await authClient.signIn.email({
+                await authClient.signIn.email({
                     email,
                     password,
-            })
+                })
             };
 
             return (
@@ -243,16 +279,39 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
     </Tab>
 </Tabs>
 
+#### Social Sign-In
+
 For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL.
 
 ```tsx title="app/social-sign-in.tsx"
-
 import { Button } from "react-native";
 
 export default function App() {
     const handleLogin = async () => {
         await authClient.signIn.social({
             provider: "google",
+            callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
+        })
+    };
+    return <Button title="Login with Google" onPress={handleLogin} />;
+}
+```
+
+#### IdToken Sign-In
+
+If you want to make provider request on the mobile device and then verify the ID token on the server, you can use the `authClient.signIn.social` method with the `idToken` option.
+
+```tsx title="app/social-sign-in.tsx"
+import { Button } from "react-native";
+
+export default function App() {
+    const handleLogin = async () => {
+        await authClient.signIn.social({
+            provider: "google", // only google, apple and facebook are supported for idToken sign-in
+            idToken: {
+                token: "...", // ID token from provider
+                nonce: "...", // nonce from provider (optional)
+            }
             callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
         })
     };
@@ -271,7 +330,7 @@ import { authClient } from "@/lib/auth-client";
 export default function App() {
     const { data: session } = authClient.useSession();
 
-    return <Text>Welcome, {data.user.name}</Text>;
+    return <Text>Welcome, {session.user.name}</Text>;
 }
 ```
 
@@ -280,33 +339,7 @@ On native, the session data will be cached in SecureStore. This will allow you t
 
 ### Making Authenticated Requests to Your Server
 
-To make authenticated requests to your server that require the user's session, you have two options:
-
-1. Use the fetch client provided by Better Auth.
-2. Retrieve the session cookie from `SecureStore` and manually add it to your request headers.
-
----
-
-#### Option 1: Using the Fetch Client
-
-Better Auth provides a built-in fetch client powered by [Better Fetch](http://better-fetch.vercel.app). This client automatically includes the session cookie in the headers of your requests.
-
-```tsx
-import { authClient } from "@/lib/auth-client";
-
-const $fetch = authClient.$fetch;
-
-// Example usage
-$fetch("/api/secure-endpoint", {
-  method: "GET",
-});
-```
-
-For more details, see the [Better Fetch documentation](http://better-fetch.vercel.app/docs).
-
-#### Option 2: Adding the Cookie to Request Headers
-
-If you prefer using your own fetch client, you can retrieve the session cookie stored in the device using `authClient.getCookie` and manually add it to your request headers.
+To make authenticated requests to your server that require the user's session, you have to retrieve the session cookie from `SecureStore` and manually add it to your request headers.
 
 ```tsx
 import { authClient } from "@/lib/auth-client";

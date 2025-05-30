@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+	refreshAccessToken,
+} from "../oauth2";
 
 export interface GitlabProfile extends Record<string, any> {
 	id: number;
@@ -79,10 +83,12 @@ export const gitlab = (options: GitlabOptions) => {
 			state,
 			scopes,
 			codeVerifier,
+			loginHint,
 			redirectURI,
 		}) => {
-			const _scopes = scopes || ["read_user"];
+			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: issuerId,
 				options,
@@ -91,6 +97,7 @@ export const gitlab = (options: GitlabOptions) => {
 				state,
 				redirectURI,
 				codeVerifier,
+				loginHint,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
@@ -102,6 +109,19 @@ export const gitlab = (options: GitlabOptions) => {
 				tokenEndpoint,
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://gitlab.com/oauth/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -126,5 +146,6 @@ export const gitlab = (options: GitlabOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<GitlabProfile>;
 };

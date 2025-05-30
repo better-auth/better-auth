@@ -1,15 +1,15 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { TWO_FACTOR_ERROR_CODES } from "../two-factor/error-code";
 import { schema } from "./schema";
 import { mergeSchema } from "../../db/schema";
-
+import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
 	/**
@@ -33,19 +33,10 @@ export type UsernameOptions = {
 };
 
 function defaultUsernameValidator(username: string) {
-	return /^[a-zA-Z0-9_]+$/.test(username);
+	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
 export const username = (options?: UsernameOptions) => {
-	const ERROR_CODES = {
-		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
-		EMAIL_NOT_VERIFIED: "email not verified",
-		UNEXPECTED_ERROR: "unexpected error",
-		USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
-		USERNAME_TOO_SHORT: "username is too short",
-		USERNAME_TOO_LONG: "username is too long",
-		INVALID_USERNAME: "username is invalid",
-	};
 	return {
 		id: "username",
 		endpoints: {
@@ -78,13 +69,16 @@ export const username = (options?: UsernameOptions) => {
 											schema: {
 												type: "object",
 												properties: {
+													token: {
+														type: "string",
+														description:
+															"Session token for the authenticated session",
+													},
 													user: {
 														$ref: "#/components/schemas/User",
 													},
-													session: {
-														$ref: "#/components/schemas/Session",
-													},
 												},
+												required: ["token", "user"],
 											},
 										},
 									},
@@ -131,7 +125,9 @@ export const username = (options?: UsernameOptions) => {
 						});
 					}
 
-					const user = await ctx.context.adapter.findOne<User>({
+					const user = await ctx.context.adapter.findOne<
+						User & { username: string }
+					>({
 						model: "user",
 						where: [
 							{
@@ -141,6 +137,8 @@ export const username = (options?: UsernameOptions) => {
 						],
 					});
 					if (!user) {
+						// Hash password to prevent timing attacks from revealing valid usernames
+						// By hashing passwords for invalid usernames, we ensure consistent response times
 						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
@@ -195,7 +193,7 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.request,
+						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -203,7 +201,6 @@ export const username = (options?: UsernameOptions) => {
 							status: 500,
 							body: {
 								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-								status: 500,
 							},
 						});
 					}
@@ -218,6 +215,7 @@ export const username = (options?: UsernameOptions) => {
 							id: user.id,
 							email: user.email,
 							emailVerified: user.emailVerified,
+							username: user.username,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -237,9 +235,9 @@ export const username = (options?: UsernameOptions) => {
 							context.path === "/update-user"
 						);
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
-						if (username) {
+						if (username !== undefined && typeof username === "string") {
 							const minUsernameLength = options?.minUsernameLength || 3;
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
@@ -263,7 +261,6 @@ export const username = (options?: UsernameOptions) => {
 									message: ERROR_CODES.INVALID_USERNAME,
 								});
 							}
-
 							const user = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
@@ -279,10 +276,23 @@ export const username = (options?: UsernameOptions) => {
 								});
 							}
 						}
+					}),
+				},
+				{
+					matcher(context) {
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
 					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!ctx.body.displayUsername && ctx.body.username) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+					}),
 				},
 			],
 		},
-		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

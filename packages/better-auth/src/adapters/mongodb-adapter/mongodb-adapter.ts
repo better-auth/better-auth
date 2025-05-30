@@ -8,7 +8,8 @@ const createTransform = (options: BetterAuthOptions) => {
 	/**
 	 * if custom id gen is provided we don't want to override with object id
 	 */
-	const customIdGen = options.advanced?.generateId;
+	const customIdGen =
+		options.advanced?.database?.generateId || options.advanced?.generateId;
 
 	function serializeID(field: string, value: any, model: string) {
 		if (customIdGen) {
@@ -267,6 +268,13 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 				);
 			const res = await cursor.toArray();
 			return res.map((r) => transform.transformOutput(r, model));
+		},
+		async count(data) {
+			const { model } = data;
+			const res = await db
+				.collection(transform.getModelName(model))
+				.countDocuments();
+			return res;
 		},
 		async update(data) {
 			const { model, where, update: values } = data;

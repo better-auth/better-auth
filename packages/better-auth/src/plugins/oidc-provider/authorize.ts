@@ -44,6 +44,8 @@ export async function authorize(
 			ctx.context.secret,
 			{
 				maxAge: 600,
+				path: "/",
+				sameSite: "lax",
 			},
 		);
 		const queryFromURL = ctx.request.url?.split("?")[1];
@@ -141,6 +143,10 @@ export async function authorize(
 		);
 	}
 
+	if (!query.code_challenge_method) {
+		query.code_challenge_method = "plain";
+	}
+
 	if (
 		![
 			"s256",
@@ -163,34 +169,37 @@ export async function authorize(
 		/**
 		 * Save the code in the database
 		 */
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: JSON.stringify({
-				clientId: client.clientId,
-				redirectURI: query.redirect_uri,
-				scope: requestScope,
-				userId: session.user.id,
-				authTime: session.session.createdAt.getTime(),
-				/**
-				 * If the prompt is set to `consent`, then we need
-				 * to require the user to consent to the scopes.
-				 *
-				 * This means the code now needs to be treated as a
-				 * consent request.
-				 *
-				 * once the user consents, teh code will be updated
-				 * with the actual code. This is to prevent the
-				 * client from using the code before the user
-				 * consents.
-				 */
-				requireConsent: query.prompt === "consent",
-				state: query.prompt === "consent" ? query.state : null,
-				codeChallenge: query.code_challenge,
-				codeChallengeMethod: query.code_challenge_method,
-				nonce: query.nonce,
-			}),
-			identifier: code,
-			expiresAt,
-		});
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: JSON.stringify({
+					clientId: client.clientId,
+					redirectURI: query.redirect_uri,
+					scope: requestScope,
+					userId: session.user.id,
+					authTime: session.session.createdAt.getTime(),
+					/**
+					 * If the prompt is set to `consent`, then we need
+					 * to require the user to consent to the scopes.
+					 *
+					 * This means the code now needs to be treated as a
+					 * consent request.
+					 *
+					 * once the user consents, the code will be updated
+					 * with the actual code. This is to prevent the
+					 * client from using the code before the user
+					 * consents.
+					 */
+					requireConsent: query.prompt === "consent",
+					state: query.prompt === "consent" ? query.state : null,
+					codeChallenge: query.code_challenge,
+					codeChallengeMethod: query.code_challenge_method,
+					nonce: query.nonce,
+				}),
+				identifier: code,
+				expiresAt,
+			},
+			ctx,
+		);
 	} catch (e) {
 		throw ctx.redirect(
 			redirectErrorURL(
@@ -234,6 +243,8 @@ export async function authorize(
 	if (options?.consentPage) {
 		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
 			maxAge: 600,
+			path: "/",
+			sameSite: "lax",
 		});
 		const conceptURI = `${options.consentPage}?client_id=${
 			client.clientId

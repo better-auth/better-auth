@@ -9,7 +9,7 @@ import { parseJSON } from "./parser";
 export const getClientConfig = (options?: ClientOptions) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
-	const baseURL = getBaseURL(options?.baseURL);
+	const baseURL = getBaseURL(options?.baseURL, options?.basePath);
 	const pluginsFetchPlugins =
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
@@ -19,6 +19,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		jsonParser(text) {
+			if (!text) {
+				return null as any;
+			}
 			return parseJSON(text, {
 				strict: false,
 			});
@@ -61,7 +64,8 @@ export const getClientConfig = (options?: ClientOptions) => {
 					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
 					path.startsWith("/sign-up") ||
-					path === "/delete-user"
+					path === "/delete-user" ||
+					path === "/verify-email"
 				);
 			},
 		},
@@ -96,7 +100,10 @@ export const getClientConfig = (options?: ClientOptions) => {
 
 	for (const plugin of plugins) {
 		if (plugin.getActions) {
-			Object.assign(pluginsActions, plugin.getActions?.($fetch, $store));
+			Object.assign(
+				pluginsActions,
+				plugin.getActions?.($fetch, $store, options),
+			);
 		}
 	}
 	return {

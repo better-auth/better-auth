@@ -36,7 +36,14 @@ export interface BetterAuthClientPlugin {
 	/**
 	 * Custom actions
 	 */
-	getActions?: ($fetch: BetterFetch, $store: Store) => Record<string, any>;
+	getActions?: (
+		$fetch: BetterFetch,
+		$store: Store,
+		/**
+		 * better-auth client options
+		 */
+		options: ClientOptions | undefined,
+	) => Record<string, any>;
 	/**
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
@@ -63,6 +70,7 @@ export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
+	basePath?: string;
 	disableDefaultFetchPlugins?: boolean;
 }
 

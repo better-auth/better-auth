@@ -7,7 +7,7 @@
 		"resolveJsonModule": true,
 		"module": "Preserve",
 		"noEmit": true,
-		"types": ["node"],
+
 		"moduleResolution": "Bundler",
 		"moduleDetection": "force",
 		"isolatedModules": true,
@@ -22,5 +22,5 @@
 	},
 	"exclude": ["**/dist", "node_modules"],
 	"references": [],
-	"include": ["src/**/*"]
+	"include": ["src"]
 }

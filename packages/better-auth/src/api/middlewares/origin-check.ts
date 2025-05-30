@@ -23,7 +23,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		? context.trustedOrigins
 		: [
 				...context.trustedOrigins,
-				...(context.options.trustedOrigins?.(ctx.request) || []),
+				...((await context.options.trustedOrigins?.(ctx.request)) || []),
 			];
 	const usesCookies = ctx.headers?.has("cookie");
 
@@ -49,8 +49,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				matchesPattern(url, origin) ||
 				(url?.startsWith("/") &&
 					label !== "origin" &&
-					!url.includes(":") &&
-					!url.includes("//")),
+					/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)),
 		);
 		if (!isTrustedOrigin) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -71,7 +70,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 export const originCheck = (
-	getValue: (ctx: GenericEndpointContext) => string,
+	getValue: (ctx: GenericEndpointContext) => string | string[],
 ) =>
 	createAuthMiddleware(async (ctx) => {
 		if (!ctx.request) {
@@ -85,7 +84,7 @@ export const originCheck = (
 			? context.trustedOrigins
 			: [
 					...context.trustedOrigins,
-					...(context.options.trustedOrigins?.(ctx.request) || []),
+					...((await context.options.trustedOrigins?.(ctx.request)) || []),
 				];
 
 		const matchesPattern = (url: string, pattern: string): boolean => {
@@ -107,8 +106,9 @@ export const originCheck = (
 					matchesPattern(url, origin) ||
 					(url?.startsWith("/") &&
 						label !== "origin" &&
-						!url.includes(":") &&
-						!url.includes("//")),
+						/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(
+							url,
+						)),
 			);
 			if (!isTrustedOrigin) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -119,5 +119,8 @@ export const originCheck = (
 				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 			}
 		};
-		callbackURL && validateURL(callbackURL, "callbackURL");
+		const callbacks = Array.isArray(callbackURL) ? callbackURL : [callbackURL];
+		for (const url of callbacks) {
+			validateURL(url, "callbackURL");
+		}
 	});

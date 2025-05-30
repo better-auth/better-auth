@@ -31,11 +31,6 @@ const Section = ({
 
 			{crosses && (
 				<>
-					<div
-						className={`hidden absolute top-0 left-7.5 right-7.5 h-0.25 bg-[#26242C] ${
-							crossesOffset && crossesOffset
-						} pointer-events-none lg:block xl:left-16 right-16`}
-					/>
 					<SectionSvg crossesOffset={crossesOffset} />
 				</>
 			)}

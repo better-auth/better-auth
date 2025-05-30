@@ -6,7 +6,7 @@ import { kFormatter } from "@/lib/utils";
 export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 	return (
 		<div className="relative">
-			<div className="mx-auto w-full">
+			<div className="md:mx-auto w-full">
 				<div className="border border-input rounded-none overflow-hidden border-l-0 border-r-0">
 					<div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-input">
 						<div className="flex pt-5 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
@@ -14,8 +14,8 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								<div className="inline-flex dark:[border:1px_solid_rgba(255,255,255,.1)] dark:[box-shadow:0_-20px_80px_-20px_#8686f01f_inset] border rounded-full items-center justify-center p-1 w-[4.0em] h-[4.0em] mx-auto mb-4">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
-										width="2.3em"
-										height="2.3em"
+										width="4em"
+										height="4em"
 										viewBox="0 0 24 24"
 										className="my-2"
 									>
@@ -25,25 +25,25 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 										></path>
 									</svg>
 								</div>
-								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b from-stone-200 via-stone-400 to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									Discord
 								</span>
 							</div>
 
-							<div className="flex items-end w-full gap-2 mt-4 text-gray-400">
+							<div className="flex items-end  w-full gap-2 mt-4 text-gray-400">
 								<Link
 									className="w-full"
-									href="https://discord.gg/Mh3DaacaFs"
+									href="https://discord.gg/better-auth"
 									target="_blank"
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
-										<span className="uppercase font-mono">
+										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Our Discord
 										</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
 									</Button>
 								</Link>
 							</div>
@@ -51,8 +51,8 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 
 						<div className="flex pt-5 w-full dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
 							<div className="relative p-3">
-								<span className="text-[70px] tracking-tighter font-bold font-mono bg-gradient-to-b from-stone-200 via-stone-400 to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
-									{parseInt(kFormatter(npmDownloads) as string)}k+
+								<span className="text-[70px] tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
+									{kFormatter(npmDownloads) as string}
 								</span>
 							</div>
 							<div className="flex -p-8 items-end w-full gap-2 mt-4 text-gray-400">
@@ -63,7 +63,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -80,20 +80,23 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 												d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
 											></path>
 										</svg>
-										<span className="uppercase font-mono">Downloads</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
+
+										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
+											Downloads
+										</span>
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
 									</Button>
 								</Link>
 							</div>
 						</div>
 
-						<div className="flex pt-5 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-center">
+						<div className="flex pt-5 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
 							<div className="relative flex flex-col p-3">
 								<div className="inline-flex dark:[border:1px_solid_rgba(255,255,255,.1)] dark:[box-shadow:0_-20px_80px_-20px_#8686f01f_inset] border rounded-full items-center justify-center p-1 w-[4.0em] h-[4.0em] mx-auto mb-4">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
-										width="2.3em"
-										height="2.3em"
+										width="4em"
+										height="4em"
 										viewBox="0 0 24 24"
 										className="my-2"
 									>
@@ -107,7 +110,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 										></path>
 									</svg>
 								</div>
-								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b from-stone-200 via-stone-400 to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									Reddit
 								</span>
 							</div>
@@ -119,10 +122,12 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
-										<span className="uppercase font-mono">Join Subreddit</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
+										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
+											Join Subreddit
+										</span>
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
 									</Button>
 								</Link>
 							</div>

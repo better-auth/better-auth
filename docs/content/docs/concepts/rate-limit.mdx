@@ -8,6 +8,10 @@ Better Auth includes a built-in rate limiter to help manage traffic and prevent 
 - Window: 60 seconds
 - Max Requests: 100 requests
 
+<Callout type="warning">
+Server-side requests made using `auth.api` aren't affected by rate limiting. Rate limits only apply to client-initiated requests.
+</Callout>
+
 You can easily customize these settings by passing the rateLimit object to the betterAuth function.
 
 ```ts title="auth.ts"
@@ -17,6 +21,17 @@ export const auth = betterAuth({
     rateLimit: {
         window: 10, // time window in seconds
         max: 100, // max requests in the window
+    },
+})
+```
+
+Rate limiting is disabled in development mode by default. In order to enable it, set `enabled` to `true`:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    rateLimit: {
+        enabled: true,
+        //...other options
     },
 })
 ```
@@ -146,7 +161,7 @@ To handle rate limit errors on the client side, you can manage them either globa
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 
-export const authClient =  createAuthClient({
+export const authClient = createAuthClient({
     fetchOptions: {
         onError: async (context) => {
             const { response } = context;
@@ -163,7 +178,7 @@ export const authClient =  createAuthClient({
 **Per Request Handling**
 
 ```ts title="auth-client.ts"
-import { client } from "./client";
+import { authClient } from "./auth-client";
 
 await authClient.signIn.email({
     fetchOptions: {
@@ -187,10 +202,15 @@ Table Name: `rateLimit`
 <DatabaseTable
     fields={[
         { 
+        name: "id", 
+        type: "string", 
+        description: "Database ID",
+        isPrimaryKey: true
+        },
+        { 
         name: "key", 
         type: "string", 
         description: "Unique identifier for each rate limit key",
-        isPrimaryKey: true
         },
         { 
         name: "count", 

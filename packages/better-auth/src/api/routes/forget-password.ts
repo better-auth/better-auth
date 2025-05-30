@@ -72,6 +72,9 @@ export const forgetPassword = createAuthEndpoint(
 										status: {
 											type: "boolean",
 										},
+										message: {
+											type: "string",
+										},
 									},
 								},
 							},
@@ -84,7 +87,7 @@ export const forgetPassword = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
 			ctx.context.logger.error(
-				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPasswordToken function in your auth config!",
+				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!",
 			);
 			throw new APIError("BAD_REQUEST", {
 				message: "Reset password isn't enabled",
@@ -97,18 +100,11 @@ export const forgetPassword = createAuthEndpoint(
 		});
 		if (!user) {
 			ctx.context.logger.error("Reset Password: User not found", { email });
-			//only on the server status is false for the client it's always true
-			//to avoid leaking information
-			return ctx.json(
-				{
-					status: false,
-				},
-				{
-					body: {
-						status: true,
-					},
-				},
-			);
+			return ctx.json({
+				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
+			});
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
 		const expiresAt = getDate(
@@ -117,12 +113,16 @@ export const forgetPassword = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id.toString(),
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			},
+			ctx,
+		);
+		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			{
 				user: user.user,
@@ -266,23 +266,37 @@ export const resetPassword = createAuthEndpoint(
 				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		const account = accounts.find((ac) => ac.providerId === "credential");
 		if (!account) {
-			await ctx.context.internalAdapter.createAccount({
-				userId,
-				providerId: "credential",
-				password: hashedPassword,
-				accountId: userId,
-			});
+			await ctx.context.internalAdapter.createAccount(
+				{
+					userId,
+					providerId: "credential",
+					password: hashedPassword,
+					accountId: userId,
+				},
+				ctx,
+			);
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verification.id,
+			);
+
 			return ctx.json({
 				status: true,
 			});
 		}
-		await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
+		await ctx.context.internalAdapter.updatePassword(
+			userId,
+			hashedPassword,
+			ctx,
+		);
+		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
+			await ctx.context.internalAdapter.deleteSessions(userId);
+		}
 		return ctx.json({
 			status: true,
 		});
