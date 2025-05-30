@@ -1,5 +1,5 @@
 ---
-title: Authenticating MCP servers
+title: Authenicating MCP servers
 description: A deep dive into how to implement MCP auth with Better Auth & Vercel MCP adapter
 date: 2025-05-19
 image: /images/blogs/mcp-auth.png
@@ -17,7 +17,7 @@ tags:
 
 ## Introduction
 
-[MCP](https://modelcontextprotocol.io) is an open protocol that standardizes how applications provide context to LLMs. It provides a standardized way to connect AI models to different data sources and tools. It's been sometime since the MCP spec by Anthropic become a standard for building LLM-based apps.
+[MCP](https://modelcontextprotocol.io) is an open protocol that standardizes how applications provide context to LLMs. It provides a standardized way to connect AI models to different data sources and tools. It's been sometime since the MCP spec by anthropic become a standard for building LLM based apps.
 
 The protocol covers both client and server implementations. When you make a server for MCP clients to connect to, one of the requirements is to have a proper way to authenticate and authorize them. The MCP spec recommends using [OAuth 2.0](https://oauth.net/2/) for this purpose with some additional requirements.
 
