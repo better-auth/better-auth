@@ -85,15 +85,15 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					const { password, issuer } = ctx.body;
-					const isPasswordValid = await validatePassword(ctx, {
-						password,
-						userId: user.id,
-					});
 					if (!password || password.length < 8) {
 						throw new APIError("BAD_REQUEST", {
 							message: "Password must be at least 8 characters",
 						});
 					}
+					const isPasswordValid = await validatePassword(ctx, {
+						password,
+						userId: user.id,
+					});
 					if (!isPasswordValid) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_PASSWORD,
