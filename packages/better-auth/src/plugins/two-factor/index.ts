@@ -250,7 +250,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 			),
 		},
-		options: options,
+		options: options ?? {},
 		hooks: {
 			after: [
 				{
