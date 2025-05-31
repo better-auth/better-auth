@@ -61,7 +61,9 @@ The Generic OAuth plugin provides endpoints for initiating the OAuth flow and ha
 
 ### Initiate OAuth Sign-In
 
-To start the OAuth sign-in process:```ts title="sign-in.ts"
+To start the OAuth sign-in process:
+
+```ts title="sign-in.ts"
 const response = await authClient.signIn.oauth2({
   providerId: "provider-id",
   callbackURL: "/dashboard" // the path to redirect to after the user is authenticated
