@@ -272,7 +272,7 @@ export function verifyApiKey({
 			};
 			if ("metadata" in returningApiKey) {
 				returningApiKey.metadata =
-					schema.apikey.fields.metadata.transform.output(
+					schema.apiKey.fields.metadata.transform.output(
 						returningApiKey.metadata as never as string,
 					);
 			}
