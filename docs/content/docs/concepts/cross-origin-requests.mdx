@@ -1,0 +1,121 @@
+---
+title: Cross-Origin Requests and Credentials
+---
+
+# Cross-Origin Requests and Credentials
+
+When making requests between different origins (domains), Better Auth requires proper configuration to handle credentials (like cookies) correctly. This is especially important when using the client-side `authClient` and server-side `auth.api` together.
+
+## Common Issues
+
+1. **Missing Cookies in Server Requests**
+   When making requests from the client to your server endpoints, cookies might not be sent automatically. This can lead to unauthorized requests even when the user is logged in.
+
+2. **JWT Token Mismatch**
+   The client-side `authClient` and server-side `auth.api` use different methods to verify sessions:
+   ```typescript
+   // Client-side
+   const session = await authClient.getSession();
+
+   // Server-side
+   const session = await auth.api.getSession({ headers: request.headers });
+   ```
+
+## Solution
+
+### 1. Enable CORS
+
+Ensure your server has proper CORS configuration to allow credentials:
+
+```typescript
+// Example with Express
+app.use(cors({
+    origin: "http://your-frontend-domain.com",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}));
+```
+
+### 2. Configure Trusted Origins
+
+Add your frontend domain to the `trustedOrigins` in your Better Auth configuration:
+
+```typescript
+export const auth = betterAuth({
+    trustedOrigins: ["http://your-frontend-domain.com"],
+});
+```
+
+### 3. Set Cookie Attributes
+
+Configure your cookies to work across origins:
+
+```typescript
+export const auth = betterAuth({
+    advanced: {
+        defaultCookieAttributes: {
+            secure: true,
+            httpOnly: true,
+            sameSite: "none",  // Allows CORS-based cookie sharing
+            partitioned: true, // New browser standards will mandate this for foreign cookies
+        },
+    },
+});
+```
+
+### 4. Use Proper Headers
+
+When making requests from your frontend to your server:
+
+```typescript
+// Using fetch
+await fetch('/api/your-endpoint', {
+    credentials: 'include',
+    headers: {
+        'Content-Type': 'application/json'
+    }
+});
+
+// Using axios
+axios.defaults.withCredentials = true;
+```
+
+## Important Notes
+
+1. **Security Warning**: Setting `sameSite: "none"` makes you vulnerable to CSRF attacks. Always configure `trustedOrigins` with an array of authorized origins.
+
+2. **Cookie Configuration**: The `partitioned` attribute is required for modern browsers to properly handle foreign cookies in cross-origin requests.
+
+3. **Session Handling**: Always use `credentials: 'include'` when making requests to endpoints that require authentication.
+
+4. **Development**: In development, ensure your frontend and backend domains are properly configured in your CORS settings.
+
+## Example Configuration
+
+Here's a complete example configuration for a frontend application running on `http://localhost:3000` and a backend on `http://localhost:3001`:
+
+```typescript
+// auth.ts
+export const auth = betterAuth({
+    trustedOrigins: ["http://localhost:3000"],
+    advanced: {
+        defaultCookieAttributes: {
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            partitioned: true,
+        },
+    },
+});
+
+// server.ts
+app.use(cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}));
+```
+
+This configuration ensures proper handling of cross-origin requests while maintaining security best practices.
