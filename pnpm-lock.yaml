@@ -77,7 +77,7 @@ importers:
         version: 0.12.0
       '@libsql/kysely-libsql':
         specifier: ^0.4.1
-        version: 0.4.1(kysely@0.27.6)
+        version: 0.4.1(kysely@0.28.2)
       '@number-flow/react':
         specifier: ^0.5.5
         version: 0.5.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -226,8 +226,8 @@ importers:
         specifier: ^1.4.1
         version: 1.4.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       kysely:
-        specifier: ^0.27.4
-        version: 0.27.6
+        specifier: ^0.28.2
+        version: 0.28.2
       lucide-react:
         specifier: ^0.477.0
         version: 0.477.0(react@19.1.0)
@@ -1474,7 +1474,7 @@ importers:
         specifier: ^5.9.6
         version: 5.10.0
       kysely:
-        specifier: ^0.28.1
+        specifier: ^0.28.2
         version: 0.28.2
       nanostores:
         specifier: ^0.11.3
@@ -14026,10 +14026,6 @@ packages:
   kuler@2.0.0:
     resolution: {integrity: sha512-Xq9nH7KlWZmXAtodXDDRE7vs6DU1gTU8zYDHDiWLSip45Egwq3plLHzPn27NgvzL2r1LMPC1vdqh98sQxtqj4A==}
 
-  kysely@0.27.6:
-    resolution: {integrity: sha512-FIyV/64EkKhJmjgC0g2hygpBv5RNWVPyNCqSAD7eTCv6eFWNIi4PN1UvdSJGicN/o35bnevgis4Y0UDC0qi8jQ==}
-    engines: {node: '>=14.0.0'}
-
   kysely@0.28.2:
     resolution: {integrity: sha512-4YAVLoF0Sf0UTqlhgQMFU9iQECdah7n+13ANkiuVfRvlK+uI0Etbgd7bVP36dKlG+NXWbhGua8vnGt+sdhvT7A==}
     engines: {node: '>=18.0.0'}
@@ -23014,10 +23010,10 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@libsql/kysely-libsql@0.4.1(kysely@0.27.6)':
+  '@libsql/kysely-libsql@0.4.1(kysely@0.28.2)':
     dependencies:
       '@libsql/client': 0.8.1
-      kysely: 0.27.6
+      kysely: 0.28.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -30097,7 +30093,7 @@ snapshots:
       '@babel/plugin-syntax-typescript': 7.27.1(@babel/core@7.27.4)
       '@vanilla-extract/babel-plugin-debug-ids': 1.2.0
       '@vanilla-extract/css': 1.17.2(babel-plugin-macros@3.1.0)
-      esbuild: 0.17.6
+      esbuild: 0.19.12
       eval: 0.1.8
       find-up: 5.0.0
       javascript-stringify: 2.1.0
@@ -36525,8 +36521,6 @@ snapshots:
       - supports-color
 
   kuler@2.0.0: {}
-
-  kysely@0.27.6: {}
 
   kysely@0.28.2: {}
 

@@ -664,7 +664,7 @@
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
-    "kysely": "^0.28.1",
+    "kysely": "^0.28.2",
     "nanostores": "^0.11.3",
     "zod": "^3.24.1"
   },
