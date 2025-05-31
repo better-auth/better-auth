@@ -3,6 +3,7 @@
   "author": "Bereket Engida",
   "version": "1.2.9-beta.6",
   "main": "dist/index.cjs",
+  "types": "dist/index.d.ts",
   "license": "MIT",
   "keywords": [
     "stripe",
