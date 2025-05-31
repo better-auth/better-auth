@@ -360,7 +360,9 @@ export default function UserCard(props: {
 											</Label>
 											<Input
 												value={twoFaPassword}
-												onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTwoFaPassword(e.target.value)}
+												onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+													setTwoFaPassword(e.target.value)
+												}
 												placeholder="Enter OTP"
 											/>
 										</div>
@@ -371,7 +373,9 @@ export default function UserCard(props: {
 												id="password"
 												placeholder="Password"
 												value={twoFaPassword}
-												onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTwoFaPassword(e.target.value)}
+												onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+													setTwoFaPassword(e.target.value)
+												}
 											/>
 										</div>
 									)}
