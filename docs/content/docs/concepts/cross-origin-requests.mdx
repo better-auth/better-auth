@@ -11,7 +11,7 @@ When making requests between different origins (domains), Better Auth requires p
 1. **Missing Cookies in Server Requests**
    When making requests from the client to your server endpoints, cookies might not be sent automatically. This can lead to unauthorized requests even when the user is logged in.
 
-2. **JWT Token Mismatch**
+2. **Session Verification Methods**
    The client-side `authClient` and server-side `auth.api` use different methods to verify sessions:
    ```typescript
    // Client-side
