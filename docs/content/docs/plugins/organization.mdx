@@ -845,7 +845,7 @@ const canCreateProjectAndCreateSale = await authClient.organization.hasPermissio
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
 
 ```ts title="auth-client.ts"
-const canCreateProject = await authClient.organization.checkRolePermission({
+const canCreateProject = authClient.organization.checkRolePermission({
 	permissions: {
 		organization: ["delete"],
 	},
@@ -853,7 +853,7 @@ const canCreateProject = await authClient.organization.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndCreateSale = await authClient.organization.checkRolePermission({
+const canCreateProjectAndCreateSale = authClient.organization.checkRolePermission({
 	permissions: {
 		organization: ["delete"],
     member: ["delete"]
