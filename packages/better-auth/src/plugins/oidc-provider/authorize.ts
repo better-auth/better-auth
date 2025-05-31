@@ -14,24 +14,14 @@ export async function authorize(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,
 ) {
-	const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors"
-
-	// Helper function to handle redirects vs JSON responses based on request type
 	const handleRedirect = (url: string) => {
-
-		ctx.context.logger.info("handleRedirect", {
-			fromFetch,
-			url,
-		});
-
+		const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
 		if (fromFetch) {
-			// Return JSON response for API calls (like authClient.signIn.email)
 			return ctx.json({
 				redirect: true,
 				url,
 			});
 		} else {
-			// Use regular redirect for browser navigation
 			throw ctx.redirect(url);
 		}
 	};
@@ -237,7 +227,7 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
-        return handleRedirect(redirectURIWithCode.toString());	
+		return handleRedirect(redirectURIWithCode.toString());
 	}
 
 	const hasAlreadyConsented = await ctx.context.adapter
@@ -271,7 +261,7 @@ export async function authorize(
 		const consentURI = `${options.consentPage}?client_id=${
 			client.clientId
 		}&scope=${requestScope.join(" ")}`;
-		
+
 		return handleRedirect(consentURI);
 	}
 	const htmlFn = options?.getConsentHTML;
