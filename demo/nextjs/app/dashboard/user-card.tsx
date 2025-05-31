@@ -77,6 +77,9 @@ export default function UserCard(props: {
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
+	const [activeSessions, setActiveSessions] = useState(props.activeSessions);
+	const removeActiveSession = (id: string) =>
+		setActiveSessions(activeSessions.filter((session) => session.id !== id));
 	const { data: subscription } = useQuery({
 		queryKey: ["subscriptions"],
 		initialData: props.subscription ? props.subscription : null,
@@ -89,6 +92,7 @@ export default function UserCard(props: {
 			return res.length ? res[0] : null;
 		},
 	});
+
 	return (
 		<Card>
 			<CardHeader>
@@ -192,7 +196,7 @@ export default function UserCard(props: {
 
 				<div className="border-l-2 px-2 w-max gap-1 flex flex-col">
 					<p className="text-xs font-medium ">Active Sessions</p>
-					{props.activeSessions
+					{activeSessions
 						.filter((session) => session.userAgent)
 						.map((session) => {
 							return (
@@ -218,8 +222,10 @@ export default function UserCard(props: {
 													toast.error(res.error.message);
 												} else {
 													toast.success("Session terminated successfully");
+													removeActiveSession(session.id);
 												}
-												router.refresh();
+												if (session.id === props.session?.session.id)
+													router.refresh();
 												setIsTerminating(undefined);
 											}}
 										>
@@ -672,7 +678,7 @@ function EditUserDialog() {
 						type="name"
 						placeholder={data?.user.name}
 						required
-						onChange={(e) => {
+						onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
 							setName(e.target.value);
 						}}
 					/>
@@ -790,7 +796,9 @@ function AddPasskey() {
 					<Input
 						id="passkey-name"
 						value={passkeyName}
-						onChange={(e) => setPasskeyName(e.target.value)}
+						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+							setPasskeyName(e.target.value)
+						}
 					/>
 				</div>
 				<DialogFooter>
@@ -912,7 +920,9 @@ function ListPasskeys() {
 							<Input
 								id="passkey-name"
 								value={passkeyName}
-								onChange={(e) => setPasskeyName(e.target.value)}
+								onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+									setPasskeyName(e.target.value)
+								}
 								placeholder="My Passkey"
 							/>
 						</div>
