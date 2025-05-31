@@ -289,7 +289,7 @@ export default function AdminDashboard() {
 										<PopoverTrigger asChild>
 											<Button
 												id="expirationDate"
-												variant={"outline"}
+												variant={"outline-solid"}
 												className={cn(
 													"w-full justify-start text-left font-normal",
 													!banForm.expirationDate && "text-muted-foreground",

@@ -25,12 +25,12 @@ function Component(props: {
 		<Dialog>
 			<DialogTrigger asChild>
 				<Button
-					variant={!props.currentPlan ? "default" : "outline"}
+					variant={!props.currentPlan ? "default" : "outline-solid"}
 					size="sm"
 					className={cn(
 						"gap-2",
 						!props.currentPlan &&
-							" bg-gradient-to-br from-purple-100 to-stone-300",
+							" bg-linear-to-br from-purple-100 to-stone-300",
 					)}
 				>
 					{props.currentPlan ? (
@@ -70,7 +70,7 @@ function Component(props: {
 						value={selectedPlan}
 						onValueChange={(value) => setSelectedPlan(value)}
 					>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-xs shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
 							<RadioGroupItem
 								value="starter"
 								id={`${id}-1`}
@@ -87,7 +87,7 @@ function Component(props: {
 								</p>
 							</div>
 						</div>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-xs shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
 							<RadioGroupItem
 								value="professional"
 								id={`${id}-2`}
@@ -104,7 +104,7 @@ function Component(props: {
 								</p>
 							</div>
 						</div>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-xs shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
 							<RadioGroupItem
 								value="enterprise"
 								id={`${id}-3`}

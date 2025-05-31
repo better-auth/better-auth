@@ -314,7 +314,7 @@ export default function UserCard(props: {
 								<DialogTrigger asChild>
 									<Button
 										variant={
-											session?.user.twoFactorEnabled ? "destructive" : "outline"
+											session?.user.twoFactorEnabled ? "destructive" : "outline-solid"
 										}
 										className="gap-2"
 									>

@@ -91,6 +91,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.8",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.17.9",
     "@types/react": "^19.0.0",
@@ -101,7 +102,7 @@
     "dotenv-cli": "^7.4.4",
     "eslint-config-next": "15.0.0-canary.149",
     "postcss": "^8.4.49",
-    "tailwindcss": "3.4.16",
+    "tailwindcss": "4.1.8",
     "typescript": "^5.7.2"
   },
   "overrides": {
