@@ -11,7 +11,7 @@ const PasswordInput = ({
 	ref,
 	className,
 	...props
-}: any & {
+}:  any & {
 	ref: React.RefObject<HTMLInputElement>;
 }) => {
 	const [showPassword, setShowPassword] = React.useState(false);
