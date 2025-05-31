@@ -104,6 +104,9 @@
     "tailwindcss": "3.4.16",
     "typescript": "^5.7.2"
   },
+  "resolutions": {
+    "@types/react": "^19.0.0"
+  },
   "overrides": {
     "whatwg-url": "^14.0.0"
   }
