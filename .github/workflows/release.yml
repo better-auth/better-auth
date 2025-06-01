@@ -62,3 +62,17 @@ jobs:
         run: pnpm -r publish --access public --no-git-checks --tag ${{ steps.determine_npm_tag.outputs.npm_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Send Release To Discord
+        uses: SethCohen/github-releases-to-discord@v1.15.1
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          color: "2105893"
+          username: "Better Auth Release Bot"
+          avatar_url: "https://github.com/better-auth.png"
+          content: "New release of Better Auth has been published"
+          footer_title: "Better Auth Changelog"
+          footer_icon_url: "https://github.com/better-auth.png"
+          footer_timestamp: true
+          max_description: '4096'
+          reduce_headings: true
