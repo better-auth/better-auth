@@ -1,3 +1,4 @@
+
 import { describe, expect, it } from "vitest";
 import { createAuthEndpoint, createAuthMiddleware } from "./call";
 import { toAuthEndpoints } from "./to-auth-endpoints";
@@ -391,7 +392,7 @@ describe("disabled paths", async () => {
 	});
 
 	it("should return 404 for disabled paths", async () => {
-		const response = await client.$fetch("/okay");
+		const response = await client.$fetch("/ok");
 		expect(response.data).toEqual({ ok: true });
 		const { error } = await client.signIn.email({
 			email: "test@test.com",
