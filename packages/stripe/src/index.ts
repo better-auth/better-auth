@@ -361,6 +361,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						}
 					: undefined;
 
+				const priceId = ctx.body.annual
+					? plan.annualDiscountPriceId
+					: plan.priceId;
+				if (!priceId) {
+					ctx.context.logger.error(
+						"Price ID not found for the plan",
+						plan.name,
+					);
+					throw new APIError("INTERNAL_SERVER_ERROR");
+				}
+
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
@@ -386,22 +397,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 							line_items: [
 								{
-									price: ctx.body.annual
-										? plan.annualDiscountPriceId
-										: plan.priceId,
+									price: priceId,
 									quantity: ctx.body.seats || 1,
 								},
 							],
 							subscription_data: {
 								...freeTrail,
 							},
-							mode: "subscription",
+							mode: plan.mode || "subscription",
 							client_reference_id: referenceId,
 							...params?.params,
 							metadata: {
 								userId: user.id,
 								subscriptionId: subscription.id,
 								referenceId,
+								priceId,
 								...params?.params?.metadata,
 							},
 						},
