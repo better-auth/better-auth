@@ -400,4 +400,3 @@ describe("disabled paths", async () => {
 		expect(error?.status).toBe(404);
 	});
 });
-
