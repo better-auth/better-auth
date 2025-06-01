@@ -54,7 +54,14 @@ export default function Layout({ children }: { children: ReactNode }) {
 						<NavbarProvider>
 							<Navbar />
 							{children}
-							<Toaster />
+							<Toaster
+								toastOptions={{
+									style: {
+										borderRadius: "0px",
+										fontSize: "11px",
+									},
+								}}
+							/>
 						</NavbarProvider>
 					</RootProvider>
 					<Analytics />

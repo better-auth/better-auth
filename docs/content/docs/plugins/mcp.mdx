@@ -1,0 +1,224 @@
+---
+title: MCP
+description: MCP provider plugin for Better Auth
+---
+
+`OAuth` `MCP`
+
+The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It handles authentication and makes it easy to issue and manage access tokens for MCP applications.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the Plugin
+
+        Add the MCP plugin to your auth configuration and specify the login page path.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { mcp } from "better-auth/plugins";
+
+        export const auth = betterAuth({
+            plugins: [
+                mcp({
+                    loginPage: "/sign-in" // path to your login page
+                })
+            ]
+        });
+        ```
+        <Callout>
+            This doesn't have a client plugin, so you don't need to make any changes to your authClient.
+        </Callout>
+    </Step>
+
+    <Step>
+        ### Generate Schema
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        The MCP plugin uses the same schema as the OIDC Provider plugin. See the [OIDC Provider Schema](#schema) section for details.
+    </Step>
+</Steps>
+
+## Usage
+
+### OAuth Discovery Metadata
+
+Add a route to expose OAuth metadata for MCP clients:
+
+```ts title=".well-known/oauth-authorization-server/route.ts"
+import { oAuthDiscoveryMetadata } from "better-auth/plugins";
+import { auth } from "../../../lib/auth";
+
+export const GET = oAuthDiscoveryMetadata(auth);
+```
+
+### MCP Session Handling
+
+You can use the helper function `withMcpAuth` to get the session and handle unauthenticated calls automatically.
+
+
+```ts title="api/[transport]/route.ts"
+import { auth } from "@/lib/auth";
+import { createMcpHandler } from "@vercel/mcp-adapter";
+import { withMcpAuth } from "better-auth/plugins";
+import { z } from "zod";
+
+const handler = withMcpAuth(auth, (req, session) => {
+    // session contains the access token record with scopes and user ID
+    return createMcpHandler(
+        (server) => {
+            server.tool(
+                "echo",
+                "Echo a message",
+                { message: z.string() },
+                async ({ message }) => {
+                    return {
+                        content: [{ type: "text", text: `Tool echo: ${message}` }],
+                    };
+                },
+            );
+        },
+        {
+            capabilities: {
+                tools: {
+                    echo: {
+                        description: "Echo a message",
+                    },
+                },
+            },
+        },
+        {
+            redisUrl: process.env.REDIS_URL,
+            basePath: "/api",
+            verboseLogs: true,
+            maxDuration: 60,
+        },
+    )(req);
+});
+
+export { handler as GET, handler as POST, handler as DELETE };
+```
+
+You can also use `auth.api.getMCPSession` to get the session using the access token sent from the MCP client:
+
+```ts title="api/[transport]/route.ts"
+import { auth } from "@/lib/auth";
+import { createMcpHandler } from "@vercel/mcp-adapter";
+import { withMcpAuth } from "better-auth/plugins";
+import { z } from "zod";
+
+const handler = async (req: Request) => {
+     // session contains the access token record with scopes and user ID
+    const session = await auth.api.getMCPSession({
+        headers: req.headers
+    })
+    if(!session){
+        //this is important and you must return 401
+        return new Response(null, {
+            status: 401
+        })
+    }
+    return createMcpHandler(
+        (server) => {
+            server.tool(
+                "echo",
+                "Echo a message",
+                { message: z.string() },
+                async ({ message }) => {
+                    return {
+                        content: [{ type: "text", text: `Tool echo: ${message}` }],
+                    };
+                },
+            );
+        },
+        {
+            capabilities: {
+                tools: {
+                    echo: {
+                        description: "Echo a message",
+                    },
+                },
+            },
+        },
+        {
+            redisUrl: process.env.REDIS_URL,
+            basePath: "/api",
+            verboseLogs: true,
+            maxDuration: 60,
+        },
+    )(req);
+}
+
+export { handler as GET, handler as POST, handler as DELETE };
+```
+
+## Configuration
+
+The MCP plugin accepts the following configuration options:
+
+<TypeTable
+  type={{
+    loginPage: {
+        description: "Path to the login page where users will be redirected for authentication",
+        type: "string",
+        required: true
+    },
+    oidcConfig: {
+        description: "Optional OIDC configuration options",
+        type: "object",
+        required: false
+    }
+  }}
+/>
+
+### OIDC Configuration
+
+The plugin supports additional OIDC configuration options through the `oidcConfig` parameter:
+
+<TypeTable
+  type={{
+    codeExpiresIn: {
+        description: "Expiration time for authorization codes in seconds",
+        type: "number",
+        default: 600
+    },
+    accessTokenExpiresIn: {
+        description: "Expiration time for access tokens in seconds",
+        type: "number",
+        default: 3600
+    },
+    refreshTokenExpiresIn: {
+        description: "Expiration time for refresh tokens in seconds",
+        type: "number",
+        default: 604800
+    },
+    defaultScope: {
+        description: "Default scope for OAuth requests",
+        type: "string",
+        default: "openid"
+    },
+    scopes: {
+        description: "Additional scopes to support",
+        type: "string[]",
+        default: '["openid", "profile", "email", "offline_access"]'
+    }
+  }}
+/>
+
+## Schema
+
+The MCP plugin uses the same schema as the OIDC Provider plugin. See the [OIDC Provider Schema](#schema) section for details.
