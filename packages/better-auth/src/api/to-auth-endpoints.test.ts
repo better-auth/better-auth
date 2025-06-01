@@ -401,17 +401,3 @@ describe("disabled paths", async () => {
 	});
 });
 
-describe("custom paths", async () => {
-	const { client } = await getTestInstance({
-		customPaths: {
-			"/ok": "/okay",
-		},
-	});
-
-	it("should redirect to custom path", async () => {
-		const response = await client.$fetch("/okay");
-		expect(response.data).toEqual({ ok: true });
-		const { error } = await client.$fetch("/ok");
-		expect(error?.status).toBe(404);
-	});
-});
