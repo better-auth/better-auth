@@ -200,7 +200,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const subscriptionToUpdate = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
 							model: "subscription",
-							where: [{ field: "id", value: ctx.body.subscriptionId }],
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+								{
+									field: "stripeSubscriptionId",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+							],
 						})
 					: null;
 
