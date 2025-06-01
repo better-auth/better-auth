@@ -247,7 +247,7 @@ await client.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
-    subscriptionId: "sub_123", // the stripe subscription ID of the user's current plan
+    subscriptionId: "sub_123", // the Stripe subscription ID of the user's current plan
 });
 ```
 This ensures that the user only pays for the new plan, and not both.
