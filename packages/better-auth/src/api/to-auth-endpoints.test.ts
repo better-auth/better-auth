@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from "vitest";
 import { createAuthEndpoint, createAuthMiddleware } from "./call";
 import { toAuthEndpoints } from "./to-auth-endpoints";
