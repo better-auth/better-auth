@@ -9,6 +9,7 @@ The **OIDC Provider Plugin** enables you to build and manage your own OpenID Con
 
 - **Client Registration**: Register clients to authenticate with your OIDC provider.
 - **Dynamic Client Registration**: Allow clients to register dynamically.
+- **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
 - **Authorization Code Flow**: Support the Authorization Code Flow.
 - **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
 - **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
@@ -97,6 +98,42 @@ const application = await client.oauth2.register({
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
 
 This Endpoint support [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
+### Trusted Clients
+
+For first-party applications and internal services, you can configure trusted clients directly in your OIDC provider configuration. Trusted clients bypass database lookups for better performance and can optionally skip consent screens for improved user experience.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        loginPage: "/sign-in",
+        trustedClients: [
+            {
+                clientId: "internal-dashboard",
+                clientSecret: "secure-secret-here",
+                name: "Internal Dashboard",
+                type: "web",
+                redirectURLs: ["https://dashboard.company.com/auth/callback"],
+                disabled: false,
+                skipConsent: true, // Skip consent for this trusted client
+                metadata: { internal: true }
+            },
+            {
+                clientId: "mobile-app",
+                clientSecret: "mobile-secret", 
+                name: "Company Mobile App",
+                type: "native",
+                redirectURLs: ["com.company.app://auth"],
+                disabled: false,
+                skipConsent: false, // Still require consent if needed
+                metadata: {}
+            }
+        ]
+    })]
+})
+```
 
 ### UserInfo Endpoint
 
@@ -127,6 +164,8 @@ The `getAdditionalUserInfoClaim` function receives the user object and the reque
 ### Consent Screen
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.
+
+**Note**: Trusted clients with `skipConsent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -415,5 +454,7 @@ Table Name: `oauthConsent`
 **loginPage**: `string` - Path to the custom login page.
 
 **consentPage**: `string` - Path to the custom consent page.
+
+**trustedClients**: `(Client & { skipConsent?: boolean })[]` - Array of trusted clients that are configured directly in the provider options. These clients bypass database lookups and can optionally skip consent screens.
 
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.

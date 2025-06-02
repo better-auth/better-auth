@@ -3,6 +3,7 @@ import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
 import { generateRandomString } from "../../crypto";
+import { getClient } from "./index";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -79,26 +80,12 @@ export async function authorize(
 		);
 	}
 
-	const client = await ctx.context.adapter
-		.findOne<Record<string, any>>({
-			model: "oauthApplication",
-			where: [
-				{
-					field: "clientId",
-					value: ctx.query.client_id,
-				},
-			],
-		})
-		.then((res) => {
-			if (!res) {
-				return null;
-			}
-			return {
-				...res,
-				redirectURLs: res.redirectURLs.split(","),
-				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
-		});
+	const client = await getClient(
+		ctx.query.client_id,
+		ctx.context.adapter,
+		"oauthApplication",
+		options.trustedClients || [],
+	);
 	if (!client) {
 		return handleRedirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -227,6 +214,11 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
+        return handleRedirect(redirectURIWithCode.toString());	
+	}
+
+	// Check if this is a trusted client that should skip consent
+	if (client.skipConsent) {
 		return handleRedirect(redirectURIWithCode.toString());
 	}
 
