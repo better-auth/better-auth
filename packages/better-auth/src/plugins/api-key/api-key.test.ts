@@ -1442,8 +1442,26 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should get session from an API key", async () => {
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey()],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { headers: userHeaders } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+		if (!apiKey2) return;
 		const headers = new Headers();
-		headers.set("x-api-key", firstApiKey.key);
+		headers.set("x-api-key", apiKey2.key);
 
 		const session = await auth.api.getSession({
 			headers: headers,
@@ -1505,6 +1523,137 @@ describe("api-key", async () => {
 
 		expect(result.error?.status).toEqual("FORBIDDEN");
 		expect(result.error?.body?.message).toEqual(ERROR_CODES.INVALID_API_KEY);
+	});
+
+	it("should fail to get session from an API key if the key is disabled", async () => {
+		const { headers: userHeaders } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+
+		if (!apiKey2) throw new Error("API key not found");
+
+		await client.apiKey.update(
+			{
+				keyId: apiKey2.id,
+				enabled: false,
+			},
+			{ headers: userHeaders },
+		);
+
+		let result: { data: any; error: any | null } = {
+			data: null,
+			error: null,
+		};
+
+		const headers = new Headers();
+		headers.set("x-api-key", apiKey2.key);
+
+		try {
+			const session = await auth.api.getSession({
+				headers,
+			});
+
+			result.data = session;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body?.message).toEqual(ERROR_CODES.KEY_DISABLED);
+	});
+
+	it("should fail to get session from an API key if the key is expired", async () => {
+		const { headers: userHeaders } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+
+		if (!apiKey2) throw new Error("API key not found");
+
+		await client.apiKey.update(
+			{
+				keyId: apiKey2.id,
+				expiresIn: 1 * 60 * 60 * 24, //1 day
+			},
+			{ headers: userHeaders, throw: true, disableValidation: true },
+		);
+
+		vi.useFakeTimers();
+		// we advance to more than 1 day
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 60 * 24 + 1);
+
+		const headers = new Headers();
+		headers.set("x-api-key", apiKey2.key);
+
+		let result: { data: any; error: any | null } = {
+			data: null,
+			error: null,
+		};
+
+		try {
+			const session = await auth.api.getSession({
+				headers,
+			});
+			result.data = session;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body?.message).toEqual(ERROR_CODES.KEY_EXPIRED);
+		vi.useRealTimers();
+	});
+
+	it("should fail to get the session if the key has no remaining requests", async () => {
+		const createdApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		if (!createdApiKey) throw new Error("API key not found");
+
+		await auth.api.updateApiKey({
+			body: {
+				keyId: createdApiKey.id,
+				remaining: 1,
+				userId: user.id,
+			},
+		});
+
+		const headers = new Headers();
+		headers.set("x-api-key", createdApiKey.key);
+
+		let result: { data: any; error: any | null } = {
+			data: null,
+			error: null,
+		};
+
+		// Login once. This should work
+		const session = await auth.api.getSession({
+			headers,
+		});
+
+		expect(session).not.toBeNull();
+
+		try {
+			// Login again. This should fail
+			const session = await auth.api.getSession({
+				headers,
+			});
+			result.data = session;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body?.message).toEqual(ERROR_CODES.USAGE_EXCEEDED);
+		expect(result.error?.body?.code).toEqual("USAGE_EXCEEDED");
 	});
 
 	it("should still work if the key headers was an array", async () => {

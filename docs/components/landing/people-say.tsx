@@ -109,7 +109,7 @@ holy sh** is it good, works so nice with typescript + drizzle`,
 		description:
 			"i have been using better-auth for exon todo and it is like so fast, I set it up once and it just works",
 		link: "https://x.com/ryandavogel/status/1914789770451964150",
-		avatar: "/people-say/ryan-vogEL.jpg",
+		avatar: "/people-say/ryan-vogel.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
