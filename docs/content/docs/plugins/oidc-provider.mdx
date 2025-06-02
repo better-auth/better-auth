@@ -457,4 +457,5 @@ Table Name: `oauthConsent`
 
 **trustedClients**: `(Client & { skipConsent?: boolean })[]` - Array of trusted clients that are configured directly in the provider options. These clients bypass database lookups and can optionally skip consent screens.
 
+
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.

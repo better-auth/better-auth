@@ -55,7 +55,7 @@ export async function getClient(
 			}
 			return {
 				...res,
-				redirectURLs: res.redirectURLs.split(","),
+				redirectURLs: (res.redirectURLs ?? "").split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});

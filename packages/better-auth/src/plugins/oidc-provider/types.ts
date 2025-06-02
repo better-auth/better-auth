@@ -125,7 +125,7 @@ export interface OIDCOptions {
 	 * Trusted clients that are configured directly in the provider options.
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
-	trustedClients?: (Client & { skipConsent?: boolean })[];
+	trustedClients?: Client[];
 }
 
 export interface AuthorizationQuery {
