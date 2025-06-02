@@ -76,7 +76,7 @@ export const facebook = (options: FacebookOptions) => {
 
 			/* limited login */
 			// check is limited token
-			if (token.split(".")[1]) {
+			if (token.split(".").length === 3) {
 				try {
 					const { payload: jwtClaims } = await jwtVerify(
 						token,
@@ -122,7 +122,7 @@ export const facebook = (options: FacebookOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			if (token.idToken && token.idToken.split(".")[1]) {
+			if (token.idToken && token.idToken.split(".").length === 3) {
 				const profile = decodeJwt(token.idToken) as {
 					sub: string;
 					email: string;
