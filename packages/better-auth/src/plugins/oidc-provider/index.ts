@@ -33,15 +33,18 @@ export async function getClient(
 	trustedClients: (Client & { skipConsent?: boolean })[] = [],
 ): Promise<(Client & { skipConsent?: boolean }) | null> {
 	// First check trusted clients
-	const trustedClient = trustedClients.find(client => client.clientId === clientId);
+	const trustedClient = trustedClients.find(
+		(client) => client.clientId === clientId,
+	);
 	if (trustedClient) {
 		return trustedClient;
 	}
 
 	// Determine the model name to use
-	const modelName = typeof modelNameOrString === 'string' 
-		? modelNameOrString 
-		: modelNameOrString.oauthClient;
+	const modelName =
+		typeof modelNameOrString === "string"
+			? modelNameOrString
+			: modelNameOrString.oauthClient;
 
 	// Fall back to database lookup
 	const dbClient = await adapter

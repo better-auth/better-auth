@@ -1,7 +1,7 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
-import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
+import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
 
@@ -214,7 +214,7 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
-        return handleRedirect(redirectURIWithCode.toString());	
+		return handleRedirect(redirectURIWithCode.toString());
 	}
 
 	// Check if this is a trusted client that should skip consent
