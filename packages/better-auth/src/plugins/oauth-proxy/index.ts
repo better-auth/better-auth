@@ -99,7 +99,18 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						key: ctx.context.secret,
 						data: cookies,
 					});
-					ctx.setHeader("set-cookie", decryptedCookies);
+
+					const isSecureContext = ctx.request
+            					? new URL(ctx.request.url).protocol === "https:"
+            					: true;
+
+          				const cookieToSet = isSecureContext
+            					? decryptedCookies
+            					: decryptedCookies
+                					.replace("Secure;", "")
+                					.replace("__Secure-better-auth", "better-auth");
+
+					ctx.setHeader("set-cookie", cookieToSet);
 					throw ctx.redirect(ctx.query.callbackURL);
 				},
 			),
