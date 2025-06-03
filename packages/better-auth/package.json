@@ -658,6 +658,7 @@
     "@prisma/client": "^5.22.0",
     "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/keccak": "^3.0.5",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.14",
@@ -693,6 +694,7 @@
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
+    "keccak": "^3.0.4",
     "kysely": "^0.28.1",
     "nanostores": "^0.11.3",
     "zod": "^3.24.1"

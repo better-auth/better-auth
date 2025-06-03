@@ -2,23 +2,28 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siwe } from "./index";
 import { siweClientPlugin } from "./client";
+import type { SiweUser } from "./types";
 
 describe("siwe", async (it) => {
-	const walletAddress = "0x1EBfa830CEcf15b8B3b3832C0a2F997386C0c1A7";
+	const walletAddress = "0x000000000000000000000000000000000000dEaD";
 	const domain = "example.com";
 
 	it("should generate a valid nonce for a valid public key", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain, 
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -36,15 +41,19 @@ describe("siwe", async (it) => {
 	it("should reject verification if nonce is missing", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain, 
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -67,15 +76,19 @@ describe("siwe", async (it) => {
 	it("should reject invalid public key", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain, 
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -92,15 +105,19 @@ describe("siwe", async (it) => {
 	it("should reject verification with invalid signature", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain, 
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -120,15 +137,19 @@ describe("siwe", async (it) => {
 	it("should reject invalid walletAddress format", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain, 
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -146,15 +167,19 @@ describe("siwe", async (it) => {
 	it("should reject invalid message", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain, 
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -174,16 +199,20 @@ describe("siwe", async (it) => {
 	it("should reject verification without email when anonymous is false", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain,
-					anonymous: false,
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -206,16 +235,20 @@ describe("siwe", async (it) => {
 	it("should accept verification with email when anonymous is false", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain,
-					anonymous: false,
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -239,16 +272,20 @@ describe("siwe", async (it) => {
 	it("should reject invalid email format when anonymous is false", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain,
-					anonymous: false,
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -256,12 +293,12 @@ describe("siwe", async (it) => {
 				},
 			},
 		);
-	  
+
 		const { error } = await client.siwe.verify({
-		  message: "valid_message",
-		  signature: "valid_signature",
-		  walletAddress,
-		  email: "not-an-email",
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress,
+			email: "not-an-email",
 		});
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(400);
@@ -271,16 +308,20 @@ describe("siwe", async (it) => {
 	it("should allow verification without email when anonymous is true", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({ 
-					domain,
-					// anonymous: true by default
-					async generateSiweNonce() {
-						return "A1b2C3d4E5f6G7h8J";
-					},
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						// anonymous: true by default
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: {
@@ -302,13 +343,19 @@ describe("siwe", async (it) => {
 	it("should not allow nonce reuse", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({
-					domain,
-					async generateSiweNonce() { return "A1b2C3d4E5f6G7h8J"; },
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: { plugins: [siweClientPlugin()] },
@@ -338,14 +385,20 @@ describe("siwe", async (it) => {
 	it("should reject empty string email when anonymous is false", async () => {
 		const { client } = await getTestInstance(
 			{
-				plugins: [siwe({
-					domain,
-					anonymous: false,
-					async generateSiweNonce() { return "A1b2C3d4E5f6G7h8J"; },
-					async verifySiweMessage(message, signature, nonce) {
-						return signature === "valid_signature" && message === "valid_message";
-					},
-				})],
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
 			},
 			{
 				clientOptions: { plugins: [siweClientPlugin()] },
@@ -364,4 +417,58 @@ describe("siwe", async (it) => {
 		expect(error?.message).toBe("Invalid body parameters");
 	});
 
+	it("should store and return the wallet address in checksum format", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async generateSiweNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifySiweMessage(message, signature, nonce) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [siweClientPlugin()] },
+			},
+		);
+
+		// Use lowercase address
+		await client.siwe.nonce({ walletAddress: walletAddress.toLowerCase() });
+		const { data } = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: walletAddress.toLowerCase(),
+		});
+		expect(data?.success).toBe(true);
+
+		// Fetch user from the adapter (simulate internal lookup)
+		const user: SiweUser | null = await (await auth.$context).adapter.findOne({
+			model: "user",
+			where: [{ field: "walletAddress", operator: "eq", value: walletAddress }],
+		});
+		expect(user).toBeDefined();
+		expect(user?.walletAddress).toBe(walletAddress); // checksummed
+
+		// Try with uppercase address, should not create a new user
+		await client.siwe.nonce({ walletAddress: walletAddress.toUpperCase() });
+		const { data: data2 } = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: walletAddress.toUpperCase(),
+		});
+		expect(data2?.token).toBeUndefined();
+
+		const users = await (await auth.$context).adapter.findMany({
+			model: "user",
+			where: [{ field: "walletAddress", operator: "eq", value: walletAddress }],
+		});
+		expect(users.length).toBe(1); // Only one user for all cases
+	});
 });

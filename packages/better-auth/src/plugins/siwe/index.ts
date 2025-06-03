@@ -5,13 +5,20 @@ import type { BetterAuthPlugin } from "../../types";
 import type { SiweUser } from "./types";
 import { schema } from "./schema";
 import { getOrigin } from "../../utils/url";
+import { toChecksumAddress } from "../../utils/hashing";
 
 export interface SIWEPluginOptions {
 	domain: string;
 	emailDomainName?: string;
 	generateSiweNonce: () => Promise<string>;
-	verifySiweMessage: (message: string, signature: string, nonce: string) => Promise<boolean>;
-	ensLookup?: (walletAddress: string) => Promise<{ name: string; avatar: string }>;
+	verifySiweMessage: (
+		message: string,
+		signature: string,
+		nonce: string,
+	) => Promise<boolean>;
+	ensLookup?: (
+		walletAddress: string,
+	) => Promise<{ name: string; avatar: string }>;
 	anonymous?: boolean;
 }
 
@@ -33,7 +40,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 					}),
 				},
 				async (ctx) => {
-					const { walletAddress } = ctx.body;
+					const { walletAddress: rawWalletAddress } = ctx.body;
+					const walletAddress = toChecksumAddress(rawWalletAddress);
 					const nonce = await options.generateSiweNonce();
 					// Store nonce with 15-minute expiration
 					await ctx.context.internalAdapter.createVerificationValue({
@@ -50,23 +58,28 @@ export const siwe = (options: SIWEPluginOptions) =>
 				"/siwe/verify",
 				{
 					method: "POST",
-					body: z.object({
-						message: z.string(),
-						signature: z.string(),
-						walletAddress: z.string(),
-						email: z.string().email().optional(),
-					})
-					.refine(
-						(data) => options.anonymous !== false || !!data.email,
-						{
-							message: "Email is required when the anonymous plugin option is disabled.",
+					body: z
+						.object({
+							message: z.string(),
+							signature: z.string(),
+							walletAddress: z.string(),
+							email: z.string().email().optional(),
+						})
+						.refine((data) => options.anonymous !== false || !!data.email, {
+							message:
+								"Email is required when the anonymous plugin option is disabled.",
 							path: ["email"],
-						}
-					),
+						}),
 					requireRequest: true,
 				},
 				async (ctx) => {
-					const { message, signature, walletAddress, email } = ctx.body;
+					const {
+						message,
+						signature,
+						walletAddress: rawWalletAddress,
+						email,
+					} = ctx.body;
+					const walletAddress = toChecksumAddress(rawWalletAddress);
 					const isAnon = options.anonymous ?? true;
 
 					if (!isAnon && !email) {
@@ -91,7 +104,11 @@ export const siwe = (options: SIWEPluginOptions) =>
 						}
 						// Verify SIWE message
 						const { value: nonce } = verification;
-						const verified = await options.verifySiweMessage(message, signature, nonce);
+						const verified = await options.verifySiweMessage(
+							message,
+							signature,
+							nonce,
+						);
 
 						if (!verified) {
 							throw new APIError("UNAUTHORIZED", {
@@ -116,9 +133,12 @@ export const siwe = (options: SIWEPluginOptions) =>
 						});
 
 						if (!user) {
-							const domain = options.emailDomainName ?? getOrigin(ctx.context.baseURL);
-							const userEmail = !isAnon && email ? email : `${walletAddress}@${domain}`;
-							const { name, avatar } = await options.ensLookup?.(walletAddress) ?? {};
+							const domain =
+								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
+							const userEmail =
+								!isAnon && email ? email : `${walletAddress}@${domain}`;
+							const { name, avatar } =
+								(await options.ensLookup?.(walletAddress)) ?? {};
 							user = await ctx.context.internalAdapter.createUser({
 								name: name ?? walletAddress,
 								email: userEmail,
