@@ -366,11 +366,29 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx.request,
 				);
 
-				const freeTrail = plan.freeTrial
-					? {
+				let freeTrail: { trial_period_days: number } | undefined;
+				if (plan.freeTrial) {
+					let isEligible = true;
+
+					if (plan.freeTrial.isEligible) {
+						isEligible = await plan.freeTrial.isEligible(
+							{
+								user,
+								session,
+								plan,
+								referenceId,
+								existingSubscriptions: subscriptions,
+							},
+							ctx.request,
+						);
+					}
+
+					if (isEligible) {
+						freeTrail = {
 							trial_period_days: plan.freeTrial.days,
-						}
-					: undefined;
+						};
+					}
+				}
 
 				const checkoutSession = await client.checkout.sessions
 					.create(

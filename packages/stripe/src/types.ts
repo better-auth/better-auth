@@ -82,6 +82,24 @@ export type StripePlan = {
 			subscription: Subscription,
 			request?: Request,
 		) => Promise<void>;
+		/**
+		 * A function that checks if a user is eligible for a free trial.
+		 * This is called before creating a subscription with a trial period.
+		 *
+		 * @param data - data containing user, session, plan, and existing subscriptions
+		 * @param request - Request object
+		 * @returns Promise<boolean> - true if the user is eligible for a free trial
+		 */
+		isEligible?: (
+			data: {
+				user: User & Record<string, any>;
+				session: Session & Record<string, any>;
+				plan: StripePlan;
+				referenceId: string;
+				existingSubscriptions: Subscription[];
+			},
+			request?: Request,
+		) => Promise<boolean>;
 	};
 };
 
