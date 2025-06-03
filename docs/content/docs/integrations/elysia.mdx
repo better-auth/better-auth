@@ -62,7 +62,7 @@ const betterAuth = new Elysia({ name: "better-auth" })
   .mount(auth.handler)
   .macro({
     auth: {
-      async resolve({ session, request: { headers } }) {
+      async resolve({ status, request: { headers } }) {
         const session = await auth.api.getSession({
           headers,
         });
