@@ -69,7 +69,7 @@ describe("passkey", async () => {
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
-			} satisfies Passkey,
+			} satisfies Omit<Passkey, "id">,
 		});
 
 		const passkeys = await auth.api.listPasskeys({
