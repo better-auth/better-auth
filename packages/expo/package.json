@@ -32,7 +32,12 @@
       ]
     }
   },
-  "keywords": ["auth", "expo", "react-native", "typescript"],
+  "keywords": [
+    "auth",
+    "expo",
+    "react-native",
+    "typescript"
+  ],
   "license": "MIT",
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",
