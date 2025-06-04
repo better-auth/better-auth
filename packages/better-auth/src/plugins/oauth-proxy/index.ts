@@ -101,14 +101,15 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					});
 
 					const isSecureContext = ctx.request
-            					? new URL(ctx.request.url).protocol === "https:"
-            					: true;
-
-          				const cookieToSet = isSecureContext
-            					? decryptedCookies
-            					: decryptedCookies
-                					.replace("Secure;", "")
-                					.replace("__Secure-better-auth", "better-auth");
+						? new URL(ctx.request.url).protocol === "https:"
+						: true;
+					const prefix =
+						ctx.context.options.advanced?.cookiePrefix || "better-auth";
+					const cookieToSet = isSecureContext
+						? decryptedCookies
+						: decryptedCookies
+								.replace("Secure;", "")
+								.replace(`__Secure-${prefix}`, prefix);
 
 					ctx.setHeader("set-cookie", cookieToSet);
 					throw ctx.redirect(ctx.query.callbackURL);
