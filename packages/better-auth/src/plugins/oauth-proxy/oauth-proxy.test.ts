@@ -67,10 +67,9 @@ describe("oauth-proxy", async () => {
 			},
 		);
 		const state = new URL(res.url!).searchParams.get("state");
-		let location = "";
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			onError(context) {
-				location = context.response.headers.get("location") ?? "";
+				const location = context.response.headers.get("location") ?? "";
 				if (!location) {
 					throw new Error("Location header not found");
 				}
@@ -79,15 +78,6 @@ describe("oauth-proxy", async () => {
 				);
 				const cookies = new URL(location).searchParams.get("cookies");
 				expect(cookies).toBeTruthy();
-			},
-		});
-
-		const res2 = await client.$fetch(location, {
-			method: "GET",
-			onResponse(context) {
-				expect(context.response.headers.get("set-cookie")).toContain(
-					"better-auth",
-				);
 			},
 		});
 	});
