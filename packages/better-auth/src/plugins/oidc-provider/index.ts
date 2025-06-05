@@ -1,4 +1,4 @@
-import { SignJWT } from "jose";
+import { SignJWT, importJWK } from "jose";
 import { z } from "zod";
 import {
 	APIError,
@@ -8,7 +8,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
-import { generateRandomString } from "../../crypto";
+import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { subtle } from "@better-auth/utils";
 import { schema } from "./schema";
 import type {
@@ -22,6 +22,8 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
+import { getJwksAdapter } from "../jwt/adapter";
+import { BetterAuthError } from "../../error";
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -29,6 +31,12 @@ export const getMetadata = (
 ): OIDCMetadata => {
 	const issuer = ctx.context.options.baseURL as string;
 	const baseURL = ctx.context.baseURL;
+	
+	// Determine supported algorithms based on JWT plugin usage
+	const supportedAlgs = options?.useJWTPlugin 
+		? ["RS256", "EdDSA", "none"] 
+		: ["HS256", "none"];
+	
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -45,7 +53,7 @@ export const getMetadata = (
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256", "none"],
+		id_token_signing_alg_values_supported: supportedAlgs as ("RS256" | "none")[],
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
@@ -596,17 +604,68 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
-						alg: "HS256",
-						key: await subtle.generateKey(
-							{
-								name: "HMAC",
-								hash: "SHA-256",
-							},
-							true,
-							["sign", "verify"],
-						),
+
+					let secretKey: {
+						alg: string;
+						key: CryptoKey;
+						kid?: string;
 					};
+
+					if (options.useJWTPlugin) {
+						// Use JWT plugin for signing
+						const adapter = getJwksAdapter(ctx.context.adapter);
+						const key = await adapter.getLatestKey();
+						
+						if (!key) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description: "No JWT signing key found. Make sure the JWT plugin is properly configured.",
+								error: "server_error",
+							});
+						}
+
+						// Parse the public key to get the algorithm
+						const publicKeyInfo = JSON.parse(key.publicKey);
+						const keyAlg = publicKeyInfo.alg || "EdDSA";
+
+						// Get JWT plugin options from context
+						const jwtPluginOptions = ctx.context.options.plugins?.find(p => p.id === "jwt")?.options;
+						const privateKeyEncryptionEnabled = !jwtPluginOptions?.jwks?.disablePrivateKeyEncryption;
+
+						let privateWebKey = privateKeyEncryptionEnabled
+							? await symmetricDecrypt({
+									key: ctx.context.secret,
+									data: JSON.parse(key.privateKey),
+								}).catch(() => {
+									throw new BetterAuthError(
+										"Failed to decrypt private key. Make sure the secret currently in use is the same as the one used to encrypt the private key.",
+									);
+								})
+							: key.privateKey;
+
+						const privateKey = await importJWK(
+							JSON.parse(privateWebKey),
+							keyAlg,
+						);
+
+						secretKey = {
+							alg: keyAlg,
+							key: privateKey,
+							kid: key.id,
+						};
+					} else {
+						// Use HMAC for backward compatibility
+						secretKey = {
+							alg: "HS256",
+							key: await subtle.generateKey(
+								{
+									name: "HMAC",
+									hash: "SHA-256",
+								},
+								true,
+								["sign", "verify"],
+							),
+						};
+					}
 					const profile = {
 						given_name: user.name.split(" ")[0],
 						family_name: user.name.split(" ")[1],
@@ -627,6 +686,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
+					const jwtHeader: { alg: string; kid?: string } = { alg: secretKey.alg };
+					if (secretKey.kid) {
+						jwtHeader.kid = secretKey.kid;
+					}
+
 					const idToken = await new SignJWT({
 						sub: user.id,
 						aud: client_id.toString(),
@@ -637,7 +701,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...userClaims,
 						...additionalUserClaims,
 					})
-						.setProtectedHeader({ alg: secretKey.alg })
+						.setProtectedHeader(jwtHeader)
 						.setIssuedAt()
 						.setExpirationTime(
 							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,

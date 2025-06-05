@@ -121,6 +121,18 @@ export interface OIDCOptions {
 		user: User & Record<string, any>,
 		scopes: string[],
 	) => Record<string, any> | Promise<Record<string, any>>;
+	/**
+	 * Use the JWT plugin for ID token signing instead of HMAC.
+	 * 
+	 * When enabled, ID tokens will be signed using the RSA/EdDSA keys from the JWT plugin,
+	 * making them verifiable using the JWKS endpoint. When disabled, ID tokens are signed
+	 * with HMAC-SHA256 using the application secret.
+	 * 
+	 * Requires the JWT plugin to be installed.
+	 * 
+	 * @default false
+	 */
+	useJWTPlugin?: boolean;
 }
 
 export interface AuthorizationQuery {
