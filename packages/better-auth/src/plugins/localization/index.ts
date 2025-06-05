@@ -217,17 +217,17 @@ export async function generateDictWithT(
  *
  * Usage:
  *   // Example 1: No arguments (default behavior)
- *   const plugin = localization();
+ *   plugins: [localization()],
  *   // Uses Accept-Language header to determine the language and translate.
  *
  *   // Example 2: singleLang
- *   const plugin = localization({
+ *   plugins: [localization({
  *     singleLang: "ja"
- *   });
+ *   })],
  *   // Always uses Japanese for localization, regardless of request headers or URL.
  *
  *   // Example 3: enabledLocales and multiLangDict (multiple languages)
- *   const plugin = localization({
+ *   plugins: [localization({
  *     enabledLocales: ["en", "ja", "fr"],
  *     simpleDict: { LOGIN_SUCCESS: "Login successful!" },
  *     multiLangDict: {
@@ -237,28 +237,28 @@ export async function generateDictWithT(
  *         fr: "Connexion réussie !"
  *       }
  *     }
- *   });
+ *   })],
  *   // The message will be translated based on Accept-Language header but limited to the enabledLocales.
  *   // simpleDict and multiLangDict are used with priority over default translations.
  *
  *   // Example 4: i18nRouting
- *   const plugin = localization({
+ *   plugins: [localization({
  *     i18nRouting: ["en", "ja"],
  *     simpleDict: {
  *       LOGIN_SUCCESS: "Login successful!"
  *     }
- *   });
+ *   })],
  *   // The language is determined from the first path segment of the referer URL.
  *
  *   // Example 5: simpleDictWithTFunc and tFuncServer (for dynamic translation)
- *   const plugin = localization({
+ *   plugins: [localization({
  *     i18nRouting: ["en", "ja"],
  *     simpleDictWithTFunc: (t) => ({ EMAIL_NOT_VERIFIED: t("Email not verified!!") }),
  *     tFuncServer: async (locale) => {
  *       const t = await getTranslations({ locale });
  *       return (key) => t(key);
  *     },
- *   });
+ *   })],
  *   // Used for i18n routing such as next-intl.
  *   // The message will be dynamically translated using the t function for the current locale.
  *
