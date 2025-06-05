@@ -59,7 +59,7 @@ export const generateEnJsonErrorCodes = () => {
 	}
 	// write all error codes to JSON without grouping by auth, organization, etc.
 	const allErrorEntries = Object.entries(errorCodeSources).flatMap(
-		([group, codes]) => Object.entries(codes),
+		([, codes]) => Object.entries(codes),
 	);
 
 	const errorCodeDict = allErrorEntries.reduce(
