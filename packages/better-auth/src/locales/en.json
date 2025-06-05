@@ -54,7 +54,7 @@
 	"ORGANIZATION_ALREADY_EXISTS": "Organization already exists",
 	"ORGANIZATION_MEMBERSHIP_LIMIT_REACHED": "Organization membership limit reached",
 	"ORGANIZATION_NOT_FOUND": "Organization not found",
-	"OTP_EXPIRED": "otp expired",
+	"OTP_EXPIRED": "OTP expired",
 	"OTP_HAS_EXPIRED": "OTP has expired",
 	"OTP_NOT_ENABLED": "OTP not enabled",
 	"OTP_NOT_FOUND": "OTP not found",
