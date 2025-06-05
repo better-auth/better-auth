@@ -58,24 +58,24 @@ export type SimpleDictWithTFunc = (
 // 型定義: simpleDictWithTFuncとtFuncServerは必ずセット
 export type LocalizationOptionsExt =
 	| ({
-			enabled_locales: Locale[];
+			enabledLocales: Locale[];
 			i18nRouting?: never;
-			single_lang?: never;
+			singleLang?: never;
 	  } & LocalizationOptionsCommon)
 	| ({
-			enabled_locales?: never;
+			enabledLocales?: never;
 			i18nRouting: Locale[];
-			single_lang?: never;
+			singleLang?: never;
 	  } & LocalizationOptionsCommon)
 	| ({
-			enabled_locales?: never;
+			enabledLocales?: never;
 			i18nRouting?: never;
-			single_lang: Exclude<Locale, "all">;
+			singleLang: Exclude<Locale, "all">;
 	  } & LocalizationOptionsCommon)
 	| ({
-			enabled_locales?: never;
+			enabledLocales?: never;
 			i18nRouting?: never;
-			single_lang?: never;
+			singleLang?: never;
 	  } & LocalizationOptionsCommon);
 
 // 共通部分
@@ -95,7 +95,7 @@ export type LocalizationOptionsCommon = {
  * getLang(ctx, options)
  * Determines the language to use based on the request context and localization options.
  * @param ctx - The request context (should have acceptLanguage and referer properties)
- * @param options - Localization options (enabled_locales, i18nRouting, or single_lang)
+ * @param options - Localization options (enabledLocales, i18nRouting, or singleLang)
  * @returns {Locale | undefined} - The detected locale or undefined if not found
  *
  * Usage:
@@ -115,8 +115,8 @@ export function getLang(
 	}
 
 	if (
-		options?.enabled_locales?.includes("all") ||
-		!(options?.enabled_locales || options?.i18nRouting || options?.single_lang)
+		options?.enabledLocales?.includes("all") ||
+		!(options?.enabledLocales || options?.i18nRouting || options?.singleLang)
 	) {
 		if (
 			firstLang &&
@@ -126,8 +126,8 @@ export function getLang(
 		) {
 			return firstLang as Locale;
 		}
-	} else if (options?.enabled_locales) {
-		if (firstLang && options.enabled_locales.includes(firstLang as Locale)) {
+	} else if (options?.enabledLocales) {
+		if (firstLang && options.enabledLocales.includes(firstLang as Locale)) {
 			return firstLang as Locale;
 		}
 	} else if (options?.i18nRouting) {
@@ -137,8 +137,8 @@ export function getLang(
 		if (firstPath && options.i18nRouting.includes(firstPath as Locale)) {
 			return firstPath as Locale;
 		}
-	} else if (options?.single_lang) {
-		return options.single_lang;
+	} else if (options?.singleLang) {
+		return options.singleLang;
 	}
 	return undefined;
 }
@@ -209,26 +209,26 @@ export async function generateDictWithT(
  * @param {Record<string, string>} [options.simpleDict] - Key-value pairs to merge into all languages.
  * @param {Record<string, Partial<Record<Locale, string>>>} [options.multiLangDict] - Per-language
  *   message dictionary for each code.
- * @param {Locale[]} [options.enabled_locales] - Array of allowed locales. "all" allows all supported locales.
+ * @param {Locale[]} [options.enabledLocales] - Array of allowed locales. "all" allows all supported locales.
  * @param {Locale[]} [options.i18nRouting] - Locales to detect from the first path segment of the referer URL.
- * @param {Exclude<Locale, "all">} [options.single_lang] - Always use this language for localization.
+ * @param {Exclude<Locale, "all">} [options.singleLang] - Always use this language for localization.
  *
  * @returns {BetterAuthPlugin} - The localization plugin object with onRequest and onResponse hooks.
  *
  * Usage:
  *   // Example 1: No arguments (default behavior)
  *   const plugin = localization();
- *   // Uses Accept-Language header or defaults to English.
+ *   // Uses Accept-Language header to determine the language and translate.
  *
- *   // Example 2: single_lang
+ *   // Example 2: singleLang
  *   const plugin = localization({
- *     single_lang: "ja"
+ *     singleLang: "ja"
  *   });
  *   // Always uses Japanese for localization, regardless of request headers or URL.
  *
- *   // Example 3: enabled_locales and multiLangDict (multiple languages)
+ *   // Example 3: enabledLocales and multiLangDict (multiple languages)
  *   const plugin = localization({
- *     enabled_locales: ["en", "ja", "fr"],
+ *     enabledLocales: ["en", "ja", "fr"],
  *     simpleDict: { LOGIN_SUCCESS: "Login successful!" },
  *     multiLangDict: {
  *       LOGIN_SUCCESS: {
@@ -238,6 +238,8 @@ export async function generateDictWithT(
  *       }
  *     }
  *   });
+ *   // The message will be translated based on Accept-Language header but limited to the enabledLocales.
+ *   // simpleDict and multiLangDict are used with priority over default translations.
  *
  *   // Example 4: i18nRouting
  *   const plugin = localization({
@@ -257,6 +259,7 @@ export async function generateDictWithT(
  *       return (key) => t(key);
  *     },
  *   });
+ *   // Used for i18n routing such as next-intl.
  *   // The message will be dynamically translated using the t function for the current locale.
  *
  *   // Use plugin.onRequest and plugin.onResponse in your auth flow
