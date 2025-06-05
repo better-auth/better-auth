@@ -363,7 +363,9 @@ export type BetterAuthOptions = {
 			deleteTokenExpiresIn?: number;
 		};
 		/**
+		 * A function that is used to override the default user finding logic. The return type of this function should match the User type given to Better Auth.
 		 *
+		 * @default adapter.findOne({ model: "user", where: [{value: email.toLowerCase(), field: "email"}]})
 		 */
 		findUser?: (ctx: GenericEndpointContext) => Promise<User>;
 	};
