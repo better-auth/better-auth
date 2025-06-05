@@ -367,7 +367,7 @@ export type BetterAuthOptions = {
 		 *
 		 * @default adapter.findOne({ model: "user", where: [{value: email.toLowerCase(), field: "email"}]})
 		 */
-		findUser?: (ctx: GenericEndpointContext) => Promise<User>;
+		findUser?: (ctx: GenericEndpointContext) => Promise<any>;
 	};
 	session?: {
 		/**
