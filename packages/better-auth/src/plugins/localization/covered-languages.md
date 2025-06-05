@@ -27,7 +27,6 @@
 ```bash
 cd packages/better-auth
 pnpm run generate-plugin-locale-enjson
-```
 
 ## Automatically add added error code translations
 Save google-service-account.json to packages/better-auth/src/plugins/localization/ and then,
