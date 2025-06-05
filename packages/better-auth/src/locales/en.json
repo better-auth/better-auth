@@ -81,7 +81,7 @@
 	"UNAUTHORIZED_SESSION": "Unauthorized or invalid session",
 	"UNEXPECTED_ERROR": "Unexpected error",
 	"USAGE_EXCEEDED": "API Key has reached its usage limit",
-	"USERNAME_IS_ALREADY_TAKEN": "username is already taken. please try another.",
+	"USERNAME_IS_ALREADY_TAKEN": "Username is already taken. Please try another.",
 	"USERNAME_TOO_LONG": "username is too long",
 	"USERNAME_TOO_SHORT": "username is too short",
 	"USER_ALREADY_EXISTS": "User already exists",
