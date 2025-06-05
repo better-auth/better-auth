@@ -10,7 +10,7 @@ import { env } from "../../utils/env";
 import { getOrigin } from "../../utils/url";
 
 function getVenderBaseURL() {
-	const vercel = env.VERCEL_URL;
+	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
 	const netlify = env.NETLIFY_URL;
 	const render = env.RENDER_URL;
 	const aws = env.AWS_LAMBDA_FUNCTION_NAME;

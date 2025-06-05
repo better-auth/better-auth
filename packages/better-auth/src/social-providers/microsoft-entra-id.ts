@@ -1,5 +1,9 @@
 import type { ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode, createAuthorizationURL } from "../oauth2";
+import {
+	validateAuthorizationCode,
+	createAuthorizationURL,
+	refreshAccessToken,
+} from "../oauth2";
 import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../utils/logger";
@@ -41,7 +45,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 		createAuthorizationURL(data) {
 			const scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email", "User.Read"];
+				: ["openid", "profile", "email", "User.Read", "offline_access"];
 			options.scope && scopes.push(...options.scope);
 			data.scopes && scopes.push(...scopes);
 			return createAuthorizationURL({
@@ -112,6 +116,26 @@ export const microsoft = (options: MicrosoftOptions) => {
 				data: user,
 			};
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					const scopes = options.disableDefaultScope
+						? []
+						: ["openid", "profile", "email", "User.Read", "offline_access"];
+					options.scope && scopes.push(...options.scope);
+
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientSecret: options.clientSecret,
+						},
+						extraParams: {
+							scope: scopes.join(" "), // Include the scopes in request to microsoft
+						},
+						tokenEndpoint,
+					});
+				},
 		options,
 	} satisfies OAuthProvider;
 };

@@ -72,6 +72,9 @@ export const forgetPassword = createAuthEndpoint(
 										status: {
 											type: "boolean",
 										},
+										message: {
+											type: "string",
+										},
 									},
 								},
 							},
@@ -99,6 +102,8 @@ export const forgetPassword = createAuthEndpoint(
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
 				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
 			});
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
@@ -108,12 +113,16 @@ export const forgetPassword = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			},
+			ctx,
+		);
+		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			{
 				user: user.user,
@@ -285,7 +294,9 @@ export const resetPassword = createAuthEndpoint(
 			ctx,
 		);
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
-
+		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
+			await ctx.context.internalAdapter.deleteSessions(userId);
+		}
 		return ctx.json({
 			status: true,
 		});

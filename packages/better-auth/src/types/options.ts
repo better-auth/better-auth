@@ -18,6 +18,9 @@ import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
+import type { AdapterDebugLogs } from "../adapters";
+//@ts-ignore - we need to import this to get the type of the database
+import type { Database as BunDatabase } from "bun:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -80,6 +83,7 @@ export type BetterAuthOptions = {
 		| Database
 		| Dialect
 		| AdapterInstance
+		| BunDatabase
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -89,6 +93,12 @@ export type BetterAuthOptions = {
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  }
 		| {
 				/**
@@ -105,6 +115,12 @@ export type BetterAuthOptions = {
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -237,8 +253,15 @@ export type BetterAuthOptions = {
 		};
 		/**
 		 * Automatically sign in the user after sign up
+		 *
+		 * @default true
 		 */
 		autoSignIn?: boolean;
+		/**
+		 * Whether to revoke all other sessions when resetting password
+		 * @default false
+		 */
+		revokeSessionsOnPasswordReset?: boolean;
 	};
 	/**
 	 * list of social providers
@@ -442,6 +465,16 @@ export type BetterAuthOptions = {
 	account?: {
 		modelName?: string;
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		/**
+		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
+		 * will be updated on sign in with the latest data from the provider.
+		 *
+		 * @default true
+		 */
+		updateAccountOnSignIn?: boolean;
+		/**
+		 * Configuration for account linking.
+		 */
 		accountLinking?: {
 			/**
 			 * Enable account linking

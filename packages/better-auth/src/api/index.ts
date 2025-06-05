@@ -28,6 +28,8 @@ import {
 	deleteUserCallback,
 	unlinkAccount,
 	refreshToken,
+	getAccessToken,
+	accountInfo,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -112,6 +114,8 @@ export function getEndpoints<
 		deleteUserCallback,
 		unlinkAccount,
 		refreshToken,
+		getAccessToken,
+		accountInfo,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -125,7 +129,6 @@ export function getEndpoints<
 		middlewares,
 	};
 }
-
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
 	options: Option,

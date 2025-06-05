@@ -22,6 +22,7 @@ import type {
 	Customer,
 	InputSubscription,
 	StripeOptions,
+	StripePlan,
 	Subscription,
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
@@ -199,7 +200,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const subscriptionToUpdate = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
 							model: "subscription",
-							where: [{ field: "id", value: ctx.body.subscriptionId }],
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+								{
+									field: "stripeSubscriptionId",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+							],
 						})
 					: null;
 
@@ -649,15 +661,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						})
-					: await ctx.context.adapter.findOne<Subscription>({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: referenceId,
-								},
-							],
-						});
+					: await ctx.context.adapter
+							.findMany<Subscription>({
+								model: "subscription",
+								where: [
+									{
+										field: "referenceId",
+										value: referenceId,
+									},
+								],
+							})
+							.then((subs) =>
+								subs.find(
+									(sub) => sub.status === "active" || sub.status === "trialing",
+								),
+							);
 				if (!subscription || !subscription.stripeCustomerId) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -761,6 +779,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						return {
 							...sub,
 							limits: plan?.limits,
+							priceId: plan?.priceId,
 						};
 					})
 					.filter((sub) => {
@@ -831,10 +850,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
 										periodEnd: new Date(
-											stripeSubscription.current_period_end * 1000,
+											stripeSubscription.items.data[0]?.current_period_end *
+												1000,
 										),
 										periodStart: new Date(
-											stripeSubscription.current_period_start * 1000,
+											stripeSubscription.items.data[0]?.current_period_start *
+												1000,
 										),
 										stripeSubscriptionId: stripeSubscription.id,
 										...(stripeSubscription.trial_start &&
@@ -993,4 +1014,4 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type { Subscription };
+export type { Subscription, StripePlan };
