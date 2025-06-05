@@ -153,7 +153,13 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
 
     export const auth = betterAuth({
         database: drizzleAdapter(db, {
-            provider: "pg", // or "mysql", "sqlite"
+            provider: "pg", // or "mysql", "sqlite",
+            schema: { // The models required here will be generated in the next step.
+                verification: verification,
+                account: account,
+                session: session,
+                user: user,
+            },
         })
     });
     ```
