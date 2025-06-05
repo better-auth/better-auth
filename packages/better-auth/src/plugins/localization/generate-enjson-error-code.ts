@@ -52,7 +52,6 @@ export const generateEnJsonErrorCodes = () => {
 		"../../locales/en.json",
 	);
 	const outputDir = path.dirname(outputPath);
-
 	// create directory if not exists
 	if (!fs.existsSync(outputDir)) {
 		fs.mkdirSync(outputDir, { recursive: true });
