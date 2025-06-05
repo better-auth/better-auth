@@ -30,7 +30,9 @@
     "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
     "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
-    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit"
+    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit",
+    "generate-plugin-locale-enjson": "pnpm tsx src/plugins/localization/generate-enjson-error-code.ts ",
+    "translate-plugin-locale-other-language": "pnpx json-autotranslate --input src/locales --delete-unused-strings --type key-based --service google-translate --config src/plugins/localization/google-service-account.json --fix-inconsistencies --directory-structure ngx-translate --source-language en"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

@@ -196,4 +196,4 @@ android/
 .turbo
 
 .json-autotranslate-cache/
-src/locales/google-service-account.json
+packages/better-auth/src/plugins/localization/google-service-account.json
