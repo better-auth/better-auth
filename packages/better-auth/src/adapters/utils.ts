@@ -9,7 +9,7 @@ export function withApplyDefault(
 		return value;
 	}
 	if (value === undefined || value === null) {
-		if (field.defaultValue) {
+		if (field.defaultValue !== undefined) {
 			if (typeof field.defaultValue === "function") {
 				return field.defaultValue();
 			}

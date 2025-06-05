@@ -3,7 +3,7 @@ title: Passkey
 description: Passkey
 ---
 
-Passkeys are a secure, passwordless authentication method using cryptographic key pairs, supported by WebAuthn and FIDO2 standards in web browsers. They replace passwords with unique key pairs: a private key stored on the user’s device and a public key shared with the website. Users can log in using biometrics, PINs, or security keys, providing strong, phishing-resistant authentication without traditional passwords.
+Passkeys are a secure, passwordless authentication method using cryptographic key pairs, supported by WebAuthn and FIDO2 standards in web browsers. They replace passwords with unique key pairs: a private key stored on the user's device and a public key shared with the website. Users can log in using biometrics, PINs, or security keys, providing strong, phishing-resistant authentication without traditional passwords.
 
 The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplewebauthn.dev/) behind the scenes.
 
@@ -239,6 +239,12 @@ Table Name: `passkey`
             type: "Date", 
             description: "The time when the passkey was created",
         },
+        {
+                name: "aaguid",
+                type: "string",
+                description: "Authenticator's Attestation GUID indicating the type of the authenticator",
+                isOptional: true
+        },
     ]}
     />
 
@@ -251,3 +257,5 @@ Table Name: `passkey`
 **origin**: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
 
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. When unspecified, both platform and cross-platform authenticators are allowed with `preferred` settings for `residentKey` and `userVerification`.
+
+**aaguid**: (optional) Authenticator Attestation GUID. This is a unique identifier for the passkey provider (device or authenticator type) and can be used to identify the type of passkey device used during registration or authentication.
