@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "Kendinizi yasaklayamazsınız",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "Kuruluşu tek sahibi olarak bırakamazsınız",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "Maksimum kuruluş sayısına ulaştınız",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Maksimum takım sayısına ulaştınız"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Maksimum takım sayısına ulaştınız",
+  "FAILED_TO_UPDATE_API_KEY": "API anahtarı güncellenemedi",
+  "USER_ALREADY_HAS_PASSWORD": "Kullanıcının zaten bir şifresi var. Hesabı silmek için bunu sağlayın."
 }

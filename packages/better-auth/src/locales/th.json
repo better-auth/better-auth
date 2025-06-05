@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "คุณไม่สามารถห้ามตัวเองได้",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "คุณไม่สามารถปล่อยให้องค์กรเป็นเจ้าของเพียงคนเดียวได้",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "คุณได้ถึงจำนวนองค์กรสูงสุดแล้ว",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "คุณได้ถึงจำนวนทีมสูงสุดแล้ว"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "คุณได้ถึงจำนวนทีมสูงสุดแล้ว",
+  "FAILED_TO_UPDATE_API_KEY": "ไม่สามารถอัปเดตคีย์ API ได้",
+  "USER_ALREADY_HAS_PASSWORD": "ผู้ใช้มีรหัสผ่านอยู่แล้ว กรุณาระบุรหัสผ่านเพื่อลบบัญชี"
 }

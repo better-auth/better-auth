@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "당신은 자신을 금지할 수 없습니다",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "당신은 조직을 유일한 소유자로 남겨둘 수 없습니다.",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "최대 조직 수에 도달했습니다.",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "최대 팀 수에 도달했습니다."
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "최대 팀 수에 도달했습니다.",
+  "FAILED_TO_UPDATE_API_KEY": "API 키 업데이트에 실패했습니다.",
+  "USER_ALREADY_HAS_PASSWORD": "사용자에게 이미 비밀번호가 있습니다. 계정을 삭제하려면 비밀번호를 입력하세요."
 }

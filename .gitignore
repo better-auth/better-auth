@@ -194,3 +194,6 @@ android/
 .vinxi
 # Turborepo
 .turbo
+
+.json-autotranslate-cache/
+src/locales/google-service-account.json

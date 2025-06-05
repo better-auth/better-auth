@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "لا يمكنك حظر نفسك",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "لا يمكنك ترك المنظمة باعتبارك المالك الوحيد",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "لقد وصلت إلى الحد الأقصى لعدد المنظمات",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "لقد وصلت إلى الحد الأقصى لعدد الفرق"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "لقد وصلت إلى الحد الأقصى لعدد الفرق",
+  "FAILED_TO_UPDATE_API_KEY": "فشل تحديث مفتاح API",
+  "USER_ALREADY_HAS_PASSWORD": "لدى المستخدم كلمة مرور بالفعل. أدخلها لحذف الحساب."
 }

@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "Você não pode se banir",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "Você não pode deixar a organização como único proprietário",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "Você atingiu o número máximo de organizações",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Você atingiu o número máximo de equipes"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Você atingiu o número máximo de equipes",
+  "FAILED_TO_UPDATE_API_KEY": "Falha ao atualizar a chave da API",
+  "USER_ALREADY_HAS_PASSWORD": "O usuário já possui uma senha. Informe-a para excluir a conta."
 }

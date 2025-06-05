@@ -30,7 +30,9 @@
     "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
     "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
-    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit"
+    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit",
+    "generate-plugin-locale-enjson": "pnpm run src/plugins/localization/generate-enjson-error-code.ts",
+    "translate-plugin-locale-other-language": "pnpx json-autotranslate --input src/locales --delete-unused-strings --type key-based --service google-translate --config src/plugins/localization/google-service-account.json --fix-inconsistencies --directory-structure ngx-translate --source-language en"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -514,6 +516,16 @@
         "types": "./dist/plugins/username/index.d.cts",
         "default": "./dist/plugins/username/index.cjs"
       }
+    },
+    "./plugins/localization": {
+      "import": {
+        "types": "./dist/plugins/localization/index.d.ts",
+        "default": "./dist/plugins/localization/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/localization/index.d.cts",
+        "default": "./dist/plugins/localization/index.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -652,6 +664,9 @@
       ],
       "plugins/username": [
         "./dist/plugins/username/index.d.ts"
+      ],
+      "plugins/localization": [
+        "./dist/plugins/localization/index.d.ts"
       ]
     }
   },

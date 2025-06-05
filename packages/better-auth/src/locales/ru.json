@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "Вы не можете запретить себе",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "Вы не можете выйти из организации как единственный владелец",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "Вы достигли максимального количества организаций",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Вы достигли максимального количества команд"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Вы достигли максимального количества команд",
+  "FAILED_TO_UPDATE_API_KEY": "Не удалось обновить ключ API",
+  "USER_ALREADY_HAS_PASSWORD": "У пользователя уже есть пароль. Укажите его, чтобы удалить учетную запись."
 }

@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "Nemůžeš si sám zakázat",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "Nemůžete opustit organizaci jako jediný vlastník",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "Dosáhli jste maximálního počtu organizací",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Dosáhli jste maximálního počtu týmů"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Dosáhli jste maximálního počtu týmů",
+  "FAILED_TO_UPDATE_API_KEY": "Nepodařilo se aktualizovat klíč API",
+  "USER_ALREADY_HAS_PASSWORD": "Uživatel již má heslo. Zadejte ho pro smazání účtu."
 }

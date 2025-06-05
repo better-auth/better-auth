@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "आप स्वयं को प्रतिबंधित नहीं कर सकते",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "आप संगठन को एकमात्र स्वामी के रूप में नहीं छोड़ सकते",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "आप संगठनों की अधिकतम संख्या तक पहुँच गए हैं",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "आप टीमों की अधिकतम संख्या तक पहुँच गए हैं"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "आप टीमों की अधिकतम संख्या तक पहुँच गए हैं",
+  "FAILED_TO_UPDATE_API_KEY": "API कुंजी अपडेट करने में विफल",
+  "USER_ALREADY_HAS_PASSWORD": "उपयोगकर्ता के पास पहले से ही पासवर्ड है। खाता हटाने के लिए उसे प्रदान करें।"
 }

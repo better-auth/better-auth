@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "Je kunt jezelf niet verbieden",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "Je kunt de organisatie niet als enige eigenaar achterlaten",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "U heeft het maximale aantal organisaties bereikt",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Je hebt het maximale aantal teams bereikt"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Je hebt het maximale aantal teams bereikt",
+  "FAILED_TO_UPDATE_API_KEY": "API-sleutel kan niet worden bijgewerkt",
+  "USER_ALREADY_HAS_PASSWORD": "De gebruiker heeft al een wachtwoord. Geef dat wachtwoord op om het account te verwijderen."
 }

@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "Du kannst dich nicht selbst verbieten",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "Sie können die Organisation nicht als alleiniger Eigentümer verlassen",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "Sie haben die maximale Anzahl an Organisationen erreicht",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Sie haben die maximale Anzahl an Teams erreicht"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Sie haben die maximale Anzahl an Teams erreicht",
+  "FAILED_TO_UPDATE_API_KEY": "API-Schlüssel konnte nicht aktualisiert werden",
+  "USER_ALREADY_HAS_PASSWORD": "Der Benutzer hat bereits ein Kennwort. Geben Sie dieses ein, um das Konto zu löschen."
 }

@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "Kamu tidak bisa melarang dirimu sendiri",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "Anda tidak dapat meninggalkan organisasi sebagai satu-satunya pemilik",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "Anda telah mencapai jumlah organisasi maksimum",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Anda telah mencapai jumlah tim maksimum"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "Anda telah mencapai jumlah tim maksimum",
+  "FAILED_TO_UPDATE_API_KEY": "Gagal memperbarui kunci API",
+  "USER_ALREADY_HAS_PASSWORD": "Pengguna sudah memiliki kata sandi. Berikan kata sandi tersebut untuk menghapus akun."
 }

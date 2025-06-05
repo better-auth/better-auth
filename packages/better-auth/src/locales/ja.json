@@ -116,5 +116,7 @@
   "YOU_CANNOT_BAN_YOURSELF": "自分自身を禁止することはできません",
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER": "組織を唯一の所有者として離れることはできない",
   "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS": "組織の数が上限に達しました",
-  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "チームの最大数に達しました"
+  "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS": "チームの最大数に達しました",
+  "FAILED_TO_UPDATE_API_KEY": "APIキーの更新に失敗しました",
+  "USER_ALREADY_HAS_PASSWORD": "ユーザーにはすでにパスワードが設定されています。アカウントを削除するには、そのパスワードを入力してください。"
 }
