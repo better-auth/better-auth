@@ -184,6 +184,7 @@ export const username = (options?: UsernameOptions) => {
 					const validPassword = await ctx.context.password.verify({
 						hash: currentPassword,
 						password: ctx.body.password,
+						account
 					});
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
