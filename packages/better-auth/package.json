@@ -514,6 +514,16 @@
         "types": "./dist/plugins/username/index.d.cts",
         "default": "./dist/plugins/username/index.cjs"
       }
+    },
+    "./plugins/localization": {
+      "import": {
+        "types": "./dist/plugins/localization/index.d.ts",
+        "default": "./dist/plugins/localization/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/localization/index.d.cts",
+        "default": "./dist/plugins/localization/index.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -652,6 +662,9 @@
       ],
       "plugins/username": [
         "./dist/plugins/username/index.d.ts"
+      ],
+      "plugins/localization": [
+        "./dist/plugins/localization/index.d.ts"
       ]
     }
   },
