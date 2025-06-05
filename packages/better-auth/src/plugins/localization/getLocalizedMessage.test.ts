@@ -21,19 +21,10 @@ const dicts: Record<string, Record<string, string>> = {
 };
 
 describe("getLocalizedMessage", () => {
-	[
-		"en",
-		"ja",
-		"fr",
-		"de",
-		"zh-CN",
-		"ko",
-		"ar",
-		"hi",
-	].forEach((lang) => {
+	["en", "ja", "fr", "de", "zh-CN", "ko", "ar", "hi"].forEach((lang) => {
 		it(`${lang}: ACCOUNT_NOT_FOUND`, () => {
 			expect(getLocalizedMessage(lang, "ACCOUNT_NOT_FOUND")).toBe(
-				dicts[lang]["ACCOUNT_NOT_FOUND"]
+				dicts[lang]["ACCOUNT_NOT_FOUND"],
 			);
 		});
 	});
@@ -46,7 +37,7 @@ describe("getLocalizedMessage", () => {
 
 	it("undefined lang defaults to en", () => {
 		expect(getLocalizedMessage(undefined, "ACCOUNT_NOT_FOUND")).toBe(
-			enDict["ACCOUNT_NOT_FOUND"]
+			enDict["ACCOUNT_NOT_FOUND"],
 		);
 	});
 	it("undefined code returns undefined", () => {
