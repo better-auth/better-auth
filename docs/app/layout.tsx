@@ -40,6 +40,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 					src="https://app.databuddy.cc/databuddy.js"
 					data-client-id="B9dz5Pb9HMftx3fHOccNs"
 					data-track-errors="true"
+					crossOrigin="anonymous"
 					strategy="afterInteractive"
 					defer
 				/>
