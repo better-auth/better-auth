@@ -336,7 +336,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				let subscription = existingSubscription;
 				if (!subscription) {
 					const incompleteSubscription = subscriptions.find(
-						(sub) => sub.status === "incomplete"
+						(sub) => sub.status === "incomplete",
 					);
 
 					if (incompleteSubscription) {
@@ -363,7 +363,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							stripeCustomerId: customerId,
 						};
 					} else {
-						const newSubscription = await ctx.context.adapter.create<InputSubscription, Subscription>({
+						const newSubscription = await ctx.context.adapter.create<
+							InputSubscription,
+							Subscription
+						>({
 							model: "subscription",
 							data: {
 								plan: plan.name.toLowerCase(),
