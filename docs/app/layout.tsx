@@ -9,6 +9,7 @@ import { baseUrl, createMetadata } from "@/lib/metadata";
 import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import Script from "next/script";
 
 export const metadata = createMetadata({
 	title: {
@@ -35,10 +36,11 @@ export default function Layout({ children }: { children: ReactNode }) {
                   `,
 					}}
 				/>
-				<script
+				<Script
 					src="https://app.databuddy.cc/databuddy.js"
 					data-client-id="B9dz5Pb9HMftx3fHOccNs"
 					data-track-errors="true"
+					strategy="afterInteractive"
 					defer
 				/>
 			</head>
