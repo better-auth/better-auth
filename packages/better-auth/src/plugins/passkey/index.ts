@@ -967,6 +967,7 @@ const schema = {
 			publicKey: {
 				type: "string",
 				required: true,
+				shouldIndex: true,
 			},
 			userId: {
 				type: "string",
@@ -975,6 +976,7 @@ const schema = {
 					field: "id",
 				},
 				required: true,
+				shouldIndex: true,
 			},
 			credentialID: {
 				type: "string",
