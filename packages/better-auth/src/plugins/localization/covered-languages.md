@@ -23,13 +23,14 @@
 | cs     | Czech          |
 | ar     | Arabic         |
 
-## Automatically create en.json files
+## Automatically create en.json files from $BASSE_ERROR_CODES and $ERROR_CODES from plugins by script
 ```bash
 cd packages/better-auth
 pnpm run generate-plugin-locale-enjson
+```
 
-## Automatically add added error code translations
-Save google-service-account.json to packages/better-auth/src/plugins/localization/ and then,
+## Automatically add error code translations by json-autotranslate to json of other Languages
+Save google-service-account.json to packages/better-auth/src/plugins/localization/ and then do as follows
 ```bash
 cd packages/better-auth
 pnpm run translate-plugin-locale-other-language
