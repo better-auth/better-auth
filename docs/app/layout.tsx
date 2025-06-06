@@ -35,6 +35,12 @@ export default function Layout({ children }: { children: ReactNode }) {
                   `,
 					}}
 				/>
+				<script
+					src="https://app.databuddy.cc/databuddy.js"
+					data-client-id="B9dz5Pb9HMftx3fHOccNs"
+					data-track-errors="true"
+					defer
+				/>
 			</head>
 			<body
 				className={`${GeistSans.variable} ${GeistMono.variable} bg-background font-sans relative `}
