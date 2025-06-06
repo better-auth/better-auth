@@ -367,6 +367,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 							})
 							.optional(),
+						target: z
+							.string({
+								description: "The target to open the OAuth2 provider in",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -479,6 +484,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					return ctx.json({
 						url: authUrl.toString(),
 						redirect: !ctx.body.disableRedirect,
+						...(ctx.body.target ? { target: ctx.body.target } : {}),
 					});
 				},
 			),
@@ -742,6 +748,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					body: z.object({
 						providerId: z.string(),
 						callbackURL: z.string(),
+						target: z.string().optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -767,6 +774,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 														description:
 															"Indicates that the client should redirect to the provided URL",
 														enum: [true],
+													},
+													target: {
+														type: "string",
+														description: "The target URL",
 													},
 												},
 												required: ["url", "redirect"],
@@ -859,6 +870,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					return c.json({
 						url: url.toString(),
 						redirect: true,
+						...(c.body.target ? { target: c.body.target } : {}),
 					});
 				},
 			),

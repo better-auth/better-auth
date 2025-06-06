@@ -114,6 +114,14 @@ export const linkSocialAccount = createAuthEndpoint(
 					description: "Additional scopes to request from the provider",
 				})
 				.optional(),
+			/**
+			 * Target for the link
+			 */
+			target: z
+				.string({
+					description: "Target for the link",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -181,6 +189,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		return c.json({
 			url: url.toString(),
 			redirect: true,
+			...(c.body.target ? { target: c.body.target } : {}),
 		});
 	},
 );

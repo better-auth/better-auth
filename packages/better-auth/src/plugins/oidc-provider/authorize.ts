@@ -20,6 +20,7 @@ export async function authorize(
 			return ctx.json({
 				redirect: true,
 				url,
+				...(ctx.body.target ? { target: ctx.body.target } : {}),
 			});
 		} else {
 			throw ctx.redirect(url);
