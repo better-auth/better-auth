@@ -69,7 +69,7 @@ describe("oauth-proxy", async () => {
 		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			onError(context) {
-				const location = context.response.headers.get("location");
+				const location = context.response.headers.get("location") ?? "";
 				if (!location) {
 					throw new Error("Location header not found");
 				}

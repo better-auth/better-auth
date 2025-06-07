@@ -54,6 +54,10 @@ export const expo = (options?: ExpoOptions) => {
 						if (!location) {
 							return;
 						}
+						const isProxyURL = location.includes("/oauth-proxy-callback");
+						if (isProxyURL) {
+							return;
+						}
 						const trustedOrigins = ctx.context.trustedOrigins.filter(
 							(origin: string) => !origin.startsWith("http"),
 						);
