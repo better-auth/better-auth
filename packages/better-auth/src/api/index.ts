@@ -30,6 +30,8 @@ import {
 	refreshToken,
 	getAccessToken,
 	accountInfo,
+	requestPasswordReset,
+	requestPasswordResetCallback,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -105,6 +107,8 @@ export function getEndpoints<
 		updateUser: updateUser<Option>(),
 		deleteUser,
 		forgetPasswordCallback,
+		requestPasswordReset,
+		requestPasswordResetCallback,
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
