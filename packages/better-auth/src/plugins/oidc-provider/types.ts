@@ -86,7 +86,7 @@ export interface OIDCOptions {
 	 */
 	loginPage: string;
 	/**
-	 * Weather to require PKCE (proof key code exchange) or not
+	 * Whether to require PKCE (proof key code exchange) or not
 	 *
 	 * According to OAuth2.1 spec this should be required. But in any
 	 * case if you want to disable this you can use this options.
