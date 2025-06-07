@@ -333,7 +333,7 @@ describe("reset password flow attempts", async (it) => {
 			code: otp,
 		});
 
-		await client.phoneNumber.forgetPassword({
+		await client.phoneNumber.requestPasswordReset({
 			phoneNumber: testPhoneNumber,
 		});
 
