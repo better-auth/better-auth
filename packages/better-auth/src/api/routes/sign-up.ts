@@ -167,7 +167,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 				});
 			}
-			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
+			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email, {}, ctx);
 			if (dbUser?.user) {
 				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
 				throw new APIError("UNPROCESSABLE_ENTITY", {

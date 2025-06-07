@@ -454,7 +454,7 @@ export const signInEmail = createAuthEndpoint(
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 			includeAccounts: true,
-		});
+		}, ctx);
 
 		if (!user) {
 			// Hash password to prevent timing attacks from revealing valid email addresses
