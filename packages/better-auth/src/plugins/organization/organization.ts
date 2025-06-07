@@ -358,6 +358,7 @@ export interface OrganizationOptions {
  * ```
  */
 export const organization = <O extends OrganizationOptions>(options?: O) => {
+	options = options || ({} as O);
 	let endpoints = {
 		createOrganization,
 		updateOrganization,
