@@ -29,7 +29,7 @@ export default function Component() {
 		setError("");
 
 		try {
-			const res = await client.requestPasswordReset({
+			await client.requestPasswordReset({
 				email,
 				redirectTo: "/reset-password",
 			});
