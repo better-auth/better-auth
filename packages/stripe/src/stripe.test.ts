@@ -700,4 +700,180 @@ describe("stripe", async () => {
 
 		expect(onSubscriptionDeleted).toHaveBeenCalled();
 	});
+
+	it("should check eligibility before applying free trial", async () => {
+		const isEligibleMock = vi.fn().mockResolvedValue(false);
+		
+		const stripeOptionsWithTrial = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: process.env.STRIPE_PRICE_ID_1!,
+						name: "starter",
+						freeTrial: {
+							days: 14,
+							isEligible: isEligibleMock,
+						},
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const authWithTrial = betterAuth({
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(stripeOptionsWithTrial)],
+		});
+
+		const clientWithTrial = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				bearer(),
+				stripeClient({
+					subscription: true,
+				}),
+			],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return authWithTrial.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const userRes = await clientWithTrial.signUp.email({
+			...testUser,
+			email: "trial-test@email.com",
+		}, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await clientWithTrial.signIn.email({
+			...testUser,
+			email: "trial-test@email.com",
+		}, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		// Call upgrade subscription
+		await clientWithTrial.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Verify that isEligible was called with correct parameters
+		expect(isEligibleMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.any(Object),
+				session: expect.any(Object),
+				plan: expect.objectContaining({
+					name: "starter",
+					freeTrial: expect.objectContaining({
+						days: 14,
+						isEligible: isEligibleMock,
+					}),
+				}),
+				referenceId: userRes.user.id,
+				existingSubscriptions: expect.any(Array),
+			}),
+			expect.any(Object),
+		);
+
+		// Verify checkout session was created without trial_period_days since not eligible
+		expect(_stripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.not.objectContaining({
+				subscription_data: expect.objectContaining({
+					trial_period_days: expect.any(Number),
+				}),
+			}),
+			undefined,
+		);
+	});
+
+	it("should apply free trial when user is eligible", async () => {
+		const isEligibleMock = vi.fn().mockResolvedValue(true);
+		
+		const stripeOptionsWithTrial = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: process.env.STRIPE_PRICE_ID_1!,
+						name: "starter",
+						freeTrial: {
+							days: 14,
+							isEligible: isEligibleMock,
+						},
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const authWithTrial = betterAuth({
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(stripeOptionsWithTrial)],
+		});
+
+		const clientWithTrial = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				bearer(),
+				stripeClient({
+					subscription: true,
+				}),
+			],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return authWithTrial.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const userRes = await clientWithTrial.signUp.email({
+			...testUser,
+			email: "eligible-trial-test@email.com",
+		}, {
+			throw: true,
+		});
+
+		const headers = new Headers();
+		await clientWithTrial.signIn.email({
+			...testUser,
+			email: "eligible-trial-test@email.com",
+		}, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+
+		// Call upgrade subscription
+		await clientWithTrial.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Verify checkout session was created with trial_period_days since eligible
+		expect(_stripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subscription_data: expect.objectContaining({
+					trial_period_days: 14,
+				}),
+			}),
+			undefined,
+		);
+	});
 });
