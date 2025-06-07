@@ -189,7 +189,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		return c.json({
 			url: url.toString(),
 			redirect: true,
-			...(c.body.target ? { target: c.body.target } : {}),
+			...(c.body?.target ? { target: c.body.target } : {}),
 		});
 	},
 );

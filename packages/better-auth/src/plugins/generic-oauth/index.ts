@@ -870,7 +870,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					return c.json({
 						url: url.toString(),
 						redirect: true,
-						...(c.body.target ? { target: c.body.target } : {}),
+						...(c.body?.target ? { target: c.body.target } : {}),
 					});
 				},
 			),
