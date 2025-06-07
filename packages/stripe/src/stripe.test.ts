@@ -1,4 +1,5 @@
 import { betterAuth, type User } from "better-auth";
+import { APIError } from "better-auth/api";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
@@ -242,6 +243,206 @@ describe("stripe", async () => {
 		});
 		expect(listAfterRes.data?.length).toBeGreaterThan(0);
 	});
+
+	// this test fails since the memory adapter doesn't support 'OR' connectors
+	it.fails(
+		"should upgrade an active subscriptions with different seats",
+		async () => {
+			const userRes = await authClient.signUp.email(
+				{
+					...testUser,
+					email: "list-test@email.com",
+				},
+				{
+					throw: true,
+				},
+			);
+			const userId = userRes.user.id;
+
+			const headers = new Headers();
+			await authClient.signIn.email(
+				{
+					...testUser,
+					email: "list-test@email.com",
+				},
+				{
+					throw: true,
+					onSuccess: setCookieToHeader(headers),
+				},
+			);
+
+			const listRes = await authClient.subscription.list({
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			expect(Array.isArray(listRes.data)).toBe(true);
+
+			await authClient.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: {
+					headers,
+				},
+			});
+			const listBeforeActive = await authClient.subscription.list({
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(listBeforeActive.data?.length).toBe(0);
+			// Update the subscription status to active
+			await ctx.adapter.update({
+				model: "subscription",
+				update: {
+					status: "active",
+				},
+				where: [
+					{
+						field: "referenceId",
+						value: userId,
+					},
+				],
+			});
+			const listAfterRes = await authClient.subscription.list({
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(listAfterRes.data?.length).toBeGreaterThan(0);
+			const subscriptionId = listAfterRes.data![0]!.id;
+			mockStripe.subscriptions.list.mockResolvedValue({
+				data: [
+					{
+						id: subscriptionId,
+						items: {
+							data: [
+								{
+									id: "stripe_123",
+								},
+							],
+						},
+					},
+				],
+			});
+
+			await authClient.subscription.upgrade({
+				plan: "starter",
+				seats: 5,
+				subscriptionId,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					flow_data: expect.objectContaining({
+						type: "subscription_update_confirm",
+						subscription_update_confirm: expect.objectContaining({
+							items: expect.arrayContaining([
+								expect.objectContaining({
+									quantity: 5,
+								}),
+							]),
+						}),
+					}),
+				}),
+			);
+		},
+	);
+
+	// Same as above, this test fails since the memory adapter doesn't support 'OR' connectors
+	it.fails(
+		"should upgrade an active subscriptions with different seats",
+		async () => {
+			const userRes = await authClient.signUp.email(
+				{
+					...testUser,
+					email: "list-test@email.com",
+				},
+				{
+					throw: true,
+				},
+			);
+			const userId = userRes.user.id;
+
+			const headers = new Headers();
+			await authClient.signIn.email(
+				{
+					...testUser,
+					email: "list-test@email.com",
+				},
+				{
+					throw: true,
+					onSuccess: setCookieToHeader(headers),
+				},
+			);
+
+			const listRes = await authClient.subscription.list({
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			expect(Array.isArray(listRes.data)).toBe(true);
+
+			await authClient.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: {
+					headers,
+				},
+			});
+			const listBeforeActive = await authClient.subscription.list({
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(listBeforeActive.data?.length).toBe(0);
+			// Update the subscription status to active
+			await ctx.adapter.update({
+				model: "subscription",
+				update: {
+					status: "active",
+				},
+				where: [
+					{
+						field: "referenceId",
+						value: userId,
+					},
+				],
+			});
+			const listAfterRes = await authClient.subscription.list({
+				fetchOptions: {
+					headers,
+				},
+			});
+			expect(listAfterRes.data?.length).toBeGreaterThan(0);
+			const subscriptionId = listAfterRes.data![0]!.id;
+			mockStripe.subscriptions.list.mockResolvedValue({
+				data: [
+					{
+						id: subscriptionId,
+					},
+				],
+			});
+
+			const { error } = await authClient.subscription.upgrade({
+				plan: "starter",
+				seats: 1,
+				subscriptionId,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			expect(error).toEqual(
+				expect.objectContaining({
+					code: "YOURE_ALREADY_SUBSCRIBED_TO_THIS_PLAN",
+				}),
+			);
+		},
+	);
 
 	it("should handle subscription webhook events", async () => {
 		const { id: testReferenceId } = await ctx.adapter.create({
