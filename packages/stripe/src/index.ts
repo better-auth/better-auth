@@ -900,7 +900,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					metadata: {
 						isAction: false,
 					},
-					cloneRequest: true,
+					disableBody: true
 				},
 				async (ctx) => {
 					if (!ctx.request?.body) {
