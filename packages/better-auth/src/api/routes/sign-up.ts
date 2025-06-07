@@ -175,10 +175,14 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const additionalData = parseUserInput(
-				ctx.context.options,
-				additionalFields as any,
-			);
+			const rawData = {
+				...additionalFields,
+				email: email.toLowerCase(),
+				name,
+				image,
+				emailVerified: false,
+			};
+			const data = parseUserInput(ctx.context.options, rawData);
 			/**
 			 * Hash the password
 			 *
@@ -191,13 +195,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			let createdUser: User;
 			try {
 				createdUser = await ctx.context.internalAdapter.createUser(
-					{
-						email: email.toLowerCase(),
-						name,
-						image,
-						...additionalData,
-						emailVerified: false,
-					},
+					data as any,
 					ctx,
 				);
 				if (!createdUser) {
