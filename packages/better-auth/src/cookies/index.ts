@@ -10,6 +10,7 @@ import { createTime } from "../utils/time";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
+import { binary } from "@better-auth/utils/binary";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -283,7 +284,7 @@ export const getSessionCookie = (
 };
 
 export const getCookieCache = <
-	Session extends {
+	S extends {
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
 	},
@@ -292,6 +293,7 @@ export const getCookieCache = <
 	config?: {
 		cookiePrefix?: string;
 		cookieName?: string;
+		isSecure?: boolean;
 	},
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
@@ -301,13 +303,20 @@ export const getCookieCache = <
 	}
 	const { cookieName = "session_data", cookiePrefix = "better-auth" } =
 		config || {};
-	const name = isProduction
-		? `__Secure-${cookiePrefix}.${cookieName}`
-		: `${cookiePrefix}.${cookieName}`;
+	const name =
+		config?.isSecure !== undefined
+			? config.isSecure
+				? `__Secure-${cookiePrefix}.${cookieName}`
+				: `${cookiePrefix}.${cookieName}`
+			: isProduction
+				? `__Secure-${cookiePrefix}.${cookieName}`
+				: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionData = parsedCookie.get(name);
 	if (sessionData) {
-		return safeJSONParse<Session>(sessionData);
+		return safeJSONParse<{
+			session: S;
+		}>(binary.decode(base64Url.decode(sessionData)))?.session;
 	}
 	return null;
 };
