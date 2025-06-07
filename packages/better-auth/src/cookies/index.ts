@@ -10,6 +10,7 @@ import { createTime } from "../utils/time";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
+import { base64 } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -309,7 +310,7 @@ export const getCookieCache = <
 	const sessionData = parsedCookie.get(name);
 	if (sessionData) {
 		return safeJSONParse<Session>(
-			binary.decode(base64Url.decode(sessionData)),
+			binary.decode(base64.decode(sessionData)),
 		);
 	}
 	return null;
