@@ -48,6 +48,18 @@ export interface PhoneNumberOptions {
 	 * @param request - the request object
 	 * @returns
 	 */
+	sendPasswordResetOTP?: (
+		data: { phoneNumber: string; code: string },
+		request?: Request,
+	) => Promise<void> | void;
+	/**
+	 * a callback to send otp on user requesting to reset their password
+	 *
+	 * @param data - contains phone number and code
+	 * @param request - the request object
+	 * @returns
+	 * @deprecated Use sendPasswordResetOTP instead. This function will be removed in the next major version.
+	 */
 	sendForgetPasswordOTP?: (
 		data: { phoneNumber: string; code: string },
 		request?: Request,
@@ -693,6 +705,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 				},
 			),
+			/**
+			 * @deprecated Use requestPasswordResetPhoneNumber instead. This endpoint will be removed in the next major version.
+			 */
 			forgetPasswordPhoneNumber: createAuthEndpoint(
 				"/phone-number/forget-password",
 				{
@@ -746,12 +761,82 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${code}:0`,
-							identifier: `${ctx.body.phoneNumber}-forget-password`,
+							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
 							expiresAt: getDate(opts.expiresIn, "sec"),
 						},
 						ctx,
 					);
 					await options?.sendForgetPasswordOTP?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx.request,
+					);
+					return ctx.json({
+						status: true,
+					});
+				},
+			),
+			requestPasswordResetPhoneNumber: createAuthEndpoint(
+				"/phone-number/request-password-reset",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+					}),
+					metadata: {
+						openapi: {
+							description: "Request OTP for password reset via phone number",
+							responses: {
+								"200": {
+									description: "OTP sent successfully for password reset",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the OTP was sent successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
+						model: "user",
+						where: [
+							{
+								value: ctx.body.phoneNumber,
+								field: opts.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "phone number isn't registered",
+						});
+					}
+					const code = generateOTP(opts.otpLength);
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
+					await options?.sendPasswordResetOTP?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,
 							code,
@@ -802,7 +887,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				async (ctx) => {
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
-							`${ctx.body.phoneNumber}-forget-password`,
+							`${ctx.body.phoneNumber}-request-password-reset`,
 						);
 					if (!verification) {
 						throw new APIError("BAD_REQUEST", {

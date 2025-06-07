@@ -217,7 +217,7 @@ describe("Origin Check", async (it) => {
 				customFetchImpl,
 			},
 		});
-		const res = await client.forgetPassword({
+		const res = await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://malicious.com",
 		});
@@ -235,7 +235,7 @@ describe("Origin Check", async (it) => {
 				},
 			},
 		});
-		const res = await client.forgetPassword({
+		const res = await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://localhost:5000/reset-password",
 		});
