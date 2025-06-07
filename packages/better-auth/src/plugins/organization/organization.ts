@@ -340,6 +340,24 @@ export interface OrganizationOptions {
 			request?: Request,
 		) => Promise<void>;
 	};
+	organizationUpdate?: {
+		beforeUpdate?: (
+			data: {
+				previous: Organization;
+				updates: Partial<Organization>;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void | { data: Partial<Organization> }>;
+		afterUpdate?: (
+			data: {
+				previous: Organization;
+				updated: Organization;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+	};
 }
 
 /**
