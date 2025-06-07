@@ -286,14 +286,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 						});
 
-				const existingSubscription = subscriptions.find(
+				const existingActiveSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
 
 				if (
-					existingSubscription &&
-					existingSubscription.status === "active" &&
-					existingSubscription.plan === ctx.body.plan
+					existingActiveSubscription &&
+					existingActiveSubscription.plan === ctx.body.plan
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
@@ -333,7 +332,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				let subscription = existingSubscription;
+				let subscription = existingActiveSubscription ?? subscriptions[0];
 				if (!subscription) {
 					const newSubscription = await ctx.context.adapter.create<
 						InputSubscription,
