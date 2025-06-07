@@ -999,4 +999,19 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+	/**
+	 * Multi-tenancy
+	 *
+	 * allows using a tenant_id field in a multi-tenant environment
+	 */
+	multiTenancy?: {
+		/**
+		 * Enable multi-tenancy mode which adds a tenantId column
+		 */
+		enabled: boolean;
+		/**
+		 * Name of the tenant id field, defaults to `tenantId`
+		 */
+		tableFieldName?: string;
+	};
 };

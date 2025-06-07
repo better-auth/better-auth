@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { createHeadersWithTenantId } from "../../test-utils/headers";
 
 describe("Email Verification", async () => {
 	const mockSendEmail = vi.fn();
@@ -246,5 +247,159 @@ describe("Email Verification Secondary Storage", async () => {
 		});
 		expect(session.data?.user.email).toBe("new@email.com");
 		expect(session.data?.user.emailVerified).toBe(false);
+	});
+});
+
+describe("Email Verification Multi-tenancy", async () => {
+	const mockSendEmail = vi.fn();
+	const tokenStore = new Map<string, string>();
+
+	const { auth, client } = await getTestInstance(
+		{
+			multiTenancy: {
+				enabled: true,
+			},
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					tokenStore.set(`${user.tenantId}-${user.email}`, token);
+					mockSendEmail(user.email, url);
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should isolate email verification per tenant", async () => {
+		// Create user in tenant-1
+
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "test@example.com",
+				password: "password",
+				name: "User",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+		const token = tokenStore.get(`tenant-1-test@example.com`);
+
+		// Ensure you can't verify with wrong tenant
+		const badTenantVerification = await client.verifyEmail({
+			query: {
+				token: token!,
+			},
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2"),
+			},
+		});
+
+		expect(badTenantVerification.data?.status).toBeUndefined();
+
+		// Verify with correct tenant context (should succeed)
+		const correctTenantVerification = await client.verifyEmail({
+			query: {
+				token: token!,
+			},
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1"),
+			},
+		});
+		console.log(token);
+		console.log(correctTenantVerification);
+
+		expect(correctTenantVerification.data?.status).toBe(true);
+	});
+
+	it("should call onEmailVerification callback with correct tenant context", async () => {
+		const onEmailVerificationMock = vi.fn();
+		const callbackTokenStore = new Map<string, string>();
+
+		const { client: callbackClient, auth: callbackAuth } =
+			await getTestInstance(
+				{
+					multiTenancy: {
+						enabled: true as const,
+					},
+					emailAndPassword: {
+						enabled: true,
+						requireEmailVerification: true,
+					},
+					emailVerification: {
+						async sendVerificationEmail({ user, url, token }) {
+							callbackTokenStore.set(`${user.tenantId}-${user.email}`, token);
+							mockSendEmail(user.email, url);
+						},
+						onEmailVerification: onEmailVerificationMock,
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+		const email = "callback@test.com";
+
+		// Create user in tenant-1
+		await callbackAuth.api.signUpEmail({
+			body: {
+				email,
+				password: "password",
+				name: "User",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		const callbackToken = callbackTokenStore.get("tenant-1-callback@test.com");
+
+		// Verify email
+		const res = await callbackClient.verifyEmail({
+			query: {
+				token: callbackToken!,
+			},
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1"),
+			},
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(onEmailVerificationMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email,
+				tenantId: "tenant-1",
+			}),
+			expect.any(Object),
+		);
+	});
+
+	it("should prevent cross-tenant email verification", async () => {
+		const email = "crosstenant@test.com";
+
+		// Create user only in tenant-1
+		await auth.api.signUpEmail({
+			body: {
+				email,
+				password: "password",
+				name: "User",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		// Try to send verification email from tenant-2 context (should fail)
+		try {
+			await auth.api.sendVerificationEmail({
+				body: {
+					email,
+				},
+				headers: createHeadersWithTenantId("tenant-2"),
+			});
+			expect(true).toBe(false); // Should not reach here
+		} catch (error) {
+			expect(error).toBeDefined(); // Should throw because user doesn't exist in tenant-2
+		}
 	});
 });

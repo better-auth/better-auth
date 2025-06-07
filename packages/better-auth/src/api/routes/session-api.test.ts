@@ -3,6 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
+import { createHeadersWithTenantId } from "../../test-utils/headers";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -542,5 +543,310 @@ describe("cookie cache", async () => {
 			},
 		});
 		expect(fn).toHaveBeenCalledTimes(5);
+	});
+});
+
+describe("session multi-tenancy", async () => {
+	const { client, auth } = await getTestInstance(
+		{
+			multiTenancy: {
+				enabled: true,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should isolate sessions per tenant", async () => {
+		// Create users in different tenants
+		const tenant1User = await auth.api.signUpEmail({
+			body: {
+				email: "user1@test.com",
+				password: "password",
+				name: "User 1",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		const tenant2User = await auth.api.signUpEmail({
+			body: {
+				email: "user2@test.com",
+				password: "password",
+				name: "User 2",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// Get sessions with correct tenant headers
+		const tenant1Session = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		const tenant2Session = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		expect(tenant1Session.data?.user.tenantId).toBe("tenant-1");
+		expect(tenant2Session.data?.user.tenantId).toBe("tenant-2");
+		expect(tenant1Session.data?.user.id).not.toBe(tenant2Session.data?.user.id);
+	});
+
+	it("should fail to get session with wrong tenant ID", async () => {
+		const tenantUser = await auth.api.signUpEmail({
+			body: {
+				email: "user@test.com",
+				password: "password",
+				name: "User",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		// Create session headers with cookies for tenant-1
+		const headers1 = new Headers();
+		await client.signIn.email(
+			{
+				email: "user@test.com",
+				password: "password",
+			},
+			{
+				onSuccess(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					const signedCookie = cookies.get("better-auth.session_token")?.value;
+					headers1.set("cookie", `better-auth.session_token=${signedCookie}`);
+					headers1.set("x-internal-tenantid", "tenant-1");
+				},
+			},
+		);
+
+		// Try to get session with wrong tenant ID
+		const headers2 = new Headers(headers1);
+		headers2.set("x-internal-tenantid", "tenant-2");
+
+		const wrongTenantSession = await client.getSession({
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+
+		expect(wrongTenantSession.data).toBeNull();
+	});
+
+	it("should list sessions only for current tenant", async () => {
+		// Create user in tenant-1 with multiple sessions
+		const tenant1User = await auth.api.signUpEmail({
+			body: {
+				email: "user1@tenant1.com",
+				password: "password",
+				name: "User 1",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		// Sign in again to create second session for same user
+		const tenant1UserSecondSession = await auth.api.signInEmail({
+			body: {
+				email: "user1@tenant1.com",
+				password: "password",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		// Create user in tenant-2
+		const tenant2User = await auth.api.signUpEmail({
+			body: {
+				email: "user@tenant2.com",
+				password: "password",
+				name: "User",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// List sessions for tenant-1 user using token
+		const tenant1Sessions = await client.listSessions({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1UserSecondSession.token}`,
+				}),
+			},
+		});
+
+		// List sessions for tenant-2 user using token
+		const tenant2Sessions = await client.listSessions({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		// Verify tenant-1 user can see their own sessions
+		expect(tenant1Sessions.data?.length).toBeGreaterThan(0);
+		expect(
+			tenant1Sessions.data?.every(
+				(session) => session.userId === tenant1User.user.id,
+			),
+		).toBe(true);
+
+		// Verify tenant-2 only sees its own session
+		expect(tenant2Sessions.data?.length).toBeGreaterThan(0);
+		expect(
+			tenant2Sessions.data?.every(
+				(session) => session.userId === tenant2User.user.id,
+			),
+		).toBe(true);
+
+		// Verify sessions are not shared between tenants
+		const tenant1SessionIds = tenant1Sessions.data?.map((s) => s.id) || [];
+		const tenant2SessionIds = tenant2Sessions.data?.map((s) => s.id) || [];
+		expect(tenant1SessionIds.some((id) => tenant2SessionIds.includes(id))).toBe(
+			false,
+		);
+	});
+
+	it("should revoke sessions only within tenant", async () => {
+		// Create users in different tenants
+		const tenant1User = await auth.api.signUpEmail({
+			body: {
+				email: "user1@revoke.com",
+				password: "password",
+				name: "User 1",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		const tenant2User = await auth.api.signUpEmail({
+			body: {
+				email: "user2@revoke.com",
+				password: "password",
+				name: "User 2",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// Revoke session in tenant-1
+		await client.revokeSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+			token: tenant1User.token!,
+		});
+
+		// Verify tenant-1 session is revoked
+		const tenant1Session = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+		expect(tenant1Session.data).toBeNull();
+
+		// Verify tenant-2 session is still active
+		const tenant2Session = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+		expect(tenant2Session.data?.user.id).toBe(tenant2User.user.id);
+	});
+
+	it("should handle session updates per tenant", async () => {
+		const { client, auth: updateAuth } = await getTestInstance(
+			{
+				multiTenancy: {
+					enabled: true,
+				},
+				session: {
+					updateAge: 60,
+					expiresIn: 60 * 2,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		// Create users in different tenants
+		const tenant1User = await updateAuth.api.signUpEmail({
+			body: {
+				email: "user1@update.com",
+				password: "password",
+				name: "User 1",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		const tenant2User = await updateAuth.api.signUpEmail({
+			body: {
+				email: "user2@update.com",
+				password: "password",
+				name: "User 2",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// Get initial sessions
+		const tenant1InitialSession = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		const tenant2InitialSession = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 70); // Advance past update age
+
+		// Update session for tenant-1 only
+		const tenant1UpdatedSession = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		// Verify tenant-1 session was updated
+		expect(
+			new Date(tenant1UpdatedSession.data!.session.expiresAt).getTime(),
+		).toBeGreaterThan(
+			new Date(tenant1InitialSession.data!.session.expiresAt).getTime(),
+		);
+
+		// Verify tenant-2 session is isolated and unchanged
+		const tenant2Session = await client.getSession({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		expect(tenant2Session.data?.user.tenantId).toBe("tenant-2");
+		expect(tenant2Session.data?.user.id).toBe(tenant2User.user.id);
+
+		vi.useRealTimers();
 	});
 });

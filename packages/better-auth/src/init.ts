@@ -218,6 +218,7 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
+	tenantId?: string;
 };
 
 function runPluginInit(ctx: AuthContext) {
@@ -261,6 +262,7 @@ function getInternalPlugins(options: BetterAuthOptions) {
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
 		//TODO: add internal plugin
 	}
+
 	return plugins;
 }
 

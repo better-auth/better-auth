@@ -7,6 +7,7 @@ import type {
 	AdditionalUserFieldsInput,
 	BetterAuthOptions,
 	User,
+	InferUser,
 } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
@@ -262,13 +263,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					token: null,
 					user: {
 						id: createdUser.id,
+						...((createdUser as any).tenantId
+							? { tenantId: (createdUser as any).tenantId as string }
+							: {}),
 						email: createdUser.email,
 						name: createdUser.name,
 						image: createdUser.image,
 						emailVerified: createdUser.emailVerified,
 						createdAt: createdUser.createdAt,
 						updatedAt: createdUser.updatedAt,
-					},
+					} as InferUser<O>,
 				});
 			}
 
@@ -289,13 +293,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				token: session.token,
 				user: {
 					id: createdUser.id,
+					...((createdUser as any).tenantId
+						? { tenantId: (createdUser as any).tenantId as string }
+						: {}),
 					email: createdUser.email,
 					name: createdUser.name,
 					image: createdUser.image,
 					emailVerified: createdUser.emailVerified,
 					createdAt: createdUser.createdAt,
 					updatedAt: createdUser.updatedAt,
-				},
+				} as InferUser<O>,
 			});
 		},
 	);

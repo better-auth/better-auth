@@ -6,6 +6,7 @@ import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
 import { signJWT } from "../../crypto/jwt";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { createHeadersWithTenantId } from "../../test-utils/headers";
 
 let email = "";
 vi.mock("../../oauth2", async (importOriginal) => {
@@ -345,5 +346,325 @@ describe("account", async () => {
 			(account) => account.provider === "google",
 		);
 		expect(remainingGoogleAccounts.length).toBe(1);
+	});
+});
+
+describe("account multi-tenancy", async () => {
+	const { client, auth } = await getTestInstance(
+		{
+			multiTenancy: {
+				enabled: true,
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should isolate accounts per tenant", async () => {
+		// Create users in different tenants
+		const tenant1User = await auth.api.signUpEmail({
+			body: {
+				email: "user1@test.com",
+				password: "password",
+				name: "User 1",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		const tenant2User = await auth.api.signUpEmail({
+			body: {
+				email: "user2@test.com",
+				password: "password",
+				name: "User 2",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// List accounts for tenant-1
+		const tenant1Accounts = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		// List accounts for tenant-2
+		const tenant2Accounts = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		// Verify each tenant only sees their own accounts
+		expect(tenant1Accounts.data?.length).toBe(1);
+		expect(tenant2Accounts.data?.length).toBe(1);
+		expect(tenant1Accounts.data?.[0].accountId).toBe(tenant1User.user.id);
+		expect(tenant2Accounts.data?.[0].accountId).toBe(tenant2User.user.id);
+	});
+
+	it("should isolate account linking per tenant", async () => {
+		// Create users in different tenants
+		const tenant1User = await auth.api.signUpEmail({
+			body: {
+				email: "link1@test.com",
+				password: "password",
+				name: "User 1",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		const tenant2User = await auth.api.signUpEmail({
+			body: {
+				email: "link2@test.com",
+				password: "password",
+				name: "User 2",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// Mock the email for the linking process
+		email = "link1@test.com";
+
+		// Link social account for tenant-1 user
+		const linkHeaders1 = new Headers();
+		const linkAccountRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+			},
+			{
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					linkHeaders1.set(
+						"cookie",
+						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+					);
+					linkHeaders1.set("x-internal-tenantid", "tenant-1");
+				},
+			},
+		);
+
+		const state =
+			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+
+		// Complete the linking process
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			headers: linkHeaders1,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+			},
+		});
+
+		// Verify accounts are properly isolated
+		const tenant1Accounts = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		const tenant2Accounts = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		// Tenant-1 should have 2 accounts (credential + google)
+		expect(tenant1Accounts.data?.length).toBe(2);
+		expect(tenant1Accounts.data?.some((acc) => acc.provider === "google")).toBe(
+			true,
+		);
+
+		// Tenant-2 should still have only 1 account (credential)
+		expect(tenant2Accounts.data?.length).toBe(1);
+		expect(tenant2Accounts.data?.[0].provider).toBe("credential");
+	});
+
+	it("should isolate account unlinking per tenant", async () => {
+		// Create user in tenant-1 with multiple accounts
+		const tenant1User = await auth.api.signUpEmail({
+			body: {
+				email: "unlink@test.com",
+				password: "password",
+				name: "User",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		// Create user in tenant-2
+		const tenant2User = await auth.api.signUpEmail({
+			body: {
+				email: "other@test.com",
+				password: "password",
+				name: "Other User",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// Manually create google accounts for both users
+		const ctx = await auth.$context;
+		await ctx.adapter.create({
+			model: "account",
+			data: {
+				providerId: "google",
+				accountId: "google123",
+				userId: tenant1User.user.id,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await ctx.adapter.create({
+			model: "account",
+			data: {
+				providerId: "google",
+				accountId: "google456",
+				userId: tenant2User.user.id,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		// Get accounts before unlinking
+		const tenant1AccountsBefore = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		const tenant2AccountsBefore = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		expect(tenant1AccountsBefore.data?.length).toBe(2);
+		expect(tenant2AccountsBefore.data?.length).toBe(2);
+
+		// Unlink google account from tenant-1
+		const googleAccount = tenant1AccountsBefore.data?.find(
+			(acc) => acc.provider === "google",
+		);
+		await client.unlinkAccount({
+			providerId: "google",
+			accountId: googleAccount?.accountId!,
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		// Verify tenant-1 has one less account
+		const tenant1AccountsAfter = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		// Verify tenant-2 accounts are unchanged
+		const tenant2AccountsAfter = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		expect(tenant1AccountsAfter.data?.length).toBe(1);
+		expect(tenant2AccountsAfter.data?.length).toBe(2); // Should remain unchanged
+	});
+
+	it("should prevent cross-tenant account operations", async () => {
+		// Create users in different tenants
+		const tenant1User = await auth.api.signUpEmail({
+			body: {
+				email: "cross1@test.com",
+				password: "password",
+				name: "User 1",
+			},
+			headers: createHeadersWithTenantId("tenant-1"),
+		});
+
+		const tenant2User = await auth.api.signUpEmail({
+			body: {
+				email: "cross2@test.com",
+				password: "password",
+				name: "User 2",
+			},
+			headers: createHeadersWithTenantId("tenant-2"),
+		});
+
+		// Get tenant-2's accounts
+		const tenant2Accounts = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		const tenant2AccountId = tenant2Accounts.data?.[0].accountId;
+
+		// Try to unlink tenant-2's account from tenant-1 context (should fail)
+		const unlinkAttempt = await client.unlinkAccount({
+			providerId: "credential",
+			accountId: tenant2AccountId!,
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-1", {
+					authorization: `Bearer ${tenant1User.token}`,
+				}),
+			},
+		});
+
+		expect(unlinkAttempt.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+		);
+
+		// Verify tenant-2's account is still there
+		const tenant2AccountsAfter = await client.listAccounts({
+			fetchOptions: {
+				headers: createHeadersWithTenantId("tenant-2", {
+					authorization: `Bearer ${tenant2User.token}`,
+				}),
+			},
+		});
+
+		expect(tenant2AccountsAfter.data?.length).toBe(1);
 	});
 });
