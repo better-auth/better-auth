@@ -484,7 +484,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					return ctx.json({
 						url: authUrl.toString(),
 						redirect: !ctx.body.disableRedirect,
-						...(ctx.body.target ? { target: ctx.body.target } : {}),
+						...(ctx.body?.target ? { target: ctx.body.target } : {}),
 					});
 				},
 			),
