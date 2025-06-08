@@ -11,30 +11,6 @@ export interface WalletAddress {
 	createdAt: Date;
 }
 
-// SIWE Session compatible with Reown spec
-export interface SIWESession {
-	address: string;
-	chainId: number;
-}
-
-// Enhanced message parameters following Reown spec
-export interface SIWEMessageParams {
-	domain: string;
-	uri: string;
-	chains: number[];
-	statement: string;
-	nonce?: string;
-	issuedAt?: string;
-	expirationTime?: string;
-	notBefore?: string;
-	requestId?: string;
-	resources?: string[];
-}
-
-export interface SIWECreateMessageArgs extends SIWEMessageParams {
-	address: string;
-	chainId: number;
-}
 
 interface CacaoHeader {
 	t: 'caip122'
