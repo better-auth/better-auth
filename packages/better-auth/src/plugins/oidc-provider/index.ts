@@ -31,12 +31,12 @@ export const getMetadata = (
 ): OIDCMetadata => {
 	const issuer = ctx.context.options.baseURL as string;
 	const baseURL = ctx.context.baseURL;
-	
+
 	// Determine supported algorithms based on JWT plugin usage
-	const supportedAlgs = options?.useJWTPlugin 
-		? ["RS256", "EdDSA", "none"] 
+	const supportedAlgs = options?.useJWTPlugin
+		? ["RS256", "EdDSA", "none"]
 		: ["HS256", "none"];
-	
+
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -53,7 +53,10 @@ export const getMetadata = (
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: supportedAlgs as ("RS256" | "none")[],
+		id_token_signing_alg_values_supported: supportedAlgs as (
+			| "RS256"
+			| "none"
+		)[],
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
@@ -615,10 +618,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						// Use JWT plugin for signing
 						const adapter = getJwksAdapter(ctx.context.adapter);
 						const key = await adapter.getLatestKey();
-						
+
 						if (!key) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
-								error_description: "No JWT signing key found. Make sure the JWT plugin is properly configured.",
+								error_description:
+									"No JWT signing key found. Make sure the JWT plugin is properly configured.",
 								error: "server_error",
 							});
 						}
@@ -628,8 +632,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						const keyAlg = publicKeyInfo.alg || "EdDSA";
 
 						// Get JWT plugin options from context
-						const jwtPluginOptions = ctx.context.options.plugins?.find(p => p.id === "jwt")?.options;
-						const privateKeyEncryptionEnabled = !jwtPluginOptions?.jwks?.disablePrivateKeyEncryption;
+						const jwtPluginOptions = ctx.context.options.plugins?.find(
+							(p) => p.id === "jwt",
+						)?.options;
+						const privateKeyEncryptionEnabled =
+							!jwtPluginOptions?.jwks?.disablePrivateKeyEncryption;
 
 						let privateWebKey = privateKeyEncryptionEnabled
 							? await symmetricDecrypt({
@@ -693,7 +700,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
-					const jwtHeader: { alg: string; kid?: string } = { alg: secretKey.alg };
+					const jwtHeader: { alg: string; kid?: string } = {
+						alg: secretKey.alg,
+					};
 					if (secretKey.kid) {
 						jwtHeader.kid = secretKey.kid;
 					}
