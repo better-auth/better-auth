@@ -31,6 +31,116 @@ function redirectCallback(
 	return url.href;
 }
 
+export const requestPasswordReset = createAuthEndpoint(
+	"/request-password-reset",
+	{
+		method: "POST",
+		body: z.object({
+			/**
+			 * The email address of the user to send a password reset email to.
+			 */
+			email: z
+				.string({
+					description:
+						"The email address of the user to send a password reset email to",
+				})
+				.email(),
+			/**
+			 * The URL to redirect the user to reset their password.
+			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
+			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
+			 * token=VALID_TOKEN
+			 */
+			redirectTo: z
+				.string({
+					description:
+						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+				})
+				.optional(),
+		}),
+		metadata: {
+			openapi: {
+				description: "Send a password reset email to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+										message: {
+											type: "string",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
+			ctx.context.logger.error(
+				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!",
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Reset password isn't enabled",
+			});
+		}
+		const { email, redirectTo } = ctx.body;
+
+		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
+			includeAccounts: true,
+		});
+		if (!user) {
+			ctx.context.logger.error("Reset Password: User not found", { email });
+			return ctx.json({
+				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
+			});
+		}
+		const defaultExpiresIn = 60 * 60 * 1;
+		const expiresAt = getDate(
+			ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
+				defaultExpiresIn,
+			"sec",
+		);
+		const verificationToken = generateId(24);
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			},
+			ctx,
+		);
+		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
+		await ctx.context.options.emailAndPassword.sendResetPassword(
+			{
+				user: user.user,
+				url,
+				token: verificationToken,
+			},
+			ctx.request,
+		);
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+/**
+ * @deprecated Use requestPasswordReset instead. This endpoint will be removed in the next major
+ * version.
+ */
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
 	{
@@ -72,6 +182,9 @@ export const forgetPassword = createAuthEndpoint(
 										status: {
 											type: "boolean",
 										},
+										message: {
+											type: "string",
+										},
 									},
 								},
 							},
@@ -99,6 +212,8 @@ export const forgetPassword = createAuthEndpoint(
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
 				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
 			});
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
@@ -116,7 +231,8 @@ export const forgetPassword = createAuthEndpoint(
 			},
 			ctx,
 		);
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
+		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			{
 				user: user.user,
@@ -131,7 +247,7 @@ export const forgetPassword = createAuthEndpoint(
 	},
 );
 
-export const forgetPasswordCallback = createAuthEndpoint(
+export const requestPasswordResetCallback = createAuthEndpoint(
 	"/reset-password/:token",
 	{
 		method: "GET",
@@ -185,6 +301,11 @@ export const forgetPasswordCallback = createAuthEndpoint(
 		throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));
 	},
 );
+
+/**
+ * @deprecated Use requestPasswordResetCallback instead
+ */
+export const forgetPasswordCallback = requestPasswordResetCallback;
 
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
