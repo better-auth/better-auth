@@ -224,7 +224,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							return;
 						}
 						if (options?.onLinkAccount) {
-							await options?.onLinkAccount?.({
+							await options.onLinkAccount?.({
 								anonymousUser: session,
 								newUser: newSession,
 							});
