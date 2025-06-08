@@ -647,6 +647,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 							keyAlg,
 						);
 
+						if (!(privateKey instanceof CryptoKey)) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description: `JWK import returned ${typeof privateKey} instead of CryptoKey. This may indicate an environment compatibility issue.`,
+								error: "server_error",
+							});
+						}
+
 						secretKey = {
 							alg: keyAlg,
 							key: privateKey,
