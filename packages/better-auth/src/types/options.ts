@@ -999,4 +999,9 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+	/**
+	 * If false, disables logging of expected errors (like failed logins) to stderr.
+	 * @default true
+	 */
+	logExpectedErrors?: boolean;
 };

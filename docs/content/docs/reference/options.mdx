@@ -556,3 +556,14 @@ export const auth = betterAuth({
 })
 ```
 
+## `logExpectedErrors`
+
+If set to `false`, disables logging of expected errors (like failed logins) to stderr. Default: `true`.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	logExpectedErrors: false,
+})
+```
+

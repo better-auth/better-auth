@@ -89,7 +89,9 @@ export const username = (options?: UsernameOptions) => {
 				},
 				async (ctx) => {
 					if (!ctx.body.username || !ctx.body.password) {
-						ctx.context.logger.error("Username or password not found");
+						if (ctx.context.options?.logExpectedErrors !== false) {
+							ctx.context.logger.error("Username or password not found");
+						}
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -99,18 +101,22 @@ export const username = (options?: UsernameOptions) => {
 					const maxUsernameLength = options?.maxUsernameLength || 30;
 
 					if (ctx.body.username.length < minUsernameLength) {
-						ctx.context.logger.error("Username too short", {
-							username: ctx.body.username,
-						});
+						if (ctx.context.options?.logExpectedErrors !== false) {
+							ctx.context.logger.error("Username too short", {
+								username: ctx.body.username,
+							});
+						}
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
 
 					if (ctx.body.username.length > maxUsernameLength) {
-						ctx.context.logger.error("Username too long", {
-							username: ctx.body.username,
-						});
+						if (ctx.context.options?.logExpectedErrors !== false) {
+							ctx.context.logger.error("Username too long", {
+								username: ctx.body.username,
+							});
+						}
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.USERNAME_TOO_LONG,
 						});
@@ -140,7 +146,9 @@ export const username = (options?: UsernameOptions) => {
 						// Hash password to prevent timing attacks from revealing valid usernames
 						// By hashing passwords for invalid usernames, we ensure consistent response times
 						await ctx.context.password.hash(ctx.body.password);
-						ctx.context.logger.error("User not found", { username });
+						if (ctx.context.options?.logExpectedErrors !== false) {
+							ctx.context.logger.error("User not found", { username });
+						}
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -176,7 +184,9 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
-						ctx.context.logger.error("Password not found", { username });
+						if (ctx.context.options?.logExpectedErrors !== false) {
+							ctx.context.logger.error("Password not found", { username });
+						}
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -186,7 +196,9 @@ export const username = (options?: UsernameOptions) => {
 						password: ctx.body.password,
 					});
 					if (!validPassword) {
-						ctx.context.logger.error("Invalid password");
+						if (ctx.context.options?.logExpectedErrors !== false) {
+							ctx.context.logger.error("Invalid password");
+						}
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});

@@ -456,11 +456,13 @@ export const signInEmail = createAuthEndpoint(
 			includeAccounts: true,
 		});
 
+		if (ctx.context.options?.logExpectedErrors !== false) {
+			ctx.context.logger.error("User not found", { email });
+		}
 		if (!user) {
 			// Hash password to prevent timing attacks from revealing valid email addresses
 			// By hashing passwords for invalid emails, we ensure consistent response times
 			await ctx.context.password.hash(password);
-			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
@@ -469,15 +471,19 @@ export const signInEmail = createAuthEndpoint(
 		const credentialAccount = user.accounts.find(
 			(a) => a.providerId === "credential",
 		);
-		if (!credentialAccount) {
+		if (ctx.context.options?.logExpectedErrors !== false) {
 			ctx.context.logger.error("Credential account not found", { email });
+		}
+		if (!credentialAccount) {
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 		const currentPassword = credentialAccount?.password;
-		if (!currentPassword) {
+		if (ctx.context.options?.logExpectedErrors !== false) {
 			ctx.context.logger.error("Password not found", { email });
+		}
+		if (!currentPassword) {
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
@@ -486,8 +492,10 @@ export const signInEmail = createAuthEndpoint(
 			hash: currentPassword,
 			password,
 		});
-		if (!validPassword) {
+		if (ctx.context.options?.logExpectedErrors !== false) {
 			ctx.context.logger.error("Invalid password");
+		}
+		if (!validPassword) {
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
