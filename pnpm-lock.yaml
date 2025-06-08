@@ -1518,6 +1518,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@babel/core':
+        specifier: ^7.0.0
+        version: 7.27.4
       '@babel/preset-react':
         specifier: ^7.26.3
         version: 7.26.3(@babel/core@7.26.10)
