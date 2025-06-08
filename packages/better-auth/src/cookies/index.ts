@@ -4,7 +4,7 @@ import type { Session, User } from "../types";
 import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
-import { isProduction } from "../utils/env";
+import { env, isProduction } from "../utils/env";
 import { base64Url } from "@better-auth/utils/base64";
 import { createTime } from "../utils/time";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -283,7 +283,7 @@ export const getSessionCookie = (
 	return null;
 };
 
-export const getCookieCache = <
+export const getCookieCache = async <
 	S extends {
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
@@ -294,6 +294,7 @@ export const getCookieCache = <
 		cookiePrefix?: string;
 		cookieName?: string;
 		isSecure?: boolean;
+		secret?: string;
 	},
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
@@ -314,9 +315,32 @@ export const getCookieCache = <
 	const parsedCookie = parseCookies(cookies);
 	const sessionData = parsedCookie.get(name);
 	if (sessionData) {
-		return safeJSONParse<{
+		const sessionDataPayload = safeJSONParse<{
 			session: S;
-		}>(binary.decode(base64Url.decode(sessionData)))?.session;
+			expiresAt: number;
+			signature: string;
+		}>(binary.decode(base64Url.decode(sessionData)));
+		if (!sessionDataPayload) {
+			return null;
+		}
+		const secret = config?.secret || env.BETTER_AUTH_SECRET;
+		if (!secret) {
+			throw new BetterAuthError(
+				"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+			);
+		}
+		const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
+			secret,
+			JSON.stringify({
+				...sessionDataPayload.session,
+				expiresAt: sessionDataPayload.expiresAt,
+			}),
+			sessionDataPayload.signature,
+		);
+		if (!isValid) {
+			return null;
+		}
+		return sessionDataPayload.session;
 	}
 	return null;
 };
