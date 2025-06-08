@@ -2,11 +2,11 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siwe } from "./index";
 import { siweClientPlugin } from "./client";
-import type { SiweUser } from "./types";
 
 describe("siwe", async (it) => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
 	const domain = "example.com";
+	const chainId = 1; // Ethereum mainnet
 
 	it("should generate a valid nonce for a valid public key", async () => {
 		const { client } = await getTestInstance(
@@ -14,10 +14,10 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -31,10 +31,39 @@ describe("siwe", async (it) => {
 				},
 			},
 		);
-		const { data } = await client.siwe.nonce({ walletAddress });
+		const { data } = await client.siwe.nonce({ walletAddress, chainId });
 		// to be of type string
 		expect(typeof data?.nonce).toBe("string");
 		// to be 17 alphanumeric characters (96 bits of entropy)
+		expect(data?.nonce).toMatch(/^[a-zA-Z0-9]{17}$/);
+	});
+
+	it("should generate a valid nonce with default chainId", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ message, signature }) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClientPlugin()],
+				},
+			},
+		);
+		// Test without chainId (should default to 1)
+		const { data } = await client.siwe.nonce({ walletAddress });
+		expect(typeof data?.nonce).toBe("string");
 		expect(data?.nonce).toMatch(/^[a-zA-Z0-9]{17}$/);
 	});
 
@@ -44,10 +73,10 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -65,6 +94,7 @@ describe("siwe", async (it) => {
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress,
+			chainId,
 		});
 
 		expect(error).toBeDefined();
@@ -79,10 +109,10 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -108,15 +138,15 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
 						},
-					}),
+					}),	
 				],
 			},
 			{
@@ -140,10 +170,10 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -170,10 +200,10 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -203,10 +233,10 @@ describe("siwe", async (it) => {
 					siwe({
 						domain,
 						anonymous: false,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -239,15 +269,15 @@ describe("siwe", async (it) => {
 					siwe({
 						domain,
 						anonymous: false,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
 						},
-					}),
+					}),	
 				],
 			},
 			{
@@ -257,12 +287,13 @@ describe("siwe", async (it) => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress });
+		await client.siwe.nonce({ walletAddress, chainId });
 
 		const { data, error } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress,
+			chainId,
 			email: "user@example.com",
 		});
 		expect(error).toBeNull();
@@ -276,10 +307,10 @@ describe("siwe", async (it) => {
 					siwe({
 						domain,
 						anonymous: false,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -312,10 +343,10 @@ describe("siwe", async (it) => {
 					siwe({
 						domain,
 						// anonymous: true by default
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -330,11 +361,12 @@ describe("siwe", async (it) => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress });
+		await client.siwe.nonce({ walletAddress, chainId });
 		const { data, error } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress,
+			chainId,
 		});
 		expect(error).toBeNull();
 		expect(data?.success).toBe(true);
@@ -346,10 +378,10 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -362,11 +394,12 @@ describe("siwe", async (it) => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress });
+		await client.siwe.nonce({ walletAddress, chainId });
 		const first = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress,
+			chainId,
 		});
 		expect(first.error).toBeNull();
 		expect(first.data?.success).toBe(true);
@@ -376,6 +409,7 @@ describe("siwe", async (it) => {
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress,
+			chainId,
 		});
 		expect(second.error).toBeDefined();
 		expect(second.error?.status).toBe(401);
@@ -389,10 +423,10 @@ describe("siwe", async (it) => {
 					siwe({
 						domain,
 						anonymous: false,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
@@ -405,11 +439,12 @@ describe("siwe", async (it) => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress });
+		await client.siwe.nonce({ walletAddress, chainId });
 		const { error } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress,
+			chainId,
 			email: "",
 		});
 		expect(error).toBeDefined();
@@ -423,15 +458,15 @@ describe("siwe", async (it) => {
 				plugins: [
 					siwe({
 						domain,
-						async generateSiweNonce() {
+						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifySiweMessage(message, signature, nonce) {
+						async verifyMessage({ message, signature }) {
 							return (
 								signature === "valid_signature" && message === "valid_message"
 							);
 						},
-					}),
+					}),	
 				],
 			},
 			{
@@ -440,35 +475,180 @@ describe("siwe", async (it) => {
 		);
 
 		// Use lowercase address
-		await client.siwe.nonce({ walletAddress: walletAddress.toLowerCase() });
+		await client.siwe.nonce({ walletAddress: walletAddress.toLowerCase(), chainId });
 		const { data } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress: walletAddress.toLowerCase(),
+			chainId,
 		});
 		expect(data?.success).toBe(true);
 
-		// Fetch user from the adapter (simulate internal lookup)
-		const user: SiweUser | null = await (await auth.$context).adapter.findOne({
-			model: "user",
-			where: [{ field: "walletAddress", operator: "eq", value: walletAddress }],
+		// Fetch wallet address from the adapter
+		const walletAddresses: any[] = await (await auth.$context).adapter.findMany({
+			model: "walletAddress",
+			where: [{ field: "address", operator: "eq", value: walletAddress }],
 		});
-		expect(user).toBeDefined();
-		expect(user?.walletAddress).toBe(walletAddress); // checksummed
+		expect(walletAddresses.length).toBe(1);
+		expect(walletAddresses[0]?.address).toBe(walletAddress); // checksummed
 
-		// Try with uppercase address, should not create a new user
-		await client.siwe.nonce({ walletAddress: walletAddress.toUpperCase() });
-		const { data: data2 } = await client.siwe.verify({
+		// Try with uppercase address, should not create a new wallet address entry
+		await client.siwe.nonce({ walletAddress: walletAddress.toUpperCase(), chainId });
+		const { data: data2, error: error2 } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress: walletAddress.toUpperCase(),
+			chainId,
 		});
-		expect(data2?.token).toBeUndefined();
+		expect(data2?.success).toBe(true); // Should succeed with existing address
 
-		const users = await (await auth.$context).adapter.findMany({
-			model: "user",
-			where: [{ field: "walletAddress", operator: "eq", value: walletAddress }],
+		const walletAddressesAfter = await (await auth.$context).adapter.findMany({
+			model: "walletAddress",
+			where: [{ field: "address", operator: "eq", value: walletAddress }],
 		});
-		expect(users.length).toBe(1); // Only one user for all cases
+		expect(walletAddressesAfter.length).toBe(1); // Still only one wallet address entry
+	});
+
+	it("should reject duplicate wallet address entries", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ message, signature }) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClientPlugin()] } },
+		);
+
+		const testAddress = "0x000000000000000000000000000000000000dEaD";
+		const testChainId = 1;
+
+		// First user successfully creates account with wallet address
+		await client.siwe.nonce({ walletAddress: testAddress, chainId: testChainId });
+		const firstUser = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
+		expect(firstUser.error).toBeNull();
+		expect(firstUser.data?.success).toBe(true);
+
+		// Verify wallet address record was created
+		const walletAddresses: any[] = await (await auth.$context).adapter.findMany({
+			model: "walletAddress",
+			where: [
+				{ field: "address", operator: "eq", value: testAddress },
+				{ field: "chainId", operator: "eq", value: testChainId },
+			],
+		});
+		expect(walletAddresses.length).toBe(1);
+		expect(walletAddresses[0]?.address).toBe(testAddress);
+		expect(walletAddresses[0]?.chainId).toBe(testChainId);
+		expect(walletAddresses[0]?.isPrimary).toBe(true);
+
+		// Second attempt with same address + chainId should use existing user
+		await client.siwe.nonce({ walletAddress: testAddress, chainId: testChainId });
+		const secondUser = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
+		expect(secondUser.error).toBeNull();
+		expect(secondUser.data?.success).toBe(true);
+		expect(secondUser.data?.user.id).toBe(firstUser.data?.user.id); // Same user ID
+
+		// Verify no duplicate wallet address records were created
+		const walletAddressesAfter: any[] = await (await auth.$context).adapter.findMany({
+			model: "walletAddress",
+			where: [
+				{ field: "address", operator: "eq", value: testAddress },
+				{ field: "chainId", operator: "eq", value: testChainId },
+			],
+		});
+		expect(walletAddressesAfter.length).toBe(1); // Still only one record
+
+		// Verify total user count (should be only 1 user created)
+		const allUsers: any[] = await (await auth.$context).adapter.findMany({
+			model: "user",
+		});
+		const usersWithTestAddress = allUsers.filter(user => 
+			walletAddressesAfter.some(wa => wa.userId === user.id)
+		);
+		expect(usersWithTestAddress.length).toBe(1); // Only one user should have this address
+	});
+
+	it("should allow same address on different chains for same user", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ message, signature }) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClientPlugin()] } },
+		);
+
+		const testAddress = "0x000000000000000000000000000000000000dEaD";
+		const chainId1 = 1; // Ethereum
+		const chainId2 = 137; // Polygon
+
+		// First authentication on Ethereum
+		await client.siwe.nonce({ walletAddress: testAddress, chainId: chainId1 });
+		const ethereumAuth = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: testAddress,
+			chainId: chainId1,
+		});
+		expect(ethereumAuth.error).toBeNull();
+		expect(ethereumAuth.data?.success).toBe(true);
+
+		// Second authentication on Polygon with same address
+		await client.siwe.nonce({ walletAddress: testAddress, chainId: chainId2 });
+		const polygonAuth = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: testAddress,
+			chainId: chainId2,
+		});
+		expect(polygonAuth.error).toBeNull();
+		expect(polygonAuth.data?.success).toBe(true);
+		expect(polygonAuth.data?.user.id).toBe(ethereumAuth.data?.user.id); // Same user
+
+		// Verify both wallet address records exist
+		const allWalletAddresses: any[] = await (await auth.$context).adapter.findMany({
+			model: "walletAddress",
+			where: [{ field: "address", operator: "eq", value: testAddress }],
+		});
+		expect(allWalletAddresses.length).toBe(2);
+
+		const ethereumRecord = allWalletAddresses.find(wa => wa.chainId === chainId1);
+		const polygonRecord = allWalletAddresses.find(wa => wa.chainId === chainId2);
+
+		expect(ethereumRecord).toBeDefined();
+		expect(polygonRecord).toBeDefined();
+		expect(ethereumRecord?.isPrimary).toBe(true); // First address is primary
+		expect(polygonRecord?.isPrimary).toBe(false); // Second address is not primary
+		expect(ethereumRecord?.userId).toBe(polygonRecord?.userId); // Same user ID
 	});
 });

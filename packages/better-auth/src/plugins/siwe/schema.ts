@@ -1,12 +1,31 @@
 import type { AuthPluginSchema } from "../../types";
 
 export const schema = {
-	user: {
+	walletAddress: {
 		fields: {
-			walletAddress: {
+			userId: {
 				type: "string",
-				unique: true,
-				required: false,
+				references: {
+					model: "user",
+					field: "id",
+				},
+				required: true,
+			},
+			address: {
+				type: "string",
+				required: true,
+			},
+			chainId: {
+				type: "number",
+				required: true,
+			},
+			isPrimary: {
+				type: "boolean",
+				defaultValue: false,
+			},
+			createdAt: {
+				type: "date",
+				required: true,
 			},
 		},
 	},
