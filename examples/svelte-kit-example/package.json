@@ -3,7 +3,8 @@
 	"version": "0.0.1",
 	"private": true,
 	"scripts": {
-		"dev": "vite dev --port 3000",
+		"auth:migrate": "pnpx @better-auth/cli migrate",
+		"dev": "pnpm auth:migrate && vite dev --port 3000",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
