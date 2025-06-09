@@ -27,6 +27,18 @@
 			}
 		}
 	},
+	"overrides": [
+		{
+			"include": ["**/*.svelte"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedImports": "off"
+					}
+				}
+			}
+		}
+	],
 	"files": {
 		"ignore": [
 			"dist",
@@ -40,7 +52,8 @@
 			".source",
 			".expo",
 			".cache",
-			"dev/cloudflare/drizzle"
+			"dev/cloudflare/drizzle",
+			"examples/svelte-kit-example/**"
 		]
 	}
 }
