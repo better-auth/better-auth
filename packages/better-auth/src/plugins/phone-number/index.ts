@@ -215,6 +215,10 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						],
 					});
 					if (!user) {
+						// Hash password to prevent timing attacks from revealing valid phone numbers
+						// By hashing passwords for invalid phone numbers, we ensure consistent response times
+						await ctx.context.password.hash(password);
+						ctx.context.logger.error("User not found", { phoneNumber });
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
