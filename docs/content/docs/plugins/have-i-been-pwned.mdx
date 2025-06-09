@@ -38,6 +38,14 @@ haveIBeenPwned({
     customPasswordCompromisedMessage: "Please choose a more secure password."
 })
 ```
+
+You can also disable the plugin for specific paths:
+
+```ts
+haveIBeenPwned({
+    disabledPaths: ["/sign-in/email"]
+})
+```
 ## Security Notes
 
 - Only the first 5 characters of the password hash are sent to the API

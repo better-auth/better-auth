@@ -1,4 +1,4 @@
-import { APIError } from "../../api";
+import { APIError, createAuthMiddleware } from "../../api";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../../types/plugins";
@@ -56,26 +56,32 @@ async function checkPasswordCompromise(
 
 export interface HaveIBeenPwnedOptions {
 	customPasswordCompromisedMessage?: string;
+	disabledPaths?: string[];
+
 }
 
-export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
-	({
-		id: "haveIBeenPwned",
-		init(ctx) {
-			return {
-				context: {
-					password: {
-						...ctx.password,
-						async hash(password) {
-							await checkPasswordCompromise(
-								password,
-								options?.customPasswordCompromisedMessage,
-							);
-							return ctx.password.hash(password);
-						},
-					},
-				},
-			};
-		},
+export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions): BetterAuthPlugin => ({
+  id: "haveIBeenPwned",
+  hooks: {
+    before: [
+      {
+        matcher: (context) => {
+          if (options?.disabledPaths !== undefined && options.disabledPaths.length > 0) {
+            if (options.disabledPaths.includes(context.path)) return false;
+          }
+          return true;
+        },
+        handler: createAuthMiddleware(async (ctx) => {
+          // Check if there's a password in the request body
+          if (ctx.body?.password) {
+            await checkPasswordCompromise(ctx.body.password, options?.customPasswordCompromisedMessage);
+          }
+          return {
+            context: ctx,
+          };
+        }),
+      },
+    ],
+  },
 		$ERROR_CODES: ERROR_CODES,
 	}) satisfies BetterAuthPlugin;
