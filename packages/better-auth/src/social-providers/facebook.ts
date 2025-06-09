@@ -81,7 +81,8 @@ export const facebook = (options: FacebookOptions) => {
 					const { payload: jwtClaims } = await jwtVerify(
 						token,
 						createRemoteJWKSet(
-							new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
+							// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
+							new URL("https://limited.facebook.com/.well-known/oauth/openid/jwks/"),
 						),
 						{
 							algorithms: ["RS256"],
