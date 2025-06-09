@@ -192,10 +192,7 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(
-		user.id,
-		c.headers,
-	);
+	const session = await c.context.internalAdapter.createSession(user.id, c);
 	if (!session) {
 		return {
 			error: "unable to create session",

@@ -243,7 +243,7 @@ describe("Create Adapter Helper", async () => {
 				expect(res3).not.toHaveProperty("id");
 			});
 
-			test('Should recieve a generated id during the call, unless "disableIdGeneration" is set to true', async () => {
+			test('Should receive a generated id during the call, unless "disableIdGeneration" is set to true', async () => {
 				const createWithId: { id: unknown } = await new Promise(async (r) => {
 					const adapter = await createTestAdapter({
 						adapter(args_0) {
@@ -1380,7 +1380,7 @@ describe("Create Adapter Helper", async () => {
 				expect(parameters.where?.[0].field).toEqual("email_address");
 			});
 
-			test("findOne: Should recieve an integer id in where clause if the user has enabled `useNumberId`", async () => {
+			test("findOne: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
 				const parameters: { where: Where[]; model: string; select?: string[] } =
 					await new Promise(async (r) => {
 						const adapter = await createTestAdapter({
@@ -1417,10 +1417,10 @@ describe("Create Adapter Helper", async () => {
 						//@ts-ignore
 						expect(res?.id).toEqual("1");
 					});
-				// The where clause should conver the string id value of `"1"` to an int since `useNumberId` is true
+				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
 				expect(parameters.where[0].value).toEqual(1);
 			});
-			test("findMany: Should recieve an integer id in where clause if the user has enabled `useNumberId`", async () => {
+			test("findMany: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
 				const parameters: { where: Where[] | undefined; model: string } =
 					await new Promise(async (r) => {
 						const adapter = await createTestAdapter({
@@ -1459,7 +1459,7 @@ describe("Create Adapter Helper", async () => {
 						//@ts-ignore
 						expect(res[0].id).toEqual("1");
 					});
-				// The where clause should conver the string id value of `"1"` to an int since `useNumberId` is true
+				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
 				expect(parameters.where?.[0].value).toEqual(1);
 			});
 		});

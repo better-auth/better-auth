@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint, type BetterAuthPlugin } from "..";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
+import type { GenericEndpointContext, Session, User } from "../../types";
 
 interface OneTimeTokenOptions {
 	/**
@@ -14,6 +15,16 @@ interface OneTimeTokenOptions {
 	 * Only allow server initiated requests
 	 */
 	disableClientRequest?: boolean;
+	/**
+	 * Generate a custom token
+	 */
+	generateToken?: (
+		session: {
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
+		},
+		ctx: GenericEndpointContext,
+	) => Promise<string>;
 }
 
 export const oneTimeToken = (options?: OneTimeTokenOptions) => {
@@ -34,7 +45,9 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 						});
 					}
 					const session = c.context.session;
-					const token = generateRandomString(32);
+					const token = options?.generateToken
+						? await options.generateToken(session, c)
+						: generateRandomString(32);
 					const expiresAt = new Date(
 						Date.now() + (options?.expiresIn ?? 3) * 60 * 1000,
 					);

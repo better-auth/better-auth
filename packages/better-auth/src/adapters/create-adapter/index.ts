@@ -159,8 +159,8 @@ export const createAdapter =
 		 * then we should return the model name ending with an `s`.
 		 */
 		const getModelName = (model: string) => {
-			return schema[model].modelName !== model
-				? schema[model].modelName
+			return schema[getDefaultModelName(model)].modelName !== model
+				? schema[getDefaultModelName(model)].modelName
 				: config.usePlural
 					? `${model}s`
 					: model;
@@ -239,9 +239,14 @@ export const createAdapter =
 			}
 		};
 
-		const idField = ({ customModelName }: { customModelName?: string }) => {
+		const idField = ({
+			customModelName,
+			forceAllowId,
+		}: { customModelName?: string; forceAllowId?: boolean }) => {
 			const shouldGenerateId =
-				!config.disableIdGeneration && !options.advanced?.database?.useNumberId;
+				!config.disableIdGeneration &&
+				!options.advanced?.database?.useNumberId &&
+				!forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
@@ -304,6 +309,7 @@ export const createAdapter =
 			data: Record<string, any>,
 			unsafe_model: string,
 			action: "create" | "update",
+			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model].fields;
@@ -312,7 +318,7 @@ export const createAdapter =
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
-				fields.id = idField({ customModelName: unsafe_model });
+				fields.id = idField({ customModelName: unsafe_model, forceAllowId });
 			}
 			for (const field in fields) {
 				const value = data[field];
@@ -529,18 +535,20 @@ export const createAdapter =
 				data: unsafeData,
 				model: unsafeModel,
 				select,
+				forceAllowId = false,
 			}: {
 				model: string;
 				data: T;
 				select?: string[];
+				forceAllowId?: boolean;
 			}): Promise<R> => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 
-				if ("id" in unsafeData) {
+				if ("id" in unsafeData && !forceAllowId) {
 					logger.warn(
-						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you. The id will be ignored.`,
+						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
 					);
 					const err = new Error();
 					const stack = err.stack
@@ -562,6 +570,7 @@ export const createAdapter =
 					unsafeData,
 					unsafeModel,
 					"create",
+					forceAllowId,
 				)) as T;
 				debugLog(
 					{ method: "create" },

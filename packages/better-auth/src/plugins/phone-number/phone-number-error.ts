@@ -1,6 +1,6 @@
 export const ERROR_CODES = {
 	INVALID_PHONE_NUMBER: "Invalid phone number",
-	PHONE_NUMBER_EXIST: "Phone number already exist",
+	PHONE_NUMBER_EXIST: "Phone number already exists",
 	INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
 	UNEXPECTED_ERROR: "Unexpected error",
 	OTP_NOT_FOUND: "OTP not found",

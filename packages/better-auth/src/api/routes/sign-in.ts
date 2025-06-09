@@ -2,11 +2,11 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { SocialProviderListEnum } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { SocialProviderListEnum } from "../../social-providers";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -202,8 +202,8 @@ export const signInSocial = createAuthEndpoint(
 												],
 											},
 										},
-										required: ["redirect", "token", "user"],
 									},
+									required: ["redirect", "token", "user"],
 								},
 							},
 						},
@@ -285,6 +285,7 @@ export const signInSocial = createAuthEndpoint(
 					accountId: userInfo.user.id,
 					accessToken: c.body.idToken.accessToken,
 				},
+				callbackURL: c.body.callbackURL,
 				disableSignUp:
 					(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 					provider.disableSignUp,
@@ -456,6 +457,8 @@ export const signInEmail = createAuthEndpoint(
 		});
 
 		if (!user) {
+			// Hash password to prevent timing attacks from revealing valid email addresses
+			// By hashing passwords for invalid emails, we ensure consistent response times
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
@@ -523,7 +526,7 @@ export const signInEmail = createAuthEndpoint(
 
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
-			ctx.headers,
+			ctx,
 			ctx.body.rememberMe === false,
 		);
 

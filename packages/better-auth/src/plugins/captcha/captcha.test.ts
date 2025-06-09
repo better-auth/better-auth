@@ -123,7 +123,7 @@ describe("captcha", async (it) => {
 		});
 		const headers = new Headers();
 
-		it("Should successful sign in users if they passed the CAPTCHA challenge", async () => {
+		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
 			mockBetterFetch.mockResolvedValue({
 				data: {
 					success: true,
@@ -196,7 +196,7 @@ describe("captcha", async (it) => {
 		});
 		const headers = new Headers();
 
-		it("Should successfuly sign in users if they passed the CAPTCHA challenge", async () => {
+		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
 			mockBetterFetch.mockResolvedValue({
 				data: {
 					success: true,
@@ -291,7 +291,7 @@ describe("captcha", async (it) => {
 		});
 		const headers = new Headers();
 
-		it("Should successfuly sign in users if they passed the CAPTCHA challenge", async () => {
+		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
 			mockBetterFetch.mockResolvedValue({
 				data: {
 					success: true,

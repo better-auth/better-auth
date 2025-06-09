@@ -9,6 +9,8 @@ description: GitHub provider setup and usage.
         To use GitHub sign in, you need a client ID and client secret. You can get them from the [GitHub Developer Portal](https://github.com/settings/developers).
 
         Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/github` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+
+        Important: You MUST include the user.email scope in your Github app. See details below.
     </Step>
 
   <Step>
@@ -45,3 +47,21 @@ description: GitHub provider setup and usage.
         ```
     </Step>
 </Steps>
+
+## Usage
+
+### Setting up your Github app
+
+Github has two types of apps: Github apps and OAuth apps.
+
+For OAuth apps, you don't have to do anything special (just follow the steps above). For Github apps, you DO have to add one more thing, which is enable it to read the user's email:
+
+1. After creating your app, go to *Permissions and Events* > *Account Permissions* > *Email Addresses* and select "Read-Only"
+
+2. Save changes. 
+
+That's all! Now you can copy the Client ID and Client Secret of your app! 
+
+<Callout>
+If you get "email_not_found" error, it's because you selected a Github app & did not configure this part!
+</Callout>

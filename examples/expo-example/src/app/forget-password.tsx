@@ -14,7 +14,7 @@ import { View } from "react-native";
 import Icons from "@expo/vector-icons/AntDesign";
 import { router } from "expo-router";
 
-export default function ForgetPassword() {
+export default function RequestPasswordReset() {
 	const [email, setEmail] = useState("");
 	return (
 		<Card className="w-10/12 ">
@@ -36,7 +36,7 @@ export default function ForgetPassword() {
 				<View className="w-full gap-2">
 					<Button
 						onPress={() => {
-							authClient.forgetPassword({
+							authClient.requestPasswordReset({
 								email,
 								redirectTo: "/reset-password",
 							});

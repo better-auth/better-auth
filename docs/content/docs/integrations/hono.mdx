@@ -93,7 +93,7 @@ serve(app);
 This will allow you to access the `user` and `session` object in all of your routes.
 
 ```ts
-app.get("/session", async (c) => {
+app.get("/session", (c) => {
 	const session = c.get("session")
 	const user = c.get("user")
 	
@@ -155,7 +155,7 @@ export const auth = createAuth({
 When using the Hono client (`@hono/client`) to make requests to your Better Auth-protected endpoints, you need to configure it to send credentials (cookies) with cross-origin requests.
 
 ```ts title="api.ts"
-import { hc } from "@hono/client";
+import { hc } from "hono/client";
 import type { AppType } from "./server"; // Your Hono app type
 
 const client = hc<AppType>("http://localhost:8787/", {

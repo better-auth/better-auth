@@ -68,7 +68,7 @@ export const auth = betterAuth({
     socialProviders: {
         facebook: {
             clientId: process.env.FACEBOOK_CLIENT_ID as string,
-            clientSecret: process.env.FACEBOOK_CLIENT_ID as string,
+            clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string,
             scopes: ["email", "public_profile", "user_friends"], // Overwrites permissions
             fields: ["user_friends"], // Extending list of fields
         },
@@ -89,7 +89,7 @@ To sign in with Facebook using the ID Token, you can use the `signIn.social` fun
 This is useful when you have the ID Token from Facebook on the client-side and want to use it to sign in on the server.
 
 <Callout>
- If id token is provided no redirection will happen, and the user will be signed in directly.
+ If ID token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>
 
 For limited login, you need to pass `idToken.token`, for only `accessToken` you need to pass `idToken.accessToken` and `idToken.token` together because of (#1183)[https://github.com/better-auth/better-auth/issues/1183].

@@ -1,0 +1,10 @@
+{
+	"title": "Blog",
+	"description": "Latest updates, articles, and insights about Better Auth",
+	"items": [
+		{
+			"title": "Latest",
+			"items": []
+		}
+	]
+}

@@ -270,7 +270,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 					ctx,
 				);
 				const newSession = await ctx.context.internalAdapter
-					.createSession(user.id, ctx.headers, false, session.session)
+					.createSession(user.id, ctx, false, session.session)
 					.catch((e) => {
 						throw e;
 					});

@@ -108,21 +108,53 @@ interface GenericOAuthConfig {
 }
 ```
 
-- `providerId`: A unique identifier for the OAuth provider.
-- `discoveryUrl`: URL to fetch OAuth 2.0 configuration (optional, but recommended for OIDC providers).
-- `type`: Type of OAuth flow ("oauth2" or "oidc", defaults to "oauth2").
-- `authorizationUrl`: URL for the authorization endpoint (optional if using discoveryUrl).
-- `tokenUrl`: URL for the token endpoint (optional if using discoveryUrl).
-- `userInfoUrl`: URL for the user info endpoint (optional if using discoveryUrl).
-- `clientId`: OAuth client ID.
-- `clientSecret`: OAuth client secret.
-- `scopes`: Array of OAuth scopes to request.
-- `redirectURI`: Custom redirect URI (optional).
-- `responseType`: OAuth response type (defaults to "code").
-- `prompt`: Controls the authentication experience for the user.
-- `pkce`: Whether to use PKCE (Proof Key for Code Exchange, defaults to false).
-- `accessType`: Access type for the authorization request.
-- `getUserInfo`: Custom function to fetch user info (optional).
+### Other Provider Configurations
+
+**providerId**: A unique string to identify the OAuth provider configuration.
+
+**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` can be auto-discovered.
+
+**authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
+
+**tokenUrl**: (Optional) The OAuth provider's token endpoint. Not required if using `discoveryUrl`.
+
+**userInfoUrl**: (Optional) The endpoint to fetch user profile information. Not required if using `discoveryUrl`.
+
+**clientId**: The OAuth client ID issued by your provider.
+
+**clientSecret**: The OAuth client secret issued by your provider.
+
+**scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
+
+**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL.
+
+**responseType**: (Optional) The OAuth response type. Defaults to `"code"` for authorization code flow.
+
+**responseMode**: (Optional) The response mode for the authorization code request, such as `"query"` or `"form_post"`.
+
+**prompt**: (Optional) Controls the authentication experience (e.g., force login, consent, etc.).
+
+**pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
+
+**accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
+
+**getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
+
+**mapProfileToUser**: (Optional) A function to map the provider's user profile to your app's user object. Useful for custom field mapping or transformations.
+
+**authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters.
+
+**disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
+
+**disableSignUp**: (Optional) If true, disables sign-up for new users entirely. Only existing users can sign in.
+
+**authentication**: (Optional) The authentication method for token requests. Can be `'basic'` or `'post'`. Defaults to `'post'`.
+
+**discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers.
+
+**authorizationHeaders**: (Optional) Custom headers to include in the authorization request. Useful for providers that require special headers.
+
+**overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
 
 ## Advanced Usage
 
@@ -175,3 +207,4 @@ genericOAuth({
 ### Error Handling
 
 The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.
+

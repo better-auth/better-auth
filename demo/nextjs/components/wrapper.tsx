@@ -27,7 +27,7 @@ export function Wrapper(props: { children: React.ReactNode }) {
 
 const queryClient = new QueryClient();
 
-export function WrapperWithQuery(props: { children: React.ReactNode }) {
+export function WrapperWithQuery(props: { children: React.ReactNode | any }) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			{props.children}

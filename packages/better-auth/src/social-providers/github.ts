@@ -73,6 +73,7 @@ export const github = (options: GithubOptions) => {
 				state,
 				redirectURI,
 				loginHint,
+				prompt: options.prompt,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

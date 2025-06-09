@@ -89,6 +89,7 @@ export const apple = (options: AppleOptions) => {
 				state,
 				redirectURI,
 				responseMode: "form_post",
+				responseType: "code id_token",
 			});
 			return url;
 		},
@@ -155,12 +156,16 @@ export const apple = (options: AppleOptions) => {
 			const name = token.user
 				? `${token.user.name?.firstName} ${token.user.name?.lastName}`
 				: profile.name || profile.email;
+			const emailVerified =
+				typeof profile.email_verified === "boolean"
+					? profile.email_verified
+					: profile.email_verified === "true";
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.sub,
 					name: name,
-					emailVerified: false,
+					emailVerified: emailVerified,
 					email: profile.email,
 					...userMap,
 				},

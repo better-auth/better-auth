@@ -4,6 +4,79 @@ import { admin, type UserWithRole } from "./admin";
 import { adminClient } from "./client";
 import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
+import type { GoogleProfile } from "../../social-providers";
+import { signJWT } from "../../crypto";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { getOAuth2Tokens } from "../../oauth2";
+
+vi.mock("../../oauth2", async (importOriginal) => {
+	const original = (await importOriginal()) as any;
+	return {
+		...original,
+		validateAuthorizationCode: vi
+			.fn()
+			.mockImplementation(async (...args: any) => {
+				const data: GoogleProfile = {
+					email: "user@email.com",
+					email_verified: true,
+					name: "First Last",
+					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+					exp: 1234567890,
+					sub: "1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "First",
+					family_name: "Last",
+				};
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
+				const tokens = getOAuth2Tokens({
+					access_token: "test",
+					refresh_token: "test",
+					id_token: testIdToken,
+				});
+				return tokens;
+			}),
+		refreshAccessToken: vi.fn().mockImplementation(async (args) => {
+			const { refreshToken, options, tokenEndpoint } = args;
+			expect(refreshToken).toBeDefined();
+			expect(options.clientId).toBe("test-client-id");
+			expect(options.clientSecret).toBe("test-client-secret");
+			expect(tokenEndpoint).toBe("http://localhost:8080/token");
+
+			const data: GoogleProfile = {
+				email: "user@email.com",
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: 1234567890,
+				sub: "1234567890",
+				iat: 1234567890,
+				aud: "test",
+				azp: "test",
+				nbf: 1234567890,
+				iss: "test",
+				locale: "en",
+				jti: "test",
+				given_name: "First",
+				family_name: "Last",
+			};
+			const testIdToken = await signJWT(data, DEFAULT_SECRET);
+			const tokens = getOAuth2Tokens({
+				access_token: "new-access-token",
+				refresh_token: "new-refresh-token",
+				id_token: testIdToken,
+				token_type: "Bearer",
+				expires_in: 3600, // Token expires in 1 hour
+			});
+			return tokens;
+		}),
+	};
+});
 
 describe("Admin plugin", async () => {
 	const {
@@ -67,7 +140,7 @@ describe("Admin plugin", async () => {
 		const res = await client.admin.createUser(
 			{
 				name: "Test User",
-				email: "test2@test.com",
+				email: "user@email.com",
 				password: "test",
 				role: "user",
 			},
@@ -91,6 +164,17 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
+		const result = await client.admin.listUsers({
+			query: {
+				filterField: "role",
+				filterOperator: "contains",
+				filterValue: "admin",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(result.data?.users.length).toBe(2);
 		expect(res.data?.user.role).toBe("user,admin");
 		await client.admin.removeUser(
 			{
@@ -341,6 +425,33 @@ describe("Admin plugin", async () => {
 		});
 		expect(res.error?.code).toBe("BANNED_USER");
 		expect(res.error?.status).toBe(403);
+	});
+
+	it("should not allow banned user to sign in with social provider", async () => {
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+			},
+			{
+				throw: true,
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		let errorLocation: string | null = null;
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				errorLocation = location;
+			},
+		});
+		expect(errorLocation).toBeDefined();
+		expect(errorLocation).toContain("error=banned");
 	});
 
 	it("should change banned user message", async () => {

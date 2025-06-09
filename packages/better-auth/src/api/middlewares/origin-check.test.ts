@@ -217,7 +217,7 @@ describe("Origin Check", async (it) => {
 				customFetchImpl,
 			},
 		});
-		const res = await client.forgetPassword({
+		const res = await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://malicious.com",
 		});
@@ -235,7 +235,7 @@ describe("Origin Check", async (it) => {
 				},
 			},
 		});
-		const res = await client.forgetPassword({
+		const res = await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://localhost:5000/reset-password",
 		});
@@ -337,6 +337,21 @@ describe("Origin Check", async (it) => {
 			password: testUser.password,
 		});
 		expect(invalidRes.error?.status).toBe(403);
+	});
+
+	it("should work with relative callbackURL with query params", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "/dashboard?email=123@email.com",
+		});
+		expect(res.data?.user).toBeDefined();
 	});
 });
 

@@ -30,6 +30,8 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	}
 	return kyselyAdapter(kysely, {
 		type: databaseType || "sqlite",
+		debugLogs:
+			"debugLogs" in options.database ? options.database.debugLogs : false,
 	})(options);
 }
 

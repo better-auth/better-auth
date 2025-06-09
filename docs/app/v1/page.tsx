@@ -78,7 +78,7 @@ export default function V1Ship() {
 						If you were using Better Auth for production, we recommend updating
 						to V1 as soon as possible. There are some breaking changes, feel
 						free to join us on{" "}
-						<Link href="https://discord.com/better-auth">Discord</Link>, and
+						<Link href="https://discord.gg/better-auth">Discord</Link>, and
 						we'll gladly assist.
 					</p>
 				</div>
@@ -194,7 +194,7 @@ function ReleaseRelated() {
 								<ArrowRight className="w-4 h-4" />
 							</Button>
 						</Link>
-						<Link className="w-full" href="https://discord.gg/GYC3W7tZzb">
+						<Link className="w-full" href="https://discord.gg/better-auth">
 							<Button
 								variant="outline"
 								className="w-full justify-between border-t-0"

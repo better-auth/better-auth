@@ -200,7 +200,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const subscriptionToUpdate = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
 							model: "subscription",
-							where: [{ field: "id", value: ctx.body.subscriptionId }],
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+								{
+									field: "stripeSubscriptionId",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+							],
 						})
 					: null;
 
@@ -650,15 +661,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						})
-					: await ctx.context.adapter.findOne<Subscription>({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: referenceId,
-								},
-							],
-						});
+					: await ctx.context.adapter
+							.findMany<Subscription>({
+								model: "subscription",
+								where: [
+									{
+										field: "referenceId",
+										value: referenceId,
+									},
+								],
+							})
+							.then((subs) =>
+								subs.find(
+									(sub) => sub.status === "active" || sub.status === "trialing",
+								),
+							);
 				if (!subscription || !subscription.stripeCustomerId) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,

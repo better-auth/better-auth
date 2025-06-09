@@ -8,13 +8,17 @@ export function stripJsonComments(jsonString: string): string {
 		)
 		.replace(/,(?=\s*[}\]])/g, "");
 }
-
-export function getTsconfigInfo(cwd?: string) {
-	const packageJsonPath = cwd
-		? path.join(cwd, "tsconfig.json")
-		: path.join("tsconfig.json");
+export function getTsconfigInfo(cwd?: string, flatPath?: string) {
+	let tsConfigPath: string;
+	if (flatPath) {
+		tsConfigPath = flatPath;
+	} else {
+		tsConfigPath = cwd
+			? path.join(cwd, "tsconfig.json")
+			: path.join("tsconfig.json");
+	}
 	try {
-		const text = fs.readFileSync(packageJsonPath, "utf-8");
+		const text = fs.readFileSync(tsConfigPath, "utf-8");
 		return JSON.parse(stripJsonComments(text));
 	} catch (error) {
 		throw error;

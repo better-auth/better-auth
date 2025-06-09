@@ -6,7 +6,7 @@ description: Authenticate users with JWT tokens in services that can't use the s
 The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to verify the token.
 
 <Callout type="info">
-  This plugin is not meant as a replacement for the session. It's meant to be used for services that requires JWT tokens.
+  This plugin is not meant as a replacement for the session. It's meant to be used for services that require JWT tokens. If you're looking to use JWT tokens for authentication, check out the [Bearer Plugin](/docs/plugins/bearer).
 </Callout>
 
 ## Installation
@@ -58,7 +58,7 @@ Once you've installed the plugin, you can start using the JWT & JWKS plugin to g
 
 1. Using your session token
 
-To get the token, call the `/token`, this will return the following:
+To get the token, call the `/token` endpoint. This will return the following:
   
 ```json
   { 
@@ -66,7 +66,7 @@ To get the token, call the `/token`, this will return the following:
   }
 ```
 
-Make sure to include the token in the Authorization header of your requests. And `bearer` plugin is added in your auth configuration.
+Make sure to include the token in the `Authorization` header of your requests and the `bearer` plugin is added in your auth configuration.
 
 ```ts
 await fetch("/api/auth/token", {
@@ -78,7 +78,7 @@ await fetch("/api/auth/token", {
 
 2. From `set-auth-jwt` header
 
-When you call `getSession` method a jwt is returned in `set-auth-jwt` header. Which you can use to send to your services directly.
+When you call `getSession` method, a JWT is returned in the `set-auth-jwt` header, which you can use to send to your services directly.
 
 ```ts
 await authClient.getSession({
@@ -92,11 +92,11 @@ await authClient.getSession({
 
 ### Verifying the token
 The token can be verified in your own service, without the need for an additional verify call or database check.
-For this JWKS is used, the public key can be fetched from the `/api/auth/jwks` endpoint.
+For this JWKS is used. The public key can be fetched from the `/api/auth/jwks` endpoint.
 
-Since this key is not subject to a frequent change, it can be cached indefinitely.
-The Key ID (kid) that was used to sign a JWT is included in the header of the token.
-In the case a JWT with a different kid is received it is recommended to fetch the JWKS again.
+Since this key is not subject to frequent changes, it can be cached indefinitely.
+The key ID (`kid`) that was used to sign a JWT is included in the header of the token.
+In case a JWT with a different `kid` is received, it is recommended to fetch the JWKS again.
 
 ```json
   {
@@ -211,7 +211,7 @@ Table Name: `jwks`
 
 ### Algorithm of the Key Pair
 
-The algorithm used for the generation of the keypair. The default is **EdDSA** with the **Ed25519** curve. Below are the available options:
+The algorithm used for the generation of the key pair. The default is **EdDSA** with the **Ed25519** curve. Below are the available options:
 
 ```ts title="auth.ts"
 jwt({
@@ -285,7 +285,7 @@ jwt({
 ```
 
 ### Modify Issuer, Audience, Subject or Expiration time
-If none is given, the BASE_URL is used as the issuer and the audience is set to the BASE_URL. The expiration time is set to 15 minutes.
+If none is given, the `BASE_URL` is used as the issuer and the audience is set to the `BASE_URL`. The expiration time is set to 15 minutes.
 
 ```ts title="auth.ts"
 jwt({

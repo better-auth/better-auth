@@ -22,7 +22,7 @@ export default function CodeTabs() {
 				? `emailAndPassword: {
 		enabled: true,
 ${
-	options.forgetPassword
+	options.requestPasswordReset
 		? `async sendResetPassword(data, request) {
 			// Send an email to the user with a link to reset their password
 		},`

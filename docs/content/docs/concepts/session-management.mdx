@@ -10,14 +10,14 @@ Better Auth manages session using a traditional cookie-based session management.
 The session table stores the session data. The session table has the following fields:
 
 - `id`: The session token. Which is also used as the session cookie.
-- `userId`: The user id of the user.
+- `userId`: The user ID of the user.
 - `expiresAt`: The expiration date of the session.
 - `ipAddress`: The IP address of the user.
 - `userAgent`: The user agent of the user. It stores the user agent header from the request.
 
 ## Session Expiration
 
-The session expires after 7 days by default. But whenever the session is used, and the `updateAge` is reached the session expiration is updated to the current time plus the `expiresIn` value.
+The session expires after 7 days by default. But whenever the session is used and the `updateAge` is reached, the session expiration is updated to the current time plus the `expiresIn` value.
 
 You can change both the `expiresIn` and `updateAge` values by passing the `session` object to the `auth` configuration.
 
@@ -164,7 +164,7 @@ When cookie caching is enabled, the server can check session validity from the c
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"l
+import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
     session: {

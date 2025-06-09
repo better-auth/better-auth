@@ -106,11 +106,12 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key#api
             rateLimitTimeWindow: 1000 * 60 * 60 * 24, // everyday
             rateLimitMax: 100, // every day, they can use up to 100 requests
             rateLimitEnabled: true,
-            userId: user.id, // the user id to create the API key for
+            userId: user.id, // the user ID to create the API key for
           },
       });
       ```
     </Tab>
+
 </Tabs>
 
 All API keys are assigned to a user. If you're creating an API key on the server, without access to headers, you must pass the `userId` property. This is the ID of the user that the API key is associated with.
@@ -136,9 +137,10 @@ All properties are optional. However if you pass a `refillAmount`, you must also
 
 ```ts
 const example = {
-  projects: ["read", "read-write"]
-}
+  projects: ["read", "read-write"],
+};
 ```
+
 - `userId`?: The ID of the user associated with the API key. When creating an API Key, you must pass the headers of the user who will own the key. However if you do not have the headers, you can pass this field, which will allow you to bypass the need for headers.
 
 #### Result
@@ -164,8 +166,8 @@ const { valid, error, key } = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
     permissions: {
-      projects: ["read", "read-write"]
-    }
+      projects: ["read", "read-write"],
+    },
   },
 });
 ```
@@ -201,7 +203,7 @@ const key = await auth.api.getApiKey({
 
 #### Properties
 
-- `keyId`: The API Key id to get information on.
+- `keyId`: The API key ID to get information on.
 
 #### Result
 
@@ -252,22 +254,20 @@ type Result = Omit<ApiKey, "key">;
 </Tabs>
 
 #### Properties
-  <DividerText>Client</DividerText>
-- `keyId`: The API key Id to update on.
-- `name`?: Update the key name.
 
-  <DividerText>Server Only</DividerText>
-- `userId`?: Update the user id who owns this key.
-- `name`?: Update the key name.
-- `enabled`?: Update whether the API key is enabled or not.
-- `remaining`?: Update the remaining count.
-- `refillAmount`?: Update the amount to refill the `remaining` count every interval.
-- `refillInterval`?: Update the interval to refill the `remaining` count.
-- `metadata`?: Update the metadata of the API key.
-- `expiresIn`?: Update the expiration time of the API key. In seconds.
-- `rateLimitEnabled`?: Update whether the rate-limiter is enabled or not.
-- `rateLimitTimeWindow`?: Update the time window for the rate-limiter.
-- `rateLimitMax`?: Update the maximum number of requests they can make during the rate-limit-time-window.
+<DividerText>Client</DividerText>- `keyId`: The API key ID to update on. -
+`name`?: Update the key name.
+
+<DividerText>Server Only</DividerText>- `userId`?: Update the user ID who owns
+this key. - `name`?: Update the key name. - `enabled`?: Update whether the API
+key is enabled or not. - `remaining`?: Update the remaining count. -
+`refillAmount`?: Update the amount to refill the `remaining` count every
+interval. - `refillInterval`?: Update the interval to refill the `remaining`
+count. - `metadata`?: Update the metadata of the API key. - `expiresIn`?: Update
+the expiration time of the API key. In seconds. - `rateLimitEnabled`?: Update
+whether the rate-limiter is enabled or not. - `rateLimitTimeWindow`?: Update the
+time window for the rate-limiter. - `rateLimitMax`?: Update the maximum number
+of requests they can make during the rate-limit-time-window.
 
 #### Result
 
@@ -301,7 +301,7 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
 
 #### Properties
 
-- `keyId`: The API Key id to delete.
+- `keyId`: The API key ID to delete.
 
 #### Result
 
@@ -341,18 +341,21 @@ If fails, throws `APIError`.
 Otherwise, you'll receive:
 
 ```ts
-type Result = ApiKey[]
+type Result = ApiKey[];
 ```
+
 ---
 
 ### Delete all expired API keys
 
 This function will delete all API keys that have an expired expiration date.
 
-<Endpoint method="DELETE" path="/api-key/delete-all-expired-api-keys" isServerOnly />
-```ts
-await auth.api.deleteAllExpiredApiKeys();
-```
+<Endpoint
+  method="DELETE"
+  path="/api-key/delete-all-expired-api-keys"
+  isServerOnly
+/>
+```ts await auth.api.deleteAllExpiredApiKeys(); ```
 
 <Callout>
   We automatically delete expired API keys every time any apiKey plugin
@@ -372,10 +375,10 @@ The default header key is `x-api-key`, but this can be changed by setting the `a
 export const auth = betterAuth({
   plugins: [
     apiKey({
-      apiKeyHeaders: ['x-api-key', 'xyz-api-key'], // or you can pass just a string, eg: "x-api-key"
-    })
-  ]
-})
+      apiKeyHeaders: ["x-api-key", "xyz-api-key"], // or you can pass just a string, eg: "x-api-key"
+    }),
+  ],
+});
 ```
 
 Or optionally, you can pass an `apiKeyGetter` function to the plugin options, which will be called with the `GenericEndpointContext`, and from there, you should return the API key, or `null` if the request is invalid.
@@ -385,13 +388,13 @@ export const auth = betterAuth({
   plugins: [
     apiKey({
       apiKeyGetter: (ctx) => {
-        const has = ctx.request.headers.has('x-api-key')
-        if(!has) return null
-        return ctx.request.headers.get('x-api-key')
-      }
-    })
-  ]
-})
+        const has = ctx.request.headers.has("x-api-key");
+        if (!has) return null;
+        return ctx.request.headers.get("x-api-key");
+      },
+    }),
+  ],
+});
 ```
 
 ## Rate Limiting
@@ -412,9 +415,9 @@ export const auth = betterAuth({
         timeWindow: 1000 * 60 * 60 * 24, // 1 day
         maxRequests: 10, // 10 requests per day
       },
-    })
-  ]
-})
+    }),
+  ],
+});
 ```
 
 For each API key, you can customize the rate-limit options on create.
@@ -448,21 +451,23 @@ The expiration time is the expiration date of the API key.
 ### How does it work?
 
 #### Remaining:
+
 Whenever an API key is used, the `remaining` count is updated.  
 If the `remaining` count is `null`, then there is no cap to key usage.  
 Otherwise, the `remaining` count is decremented by 1.  
 If the `remaining` count is 0, then the API key is disabled & removed.
 
 #### refillInterval & refillAmount:
+
 Whenever an API key is created, the `refillInterval` and `refillAmount` are set to `null`.  
 This means that the API key will not be refilled automatically.  
 However, if `refillInterval` & `refillAmount` are set, then the API key will be refilled accordingly.
 
 #### Expiration:
+
 Whenever an API key is created, the `expiresAt` is set to `null`.  
 This means that the API key will never expire.  
 However, if the `expiresIn` is set, then the API key will expire after the `expiresIn` time.
-
 
 ## Custom Key generation & verification
 
@@ -474,19 +479,25 @@ Here's an example:
 export const auth = betterAuth({
   plugins: [
     apiKey({
-      customKeyGenerator: (options: { length: number, prefix: string | undefined }) => {
-        const apiKey = mySuperSecretApiKeyGenerator(options.length, options.prefix);
+      customKeyGenerator: (options: {
+        length: number;
+        prefix: string | undefined;
+      }) => {
+        const apiKey = mySuperSecretApiKeyGenerator(
+          options.length,
+          options.prefix
+        );
         return apiKey;
       },
-      customAPIKeyValidator: ({ctx, key}) => {
-          if(key.endsWith("_super_secret_api_key")) {
-            return true;
-          } else {
-            return false;
-          }
+      customAPIKeyValidator: ({ ctx, key }) => {
+        if (key.endsWith("_super_secret_api_key")) {
+          return true;
+        } else {
+          return false;
+        }
       },
-    })
-  ]
+    }),
+  ],
 });
 ```
 
@@ -516,17 +527,19 @@ as all failed keys can be invalidated without having to query your database.
 We allow you to store metadata alongside your API keys. This is useful for storing information about the key, such as a subscription plan for example.
 
 To store metadata, make sure you haven't disabled the metadata feature in the plugin options.
+
 ```ts
 export const auth = betterAuth({
   plugins: [
     apiKey({
       enableMetadata: true,
-    })
-  ]
-})
+    }),
+  ],
+});
 ```
 
 Then, you can store metadata in the `metadata` field of the API key object.
+
 ```ts
 const apiKey = await auth.api.createApiKey({
   body: {
@@ -538,6 +551,7 @@ const apiKey = await auth.api.createApiKey({
 ```
 
 You can then retrieve the metadata from the API key object.
+
 ```ts
 const apiKey = await auth.api.getApiKey({
   body: {
@@ -554,11 +568,9 @@ console.log(apiKey.metadata.plan); // "premium"
 
 The header name to check for API key. Default is `x-api-key`.
 
-
 `customAPIKeyGetter` <span className="opacity-70">`(ctx: GenericEndpointContext) => string | null`</span>
 
 A custom function to get the API key from the context.
-
 
 `customAPIKeyValidator` <span className="opacity-70">`(options: { ctx: GenericEndpointContext; key: string; }) => boolean`</span>
 
@@ -576,15 +588,16 @@ Customize the starting characters configuration.
   <Accordion title="startingCharactersConfig Options">
     `shouldStore` <span className="opacity-70">`boolean`</span>
 
-    Wether to store the starting characters in the database.  
-    If false, we will set `start` to `null`.  
+    Whether to store the starting characters in the database.
+    If false, we will set `start` to `null`.
     Default is `true`.
-    
+
     `charactersLength` <span className="opacity-70">`number`</span>
 
-    The length of the starting characters to store in the database.  
-    This includes the prefix length.  
+    The length of the starting characters to store in the database.
+    This includes the prefix length.
     Default is `6`.
+
   </Accordion>
 </Accordions>
 
@@ -632,7 +645,7 @@ Customize the key expiration.
 
     `disableCustomExpiresTime` <span className="opacity-70">`boolean`</span>
 
-    Wether to disable the expires time passed from the client.  
+    Whether to disable the expires time passed from the client.
     If `true`, the expires time will be based on the default values.
     Default is `false`.
 
@@ -645,6 +658,7 @@ Customize the key expiration.
 
     The maximum expiresIn value allowed to be set from the client. in days.
     Default is `365`.
+
   </Accordion>
 </Accordions>
 
@@ -660,16 +674,16 @@ Customize the rate-limiting.
 
     `timeWindow` <span className="opacity-70">`number`</span>
 
-    The duration in milliseconds where each request is counted.  
-    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.  
+    The duration in milliseconds where each request is counted.
+    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
 
     `maxRequests` <span className="opacity-70">`number`</span>
 
-    Maximum amount of requests allowed within a window.  
+    Maximum amount of requests allowed within a window.
     Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+
   </Accordion>
 </Accordions>
-
 
 `schema` <span className="opacity-70">`InferOptionSchema<ReturnType<typeof apiKeySchema>>`</span>
 
@@ -677,7 +691,7 @@ Custom schema for the API key plugin.
 
 `disableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
-An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.  
+An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 
@@ -690,8 +704,16 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
     `defaultPermissions` <span className="opacity-70">`Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>)`</span>
 
     The default permissions for the API key.
+
   </Accordion>
 </Accordions>
+
+`disableKeyHashing` <span className="opacity-70">`boolean`</span>
+
+Disable hashing of the API key.
+
+⚠️ Security Warning: It's strongly recommended to not disable hashing.
+Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
 
 ---
 
@@ -735,7 +757,7 @@ Table: `apiKey`
     {
       name: "userId",
       type: "string",
-      description: "The id of the user who created the API key.",
+      description: "The ID of the user who created the API key.",
       isForeignKey: true,
     },
     {
@@ -843,12 +865,12 @@ export const auth = betterAuth({
       permissions: {
         defaultPermissions: {
           files: ["read"],
-          users: ["read"]
-        }
-      }
-    })
-  ]
-})
+          users: ["read"],
+        },
+      },
+    }),
+  ],
+});
 ```
 
 You can also provide a function that returns permissions dynamically:
@@ -862,13 +884,13 @@ export const auth = betterAuth({
           // Fetch user role or other data to determine permissions
           return {
             files: ["read"],
-            users: ["read"]
+            users: ["read"],
           };
-        }
-      }
-    })
-  ]
-})
+        },
+      },
+    }),
+  ],
+});
 ```
 
 ### Creating API Keys with Permissions
@@ -881,9 +903,9 @@ const apiKey = await auth.api.createApiKey({
     name: "My API Key",
     permissions: {
       files: ["read", "write"],
-      users: ["read"]
+      users: ["read"],
     },
-    userId: "userId"
+    userId: "userId",
   },
 });
 ```
@@ -897,9 +919,9 @@ const result = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
     permissions: {
-      files: ["read"]
-    }
-  }
+      files: ["read"],
+    },
+  },
 });
 
 if (result.valid) {
@@ -919,8 +941,8 @@ const apiKey = await auth.api.updateApiKey({
     keyId: existingApiKeyId,
     permissions: {
       files: ["read", "write", "delete"],
-      users: ["read", "write"]
-    }
+      users: ["read", "write"],
+    },
   },
   headers: user_headers,
 });
@@ -939,7 +961,7 @@ type Permissions = {
 const permissions = {
   files: ["read", "write", "delete"],
   users: ["read"],
-  projects: ["read", "write"]
+  projects: ["read", "write"],
 };
 ```
 
