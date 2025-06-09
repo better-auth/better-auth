@@ -162,7 +162,6 @@ describe("stripe", async () => {
 				headers,
 			},
 		});
-		console.log("res", res);
 		expect(res.data?.url).toBeDefined();
 		const subscription = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
