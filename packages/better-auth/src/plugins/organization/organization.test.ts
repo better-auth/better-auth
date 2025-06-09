@@ -399,7 +399,7 @@ describe("organization", async (it) => {
 		const member = await auth.api.addMember({
 			body: {
 				organizationId,
-				userId: res.data?.user.id!,
+				userId: res.data?.user?.id!,
 				role: "admin",
 			},
 		});
@@ -412,7 +412,7 @@ describe("organization", async (it) => {
 			},
 		);
 		expect(leaveRes.data).toMatchObject({
-			userId: res.data?.user.id!,
+			userId: res.data?.user?.id!,
 		});
 	});
 

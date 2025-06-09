@@ -4,7 +4,6 @@ import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
@@ -157,8 +156,14 @@ export const sendVerificationEmail = createAuthEndpoint(
 		const { email } = ctx.body;
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.USER_NOT_FOUND,
+			ctx.context.logger.error(
+				"Verification email requested for non-existent user",
+				{ email },
+			);
+			// Return success response to prevent email enumeration
+			// Don't reveal that the user doesn't exist
+			return ctx.json({
+				status: true,
 			});
 		}
 		await sendVerificationEmailFn(ctx, user.user);
