@@ -70,14 +70,16 @@ describe("username", async (it) => {
 		expect(session?.user.username).toBe("new_username_2.1");
 	});
 
-	it("should fail on duplicate username", async () => {
+	it("should return success for duplicate username (enumeration protection)", async () => {
 		const res = await client.signUp.email({
 			email: "new-email-2@gamil.com",
 			username: "New_username_2.1",
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		// Should return success to prevent username enumeration
+		expect(res.data?.user).toBeNull();
+		expect(res.data?.token).toBeNull();
 	});
 
 	it("should fail on invalid username", async () => {

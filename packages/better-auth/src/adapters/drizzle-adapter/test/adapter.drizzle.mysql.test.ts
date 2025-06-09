@@ -116,7 +116,7 @@ describe("Drizzle Adapter Authentication Flow Tests (MySQL)", async () => {
 	it("should successfully sign up a new user", async () => {
 		const user = await auth.api.signUpEmail({ body: testUser });
 		expect(user).toBeDefined();
-		expect(user.user.id).toBeDefined();
+		expect(user.user?.id).toBeDefined();
 	});
 
 	it("should successfully sign in an existing user", async () => {

@@ -271,9 +271,12 @@ export const username = (options?: UsernameOptions) => {
 								],
 							});
 							if (user) {
-								throw new APIError("UNPROCESSABLE_ENTITY", {
-									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
-								});
+								ctx.context.logger.info(
+									`Sign-up attempt for existing username: ${username}`,
+								);
+								// Set a flag to indicate username already exists
+								// We'll handle this in the main sign-up flow to prevent enumeration
+								ctx.context.usernameAlreadyExists = true;
 							}
 						}
 					}),

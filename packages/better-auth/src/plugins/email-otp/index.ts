@@ -380,8 +380,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+						ctx.context.logger.error(
+							"Email verification OTP requested for non-existent user",
+							{ email },
+						);
+						// Return success response to prevent email enumeration
+						// Don't reveal that the user doesn't exist
+						return ctx.json({
+							status: true,
+							token: null,
+							user: null,
 						});
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -622,8 +630,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const email = ctx.body.email;
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+						ctx.context.logger.error(
+							"Forget password OTP requested for non-existent user",
+							{ email },
+						);
+						// Return success response to prevent email enumeration
+						// Don't reveal that the user doesn't exist
+						return ctx.json({
+							success: true,
 						});
 					}
 					const otp = opts.generateOTP(
@@ -698,8 +712,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 					);
 					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+						ctx.context.logger.error(
+							"Reset password OTP requested for non-existent user",
+							{ email },
+						);
+						// Return success response to prevent email enumeration
+						// Don't reveal that the user doesn't exist
+						return ctx.json({
+							success: true,
 						});
 					}
 					const verificationValue =

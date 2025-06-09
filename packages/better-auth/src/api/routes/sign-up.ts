@@ -73,6 +73,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 											},
 											user: {
 												type: "object",
+												nullable: true,
 												properties: {
 													id: {
 														type: "string",
@@ -118,7 +119,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												],
 											},
 										},
-										required: ["user"], // token is optional
+										// user and token are both optional for enumeration protection
 									},
 								},
 							},
@@ -167,11 +168,24 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 				});
 			}
+			// Check if username already exists (set by username plugin hook)
+			if ((ctx as any).context.usernameAlreadyExists) {
+				// Return success response to prevent username enumeration
+				// Don't reveal that the username already exists
+				return ctx.json({
+					token: null,
+					user: null,
+				});
+			}
+
 			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (dbUser?.user) {
 				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
-				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+				// Return success response to prevent email enumeration
+				// Don't reveal that the user already exists
+				return ctx.json({
+					token: null,
+					user: null,
 				});
 			}
 
