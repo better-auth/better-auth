@@ -873,7 +873,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						state: state.state,
 						codeVerifier: pkce ? state.codeVerifier : undefined,
 						scopes: c.body.scopes || scopes || [],
-						redirectURI: c.body.callbackURL,
+						redirectURI:
+							redirectURI ||
+							`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						prompt,
 						accessType,
 						additionalParams: authorizationUrlParams,
