@@ -14,18 +14,32 @@ export async function onCheckoutSessionCompleted(
 		if (checkoutSession.mode === "setup" || !options.subscription?.enabled) {
 			return;
 		}
-		const subscription = await client.subscriptions.retrieve(
-			checkoutSession.subscription as string,
-		);
-		const priceId = subscription.items.data[0]?.price.id;
-		const plan = await getPlanByPriceId(options, priceId as string);
-		if (plan) {
-			const referenceId =
-				checkoutSession?.client_reference_id ||
-				checkoutSession?.metadata?.referenceId;
-			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
-			const seats = subscription.items.data[0].quantity;
-			if (referenceId && subscriptionId) {
+		let subscription: Stripe.Response<Stripe.Subscription> | undefined;
+		let priceId: string | undefined;
+
+		if (checkoutSession.mode === "subscription") {
+			subscription = await client.subscriptions.retrieve(
+				checkoutSession.subscription as string,
+			);
+			priceId = subscription.items.data[0]?.price.id;
+		} else if (checkoutSession.mode === "payment") {
+			priceId = checkoutSession.metadata?.priceId;
+		}
+
+		if (!priceId) return;
+
+		const plan = await getPlanByPriceId(options, priceId);
+
+		if (!plan) return;
+
+		const referenceId =
+			checkoutSession?.client_reference_id ||
+			checkoutSession?.metadata?.referenceId;
+		const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+
+		if (referenceId && subscriptionId) {
+			if (subscription) {
+				const seats = subscription.items.data[0].quantity;
 				const trial =
 					subscription.trial_start && subscription.trial_end
 						? {
@@ -78,6 +92,40 @@ export async function onCheckoutSessionCompleted(
 					event,
 					subscription: dbSubscription as Subscription,
 					stripeSubscription: subscription,
+					plan,
+				});
+				return;
+			} else {
+				let dbSubscription =
+					await ctx.context.adapter.update<InputSubscription>({
+						model: "subscription",
+						update: {
+							plan: plan.name.toLowerCase(),
+							status: "active",
+							updatedAt: new Date(),
+						},
+						where: [
+							{
+								field: "id",
+								value: subscriptionId,
+							},
+						],
+					});
+
+				if (!dbSubscription) {
+					dbSubscription = await ctx.context.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [
+							{
+								field: "id",
+								value: subscriptionId,
+							},
+						],
+					});
+				}
+				await options.subscription?.onPaymentComplete?.({
+					event,
+					subscription: dbSubscription as Subscription,
 					plan,
 				});
 				return;

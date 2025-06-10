@@ -83,6 +83,10 @@ export type StripePlan = {
 			request?: Request,
 		) => Promise<void>;
 	};
+	/**
+	 * Stripe checkout mode, defaults to subscription
+	 */
+	mode?: "payment" | "setup" | "subscription";
 };
 
 export interface Subscription {
@@ -220,6 +224,20 @@ export interface StripeOptions {
 		 * @default false
 		 */
 		requireEmailVerification?: boolean;
+		/**
+		 * A callback to run after a user has finished their payment
+		 * @param event - Stripe Event
+		 * @param subscription - Subscription Data
+		 * @returns
+		 */
+		onPaymentComplete?: (
+			data: {
+				event: Stripe.Event;
+				subscription: Subscription;
+				plan: StripePlan;
+			},
+			request?: Request,
+		) => Promise<void>;
 		/**
 		 * A callback to run after a user has subscribed to a package
 		 * @param event - Stripe Event
