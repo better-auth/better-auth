@@ -95,11 +95,33 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				},
 				async (ctx) => {
 					const cookies = ctx.query.cookies;
+
 					const decryptedCookies = await symmetricDecrypt({
 						key: ctx.context.secret,
 						data: cookies,
+					}).catch((e) => {
+						ctx.context.logger.error(e);
+						return null;
 					});
-					ctx.setHeader("set-cookie", decryptedCookies);
+					const error =
+						ctx.context.options.onAPIError?.errorURL ||
+						`${ctx.context.options.baseURL}/api/auth/error`;
+					if (!decryptedCookies) {
+						throw ctx.redirect(
+							`${error}?error=OAuthProxy - Invalid cookies or secret`,
+						);
+					}
+					const isSecureContext = ctx.request
+						? new URL(ctx.request.url).protocol === "https:"
+						: true;
+					const prefix =
+						ctx.context.options.advanced?.cookiePrefix || "better-auth";
+					const cookieToSet = isSecureContext
+						? decryptedCookies
+						: decryptedCookies
+								.replace("Secure;", "")
+								.replace(`__Secure-${prefix}`, prefix);
+					ctx.setHeader("set-cookie", cookieToSet);
 					throw ctx.redirect(ctx.query.callbackURL);
 				},
 			),
@@ -161,6 +183,11 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						// if skip proxy header is set, we don't need to proxy
+						const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
+						if (skipProxy) {
+							return;
+						}
 						const url = new URL(
 							opts?.currentURL ||
 								ctx.request?.url ||
