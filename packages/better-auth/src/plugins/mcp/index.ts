@@ -18,7 +18,7 @@ import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
 import { subtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
-import type { GenericEndpointContext } from "../../types";
+import type { BetterAuthOptions, GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
@@ -866,6 +866,7 @@ export const withMcpAuth = <
 		api: {
 			getMcpSession: (...args: any) => Promise<OAuthAccessToken | null>;
 		};
+		options: BetterAuthOptions;
 	},
 >(
 	auth: Auth,
@@ -875,11 +876,12 @@ export const withMcpAuth = <
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
+		const baseURL = auth.options.baseURL;
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
 		const wwwAuthenticateValue =
-			"Bearer resource_metadata=http://localhost:3000/api/auth/.well-known/oauth-authorization-server";
+			`Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-authorization-server`;
 		if (!session) {
 			return Response.json(
 				{
