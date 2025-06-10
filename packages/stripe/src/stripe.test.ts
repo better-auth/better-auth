@@ -779,7 +779,6 @@ describe("stripe", async () => {
 			},
 		);
 
-		// Create initial subscription with 3 seats
 		await authClient.subscription.upgrade({
 			plan: "starter",
 			seats: 3,
@@ -788,7 +787,6 @@ describe("stripe", async () => {
 			},
 		});
 
-		// Update subscription status to active
 		await ctx.adapter.update({
 			model: "subscription",
 			update: {
@@ -803,7 +801,6 @@ describe("stripe", async () => {
 			],
 		});
 
-		// Attempt to create identical subscription - should fail
 		const upgradeRes = await authClient.subscription.upgrade({
 			plan: "starter",
 			seats: 3,
