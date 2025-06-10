@@ -50,6 +50,19 @@ const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	}`;
 };
 
+async function resolvePriceIdFromLookupKey(
+	stripeClient: Stripe,
+	lookupKey: string,
+): Promise<string | undefined> {
+	if (!lookupKey) return undefined;
+	const prices = await stripeClient.prices.list({
+		lookup_keys: [lookupKey],
+		active: true,
+		limit: 1,
+	});
+	return prices.data[0]?.id;
+}
+
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
@@ -372,6 +385,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						}
 					: undefined;
 
+				let priceIdToUse: string | undefined = undefined;
+				if (ctx.body.annual) {
+					priceIdToUse = plan.annualDiscountPriceId;
+					if (!priceIdToUse && plan.annualDiscountLookupKey) {
+						priceIdToUse = await resolvePriceIdFromLookupKey(
+							client,
+							plan.annualDiscountLookupKey,
+						);
+					}
+				} else {
+					priceIdToUse = plan.priceId;
+					if (!priceIdToUse && plan.lookupKey) {
+						priceIdToUse = await resolvePriceIdFromLookupKey(
+							client,
+							plan.lookupKey,
+						);
+					}
+				}
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
@@ -397,9 +428,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 							line_items: [
 								{
-									price: ctx.body.annual
-										? plan.annualDiscountPriceId
-										: plan.priceId,
+									price: priceIdToUse,
 									quantity: ctx.body.seats || 1,
 								},
 							],

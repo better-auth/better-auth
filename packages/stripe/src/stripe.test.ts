@@ -11,6 +11,9 @@ import type { StripeOptions, Subscription } from "./types";
 
 describe("stripe", async () => {
 	const mockStripe = {
+		prices: {
+			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
+		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
 		},
@@ -59,10 +62,12 @@ describe("stripe", async () => {
 				{
 					priceId: process.env.STRIPE_PRICE_ID_1!,
 					name: "starter",
+					lookupKey: "lookup_key_123",
 				},
 				{
 					priceId: process.env.STRIPE_PRICE_ID_2!,
 					name: "premium",
+					lookupKey: "lookup_key_234",
 				},
 			],
 		},
