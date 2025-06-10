@@ -24,7 +24,6 @@ export async function generateState(
 		errorURL: c.body?.errorCallbackURL,
 		newUserURL: c.body?.newUserCallbackURL,
 		link,
-
 		/**
 		 * This is the actual expiry time of the state
 		 */
