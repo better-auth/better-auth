@@ -118,7 +118,7 @@ describe("anonymous", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
-		const state = new URL(signInRes.data?.url || "").searchParams.get("state");
+		const state = signInRes.data?.url ? new URL(signInRes.data.url).searchParams.get("state") : null;
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
