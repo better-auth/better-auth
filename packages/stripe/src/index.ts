@@ -293,7 +293,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				if (
 					existingSubscription &&
 					existingSubscription.status === "active" &&
-					existingSubscription.plan === ctx.body.plan
+					existingSubscription.plan === ctx.body.plan &&
+					existingSubscription.seats === (ctx.body.seats || 1)
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
@@ -312,7 +313,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									items: [
 										{
 											id: activeSubscription.items.data[0]?.id as string,
-											quantity: 1,
+											quantity: ctx.body.seats || 1,
 											price: ctx.body.annual
 												? plan.annualDiscountPriceId
 												: plan.priceId,

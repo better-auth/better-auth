@@ -700,4 +700,119 @@ describe("stripe", async () => {
 
 		expect(onSubscriptionDeleted).toHaveBeenCalled();
 	});
+
+	it("should allow seat upgrades for the same plan", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "seat-upgrade@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "seat-upgrade@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 5,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(upgradeRes.data?.url).toBeDefined();
+	});
+
+	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "duplicate-prevention@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "duplicate-prevention@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Create initial subscription with 3 seats
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Update subscription status to active
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				seats: 3,
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Attempt to create identical subscription - should fail
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(upgradeRes.error).toBeDefined();
+		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
 });
