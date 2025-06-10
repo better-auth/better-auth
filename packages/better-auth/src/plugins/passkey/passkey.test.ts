@@ -68,7 +68,8 @@ describe("passkey", async () => {
 				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
-			},
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
 		});
 
 		const passkeys = await auth.api.listPasskeys({
@@ -80,6 +81,7 @@ describe("passkey", async () => {
 		expect(passkeys[0]).toHaveProperty("userId");
 		expect(passkeys[0]).toHaveProperty("publicKey");
 		expect(passkeys[0]).toHaveProperty("credentialID");
+		expect(passkeys[0]).toHaveProperty("aaguid");
 	});
 
 	it("should update a passkey", async () => {

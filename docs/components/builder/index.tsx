@@ -372,11 +372,11 @@ export function Builder() {
 												</div>
 												<Switch
 													id="email-provider-forget-password"
-													checked={options.forgetPassword}
+													checked={options.requestPasswordReset}
 													onCheckedChange={(checked) => {
 														setOptions((prev) => ({
 															...prev,
-															forgetPassword: checked,
+															requestPasswordReset: checked,
 														}));
 													}}
 												/>

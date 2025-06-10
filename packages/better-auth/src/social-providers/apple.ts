@@ -89,6 +89,7 @@ export const apple = (options: AppleOptions) => {
 				state,
 				redirectURI,
 				responseMode: "form_post",
+				responseType: "code id_token",
 			});
 			return url;
 		},

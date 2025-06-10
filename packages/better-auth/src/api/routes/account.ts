@@ -114,6 +114,15 @@ export const linkSocialAccount = createAuthEndpoint(
 					description: "Additional scopes to request from the provider",
 				})
 				.optional(),
+			/**
+			 * The URL to redirect to if there is an error during the link process.
+			 */
+			errorCallbackURL: z
+				.string({
+					description:
+						"The URL to redirect to if there is an error during the link process",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -346,17 +355,15 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Provider ${providerId} not found.`,
 			});
 		}
-		if (!provider.refreshAccessToken) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} does not support token refreshing.`,
-			});
-		}
+
 		try {
 			let newTokens: OAuth2Tokens | null = null;
 
 			if (
-				!account.accessTokenExpiresAt ||
-				account.accessTokenExpiresAt.getTime() - Date.now() < 5_000 // 5 second buffer
+				account.refreshToken &&
+				(!account.accessTokenExpiresAt ||
+					account.accessTokenExpiresAt.getTime() - Date.now() < 5_000) &&
+				provider.refreshAccessToken
 			) {
 				newTokens = await provider.refreshAccessToken(
 					account.refreshToken as string,

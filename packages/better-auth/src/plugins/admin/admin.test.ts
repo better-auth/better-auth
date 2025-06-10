@@ -164,6 +164,17 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
+		const result = await client.admin.listUsers({
+			query: {
+				filterField: "role",
+				filterOperator: "contains",
+				filterValue: "admin",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(result.data?.users.length).toBe(2);
 		expect(res.data?.user.role).toBe("user,admin");
 		await client.admin.removeUser(
 			{

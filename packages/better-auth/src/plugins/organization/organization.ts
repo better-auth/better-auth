@@ -575,7 +575,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					}
 					const result = hasPermission({
 						role: member.role,
-						options: options as OrganizationOptions,
+						options: options || {},
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 						returnMissingPermissions: ctx.body.returnMissingPermissions,
 					});

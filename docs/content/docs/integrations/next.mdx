@@ -164,6 +164,20 @@ const sessionCookie = getSessionCookie(request, {
 ```
 </Callout>
 
+Alternatively, you can use the `getCookieCache` helper to get the session object from the cookie cache.
+
+```ts
+import { getCookieCache } from "better-auth/cookies";
+
+export async function middleware(request: NextRequest) {
+	const session = await getCookieCache(request);
+	if (!session) {
+		return NextResponse.redirect(new URL("/sign-in", request.url));
+	}
+	return NextResponse.next();
+}
+```
+
 ### For Next.js release `15.1.7` and below
 
 If you need the full session object, you'll have to fetch it from the `/get-session` API route. Since Next.js middleware doesn't support running Node.js APIs directly, you must make an HTTP request.

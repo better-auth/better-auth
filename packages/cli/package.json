@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.2.9-beta.5",
+  "version": "1.2.9",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
   "repository": {
@@ -30,6 +30,7 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
+    "@babel/core": "^7.0.0",
     "@babel/preset-react": "^7.26.3",
     "@babel/preset-typescript": "^7.26.0",
     "@clack/prompts": "^0.10.0",

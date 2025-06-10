@@ -1,8 +1,9 @@
 {
   "name": "better-auth",
-  "version": "1.2.9-beta.5",
+  "version": "1.2.9",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -664,7 +665,7 @@
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
-    "kysely": "^0.28.1",
+    "kysely": "^0.28.2",
     "nanostores": "^0.11.3",
     "zod": "^3.24.1"
   },
