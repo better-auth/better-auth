@@ -395,20 +395,28 @@ export const resetPassword = createAuthEndpoint(
 				},
 				ctx,
 			);
-			await ctx.context.internalAdapter.deleteVerificationValue(
-				verification.id,
+		} else {
+			await ctx.context.internalAdapter.updatePassword(
+				userId,
+				hashedPassword,
+				ctx,
 			);
-
-			return ctx.json({
-				status: true,
-			});
 		}
-		await ctx.context.internalAdapter.updatePassword(
-			userId,
-			hashedPassword,
-			ctx,
+		await ctx.context.internalAdapter.deleteVerificationValue(
+			verification.id,
 		);
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+
+		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
+			const user = await ctx.context.internalAdapter.findUserById(userId);
+			if (user) {
+				await ctx.context.options.emailAndPassword.onPasswordReset(
+					{
+						user,
+					},
+					ctx.request,
+				);
+			}
+		}
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}

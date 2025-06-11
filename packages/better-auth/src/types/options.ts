@@ -240,6 +240,11 @@ export type BetterAuthOptions = {
 		 */
 		resetPasswordTokenExpiresIn?: number;
 		/**
+		 * A callback function that is triggered
+		 * when a user's password is changed successfully.
+		 */
+		onPasswordReset?: (data: { user: User }, request?: Request) => Promise<void>;
+		/**
 		 * Password hashing and verification
 		 *
 		 * By default Scrypt is used for password hashing and
