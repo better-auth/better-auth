@@ -413,10 +413,15 @@ export const resetPassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}
 		if (ctx.context.options.emailAndPassword?.onSuccessfulPasswordReset) {
-			await ctx.context.options.emailAndPassword.onSuccessfulPasswordReset(
-				account,
-				ctx.request,
-			);
+			try {
+				// We don't want to bubble up thrown errors if the onSuccessfulPasswordReset function throws
+				ctx.context.options.emailAndPassword.onSuccessfulPasswordReset(
+					account,
+					ctx.request,
+				);
+			} catch (error) {
+				
+			}
 		}
 		return ctx.json({
 			status: true,
