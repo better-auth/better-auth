@@ -91,12 +91,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 			}
 			const isAuthorized = ctx.body?.referenceId
-				? await options.subscription?.authorizeReference?.({
-						user: session.user,
-						session: session.session,
-						referenceId,
-						action,
-					})
+				? await options.subscription?.authorizeReference?.(
+						{
+							user: session.user,
+							session: session.session,
+							referenceId,
+							action,
+						},
+						//@ts-expect-error
+						ctx,
+					)
 				: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
@@ -381,6 +385,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription,
 					},
 					ctx.request,
+					//@ts-expect-error
+					ctx,
 				);
 
 				const freeTrail = plan.freeTrial
@@ -1029,11 +1035,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										if (!customer) {
 											logger.error("#BETTER_AUTH: Failed to create  customer");
 										} else {
-											await options.onCustomerCreate?.({
-												customer,
-												stripeCustomer,
-												user,
-											});
+											await options.onCustomerCreate?.(
+												{
+													customer,
+													stripeCustomer,
+													user,
+												},
+												//@ts-expect-error
+												ctx,
+											);
 										}
 									}
 								},
