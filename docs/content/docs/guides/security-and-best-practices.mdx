@@ -98,6 +98,28 @@ When using Better Auth in cross-origin contexts (e.g., separate frontend/backend
 Always set the `Access-Control-Allow-Origin` header precisely (avoid `*`). And don't forget to configure Better Auth's `trustedOrigins` in your auth
 config to include only your frontend domains.
 
+
+## `input` Property in Additional Fields
+
+The `input` property controls whether a custom field is accepted from the user's input during operations like registration or profile updates.
+
+By default, `input` is set to `true`, which means users can submit a value for this field.
+
+To restrict a field so that it cannot be provided by the user, set `input: false` explicitly:
+
+```ts
+additionalFields: {
+    role: {
+        type: "string",
+        input: false
+    }
+}
+```
+
+By default, all additional fields are included in user-submitted input, which can introduce security risks if not properly controlled. 
+ 
+For sensitive fields that should not be user-defined - such as `role` or `isAdmin` — it's essential to explicitly set `input: false` to prevent users from assigning unauthorized values.
+
 ## Testing
 
 Thoroughly testing your authentication flow and all exposed endpoints is critical for ensuring the security and reliability of your application.
@@ -126,7 +148,3 @@ Thoroughly testing your authentication flow and all exposed endpoints is critica
   - Missing or tampered cookies
   - Expired sessions
   - Unexpected HTTP methods (e.g., sending `POST` to a `GET`-only route)
-
----
-
-Proper testing ensures not only a secure application, but also a smooth user experience that fails safely under edge conditions.
