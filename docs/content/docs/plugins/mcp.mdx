@@ -113,7 +113,7 @@ const handler = withMcpAuth(auth, (req, session) => {
 export { handler as GET, handler as POST, handler as DELETE };
 ```
 
-You can also use `auth.api.getMCPSession` to get the session using the access token sent from the MCP client:
+You can also use `auth.api.getMcpSession` to get the session using the access token sent from the MCP client:
 
 ```ts title="api/[transport]/route.ts"
 import { auth } from "@/lib/auth";
@@ -122,7 +122,7 @@ import { z } from "zod";
 
 const handler = async (req: Request) => {
      // session contains the access token record with scopes and user ID
-    const session = await auth.api.getMCPSession({
+    const session = await auth.api.getMcpSession({
         headers: req.headers
     })
     if(!session){
