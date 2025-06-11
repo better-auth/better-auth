@@ -46,7 +46,7 @@ import { toNextJsHandler } from "better-auth/next-js";
 export const { GET, POST } = toNextJsHandler(auth);
 ```
 
-Use `auth.api.getMCPSession` to get the session using the access token sent from the MCP client
+Use `auth.api.getMcpSession` to get the session using the access token sent from the MCP client
 
 ```ts
 import { auth } from "@/lib/auth";
