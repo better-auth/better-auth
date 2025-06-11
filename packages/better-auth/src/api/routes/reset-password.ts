@@ -419,9 +419,7 @@ export const resetPassword = createAuthEndpoint(
 					account,
 					ctx.request,
 				);
-			} catch (error) {
-				
-			}
+			} catch (error) {}
 		}
 		return ctx.json({
 			status: true,

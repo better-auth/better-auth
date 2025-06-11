@@ -265,11 +265,14 @@ export type BetterAuthOptions = {
 		/**
 		 * A function that is called when a user successfully resets their password.
 		 * Helpful if you want to send an email to the user.
-		 * 
+		 *
 		 * @param account the account that reset their password
 		 * @param request the request object
 		 */
-		onSuccessfulPasswordReset?: (account: Account, request?: Request) => Promise<void> | void;
+		onSuccessfulPasswordReset?: (
+			account: Account,
+			request?: Request,
+		) => Promise<void> | void;
 	};
 	/**
 	 * list of social providers
