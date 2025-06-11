@@ -320,7 +320,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					toCheckOtp.id,
 					{
-						value: `${otp}:${parseInt(counter) + 1}`,
+							value: `${otp}:${((parseInt(counter, 10) || 0) + 1)}`,
 					},
 				);
 				return invalid("INVALID_CODE");
