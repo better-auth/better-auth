@@ -11,7 +11,6 @@ function sanitizeUrl(url: string): string {
 }
 function checkHasPath(url: string): boolean {
   try {
-    url = sanitizeUrl(url);
     const parsedUrl = new URL(url);
     return parsedUrl.pathname !== "/";
   } catch (error) {
@@ -22,12 +21,13 @@ function checkHasPath(url: string): boolean {
 }
 
 function withPath(url: string, path = "/api/auth") {
-  const hasPath = checkHasPath(url);
+  const cleanUrl = sanitizeUrl(url);
+  const hasPath = checkHasPath(cleanUrl);
   if (hasPath) {
-    return url;
+    return cleanUrl;
   }
   path = path.startsWith("/") ? path : `/${path}`;
-  return `${url.replace(/\/+$/, "")}${path}`;
+  return `${cleanUrl.replace(/\/+$/, "")}${path}`;
 }
 
 export function getBaseURL(url?: string, path?: string, request?: Request) {
