@@ -1,0 +1,132 @@
+---
+title: Security and Best Practices
+description: Best practices for securing your application using Better Auth
+---
+
+This guide will walk you through applying best security practices to your application using Better Auth.
+
+## Client vs Server side usage
+
+We recommend using Better Auth's client-side methods whenever possible.
+Features like data validation, rate-limiting, and cookie management are automatically handled for you by default.
+
+Server-side methods should be used only when necessary - such as when server-specific logic or additional security validation is required.
+By using server-side methods, you must manage cookies and rate-limiting manually.
+
+<Callout type="warn">
+Be cautious of <a href="https://en.wikipedia.org/wiki/Timing_attack" target="_blank">timing-based attacks</a> when implementing custom logic in server endpoints.
+</Callout>
+
+## Protecting routes (Vercel/Next.js specific)
+
+If you're using Vercel or Next.js, you can take advantage of `middleware.ts` for route protection.
+We recommend implementing optimistic redirects for unauthenticated users, along with additional checks on each page or route as needed.
+
+Keep in mind that with Partial Rendering, layout components do not re-render on client-side navigation.
+As a result, session checks placed in layouts won't run on every route change - use caution when relying on them for authentication logic.
+
+<Callout>
+    You can read more about this in the [Next.js Authentication docs](https://nextjs.org/docs/app/guides/authentication).
+</Callout>
+
+## Plugins introduce publicly accessible endpoints
+
+When you add a plugin, Better Auth automatically exposes new endpoints. It's important to be aware of this during development.
+Relying solely on custom security checks in your own wrapper endpoints is not sufficient - malicious users can still access the plugin-provided endpoints directly.
+
+<Callout>
+We intend to introduce customization functionality to make certain endpoints/methods server-only in the future.
+</Callout>
+
+## Dependency Versions
+
+It's important to keep both Better Auth and any Better Auth related dependencies up-to-date.
+
+```bash
+npm update better-auth
+```
+
+## Profile Image Rendering
+
+Better Auth does not provide any santization for profile images. How you accept `image` fields on sign-up is up to you.
+We do not recommend making a custom endpoint to sanitize the image, as the default `/sign-up/email` endpoint is still exposed and thus your the `image` field wouldn't be sanitized.
+
+Here's an example of how you can sanitize the image field on sign-up. Keep in mind that this example only applies for the sign-up email endpoint,
+any endpoint that can sign up a user and accept an image should be sanitized in a similar way.
+
+```ts
+import { betterAuth, createAuthMiddleware } from "better-auth";
+import { APIError } from "better-auth/api";
+import { z } from "zod";
+
+export const auth = betterAuth({
+	hooks: {
+		before: createAuthMiddleware(async (ctx) => {
+			// Check that the request is for the sign-up/email endpoint
+			if (ctx.path !== "/sign-up/email") return;
+
+			// Check that the image field is present
+			if (!ctx.body.image) return;
+			const img = ctx.body.image;
+
+			// Validate that the image URL is a valid URL
+			const url_validator = z.string().url();
+			if (!url_validator.safeParse(img).success) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Invalid image URL",
+				});
+			}
+			// Check that the image URL is valid
+			const url = new URL(img);
+			if (url.hostname !== "example.com") {
+				throw new APIError("BAD_REQUEST", {
+					message: "Invalid image URL",
+				});
+			}
+		}),
+	},
+})
+```
+
+In this example, we're using a combination of [hooks](/docs/concepts/hooks) and [Zod](https://zod.dev/) to validate the image field.
+
+Without proper sanitization, the image field can accept any string value, making it difficult to reliably render images on the client side.
+
+## Cross-Origin & CORS
+
+When using Better Auth in cross-origin contexts (e.g., separate frontend/backend domains):
+Always set the `Access-Control-Allow-Origin` header precisely (avoid `*`). And don't forget to configure Better Auth's `trustedOrigins` in your auth
+config to include only your frontend domains.
+
+## Testing
+
+Thoroughly testing your authentication flow and all exposed endpoints is critical for ensuring the security and reliability of your application.
+
+### What to Test
+
+- **Authentication flows**  
+  Test login, logout, session expiry, password resets, and any multi-factor flows you’ve implemented. Ensure they function correctly under different scenarios (e.g., expired cookies, invalid tokens).
+
+- **Public and protected routes**  
+  Ensure unauthenticated users cannot access protected routes. Verify that redirects, error states, and fallback UI work as expected.
+
+- **Plugin endpoints**  
+  Every plugin you add to Better Auth may expose new endpoints (e.g., `/organization/create`). These must be reviewed, tested, and hardened like any part of your API.
+
+- **Rate limits and abuse protection**  
+  Simulate brute force or spam attempts to verify rate-limiting and abuse prevention mechanisms. Ensure error responses don’t leak sensitive details.
+
+- **CSRF protections (if applicable)**  
+  Confirm that session-protected endpoints can’t be triggered cross-origin when cookies are present.
+
+### Manual and Automated Testing
+
+- Write integration tests using frameworks like **Jest**, **Vitest**, or **Playwright** to automate core flows.
+- If using middleware or server-side logic, test edge cases like:
+  - Missing or tampered cookies
+  - Expired sessions
+  - Unexpected HTTP methods (e.g., sending `POST` to a `GET`-only route)
+
+---
+
+Proper testing ensures not only a secure application, but also a smooth user experience that fails safely under edge conditions.
