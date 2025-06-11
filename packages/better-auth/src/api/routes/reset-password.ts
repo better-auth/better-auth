@@ -402,9 +402,7 @@ export const resetPassword = createAuthEndpoint(
 				ctx,
 			);
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(
-			verification.id,
-		);
+		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			const user = await ctx.context.internalAdapter.findUserById(userId);

@@ -243,7 +243,10 @@ export type BetterAuthOptions = {
 		 * A callback function that is triggered
 		 * when a user's password is changed successfully.
 		 */
-		onPasswordReset?: (data: { user: User }, request?: Request) => Promise<void>;
+		onPasswordReset?: (
+			data: { user: User },
+			request?: Request,
+		) => Promise<void>;
 		/**
 		 * Password hashing and verification
 		 *
