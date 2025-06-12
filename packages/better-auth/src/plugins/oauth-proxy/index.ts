@@ -8,6 +8,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
 import { env } from "../../utils/env";
 import { getOrigin } from "../../utils/url";
+import type { EndpointContext } from "better-call";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
@@ -44,10 +45,7 @@ interface OAuthProxyOptions {
  * the redirect URL can't be known in advance to add to the OAuth provider.
  */
 export const oAuthProxy = (opts?: OAuthProxyOptions) => {
-	const resolveCurrentURL = (ctx: {
-		request?: Request;
-		context: { baseURL: string };
-	}) => {
+	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
 		return new URL(
 			opts?.currentURL ||
 				ctx.request?.url ||
