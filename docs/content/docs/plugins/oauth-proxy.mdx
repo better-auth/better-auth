@@ -16,7 +16,10 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
 
     export const auth = betterAuth({
         plugins: [ // [!code highlight]
-            oAuthProxy(), // [!code highlight]
+            oAuthProxy({
+                productionURL: "https://my-main-app.com", // Optional - if the URL isn't inferred correctly // [!code highlight]
+                currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight] 
+            }), // [!code highlight]
         ] // [!code highlight]
     })
     ```

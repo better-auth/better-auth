@@ -46,7 +46,7 @@ export default function SignIn() {
 							<div className="grid gap-2">
 								<div className="flex items-center">
 									<Label htmlFor="password">Password</Label>
-									{options.forgetPassword && (
+									{options.requestPasswordReset && (
 										<Link
 											href="#"
 											className="ml-auto inline-block text-sm underline"
@@ -208,7 +208,7 @@ export default function SignIn() {
               <div className="flex items-center">
                 <Label htmlFor="password">Password</Label>
                 ${
-									options.forgetPassword
+									options.requestPasswordReset
 										? `<Link
                     href="#"
                     className="ml-auto inline-block text-sm underline"
