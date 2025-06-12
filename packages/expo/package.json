@@ -42,7 +42,8 @@
     "auth",
     "expo",
     "react-native",
-    "typescript"
+    "typescript",
+    "better-auth"
   ],
   "license": "MIT",
   "devDependencies": {
