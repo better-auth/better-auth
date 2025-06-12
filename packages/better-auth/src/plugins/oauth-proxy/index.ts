@@ -8,8 +8,6 @@ import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
 import { env } from "../../utils/env";
 import { getOrigin } from "../../utils/url";
-import type { MiddlewareContext } from "better-call";
-import type { Logger } from "../../utils";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
