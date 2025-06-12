@@ -485,7 +485,7 @@ const canCreateProject = authClient.admin.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndRevokeSession = authClient.admin.checkRolePermission({
+const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
     session: ["revoke"]
