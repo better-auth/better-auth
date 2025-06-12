@@ -264,6 +264,50 @@ describe("updateUser", async () => {
 		// @ts-ignore
 		expect(session?.user.newField).toBe("new");
 	});
+
+	it("should propagate updates across sessions when secondaryStorage is enabled", async () => {
+		const store = new Map<string, string>();
+		const { client: authClient, signInWithTestUser: signIn } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		const { headers: headers1 } = await signIn();
+		const { headers: headers2 } = await signIn();
+
+		await authClient.updateUser({
+			name: "updatedName",
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+
+		const secondSession = await authClient.getSession({
+			fetchOptions: {
+				headers: headers2,
+				throw: true,
+			},
+		});
+		expect(secondSession.user.name).toBe("updatedName");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: {
+				headers: headers1,
+				throw: true,
+			},
+		});
+
+		expect(firstSession.user.name).toBe("updatedName");
+	});
 });
 
 describe("delete user", async () => {
