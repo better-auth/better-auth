@@ -8,6 +8,8 @@ import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
 import { env } from "../../utils/env";
 import { getOrigin } from "../../utils/url";
+import type { MiddlewareContext } from "better-call";
+import type { Logger } from "../../utils";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
@@ -44,6 +46,18 @@ interface OAuthProxyOptions {
  * the redirect URL can't be known in advance to add to the OAuth provider.
  */
 export const oAuthProxy = (opts?: OAuthProxyOptions) => {
+	const resolveCurrentURL = (ctx: {
+		request?: Request;
+		context: { baseURL: string };
+	}) => {
+		return new URL(
+			opts?.currentURL ||
+				ctx.request?.url ||
+				getVenderBaseURL() ||
+				ctx.context.baseURL,
+		);
+	};
+
 	return {
 		id: "oauth-proxy",
 		endpoints: {
@@ -111,9 +125,8 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							`${error}?error=OAuthProxy - Invalid cookies or secret`,
 						);
 					}
-					const isSecureContext = ctx.request
-						? new URL(ctx.request.url).protocol === "https:"
-						: true;
+
+					const isSecureContext = resolveCurrentURL(ctx).protocol === "https:";
 					const prefix =
 						ctx.context.options.advanced?.cookiePrefix || "better-auth";
 					const cookieToSet = isSecureContext
@@ -188,12 +201,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						if (skipProxy) {
 							return;
 						}
-						const url = new URL(
-							opts?.currentURL ||
-								ctx.request?.url ||
-								getVenderBaseURL() ||
-								ctx.context.baseURL,
-						);
+						const url = resolveCurrentURL(ctx);
 						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
 						if (productionURL === ctx.context.options.baseURL) {
 							return;
