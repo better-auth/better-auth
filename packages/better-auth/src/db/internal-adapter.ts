@@ -689,7 +689,7 @@ export const createInternalAdapter = (
 								user: User;
 							}>(cached);
 							if (!parsed) return;
-							const ttl = Math.max(
+							const sessionTTL = Math.max(
 								Math.floor(
 									(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
 								),
@@ -701,7 +701,7 @@ export const createInternalAdapter = (
 									session: parsed.session,
 									user,
 								}),
-								ttl,
+								sessionTTL,
 							);
 						}),
 					);
