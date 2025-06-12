@@ -356,8 +356,6 @@ export const getOrgAdapter = (
 				limit: options?.membershipLimit || 100,
 			}): [];
 			
-			
-
 			const userMap = new Map(users.map((user) => [user.id, user]));
 			const membersWithUsers = members.map((member) => {
 				const user = userMap.get(member.userId);
