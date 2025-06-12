@@ -22,8 +22,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 		id: "siwe",
 		schema,
 		endpoints: {
-			// Generate nonce endpoint
-			nonce: createAuthEndpoint(
+			getSiweNonce: createAuthEndpoint(
 				"/siwe/nonce",
 				{
 					method: "POST",
@@ -47,11 +46,10 @@ export const siwe = (options: SIWEPluginOptions) =>
 						expiresAt: new Date(Date.now() + 15 * 60 * 1000),
 					});
 
-					return { nonce };
+					return ctx.json({ nonce });
 				},
 			),
-			// Verify siwe payload
-			verify: createAuthEndpoint(
+			verifySiweMessage: createAuthEndpoint(
 				"/siwe/verify",
 				{
 					method: "POST",
@@ -182,7 +180,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							user = await ctx.context.internalAdapter.createUser({
 								name: name ?? walletAddress,
 								email: userEmail,
-								avatar: avatar ?? "",
+								image: avatar ?? "",
 							});
 
 							// Create wallet address record
