@@ -473,10 +473,11 @@ await auth.api.userHasPermission({
 
 **Check Role Permission**:
 
-Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
+Use the `checkRolePermission` function on the client side to verify if a specific role has a given permission. This is useful after roles and their permissions have been defined, as it avoids the need to perform permission checks through the server. The function is synchronous, so there's no need to use `await` when calling it.
+
 
 ```ts title="auth-client.ts"
-const canCreateProject = await authClient.admin.checkRolePermission({
+const canCreateProject = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
   },
@@ -484,7 +485,7 @@ const canCreateProject = await authClient.admin.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndRevokeSession = await authClient.admin.checkRolePermission({
+const canCreateProjectAndRevokeSession = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
     session: ["revoke"]
