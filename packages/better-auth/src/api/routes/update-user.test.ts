@@ -267,19 +267,20 @@ describe("updateUser", async () => {
 
 	it("should propagate updates across sessions when secondaryStorage is enabled", async () => {
 		const store = new Map<string, string>();
-		const { client: authClient, signInWithTestUser: signIn } = await getTestInstance({
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
+		const { client: authClient, signInWithTestUser: signIn } =
+			await getTestInstance({
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
 				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
-		});
+			});
 
 		const { headers: headers1 } = await signIn();
 		const { headers: headers2 } = await signIn();
