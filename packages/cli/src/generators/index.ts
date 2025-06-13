@@ -19,9 +19,23 @@ export const getGenerator = (opts: {
 		adapter.id in adapters
 			? adapters[adapter.id as keyof typeof adapters]
 			: null;
-	if (!generator) {
-		logger.error(`${adapter.id} is not supported.`);
-		process.exit(1);
+	if (generator) {
+		// generator from the built-in list above
+		return generator(opts);
 	}
-	return generator(opts);
+	if (adapter.createSchema) {
+		// use the custom adapter's createSchema method
+		return adapter
+			.createSchema(opts.options, opts.file)
+			.then(({ code, path: fileName, overwrite }) => ({
+				code,
+				fileName,
+				overwrite,
+			}));
+	}
+
+	logger.error(
+		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement createSchema`,
+	);
+	process.exit(1);
 };
