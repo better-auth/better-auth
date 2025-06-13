@@ -389,7 +389,21 @@ export const jwt = (options?: JwtOptions) => {
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
 							ctx.setHeader("set-auth-jwt", jwt);
-							ctx.setHeader("Access-Control-Expose-Headers", "set-auth-jwt");
+							const exposedHeaders =
+								ctx.context.responseHeaders?.get(
+									"access-control-expose-headers",
+								) || "";
+							const headersSet = new Set(
+								exposedHeaders
+									.split(",")
+									.map((header) => header.trim())
+									.filter(Boolean),
+							);
+							headersSet.add("set-auth-jwt");
+							ctx.setHeader(
+								"Access-Control-Expose-Headers",
+								Array.from(headersSet).join(", "),
+							);
 						}
 					}),
 				},
