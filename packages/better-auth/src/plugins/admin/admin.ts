@@ -1346,9 +1346,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 					const user =
 						session?.user ||
-						((await ctx.context.internalAdapter.findUserById(
-							ctx.body.userId as string,
-						)) as { role?: string; id: string }) ||
+						(ctx.body.userId
+							? ((await ctx.context.internalAdapter.findUserById(
+									ctx.body.userId as string,
+								)) as { role?: string; id: string })
+							: null) ||
 						(ctx.body.role ? { id: "", role: ctx.body.role } : null);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
