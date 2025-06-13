@@ -1,7 +1,11 @@
-import type { InferOptionSchema, Session, User } from "better-auth";
+import type {
+	GenericEndpointContext,
+	InferOptionSchema,
+	Session,
+	User,
+} from "better-auth";
 import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
-import type { GenericEndpointContext } from "../../better-auth/dist/index.cjs";
 
 export type StripePlan = {
 	/**

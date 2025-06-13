@@ -98,7 +98,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							referenceId,
 							action,
 						},
-						//@ts-expect-error
 						ctx,
 					)
 				: true;
@@ -1041,7 +1040,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 													stripeCustomer,
 													user,
 												},
-												//@ts-expect-error
 												ctx,
 											);
 										}
