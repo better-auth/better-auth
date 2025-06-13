@@ -132,19 +132,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 		max = specialRule.max;
 	}
 
-	for (const plugin of ctx.options.plugins || []) {
-		if (plugin.rateLimit) {
-			const matchedRule = plugin.rateLimit.find((rule) =>
-				rule.pathMatcher(path),
-			);
-			if (matchedRule) {
-				window = matchedRule.window;
-				max = matchedRule.max;
-				break;
-			}
-		}
-	}
-
+	let ruleFound = false;
 	if (ctx.rateLimit.customRules) {
 		const _path = Object.keys(ctx.rateLimit.customRules).find((p) => {
 			if (p.includes("*")) {
@@ -160,6 +148,21 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 			if (resolved) {
 				window = resolved.window;
 				max = resolved.max;
+				ruleFound = true;
+			}
+		}
+	}
+	if (!ruleFound) {
+		for (const plugin of ctx.options.plugins || []) {
+			if (plugin.rateLimit) {
+				const matchedRule = plugin.rateLimit.find((rule) =>
+					rule.pathMatcher(path),
+				);
+				if (matchedRule) {
+					window = matchedRule.window;
+					max = matchedRule.max;
+					break;
+				}
 			}
 		}
 	}
