@@ -186,7 +186,7 @@ export async function onSubscriptionUpdated(
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialEnd
 			) {
-				await plan.freeTrial.onTrialEnd({ subscription }, ctx;
+				await plan.freeTrial.onTrialEnd({ subscription }, ctx);
 			}
 			if (
 				subscriptionUpdated.status === "incomplete_expired" &&
