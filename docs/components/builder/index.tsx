@@ -507,7 +507,7 @@ export function Builder() {
 													className="cursor-pointer"
 													htmlFor="label-powered-by"
 												>
-													Powered by label
+													Show Built with label
 												</Label>
 												<Switch
 													id="label-powered-by"
