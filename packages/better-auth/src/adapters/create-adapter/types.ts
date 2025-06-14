@@ -86,9 +86,27 @@ export interface AdapterConfig {
 	 *
 	 * We will handle the translation between using `boolean`s, and saving `0`s and `1`s to the database.
 	 *
+	 * Note: If `supportsNumbers` is `false`, then the `0` and `1` will be saved as `string`s.
+	 *
 	 * @default true
 	 */
 	supportsBooleans?: boolean;
+	/**
+	 * If the database doesn't support arrays, set this to `false`.
+	 *
+	 * We will handle the translation between using `array`s, and saving `string`s to the database.
+	 *
+	 * @default true
+	 */
+	supportsArrays?: boolean;
+	/**
+	 * If the database doesn't support numbers, set this to `false`.
+	 *
+	 * We will handle the translation between using `number`s, and saving `string`s to the database.
+	 *
+	 * @default true
+	 */
+	supportsNumbers?: boolean;
 	/**
 	 * Disable id generation for the `create` method.
 	 *
