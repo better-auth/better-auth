@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { generatePrismaSchema } from "../src/generators/prisma";
-import { twoFactor, username , organization} from "better-auth/plugins";
+import { twoFactor, username } from "better-auth/plugins";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { generateMigrations } from "../src/generators/kysely";
@@ -100,23 +100,9 @@ describe("generate", async () => {
 						provider: "mongodb",
 					},
 				),
-				plugins: [twoFactor(), username() , organization({
-					schema: {
-						organization: {
-							modelName: "workspace",
-							
-						},
-						invitation: {
-							modelName: "workspaceInvitation",
-							fields: {
-								organizationId: "workspaceId",
-							}
-						}
-					},
-				})],
+				plugins: [twoFactor(), username()],
 			},
 		});
-		console.log(schema.code)
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mysql.prisma",
 		);
