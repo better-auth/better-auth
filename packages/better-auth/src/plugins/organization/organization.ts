@@ -358,6 +358,10 @@ export interface OrganizationOptions {
  * ```
  */
 export const organization = <O extends OrganizationOptions>(options?: O) => {
+	console.log("The options are : ", options)
+	const organizationModelName =
+		options?.schema?.organization?.modelName || "organization";
+	const teamModelName = options?.schema?.team?.modelName || "team";
 	let endpoints = {
 		createOrganization,
 		updateOrganization,
@@ -401,26 +405,28 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				team: {
 					modelName: options?.schema?.team?.modelName,
 					fields: {
-						name: {
+						[options?.schema?.team?.fields?.name || "name"]: {
 							type: "string",
 							required: true,
 							fieldName: options?.schema?.team?.fields?.name,
 						},
-						organizationId: {
+						[options?.schema?.team?.fields?.organizationId || "organizationId"]:
+						{
 							type: "string",
 							required: true,
 							references: {
-								model: "organization",
+								model: organizationModelName,
 								field: "id",
+								onDelete: "cascade",
 							},
 							fieldName: options?.schema?.team?.fields?.organizationId,
 						},
-						createdAt: {
+						[options?.schema?.team?.fields?.createdAt || "createdAt"]: {
 							type: "date",
 							required: true,
 							fieldName: options?.schema?.team?.fields?.createdAt,
 						},
-						updatedAt: {
+						[options?.schema?.team?.fields?.updatedAt || "updatedAt"]: {
 							type: "date",
 							required: false,
 							fieldName: options?.schema?.team?.fields?.updatedAt,
@@ -579,7 +585,8 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		schema: {
 			session: {
 				fields: {
-					activeOrganizationId: {
+					[options?.schema?.session?.fields?.activeOrganizationId ||
+					"activeOrganizationId"]: {
 						type: "string",
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
@@ -589,29 +596,29 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			organization: {
 				modelName: options?.schema?.organization?.modelName,
 				fields: {
-					name: {
+					[options?.schema?.organization?.fields?.name || "name"]: {
 						type: "string",
 						required: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.name,
 					},
-					slug: {
+					[options?.schema?.organization?.fields?.slug || "slug"]: {
 						type: "string",
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
 					},
-					logo: {
+					[options?.schema?.organization?.fields?.logo || "logo"]: {
 						type: "string",
 						required: false,
 						fieldName: options?.schema?.organization?.fields?.logo,
 					},
-					createdAt: {
+					[options?.schema?.organization?.fields?.createdAt || "createdAt"]: {
 						type: "date",
 						required: true,
 						fieldName: options?.schema?.organization?.fields?.createdAt,
 					},
-					metadata: {
+					[options?.schema?.organization?.fields?.metadata || "metadata"]: {
 						type: "string",
 						required: false,
 						fieldName: options?.schema?.organization?.fields?.metadata,
@@ -621,25 +628,28 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			member: {
 				modelName: options?.schema?.member?.modelName,
 				fields: {
-					organizationId: {
+					[options?.schema?.member?.fields?.organizationId || "organizationId"]:
+					{
 						type: "string",
 						required: true,
 						references: {
-							model: "organization",
+							model: organizationModelName,
 							field: "id",
+							onDelete: "cascade",
 						},
 						fieldName: options?.schema?.member?.fields?.organizationId,
 					},
-					userId: {
+					[options?.schema?.member?.fields?.userId || "userId"]: {
 						type: "string",
 						required: true,
 						fieldName: options?.schema?.member?.fields?.userId,
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "cascade",
 						},
 					},
-					role: {
+					[options?.schema?.member?.fields?.role || "role"]: {
 						type: "string",
 						required: true,
 						sortable: true,
@@ -648,15 +658,15 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					...(teamSupport
 						? {
-								teamId: {
+								[options?.schema?.member?.fields?.teamId || "teamId"]: {
 									type: "string",
 									required: false,
 									sortable: true,
 									fieldName: options?.schema?.member?.fields?.teamId,
 								},
-							}
+						  }
 						: {}),
-					createdAt: {
+					[options?.schema?.member?.fields?.createdAt || "createdAt"]: {
 						type: "date",
 						required: true,
 						fieldName: options?.schema?.member?.fields?.createdAt,
@@ -666,22 +676,24 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			invitation: {
 				modelName: options?.schema?.invitation?.modelName,
 				fields: {
-					organizationId: {
+					[options?.schema?.invitation?.fields?.organizationId ||
+					"organizationId"]: {
 						type: "string",
 						required: true,
 						references: {
-							model: "organization",
+							model: organizationModelName,
 							field: "id",
+							onDelete: "cascade",
 						},
 						fieldName: options?.schema?.invitation?.fields?.organizationId,
 					},
-					email: {
+					[options?.schema?.invitation?.fields?.email || "email"]: {
 						type: "string",
 						required: true,
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
 					},
-					role: {
+					[options?.schema?.invitation?.fields?.role || "role"]: {
 						type: "string",
 						required: false,
 						sortable: true,
@@ -689,31 +701,32 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					...(teamSupport
 						? {
-								teamId: {
+								[options?.schema?.invitation?.fields?.teamId || "teamId"]: {
 									type: "string",
 									required: false,
 									sortable: true,
 									fieldName: options?.schema?.invitation?.fields?.teamId,
 								},
-							}
+						  }
 						: {}),
-					status: {
+					[options?.schema?.invitation?.fields?.status || "status"]: {
 						type: "string",
 						required: true,
 						sortable: true,
 						defaultValue: "pending",
 						fieldName: options?.schema?.invitation?.fields?.status,
 					},
-					expiresAt: {
+					[options?.schema?.invitation?.fields?.expiresAt || "expiresAt"]: {
 						type: "date",
 						required: true,
 						fieldName: options?.schema?.invitation?.fields?.expiresAt,
 					},
-					inviterId: {
+					[options?.schema?.invitation?.fields?.inviterId || "inviterId"]: {
 						type: "string",
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "cascade",
 						},
 						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
