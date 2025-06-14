@@ -9,6 +9,7 @@ import { spotify } from "./spotify";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { dropbox } from "./dropbox";
+import { linear } from "./linear";
 import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
@@ -30,6 +31,7 @@ export const socialProviders = {
 	twitter,
 	dropbox,
 	kick,
+	linear,
 	linkedin,
 	gitlab,
 	tiktok,
@@ -68,6 +70,7 @@ export * from "./twitch";
 export * from "./facebook";
 export * from "./twitter";
 export * from "./dropbox";
+export * from "./linear";
 export * from "./linkedin";
 export * from "./gitlab";
 export * from "./tiktok";
