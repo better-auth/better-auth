@@ -25,7 +25,6 @@ model User {
 
   @@unique([email])
   @@unique([username])
-  @@map("user")
 }
 
 model Session {
@@ -40,7 +39,6 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
-  @@map("session")
 }
 
 model Account {
@@ -58,8 +56,6 @@ model Account {
   password              String?
   createdAt             DateTime
   updatedAt             DateTime
-
-  @@map("account")
 }
 
 model Verification {
@@ -69,8 +65,6 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime?
   updatedAt  DateTime?
-
-  @@map("verification")
 }
 
 model TwoFactor {
@@ -79,6 +73,4 @@ model TwoFactor {
   backupCodes String
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("twoFactor")
 }
