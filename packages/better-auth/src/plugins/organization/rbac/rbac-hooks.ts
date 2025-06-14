@@ -1,11 +1,11 @@
 import type { User, Session, AuthContext } from "../../../types";
 import type {
-	RbacRole,
-	RbacPermission,
-	RbacUserRole,
-	RbacResource,
-	RbacAuditLog,
-	RbacPolicy,
+	Role,
+	Permission,
+	UserRole,
+	Resource,
+	AuditLog,
+	Policy,
 	PermissionContext,
 } from "./rbac-schema";
 
@@ -50,58 +50,58 @@ export interface ResourceOperationHookData {
 export interface RbacHooks {
 	// Role management hooks
 	beforeRoleCreate?: (
-		data: { role: Omit<RbacRole, "id" | "createdAt" | "updatedAt"> },
+		data: { role: Omit<Role, "id" | "createdAt" | "updatedAt"> },
 		context: RbacHookContext,
 	) => Promise<
 		| void
 		| {
-				data: Omit<RbacRole, "id" | "createdAt" | "updatedAt">;
+				data: Omit<Role, "id" | "createdAt" | "updatedAt">;
 		  }
 	>;
 
 	afterRoleCreate?: (
-		data: { role: RbacRole },
+		data: { role: Role },
 		context: RbacHookContext,
 	) => Promise<void>;
 
 	beforeRoleUpdate?: (
-		data: { roleId: string; updates: Partial<RbacRole> },
+		data: { roleId: string; updates: Partial<Role> },
 		context: RbacHookContext,
 	) => Promise<
 		| void
 		| {
-				updates: Partial<RbacRole>;
+				updates: Partial<Role>;
 		  }
 	>;
 
 	afterRoleUpdate?: (
-		data: { role: RbacRole; previousRole: RbacRole },
+		data: { role: Role; previousRole: Role },
 		context: RbacHookContext,
 	) => Promise<void>;
 
 	beforeRoleDelete?: (
-		data: { roleId: string; role: RbacRole },
+		data: { roleId: string; role: Role },
 		context: RbacHookContext,
 	) => Promise<void>;
 
 	afterRoleDelete?: (
-		data: { roleId: string; role: RbacRole },
+		data: { roleId: string; role: Role },
 		context: RbacHookContext,
 	) => Promise<void>;
 
 	// Permission management hooks
 	beforePermissionCreate?: (
-		data: { permission: Omit<RbacPermission, "id" | "createdAt" | "updatedAt"> },
+		data: { permission: Omit<Permission, "id" | "createdAt" | "updatedAt"> },
 		context: RbacHookContext,
 	) => Promise<
 		| void
 		| {
-				data: Omit<RbacPermission, "id" | "createdAt" | "updatedAt">;
+				data: Omit<Permission, "id" | "createdAt" | "updatedAt">;
 		  }
 	>;
 
 	afterPermissionCreate?: (
-		data: { permission: RbacPermission },
+		data: { permission: Permission },
 		context: RbacHookContext,
 	) => Promise<void>;
 
@@ -117,7 +117,7 @@ export interface RbacHooks {
 	>;
 
 	afterRoleAssignment?: (
-		data: RoleAssignmentHookData & { userRole: RbacUserRole },
+		data: RoleAssignmentHookData & { userRole: UserRole },
 		context: RbacHookContext,
 	) => Promise<void>;
 
@@ -176,37 +176,37 @@ export interface RbacHooks {
 
 	// Audit hooks
 	beforeAuditLog?: (
-		data: { auditData: Omit<RbacAuditLog, "id" | "timestamp"> },
+		data: { auditData: Omit<AuditLog, "id" | "timestamp"> },
 		context: RbacHookContext,
 	) => Promise<
 		| void
 		| {
-				data: Omit<RbacAuditLog, "id" | "timestamp">;
+				data: Omit<AuditLog, "id" | "timestamp">;
 		  }
 	>;
 
 	afterAuditLog?: (
-		data: { auditLog: RbacAuditLog },
+		data: { auditLog: AuditLog },
 		context: RbacHookContext,
 	) => Promise<void>;
 
 	// Policy evaluation hooks
 	beforePolicyEvaluation?: (
 		data: {
-			policies: RbacPolicy[];
+			policies: Policy[];
 			context: PermissionContext;
 		},
 		hookContext: RbacHookContext,
 	) => Promise<
 		| void
 		| {
-				policies: RbacPolicy[];
+				policies: Policy[];
 		  }
 	>;
 
 	afterPolicyEvaluation?: (
 		data: {
-			policies: RbacPolicy[];
+			policies: Policy[];
 			context: PermissionContext;
 			result: boolean | null;
 		},
@@ -404,7 +404,7 @@ export const createOrganizationSetupHook = (defaultRoles: string[]) => {
 
 export const createSecurityAuditHook = (sensitiveActions: string[]) => {
 	return async (
-		data: { auditData: Omit<RbacAuditLog, "id" | "timestamp"> },
+		data: { auditData: Omit<AuditLog, "id" | "timestamp"> },
 		context: RbacHookContext,
 	) => {
 		if (sensitiveActions.includes(data.auditData.action)) {
