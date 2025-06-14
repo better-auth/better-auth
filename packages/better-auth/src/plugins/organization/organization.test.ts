@@ -17,6 +17,11 @@ describe("organization", async (it) => {
 				organization({
 					membershipLimit: 6,
 					async sendInvitationEmail(data, request) {},
+					schema: {
+						team: {
+							modelName: "team",
+						}
+					},
 					invitationLimit: 3,
 				}),
 			],
@@ -237,65 +242,6 @@ describe("organization", async (it) => {
 		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
 		);
-	});
-	it("should map schema correctly", async () => {
-		const plugin = organization({
-			schema: {
-				organization: {
-					modelName: "workspace",
-				},
-				member: {
-					modelName: "workspaceMember",
-					fields: {
-						organizationId: "workspaceId",
-					},
-				},
-				invitation: {
-					modelName: "workspaceInvitation",
-					fields: {
-						organizationId: "workspaceId",
-					},
-				},
-				team: {
-					modelName: "workspaceTeam",
-					fields: {
-						organizationId: "workspaceId",
-					},
-				},
-			},
-			teams: {
-				enabled: true,
-			},
-		});
-		const testInstance = await getTestInstance({
-			plugins: [plugin],
-		});
-
-		const schema = plugin.schema!;
-		console.log(schema);
-		expect(schema.organization?.modelName).toBe("workspace");
-		expect(schema.member?.modelName).toBe("workspaceMember");
-		expect(schema.invitation?.modelName).toBe("workspaceInvitation");
-		const teamSchema = schema as typeof schema & {
-			team: { modelName: string; fields: any };
-		};
-		expect(teamSchema.team.modelName).toBe("workspaceTeam");
-
-		const memberFields = schema.member?.fields;
-		expect(memberFields?.workspaceId).toBeDefined();
-		expect((memberFields?.workspaceId as any).references.model).toBe(
-			"workspace",
-		);
-
-		const invitationFields = schema.invitation?.fields;
-		expect(invitationFields?.workspaceId).toBeDefined();
-		expect((invitationFields?.workspaceId as any).references.model).toBe(
-			"workspace",
-		);
-
-		const teamFields = teamSchema.team.fields;
-		expect(teamFields?.workspaceId).toBeDefined();
-		expect((teamFields?.workspaceId as any).references.model).toBe("workspace");
 	});
 
 	it("should create invitation with multiple roles", async () => {
@@ -1070,62 +1016,3 @@ describe("types", async (it) => {
 		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization>();
 	});
 });
-
-// describe("Organization Plugin Schema", () => {
-// 	it("should correctly map custom model and field names", () => {
-// 		const plugin = organization({
-// 			teams: {
-// 				enabled: true,
-// 			},
-// 			schema: {
-// 				organization: {
-// 					modelName: "workspace",
-// 				},
-// 				member: {
-// 					modelName: "workspaceMember",
-// 					fields: {
-// 						organizationId: "workspaceId",
-// 					},
-// 				},
-// 				invitation: {
-// 					modelName: "workspaceInvitation",
-// 					fields: {
-// 						organizationId: "workspaceId",
-// 					},
-// 				},
-// 				team: {
-// 					modelName: "workspaceTeam",
-// 					fields: {
-// 						organizationId: "workspaceId",
-// 					},
-// 				},
-// 			},
-// 		});
-
-// 		const schema = plugin.schema!;
-// 		console.log(schema)
-// 		// Check model names
-// 		expect(schema.organization?.modelName).toBe("workspace");
-// 		expect(schema.member?.modelName).toBe("workspaceMember");
-// 		expect(schema.invitation?.modelName).toBe("workspaceInvitation");
-// 		const teamSchema = schema as typeof schema & {
-// 			team: { modelName: string; fields: any };
-// 		};
-// 		expect(teamSchema.team.modelName).toBe("workspaceTeam");
-
-// 		// Check fields and relations
-// 		const memberFields = schema.member?.fields;
-// 		expect(memberFields?.workspaceId).toBeDefined();
-// 		expect((memberFields?.workspaceId as any).references.model).toBe("workspace");
-
-// 		const invitationFields = schema.invitation?.fields;
-// 		expect(invitationFields?.workspaceId).toBeDefined();
-// 		expect(
-// 			(invitationFields?.workspaceId as any).references.model,
-// 		).toBe("workspace");
-
-// 		const teamFields = teamSchema.team.fields;
-// 		expect(teamFields?.workspaceId).toBeDefined();
-// 		expect((teamFields?.workspaceId as any).references.model).toBe("workspace");
-// 	});
-// });
