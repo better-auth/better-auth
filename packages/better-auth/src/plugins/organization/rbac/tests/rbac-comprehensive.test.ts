@@ -20,31 +20,35 @@ describe("RBAC Organization Comprehensive Tests", () => {
 						enabled: true,
 						permissions: [
 							"user:create",
-							"user:read", 
+							"user:read",
 							"user:update",
 							"user:delete",
 							"document:create",
 							"document:read",
 							"document:update",
-							"document:delete"
+							"document:delete",
 						],
 						roles: [
 							{
 								name: "admin",
-								permissions: ["user:*", "document:*"]
+								permissions: ["user:*", "document:*"],
 							},
 							{
-								name: "editor", 
-								permissions: ["document:read", "document:update", "document:create"]
+								name: "editor",
+								permissions: [
+									"document:read",
+									"document:update",
+									"document:create",
+								],
 							},
 							{
 								name: "viewer",
-								permissions: ["document:read"]
-							}
-						]
-					}
-				})
-			]
+								permissions: ["document:read"],
+							},
+						],
+					},
+				}),
+			],
 		} as BetterAuthOptions);
 
 		auth = testInstance.auth;
@@ -63,7 +67,7 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		const regularSignUp = await auth.api.signUpEmail({
 			body: {
 				email: "regular@test.com",
-				password: "password123", 
+				password: "password123",
 				name: "Regular User",
 			},
 		});
@@ -72,15 +76,17 @@ describe("RBAC Organization Comprehensive Tests", () => {
 
 	it("should create organization and verify RBAC setup", async () => {
 		console.log("DEBUG: Creating organization with admin user:", adminUser.id);
-		
+
 		// Create organization
 		const orgResponse = await auth.api.createOrganization({
 			body: {
 				name: "RBAC Test Organization",
-				slug: "rbac-test-org"
+				slug: "rbac-test-org",
 			},
 			headers: {
-				authorization: `Bearer ${auth.api.getSession({ userId: adminUser.id })}`,
+				authorization: `Bearer ${auth.api.getSession({
+					userId: adminUser.id,
+				})}`,
 			},
 		});
 
@@ -94,29 +100,29 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		const permissions = await db.findMany({
 			model: "permission",
 			where: {
-				organizationId: testOrg.id
-			}
+				organizationId: testOrg.id,
+			},
 		});
 
 		const roles = await db.findMany({
-			model: "role", 
+			model: "role",
 			where: {
-				organizationId: testOrg.id
-			}
+				organizationId: testOrg.id,
+			},
 		});
 
 		const userRoles = await db.findMany({
 			model: "userRole",
 			where: {
-				organizationId: testOrg.id
-			}
+				organizationId: testOrg.id,
+			},
 		});
 
 		const auditLogs = await db.findMany({
 			model: "rbacAuditLog",
 			where: {
-				organizationId: testOrg.id
-			}
+				organizationId: testOrg.id,
+			},
 		});
 
 		console.log("DEBUG: Permissions count:", permissions.length);
@@ -133,7 +139,7 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		// Verify owner has admin role
 		const ownerRole = userRoles.find((ur: any) => ur.userId === adminUser.id);
 		expect(ownerRole).toBeDefined();
-		
+
 		const adminRole = roles.find((r: any) => r.name === "admin");
 		expect(adminRole).toBeDefined();
 		expect(ownerRole?.roleId).toBe(adminRole?.id);
@@ -145,10 +151,12 @@ describe("RBAC Organization Comprehensive Tests", () => {
 			body: {
 				email: regularUser.email,
 				organizationId: testOrg.id,
-				role: "member"
+				role: "member",
 			},
 			headers: {
-				authorization: `Bearer ${auth.api.getSession({ userId: adminUser.id })}`,
+				authorization: `Bearer ${auth.api.getSession({
+					userId: adminUser.id,
+				})}`,
 			},
 		});
 
@@ -157,10 +165,12 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		// Accept invitation
 		const acceptResponse = await auth.api.acceptInvitation({
 			body: {
-				invitationId: inviteResponse.invitation.id
+				invitationId: inviteResponse.invitation.id,
 			},
 			headers: {
-				authorization: `Bearer ${auth.api.getSession({ userId: regularUser.id })}`,
+				authorization: `Bearer ${auth.api.getSession({
+					userId: regularUser.id,
+				})}`,
 			},
 		});
 
@@ -171,8 +181,8 @@ describe("RBAC Organization Comprehensive Tests", () => {
 			model: "role",
 			where: {
 				organizationId: testOrg.id,
-				name: "editor"
-			}
+				name: "editor",
+			},
 		});
 
 		expect(editorRole).toBeDefined();
@@ -182,7 +192,7 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		await rbacAdapter.assignRole({
 			userId: regularUser.id,
 			organizationId: testOrg.id,
-			roleId: editorRole.id
+			roleId: editorRole.id,
 		});
 
 		// Verify assignment
@@ -191,8 +201,8 @@ describe("RBAC Organization Comprehensive Tests", () => {
 			where: {
 				userId: regularUser.id,
 				organizationId: testOrg.id,
-				roleId: editorRole.id
-			}
+				roleId: editorRole.id,
+			},
 		});
 
 		expect(userRole).toBeDefined();
@@ -206,13 +216,13 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		const adminCanCreate = await rbacAdapter.checkPermission({
 			userId: adminUser.id,
 			organizationId: testOrg.id,
-			permission: "user:create"
+			permission: "user:create",
 		});
 
 		const adminCanDelete = await rbacAdapter.checkPermission({
 			userId: adminUser.id,
 			organizationId: testOrg.id,
-			permission: "document:delete"
+			permission: "document:delete",
 		});
 
 		expect(adminCanCreate).toBe(true);
@@ -222,19 +232,19 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		const userCanRead = await rbacAdapter.checkPermission({
 			userId: regularUser.id,
 			organizationId: testOrg.id,
-			permission: "document:read"
+			permission: "document:read",
 		});
 
 		const userCanUpdate = await rbacAdapter.checkPermission({
 			userId: regularUser.id,
 			organizationId: testOrg.id,
-			permission: "document:update"
+			permission: "document:update",
 		});
 
 		const userCanDeleteUser = await rbacAdapter.checkPermission({
 			userId: regularUser.id,
 			organizationId: testOrg.id,
-			permission: "user:delete"
+			permission: "user:delete",
 		});
 
 		expect(userCanRead).toBe(true);
@@ -246,8 +256,8 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		const auditLogs = await db.findMany({
 			model: "rbacAuditLog",
 			where: {
-				organizationId: testOrg.id
-			}
+				organizationId: testOrg.id,
+			},
 		});
 
 		expect(auditLogs.length).toBeGreaterThan(1);

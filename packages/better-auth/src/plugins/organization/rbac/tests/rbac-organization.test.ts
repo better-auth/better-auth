@@ -34,7 +34,7 @@ describe("RBAC Organization", async () => {
 
 	it("should create an organization with RBAC enabled", async () => {
 		console.log("DEBUG: Starting test - create organization with RBAC enabled");
-		
+
 		const organization = await auth.api.createOrganization({
 			body: {
 				name: "Test Organization",

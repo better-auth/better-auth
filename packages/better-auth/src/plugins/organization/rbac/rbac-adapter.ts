@@ -19,7 +19,6 @@ import type {
 	PermissionContext,
 	PolicyRule,
 } from "./rbac-schema";
-import type { User } from "../../../types";
 
 export interface RbacAdapterOptions {
 	enableAuditLog?: boolean;
@@ -100,9 +99,7 @@ export const getRbacAdapter = (
 			});
 		},
 
-		async findRolesByOrganization(
-			organizationId: string,
-		): Promise<Role[]> {
+		async findRolesByOrganization(organizationId: string): Promise<Role[]> {
 			return await adapter.findMany<Role>({
 				model: "role",
 				where: [
@@ -296,10 +293,7 @@ export const getRbacAdapter = (
 		async grantResourcePermission(
 			data: ResourcePermissionInput,
 		): Promise<ResourcePermission> {
-			return await adapter.create<
-				ResourcePermissionInput,
-				ResourcePermission
-			>({
+			return await adapter.create<ResourcePermissionInput, ResourcePermission>({
 				model: "resourcePermission",
 				data,
 			});
@@ -377,10 +371,7 @@ export const getRbacAdapter = (
 			});
 		},
 
-		async updatePolicy(
-			id: string,
-			data: Partial<Policy>,
-		): Promise<Policy> {
+		async updatePolicy(id: string, data: Partial<Policy>): Promise<Policy> {
 			const result = await adapter.update<Policy>({
 				model: "policy",
 				where: [{ field: "id", value: id }],
@@ -472,10 +463,7 @@ export const getRbacAdapter = (
 
 			// Check conditions if present
 			if (rolePermission.conditions) {
-				return this.evaluateConditions(
-					rolePermission.conditions,
-					context,
-				);
+				return this.evaluateConditions(rolePermission.conditions, context);
 			}
 
 			return rolePermission.granted;

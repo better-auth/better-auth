@@ -1,28 +1,18 @@
-import { APIError } from "better-call";
-import { z } from "zod";
-import type { AuthPluginSchema, Session, User } from "../../../types";
-import { createAuthEndpoint } from "../../../api/call";
-import { getSessionFromCtx } from "../../../api/routes";
 import type { AuthContext } from "../../../init";
 import type { BetterAuthPlugin } from "../../../types/plugins";
-import { shimContext } from "../../../utils/shim";
-import { type AccessControl, type Role } from "../../access";
-import { getOrgAdapter } from "../adapter";
-import { orgSessionMiddleware } from "../call";
-import { organization, type OrganizationOptions } from "../organization";
+import { organization } from "../organization";
 import { getRbacAdapter } from "./rbac-adapter";
 import type { RbacOrganizationOptions } from "./rbac-types";
 import { rbacRoutes } from "./rbac-routes";
 import { schema } from "./rbac-schema";
-import { SYSTEM_PERMISSIONS, SYSTEM_ROLES } from "./rbac-schema";
-import { defaultRbacHooks } from "./rbac-hooks";
+import { SYSTEM_PERMISSIONS } from "./rbac-schema";
 
 /**
  * Extended Organization plugin with full database-level RBAC support
- * 
+ *
  * This plugin extends the base organization plugin with comprehensive
  * Role-Based Access Control (RBAC) capabilities stored in the database.
- * 
+ *
  * Features:
  * - Database-level roles and permissions
  * - Role hierarchy support
@@ -30,7 +20,7 @@ import { defaultRbacHooks } from "./rbac-hooks";
  * - Audit logging
  * - Policy engine for complex permission rules
  * - Hook system for customization
- * 
+ *
  * @example
  * ```ts
  * const auth = betterAuth({
@@ -71,7 +61,7 @@ export const organizationRbac = <O extends RbacOrganizationOptions>(
 	// Create the RBAC extension
 	const rbacExtension: BetterAuthPlugin = {
 		id: "organization-rbac",
-		
+
 		init(ctx: AuthContext) {
 			// Initialize RBAC adapter
 			const rbacAdapter = getRbacAdapter(ctx, {
@@ -106,22 +96,39 @@ export const organizationRbac = <O extends RbacOrganizationOptions>(
 					handler: async (context) => {
 						// Auto-setup RBAC for new organizations
 						console.log("DEBUG: RBAC organization create hook triggered");
-						console.log("DEBUG: options?.rbac?.enabled:", options?.rbac?.enabled);
-						console.log("DEBUG: context.context.returned:", !!(context as any).context.returned);
-						
+						console.log(
+							"DEBUG: options?.rbac?.enabled:",
+							options?.rbac?.enabled,
+						);
+						console.log(
+							"DEBUG: context.context.returned:",
+							!!(context as any).context.returned,
+						);
+
 						try {
 							if (options?.rbac?.enabled && (context as any).context.returned) {
 								const returned = (context as any).context.returned;
-								console.log("DEBUG: returned data:", JSON.stringify(returned, null, 2));
-								
+								console.log(
+									"DEBUG: returned data:",
+									JSON.stringify(returned, null, 2),
+								);
+
 								// The organization create endpoint returns: { ...organization, metadata, members: [member] }
 								// So we need to extract the organization and member from this structure
-								if (returned && typeof returned === 'object' && 'id' in returned && 'members' in returned) {
+								if (
+									returned &&
+									typeof returned === "object" &&
+									"id" in returned &&
+									"members" in returned
+								) {
 									const organization = returned;
 									const member = returned.members?.[0]; // First member is the creator
-									
+
 									if (member) {
-										console.log("DEBUG: Setting up RBAC for organization:", organization.id);
+										console.log(
+											"DEBUG: Setting up RBAC for organization:",
+											organization.id,
+										);
 										await setupOrganizationRbac(
 											(context as any).context,
 											organization,
@@ -133,7 +140,9 @@ export const organizationRbac = <O extends RbacOrganizationOptions>(
 										console.log("DEBUG: No member found in returned data");
 									}
 								} else {
-									console.log("DEBUG: Organization data not found in returned data");
+									console.log(
+										"DEBUG: Organization data not found in returned data",
+									);
 								}
 							} else {
 								console.log("DEBUG: RBAC not enabled or no returned data");
@@ -154,7 +163,7 @@ export const organizationRbac = <O extends RbacOrganizationOptions>(
 	return {
 		...baseOrganizationPlugin,
 		id: "organization-rbac",
-		
+
 		schema: {
 			...baseOrganizationPlugin.schema,
 			...rbacExtension.schema,
@@ -166,9 +175,7 @@ export const organizationRbac = <O extends RbacOrganizationOptions>(
 		},
 
 		hooks: {
-			after: [
-				...(rbacExtension.hooks?.after || []),
-			],
+			after: [...(rbacExtension.hooks?.after || [])],
 		},
 
 		async init(ctx: AuthContext) {
@@ -202,10 +209,10 @@ async function setupOrganizationRbac(
 		// Create default permissions
 		const defaultPermissions = options?.rbac?.customPermissions || [];
 		const systemPermissions = Object.values(SYSTEM_PERMISSIONS);
-		
+
 		const allPermissions = [
-			...systemPermissions.map(name => {
-				const [resource, action] = name.split(':');
+			...systemPermissions.map((name) => {
+				const [resource, action] = name.split(":");
 				return {
 					name,
 					resource,
@@ -216,7 +223,7 @@ async function setupOrganizationRbac(
 					createdAt: new Date(), // Add createdAt
 				};
 			}),
-			...defaultPermissions.map(permission => ({
+			...defaultPermissions.map((permission) => ({
 				...permission,
 				organizationId: organization.id, // Add organization ID
 				createdAt: new Date(), // Add createdAt
@@ -227,7 +234,9 @@ async function setupOrganizationRbac(
 		const createdPermissions = [];
 		for (const permission of allPermissions) {
 			try {
-				const existing = await rbacAdapter.findPermissionByName(permission.name);
+				const existing = await rbacAdapter.findPermissionByName(
+					permission.name,
+				);
 				if (!existing) {
 					const created = await rbacAdapter.createPermission(permission);
 					createdPermissions.push(created);
@@ -249,7 +258,7 @@ async function setupOrganizationRbac(
 				isCreatorRole: true,
 			},
 			{
-				name: "Organization Admin", 
+				name: "Organization Admin",
 				description: "Administrative access to the organization",
 				level: 1,
 				permissions: [
@@ -294,7 +303,9 @@ async function setupOrganizationRbac(
 
 				// Assign permissions to role
 				for (const permissionName of roleData.permissions) {
-					const permission = createdPermissions.find(p => p.name === permissionName);
+					const permission = createdPermissions.find(
+						(p) => p.name === permissionName,
+					);
 					if (permission) {
 						await rbacAdapter.assignPermissionToRole({
 							roleId: role.id,
@@ -350,7 +361,6 @@ async function setupOrganizationRbac(
 			}),
 			timestamp: new Date(), // Use timestamp per Zod schema
 		});
-
 	} catch (error) {
 		console.error("Failed to setup RBAC for organization:", error);
 		// Don't throw error to avoid breaking organization creation

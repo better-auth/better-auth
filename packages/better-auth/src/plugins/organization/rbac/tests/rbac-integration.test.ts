@@ -40,7 +40,7 @@ describe("RBAC Organization Integration", async () => {
 
 	it("should create organization with RBAC enabled", async () => {
 		console.log("DEBUG: Starting organization creation with RBAC enabled");
-		
+
 		const organization = await client.organization.create({
 			name: "RBAC Test Organization",
 			slug: "rbac-test-org",

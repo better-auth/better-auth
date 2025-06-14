@@ -222,7 +222,8 @@ export const schema = {
 				required: true,
 			},
 		},
-	},		userRole: {
+	},
+	userRole: {
 		modelName: "userRole",
 		fields: {
 			userId: {
@@ -386,61 +387,61 @@ export type PolicyInput = z.input<typeof policySchema>;
 // Common enums and constants
 export const SYSTEM_PERMISSIONS = {
 	// Organization permissions
-	ORGANIZATION_CREATE: 'organization:create',
-	ORGANIZATION_READ: 'organization:read',
-	ORGANIZATION_UPDATE: 'organization:update',
-	ORGANIZATION_DELETE: 'organization:delete',
-	ORGANIZATION_MANAGE_SETTINGS: 'organization:manage_settings',
-	
+	ORGANIZATION_CREATE: "organization:create",
+	ORGANIZATION_READ: "organization:read",
+	ORGANIZATION_UPDATE: "organization:update",
+	ORGANIZATION_DELETE: "organization:delete",
+	ORGANIZATION_MANAGE_SETTINGS: "organization:manage_settings",
+
 	// Member permissions
-	MEMBER_INVITE: 'member:invite',
-	MEMBER_READ: 'member:read',
-	MEMBER_UPDATE: 'member:update',
-	MEMBER_REMOVE: 'member:remove',
-	MEMBER_MANAGE_ROLES: 'member:manage_roles',
-	
+	MEMBER_INVITE: "member:invite",
+	MEMBER_READ: "member:read",
+	MEMBER_UPDATE: "member:update",
+	MEMBER_REMOVE: "member:remove",
+	MEMBER_MANAGE_ROLES: "member:manage_roles",
+
 	// Team permissions
-	TEAM_CREATE: 'team:create',
-	TEAM_READ: 'team:read',
-	TEAM_UPDATE: 'team:update',
-	TEAM_DELETE: 'team:delete',
-	TEAM_MANAGE_MEMBERS: 'team:manage_members',
-	
+	TEAM_CREATE: "team:create",
+	TEAM_READ: "team:read",
+	TEAM_UPDATE: "team:update",
+	TEAM_DELETE: "team:delete",
+	TEAM_MANAGE_MEMBERS: "team:manage_members",
+
 	// Role permissions
-	ROLE_CREATE: 'role:create',
-	ROLE_READ: 'role:read',
-	ROLE_UPDATE: 'role:update',
-	ROLE_DELETE: 'role:delete',
-	ROLE_ASSIGN: 'role:assign',
-	
+	ROLE_CREATE: "role:create",
+	ROLE_READ: "role:read",
+	ROLE_UPDATE: "role:update",
+	ROLE_DELETE: "role:delete",
+	ROLE_ASSIGN: "role:assign",
+
 	// Resource permissions
-	RESOURCE_CREATE: 'resource:create',
-	RESOURCE_READ: 'resource:read',
-	RESOURCE_UPDATE: 'resource:update',
-	RESOURCE_DELETE: 'resource:delete',
-	RESOURCE_SHARE: 'resource:share',
-	
+	RESOURCE_CREATE: "resource:create",
+	RESOURCE_READ: "resource:read",
+	RESOURCE_UPDATE: "resource:update",
+	RESOURCE_DELETE: "resource:delete",
+	RESOURCE_SHARE: "resource:share",
+
 	// Audit permissions
-	AUDIT_READ: 'audit:read',
-	AUDIT_EXPORT: 'audit:export',
+	AUDIT_READ: "audit:read",
+	AUDIT_EXPORT: "audit:export",
 } as const;
 
 export const SYSTEM_ROLES = {
-	SUPER_ADMIN: 'super_admin',
-	ORGANIZATION_OWNER: 'organization_owner',
-	ORGANIZATION_ADMIN: 'organization_admin',
-	TEAM_LEAD: 'team_lead',
-	MEMBER: 'member',
-	VIEWER: 'viewer',
+	SUPER_ADMIN: "super_admin",
+	ORGANIZATION_OWNER: "organization_owner",
+	ORGANIZATION_ADMIN: "organization_admin",
+	TEAM_LEAD: "team_lead",
+	MEMBER: "member",
+	VIEWER: "viewer",
 } as const;
 
 export const RESOURCE_TYPES = {
-	ORGANIZATION: 'organization',
-	TEAM: 'team',
-	PROJECT: 'project',
-	DOCUMENT: 'document',
-	FILE: 'file',
-	INTEGRATION: 'integration',
+	ORGANIZATION: "organization",
+	TEAM: "team",
+	PROJECT: "project",
+	DOCUMENT: "document",
+	FILE: "file",
+	INTEGRATION: "integration",
 } as const;
 
 // Permission evaluation contexts
@@ -455,7 +456,7 @@ export interface PermissionContext {
 }
 
 export interface PolicyRule {
-	effect: 'allow' | 'deny';
+	effect: "allow" | "deny";
 	resource?: string;
 	action?: string;
 	condition?: string; // JavaScript expression

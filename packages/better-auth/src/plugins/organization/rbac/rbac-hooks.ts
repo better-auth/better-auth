@@ -3,7 +3,6 @@ import type {
 	Role,
 	Permission,
 	UserRole,
-	Resource,
 	AuditLog,
 	Policy,
 	PermissionContext,
@@ -52,12 +51,9 @@ export interface RbacHooks {
 	beforeRoleCreate?: (
 		data: { role: Omit<Role, "id" | "createdAt" | "updatedAt"> },
 		context: RbacHookContext,
-	) => Promise<
-		| void
-		| {
-				data: Omit<Role, "id" | "createdAt" | "updatedAt">;
-		  }
-	>;
+	) => Promise<void | {
+		data: Omit<Role, "id" | "createdAt" | "updatedAt">;
+	}>;
 
 	afterRoleCreate?: (
 		data: { role: Role },
@@ -67,12 +63,9 @@ export interface RbacHooks {
 	beforeRoleUpdate?: (
 		data: { roleId: string; updates: Partial<Role> },
 		context: RbacHookContext,
-	) => Promise<
-		| void
-		| {
-				updates: Partial<Role>;
-		  }
-	>;
+	) => Promise<void | {
+		updates: Partial<Role>;
+	}>;
 
 	afterRoleUpdate?: (
 		data: { role: Role; previousRole: Role },
@@ -93,12 +86,9 @@ export interface RbacHooks {
 	beforePermissionCreate?: (
 		data: { permission: Omit<Permission, "id" | "createdAt" | "updatedAt"> },
 		context: RbacHookContext,
-	) => Promise<
-		| void
-		| {
-				data: Omit<Permission, "id" | "createdAt" | "updatedAt">;
-		  }
-	>;
+	) => Promise<void | {
+		data: Omit<Permission, "id" | "createdAt" | "updatedAt">;
+	}>;
 
 	afterPermissionCreate?: (
 		data: { permission: Permission },
@@ -109,12 +99,9 @@ export interface RbacHooks {
 	beforeRoleAssignment?: (
 		data: RoleAssignmentHookData,
 		context: RbacHookContext,
-	) => Promise<
-		| void
-		| {
-				data: RoleAssignmentHookData;
-		  }
-	>;
+	) => Promise<void | {
+		data: RoleAssignmentHookData;
+	}>;
 
 	afterRoleAssignment?: (
 		data: RoleAssignmentHookData & { userRole: UserRole },
@@ -145,12 +132,9 @@ export interface RbacHooks {
 	beforePermissionCheck?: (
 		data: PermissionCheckHookData,
 		context: RbacHookContext,
-	) => Promise<
-		| void
-		| {
-				data: PermissionCheckHookData;
-		  }
-	>;
+	) => Promise<void | {
+		data: PermissionCheckHookData;
+	}>;
 
 	afterPermissionCheck?: (
 		data: PermissionCheckHookData & { result: boolean; reason?: string },
@@ -178,12 +162,9 @@ export interface RbacHooks {
 	beforeAuditLog?: (
 		data: { auditData: Omit<AuditLog, "id" | "timestamp"> },
 		context: RbacHookContext,
-	) => Promise<
-		| void
-		| {
-				data: Omit<AuditLog, "id" | "timestamp">;
-		  }
-	>;
+	) => Promise<void | {
+		data: Omit<AuditLog, "id" | "timestamp">;
+	}>;
 
 	afterAuditLog?: (
 		data: { auditLog: AuditLog },
@@ -197,12 +178,9 @@ export interface RbacHooks {
 			context: PermissionContext;
 		},
 		hookContext: RbacHookContext,
-	) => Promise<
-		| void
-		| {
-				policies: Policy[];
-		  }
-	>;
+	) => Promise<void | {
+		policies: Policy[];
+	}>;
 
 	afterPolicyEvaluation?: (
 		data: {
@@ -318,7 +296,9 @@ export const defaultRbacHooks: Partial<RbacHooks> = {
 	// Auto-assign default role to new organization members
 	async onMemberJoin(data, context) {
 		// This would be implemented to assign a default "member" role
-		console.log(`Member ${data.userId} joined organization ${data.organizationId}`);
+		console.log(
+			`Member ${data.userId} joined organization ${data.organizationId}`,
+		);
 	},
 
 	// Log unauthorized access attempts
@@ -332,8 +312,9 @@ export const defaultRbacHooks: Partial<RbacHooks> = {
 	async beforeAuditLog(data, context) {
 		// Add default fields like IP address, user agent
 		if (context.request) {
-			const ipAddress = context.request.headers.get("x-forwarded-for") || 
-				context.request.headers.get("x-real-ip") || 
+			const ipAddress =
+				context.request.headers.get("x-forwarded-for") ||
+				context.request.headers.get("x-real-ip") ||
 				"unknown";
 			const userAgent = context.request.headers.get("user-agent") || "unknown";
 
@@ -350,7 +331,9 @@ export const defaultRbacHooks: Partial<RbacHooks> = {
 	// Default role hierarchy setup for new organizations
 	async onOrganizationCreate(data, context) {
 		// This would create default roles for the organization
-		console.log(`Setting up default roles for organization ${data.organizationId}`);
+		console.log(
+			`Setting up default roles for organization ${data.organizationId}`,
+		);
 	},
 };
 
@@ -398,7 +381,10 @@ export const createOrganizationSetupHook = (defaultRoles: string[]) => {
 		context: RbacHookContext,
 	) => {
 		// Implementation would create default roles and assign creator as owner
-		console.log(`Setting up organization ${data.organizationId} with roles:`, defaultRoles);
+		console.log(
+			`Setting up organization ${data.organizationId} with roles:`,
+			defaultRoles,
+		);
 	};
 };
 

@@ -1,13 +1,6 @@
 import type { BetterAuthClientPlugin } from "../../../types";
 import type { AccessControl, Role } from "../../access";
-import type { RbacOrganizationOptions } from "./rbac-types";
-import {
-	type Role as RbacRole,
-	type Permission,
-	type UserRole,
-	type AuditLog,
-	SYSTEM_PERMISSIONS,
-} from "./rbac-schema";
+import { SYSTEM_PERMISSIONS } from "./rbac-schema";
 
 interface RbacClientOptions {
 	ac?: AccessControl;
@@ -18,7 +11,7 @@ interface RbacClientOptions {
 
 /**
  * RBAC client plugin for organization with database-level access control
- * 
+ *
  * Provides client-side methods for managing roles, permissions, and access control
  */
 export const organizationRbacClient = <O extends RbacClientOptions>(
@@ -26,7 +19,7 @@ export const organizationRbacClient = <O extends RbacClientOptions>(
 ) => {
 	return {
 		id: "organization-rbac-client",
-		
+
 		$InferServerPlugin: {} as any,
 
 		getActions: ($fetch) => ({
@@ -249,7 +242,9 @@ export const organizationRbacClient = <O extends RbacClientOptions>(
 					}) => {
 						const { fetchOptions, ...query } = params;
 						// If userId is not provided, let the server use the current user
-						const queryParams = params.userId ? query : { organizationId: params.organizationId };
+						const queryParams = params.userId
+							? query
+							: { organizationId: params.organizationId };
 						return await $fetch("/organization/rbac/users/roles", {
 							method: "GET",
 							query: queryParams,
@@ -314,7 +309,7 @@ export const rbacUtils = {
 			});
 
 			const permissions = new Set<string>();
-			
+
 			// Get permissions for each role
 			for (const userRole of rolesResult.roles) {
 				const roleResult = await $fetch("/organization/rbac/roles/list", {
@@ -325,7 +320,9 @@ export const rbacUtils = {
 					},
 				});
 
-				const role = roleResult.roles.find((r: any) => r.id === userRole.roleId);
+				const role = roleResult.roles.find(
+					(r: any) => r.id === userRole.roleId,
+				);
 				if (role?.permissions) {
 					role.permissions.forEach((p: any) => {
 						if (p.granted) {

@@ -208,7 +208,10 @@ export interface RbacOrganizationOptions extends OrganizationOptions {
 			 * How to handle multiple roles with conflicting permissions
 			 * @default "most_permissive"
 			 */
-			conflictResolution?: "most_permissive" | "most_restrictive" | "explicit_deny";
+			conflictResolution?:
+				| "most_permissive"
+				| "most_restrictive"
+				| "explicit_deny";
 
 			/**
 			 * Whether to use role hierarchy for permission inheritance
@@ -388,12 +391,7 @@ export const PERMISSION_SETS = {
 		"resource:update",
 		"resource:share",
 	],
-	VIEWER: [
-		"organization:read",
-		"member:read",
-		"team:read",
-		"resource:read",
-	],
+	VIEWER: ["organization:read", "member:read", "team:read", "resource:read"],
 } as const;
 
 // Default role configurations

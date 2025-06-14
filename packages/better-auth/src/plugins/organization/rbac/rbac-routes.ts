@@ -1,26 +1,14 @@
-import { APIError } from "better-call";
+import { APIError } from "../../../api";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { getSessionFromCtx } from "../../../api/routes";
-import type { AuthContext } from "../../../init";
 import { getRbacAdapter } from "./rbac-adapter";
 import type { RbacOrganizationOptions } from "./rbac-types";
 import { orgSessionMiddleware } from "../call";
-import {
-	permissionSchema,
-	roleSchema,
-	userRoleSchema,
-	resourceSchema,
-	policySchema,
-	type PermissionContext,
-} from "./rbac-schema";
 
 /**
  * RBAC routes for managing roles, permissions, and access control
  */
-export const rbacRoutes = <O extends RbacOrganizationOptions>(
-	options?: O,
-) => {
+export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 	return {
 		// Role Management Routes
 		createRole: createAuthEndpoint(
@@ -73,7 +61,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 					});
 				}
 
-				const organizationId = ctx.body.organizationId || session.session.activeOrganizationId;
+				const organizationId =
+					ctx.body.organizationId || session.session.activeOrganizationId;
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
@@ -92,7 +81,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 				// Assign permissions if provided
 				if (ctx.body.permissions) {
 					for (const permissionName of ctx.body.permissions) {
-						const permission = await rbacAdapter.findPermissionByName(permissionName);
+						const permission =
+							await rbacAdapter.findPermissionByName(permissionName);
 						if (permission) {
 							await rbacAdapter.assignPermissionToRole({
 								roleId: role.id,
@@ -161,7 +151,7 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 				console.log("DEBUG: ctx.context.session:", !!ctx.context.session);
 				console.log("DEBUG: ctx.headers:", ctx.headers);
 				console.log("DEBUG: ctx.request url:", ctx.request?.url);
-				
+
 				const session = ctx.context.session;
 				if (!session) {
 					console.log("DEBUG: No session found, throwing UNAUTHORIZED");
@@ -175,7 +165,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 					});
 				}
 
-				const organizationId = ctx.query.organizationId || session.session.activeOrganizationId;
+				const organizationId =
+					ctx.query.organizationId || session.session.activeOrganizationId;
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
@@ -189,14 +180,16 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 				if (ctx.query.includePermissions) {
 					const rolesWithPermissions = await Promise.all(
 						roles.map(async (role: any) => {
-							const rolePermissions = await rbacAdapter.getRolePermissions(role.id);
+							const rolePermissions = await rbacAdapter.getRolePermissions(
+								role.id,
+							);
 							const permissions = await Promise.all(
 								rolePermissions.map(async (rp: any) => {
 									return await rbacAdapter.findPermissionById(rp.permissionId);
-								})
+								}),
 							);
 							return { ...role, permissions: permissions.filter(Boolean) };
-						})
+						}),
 					);
 					return ctx.json({ roles: rolesWithPermissions });
 				}
@@ -404,7 +397,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 					});
 				}
 
-				const organizationId = ctx.body.organizationId || session.session.activeOrganizationId;
+				const organizationId =
+					ctx.body.organizationId || session.session.activeOrganizationId;
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
@@ -482,7 +476,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 					});
 				}
 
-				const organizationId = ctx.body.organizationId || session.session.activeOrganizationId;
+				const organizationId =
+					ctx.body.organizationId || session.session.activeOrganizationId;
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
@@ -563,8 +558,9 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 				}
 
 				const userId = ctx.query.userId || session.user.id;
-				const organizationId = ctx.query.organizationId || session.session.activeOrganizationId;
-				
+				const organizationId =
+					ctx.query.organizationId || session.session.activeOrganizationId;
+
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
@@ -572,13 +568,16 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 				}
 
 				// Get user roles
-				const userRoles = await rbacAdapter.getUserRoles(userId, organizationId);
+				const userRoles = await rbacAdapter.getUserRoles(
+					userId,
+					organizationId,
+				);
 
 				// Get full role details
 				const roles = await Promise.all(
 					userRoles.map(async (userRole: any) => {
 						return await rbacAdapter.findRoleById(userRole.roleId);
-					})
+					}),
 				);
 
 				return ctx.json({ roles: roles.filter(Boolean) });
@@ -695,8 +694,9 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 				}
 
 				const userId = ctx.body.userId || session.user.id;
-				const organizationId = ctx.body.organizationId || session.session.activeOrganizationId;
-				
+				const organizationId =
+					ctx.body.organizationId || session.session.activeOrganizationId;
+
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
@@ -707,7 +707,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 
 				if (ctx.body.permission) {
 					// Check by permission name - get effective permissions and check if it includes the requested permission
-					const effectivePermissions = await rbacAdapter.getEffectivePermissions(userId, organizationId);
+					const effectivePermissions =
+						await rbacAdapter.getEffectivePermissions(userId, organizationId);
 					hasPermission = effectivePermissions.includes(ctx.body.permission);
 				} else if (ctx.body.action && ctx.body.resourceType) {
 					// Check by action and resource type
@@ -720,7 +721,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 					});
 				} else {
 					throw new APIError("BAD_REQUEST", {
-						message: "Either permission or action+resourceType must be provided",
+						message:
+							"Either permission or action+resourceType must be provided",
 					});
 				}
 
@@ -781,7 +783,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 					});
 				}
 
-				const organizationId = ctx.query.organizationId || session.session.activeOrganizationId;
+				const organizationId =
+					ctx.query.organizationId || session.session.activeOrganizationId;
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
@@ -789,7 +792,10 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(
 				}
 
 				// Get audit logs
-				const logs = await rbacAdapter.getAuditLogs(organizationId, ctx.query.limit);
+				const logs = await rbacAdapter.getAuditLogs(
+					organizationId,
+					ctx.query.limit,
+				);
 
 				return ctx.json({ logs });
 			},
