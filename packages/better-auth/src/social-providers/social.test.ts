@@ -682,6 +682,64 @@ describe("signin", async () => {
 			name: "Updated User",
 		});
 	});
+
+	it("should allow user info override during sign in", async () => {
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database,
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						overrideUserInfoOnSignIn: (profile, { email, emailVerified }) => {
+							return {
+								name: "Override User",
+							};
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		// sign up the user
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			email: "user@email.com",
+			name: "Override User",
+		});
+	});
 });
 
 describe("updateAccountOnSignIn", async () => {
