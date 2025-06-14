@@ -55,7 +55,7 @@ describe("updateUser", async () => {
 			},
 		});
 		expect(updated.data?.status).toBe(true);
-		expect(session.user.name).toBe("newName");
+		expect(session?.user.name).toBe("newName");
 	});
 
 	it("should unset image", async () => {
@@ -71,7 +71,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.image).toBeNull();
+		expect(session?.user.image).toBeNull();
 	});
 
 	it("should update user email", async () => {
@@ -88,8 +88,8 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.email).toBe(newEmail);
-		expect(session.user.emailVerified).toBe(false);
+		expect(session?.user.email).toBe(newEmail);
+		expect(session?.user.emailVerified).toBe(false);
 	});
 
 	it("should verify email", async () => {
@@ -107,7 +107,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.emailVerified).toBe(true);
+		expect(session?.user.emailVerified).toBe(true);
 	});
 
 	it("should send email verification before update", async () => {
@@ -298,7 +298,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		expect(secondSession.user.name).toBe("updatedName");
+		expect(secondSession?.user.name).toBe("updatedName");
 
 		const firstSession = await authClient.getSession({
 			fetchOptions: {
@@ -307,7 +307,7 @@ describe("updateUser", async () => {
 			},
 		});
 
-		expect(firstSession.user.name).toBe("updatedName");
+		expect(firstSession?.user.name).toBe("updatedName");
 	});
 });
 
