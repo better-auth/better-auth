@@ -247,7 +247,9 @@ function runPluginInit(ctx: AuthContext) {
 	}
 
 	if (options.trustedOrigins) {
-		options.trustedOrigins = [...new Set(options.trustedOrigins as string[])];
+		options.trustedOrigins = Array.isArray(options.trustedOrigins)
+			? [...new Set(options.trustedOrigins)]
+			: options.trustedOrigins;
 	}
 
 	// Add the global database hooks last
