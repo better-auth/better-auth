@@ -245,6 +245,13 @@ function runPluginInit(ctx: AuthContext) {
 			}
 		}
 	}
+
+	if (options.trustedOrigins) {
+		options.trustedOrigins = Array.isArray(options.trustedOrigins)
+			? [...new Set(options.trustedOrigins)]
+			: options.trustedOrigins;
+	}
+
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
