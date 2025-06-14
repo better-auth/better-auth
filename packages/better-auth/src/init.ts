@@ -249,7 +249,7 @@ function runPluginInit(ctx: AuthContext) {
 	if (options.trustedOrigins) {
 		options.trustedOrigins = [...new Set(options.trustedOrigins as string[])];
 	}
-	
+
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
