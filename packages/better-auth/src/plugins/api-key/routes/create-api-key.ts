@@ -412,7 +412,7 @@ export function createApiKey({
 
 			if (metadata) {
 				//@ts-expect-error - we intentionally save the metadata as string on DB.
-				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
+				data.metadata = schema.apiKey.fields.metadata.transform.input(metadata);
 			}
 
 			const apiKey = await ctx.context.adapter.create<

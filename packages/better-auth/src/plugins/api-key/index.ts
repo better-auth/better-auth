@@ -54,7 +54,7 @@ export const ERROR_CODES = {
 	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
 };
 
-export const API_KEY_TABLE_NAME = "apikey";
+export const API_KEY_TABLE_NAME = "apiKey";
 
 export const apiKey = (options?: ApiKeyOptions) => {
 	const opts = {
