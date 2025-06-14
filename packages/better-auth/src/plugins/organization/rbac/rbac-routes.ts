@@ -69,6 +69,30 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 					});
 				}
 
+				// Check permission to create roles
+				const hasPermission = await rbacAdapter.checkUserPermission(
+					session.user.id,
+					"role:create",
+					organizationId,
+					{
+						userId: session.user.id,
+						organizationId,
+						action: "role:create",
+						resourceType: "role",
+						conditions: {
+							ipAddress:
+								ctx.request?.headers?.get("x-forwarded-for") || "unknown",
+							userAgent: ctx.request?.headers?.get("user-agent") || "unknown",
+						},
+					},
+				);
+
+				if (!hasPermission) {
+					throw new APIError("FORBIDDEN", {
+						message: "Insufficient permissions to create roles",
+					});
+				}
+
 				// Create the role
 				const role = await rbacAdapter.createRole({
 					name: ctx.body.name,
@@ -146,15 +170,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 				},
 			},
 			async (ctx) => {
-				console.log("DEBUG: listRoles handler called");
-				console.log("DEBUG: ctx.context keys:", Object.keys(ctx.context));
-				console.log("DEBUG: ctx.context.session:", !!ctx.context.session);
-				console.log("DEBUG: ctx.headers:", ctx.headers);
-				console.log("DEBUG: ctx.request url:", ctx.request?.url);
-
 				const session = ctx.context.session;
 				if (!session) {
-					console.log("DEBUG: No session found, throwing UNAUTHORIZED");
 					throw new APIError("UNAUTHORIZED");
 				}
 
@@ -254,6 +271,26 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 					});
 				}
 
+				// Check permission to update roles
+				const hasPermission = await rbacAdapter.checkUserPermission(
+					session.user.id,
+					"role:update",
+					existingRole.organizationId,
+					{
+						userId: session.user.id,
+						organizationId: existingRole.organizationId,
+						action: "role:update",
+						resourceType: "role",
+						resourceId: ctx.body.roleId,
+					},
+				);
+
+				if (!hasPermission) {
+					throw new APIError("FORBIDDEN", {
+						message: "Insufficient permissions to update roles",
+					});
+				}
+
 				// Update the role
 				const role = await rbacAdapter.updateRole(ctx.body.roleId, {
 					name: ctx.body.name,
@@ -331,6 +368,26 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 					});
 				}
 
+				// Check permission to delete roles
+				const hasPermission = await rbacAdapter.checkUserPermission(
+					session.user.id,
+					"role:delete",
+					existingRole.organizationId,
+					{
+						userId: session.user.id,
+						organizationId: existingRole.organizationId,
+						action: "role:delete",
+						resourceType: "role",
+						resourceId: ctx.body.roleId,
+					},
+				);
+
+				if (!hasPermission) {
+					throw new APIError("FORBIDDEN", {
+						message: "Insufficient permissions to delete roles",
+					});
+				}
+
 				// Delete the role
 				await rbacAdapter.deleteRole(ctx.body.roleId);
 
@@ -402,6 +459,26 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
+					});
+				}
+
+				// Check permission to assign roles
+				const hasPermission = await rbacAdapter.checkUserPermission(
+					session.user.id,
+					"role:assign",
+					organizationId,
+					{
+						userId: session.user.id,
+						organizationId,
+						action: "role:assign",
+						resourceType: "role",
+						resourceId: ctx.body.roleId,
+					},
+				);
+
+				if (!hasPermission) {
+					throw new APIError("FORBIDDEN", {
+						message: "Insufficient permissions to assign roles",
 					});
 				}
 
@@ -481,6 +558,26 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 				if (!organizationId) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Organization ID required",
+					});
+				}
+
+				// Check permission to remove roles
+				const hasPermission = await rbacAdapter.checkUserPermission(
+					session.user.id,
+					"role:remove",
+					organizationId,
+					{
+						userId: session.user.id,
+						organizationId,
+						action: "role:remove",
+						resourceType: "role",
+						resourceId: ctx.body.roleId,
+					},
+				);
+
+				if (!hasPermission) {
+					throw new APIError("FORBIDDEN", {
+						message: "Insufficient permissions to remove roles",
 					});
 				}
 
@@ -791,10 +888,35 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 					});
 				}
 
+				// Check permission to read audit logs
+				const hasPermission = await rbacAdapter.checkUserPermission(
+					session.user.id,
+					"audit:read",
+					organizationId,
+					{
+						userId: session.user.id,
+						organizationId,
+						action: "audit:read",
+						resourceType: "audit",
+					},
+				);
+
+				if (!hasPermission) {
+					throw new APIError("FORBIDDEN", {
+						message: "Insufficient permissions to access audit logs",
+					});
+				}
+
 				// Get audit logs
 				const logs = await rbacAdapter.getAuditLogs(
 					organizationId,
 					ctx.query.limit,
+					ctx.query.offset,
+					{
+						userId: ctx.query.userId,
+						action: ctx.query.action,
+						resource: ctx.query.resource,
+					},
 				);
 
 				return ctx.json({ logs });

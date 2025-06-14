@@ -39,8 +39,6 @@ describe("RBAC Organization Integration", async () => {
 	});
 
 	it("should create organization with RBAC enabled", async () => {
-		console.log("DEBUG: Starting organization creation with RBAC enabled");
-
 		const organization = await client.organization.create({
 			name: "RBAC Test Organization",
 			slug: "rbac-test-org",
@@ -49,18 +47,10 @@ describe("RBAC Organization Integration", async () => {
 			},
 		});
 
-		console.log("DEBUG: Organization creation response:", {
-			id: organization.data?.id,
-			name: organization.data?.name,
-			membersCount: organization.data?.members?.length,
-		});
-
 		// Basic organization assertions
 		expect(organization.data?.name).toBe("RBAC Test Organization");
 		expect(organization.data?.slug).toBe("rbac-test-org");
 		expect(organization.data?.members?.length).toBe(1);
 		expect(organization.data?.members?.[0]?.role).toBe("owner");
-
-		console.log("✓ Organization created successfully with RBAC plugin enabled");
 	});
 });

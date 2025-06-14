@@ -2943,26 +2943,33 @@ const assignRoleToUser = async (params: AssignRoleParams) => {
 // Encrypt sensitive audit log data
 import crypto from 'crypto';
 
-const encryptSensitiveData = (data: string, key: string): string => {
+const encryptSensitiveData = (data: string, key: Buffer): string => {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipher('aes-256-gcm', key);
+  const cipher = crypto.createCipherGCM('aes-256-gcm', key);
+  cipher.setAAD(Buffer.from('additional-data'));
   let encrypted = cipher.update(data, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   const authTag = cipher.getAuthTag();
   return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
 };
 
-const decryptSensitiveData = (encryptedData: string, key: string): string => {
+const decryptSensitiveData = (encryptedData: string, key: Buffer): string => {
   const parts = encryptedData.split(':');
   const iv = Buffer.from(parts[0], 'hex');
   const authTag = Buffer.from(parts[1], 'hex');
   const encrypted = parts[2];
   
-  const decipher = crypto.createDecipher('aes-256-gcm', key);
+  const decipher = crypto.createDecipherGCM('aes-256-gcm', key);
+  decipher.setAAD(Buffer.from('additional-data'));
   decipher.setAuthTag(authTag);
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
   return decrypted;
+};
+
+// Generate secure key
+const generateEncryptionKey = (): Buffer => {
+  return crypto.randomBytes(32); // 256-bit key
 };
 ```
 

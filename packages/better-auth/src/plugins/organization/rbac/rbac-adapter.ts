@@ -316,9 +316,9 @@ export const getRbacAdapter = (
 		},
 
 		// Audit Log operations
-		async createAuditLog(data: AuditLogInput): Promise<AuditLog> {
+		async createAuditLog(data: AuditLogInput): Promise<AuditLog | null> {
 			if (!enableAuditLog) {
-				return {} as AuditLog;
+				return null;
 			}
 
 			return await adapter.create<AuditLogInput, AuditLog>({
@@ -330,15 +330,36 @@ export const getRbacAdapter = (
 		async getAuditLogs(
 			organizationId?: string,
 			limit: number = 100,
+			offset: number = 0,
+			filters?: {
+				userId?: string;
+				action?: string;
+				resource?: string;
+			},
 		): Promise<AuditLog[]> {
-			const whereClause = organizationId
-				? [{ field: "organizationId", value: organizationId }]
-				: [];
+			const whereClause = [];
+
+			if (organizationId) {
+				whereClause.push({ field: "organizationId", value: organizationId });
+			}
+
+			if (filters?.userId) {
+				whereClause.push({ field: "userId", value: filters.userId });
+			}
+
+			if (filters?.action) {
+				whereClause.push({ field: "action", value: filters.action });
+			}
+
+			if (filters?.resource) {
+				whereClause.push({ field: "resource", value: filters.resource });
+			}
 
 			return await adapter.findMany<AuditLog>({
 				model: "auditLog",
 				where: whereClause,
 				limit,
+				offset,
 				sortBy: { field: "timestamp", direction: "desc" },
 			});
 		},
@@ -402,17 +423,36 @@ export const getRbacAdapter = (
 				return false;
 			}
 
-			// Get role permissions
+			// Get all role permissions in bulk to avoid N+1 queries
 			const rolePermissions = await Promise.all(
 				userRoles.map((userRole) => this.getRolePermissions(userRole.roleId)),
 			);
 
 			const allPermissions = rolePermissions.flat();
 
+			// Get all unique permission IDs to fetch in bulk
+			const permissionIds = [
+				...new Set(allPermissions.map((rp) => rp.permissionId)),
+			];
+			const permissions = await Promise.all(
+				permissionIds.map((id) => this.findPermissionById(id)),
+			);
+
+			// Create a map for quick lookup
+			const permissionMap = new Map<string, Permission>();
+			permissions.forEach((permission) => {
+				if (permission) {
+					permissionMap.set(permission.id, permission);
+				}
+			});
+
 			// Check if any role has the required permission
 			const hasPermission = allPermissions.some((rolePermission) => {
+				const permission = permissionMap.get(rolePermission.permissionId);
+				if (!permission) return false;
+
 				// Check if permission matches action and resource
-				return this.matchesPermission(rolePermission, context);
+				return this.matchesPermission(permission, rolePermission, context);
 			});
 
 			// If policies are enabled, evaluate them
@@ -432,18 +472,11 @@ export const getRbacAdapter = (
 		},
 
 		// Helper methods
-		async matchesPermission(
+		matchesPermission(
+			permission: Permission,
 			rolePermission: RolePermission,
 			context: PermissionContext,
-		): Promise<boolean> {
-			const permission = await this.findPermissionById(
-				rolePermission.permissionId,
-			);
-
-			if (!permission) {
-				return false;
-			}
-
+		): boolean {
 			// Basic matching: resource:action format
 			const permissionParts = permission.name.split(":");
 			const contextParts = context.action.split(":");
@@ -463,7 +496,10 @@ export const getRbacAdapter = (
 
 			// Check conditions if present
 			if (rolePermission.conditions) {
-				return this.evaluateConditions(rolePermission.conditions, context);
+				return (
+					rolePermission.granted &&
+					this.evaluateConditions(rolePermission.conditions, context)
+				);
 			}
 
 			return rolePermission.granted;
@@ -475,9 +511,80 @@ export const getRbacAdapter = (
 		): boolean {
 			try {
 				const conditionObj = JSON.parse(conditions);
-				// Simple condition evaluation
-				// In a real implementation, you'd want a more sophisticated evaluation engine
-				return true; // Placeholder
+
+				// Time-based restrictions
+				if (conditionObj.timeRestricted && conditionObj.allowedHours) {
+					const now = new Date();
+					const currentTime = now.getHours() * 100 + now.getMinutes();
+					const [startHour, startMin] = conditionObj.allowedHours
+						.split("-")[0]
+						.split(":")
+						.map(Number);
+					const [endHour, endMin] = conditionObj.allowedHours
+						.split("-")[1]
+						.split(":")
+						.map(Number);
+					const startTime = startHour * 100 + startMin;
+					const endTime = endHour * 100 + endMin;
+
+					if (currentTime < startTime || currentTime > endTime) {
+						return false;
+					}
+				}
+
+				// Day-based restrictions
+				if (
+					conditionObj.allowedDays &&
+					Array.isArray(conditionObj.allowedDays)
+				) {
+					const now = new Date();
+					const dayNames = [
+						"sunday",
+						"monday",
+						"tuesday",
+						"wednesday",
+						"thursday",
+						"friday",
+						"saturday",
+					];
+					const currentDay = dayNames[now.getDay()];
+
+					if (!conditionObj.allowedDays.includes(currentDay)) {
+						return false;
+					}
+				}
+
+				// IP whitelist restrictions
+				if (
+					conditionObj.ipWhitelist &&
+					Array.isArray(conditionObj.ipWhitelist) &&
+					context.conditions?.ipAddress
+				) {
+					// Simple check - in production, use proper CIDR matching
+					const isAllowed = conditionObj.ipWhitelist.some(
+						(allowedIp: string) => {
+							if (allowedIp.includes("/")) {
+								// CIDR notation - simplified check
+								const [network] = allowedIp.split("/");
+								return context.conditions!.ipAddress.startsWith(
+									network.split(".").slice(0, 3).join("."),
+								);
+							}
+							return context.conditions!.ipAddress === allowedIp;
+						},
+					);
+
+					if (!isAllowed) {
+						return false;
+					}
+				}
+
+				// MFA requirement
+				if (conditionObj.requireMFA && !context.conditions?.mfaVerified) {
+					return false;
+				}
+
+				return true;
 			} catch {
 				return false;
 			}
@@ -561,6 +668,23 @@ export const getRbacAdapter = (
 			}
 
 			return Array.from(allPermissions);
+		},
+
+		// Permission checking operations
+		async checkUserPermission(
+			userId: string,
+			permission: string,
+			organizationId?: string,
+			context?: PermissionContext,
+		): Promise<boolean> {
+			const permissionContext: PermissionContext = context || {
+				userId,
+				organizationId,
+				action: permission,
+				resourceType: permission.split(":")[0] || "unknown",
+			};
+
+			return await this.evaluatePermission(permissionContext);
 		},
 	};
 };

@@ -95,23 +95,9 @@ export const organizationRbac = <O extends RbacOrganizationOptions>(
 					},
 					handler: async (context) => {
 						// Auto-setup RBAC for new organizations
-						console.log("DEBUG: RBAC organization create hook triggered");
-						console.log(
-							"DEBUG: options?.rbac?.enabled:",
-							options?.rbac?.enabled,
-						);
-						console.log(
-							"DEBUG: context.context.returned:",
-							!!(context as any).context.returned,
-						);
-
 						try {
 							if (options?.rbac?.enabled && (context as any).context.returned) {
 								const returned = (context as any).context.returned;
-								console.log(
-									"DEBUG: returned data:",
-									JSON.stringify(returned, null, 2),
-								);
 
 								// The organization create endpoint returns: { ...organization, metadata, members: [member] }
 								// So we need to extract the organization and member from this structure
@@ -125,30 +111,16 @@ export const organizationRbac = <O extends RbacOrganizationOptions>(
 									const member = returned.members?.[0]; // First member is the creator
 
 									if (member) {
-										console.log(
-											"DEBUG: Setting up RBAC for organization:",
-											organization.id,
-										);
 										await setupOrganizationRbac(
 											(context as any).context,
 											organization,
 											member,
 											options,
 										);
-										console.log("DEBUG: RBAC setup completed");
-									} else {
-										console.log("DEBUG: No member found in returned data");
 									}
-								} else {
-									console.log(
-										"DEBUG: Organization data not found in returned data",
-									);
 								}
-							} else {
-								console.log("DEBUG: RBAC not enabled or no returned data");
 							}
 						} catch (error) {
-							console.error("DEBUG: RBAC setup failed:", error);
 							// Don't break organization creation if RBAC setup fails
 						}
 						// Return empty response to not interfere with the original response
@@ -198,10 +170,8 @@ async function setupOrganizationRbac(
 	member: any,
 	options?: RbacOrganizationOptions,
 ) {
-	console.log("DEBUG: setupOrganizationRbac called for org:", organization.id);
 	const rbacAdapter = (context as any).rbacAdapter;
 	if (!rbacAdapter) {
-		console.log("DEBUG: No RBAC adapter found");
 		return;
 	}
 

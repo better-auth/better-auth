@@ -33,8 +33,6 @@ describe("RBAC Organization", async () => {
 	const { headers, user } = await signInWithTestUser();
 
 	it("should create an organization with RBAC enabled", async () => {
-		console.log("DEBUG: Starting test - create organization with RBAC enabled");
-
 		const organization = await auth.api.createOrganization({
 			body: {
 				name: "Test Organization",
@@ -43,7 +41,6 @@ describe("RBAC Organization", async () => {
 			},
 		});
 
-		console.log("DEBUG: Organization created:", organization);
 		expect(organization).toBeDefined();
 		expect(organization?.name).toBe("Test Organization");
 		expect(organization?.slug).toBe("test-org");
