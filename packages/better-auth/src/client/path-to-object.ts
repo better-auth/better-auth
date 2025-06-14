@@ -128,7 +128,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 												? {
 														user: InferUserFromClient<COpts>;
 														session: InferSessionFromClient<COpts>;
-													}
+													} | null
 												: NonNullable<Awaited<R>>,
 										{
 											code?: string;
