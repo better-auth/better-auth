@@ -67,7 +67,7 @@ This creates the following tables:
 - `role` - Role definitions
 - `permission` - Permission definitions  
 - `rolePermission` - Role-permission mappings
-- `userRole` - User-role assignments
+- `memberRole` - User-role assignments
 - `resource` - Resource definitions
 - `auditLog` - Audit trail
 - `policy` - Custom policies (optional)
@@ -375,7 +375,7 @@ Maps permissions to roles with conditional support.
 }
 ```
 
-### `userRole` Table
+### `memberRole` Table
 Assigns roles to users with expiration and condition support.
 
 | Column | Type | Description |
@@ -612,7 +612,7 @@ await auth.api.revokeRoleFromUser({
 });
 
 // Get all roles for a user
-const userRoles = await auth.api.getUserRoles({
+const memberRoles = await auth.api.getUserRoles({
   userId: "user-123",
   organizationId: "org-123",
   includeExpired: false, // Exclude expired assignments
@@ -737,27 +737,27 @@ const { hasPermission, loading } = authClient.rbac.permissions.useCheck({
 
 ```typescript
 // Assign role to user
-await authClient.rbac.userRoles.assign({
+await authClient.rbac.memberRoles.assign({
   userId: "user-123", 
   roleId: "role-456",
   organizationId: "org-123"
 });
 
 // List user roles with real-time updates
-const { data: userRoles } = authClient.rbac.userRoles.useList({
+const { data: memberRoles } = authClient.rbac.memberRoles.useList({
   userId: "user-123",
   organizationId: "org-123"
 });
 
 // Revoke role
-await authClient.rbac.userRoles.revoke({
+await authClient.rbac.memberRoles.revoke({
   userId: "user-123",
   roleId: "role-456", 
   organizationId: "org-123"
 });
 
 // Bulk role assignment
-await authClient.rbac.userRoles.assignBulk({
+await authClient.rbac.memberRoles.assignBulk({
   userIds: ["user-1", "user-2", "user-3"],
   roleId: "role-456",
   organizationId: "org-123"
@@ -1181,9 +1181,9 @@ interface RbacHooks {
   
   // Role assignment hooks
   beforeRoleAssign?: (data: RoleAssignmentData, context: HookContext) => Promise<void | { data: RoleAssignmentData }>;
-  afterRoleAssign?: (assignment: UserRole, context: HookContext) => Promise<void>;
+  afterRoleAssign?: (assignment: MemberRole, context: HookContext) => Promise<void>;
   beforeRoleRevoke?: (data: RoleRevocationData, context: HookContext) => Promise<void>;
-  afterRoleRevoke?: (revokedAssignment: UserRole, context: HookContext) => Promise<void>;
+  afterRoleRevoke?: (revokedAssignment: MemberRole, context: HookContext) => Promise<void>;
   
   // Organization integration hooks
   onOrganizationCreate?: (organization: Organization, context: HookContext) => Promise<void>;
@@ -1567,7 +1567,7 @@ Implement sophisticated access control with conditions:
 
 ```typescript
 // Time-restricted access
-await authClient.rbac.userRoles.assign({
+await authClient.rbac.memberRoles.assign({
   userId: "contractor-123",
   roleId: "developer-role-id",
   organizationId: "org-123",
@@ -1582,7 +1582,7 @@ await authClient.rbac.userRoles.assign({
 });
 
 // IP-based restrictions
-await authClient.rbac.userRoles.assign({
+await authClient.rbac.memberRoles.assign({
   userId: "remote-worker-456", 
   roleId: "developer-role-id",
   organizationId: "org-123",
@@ -1597,7 +1597,7 @@ await authClient.rbac.userRoles.assign({
 });
 
 // Multi-factor authentication requirements
-await authClient.rbac.userRoles.assign({
+await authClient.rbac.memberRoles.assign({
   userId: "admin-789",
   roleId: "admin-role-id", 
   organizationId: "org-123",
@@ -1831,7 +1831,7 @@ const performanceConfig = {
   cacheStrategies: {
     permissions: "write-through", // write-through | write-behind | read-through
     roles: "write-through",
-    userRoles: "write-behind"
+    memberRoles: "write-behind"
   },
   
   // Pre-loading strategies
@@ -1851,7 +1851,7 @@ const performanceConfig = {
 };
 
 // Bulk operations for efficiency
-await authClient.rbac.userRoles.assignBulk({
+await authClient.rbac.memberRoles.assignBulk({
   assignments: [
     { userId: "user-1", roleId: "role-a", organizationId: "org-123" },
     { userId: "user-2", roleId: "role-b", organizationId: "org-123" },
@@ -2247,10 +2247,10 @@ const auth = betterAuth({
 const tracePermissionCheck = async (userId: string, permission: string) => {
   console.log(`Checking permission ${permission} for user ${userId}`);
   
-  const userRoles = await getUserRoles(userId);
-  console.log(`User has roles:`, userRoles.map(r => r.name));
+  const memberRoles = await getUserRoles(userId);
+  console.log(`User has roles:`, memberRoles.map(r => r.name));
   
-  for (const role of userRoles) {
+  for (const role of memberRoles) {
     const rolePermissions = await getRolePermissions(role.id);
     console.log(`Role ${role.name} has permissions:`, rolePermissions.map(p => p.name));
   }
@@ -2585,7 +2585,7 @@ const auth = betterAuth({
             ttl: 600, // 10 minutes
             maxSize: 5000
           },
-          userRoles: {
+          memberRoles: {
             ttl: 180, // 3 minutes
             maxSize: 50000
           }

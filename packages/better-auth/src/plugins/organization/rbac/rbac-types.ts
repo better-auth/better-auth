@@ -133,7 +133,7 @@ export interface RbacOrganizationOptions extends OrganizationOptions {
 					createdAt?: string;
 				};
 			};
-			rbacUserRole?: {
+			rbacMemberRole?: {
 				modelName?: string;
 				fields?: {
 					userId?: string;

@@ -34,7 +34,7 @@ export const rolePermissionSchema = z.object({
 	createdAt: z.date().default(() => new Date()),
 });
 
-export const userRoleSchema = z.object({
+export const memberRoleSchema = z.object({
 	id: z.string().default(generateId),
 	userId: z.string(),
 	roleId: z.string(),
@@ -223,8 +223,8 @@ export const schema = {
 			},
 		},
 	},
-	userRole: {
-		modelName: "userRole",
+	memberRole: {
+		modelName: "memberRole",
 		fields: {
 			userId: {
 				type: "string",
@@ -368,7 +368,7 @@ export const schema = {
 export type Permission = z.infer<typeof permissionSchema>;
 export type Role = z.infer<typeof roleSchema>;
 export type RolePermission = z.infer<typeof rolePermissionSchema>;
-export type UserRole = z.infer<typeof userRoleSchema>;
+export type MemberRole = z.infer<typeof memberRoleSchema>;
 export type Resource = z.infer<typeof resourceSchema>;
 export type ResourcePermission = z.infer<typeof resourcePermissionSchema>;
 export type AuditLog = z.infer<typeof auditLogSchema>;
@@ -378,7 +378,7 @@ export type Policy = z.infer<typeof policySchema>;
 export type PermissionInput = z.input<typeof permissionSchema>;
 export type RoleInput = z.input<typeof roleSchema>;
 export type RolePermissionInput = z.input<typeof rolePermissionSchema>;
-export type UserRoleInput = z.input<typeof userRoleSchema>;
+export type MemberRoleInput = z.input<typeof memberRoleSchema>;
 export type ResourceInput = z.input<typeof resourceSchema>;
 export type ResourcePermissionInput = z.input<typeof resourcePermissionSchema>;
 export type AuditLogInput = z.input<typeof auditLogSchema>;
@@ -476,7 +476,7 @@ export interface RbacMember {
 	userId: string;
 	organizationId: string;
 	teamId?: string;
-	roles: UserRole[];
+	roles: MemberRole[];
 	effectivePermissions: string[];
 	createdAt: Date;
 	updatedAt: Date;

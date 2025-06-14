@@ -115,8 +115,8 @@ describe("RBAC Organization Comprehensive Tests", () => {
 			where: [{ field: "organizationId", value: testOrg.id }],
 		});
 
-		const userRoles = await db.findMany({
-			model: "userRole",
+		const memberRoles = await db.findMany({
+			model: "memberRole",
 			where: [{ field: "organizationId", value: testOrg.id }],
 		});
 
@@ -128,11 +128,11 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		// Verify expected counts
 		expect(permissions.length).toBeGreaterThan(0);
 		expect(roles.length).toBe(3); // Organization Owner, Organization Admin, Member
-		expect(userRoles.length).toBe(1); // owner should have admin role
+		expect(memberRoles.length).toBe(1); // owner should have admin role
 		expect(auditLogs.length).toBeGreaterThan(0);
 
 		// Verify owner has admin role
-		const ownerRole = userRoles.find((ur: any) => ur.userId === adminUser.id);
+		const ownerRole = memberRoles.find((ur: any) => ur.userId === adminUser.id);
 		expect(ownerRole).toBeDefined();
 
 		// Verify that we have the default roles created by the system
@@ -157,7 +157,7 @@ describe("RBAC Organization Comprehensive Tests", () => {
 
 		expect(adminRole).toBeDefined();
 
-		const userRoleData = {
+		const memberRoleData = {
 			userId: regularUser.id,
 			organizationId: testOrg.id,
 			roleId: adminRole.id,
@@ -167,13 +167,13 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		};
 
 		await db.create({
-			model: "userRole",
-			data: userRoleData,
+			model: "memberRole",
+			data: memberRoleData,
 		});
 
 		// Verify assignment
-		const userRole = await db.findOne({
-			model: "userRole",
+		const memberRole = await db.findOne({
+			model: "memberRole",
 			where: [
 				{ field: "userId", value: regularUser.id },
 				{ field: "organizationId", value: testOrg.id },
@@ -181,8 +181,8 @@ describe("RBAC Organization Comprehensive Tests", () => {
 			],
 		});
 
-		expect(userRole).toBeDefined();
-		expect(userRole.assignedAt).toBeDefined();
+		expect(memberRole).toBeDefined();
+		expect(memberRole.assignedAt).toBeDefined();
 	});
 
 	it("should check user permissions", async () => {
@@ -196,21 +196,21 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		const db = testInstance.db;
 
 		// Verify admin user has the Organization Owner role
-		const adminUserRole = await db.findOne({
-			model: "userRole",
+		const adminMemberRole = await db.findOne({
+			model: "memberRole",
 			where: [
 				{ field: "userId", value: adminUser.id },
 				{ field: "organizationId", value: testOrg.id },
 			],
 		});
 
-		expect(adminUserRole).toBeTruthy();
+		expect(adminMemberRole).toBeTruthy();
 
 		// Get the role details
 		const adminRole = await db.findOne({
 			model: "role",
 			where: [
-				{ field: "id", value: adminUserRole?.roleId },
+				{ field: "id", value: adminMemberRole?.roleId },
 				{ field: "name", value: "Organization Owner" },
 			],
 		});
@@ -259,7 +259,7 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		expect(memberRole).toBeTruthy();
 
 		await db.create({
-			model: "userRole",
+			model: "memberRole",
 			data: {
 				userId: memberUser.id,
 				organizationId: testOrg.id,
@@ -270,8 +270,8 @@ describe("RBAC Organization Comprehensive Tests", () => {
 		});
 
 		// Verify the member role assignment
-		const memberUserRole = await db.findOne({
-			model: "userRole",
+		const memberMemberRole = await db.findOne({
+			model: "memberRole",
 			where: [
 				{ field: "userId", value: memberUser.id },
 				{ field: "organizationId", value: testOrg.id },
@@ -279,7 +279,7 @@ describe("RBAC Organization Comprehensive Tests", () => {
 			],
 		});
 
-		expect(memberUserRole).toBeTruthy();
+		expect(memberMemberRole).toBeTruthy();
 
 		// Verify Member role has fewer permissions than Organization Owner
 		const memberRolePermissions = await db.findMany({

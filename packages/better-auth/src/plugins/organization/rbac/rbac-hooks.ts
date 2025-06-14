@@ -2,7 +2,7 @@ import type { User, Session, AuthContext } from "../../../types";
 import type {
 	Role,
 	Permission,
-	UserRole,
+	MemberRole,
 	AuditLog,
 	Policy,
 	PermissionContext,
@@ -104,7 +104,7 @@ export interface RbacHooks {
 	}>;
 
 	afterRoleAssignment?: (
-		data: RoleAssignmentHookData & { userRole: UserRole },
+		data: RoleAssignmentHookData & { memberRole: MemberRole },
 		context: RbacHookContext,
 	) => Promise<void>;
 

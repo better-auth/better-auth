@@ -429,8 +429,8 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 										schema: {
 											type: "object",
 											properties: {
-												userRole: {
-													$ref: "#/components/schemas/RbacUserRole",
+												memberRole: {
+													$ref: "#/components/schemas/RbacMemberRole",
 												},
 											},
 										},
@@ -483,7 +483,7 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 				}
 
 				// Assign the role to the user
-				const userRole = await rbacAdapter.assignRoleToUser({
+				const memberRole = await rbacAdapter.assignRoleToUser({
 					userId: ctx.body.userId,
 					roleId: ctx.body.roleId,
 					organizationId,
@@ -494,7 +494,7 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 				await rbacAdapter.createAuditLog({
 					action: "ROLE_ASSIGNED",
 					resource: "user_role",
-					resourceId: userRole.id,
+					resourceId: memberRole.id,
 					userId: session.user.id,
 					organizationId,
 					details: JSON.stringify({
@@ -503,7 +503,7 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 					}),
 				});
 
-				return ctx.json({ userRole });
+				return ctx.json({ memberRole });
 			},
 		),
 
@@ -665,15 +665,15 @@ export const rbacRoutes = <O extends RbacOrganizationOptions>(options?: O) => {
 				}
 
 				// Get user roles
-				const userRoles = await rbacAdapter.getUserRoles(
+				const memberRoles = await rbacAdapter.getUserRoles(
 					userId,
 					organizationId,
 				);
 
 				// Get full role details
 				const roles = await Promise.all(
-					userRoles.map(async (userRole: any) => {
-						return await rbacAdapter.findRoleById(userRole.roleId);
+					memberRoles.map(async (memberRole: any) => {
+						return await rbacAdapter.findRoleById(memberRole.roleId);
 					}),
 				);
 

@@ -3,7 +3,7 @@ import type {
 	Permission,
 	Role,
 	RolePermission,
-	UserRole,
+	MemberRole,
 	Resource,
 	ResourcePermission,
 	AuditLog,
@@ -11,7 +11,7 @@ import type {
 	PermissionInput,
 	RoleInput,
 	RolePermissionInput,
-	UserRoleInput,
+	MemberRoleInput,
 	ResourceInput,
 	ResourcePermissionInput,
 	AuditLogInput,
@@ -167,17 +167,17 @@ export const getRbacAdapter = (
 		},
 
 		// User-Role operations
-		async assignRoleToUser(data: UserRoleInput): Promise<UserRole> {
-			const userRole = await adapter.create<UserRoleInput, UserRole>({
-				model: "userRole",
+		async assignRoleToUser(data: MemberRoleInput): Promise<MemberRole> {
+			const memberRole = await adapter.create<MemberRoleInput, MemberRole>({
+				model: "memberRole",
 				data,
 			});
 
 			if (enableAuditLog) {
 				await this.createAuditLog({
 					action: "ROLE_ASSIGNED",
-					resource: "user_role",
-					resourceId: userRole.id,
+					resource: "member_role",
+					resourceId: memberRole.id,
 					userId: data.assignedBy,
 					organizationId: data.organizationId,
 					details: JSON.stringify({
@@ -189,7 +189,7 @@ export const getRbacAdapter = (
 				});
 			}
 
-			return userRole;
+			return memberRole;
 		},
 
 		async removeRoleFromUser(
@@ -208,14 +208,14 @@ export const getRbacAdapter = (
 			}
 
 			await adapter.delete({
-				model: "userRole",
+				model: "memberRole",
 				where: whereClause,
 			});
 
 			if (enableAuditLog && removedBy) {
 				await this.createAuditLog({
 					action: "ROLE_REMOVED",
-					resource: "user_role",
+					resource: "member_role",
 					userId: removedBy,
 					organizationId,
 					details: JSON.stringify({
@@ -230,15 +230,15 @@ export const getRbacAdapter = (
 		async getUserRoles(
 			userId: string,
 			organizationId?: string,
-		): Promise<UserRole[]> {
+		): Promise<MemberRole[]> {
 			const whereClause = [{ field: "userId", value: userId }];
 
 			if (organizationId) {
 				whereClause.push({ field: "organizationId", value: organizationId });
 			}
 
-			return await adapter.findMany<UserRole>({
-				model: "userRole",
+			return await adapter.findMany<MemberRole>({
+				model: "memberRole",
 				where: whereClause,
 			});
 		},
@@ -431,9 +431,9 @@ export const getRbacAdapter = (
 			const allPermissions = rolePermissions.flat();
 
 			// Get all unique permission IDs to fetch in bulk
-			const permissionIds = [
-				...new Set(allPermissions.map((rp) => rp.permissionId)),
-			];
+			const permissionIds = Array.from(
+				new Set(allPermissions.map((rp) => rp.permissionId)),
+			);
 			const permissions = await Promise.all(
 				permissionIds.map((id) => this.findPermissionById(id)),
 			);

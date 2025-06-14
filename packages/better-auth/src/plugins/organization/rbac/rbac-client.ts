@@ -12,7 +12,14 @@ interface RbacClientOptions {
 /**
  * RBAC client plugin for organization with database-level access control
  *
- * Provides client-side methods for managing roles, permissions, and access control
+ * Provides client-sid			const memberRoleIds = rolesResult.roles.map((ur: any) => ur.roleId);
+			const memberRoleNames = rolesList.roles
+				.filter((r: any) => memberRoleIds.includes(r.id))
+				.map((r: any) => r.name);
+
+			return data.roleNames.some((roleName: string) =>
+				memberRoleNames.includes(roleName),
+			);s for managing roles, permissions, and access control
  */
 export const organizationRbacClient = <O extends RbacClientOptions>(
 	options?: O,
@@ -231,7 +238,7 @@ export const organizationRbacClient = <O extends RbacClientOptions>(
 				},
 
 				// User Roles (alias for users.getRoles for backward compatibility)
-				userRoles: {
+				memberRoles: {
 					/**
 					 * Get roles assigned to a user (alias for users.getRoles)
 					 */
@@ -311,7 +318,7 @@ export const rbacUtils = {
 			const permissions = new Set<string>();
 
 			// Get permissions for each role
-			for (const userRole of rolesResult.roles) {
+			for (const memberRole of rolesResult.roles) {
 				const roleResult = await $fetch("/organization/rbac/roles/list", {
 					method: "GET",
 					query: {
@@ -321,7 +328,7 @@ export const rbacUtils = {
 				});
 
 				const role = roleResult.roles.find(
-					(r: any) => r.id === userRole.roleId,
+					(r: any) => r.id === memberRole.roleId,
 				);
 				if (role?.permissions) {
 					role.permissions.forEach((p: any) => {
