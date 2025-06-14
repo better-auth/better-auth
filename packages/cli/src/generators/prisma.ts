@@ -35,7 +35,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				const referencedOriginalModel = attr.references.model;
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
-				const referencedModelNameCap = capitalizeFirstLetter(referencedCustomModel);
+				const referencedModelNameCap = capitalizeFirstLetter(
+					referencedCustomModel,
+				);
 
 				if (!manyToManyRelations.has(referencedModelNameCap)) {
 					manyToManyRelations.set(referencedModelNameCap, new Set());
@@ -197,7 +199,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					within: prismaModel?.properties,
 				});
 				if (!hasAttribute) {
-					builder.model(modelName).blockAttribute("map", `${originalTableName}`);
+					builder
+						.model(modelName)
+						.blockAttribute("map", `${originalTableName}`);
 				}
 			}
 		}

@@ -20,7 +20,7 @@ describe("organization", async (it) => {
 					schema: {
 						team: {
 							modelName: "team",
-						}
+						},
 					},
 					invitationLimit: 3,
 				}),
