@@ -117,7 +117,9 @@ Signin method accepts:
 
 `autoFill`: Browser autofill, a.k.a. Conditional UI. [read more](https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui)
 
-`callbackURL`: The URL to redirect to after the user has signed in. (optional)
+`email`: The email of the user to sign in.
+
+`fetchOptions`: Fetch options to pass to the fetch request.
 
 ```ts
 const data = await authClient.signIn.passkey();
