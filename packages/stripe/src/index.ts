@@ -352,20 +352,49 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				let subscription = existingSubscription;
 				if (!subscription) {
-					const newSubscription = await ctx.context.adapter.create<
-						InputSubscription,
-						Subscription
-					>({
-						model: "subscription",
-						data: {
+					const incompleteSubscription = subscriptions.find(
+						(sub) => sub.status === "incomplete",
+					);
+
+					if (incompleteSubscription) {
+						await ctx.context.adapter.update({
+							model: "subscription",
+							update: {
+								...incompleteSubscription,
+								plan: plan.name.toLowerCase(),
+								seats: ctx.body.seats || 1,
+								stripeCustomerId: customerId,
+								status: "active",
+							},
+							where: [
+								{
+									field: "id",
+									value: incompleteSubscription.id,
+								},
+							],
+						});
+						subscription = {
+							...incompleteSubscription,
 							plan: plan.name.toLowerCase(),
-							stripeCustomerId: customerId,
-							status: "incomplete",
-							referenceId,
 							seats: ctx.body.seats || 1,
-						},
-					});
-					subscription = newSubscription;
+							stripeCustomerId: customerId,
+						};
+					} else {
+						const newSubscription = await ctx.context.adapter.create<
+							InputSubscription,
+							Subscription
+						>({
+							model: "subscription",
+							data: {
+								plan: plan.name.toLowerCase(),
+								stripeCustomerId: customerId,
+								status: "incomplete",
+								referenceId,
+								seats: ctx.body.seats || 1,
+							},
+						});
+						subscription = newSubscription;
+					}
 				}
 
 				if (!subscription) {
