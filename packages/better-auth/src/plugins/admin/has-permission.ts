@@ -17,11 +17,22 @@ type PermissionExclusive =
 export const hasPermission = (
 	input: {
 		userId?: string;
+		email: string | undefined;
 		role?: string;
 		options?: AdminOptions;
 	} & PermissionExclusive,
 ) => {
 	if (input.userId && input.options?.adminUserIds?.includes(input.userId)) {
+		return true;
+	}
+	if (
+		input.email &&
+		input.options?.adminEmails?.some((email) =>
+			typeof email === "string"
+				? email === input.email
+				: email.test(input.email!),
+		)
+	) {
 		return true;
 	}
 	if (!input.permissions && !input.permission) {
