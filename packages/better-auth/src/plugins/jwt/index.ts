@@ -388,7 +388,6 @@ export const jwt = (options?: JwtOptions) => {
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
-							ctx.setHeader("set-auth-jwt", jwt);
 							const exposedHeaders =
 								ctx.context.responseHeaders?.get(
 									"access-control-expose-headers",
@@ -400,6 +399,7 @@ export const jwt = (options?: JwtOptions) => {
 									.filter(Boolean),
 							);
 							headersSet.add("set-auth-jwt");
+							ctx.setHeader("set-auth-jwt", jwt);
 							ctx.setHeader(
 								"Access-Control-Expose-Headers",
 								Array.from(headersSet).join(", "),
