@@ -111,4 +111,18 @@ describe("username", async (it) => {
 		});
 		expect(res.error?.status).toBe(422);
 	});
+
+	it("should check if username is unavailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "new_username_2.1",
+		});
+		expect(res.data?.available).toEqual(false);
+	});
+
+	it("should check if username is available", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "new_username_2.2",
+		});
+		expect(res.data?.available).toEqual(true);
+	});
 });

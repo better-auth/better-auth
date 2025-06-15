@@ -96,6 +96,23 @@ const data = await authClient.updateUser({
 })
 ```
 
+### Check if username is available
+
+To check if a username is available, you can use the `isUsernameAvailable` function provided by the client.
+
+```ts title="auth-client.ts"
+const response = await authClient.isUsernameAvailable({
+    username: "new-username"
+});
+
+if(response.data?.available) {
+    console.log("Username is available");
+} else {
+    console.log("Username is not available");
+}
+```
+
+
 ## Schema
 
 The plugin requires 1 field to be added to the user table:
