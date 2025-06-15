@@ -24,15 +24,25 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
+	
+	// Cross-origin cookie configuration
+	const crossOriginConfig = {
+		autoSecure: options.advanced?.crossOriginCookies?.autoSecure ?? true,
+		allowLocalhostUnsecure: options.advanced?.crossOriginCookies?.allowLocalhostUnsecure ?? true,
+		...options.advanced?.crossOriginCookies,
+	};
+	
 	const domain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
 			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
 		: undefined;
+	
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled",
 		);
 	}
+	
 	function createCookie(
 		cookieName: string,
 		overrideAttributes: Partial<CookieOptions> = {},
@@ -45,18 +55,52 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		const attributes =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
+		// Build base attributes
+		let baseAttributes: CookieOptions = {
+			secure: !!secureCookiePrefix,
+			sameSite: "lax",
+			path: "/",
+			httpOnly: true,
+			...(crossSubdomainEnabled ? { domain } : {}),
+		};
+
+		// Merge with user-defined attributes
+		const mergedAttributes = {
+			...baseAttributes,
+			...options.advanced?.defaultCookieAttributes,
+			...overrideAttributes,
+			...attributes,
+		};
+
+		// Enforce security constraints for SameSite=None cookies
+		if (mergedAttributes.sameSite === "none") {
+			const isLocalhost = options.baseURL?.startsWith("http://localhost") || 
+				options.baseURL?.startsWith("http://127.0.0.1");
+			
+			// SameSite=None requires Secure=true (except localhost in development)
+			if (!mergedAttributes.secure && !isLocalhost) {
+				if (crossOriginConfig.allowLocalhostUnsecure && isLocalhost) {
+					// Allow unsecure cookies on localhost for development
+				} else {
+					throw new BetterAuthError(
+						"SameSite=None cookies require Secure=true. Set secure: true in your cookie attributes, use HTTPS, or disable crossOriginCookies.autoSecure for development."
+					);
+				}
+			}
+			
+			// Auto-set secure for SameSite=None (except localhost for development)
+			if (crossOriginConfig.autoSecure && !isLocalhost) {
+				mergedAttributes.secure = true;
+			}
+		}
+
+		// Apply secure cookie prefix if secure is enforced
+		const finalSecurePrefix = mergedAttributes.secure ? "__Secure-" : "";
+		const finalName = `${finalSecurePrefix}${name}`;
+
 		return {
-			name: `${secureCookiePrefix}${name}`,
-			attributes: {
-				secure: !!secureCookiePrefix,
-				sameSite: "lax",
-				path: "/",
-				httpOnly: true,
-				...(crossSubdomainEnabled ? { domain } : {}),
-				...options.advanced?.defaultCookieAttributes,
-				...overrideAttributes,
-				...attributes,
-			} as CookieOptions,
+			name: finalName,
+			attributes: mergedAttributes as CookieOptions,
 		};
 	}
 	return createCookie;
