@@ -18,14 +18,8 @@ describe("organization", async (it) => {
 					membershipLimit: 6,
 					async sendInvitationEmail(data, request) {},
 					schema: {
-						organization: {
+						team: {
 							modelName: "team",
-						},
-						member: {
-							modelName: "teamMembers",
-							fields: {
-								userId: "user_id",
-							},
 						},
 					},
 					invitationLimit: 3,
