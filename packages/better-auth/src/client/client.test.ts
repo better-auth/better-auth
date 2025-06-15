@@ -84,8 +84,7 @@ describe("run time proxy", async () => {
 		returnNull = true;
 		await client.test2.signOut();
 		await vi.advanceTimersByTimeAsync(10);
-		const result = res()	
-		expect(result).toMatchObject({
+		expect(res()).toMatchObject({
 			data: null,
 			error: null,
 			isPending: false,
