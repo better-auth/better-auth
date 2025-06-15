@@ -151,6 +151,22 @@ export interface OrganizationOptions {
 					request?: Request,
 			  ) => number | Promise<number>)
 			| number;
+
+		/**
+		 * The maximum number of members per team.
+		 *
+		 * if `undefined`, there is no limit.
+		 *
+		 * @default undefined
+		 */
+		maximumMembersPerTeam?:
+			| number
+			| ((data: {
+					teamId: string;
+					session: { user: User; session: Session };
+					organizationId: string;
+			  }) => Promise<number> | number)
+			| undefined;
 		/**
 		 * By default, if an organization does only have one team, they'll not be able to remove it.
 		 *
@@ -566,7 +582,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					}
 					const result = hasPermission({
 						role: member.role,
-						options: options as OrganizationOptions,
+						options: options || {},
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({

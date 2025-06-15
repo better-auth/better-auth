@@ -11,13 +11,27 @@ function redirectErrorURL(url: string, error: string, description: string) {
 }
 
 function getDefaultOrCustomErrorURL(ctx: GenericEndpointContext) {
-	return ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
+	return (
+		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`
+	);
 }
 
 export async function authorize(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,
 ) {
+	const handleRedirect = (url: string) => {
+		const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
+		if (fromFetch) {
+			return ctx.json({
+				redirect: true,
+				url,
+			});
+		} else {
+			throw ctx.redirect(url);
+		}
+	};
+
 	const opts = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
@@ -53,7 +67,7 @@ export async function authorize(
 			},
 		);
 		const queryFromURL = ctx.request.url?.split("?")[1];
-		throw ctx.redirect(`${options.loginPage}?${queryFromURL}`);
+		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
 	}
 
 	const query = ctx.query as AuthorizationQuery;
@@ -116,9 +130,7 @@ export async function authorize(
 
 	if (query.response_type !== "code") {
 		const errorURL = getDefaultOrCustomErrorURL(ctx);
-		throw ctx.redirect(
-			`${errorURL}?error=unsupported_response_type`,
-		);
+		throw ctx.redirect(`${errorURL}?error=unsupported_response_type`);
 	}
 
 	const requestScope =
@@ -130,7 +142,7 @@ export async function authorize(
 		return isInvalid;
 	});
 	if (invalidScopes.length) {
-		throw ctx.redirect(
+		return handleRedirect(
 			redirectErrorURL(
 				query.redirect_uri,
 				"invalid_scope",
@@ -143,7 +155,7 @@ export async function authorize(
 		(!query.code_challenge || !query.code_challenge_method) &&
 		options.requirePKCE
 	) {
-		throw ctx.redirect(
+		return handleRedirect(
 			redirectErrorURL(
 				query.redirect_uri,
 				"invalid_request",
@@ -162,7 +174,7 @@ export async function authorize(
 			options.allowPlainCodeChallengeMethod ? "plain" : "s256",
 		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
-		throw ctx.redirect(
+		return handleRedirect(
 			redirectErrorURL(
 				query.redirect_uri,
 				"invalid_request",
@@ -193,7 +205,7 @@ export async function authorize(
 					 * This means the code now needs to be treated as a
 					 * consent request.
 					 *
-					 * once the user consents, teh code will be updated
+					 * once the user consents, the code will be updated
 					 * with the actual code. This is to prevent the
 					 * client from using the code before the user
 					 * consents.
@@ -210,7 +222,7 @@ export async function authorize(
 			ctx,
 		);
 	} catch (e) {
-		throw ctx.redirect(
+		return handleRedirect(
 			redirectErrorURL(
 				query.redirect_uri,
 				"server_error",
@@ -224,7 +236,7 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
-		throw ctx.redirect(redirectURIWithCode.toString());
+		return handleRedirect(redirectURIWithCode.toString());
 	}
 
 	const hasAlreadyConsented = await ctx.context.adapter
@@ -246,7 +258,7 @@ export async function authorize(
 		.then((res) => !!res?.consentGiven);
 
 	if (hasAlreadyConsented) {
-		throw ctx.redirect(redirectURIWithCode.toString());
+		return handleRedirect(redirectURIWithCode.toString());
 	}
 
 	if (options?.consentPage) {
@@ -255,10 +267,11 @@ export async function authorize(
 			path: "/",
 			sameSite: "lax",
 		});
-		const conceptURI = `${options.consentPage}?client_id=${
+		const consentURI = `${options.consentPage}?client_id=${
 			client.clientId
 		}&scope=${requestScope.join(" ")}`;
-		throw ctx.redirect(conceptURI);
+
+		return handleRedirect(consentURI);
 	}
 	const htmlFn = options?.getConsentHTML;
 

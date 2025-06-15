@@ -507,6 +507,7 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 				(member) => member.userId === session.user.id,
 			);
 			if (!isMember) {
+				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
