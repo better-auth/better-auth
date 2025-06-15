@@ -50,6 +50,70 @@ export const auth = betterAuth({
 })
 ```
 
+### Cross-Domain Cookies
+
+Sometimes you may need to share cookies across different domains (not just subdomains). For example, if your API is hosted at `api.example.com` and your frontend at `app.mydomain.com`, you'll need cross-domain cookies.
+
+Better Auth provides two approaches for this:
+
+#### Option 1: Using crossOriginCookies (Recommended)
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    advanced: {
+        crossOriginCookies: {
+            enabled: true,
+            autoSecure: true, // Automatically set secure=true for SameSite=None
+            allowLocalhostUnsecure: true, // Allow unsecure cookies on localhost for development
+        },
+        defaultCookieAttributes: {
+            sameSite: "none", // Required for cross-domain cookies
+            // secure: true is automatically set when autoSecure: true
+            partitioned: true, // Recommended for modern browsers
+        },
+    },
+    trustedOrigins: [
+        'https://app.mydomain.com',
+        'https://admin.mydomain.com',
+        // Add all your frontend domains
+    ],
+})
+```
+
+#### Option 2: Manual Configuration
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    advanced: {
+        defaultCookieAttributes: {
+            secure: true,
+            httpOnly: true,
+            sameSite: "none",  // Allows cross-domain cookie sharing
+            partitioned: true, // New browser standards will mandate this for foreign cookies
+        },
+    },
+    trustedOrigins: [
+        'https://app.mydomain.com',
+        'https://admin.mydomain.com',
+    ],
+})
+```
+
+<Callout type="warn">
+**Important Requirements for Cross-Domain Cookies:**
+- `SameSite=None` cookies **must** have `Secure=true` (except on localhost for development)
+- Your API must be served over HTTPS (except localhost)
+- You must configure CORS on your backend with `credentials: true`
+- Your frontend must use `credentials: 'include'` in fetch requests
+- All frontend domains must be added to `trustedOrigins`
+</Callout>
+
+<Callout type="warn">Setting your `sameSite` cookie attribute to `none` makes you vulnerable to CSRF attacks. To mitigate risks, configure `trustedOrigins` with an array of authorized origins to allow.</Callout>
+
 ### Cross Subdomain Cookies
 
 Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `example.com`, and if you authenticate on `example.com`, you may want to access the same session on `app.example.com`.
@@ -74,8 +138,7 @@ export const auth = betterAuth({
         defaultCookieAttributes: {
             secure: true,
             httpOnly: true,
-            sameSite: "none",  // Allows CORS-based cookie sharing across subdomains
-            partitioned: true, // New browser standards will mandate this for foreign cookies
+            sameSite: "lax",  // Lax is safe for subdomains
         },
     },
     trustedOrigins: [
@@ -85,8 +148,6 @@ export const auth = betterAuth({
     ],
 })
 ```
-
-<Callout type="warn">Setting your `sameSite` cookie attribute to `none` makes you vulnerable to CSRF attacks. To mitigate risks, configure `trustedOrigins` with an array of authorized origins to allow.</Callout>
 
 ### Secure Cookies
 
