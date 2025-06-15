@@ -253,6 +253,7 @@ export const changePassword = createAuthEndpoint(
 		const verify = await ctx.context.password.verify({
 			hash: account.password,
 			password: currentPassword,
+			account
 		});
 		if (!verify) {
 			throw new APIError("BAD_REQUEST", {
@@ -440,6 +441,7 @@ export const deleteUser = createAuthEndpoint(
 			const verify = await ctx.context.password.verify({
 				hash: account.password,
 				password: ctx.body.password,
+				account
 			});
 			if (!verify) {
 				throw new APIError("BAD_REQUEST", {
