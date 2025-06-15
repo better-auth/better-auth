@@ -532,64 +532,31 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
-			const account = await adapter.findOne<Account>({
-				model: "account",
+			const user = await adapter.findOne<User>({
+				model: "user",
 				where: [
 					{
-						value: accountId,
-						field: "accountId",
-					},
-					{
-						value: providerId,
-						field: "providerId",
+						value: email.toLowerCase(),
+						field: "email",
 					},
 				],
 			});
-			if (account) {
-				const user = await adapter.findOne<User>({
-					model: "user",
+			if (user) {
+				const accounts = await adapter.findMany<Account>({
+					model: "account",
 					where: [
 						{
-							value: account.userId,
-							field: "id",
+							value: user.id,
+							field: "userId",
 						},
 					],
 				});
-				if (user) {
-					return {
-						user,
-						accounts: [account],
-					};
-				} else {
-					return null;
-				}
+				return {
+					user,
+					accounts: accounts || [],
+				};
 			} else {
-				const user = await adapter.findOne<User>({
-					model: "user",
-					where: [
-						{
-							value: email.toLowerCase(),
-							field: "email",
-						},
-					],
-				});
-				if (user) {
-					const accounts = await adapter.findMany<Account>({
-						model: "account",
-						where: [
-							{
-								value: user.id,
-								field: "userId",
-							},
-						],
-					});
-					return {
-						user,
-						accounts: accounts || [],
-					};
-				} else {
-					return null;
-				}
+				return null;
 			}
 		},
 		findUserByEmail: async (

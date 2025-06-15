@@ -40,7 +40,9 @@ export async function handleOAuthUserInfo(
 
 	if (dbUser) {
 		const hasBeenLinked = dbUser.accounts.find(
-			(a) => a.providerId === account.providerId,
+			(a) =>
+				a.providerId === account.providerId &&
+				a.accountId === account.accountId,
 		);
 		if (!hasBeenLinked) {
 			const trustedProviders =
