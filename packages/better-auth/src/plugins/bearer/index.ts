@@ -104,21 +104,7 @@ export const bearer = (options?: BearerOptions) => {
 						}
 						const token = sessionCookie.value;
 						ctx.setHeader("set-auth-token", token);
-						const exposedHeaders =
-							ctx.context.responseHeaders?.get(
-								"access-control-expose-headers",
-							) || "";
-						const headersSet = new Set(
-							exposedHeaders
-								.split(",")
-								.map((header) => header.trim())
-								.filter(Boolean),
-						);
-						headersSet.add("set-auth-token");
-						ctx.setHeader(
-							"Access-Control-Expose-Headers",
-							Array.from(headersSet).join(", "),
-						);
+						ctx.setHeader("Access-Control-Expose-Headers", "set-auth-token");
 					}),
 				},
 			],
