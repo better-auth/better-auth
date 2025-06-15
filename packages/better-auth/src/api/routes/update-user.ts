@@ -512,7 +512,7 @@ export const deleteUser = createAuthEndpoint(
 			const currentAge = session.session.createdAt.getTime();
 			const freshAge = ctx.context.options.session.freshAge;
 			const now = Date.now();
-			if (now - currentAge > freshAge) {
+			if (now - currentAge > freshAge * 1000) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.SESSION_EXPIRED,
 				});
