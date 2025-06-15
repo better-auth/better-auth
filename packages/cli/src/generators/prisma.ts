@@ -126,7 +126,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 
-				builder.model(modelName).field(
+				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
 					field === "id" && options.advanced?.database?.useNumberId
 						? getType({
@@ -145,6 +145,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 										: attr.type,
 							}),
 				);
+				if (field === "id") {
+					fieldBuilder.attribute("id");
+					if (provider === "mongodb") {
+						fieldBuilder.attribute(`map("_id")`);
+					}
+				} else if (fieldName !== field) {
+					fieldBuilder.attribute(`map("${field}")`);
+				}
+
 				if (attr.unique) {
 					builder.model(modelName).blockAttribute(`unique([${fieldName}])`);
 				}
@@ -193,16 +202,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 			}
 
-			if (customModelName !== originalTableName) {
-				const hasAttribute = builder.findByType("attribute", {
-					name: "map",
-					within: prismaModel?.properties,
-				});
-				if (!hasAttribute) {
-					builder
-						.model(modelName)
-						.blockAttribute("map", `${originalTableName}`);
-				}
+			const hasAttribute = builder.findByType("attribute", {
+				name: "map",
+				within: prismaModel?.properties,
+			});
+			const hasChanged = customModelName !== originalTableName;
+			if (!hasAttribute) {
+				builder
+					.model(modelName)
+					.blockAttribute("map", `${hasChanged ? customModelName : originalTableName}`);
 			}
 		}
 	});

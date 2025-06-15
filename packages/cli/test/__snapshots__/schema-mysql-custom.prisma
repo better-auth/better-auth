@@ -1,0 +1,127 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String                @id
+  name                 String                @db.Text
+  email                String
+  emailVerified        Boolean
+  image                String?               @db.Text
+  createdAt            DateTime
+  updatedAt            DateTime
+  twoFactorEnabled     Boolean?
+  username             String?
+  displayUsername      String?               @db.Text
+  sessions             Session[]
+  accounts             Account[]
+  twofactors           TwoFactor[]
+  members              Member[]
+  workspaceinvitations WorkspaceInvitation[]
+
+  @@unique([email])
+  @@unique([username])
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime
+  updatedAt            DateTime
+  ipAddress            String?  @db.Text
+  userAgent            String?  @db.Text
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?  @db.Text
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String    @db.Text
+  providerId            String    @db.Text
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?   @db.Text
+  password              String?   @db.Text
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String    @db.Text
+  value      String    @db.Text
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+model TwoFactor {
+  id          String @id
+  secret      String @db.Text
+  backupCodes String @db.Text
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("twoFactor")
+}
+
+model Workspace {
+  id                   String                @id
+  name                 String                @db.Text
+  slug                 String?
+  logo                 String?               @db.Text
+  createdAt            DateTime
+  metadata             String?               @db.Text
+  members              Member[]
+  workspaceinvitations WorkspaceInvitation[]
+
+  @@unique([slug])
+  @@map("workspace")
+}
+
+model Member {
+  id             String    @id
+  organizationId String
+  workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String    @db.Text
+  createdAt      DateTime
+
+  @@map("member")
+}
+
+model WorkspaceInvitation {
+  id             String    @id
+  organizationId String
+  workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String    @db.Text
+  role           String?   @db.Text
+  status         String    @db.Text
+  expiresAt      DateTime
+  inviterId      String
+  user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@map("workspaceInvitation")
+}
