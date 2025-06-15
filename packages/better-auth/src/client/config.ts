@@ -14,18 +14,6 @@ export const getClientConfig = (options?: ClientOptions) => {
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
 			.filter((pl) => pl !== undefined) || [];
-	const lifeCyclePlugin = {
-		id: "lifecycle-hooks",
-		name: "lifecycle-hooks",
-		hooks: {
-			onSuccess: options?.fetchOptions?.onSuccess,
-			onError: options?.fetchOptions?.onError,
-			onRequest: options?.fetchOptions?.onRequest,
-			onResponse: options?.fetchOptions?.onResponse,
-		},
-	};
-	const { onSuccess, onError, onRequest, onResponse, ...restOfFetchOptions } =
-		options?.fetchOptions || {};
 	const $fetch = createFetch({
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
@@ -45,10 +33,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 				return Response.error();
 			}
 		},
-		...restOfFetchOptions,
+		...options?.fetchOptions,
 		plugins: [
-			lifeCyclePlugin,
-			...(restOfFetchOptions.plugins || []),
+			...(options?.fetchOptions?.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
 			...pluginsFetchPlugins,
 		],
