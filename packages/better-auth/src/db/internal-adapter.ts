@@ -532,31 +532,80 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
-			const user = await adapter.findOne<User>({
-				model: "user",
-				where: [
-					{
-						value: email.toLowerCase(),
-						field: "email",
-					},
-				],
-			});
-			if (user) {
-				const accounts = await adapter.findMany<Account>({
+			// we need to find account first to avoid missing user if the email changed with the provider for the same account
+			const account = await adapter
+				.findMany<Account>({
 					model: "account",
 					where: [
 						{
-							value: user.id,
-							field: "userId",
+							value: accountId,
+							field: "accountId",
+						},
+					],
+				})
+				.then((accounts) => {
+					return accounts.find((a) => a.providerId === providerId);
+				});
+			if (account) {
+				const user = await adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							value: account.userId,
+							field: "id",
 						},
 					],
 				});
-				return {
-					user,
-					accounts: accounts || [],
-				};
+				if (user) {
+					return {
+						user,
+						accounts: [account],
+					};
+				} else {
+					const user = await adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								value: email.toLowerCase(),
+								field: "email",
+							},
+						],
+					});
+					if (user) {
+						return {
+							user,
+							accounts: [account],
+						};
+					}
+					return null;
+				}
 			} else {
-				return null;
+				const user = await adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							value: email.toLowerCase(),
+							field: "email",
+						},
+					],
+				});
+				if (user) {
+					const accounts = await adapter.findMany<Account>({
+						model: "account",
+						where: [
+							{
+								value: user.id,
+								field: "userId",
+							},
+						],
+					});
+					return {
+						user,
+						accounts: accounts || [],
+					};
+				} else {
+					return null;
+				}
 			}
 		},
 		findUserByEmail: async (
