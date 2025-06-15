@@ -103,7 +103,6 @@ export const bearer = (options?: BearerOptions) => {
 							return;
 						}
 						const token = sessionCookie.value;
-						ctx.setHeader("set-auth-token", token);
 						const exposedHeaders =
 							ctx.context.responseHeaders?.get(
 								"access-control-expose-headers",
@@ -115,6 +114,7 @@ export const bearer = (options?: BearerOptions) => {
 								.filter(Boolean),
 						);
 						headersSet.add("set-auth-token");
+						ctx.setHeader("set-auth-token", token);
 						ctx.setHeader(
 							"Access-Control-Expose-Headers",
 							Array.from(headersSet).join(", "),
