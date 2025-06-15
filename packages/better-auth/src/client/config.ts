@@ -34,11 +34,13 @@ export const getClientConfig = (options?: ClientOptions) => {
 			}
 		},
 		...options?.fetchOptions,
-		plugins: [
-			...(options?.fetchOptions?.plugins || []),
-			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
-			...pluginsFetchPlugins,
-		],
+		plugins: options?.disableDefaultFetchPlugins
+			? [...(options?.fetchOptions?.plugins || []), ...pluginsFetchPlugins]
+			: [
+					redirectPlugin,
+					...(options?.fetchOptions?.plugins || []),
+					...pluginsFetchPlugins,
+				],
 	});
 	const { $sessionSignal, session } = getSessionAtom($fetch);
 	const plugins = options?.plugins || [];
