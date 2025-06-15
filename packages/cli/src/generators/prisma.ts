@@ -210,7 +210,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			if (!hasAttribute) {
 				builder
 					.model(modelName)
-					.blockAttribute("map", `${hasChanged ? customModelName : originalTableName}`);
+					.blockAttribute(
+						"map",
+						`${hasChanged ? customModelName : originalTableName}`,
+					);
 			}
 		}
 	});

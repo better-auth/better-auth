@@ -100,10 +100,7 @@ describe("generate", async () => {
 						provider: "mongodb",
 					},
 				),
-				plugins: [
-					twoFactor(),
-					username(),
-				],
+				plugins: [twoFactor(), username()],
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
@@ -133,12 +130,12 @@ describe("generate", async () => {
 					organization({
 						schema: {
 							organization: {
-								modelName: 'workspace',
+								modelName: "workspace",
 							},
 							invitation: {
-								modelName: 'workspaceInvitation'
-							}
-						}
+								modelName: "workspaceInvitation",
+							},
+						},
 					}),
 				],
 			},
@@ -146,7 +143,7 @@ describe("generate", async () => {
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mysql-custom.prisma",
 		);
-	});								
+	});
 
 	it("should generate drizzle schema", async () => {
 		const schema = await generateDrizzleSchema({
