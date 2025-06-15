@@ -1,0 +1,46 @@
+---
+title: Redis Adapter
+description: Integrate Better Auth with Redis.
+---
+
+Redis is an open-source, in-memory data structure store that can be used as a database, cache, message broker, and queue, known for its exceptional speed and versatility.
+
+<Callout type="warn">
+  Key-Value stores like Redis are well-suited for basic authentication scenarios
+  such as email-password authentication. However, when using more complex
+  plugins or features that require sophisticated queries, you may experience
+  slower performance as KV databases aren't optimized for complex data
+  relationships and filtering operations that relational databases excel at.
+</Callout>
+
+## Example Usage
+
+Install the `redis` package.
+
+```package-install
+npm install redis
+```
+
+Then initiate the redis client and pass it to the `redisAdapter` function.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { redisAdapter } from "better-auth/adapters/redis";
+import { createClient } from "redis";
+
+const client = await createClient({ url: process.env.REDIS_URL }).connect();
+
+export const auth = betterAuth({
+  database: redisAdapter(client),
+});
+```
+
+## Schema Generation & Migration
+
+Redis doesn't require schema generation or migration.
+
+## Additional Information
+
+Under the hood, the Redis adapter utilizes hashes to store all data. ([Read more here](https://redis.io/docs/latest/develop/data-types/hashes/))
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
