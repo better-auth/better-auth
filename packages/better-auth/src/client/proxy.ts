@@ -88,8 +88,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 							id: "global-on-success",
 							name: "global-on-success",
 							hooks: {
-								async onSuccess(context) {
-									await options?.onSuccess?.(context);
+								async onSuccess() {
 									/**
 									 * We trigger listeners
 									 */
