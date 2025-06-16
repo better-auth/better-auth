@@ -4,7 +4,6 @@ import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
