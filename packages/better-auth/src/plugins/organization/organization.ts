@@ -493,6 +493,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					body: z
 						.object({
 							organizationId: z.string().optional(),
+							returnMissingPermissions: z.boolean().optional(),
 						})
 						.and(
 							z.union([
@@ -511,6 +512,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						$Infer: {
 							body: {} as PermissionExclusive & {
 								organizationId?: string;
+								returnMissingPermissions?: boolean;
 							},
 						},
 						openapi: {
@@ -529,6 +531,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 												permissions: {
 													type: "object",
 													description: "The permission to check",
+												},
+												returnMissingPermissions: {
+													type: "boolean",
+													description: "Whether to return missing permissions",
 												},
 											},
 											required: ["permissions"],
@@ -549,6 +555,9 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 													},
 													success: {
 														type: "boolean",
+													},
+													missingPermissions: {
+														type: ["object", "null"],
 													},
 												},
 												required: ["success"],
@@ -584,11 +593,21 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						role: member.role,
 						options: options || {},
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+						returnMissingPermissions: ctx.body.returnMissingPermissions,
 					});
-					return ctx.json({
+
+					const baseResponse = {
 						error: null,
-						success: result,
-					});
+						success: typeof result === "boolean" ? result : result.success,
+					};
+					const ctxRes = {
+						...baseResponse,
+						...(typeof result === "object" && {
+							missingPermissions: result.missingPermissions,
+						}),
+					};
+
+					return ctx.json(ctxRes);
 				},
 			),
 		},
