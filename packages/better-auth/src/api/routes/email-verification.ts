@@ -5,13 +5,13 @@ import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
-import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
-import { JWTExpired } from "jose/errors";
+import { generateId } from "../../utils";
+import type { InternalAdapter } from "../../db/internal-adapter";
+import { getDate } from "../../utils/date";
 
 export async function createEmailVerificationToken(
-	secret: string,
+	adapter: InternalAdapter,
 	email: string,
 	/**
 	 * The email to update from
@@ -22,14 +22,15 @@ export async function createEmailVerificationToken(
 	 */
 	expiresIn: number = 3600,
 ) {
-	const token = await signJWT(
-		{
-			email: email.toLowerCase(),
-			updateTo,
-		},
-		secret,
-		expiresIn,
-	);
+	const token = generateId(32);
+	const identifier = updateTo
+		? `email-change:${email}:${updateTo}`
+		: `email-verification:${email}`;
+	await adapter.createVerificationValue({
+		identifier,
+		value: token,
+		expiresAt: getDate(expiresIn, "sec"),
+	});
 	return token;
 }
 
@@ -47,7 +48,7 @@ export async function sendVerificationEmailFn(
 		});
 	}
 	const token = await createEmailVerificationToken(
-		ctx.context.secret,
+		ctx.context.internalAdapter,
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
@@ -304,33 +305,26 @@ export const verifyEmail = createAuthEndpoint(
 			});
 		}
 		const { token } = ctx.query;
-		let jwt: JWTVerifyResult<JWTPayload>;
-		try {
-			jwt = await jwtVerify(
-				token,
-				new TextEncoder().encode(ctx.context.secret),
-				{
-					algorithms: ["HS256"],
-				},
-			);
-		} catch (e) {
-			if (e instanceof JWTExpired) {
-				return redirectOnError("token_expired");
-			}
+
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValueByToken(token);
+        console.log("The verification is: " , verification)
+		if (!verification) {
 			return redirectOnError("invalid_token");
 		}
-		const schema = z.object({
-			email: z.string().email(),
-			updateTo: z.string().optional(),
-		});
-		const parsed = schema.parse(jwt.payload);
-		const user = await ctx.context.internalAdapter.findUserByEmail(
-			parsed.email,
-		);
-		if (!user) {
-			return redirectOnError("user_not_found");
+
+		if (verification.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.deleteVerificationByToken(token);
+			return redirectOnError("token_expired");
 		}
-		if (parsed.updateTo) {
+
+		await ctx.context.internalAdapter.deleteVerificationByToken(token);
+
+		const [type, ...rest] = verification.identifier.split(":");
+
+		if (type === "email-change") {
+			const [email, newEmail] = rest;
+			console.log("The email is: " , email)
 			const session = await getSessionFromCtx(ctx);
 			if (!session) {
 				if (ctx.query.callbackURL) {
@@ -338,7 +332,7 @@ export const verifyEmail = createAuthEndpoint(
 				}
 				return redirectOnError("unauthorized");
 			}
-			if (session.user.email !== parsed.email) {
+			if (session.user.email !== email) {
 				if (ctx.query.callbackURL) {
 					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
 				}
@@ -346,17 +340,17 @@ export const verifyEmail = createAuthEndpoint(
 			}
 
 			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
-				parsed.email,
+				email,
 				{
-					email: parsed.updateTo,
+					email: newEmail,
 					emailVerified: false,
 				},
 				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
-				ctx.context.secret,
-				parsed.updateTo,
+				ctx.context.internalAdapter,
+				newEmail,
 			);
 
 			//send verification email to the new email
@@ -377,7 +371,7 @@ export const verifyEmail = createAuthEndpoint(
 				session: session.session,
 				user: {
 					...session.user,
-					email: parsed.updateTo,
+					email: newEmail,
 					emailVerified: false,
 				},
 			});
@@ -398,20 +392,28 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
+
+		const [email] = rest;
+		const user = await ctx.context.internalAdapter.findUserByEmail(email);
+
+		if (!user) {
+			return redirectOnError("user_not_found");
+		}
+
 		await ctx.context.options.emailVerification?.onEmailVerification?.(
 			user.user,
 			ctx.request,
 		);
 		await ctx.context.internalAdapter.updateUserByEmail(
-			parsed.email,
+			email,
 			{
 				emailVerified: true,
 			},
 			ctx,
 		);
+		const currentSession = await getSessionFromCtx(ctx);
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
-			const currentSession = await getSessionFromCtx(ctx);
-			if (!currentSession || currentSession.user.email !== parsed.email) {
+			if (!currentSession || currentSession.user.email !== email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
 					ctx,

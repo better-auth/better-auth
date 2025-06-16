@@ -20,7 +20,8 @@ describe("updateUser", async () => {
 						url,
 						token,
 					}) => {
-						sendChangeEmail(user, newEmail, url, token);
+						console.log("Token found here on callback: " , token) 	
+						await sendChangeEmail(user, newEmail, url, token);
 					},
 				},
 			},

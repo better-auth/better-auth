@@ -103,6 +103,87 @@ export const createInternalAdapter = (
 			);
 			return createdAccount as T & Account;
 		},
+		createVerificationValue: async (
+			data: Omit<Verification, "id" | "createdAt" | "updatedAt">,
+			context?: GenericEndpointContext,
+		) => {
+			const verificationValue = await createWithHooks(
+				{
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...data,
+				},
+				"verification",
+				undefined,
+				context,
+			);
+			return verificationValue;
+		},
+		findVerificationValue: async (identifier: string) => {
+			const verificationValue = await adapter.findOne<Verification>({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
+					},
+				],
+			});
+			return verificationValue;
+		},
+		findVerificationValueByToken: async (token: string) => {
+			const verificationValue = await adapter.findOne<Verification>({
+				model: "verification",
+				where: [
+					{
+						field: "value",
+						value: token,
+					},
+				],
+			});
+			return verificationValue;
+		},
+		deleteVerificationByIdentifier: async (identifier: string) => {
+			await adapter.delete({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
+					},
+				],
+			});
+		},
+		deleteVerificationByToken: async (token: string) => {
+			await adapter.delete({
+				model: "verification",
+				where: [
+					{
+						field: "value",
+						value: token,
+					},
+				],
+			});
+		},
+		updateVerificationValue: async (
+			id: string,
+			data: Partial<Omit<Verification, "id">>,
+		) => {
+			const verificationValue = await adapter.update<Verification>({
+				model: "verification",
+				where: [
+					{
+						field: "id",
+						value: id,
+					},
+				],
+				update: {
+					...data,
+					updatedAt: new Date(),
+				},
+			});
+			return verificationValue;
+		},
 		listSessions: async (userId: string) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
@@ -834,53 +915,6 @@ export const createInternalAdapter = (
 			);
 			return account;
 		},
-		createVerificationValue: async (
-			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
-				Partial<Verification>,
-			context?: GenericEndpointContext,
-		) => {
-			const verification = await createWithHooks(
-				{
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					...data,
-				},
-				"verification",
-				undefined,
-				context,
-			);
-			return verification as Verification;
-		},
-		findVerificationValue: async (identifier: string) => {
-			const verification = await adapter.findMany<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-				sortBy: {
-					field: "createdAt",
-					direction: "desc",
-				},
-				limit: 1,
-			});
-			if (!options.verification?.disableCleanup) {
-				await adapter.deleteMany({
-					model: "verification",
-					where: [
-						{
-							field: "expiresAt",
-							value: new Date(),
-							operator: "lt",
-						},
-					],
-				});
-			}
-			const lastVerification = verification[0];
-			return lastVerification as Verification | null;
-		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({
 				model: "verification",
@@ -891,31 +925,6 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-		},
-		deleteVerificationByIdentifier: async (identifier: string) => {
-			await adapter.delete<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-			});
-		},
-		updateVerificationValue: async (
-			id: string,
-			data: Partial<Verification>,
-			context?: GenericEndpointContext,
-		) => {
-			const verification = await updateWithHooks<Verification>(
-				data,
-				[{ field: "id", value: id }],
-				"verification",
-				undefined,
-				context,
-			);
-			return verification;
 		},
 	};
 };
