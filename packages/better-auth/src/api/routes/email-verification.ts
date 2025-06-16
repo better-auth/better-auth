@@ -308,7 +308,6 @@ export const verifyEmail = createAuthEndpoint(
 
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValueByToken(token);
-        console.log("The verification is: " , verification)
 		if (!verification) {
 			return redirectOnError("invalid_token");
 		}
@@ -324,7 +323,6 @@ export const verifyEmail = createAuthEndpoint(
 
 		if (type === "email-change") {
 			const [email, newEmail] = rest;
-			console.log("The email is: " , email)
 			const session = await getSessionFromCtx(ctx);
 			if (!session) {
 				if (ctx.query.callbackURL) {
@@ -347,12 +345,11 @@ export const verifyEmail = createAuthEndpoint(
 				},
 				ctx,
 			);
-
 			const newToken = await createEmailVerificationToken(
 				ctx.context.internalAdapter,
 				newEmail,
 			);
-
+			
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{

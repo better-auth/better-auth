@@ -4,6 +4,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
+	let emailChangeToken = "";
 	const { client, testUser, sessionSetter, db, customFetchImpl } =
 		await getTestInstance({
 			emailVerification: {
@@ -20,7 +21,7 @@ describe("updateUser", async () => {
 						url,
 						token,
 					}) => {
-						console.log("Token found here on callback: " , token) 	
+						emailChangeToken = token;
 						await sendChangeEmail(user, newEmail, url, token);
 					},
 				},
@@ -100,6 +101,7 @@ describe("updateUser", async () => {
 			},
 			fetchOptions: {
 				headers,
+				onSuccess: sessionSetter(headers),
 			},
 		});
 		const session = await client.getSession({
@@ -140,8 +142,36 @@ describe("updateUser", async () => {
 		);
 	});
 
+	it("should complete email change for a verified user after verification", async () => {
+		expect(emailChangeToken).toBeDefined();
+		expect(emailChangeToken.length).toBe(32);
+
+		const verifyRes = await client.verifyEmail({
+			query: {
+				token: emailChangeToken,
+			},
+			fetchOptions: {
+				headers,
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(session?.user.email).toBe("new-email-2@email.com");
+		expect(session?.user.emailVerified).toBe(false);
+		expect(emailVerificationToken).toBeDefined();
+		expect(emailVerificationToken.length).toBe(32);
+		expect(emailVerificationToken).not.toBe(emailChangeToken);
+	});
+
 	it("should update the user's password", async () => {
-		const newEmail = "new-email@email.com";
+		const newEmail = "new-email-2@email.com";
 		const updated = await client.changePassword({
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
@@ -167,7 +197,7 @@ describe("updateUser", async () => {
 		const newHeaders = new Headers();
 		await client.signUp.email({
 			name: "name",
-			email: "new-email-2@email.com",
+			email: "new-email2@email.com",
 			password: "password",
 			fetchOptions: {
 				onSuccess: sessionSetter(newHeaders),
@@ -182,7 +212,7 @@ describe("updateUser", async () => {
 		});
 		expect(res.data).toBeNull();
 		const signInAttempt = await client.signIn.email({
-			email: "new-email-2@email.com",
+			email: "new-email2@email.com",
 			password: "newPassword",
 		});
 		expect(signInAttempt.data).toBeNull();
