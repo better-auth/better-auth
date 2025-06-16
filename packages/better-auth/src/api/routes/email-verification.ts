@@ -304,10 +304,10 @@ export const verifyEmail = createAuthEndpoint(
 			});
 		}
 		const { token } = ctx.query;
-		console.log("The token is: " , token)
+		console.log("The token is: ", token);
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValueByToken(token);
-			if (!verification) {
+		if (!verification) {
 			return redirectOnError("invalid_token");
 		}
 
@@ -348,7 +348,7 @@ export const verifyEmail = createAuthEndpoint(
 				ctx.context.internalAdapter,
 				newEmail,
 			);
-			console.log("The new token is: " , newToken)
+			console.log("The new token is: ", newToken);
 
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
