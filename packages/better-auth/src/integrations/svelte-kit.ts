@@ -67,13 +67,11 @@ export const sveltekitCookies = () => {
 						if (returned instanceof Headers) {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
-
 							// @ts-expect-error
 							const { getRequestEvent } = await import("$app/server");
 							const event = getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
-
 							for (const [name, { value, ...ops }] of parsed) {
 								event.cookies.set(name, value, {
 									sameSite: ops.samesite,
