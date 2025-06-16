@@ -4,7 +4,6 @@ import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
 import { generateId } from "../../utils";
 import type { InternalAdapter } from "../../db/internal-adapter";
@@ -349,7 +348,7 @@ export const verifyEmail = createAuthEndpoint(
 				ctx.context.internalAdapter,
 				newEmail,
 			);
-			
+
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{

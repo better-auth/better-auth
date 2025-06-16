@@ -28,7 +28,6 @@ import { useAtom } from "jotai";
 import { optionsAtom } from "./store";
 import { useTheme } from "next-themes";
 import { ScrollArea } from "../ui/scroll-area";
-import styles from "./builder.module.css";
 const frameworks = [
 	{
 		title: "Next.js",
