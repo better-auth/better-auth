@@ -392,6 +392,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 						ctx,
 					);
+					await ctx.context.options.emailVerification?.onEmailVerification?.(
+						updatedUser,
+						ctx.request,
+					);
 
 					if (
 						ctx.context.options.emailVerification?.autoSignInAfterVerification
