@@ -186,21 +186,16 @@ export const createInternalAdapter = (
 		updateVerificationValue: async (
 			id: string,
 			data: Partial<Omit<Verification, "id">>,
+			context?: GenericEndpointContext,
 		) => {
-			const verificationValue = await adapter.update<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "id",
-						value: id,
-					},
-				],
-				update: {
-					...data,
-					updatedAt: new Date(),
-				},
-			});
-			return verificationValue;
+			const verification = await updateWithHooks<Verification>(
+				data,
+				[{ field: "id", value: id }],
+				"verification",
+				undefined,
+				context,
+			);
+			return verification;
 		},
 		listSessions: async (userId: string) => {
 			if (secondaryStorage) {
