@@ -63,7 +63,9 @@ export const sveltekitCookies = () => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.responseHeaders;
-
+						if ('_flag' in ctx && ctx._flag === 'router') {
+							return;
+						}
 						if (returned instanceof Headers) {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
