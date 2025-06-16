@@ -78,7 +78,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				options.baseURL?.startsWith("http://127.0.0.1");
 			
 			// SameSite=None requires Secure=true (except localhost in development)
-			if (!mergedAttributes.secure && !isLocalhost) {
+			if (!mergedAttributes.secure) {
 				if (crossOriginConfig.allowLocalhostUnsecure && isLocalhost) {
 					// Allow unsecure cookies on localhost for development
 				} else {
