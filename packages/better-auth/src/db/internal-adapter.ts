@@ -120,7 +120,7 @@ export const createInternalAdapter = (
 			return verificationValue;
 		},
 		findVerificationValue: async (identifier: string) => {
-			const verificationValue = await adapter.findOne<Verification>({
+			const verification = await adapter.findMany<Verification>({
 				model: "verification",
 				where: [
 					{
@@ -128,8 +128,26 @@ export const createInternalAdapter = (
 						value: identifier,
 					},
 				],
+				sortBy: {
+					field: "createdAt",
+					direction: "desc",
+				},
+				limit: 1,
 			});
-			return verificationValue;
+			if (!options.verification?.disableCleanup) {
+				await adapter.deleteMany({
+					model: "verification",
+					where: [
+						{
+							field: "expiresAt",
+							value: new Date(),
+							operator: "lt",
+						},
+					],
+				});
+			}
+			const lastVerification = verification[0];
+			return lastVerification as Verification | null;
 		},
 		findVerificationValueByToken: async (token: string) => {
 			const verificationValue = await adapter.findOne<Verification>({
@@ -143,17 +161,6 @@ export const createInternalAdapter = (
 			});
 			return verificationValue;
 		},
-		deleteVerificationByIdentifier: async (identifier: string) => {
-			await adapter.delete({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-			});
-		},
 		deleteVerificationByToken: async (token: string) => {
 			await adapter.delete({
 				model: "verification",
@@ -161,6 +168,17 @@ export const createInternalAdapter = (
 					{
 						field: "value",
 						value: token,
+					},
+				],
+			});
+		},
+		deleteVerificationByIdentifier: async (identifier: string) => {
+			await adapter.delete<Verification>({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
 					},
 				],
 			});
