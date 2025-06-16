@@ -62,6 +62,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				| "number"
 				| "boolean"
 				| "date"
+				| "decimal"
 				| `${"string" | "number"}[]`;
 
 			const typeMap: Record<
@@ -109,6 +110,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					sqlite: `text('${name}').array()`,
 					pg: `text('${name}').array()`,
 					mysql: `text('${name}').array()`,
+				},
+				decimal: {
+					sqlite: `real('${name}')`,
+					pg: `numeric('${name}', { precision: ${
+						field.precision ?? 18
+					}, scale: ${field.scale ?? 2} })`,
+					mysql: `decimal('${name}', { precision: ${
+						field.precision ?? 18
+					}, scale: ${field.scale ?? 2} })`,
 				},
 			} as const;
 			return typeMap[type][databaseType];
@@ -179,6 +189,9 @@ function generateImport({
 	const hasBigint = Object.values(tables).some((table) =>
 		Object.values(table.fields).some((field) => field.bigint),
 	);
+	const hasDecimal = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.type === "decimal"),
+	);
 
 	imports.push(`${databaseType}Table`);
 	imports.push(
@@ -191,6 +204,15 @@ function generateImport({
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
 	imports.push(databaseType === "mysql" ? "int" : "integer");
+	if (hasDecimal) {
+		imports.push(
+			databaseType === "mysql"
+				? "decimal"
+				: databaseType === "pg"
+					? "numeric"
+					: "real",
+		);
+	}
 
 	return `import { ${imports
 		.map((x) => x.trim())
