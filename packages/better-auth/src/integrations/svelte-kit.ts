@@ -52,30 +52,30 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 		return false;
 	return true;
 }
-export const sveltekitCookies = () => {
-	return {
-		id: "svelte-cookies",
-		hooks: {
-			after: [
-				{
-					matcher() {
-						return true;
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.responseHeaders;
-						if ("_flag" in ctx && ctx._flag === "router") {
-							return;
-						}
-						if (returned instanceof Headers) {
-							const setCookies = returned?.get("set-cookie");
-							if (!setCookies) return;
-							// @ts-expect-error
-							const { getRequestEvent } = await import("$app/server");
-							const event = getRequestEvent();
-							if (!event) return;
-							const parsed = parseSetCookieHeader(setCookies);
-							for (const [name, { value, ...ops }] of parsed) {
-								event.cookies.set(name, value, {
+export const sveltekitCookies = (): BetterAuthPlugin => ({
+	id: "sveltekit-cookies",
+	hooks: {
+		after: [
+			{
+				matcher() {
+					return true;
+				},
+				handler: createAuthMiddleware(async (ctx) => {
+					const returned = ctx.context.responseHeaders;
+					if ("_flag" in ctx && ctx._flag === "router") {
+						return;
+					}
+					if (returned instanceof Headers) {
+						const setCookies = returned?.get("set-cookie");
+						if (!setCookies) return;
+						// @ts-expect-error
+						const { getRequestEvent } = await import("$app/server");
+						const event = await getRequestEvent();
+						if (!event) return;
+						const parsed = parseSetCookieHeader(setCookies);
+						for (const [name, { value, ...ops }] of parsed) {
+							try {
+								event.cookies.set(name, decodeURIComponent(value), {
 									sameSite: ops.samesite,
 									path: ops.path || "/",
 									expires: ops.expires,
@@ -83,13 +83,14 @@ export const sveltekitCookies = () => {
 									httpOnly: ops.httponly,
 									domain: ops.domain,
 									maxAge: ops["max-age"],
-									encode: (value: any) => value,
 								});
+							} catch (e) {
+								// This can fail if the cookie is being set in a server component
 							}
 						}
-					}),
-				},
-			],
-		},
-	} satisfies BetterAuthPlugin;
-};
+					}
+				}),
+			},
+		],
+	},
+});
