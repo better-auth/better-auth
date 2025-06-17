@@ -245,10 +245,11 @@ export interface Client {
 	 * Client Secret
 	 *
 	 * A secret for the client, if required by the authorization server.
+	 * Optional for public clients using PKCE.
 	 *
 	 * size 32
 	 */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * The client type
 	 *
@@ -257,8 +258,9 @@ export interface Client {
 	 * - web - A web application
 	 * - native - A mobile application
 	 * - user-agent-based - A user-agent-based application
+	 * - public - A public client (PKCE-enabled, no client_secret)
 	 */
-	type: "web" | "native" | "user-agent-based";
+	type: "web" | "native" | "user-agent-based" | "public";
 	/**
 	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
 	 * and path.
