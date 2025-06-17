@@ -67,6 +67,18 @@ export function matchType(
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
+
+	// this could be a bit messy
+	if (fieldType === "decimal") {
+		if (dbType === "sqlite") {
+			return columnDataType.toLowerCase().includes("real");
+		} else if (dbType === "mysql" || dbType === "mssql") {
+			return columnDataType.toLowerCase().includes("decimal");
+		} else {
+			return columnDataType.toLowerCase().includes("numeric");
+		}
+	}
+
 	const types = map[dbType];
 	const type = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
@@ -209,6 +221,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 					? "integer"
 					: "varchar(36)",
 				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+			},
+			decimal: {
+				sqlite: "real",
+				postgres: "numeric",
+				mysql: "decimal",
+				mssql: "decimal",
 			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {

@@ -77,6 +77,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "number[]") {
 					return isOptional ? "Int[]" : "Int[]";
 				}
+				if (type === "decimal") {
+					return isOptional ? "Decimal?" : "Decimal";
+				}
 			}
 
 			const prismaModel = builder.findByType("model", {

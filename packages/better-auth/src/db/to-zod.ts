@@ -20,6 +20,13 @@ export function toZodSchema(fields: Record<string, FieldAttribute>) {
 					[key]: z.any(),
 				};
 			}
+			if (field.type === "decimal") {
+				return {
+					...acc,
+					[key]: z.number(),
+				};
+			}
+
 			let schema: ZodSchema = z[field.type]();
 			if (field?.required === false) {
 				schema = schema.optional();
