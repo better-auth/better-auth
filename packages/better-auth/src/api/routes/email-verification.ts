@@ -155,13 +155,32 @@ export const sendVerificationEmail = createAuthEndpoint(
 			});
 		}
 		const { email } = ctx.body;
-		const user = await ctx.context.internalAdapter.findUserByEmail(email);
-		if (!user) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.USER_NOT_FOUND,
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			if (!user) {
+				//we're returning true to avoid leaking information about the user
+				return ctx.json({
+					status: true,
+				});
+			}
+			await sendVerificationEmailFn(ctx, user.user);
+			return ctx.json({
+				status: true,
 			});
 		}
-		await sendVerificationEmailFn(ctx, user.user);
+		if (session?.user.emailVerified) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"You can only send a verification email to an unverified email",
+			});
+		}
+		if (session?.user.email !== email) {
+			throw new APIError("BAD_REQUEST", {
+				message: "You can only send a verification email to your own email",
+			});
+		}
+		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
 			status: true,
 		});

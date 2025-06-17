@@ -114,6 +114,15 @@ export const linkSocialAccount = createAuthEndpoint(
 					description: "Additional scopes to request from the provider",
 				})
 				.optional(),
+			/**
+			 * The URL to redirect to if there is an error during the link process.
+			 */
+			errorCallbackURL: z
+				.string({
+					description:
+						"The URL to redirect to if there is an error during the link process",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {

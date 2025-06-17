@@ -89,7 +89,7 @@ To register a new OIDC client, use the `oauth2.register` method.
 
 ```ts title="client.ts"
 const application = await client.oauth2.register({
-    name: "My Client",
+    client_name: "My Client",
     redirect_uris: ["https://client.example.com/callback"],
 });
 ```
