@@ -586,7 +586,6 @@ export const auth = betterAuth({
           if (ctx.context.session) {
             console.log("User update initiated by:", ctx.context.session.userId);
           }
-          // Return the data to proceed with the update.
           return { data };
         },
       },
