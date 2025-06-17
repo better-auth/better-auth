@@ -296,7 +296,6 @@ export const verifyEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		console.log("The token is: ", ctx.query.token);
 		function redirectOnError(error: string) {
 			if (ctx.query.callbackURL) {
 				if (ctx.query.callbackURL.includes("?")) {
@@ -316,7 +315,6 @@ export const verifyEmail = createAuthEndpoint(
 			});
 		}
 
-		// Try JWT verification first for standard email verification
 		try {
 			const secret = new TextEncoder().encode(ctx.context.options.secret);
 			const { payload: jwtPayload } = await jwtVerify(token, secret, {
@@ -325,7 +323,6 @@ export const verifyEmail = createAuthEndpoint(
 
 			const email = (jwtPayload as any).email;
 			if (!email) {
-				// This indicates it's not a standard verification JWT, so we fall through.
 				throw new Error("Invalid JWT payload for standard verification");
 			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
