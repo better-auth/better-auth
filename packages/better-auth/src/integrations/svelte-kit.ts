@@ -75,19 +75,15 @@ export const sveltekitCookies = () => {
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							for (const [name, { value, ...ops }] of parsed) {
-								try {
-									event.cookies.set(name, decodeURIComponent(value), {
-										sameSite: ops.samesite,
-										path: ops.path || "/",
-										expires: ops.expires,
-										secure: ops.secure,
-										httpOnly: ops.httponly,
-										domain: ops.domain,
-										maxAge: ops["max-age"],
-									});
-								} catch (e) {
-									// This can fail if the cookie is being set in a server component
-								}
+								event.cookies.set(name, decodeURIComponent(value), {
+									sameSite: ops.samesite,
+									path: ops.path || "/",
+									expires: ops.expires,
+									secure: ops.secure,
+									httpOnly: ops.httponly,
+									domain: ops.domain,
+									maxAge: ops["max-age"],
+								});
 							}
 						}
 					}),
