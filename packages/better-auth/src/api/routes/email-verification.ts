@@ -5,7 +5,7 @@ import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
 import { originCheck } from "../middlewares";
-import { jwtVerify, SignJWT } from "jose";
+import { jwtVerify } from "jose";
 import { signJWT } from "../../crypto/jwt";
 
 export async function createEmailVerificationToken(
@@ -30,7 +30,6 @@ export async function createEmailVerificationToken(
 	);
 	return token;
 }
-
 
 /**
  * A function to send a verification email to the user
@@ -297,7 +296,7 @@ export const verifyEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		console.log("The token is: " , ctx.query.token)
+		console.log("The token is: ", ctx.query.token);
 		function redirectOnError(error: string) {
 			if (ctx.query.callbackURL) {
 				if (ctx.query.callbackURL.includes("?")) {
@@ -394,8 +393,8 @@ export const verifyEmail = createAuthEndpoint(
 		// Fallback to DB check for email change verification
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(token);
-		console.log("The verification is: " , verification)
-			if (!verification) {
+		console.log("The verification is: ", verification);
+		if (!verification) {
 			return redirectOnError("invalid_token");
 		}
 

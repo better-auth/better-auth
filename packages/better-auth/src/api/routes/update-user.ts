@@ -777,14 +777,13 @@ export const changeEmail = createAuthEndpoint(
 
 		const token = generateId(32);
 		const value = `email-change:${ctx.context.session.user.email}:${newEmail}`;
-		const expiresIn =
-			ctx.context.options.emailVerification?.expiresIn || 3600;
-			const res =  await ctx.context.internalAdapter.createVerificationValue({
+		const expiresIn = ctx.context.options.emailVerification?.expiresIn || 3600;
+		const res = await ctx.context.internalAdapter.createVerificationValue({
 			identifier: token,
 			value: value,
 			expiresAt: getDate(expiresIn, "sec"),
 		});
-		console.log("The res is: " , res)
+		console.log("The res is: ", res);
 		const url = `${
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;

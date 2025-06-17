@@ -21,7 +21,7 @@ describe("updateUser", async () => {
 						url,
 						token,
 					}) => {
-						console.log("The should be caled is: " , token)
+						console.log("The should be caled is: ", token);
 						emailChangeToken = token;
 						sendChangeEmail(user, newEmail, url, token);
 					},
@@ -96,7 +96,7 @@ describe("updateUser", async () => {
 	});
 
 	it("should verify email", async () => {
-		console.log("The email change token is: " , emailChangeToken)
+		console.log("The email change token is: ", emailChangeToken);
 		await client.verifyEmail({
 			query: {
 				token: emailVerificationToken,
