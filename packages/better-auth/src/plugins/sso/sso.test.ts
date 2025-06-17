@@ -474,7 +474,7 @@ describe("provisioning", async (ctx) => {
 		expect(res.url).toContain("http://localhost:8080/authorize");
 	});
 });
-describe("SSO provider limits & allow to register provider", () => {
+describe("SSO onfigurable limits", () => {
 	let server = new OAuth2Server();
 
 	beforeAll(async () => {
