@@ -20,7 +20,7 @@ export async function handle({ event, resolve }) {
 
 ### Server Action Cookies 
 
-When you call a function that needs to set cookies, like `signInEmail` or `signUpEmail` in a server action, cookies won’t be set. This is because server actions need to use the `cookies` helper from Svelte-kit to set cookies.
+To ensure cookies are properly set when you call functions like `signInEmail` or `signUpEmail` in a server action, you should use the `sveltekitCookies` plugin. This plugin will automatically handle setting cookies for you in SvelteKit.
 
 You need to add it as a plugin to your Better Auth instance.
 
