@@ -1,6 +1,6 @@
 {
   "name": "@pekastel/better-auth",
-  "version": "1.2.10-pkce-fix.1",
+  "version": "1.2.10-pkce-fix.3",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
