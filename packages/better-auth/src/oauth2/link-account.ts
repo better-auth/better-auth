@@ -155,7 +155,7 @@ export async function handleOAuthUserInfo(
 				c.context.options.emailVerification?.sendOnSignUp
 			) {
 				const token = await createEmailVerificationToken(
-					c.context.internalAdapter,
+					c.context.secret,
 					user.email,
 					undefined,
 					c.context.options.emailVerification?.expiresIn,

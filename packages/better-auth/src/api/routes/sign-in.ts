@@ -503,7 +503,7 @@ export const signInEmail = createAuthEndpoint(
 				});
 			}
 			const token = await createEmailVerificationToken(
-				ctx.context.internalAdapter,
+				ctx.context.secret,
 				user.user.email,
 				undefined,
 				ctx.context.options.emailVerification?.expiresIn,

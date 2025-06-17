@@ -11,6 +11,7 @@ import type {
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
+import { getOrgAdapter } from "../../plugins/organization/adapter";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -236,7 +237,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options.emailAndPassword.requireEmailVerification
 			) {
 				const token = await createEmailVerificationToken(
-					ctx.context.internalAdapter,
+					ctx.context.secret,
 					createdUser.email,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
@@ -252,6 +253,27 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					},
 					ctx.request,
 				);
+			}
+
+			if ((ctx.context as any).orgOptions?.autoCreateOrganizationOnSignUp) {
+				const adapter = getOrgAdapter(
+					ctx.context,
+					(ctx.context as any).orgOptions,
+				);
+				const organization = await adapter.createOrganization({
+					organization: {
+						name: `${createdUser.name}'s Team`,
+						slug: `${createdUser.name
+							?.toLowerCase()
+							.replace(/\\s+/g, "-")}-team-${createdUser.id}`,
+						createdAt: new Date(),
+					},
+				});
+				await adapter.createMember({
+					userId: createdUser.id,
+					organizationId: organization.id,
+					role: (ctx.context as any).orgOptions.creatorRole || "owner",
+				});
 			}
 
 			if (

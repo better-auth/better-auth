@@ -10,6 +10,8 @@ import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
+import { generateId } from "../../utils";
+import { getDate } from "../../utils/date";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -735,7 +737,7 @@ export const changeEmail = createAuthEndpoint(
 			});
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
-					ctx.context.internalAdapter,
+					ctx.context.secret,
 					newEmail,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
@@ -773,12 +775,16 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
-		const token = await createEmailVerificationToken(
-			ctx.context.internalAdapter,
-			ctx.context.session.user.email,
-			newEmail,
-			ctx.context.options.emailVerification?.expiresIn,
-		);
+		const token = generateId(32);
+		const value = `email-change:${ctx.context.session.user.email}:${newEmail}`;
+		const expiresIn =
+			ctx.context.options.emailVerification?.expiresIn || 3600;
+			const res =  await ctx.context.internalAdapter.createVerificationValue({
+			identifier: token,
+			value: value,
+			expiresAt: getDate(expiresIn, "sec"),
+		});
+		console.log("The res is: " , res)
 		const url = `${
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
