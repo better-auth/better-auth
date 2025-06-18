@@ -18,7 +18,8 @@
 		"strict": true,
 		"noImplicitOverride": true,
 		"noFallthroughCasesInSwitch": true,
-		"downlevelIteration": true
+		"downlevelIteration": true,
+		"types": ["@noble/hashes"]
 	},
 	"exclude": ["**/dist", "node_modules"],
 	"references": [],
