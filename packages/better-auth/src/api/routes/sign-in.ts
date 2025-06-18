@@ -531,6 +531,7 @@ export const signInEmail = createAuthEndpoint(
 		)?.options as OrganizationOptions;
 		let activeOrganizationId: string | undefined | null = undefined;
 		if (orgOptions) {
+			console.log("Here");
 			const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
 			const orgs = await orgAdapter.listOrganizations(user.user.id);
 			if (orgs.length > 0) {
@@ -542,32 +543,23 @@ export const signInEmail = createAuthEndpoint(
 			ctx,
 			ctx.body.rememberMe === false,
 		);
-		if (orgOptions && activeOrganizationId) {
-			await getOrgAdapter(ctx.context, orgOptions).setActiveOrganization(
-				session.token,
-				activeOrganizationId,
-			);
-		}
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 			});
 		}
-		const cookieUser = {
-			id: user.user.id,
-			email: user.user.email,
-			name: user.user.name,
-			image: user.user.image,
-			emailVerified: user.user.emailVerified,
-			createdAt: user.user.createdAt,
-			updatedAt: user.user.updatedAt,
-		};
+		if (activeOrganizationId) {
+			await getOrgAdapter(ctx.context, orgOptions).setActiveOrganization(
+				session.token,
+				activeOrganizationId,
+			);
+		}
 		await setSessionCookie(
 			ctx,
 			{
 				session,
-				user: cookieUser,
+				user: user.user,
 			},
 			ctx.body.rememberMe === false,
 		);
@@ -575,7 +567,15 @@ export const signInEmail = createAuthEndpoint(
 			redirect: !!ctx.body.callbackURL,
 			token: session.token,
 			url: ctx.body.callbackURL,
-			user: cookieUser,
+			user: {
+				id: user.user.id,
+				email: user.user.email,
+				name: user.user.name,
+				image: user.user.image,
+				emailVerified: user.user.emailVerified,
+				createdAt: user.user.createdAt,
+				updatedAt: user.user.updatedAt,
+			},
 		});
 	},
 );
