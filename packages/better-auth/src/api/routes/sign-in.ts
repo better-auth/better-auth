@@ -7,6 +7,8 @@ import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
+import { getOrgAdapter } from "../../plugins/organization/adapter";
+import type { OrganizationOptions } from "../../plugins/organization/organization";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -524,24 +526,48 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 
+		const orgOptions = ctx.context.options.plugins?.find(
+			(p) => p.id === "organization",
+		)?.options as OrganizationOptions;
+		let activeOrganizationId: string | undefined | null = undefined;
+		if (orgOptions) {
+			const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
+			const orgs = await orgAdapter.listOrganizations(user.user.id);
+			if (orgs.length > 0) {
+				activeOrganizationId = orgs[0].id;
+			}
+		}
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx,
 			ctx.body.rememberMe === false,
 		);
-
+		if (orgOptions && activeOrganizationId) {
+			await getOrgAdapter(ctx.context, orgOptions).setActiveOrganization(
+				session.token,
+				activeOrganizationId,
+			);
+		}
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 			});
 		}
-
+		const cookieUser = {
+			id: user.user.id,
+			email: user.user.email,
+			name: user.user.name,
+			image: user.user.image,
+			emailVerified: user.user.emailVerified,
+			createdAt: user.user.createdAt,
+			updatedAt: user.user.updatedAt,
+		};
 		await setSessionCookie(
 			ctx,
 			{
 				session,
-				user: user.user,
+				user: cookieUser,
 			},
 			ctx.body.rememberMe === false,
 		);
@@ -549,15 +575,7 @@ export const signInEmail = createAuthEndpoint(
 			redirect: !!ctx.body.callbackURL,
 			token: session.token,
 			url: ctx.body.callbackURL,
-			user: {
-				id: user.user.id,
-				email: user.user.email,
-				name: user.user.name,
-				image: user.user.image,
-				emailVerified: user.user.emailVerified,
-				createdAt: user.user.createdAt,
-				updatedAt: user.user.updatedAt,
-			},
+			user: cookieUser,
 		});
 	},
 );

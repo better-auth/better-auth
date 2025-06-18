@@ -356,6 +356,12 @@ export interface OrganizationOptions {
 			request?: Request,
 		) => Promise<void>;
 	};
+	/**
+	 * Automatically create an organization for the user on sign up.
+	 *
+	 * @default false
+	 */
+	autoCreateOrganizationOnSignUp?: boolean;
 }
 
 /**
@@ -748,5 +754,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
+		options,
 	} satisfies BetterAuthPlugin;
 };

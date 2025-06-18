@@ -1,5 +1,6 @@
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { organization } from "../../plugins/organization";
 
 describe("sign-up with custom fields", async (it) => {
 	const mockFn = vi.fn();
@@ -74,5 +75,49 @@ describe("sign-up with custom fields", async (it) => {
 			userAgent: "test-user-agent",
 			ipAddress: "127.0.0.1",
 		});
+	});
+});
+
+describe("sign-up with organization", async (it) => {
+	const { auth, db } = await getTestInstance(
+		{
+			plugins: [
+				organization({
+					autoCreateOrganizationOnSignUp: true,
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should create organization on sign up", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "org-test@test.com",
+				password: "password",
+				name: "Org User",
+			},
+		});
+
+		expect(res.token).toBeDefined();
+
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		console.log(session);
+		expect(session?.session.activeOrganizationId).toBeDefined();
+
+		const orgs = await db.findMany({
+			model: "organization",
+		});
+		expect(orgs.length).toBe(1);
+		expect((orgs[0] as { name: string }).name).toBe("Org User");
+		expect(session?.session.activeOrganizationId).toBe(
+			(orgs[0] as { id: string }).id,
+		);
 	});
 });
