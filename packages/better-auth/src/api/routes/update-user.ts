@@ -421,14 +421,14 @@ export const deleteUser = createAuthEndpoint(
 			throw new APIError("NOT_FOUND");
 		}
 		const session = ctx.context.session;
-		const accounts = await ctx.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
-		);
 
 		if (ctx.body.password) {
+			const accounts = await ctx.context.internalAdapter.findAccounts(
+				session.user.id,
+			);
+			const account = accounts.find(
+				(account) => account.providerId === "credential" && account.password,
+			);
 			if (!account || !account.password) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
@@ -493,11 +493,7 @@ export const deleteUser = createAuthEndpoint(
 			});
 		}
 
-		if (
-			!ctx.body.token &&
-			!ctx.body.password &&
-			ctx.context.sessionConfig.freshAge !== 0
-		) {
+		if (!ctx.body.password && ctx.context.sessionConfig.freshAge !== 0) {
 			const currentAge = session.session.createdAt.getTime();
 			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
 			const now = Date.now();
