@@ -390,36 +390,38 @@ export const verifyEmail = createAuthEndpoint(
 			},
 			ctx,
 		);
-		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
-			const currentSession = await getSessionFromCtx(ctx);
+		const currentSession = await getSessionFromCtx(ctx);
+		if (
+			ctx.context.options.emailVerification?.autoSignInAfterVerification &&
+			!currentSession
+		) {
 			if (!currentSession || currentSession.user.email !== parsed.email) {
-				const session = await ctx.context.internalAdapter.createSession(
-					user.user.id,
-					ctx,
-				);
-				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: "Failed to create session",
-					});
-				}
-				await setSessionCookie(ctx, {
-					session,
-					user: {
-						...user.user,
-						emailVerified: true,
-					},
-				});
-			} else {
-				await setSessionCookie(ctx, {
-					session: currentSession.session,
-					user: {
-						...currentSession.user,
-						emailVerified: true,
-					},
+			}
+			const session = await ctx.context.internalAdapter.createSession(
+				user.user.id,
+				ctx,
+			);
+			if (!session) {
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "Failed to create session",
 				});
 			}
+			await setSessionCookie(ctx, {
+				session,
+				user: {
+					...user.user,
+					emailVerified: true,
+				},
+			});
+		} else {
+			await setSessionCookie(ctx, {
+				session: currentSession.session,
+				user: {
+					...currentSession.user,
+					emailVerified: true,
+				},
+			});
 		}
-
 		if (ctx.query.callbackURL) {
 			throw ctx.redirect(ctx.query.callbackURL);
 		}
