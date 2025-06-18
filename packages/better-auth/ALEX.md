@@ -1,1 +1,2 @@
-better auth needs to be packed, then the packed folder needs to be pnpm add file:/path/to/packed.
+1. Run pnpm gogo
+2. move the `package` folder to owlie/packages/better-auth (renamed to better-auth)

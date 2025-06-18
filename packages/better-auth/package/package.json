@@ -19,20 +19,6 @@
     "typescript",
     "nextjs"
   ],
-  "scripts": {
-    "gogo": "pnpm pack --pack-destination pack && tar -xzf pack/better-auth-1.2.9.tgz",
-    "build": "unbuild --clean",
-    "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
-    "dev:types": "tsc --project tsconfig.declarations.json --watch",
-    "build:types": "tsc --project tsconfig.declarations.json",
-    "stub": "unbuild --stub",
-    "pretest": "pnpm prisma:normal:push && pnpm prisma:number-id:push",
-    "test": "vitest",
-    "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
-    "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
-    "bump": "bumpp",
-    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit"
-  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "exports": {
@@ -658,12 +644,12 @@
   },
   "dependencies": {
     "@better-auth/utils": "0.2.5",
-    "@better-fetch/fetch": "catalog:",
+    "@better-fetch/fetch": "^1.1.18",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0",
-    "better-call": "catalog:",
+    "better-call": "^1.0.8",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
     "kysely": "^0.28.2",
@@ -695,8 +681,8 @@
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
-    "typescript": "catalog:",
-    "unbuild": "catalog:",
+    "typescript": "^5.7.3",
+    "unbuild": "^3.5.0",
     "vitest": "^1.6.0",
     "vue": "^3.5.13"
   },
@@ -705,5 +691,19 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "scripts": {
+    "gogo": "pnpm pack --pack-destination pack && tar -xzf pack/better-auth-1.2.9.tgz",
+    "build": "unbuild --clean",
+    "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
+    "dev:types": "tsc --project tsconfig.declarations.json --watch",
+    "build:types": "tsc --project tsconfig.declarations.json",
+    "stub": "unbuild --stub",
+    "pretest": "pnpm prisma:normal:push && pnpm prisma:number-id:push",
+    "test": "vitest",
+    "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
+    "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
+    "bump": "bumpp",
+    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit"
+  }
 }
