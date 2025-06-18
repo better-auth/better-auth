@@ -152,12 +152,6 @@ export const sendVerificationEmail = createAuthEndpoint(
 				message: "Verification email isn't enabled",
 			});
 		}
-		if (!ctx.context.options.secret) {
-			ctx.context.logger.error("Secret is not configured.");
-			throw new APIError("INTERNAL_SERVER_ERROR", {
-				message: "Secret is not configured",
-			});
-		}
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
@@ -316,19 +310,21 @@ export const verifyEmail = createAuthEndpoint(
 		}
 
 		try {
-			const secret = new TextEncoder().encode(ctx.context.options.secret);
-			const { payload: jwtPayload } = await jwtVerify(token, secret, {
-				algorithms: ["HS256"],
-			});
-
+			const { payload: jwtPayload } = await jwtVerify(
+				token,
+				new TextEncoder().encode(ctx.context.secret),
+				{
+					algorithms: ["HS256"],
+				},
+			);
 			const email = (jwtPayload as any).email;
 			if (!email) {
 				throw new Error("Invalid JWT payload for standard verification");
 			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-
 			if (!user) {
-				return redirectOnError("user_not_found");
+				redirectOnError("user_not_found");
+				return; // unreachable but for TS
 			}
 
 			await ctx.context.options.emailVerification?.onEmailVerification?.(
@@ -371,7 +367,6 @@ export const verifyEmail = createAuthEndpoint(
 					});
 				}
 			}
-
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
@@ -380,17 +375,19 @@ export const verifyEmail = createAuthEndpoint(
 				user: null,
 			});
 		} catch (e: any) {
-			if (e?.code === "ERR_JWT_EXPIRED") {
-				return redirectOnError("token_expired");
+			if (e instanceof Response || e instanceof APIError) {
+				throw e;
 			}
-			// If it's not a JWT-related error, or another JWT error, we fall through
+			if (e?.code === "ERR_JWT_EXPIRED") {
+				redirectOnError("token_expired");
+			}
+			// If it's not a JWT-related error we're handling, we fall through
 			// to checking the DB for an email-change token.
 		}
 
 		// Fallback to DB check for email change verification
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(token);
-		console.log("The verification is: ", verification);
 		if (!verification) {
 			return redirectOnError("invalid_token");
 		}

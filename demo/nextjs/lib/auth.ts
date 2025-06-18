@@ -195,5 +195,5 @@ export const auth = betterAuth({
 			},
 		}),
 	],
-	trustedOrigins: ["exp://", "http://localhost:3000", "https://demo.better-auth.com"],
+	trustedOrigins: ["exp://"],
 });
