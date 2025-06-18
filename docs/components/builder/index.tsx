@@ -268,8 +268,18 @@ export function Builder() {
 				</DialogHeader>
 
 				<div className="flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
-					<ScrollArea className="w-4/12">
-						<div className="overflow-scroll h-[580px] relative">
+					<div className={cn("w-4/12")}>
+						<div
+							className="overflow-scroll h-[580px] relative"
+							style={{
+								scrollbarWidth: "none",
+								scrollbarColor: "transparent transparent",
+								//@ts-expect-error
+								"&::-webkit-scrollbar": {
+									display: "none",
+								},
+							}}
+						>
 							{options.signUp ? (
 								<AuthTabs
 									tabs={[
@@ -289,8 +299,18 @@ export function Builder() {
 								<SignIn />
 							)}
 						</div>
-					</ScrollArea>
-					<ScrollArea className="w-[45%] flex-grow">
+					</div>
+					<ScrollArea
+						className="w-[45%] flex-grow"
+						style={{
+							scrollbarWidth: "none",
+							scrollbarColor: "transparent transparent",
+							//@ts-expect-error
+							"&::-webkit-scrollbar": {
+								display: "none",
+							},
+						}}
+					>
 						<div className="h-[580px]">
 							{currentStep === 0 ? (
 								<Card className="rounded-none flex-grow h-full">
@@ -507,7 +527,7 @@ export function Builder() {
 													className="cursor-pointer"
 													htmlFor="label-powered-by"
 												>
-													Powered by label
+													Show Built with label
 												</Label>
 												<Switch
 													id="label-powered-by"
