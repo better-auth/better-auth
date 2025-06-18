@@ -139,16 +139,16 @@ const auth = betterAuth({
 
 You can provide a callback function that will be executed after a user successfully verifies their email. This is useful for any side-effects you want to trigger after email verification.
 
-- **onEmailVerification**: This function is triggered after successful email verification. It accepts a `user` object and a `request` object as parameters.
+- **onEmailVerified**: This function is triggered after the user's email has been successfully verified and the `emailVerified` field is set to `true`. It accepts a `user` object and a `request` object as parameters.
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
     emailVerification: {
-        async onEmailVerification(user, request) {
-            // Your custom logic here
-            console.log(`${user.email} has been verified`);
+        async onEmailVerified(user, request) {
+            // Your custom logic here, e.g., grant access to premium features
+            console.log(`${user.email} has been successfully verified!`);
         }
     }
 })
