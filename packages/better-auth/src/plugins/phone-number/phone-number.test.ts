@@ -102,7 +102,9 @@ describe("phone-number", async (it) => {
 		});
 		expect(user.data?.user.phoneNumber).toBe(newPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
-		expect(oldSession.data?.session.token).not.toBe(newSession.data?.session.token);
+		expect(oldSession.data?.session.token).not.toBe(
+			newSession.data?.session.token,
+		);
 	});
 
 	it("should not verify if code expired", async () => {
