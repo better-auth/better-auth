@@ -1,22 +1,22 @@
+import { z } from "zod";
 import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";
+import { dropbox } from "./dropbox";
 import { facebook } from "./facebook";
 import { github } from "./github";
-import { google } from "./google";
-import { microsoft } from "./microsoft-entra-id";
-import { spotify } from "./spotify";
-import { twitch } from "./twitch";
-import { twitter } from "./twitter";
-import { dropbox } from "./dropbox";
-import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
-import { tiktok } from "./tiktok";
+import { google } from "./google";
+import { kick } from "./kick";
+import { linkedin } from "./linkedin";
+import { microsoft } from "./microsoft-entra-id";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
-import { z } from "zod";
+import { spotify } from "./spotify";
+import { tiktok } from "./tiktok";
+import { twitch } from "./twitch";
+import { twitter } from "./twitter";
 import { vk } from "./vk";
-import { kick } from "./kick";
 import { zoom } from "./zoom";
 export const socialProviders = {
 	apple,
@@ -58,23 +58,23 @@ export type SocialProviders = {
 	>;
 };
 
-export * from "./github";
-export * from "./google";
 export * from "./apple";
-export * from "./microsoft-entra-id";
 export * from "./discord";
-export * from "./spotify";
-export * from "./twitch";
-export * from "./facebook";
-export * from "./twitter";
 export * from "./dropbox";
-export * from "./linkedin";
+export * from "./facebook";
+export * from "./github";
 export * from "./gitlab";
-export * from "./tiktok";
+export * from "./google";
+export * from "./kick";
+export * from "./linkedin";
+export * from "./microsoft-entra-id";
 export * from "./reddit";
 export * from "./roblox";
+export * from "./spotify";
+export * from "./tiktok";
+export * from "./twitch";
+export * from "./twitter";
 export * from "./vk";
 export * from "./zoom";
-export * from "./kick";
 
 export type SocialProviderList = typeof socialProviderList;
