@@ -18,6 +18,7 @@ const createTransform = (options: BetterAuthOptions) => {
 		if (
 			field === "id" ||
 			field === "_id" ||
+			field === "userId" ||
 			schema[model].fields[field].references?.field === "id"
 		) {
 			if (typeof value !== "string") {
