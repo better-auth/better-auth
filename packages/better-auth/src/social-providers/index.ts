@@ -10,6 +10,7 @@ import { google } from "./google";
 import { kick } from "./kick";
 import { linkedin } from "./linkedin";
 import { microsoft } from "./microsoft-entra-id";
+import { notion } from "./notion";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { spotify } from "./spotify";
@@ -37,6 +38,7 @@ export const socialProviders = {
 	roblox,
 	vk,
 	zoom,
+	notion,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -68,6 +70,7 @@ export * from "./google";
 export * from "./kick";
 export * from "./linkedin";
 export * from "./microsoft-entra-id";
+export * from "./notion";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./spotify";
