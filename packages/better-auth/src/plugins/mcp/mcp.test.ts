@@ -9,46 +9,65 @@ import { listen, type Listener } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
 
-describe("mcp", async () => {
-	const {
-		auth: authorizationServer,
-		signInWithTestUser,
-		customFetchImpl,
-		testUser,
-	} = await getTestInstance({
-		baseURL: "http://localhost:3001",
-		plugins: [
-			mcp({
-				loginPage: "/login",
-				oidcConfig: {
-					loginPage: "/login",
-					requirePKCE: true,
-
-					getAdditionalUserInfoClaim(user, scopes) {
-						return {
-							custom: "custom value",
-							userId: user.id,
-						};
-					},
-				},
-			}),
-			jwt(),
-		],
-	});
-	const { headers } = await signInWithTestUser();
-	const serverClient = createAuthClient({
-		baseURL: "http://localhost:3001",
-		fetchOptions: {
-			customFetchImpl,
-			headers,
-		},
-	});
-
+describe("mcp", () => {
+	let authorizationServer: any;
+	let signInWithTestUser: any;
+	let customFetchImpl: any;
+	let testUser: any;
+	let headers: any;
+	let serverClient: any;
 	let server: Listener;
+	let baseURL: string;
 
 	beforeAll(async () => {
+		// Start server on ephemeral port first to get available port
+		const tempServer = await listen(toNodeHandler(async () => new Response("temp")), {
+			port: 0,
+		});
+		const port = tempServer.address?.port || 3001;
+		await tempServer.close();
+		
+		baseURL = `http://localhost:${port}`;
+
+		const testInstance = await getTestInstance({
+			baseURL,
+			plugins: [
+				mcp({
+					loginPage: "/login",
+					oidcConfig: {
+						loginPage: "/login",
+						requirePKCE: true,
+
+						getAdditionalUserInfoClaim(user, scopes) {
+							return {
+								custom: "custom value",
+								userId: user.id,
+							};
+						},
+					},
+				}),
+				jwt(),
+			],
+		});
+
+		authorizationServer = testInstance.auth;
+		signInWithTestUser = testInstance.signInWithTestUser;
+		customFetchImpl = testInstance.customFetchImpl;
+		testUser = testInstance.testUser;
+
+		const signInResult = await signInWithTestUser();
+		headers = signInResult.headers;
+
+		serverClient = createAuthClient({
+			baseURL,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
 		server = await listen(toNodeHandler(authorizationServer.handler), {
-			port: 3001,
+			port,
 		});
 	});
 
@@ -157,8 +176,8 @@ describe("mcp", async () => {
 							providerId: "test-public",
 							clientId: publicClient.clientId,
 							clientSecret: "", // Public client has no secret
-							authorizationUrl: "http://localhost:3001/api/auth/mcp/authorize",
-							tokenUrl: "http://localhost:3001/api/auth/mcp/token",
+							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+							tokenUrl: `${baseURL}/api/auth/mcp/token`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 						},
@@ -185,7 +204,7 @@ describe("mcp", async () => {
 			},
 		);
 
-		expect(data.url).toContain("http://localhost:3001/api/auth/mcp/authorize");
+		expect(data.url).toContain(`${baseURL}/api/auth/mcp/authorize`);
 		expect(data.url).toContain(`client_id=${publicClient.clientId}`);
 		expect(data.url).toContain("code_challenge=");
 		expect(data.url).toContain("code_challenge_method=S256");
@@ -193,7 +212,7 @@ describe("mcp", async () => {
 		let redirectURI = "";
 		await serverClient.$fetch(data.url, {
 			method: "GET",
-			onError(context) {
+			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
 			},
 		});
@@ -203,7 +222,7 @@ describe("mcp", async () => {
 
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
-			onError(context) {
+			onError(context: any) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
@@ -250,8 +269,8 @@ describe("mcp", async () => {
 							providerId: "test-confidential",
 							clientId: confidentialClient.clientId,
 							clientSecret: confidentialClient.clientSecret || "",
-							authorizationUrl: "http://localhost:3001/api/auth/mcp/authorize",
-							tokenUrl: "http://localhost:3001/api/auth/mcp/token",
+							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+							tokenUrl: `${baseURL}/api/auth/mcp/token`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 						},
@@ -278,13 +297,13 @@ describe("mcp", async () => {
 			},
 		);
 
-		expect(data.url).toContain("http://localhost:3001/api/auth/mcp/authorize");
+		expect(data.url).toContain(`${baseURL}/api/auth/mcp/authorize`);
 		expect(data.url).toContain(`client_id=${confidentialClient.clientId}`);
 
 		let redirectURI = "";
 		await serverClient.$fetch(data.url, {
 			method: "GET",
-			onError(context) {
+			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
 			},
 		});
@@ -294,7 +313,7 @@ describe("mcp", async () => {
 
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
-			onError(context) {
+			onError(context: any) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
@@ -307,12 +326,12 @@ describe("mcp", async () => {
 		);
 
 		expect(metadata.data).toMatchObject({
-			issuer: "http://localhost:3001",
-			authorization_endpoint: "http://localhost:3001/api/auth/mcp/authorize",
-			token_endpoint: "http://localhost:3001/api/auth/mcp/token",
-			userinfo_endpoint: "http://localhost:3001/api/auth/mcp/userinfo",
-			jwks_uri: "http://localhost:3001/api/auth/mcp/jwks",
-			registration_endpoint: "http://localhost:3001/api/auth/mcp/register",
+			issuer: baseURL,
+			authorization_endpoint: `${baseURL}/api/auth/mcp/authorize`,
+			token_endpoint: `${baseURL}/api/auth/mcp/token`,
+			userinfo_endpoint: `${baseURL}/api/auth/mcp/userinfo`,
+			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
+			registration_endpoint: `${baseURL}/api/auth/mcp/register`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			response_types_supported: ["code"],
 			response_modes_supported: ["query"],
@@ -413,8 +432,8 @@ describe("mcp", async () => {
 							providerId: "test-userinfo",
 							clientId: userinfoClient.clientId,
 							clientSecret: "",
-							authorizationUrl: "http://localhost:3001/api/auth/mcp/authorize",
-							tokenUrl: "http://localhost:3001/api/auth/mcp/token",
+							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+							tokenUrl: `${baseURL}/api/auth/mcp/token`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 						},
