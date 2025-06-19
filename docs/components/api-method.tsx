@@ -183,13 +183,13 @@ export const APIMethod = ({
 					</div>
 				</TabsList>
 				<TabsContent value="client">
-					{isClientOnly ? null : (
+					{isClientOnly ? (
 						<Endpoint
 							method={method || "GET"}
 							path={path}
 							isServerOnly={isServerOnly ?? false}
 						/>
-					)}
+					) : null}
 					{clientOnlyNote || note ? (
 						<Note>
 							{note && tsxifyBackticks(note)}
