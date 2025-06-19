@@ -137,9 +137,11 @@ const auth = betterAuth({
 
 ### Callback after successful email verification
 
-You can provide a callback function that will be executed after a user successfully verifies their email. This is useful for any side-effects you want to trigger after email verification.
+You can run custom code immediately after a user verifies their email using the `onEmailVerified` callback. This is useful for any side-effects you want to trigger, like granting access to special features or logging the event.
 
-- **onEmailVerified**: This function is triggered after the user's email has been successfully verified and the `emailVerified` field is set to `true`. It accepts a `user` object and a `request` object as parameters.
+The `onEmailVerified` function runs automatically when a user's email is confirmed, receiving the `user` object and `request` details so you can perform actions for that specific user.
+
+Here's how you can set it up:
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
