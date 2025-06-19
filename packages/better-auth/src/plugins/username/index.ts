@@ -6,12 +6,12 @@ import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { schema } from "./schema";
+import { createUsernameSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 export * from "./error-codes";
 export type UsernameOptions = {
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<UsernameSchema>;
 	/**
 	 * The minimum length of the username
 	 *
@@ -25,6 +25,12 @@ export type UsernameOptions = {
 	 */
 	maxUsernameLength?: number;
 	/**
+	 * Whether the username is required
+	 *
+	 * @default false
+	 */
+	requiredUsername?: boolean;
+	/**
 	 * A function to validate the username
 	 *
 	 * By default, the username should only contain alphanumeric characters and underscores
@@ -37,6 +43,10 @@ function defaultUsernameValidator(username: string) {
 }
 
 export const username = (options?: UsernameOptions) => {
+	const schema = createUsernameSchema({
+		requiredUsername: options?.requiredUsername,
+	});
+
 	return {
 		id: "username",
 		endpoints: {
