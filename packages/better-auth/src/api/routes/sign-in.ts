@@ -531,7 +531,6 @@ export const signInEmail = createAuthEndpoint(
 		)?.options as OrganizationOptions;
 		let activeOrganizationId: string | undefined | null = undefined;
 		if (orgOptions) {
-			console.log("Here");
 			const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
 			const orgs = await orgAdapter.listOrganizations(user.user.id);
 			if (orgs.length > 0) {
