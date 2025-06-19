@@ -117,6 +117,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						ctx.setCookie(dataCookie, "", {
 							maxAge: 0,
 						});
+						return ctx.json(null);
 					}
 				}
 
@@ -204,6 +205,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							session.session.token,
 							{
 								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
+								updatedAt: new Date(),
 							},
 						);
 					if (!updatedSession) {

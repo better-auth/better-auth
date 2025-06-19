@@ -5,6 +5,7 @@ import { expo } from ".";
 import { expoClient } from "./client";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
+import { oAuthProxy } from "better-auth/plugins";
 
 vi.mock("expo-web-browser", async () => {
 	return {
@@ -59,7 +60,7 @@ function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
 				clientSecret: "test",
 			},
 		},
-		plugins: [expo()],
+		plugins: [expo(), oAuthProxy()],
 		trustedOrigins: ["better-auth://"],
 		...extraOpts,
 	});
@@ -126,6 +127,14 @@ describe("expo", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
+		const stateId = res?.url?.split("state=")[1].split("&")[0];
+		const ctx = await auth.$context;
+		if (!stateId) {
+			throw new Error("State ID not found");
+		}
+		const state = await ctx.internalAdapter.findVerificationValue(stateId);
+		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
+		expect(callbackURL).toBe("better-auth:///dashboard");
 		expect(res).toMatchObject({
 			url: expect.stringContaining("accounts.google"),
 		});

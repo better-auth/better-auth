@@ -18,7 +18,7 @@ export const auth = betterAuth({
 
 ## `baseURL`
 
-Base URL for Better Auth. This is typically the root URL where your application server is hosted.
+Base URL for Better Auth. This is typically the root URL where your application server is hosted. Note: If you include a path in the baseURL, it will take precedence over the default path.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -31,7 +31,7 @@ If not explicitly set, the system will check for the environment variable `proce
 
 ## `basePath`
 
-Base path for Better Auth. This is typically the path where the Better Auth routes are mounted.
+Base path for Better Auth. This is typically the path where the Better Auth routes are mounted. It will be overridden if there is a path component within `baseURL`.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -41,6 +41,17 @@ export const auth = betterAuth({
 ```
 
 Default: `/api/auth`
+
+## `trustedOrigins`
+
+List of trusted origins.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	trustedOrigins: ["http://localhost:3000", "https://example.com"],
+})
+```
 
 ## `secret`
 
@@ -223,7 +234,6 @@ export const auth = betterAuth({
 		additionalFields: {
 			customField: {
 				type: "string",
-				nullable: true
 			}
 		},
 		changeEmail: {
@@ -272,7 +282,6 @@ export const auth = betterAuth({
 		additionalFields: { // Additional fields for the session table
 			customField: {
 				type: "string",
-				nullable: true
 			}
 		},
 		storeSessionInDatabase: true, // Store session in database when secondary storage is provided (default: `false`)
@@ -531,6 +540,19 @@ Disable specific auth paths.
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	disabledPaths: ["/sign-up/email", "/sign-in/email"],
+})
+```
+
+## `customPaths`
+
+Customize specific auth paths. This allows you to map any existing route to a custom path.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	customPaths: {
+		"/ok": "/okay",
+	},
 })
 ```
 

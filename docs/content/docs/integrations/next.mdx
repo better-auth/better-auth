@@ -132,7 +132,7 @@ In Next.js middleware, it's recommended to only check for the existence of a ses
 You can use the `getSessionCookie` helper from Better Auth for this purpose:
 
 <Callout type="warn">
-The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
+The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, if you customized the cookie name or prefix, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
 </Callout>
 
 ```ts
@@ -163,6 +163,20 @@ const sessionCookie = getSessionCookie(request, {
 });
 ```
 </Callout>
+
+Alternatively, you can use the `getCookieCache` helper to get the session object from the cookie cache.
+
+```ts
+import { getCookieCache } from "better-auth/cookies";
+
+export async function middleware(request: NextRequest) {
+	const session = await getCookieCache(request);
+	if (!session) {
+		return NextResponse.redirect(new URL("/sign-in", request.url));
+	}
+	return NextResponse.next();
+}
+```
 
 ### For Next.js release `15.1.7` and below
 

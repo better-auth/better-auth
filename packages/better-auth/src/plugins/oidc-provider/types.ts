@@ -86,7 +86,7 @@ export interface OIDCOptions {
 	 */
 	loginPage: string;
 	/**
-	 * Weather to require PKCE (proof key code exchange) or not
+	 * Whether to require PKCE (proof key code exchange) or not
 	 *
 	 * According to OAuth2.1 spec this should be required. But in any
 	 * case if you want to disable this you can use this options.
@@ -513,4 +513,12 @@ export interface OIDCMetadata {
 	 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "email", "email_verified", "name"]
 	 */
 	claims_supported: string[];
+	/**
+	 * Supported code challenge methods.
+	 *
+	 * only `S256` is supported.
+	 *
+	 * @default ["S256"]
+	 */
+	code_challenge_methods_supported: ["S256"];
 }

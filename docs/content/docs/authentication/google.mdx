@@ -85,3 +85,25 @@ socialProviders: {
     },
 }
 ```
+
+### Requesting Additional Google Scopes
+
+If your application needs additional Google scopes after the user has already signed up (e.g., for Google Drive, Gmail, or other Google services), you can request them using the `linkSocial` method with the same Google provider.
+
+```ts title="auth-client.ts"
+const requestGoogleDriveAccess = async () => {
+    await authClient.linkSocial({
+        provider: "google",
+        scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+};
+
+// Example usage in a React component
+return <button onClick={requestGoogleDriveAccess}>Add Google Drive Permissions</button>;
+```
+
+This will trigger a new OAuth flow that requests the additional scopes. After completion, your account will have the new scope in the database, and the access token will give you access to the requested Google APIs.
+
+<Callout>
+Ensure you're using Better Auth version 1.2.7 or later to avoid "Social account already linked" errors when requesting additional scopes from the same provider.
+</Callout>
