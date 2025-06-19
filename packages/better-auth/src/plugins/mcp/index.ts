@@ -61,6 +61,7 @@ export const getMCPProviderMetadata = (
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"none",
 		],
 		code_challenge_methods_supported: ["S256"],
 		claims_supported: [
@@ -384,9 +385,10 @@ export const mcp = (options: MCPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					if (!client_id || !client_secret) {
+					
+					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "client_id and client_secret are required",
+							error_description: "client_id is required",
 							error: "invalid_client",
 						});
 					}
@@ -437,13 +439,32 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_client",
 						});
 					}
-					const isValidSecret =
-						client.clientSecret === client_secret.toString();
-					if (!isValidSecret) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_secret",
-							error: "invalid_client",
-						});
+					// For public clients (type: 'public'), validate PKCE instead of client_secret
+					if (client.type === 'public') {
+						// Public clients must use PKCE
+						if (!code_verifier) {
+							throw new APIError("BAD_REQUEST", {
+								error_description: "code verifier is required for public clients",
+								error: "invalid_request",
+							});
+						}
+						// PKCE validation happens later in the flow, so we skip client_secret validation
+					} else {
+						// For confidential clients, validate client_secret
+						if (!client_secret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "client_secret is required for confidential clients",
+								error: "invalid_client",
+							});
+						}
+						const isValidSecret =
+							client.clientSecret === client_secret.toString();
+						if (!isValidSecret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_secret",
+								error: "invalid_client",
+							});
+						}
 					}
 					const value = JSON.parse(
 						verificationValue.value,
@@ -772,6 +793,10 @@ export const mcp = (options: MCPOptions) => {
 						opts.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
+					// Determine client type based on auth method
+					const clientType = (body.token_endpoint_auth_method === "none") ? "public" : "web";
+					const finalClientSecret = (clientType === "public") ? "" : clientSecret;
+
 					await ctx.context.adapter.create({
 						model: modelName.oauthClient,
 						data: {
@@ -779,9 +804,9 @@ export const mcp = (options: MCPOptions) => {
 							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
-							clientSecret: clientSecret,
+							clientSecret: finalClientSecret,
 							redirectURLs: body.redirect_uris.join(","),
-							type: "web",
+							type: clientType,
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",
 							disabled: false,
@@ -794,7 +819,7 @@ export const mcp = (options: MCPOptions) => {
 					return ctx.json(
 						{
 							client_id: clientId,
-							client_secret: clientSecret,
+							client_secret: finalClientSecret,
 							client_id_issued_at: Math.floor(Date.now() / 1000),
 							client_secret_expires_at: 0, // 0 means it doesn't expire
 							redirect_uris: body.redirect_uris,
