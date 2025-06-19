@@ -134,6 +134,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						const user =
 							await ctx.context.internalAdapter.findUserByEmail(email);
 						if (!user) {
+							if (opts.disableSignUp) {
+								throw new APIError("BAD_REQUEST", {
+									message: ERROR_CODES.USER_NOT_FOUND,
+								});
+							}
 							return ctx.json({
 								success: true,
 							});
