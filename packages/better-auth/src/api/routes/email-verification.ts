@@ -4,11 +4,9 @@ import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
-import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
-import { JWTExpired } from "jose/errors";
+import { jwtVerify } from "jose";
+import { signJWT } from "../../crypto/jwt";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -304,147 +302,175 @@ export const verifyEmail = createAuthEndpoint(
 			});
 		}
 		const { token } = ctx.query;
-		let jwt: JWTVerifyResult<JWTPayload>;
+		if (!ctx.context.options.secret) {
+			ctx.context.logger.error("Secret is not configured.");
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: "Secret is not configured",
+			});
+		}
+
 		try {
-			jwt = await jwtVerify(
+			const { payload: jwtPayload } = await jwtVerify(
 				token,
 				new TextEncoder().encode(ctx.context.secret),
 				{
 					algorithms: ["HS256"],
 				},
 			);
-		} catch (e) {
-			if (e instanceof JWTExpired) {
-				return redirectOnError("token_expired");
+			const email = (jwtPayload as any).email;
+			if (!email) {
+				throw new Error("Invalid JWT payload for standard verification");
 			}
-			return redirectOnError("invalid_token");
-		}
-		const schema = z.object({
-			email: z.string().email(),
-			updateTo: z.string().optional(),
-		});
-		const parsed = schema.parse(jwt.payload);
-		const user = await ctx.context.internalAdapter.findUserByEmail(
-			parsed.email,
-		);
-		if (!user) {
-			return redirectOnError("user_not_found");
-		}
-		if (parsed.updateTo) {
-			const session = await getSessionFromCtx(ctx);
-			if (!session) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
-				return redirectOnError("unauthorized");
-			}
-			if (session.user.email !== parsed.email) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
-				return redirectOnError("unauthorized");
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			if (!user) {
+				redirectOnError("user_not_found");
+				return; // unreachable but for TS
 			}
 
-			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
-				parsed.email,
+			await ctx.context.options.emailVerification?.onEmailVerification?.(
+				user.user,
+				ctx.request,
+			);
+			await ctx.context.internalAdapter.updateUserByEmail(
+				email,
 				{
-					email: parsed.updateTo,
-					emailVerified: false,
+					emailVerified: true,
 				},
 				ctx,
 			);
-
-			const newToken = await createEmailVerificationToken(
-				ctx.context.secret,
-				parsed.updateTo,
-			);
-
-			//send verification email to the new email
-			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-				{
-					user: updatedUser,
-					url: `${
-						ctx.context.baseURL
-					}/verify-email?token=${newToken}&callbackURL=${
-						ctx.query.callbackURL || "/"
-					}`,
-					token: newToken,
-				},
-				ctx.request,
-			);
-
-			await setSessionCookie(ctx, {
-				session: session.session,
-				user: {
-					...session.user,
-					email: parsed.updateTo,
-					emailVerified: false,
-				},
-			});
-
+			const currentSession = await getSessionFromCtx(ctx);
+			if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
+				if (!currentSession || currentSession.user.email !== email) {
+					const session = await ctx.context.internalAdapter.createSession(
+						user.user.id,
+						ctx,
+					);
+					if (!session) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to create session",
+						});
+					}
+					await setSessionCookie(ctx, {
+						session,
+						user: {
+							...user.user,
+							emailVerified: true,
+						},
+					});
+				} else {
+					await setSessionCookie(ctx, {
+						session: currentSession.session,
+						user: {
+							...currentSession.user,
+							emailVerified: true,
+						},
+					});
+				}
+			}
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
 			return ctx.json({
 				status: true,
-				user: {
-					id: updatedUser.id,
-					email: updatedUser.email,
-					name: updatedUser.name,
-					image: updatedUser.image,
-					emailVerified: updatedUser.emailVerified,
-					createdAt: updatedUser.createdAt,
-					updatedAt: updatedUser.updatedAt,
-				},
+				user: null,
 			});
+		} catch (e: any) {
+			if (e instanceof Response || e instanceof APIError) {
+				throw e;
+			}
+			if (e?.code === "ERR_JWT_EXPIRED") {
+				redirectOnError("token_expired");
+			}
+			// If it's not a JWT-related error we're handling, we fall through
+			// to checking the DB for an email-change token.
 		}
-		await ctx.context.options.emailVerification?.onEmailVerification?.(
-			user.user,
-			ctx.request,
-		);
-		await ctx.context.internalAdapter.updateUserByEmail(
-			parsed.email,
+
+		// Fallback to DB check for email change verification
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(token);
+		if (!verification) {
+			return redirectOnError("invalid_token");
+		}
+
+		if (verification.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.deleteVerificationValue(token);
+			return redirectOnError("token_expired");
+		}
+
+		// We delete the token after use
+		await ctx.context.internalAdapter.deleteVerificationValue(token);
+
+		const [type, ...rest] = verification.value.split(":");
+
+		if (type !== "email-change") {
+			return redirectOnError("invalid_token");
+		}
+
+		const [email, newEmail] = rest;
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+			}
+			return redirectOnError("unauthorized");
+		}
+		if (session.user.email !== email) {
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+			}
+			return redirectOnError("unauthorized");
+		}
+
+		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+			email,
 			{
-				emailVerified: true,
+				email: newEmail,
+				emailVerified: false,
 			},
 			ctx,
 		);
-		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
-			const currentSession = await getSessionFromCtx(ctx);
-			if (!currentSession || currentSession.user.email !== parsed.email) {
-				const session = await ctx.context.internalAdapter.createSession(
-					user.user.id,
-					ctx,
-				);
-				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: "Failed to create session",
-					});
-				}
-				await setSessionCookie(ctx, {
-					session,
-					user: {
-						...user.user,
-						emailVerified: true,
-					},
-				});
-			} else {
-				await setSessionCookie(ctx, {
-					session: currentSession.session,
-					user: {
-						...currentSession.user,
-						emailVerified: true,
-					},
-				});
-			}
-		}
+		const newToken = await createEmailVerificationToken(
+			ctx.context.secret,
+			newEmail,
+		);
+
+		//send verification email to the new email
+		await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+			{
+				user: updatedUser,
+				url: `${
+					ctx.context.baseURL
+				}/verify-email?token=${newToken}&callbackURL=${
+					ctx.query.callbackURL || "/"
+				}`,
+				token: newToken,
+			},
+			ctx.request,
+		);
+
+		await setSessionCookie(ctx, {
+			session: session.session,
+			user: {
+				...session.user,
+				email: newEmail,
+				emailVerified: false,
+			},
+		});
 
 		if (ctx.query.callbackURL) {
 			throw ctx.redirect(ctx.query.callbackURL);
 		}
 		return ctx.json({
 			status: true,
-			user: null,
+			user: {
+				id: updatedUser.id,
+				email: updatedUser.email,
+				name: updatedUser.name,
+				image: updatedUser.image,
+				emailVerified: updatedUser.emailVerified,
+				createdAt: updatedUser.createdAt,
+				updatedAt: updatedUser.updatedAt,
+			},
 		});
 	},
 );
