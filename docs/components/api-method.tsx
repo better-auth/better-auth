@@ -155,18 +155,18 @@ export const APIMethod = ({
 				defaultValue={isServerOnly ? "server" : "client"}
 				className="w-full gap-0"
 			>
-				<TabsList className="relative flex justify-start w-full gap-2 p-0 mb-1 bg-transparent hover:[&>div>a>button]:opacity-100">
+				<TabsList className="relative flex justify-start w-full p-0 bg-transparent hover:[&>div>a>button]:opacity-100">
 					<TabsTrigger
 						value="client"
 						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
 					>
-						client
+						Client
 					</TabsTrigger>
 					<TabsTrigger
 						value="server"
 						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
 					>
-						server
+						Server
 					</TabsTrigger>
 					<div className="absolute right-0">
 						<a href={`#api-method${pathId}`}>
@@ -186,7 +186,6 @@ export const APIMethod = ({
 							method={method || "GET"}
 							path={path}
 							isServerOnly={isServerOnly ?? false}
-							className="mt-0.5 mb-2"
 						/>
 					)}
 					{clientOnlyNote || note ? (
@@ -225,7 +224,7 @@ export const APIMethod = ({
 							method={method || "GET"}
 							path={path}
 							isServerOnly={isServerOnly ?? false}
-							className="mt-0.5 mb-2"
+							className=""
 						/>
 					)}
 					{serverOnlyNote || note ? (

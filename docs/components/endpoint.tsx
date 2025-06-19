@@ -29,7 +29,7 @@ export function Endpoint({
 	return (
 		<div
 			className={cn(
-				"relative flex items-center w-full gap-2 p-2 border rounded-lg border-border bg-fd-secondary/50",
+				"relative flex items-center w-full gap-2 p-2 border-t border-x  border-border bg-fd-secondary/50",
 				className,
 			)}
 		>
