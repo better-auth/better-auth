@@ -18,6 +18,7 @@ import { z } from "zod";
 import { vk } from "./vk";
 import { kick } from "./kick";
 import { zoom } from "./zoom";
+import { linear } from "./linear";
 export const socialProviders = {
 	apple,
 	discord,
@@ -37,6 +38,7 @@ export const socialProviders = {
 	roblox,
 	vk,
 	zoom,
+	linear,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -76,5 +78,6 @@ export * from "./roblox";
 export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
+export * from "./linear";
 
 export type SocialProviderList = typeof socialProviderList;

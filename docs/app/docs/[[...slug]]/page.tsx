@@ -1,26 +1,25 @@
-import { source } from "@/lib/source";
-import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
-import { notFound } from "next/navigation";
-import { absoluteUrl } from "@/lib/utils";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { cn } from "@/lib/utils";
-import { Step, Steps } from "fumadocs-ui/components/steps";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { GenerateSecret } from "@/components/generate-secret";
-import { AnimatePresence } from "@/components/ui/fade-in";
-import { TypeTable } from "fumadocs-ui/components/type-table";
 import { Features } from "@/components/blocks/features";
+import { DividerText } from "@/components/divider-text";
+import { Endpoint } from "@/components/endpoint";
 import { ForkButton } from "@/components/fork-button";
-import Link from "next/link";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import { File, Folder, Files } from "fumadocs-ui/components/files";
+import { GenerateSecret } from "@/components/generate-secret";
+import DatabaseTable from "@/components/mdx/database-tables";
+import { contents } from "@/components/sidebar-content";
+import { AnimatePresence } from "@/components/ui/fade-in";
+import { source } from "@/lib/source";
+import { absoluteUrl, cn } from "@/lib/utils";
 import { createTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Card, Cards } from "fumadocs-ui/components/card";
+import { File, Files, Folder } from "fumadocs-ui/components/files";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { TypeTable } from "fumadocs-ui/components/type-table";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+import { DocsBody, DocsPage, DocsTitle } from "fumadocs-ui/page";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { contents } from "@/components/sidebar-content";
-import { Endpoint } from "@/components/endpoint";
-import { DividerText } from "@/components/divider-text";
+import Link from "next/link";
+import { notFound } from "next/navigation";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -166,8 +165,14 @@ export async function generateMetadata({
 	const { slug } = await params;
 	const page = source.getPage(slug);
 	if (page == null) notFound();
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const url = new URL(`${baseUrl}/api/og`);
+	const baseUrl =
+		process.env.NEXT_PUBLIC_URL ||
+		process.env.VERCEL_URL ||
+		"http://localhost:3000";
+	const url = new URL(
+		`/api/og`,
+		baseUrl.includes("http") ? baseUrl : `https://${baseUrl}`,
+	);
 	const { title, description } = page.data;
 	const pageSlug = page.file.path;
 	url.searchParams.set("type", "Documentation");

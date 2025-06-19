@@ -1,0 +1,131 @@
+---
+title: Linear
+description: Linear OAuth provider setup and usage for Better Auth.
+---
+
+<Steps>
+    <Step> 
+        ### Get your Linear OAuth credentials
+        
+        To use Linear as a social provider, you need to create an OAuth application in your Linear workspace. Follow these steps:
+
+        1. Go to your [Linear workspace settings](https://linear.app/settings)
+        2. Navigate to the **"API"** section in the sidebar
+        3. Click **"Create new OAuth app"**
+        4. Fill in your application details:
+           - **Name**: Your application name (e.g., "My App")
+           - **Description**: Brief description of your application
+           - **Website**: Your application's website URL (optional)
+           - **Callback URL**: `http://localhost:3000/api/auth/callback/linear` (for development)
+        5. Click **"Create application"**
+        6. Copy the **Client ID** and **Client Secret** from the application details
+
+        <Callout type="warn">
+            For production, make sure to update the callback URL to your production domain: `https://yourdomain.com/api/auth/callback/linear`. If you change the base path of the auth routes, you should update the callback URL accordingly.
+        </Callout>
+
+        <Callout>
+            Linear OAuth apps are workspace-specific. Users can only authenticate if they have access to the workspace where the OAuth app was created.
+        </Callout>
+    </Step>
+
+    <Step>
+        ### Configure the provider
+
+        Add Linear to your `betterAuth` configuration and set up your environment variables:
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            socialProviders: {
+                linear: { // [!code highlight]
+                    clientId: process.env.LINEAR_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.LINEAR_CLIENT_SECRET as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+
+        Add the environment variables to your `.env` file:
+
+        ```env title=".env"
+        LINEAR_CLIENT_ID=your_linear_client_id
+        LINEAR_CLIENT_SECRET=your_linear_client_secret
+        ```
+
+        <Callout type="warn">
+            Keep your `LINEAR_CLIENT_SECRET` secure and never expose it in client-side code. Store it securely in your environment variables.
+        </Callout>
+    </Step>
+
+    <Step>
+        ### Sign In with Linear
+
+        Use the Linear provider to authenticate users in your application:
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        const authClient = createAuthClient()
+
+        const signIn = async () => {
+            const data = await authClient.signIn.social({
+                provider: "linear" // [!code highlight]
+            })
+        }
+        ```
+    </Step>
+
+</Steps>
+
+## Usage
+
+### Available Scopes
+
+Linear supports the following OAuth scopes that determine what data your application can access:
+
+- **`read`** (default): Read access to user profile and workspace data
+- **`write`**: Write access to create and modify issues, comments, and other Linear objects
+- **`admin`**: Administrative access to workspace settings and user management
+
+### Custom Scopes
+
+You can specify custom scopes by adding them to the provider configuration:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  socialProviders: {
+    linear: {
+      clientId: process.env.LINEAR_CLIENT_ID as string,
+      clientSecret: process.env.LINEAR_CLIENT_SECRET as string,
+      scope: ["read", "write"], // [!code highlight]
+    },
+  },
+});
+```
+
+<Callout>
+  If no scope is specified, Linear defaults to the `read` scope. Make sure your
+  OAuth app has the necessary permissions for the scopes you request.
+</Callout>
+
+### User Profile Data
+
+The Linear provider returns the following user information:
+
+**Standard fields:**
+
+- `id`: Linear user's unique identifier
+- `name`: User's display name
+- `email`: User's email address
+- `image`: User's avatar URL
+- `emailVerified`: Always `true` for Linear accounts
+
+**Linear-specific data** (available in the `data` object):
+
+- `active`: Whether the user account is active
+- `admin`: Whether the user has admin privileges in the workspace
+- `timezone`: User's configured timezone
+- `guest`: Whether the user is a guest user
+- `createdAt`: When the user account was created
+- `updatedAt`: When the user account was last updated
