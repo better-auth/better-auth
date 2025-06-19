@@ -1033,7 +1033,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												customer,
 												stripeCustomer,
 												user,
-											});
+											}, ctx.request);
 										}
 									}
 								},
