@@ -35,15 +35,16 @@ export interface HuggingFaceProfile {
 	};
 }
 
-export interface HuggingFaceOptions extends ProviderOptions<HuggingFaceProfile> {}
+export interface HuggingFaceOptions
+	extends ProviderOptions<HuggingFaceProfile> {}
 
 export const huggingface = (options: HuggingFaceOptions) => {
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			const _scopes = options.disableDefaultScope 
-				? [] 
+			const _scopes = options.disableDefaultScope
+				? []
 				: ["openid", "profile", "email"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
@@ -110,4 +111,4 @@ export const huggingface = (options: HuggingFaceOptions) => {
 		},
 		options,
 	} satisfies OAuthProvider<HuggingFaceProfile>;
-}; 
+};
