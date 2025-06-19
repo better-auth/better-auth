@@ -98,7 +98,6 @@ describe("mcp", () => {
 
 		expect(createdClient.data).toMatchObject({
 			client_id: expect.any(String),
-			client_secret: "", // Public clients have empty client_secret
 			client_name: "test-public-client",
 			logo_uri: "",
 			redirect_uris: [
@@ -108,12 +107,15 @@ describe("mcp", () => {
 			response_types: ["code"],
 			token_endpoint_auth_method: "none",
 			client_id_issued_at: expect.any(Number),
-			client_secret_expires_at: 0,
 		});
+
+		// Public clients should NOT receive client_secret or client_secret_expires_at
+		expect(createdClient.data).not.toHaveProperty("client_secret");
+		expect(createdClient.data).not.toHaveProperty("client_secret_expires_at");
 
 		publicClient = {
 			clientId: (createdClient.data as any).client_id,
-			clientSecret: (createdClient.data as any).client_secret,
+			clientSecret: "", // Public clients don't have secrets, but our type expects a string
 			redirectURLs: (createdClient.data as any).redirect_uris,
 			metadata: {},
 			icon: (createdClient.data as any).logo_uri || "",
@@ -152,6 +154,10 @@ describe("mcp", () => {
 			client_id_issued_at: expect.any(Number),
 			client_secret_expires_at: 0,
 		});
+
+		// Confidential clients should receive client_secret and client_secret_expires_at
+		expect(createdClient.data).toHaveProperty("client_secret");
+		expect(createdClient.data).toHaveProperty("client_secret_expires_at");
 
 		confidentialClient = {
 			clientId: (createdClient.data as any).client_id,

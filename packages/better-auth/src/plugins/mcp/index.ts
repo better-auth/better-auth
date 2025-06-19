@@ -683,7 +683,8 @@ export const mcp = (options: MCPOptions) => {
 													},
 													clientSecret: {
 														type: "string",
-														description: "Secret key for the client",
+														description:
+															"Secret key for the client. Not included for public clients.",
 													},
 													redirectURLs: {
 														type: "array",
@@ -726,7 +727,6 @@ export const mcp = (options: MCPOptions) => {
 												required: [
 													"name",
 													"clientId",
-													"clientSecret",
 													"redirectURLs",
 													"type",
 													"authenticationScheme",
@@ -819,39 +819,42 @@ export const mcp = (options: MCPOptions) => {
 						},
 					});
 
-					return ctx.json(
-						{
-							client_id: clientId,
-							client_secret: finalClientSecret,
-							client_id_issued_at: Math.floor(Date.now() / 1000),
-							client_secret_expires_at: 0, // 0 means it doesn't expire
-							redirect_uris: body.redirect_uris,
-							token_endpoint_auth_method:
-								body.token_endpoint_auth_method || "client_secret_basic",
-							grant_types: body.grant_types || ["authorization_code"],
-							response_types: body.response_types || ["code"],
-							client_name: body.client_name,
-							client_uri: body.client_uri,
-							logo_uri: body.logo_uri,
-							scope: body.scope,
-							contacts: body.contacts,
-							tos_uri: body.tos_uri,
-							policy_uri: body.policy_uri,
-							jwks_uri: body.jwks_uri,
-							jwks: body.jwks,
-							software_id: body.software_id,
-							software_version: body.software_version,
-							software_statement: body.software_statement,
-							metadata: body.metadata,
+					const responseData: any = {
+						client_id: clientId,
+						client_id_issued_at: Math.floor(Date.now() / 1000),
+						redirect_uris: body.redirect_uris,
+						token_endpoint_auth_method:
+							body.token_endpoint_auth_method || "client_secret_basic",
+						grant_types: body.grant_types || ["authorization_code"],
+						response_types: body.response_types || ["code"],
+						client_name: body.client_name,
+						client_uri: body.client_uri,
+						logo_uri: body.logo_uri,
+						scope: body.scope,
+						contacts: body.contacts,
+						tos_uri: body.tos_uri,
+						policy_uri: body.policy_uri,
+						jwks_uri: body.jwks_uri,
+						jwks: body.jwks,
+						software_id: body.software_id,
+						software_version: body.software_version,
+						software_statement: body.software_statement,
+						metadata: body.metadata,
+					};
+
+					// Only include client_secret for confidential clients
+					if (clientType !== "public") {
+						responseData.client_secret = finalClientSecret;
+						responseData.client_secret_expires_at = 0; // 0 means it doesn't expire
+					}
+
+					return ctx.json(responseData, {
+						status: 201,
+						headers: {
+							"Cache-Control": "no-store",
+							Pragma: "no-cache",
 						},
-						{
-							status: 201,
-							headers: {
-								"Cache-Control": "no-store",
-								Pragma: "no-cache",
-							},
-						},
-					);
+					});
 				},
 			),
 			getMcpSession: createAuthEndpoint(
