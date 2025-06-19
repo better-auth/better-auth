@@ -31,29 +31,29 @@ export const betterAuth = <O extends BetterAuthOptions>(
 		return acc;
 	}, {});
 	return {
-		handler: async (request: Request) => {
-			const ctx = await authContext;
-			const basePath = ctx.options.basePath || "/api/auth";
-			if (!ctx.options.baseURL) {
+		handler: async (request: Request, ctx?: AuthContext) => {
+			const _ctx = ctx || (await authContext);
+			const basePath = _ctx.options.basePath || "/api/auth";
+			if (!_ctx.options.baseURL) {
 				const baseURL = getBaseURL(undefined, basePath, request);
 				if (baseURL) {
-					ctx.baseURL = baseURL;
-					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+					_ctx.baseURL = baseURL;
+					_ctx.options.baseURL = getOrigin(_ctx.baseURL) || undefined;
 				} else {
 					throw new BetterAuthError(
 						"Could not get base URL from request. Please provide a valid base URL.",
 					);
 				}
 			}
-			ctx.trustedOrigins = [
+			_ctx.trustedOrigins = [
 				...(options.trustedOrigins
 					? Array.isArray(options.trustedOrigins)
 						? options.trustedOrigins
 						: await options.trustedOrigins(request)
 					: []),
-				ctx.options.baseURL!,
+				_ctx.options.baseURL!,
 			];
-			const { handler } = router(ctx, options);
+			const { handler } = router(_ctx, options);
 			return handler(request);
 		},
 		api: api as InferAPI<typeof api>,
