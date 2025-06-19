@@ -799,7 +799,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						const email = response?.user.email;
 						if (email) {
 							const otp = opts.generateOTP(
-								{ email, type: ctx.body.type },
+								{ email, type: "email-verification" },
 								ctx.request,
 							);
 							await ctx.context.internalAdapter.createVerificationValue(
