@@ -220,13 +220,13 @@ Changes the role of a user.
 ```ts
 type setRole = {
     /**
-     * The user id. 
+     * The user id which you want to set the role for.
      */
     userId?: string = "user-id"
     /**
      * The role to set, this can be a string or an array of strings. 
      */
-    role: string | string[]
+    role: string | string[] = "admin"
 }
 ```
 </APIMethod>
@@ -247,7 +247,7 @@ type setUserPassword = {
      */
     newPassword: string = 'new-password'
     /**
-     * The user id. 
+     * The user id which you want to set the password for.
      */
     userId: string = 'user-id'
 }
@@ -263,11 +263,12 @@ Bans a user, preventing them from signing in and revokes all of their existing s
   path="/admin/ban-user"
   method="POST"
   requireSession
+  noResult
 >
 ```ts
 type banUser = {
     /**
-     * The user id. If not provided, will default to the session headers.
+     * The user id which you want to ban.
      */
     userId: string = "user-id"
     /**
@@ -290,11 +291,12 @@ Removes the ban from a user, allowing them to sign in again.
   path="/admin/unban-user"
   method="POST"
   requireSession
+  noResult
 >
 ```ts
 type unbanUser = {
     /**
-     * The user id 
+     * The user id which you want to unban.
      */
     userId: string = "user-id"
 }
@@ -333,7 +335,7 @@ Revokes a specific session for a user.
 ```ts
 type revokeUserSession = {
     /**
-     * The session token. 
+     * The session token which you want to revoke. 
      */
     sessionToken: string = "session_token_here"
 }
@@ -352,7 +354,7 @@ Revokes all sessions for a user.
 ```ts
 type revokeUserSessions = {
     /**
-     * The user id. 
+     * The user id which you want to revoke all sessions for. 
      */
     userId: string = "user-id"
 }
@@ -371,7 +373,7 @@ This feature allows an admin to create a session that mimics the specified user.
 ```ts
 type impersonateUser = {
     /**
-     * The user id. 
+     * The user id which you want to impersonate. 
      */
     userId: string = "user-id"
 }
@@ -402,7 +404,7 @@ Hard deletes a user from the database.
 ```ts
 type removeUser = {
     /**
-     * The user id. 
+     * The user id which you want to remove. 
      */
     userId: string = "user-id"
 }
@@ -568,7 +570,7 @@ To check a user's permissions, you can use the `hasPermission` function provided
 ```ts
 type userHasPermission = {
     /**
-     * The user id. 
+     * The user id which you want to check the permissions for. 
      */
     userId?: string = "user-id"
     /**
