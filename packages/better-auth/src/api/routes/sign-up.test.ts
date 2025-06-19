@@ -108,7 +108,6 @@ describe("sign-up with organization", async (it) => {
 				authorization: `Bearer ${res.token}`,
 			}),
 		});
-		console.log(session);
 		expect(session?.session.activeOrganizationId).toBeDefined();
 
 		const orgs = await db.findMany({
