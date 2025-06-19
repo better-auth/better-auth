@@ -693,13 +693,13 @@ export const mcp = (options: MCPOptions) => {
 													type: {
 														type: "string",
 														description: "Type of the client",
-														enum: ["web"],
+														enum: ["web", "public"],
 													},
 													authenticationScheme: {
 														type: "string",
 														description:
 															"Authentication scheme used by the client",
-														enum: ["client_secret"],
+														enum: ["client_secret", "none"],
 													},
 													disabled: {
 														type: "boolean",
