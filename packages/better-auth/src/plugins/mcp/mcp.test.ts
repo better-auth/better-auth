@@ -58,12 +58,16 @@ describe("mcp", async () => {
 	let publicClient: Client;
 	let confidentialClient: Client;
 
-	it("should register public client with token_endpoint_auth_method: none", async ({ expect }) => {
+	it("should register public client with token_endpoint_auth_method: none", async ({
+		expect,
+	}) => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
 				client_name: "test-public-client",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test-public"],
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-public",
+				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
 			},
@@ -74,7 +78,9 @@ describe("mcp", async () => {
 			client_secret: "", // Public clients have empty client_secret
 			client_name: "test-public-client",
 			logo_uri: "",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test-public"],
+			redirect_uris: [
+				"http://localhost:3000/api/auth/oauth2/callback/test-public",
+			],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "none",
@@ -94,12 +100,16 @@ describe("mcp", async () => {
 		};
 	});
 
-	it("should register confidential client with client_secret_basic", async ({ expect }) => {
+	it("should register confidential client with client_secret_basic", async ({
+		expect,
+	}) => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
 				client_name: "test-confidential-client",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test-confidential"],
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
+				],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
 			},
@@ -110,7 +120,9 @@ describe("mcp", async () => {
 			client_secret: expect.any(String),
 			client_name: "test-confidential-client",
 			logo_uri: "",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test-confidential"],
+			redirect_uris: [
+				"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
+			],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "client_secret_basic",
@@ -197,10 +209,12 @@ describe("mcp", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
-	it("should reject public client without code_verifier", async ({ expect }) => {
+	it("should reject public client without code_verifier", async ({
+		expect,
+	}) => {
 		// Create a mock token request without code_verifier
 		const authCode = "test-auth-code";
-		
+
 		const result = await serverClient.$fetch("/mcp/token", {
 			method: "POST",
 			body: {
@@ -211,13 +225,17 @@ describe("mcp", async () => {
 				// Missing code_verifier for public client
 			},
 		});
-		
+
 		expect(result.error).toBeTruthy();
 		expect(result.error.error).toBe("invalid_request");
-		expect(result.error.error_description).toContain("code verifier is missing");
+		expect(result.error.error_description).toContain(
+			"code verifier is missing",
+		);
 	});
 
-	it("should still support confidential clients in MCP context", async ({ expect }) => {
+	it("should still support confidential clients in MCP context", async ({
+		expect,
+	}) => {
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
 				accountLinking: {
@@ -283,8 +301,10 @@ describe("mcp", async () => {
 	});
 
 	it("should expose OAuth discovery metadata", async ({ expect }) => {
-		const metadata = await serverClient.$fetch("/.well-known/oauth-authorization-server");
-		
+		const metadata = await serverClient.$fetch(
+			"/.well-known/oauth-authorization-server",
+		);
+
 		expect(metadata.data).toMatchObject({
 			issuer: "http://localhost:3001",
 			authorization_endpoint: "http://localhost:3001/api/auth/mcp/authorize",
@@ -325,7 +345,9 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-refresh-client",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test-refresh"],
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-refresh",
+				],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
 			},
@@ -335,7 +357,7 @@ describe("mcp", async () => {
 		// We'll simulate an existing token with refresh capabilities
 		const clientId = createdClient.data.client_id;
 		const clientSecret = createdClient.data.client_secret;
-		
+
 		// Test the refresh token flow by creating a refresh token request
 		// For this test, we'll verify the endpoint handles refresh_token grant_type
 		const refreshTokenRequest = await serverClient.$fetch("/mcp/token", {
@@ -351,7 +373,9 @@ describe("mcp", async () => {
 		// Should fail with invalid_grant error for invalid refresh token
 		expect(refreshTokenRequest.error).toBeTruthy();
 		expect(refreshTokenRequest.error.error).toBe("invalid_grant");
-		expect(refreshTokenRequest.error.error_description).toContain("invalid refresh token");
+		expect(refreshTokenRequest.error.error_description).toContain(
+			"invalid refresh token",
+		);
 	});
 
 	it("should return user info from userinfo endpoint", async ({ expect }) => {
@@ -360,7 +384,9 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-userinfo-client",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test-userinfo"],
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-userinfo",
+				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
 			},
@@ -418,7 +444,7 @@ describe("mcp", async () => {
 		// Follow OAuth flow to get access token (simplified version)
 		// In a real test, we'd complete the full flow, but for this test we'll
 		// use the getMcpSession endpoint which validates bearer tokens
-		
+
 		// For now, let's test the userinfo endpoint structure by calling it directly
 		// This will fail auth but we can check the endpoint exists and returns proper errors
 		const userinfoResponse = await serverClient.$fetch("/mcp/userinfo", {
@@ -438,7 +464,9 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-idtoken-client",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test-idtoken"],
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-idtoken",
+				],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
 			},
@@ -446,7 +474,7 @@ describe("mcp", async () => {
 
 		const clientId = createdClient.data.client_id;
 		const clientSecret = createdClient.data.client_secret;
-		
+
 		// Test that token endpoint handles openid scope properly
 		// We'll test with invalid code but valid structure to verify ID token logic
 		const tokenRequest = await serverClient.$fetch("/mcp/token", {
@@ -464,6 +492,8 @@ describe("mcp", async () => {
 		// Should fail due to missing code verifier, but this tests the ID token flow exists
 		expect(tokenRequest.error).toBeTruthy();
 		expect(tokenRequest.error.error).toBe("invalid_request");
-		expect(tokenRequest.error.error_description).toContain("code verifier is missing");
+		expect(tokenRequest.error.error_description).toContain(
+			"code verifier is missing",
+		);
 	});
 });

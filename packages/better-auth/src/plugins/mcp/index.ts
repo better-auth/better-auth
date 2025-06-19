@@ -385,7 +385,7 @@ export const mcp = (options: MCPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					
+
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "client_id is required",
@@ -440,11 +440,12 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 					// For public clients (type: 'public'), validate PKCE instead of client_secret
-					if (client.type === 'public') {
+					if (client.type === "public") {
 						// Public clients must use PKCE
 						if (!code_verifier) {
 							throw new APIError("BAD_REQUEST", {
-								error_description: "code verifier is required for public clients",
+								error_description:
+									"code verifier is required for public clients",
 								error: "invalid_request",
 							});
 						}
@@ -453,7 +454,8 @@ export const mcp = (options: MCPOptions) => {
 						// For confidential clients, validate client_secret
 						if (!client_secret) {
 							throw new APIError("UNAUTHORIZED", {
-								error_description: "client_secret is required for confidential clients",
+								error_description:
+									"client_secret is required for confidential clients",
 								error: "invalid_client",
 							});
 						}
@@ -794,8 +796,9 @@ export const mcp = (options: MCPOptions) => {
 						generateRandomString(32, "a-z", "A-Z");
 
 					// Determine client type based on auth method
-					const clientType = (body.token_endpoint_auth_method === "none") ? "public" : "web";
-					const finalClientSecret = (clientType === "public") ? "" : clientSecret;
+					const clientType =
+						body.token_endpoint_auth_method === "none" ? "public" : "web";
+					const finalClientSecret = clientType === "public" ? "" : clientSecret;
 
 					await ctx.context.adapter.create({
 						model: modelName.oauthClient,
