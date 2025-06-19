@@ -1,15 +1,15 @@
 "use client";
 
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { AsideLink } from "@/components/ui/aside-link";
-import { Suspense, useEffect, useState } from "react";
-import { useSearchContext } from "fumadocs-ui/provider";
-import { usePathname, useRouter } from "next/navigation";
-import { contents, examples } from "./sidebar-content";
-import { ChevronDownIcon, Search } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { useSearchContext } from "fumadocs-ui/provider";
+import { ChevronDownIcon, Search } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { contents, examples } from "./sidebar-content";
 import { Badge } from "./ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 
 export default function ArticleLayout() {
 	const [currentOpen, setCurrentOpen] = useState<number>(0);
