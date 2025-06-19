@@ -68,7 +68,6 @@ describe("sign-in with organization", async (it) => {
 
 		const newUserId = signUpRes.user.id;
 
-		// 2. Create an organization for this user
 		const org = await auth.api.createOrganization({
 			body: {
 				name: "test-org",
@@ -76,12 +75,10 @@ describe("sign-in with organization", async (it) => {
 				userId: newUserId,
 			},
 		});
-		console.log(org);
 
 		expect(org).toBeDefined();
 		if (!org) return;
 
-		// 3. Sign in as the new user
 		const signInRes = await auth.api.signInEmail({
 			body: {
 				email: newUserEmail,
@@ -90,7 +87,6 @@ describe("sign-in with organization", async (it) => {
 			asResponse: true,
 		});
 
-		// 4. Assertions
 		const setCookie = signInRes.headers.get("set-cookie");
 		const parsed = parseSetCookieHeader(setCookie || "");
 		const sessionToken = parsed.get("better-auth.session_token");
