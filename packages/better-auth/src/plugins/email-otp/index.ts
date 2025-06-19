@@ -130,19 +130,19 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
-					if (ctx.body.type === "forget-password" || opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
+
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					// Allow silent success for forget-password requests (security measure)
+					if (ctx.body.type === "forget-password") {
 						if (!user) {
-							if (opts.disableSignUp) {
-								throw new APIError("BAD_REQUEST", {
-									message: ERROR_CODES.USER_NOT_FOUND,
-								});
-							}
-							return ctx.json({
-								success: true,
-							});
+							return ctx.json({ success: true });
 						}
+					}
+					// Block unregistered users if sign-up is disabled
+					if (!user && opts.disableSignUp) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.USER_NOT_FOUND,
+						});
 					}
 					const otp = opts.generateOTP(
 						{ email, type: ctx.body.type },
