@@ -5,6 +5,7 @@ import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { ERROR_CODES } from "./email-otp-error";
 
 export interface EmailOTPOptions {
 	/**
@@ -68,13 +69,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
 		...options,
 	} satisfies EmailOTPOptions;
-	const ERROR_CODES = {
-		OTP_EXPIRED: "otp expired",
-		INVALID_OTP: "Invalid OTP",
-		INVALID_EMAIL: "Invalid email",
-		USER_NOT_FOUND: "User not found",
-		TOO_MANY_ATTEMPTS: "Too many attempts",
-	} as const;
 	return {
 		id: "email-otp",
 		endpoints: {
