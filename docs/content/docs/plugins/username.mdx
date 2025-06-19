@@ -173,3 +173,24 @@ const auth = betterAuth({
     ]
 })
 ```
+
+### Required Username
+
+Whether the username is required during user registration. Default is `false`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            requiredUsername: true
+        })
+    ]
+})
+```
+
+When set to `true`, users will be required to provide a username during sign up. When set to `false` (default), the username field is optional during registration.
+
+
