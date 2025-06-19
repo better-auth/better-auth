@@ -21,12 +21,15 @@ describe("mcp", () => {
 
 	beforeAll(async () => {
 		// Start server on ephemeral port first to get available port
-		const tempServer = await listen(toNodeHandler(async () => new Response("temp")), {
-			port: 0,
-		});
+		const tempServer = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{
+				port: 0,
+			},
+		);
 		const port = tempServer.address?.port || 3001;
 		await tempServer.close();
-		
+
 		baseURL = `http://localhost:${port}`;
 
 		const testInstance = await getTestInstance({
