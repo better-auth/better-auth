@@ -285,6 +285,10 @@ export const username = (options?: UsernameOptions) => {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
 							}
+						} else if (options?.requiredUsername) {
+							throw new APIError("UNPROCESSABLE_ENTITY", {
+								message: ERROR_CODES.USERNAME_IS_REQUIRED,
+							});
 						}
 					}),
 				},
