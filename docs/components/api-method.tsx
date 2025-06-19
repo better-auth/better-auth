@@ -211,8 +211,8 @@ export const APIMethod = ({
 							lang="ts"
 						/>
 						{isServerOnly ? (
-							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-blur-xs border-border">
-								<span>This is a server-only endpoint!</span>
+							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-brightness-50 backdrop-blur-xs border-border">
+								<span>This is a server-only endpoint</span>
 							</div>
 						) : null}
 					</div>
@@ -241,8 +241,8 @@ export const APIMethod = ({
 					<div className={cn("w-full relative")}>
 						{serverCodeBlock}
 						{isClientOnly ? (
-							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-blur-xs border-border">
-								<span>This is a client-only method!</span>
+							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-brightness-50 backdrop-blur-xs border-border">
+								<span>This is a client-only endpoint</span>
 							</div>
 						) : null}
 					</div>

@@ -90,7 +90,7 @@ To enable two-factor authentication, call `twoFactor.enable` with the user's pas
 ```ts
 type enableTwoFactor = {
     /**
-     * User password. 
+     * The user's password. Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
      */
     password: string
     /**
@@ -152,17 +152,24 @@ const authClient = createAuthClient({
 
 
 
-#### Using `auth.api`
+<Callout type="warn">
+#### With `auth.api`
 
-When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will, by default, respond with an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. We recommend passing `asResponse: true` to receive the Response object instead.
+When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will return an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. You can check using `in` instead to check if `twoFactorRedirect` is set to `true`.
 
 ```ts
 const response = await auth.api.signInEmail({
-    email: "my-email@email.com",
-    password: "secure-password",
-    asResponse: true
-})
+	body: {
+		email: "test@test.com",
+		password: "test",
+	},
+});
+
+if ("twoFactorRedirect" in response) {
+	// Handle the 2FA verification in place
+}
 ```
+</Callout>
 
 ### Disabling 2FA
 
@@ -176,7 +183,7 @@ To disable two-factor authentication, call `twoFactor.disable` with the user's p
 ```ts
 type disableTwoFactor = {
     /**
-     * User password. 
+     * The user's password. Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
      */
     password: string
 }
@@ -187,7 +194,7 @@ type disableTwoFactor = {
 
 TOTP (Time-Based One-Time Password) is an algorithm that generates a unique password for each login attempt using time as a counter. Every fixed interval (Better Auth defaults to 30 seconds), a new password is generated. This addresses several issues with traditional passwords: they can be forgotten, stolen, or guessed. OTPs solve some of these problems, but their delivery via SMS or email can be unreliable (or even risky, considering it opens new attack vectors).
 
-TOTP, however, generates codes offline, making it both secure and convenient. You just need an authenticator app on your phone, and you’re set—no internet required.
+TOTP, however, generates codes offline, making it both secure and convenient. You just need an authenticator app on your phone.
 
 #### Getting TOTP URI
 
@@ -201,7 +208,7 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
 ```ts
 type getTOTPURI = {
     /**
-     * User password. 
+     * The user's password. Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
      */
     password: string
 }
@@ -210,6 +217,8 @@ type getTOTPURI = {
 
 
 **Example: Using React**
+
+Once you have the TOTP URI, you can use it to generate a QR code for the user to scan with their authenticator app.
 
 ```tsx title="user-card.tsx"
 import QRCode from "react-qr-code";
@@ -340,6 +349,11 @@ if (data) {
 ```
 </APIMethod>
 
+
+<Callout type="warn">
+When you generate backup codes, the old backup codes will be deleted and new ones will be generated.
+</Callout>
+
 #### Using Backup Codes
 
 You can now allow users to provider backup code as account recover method.
@@ -370,7 +384,7 @@ Once a backup code is used, it will be removed from the database and can't be us
 
 #### Viewing Backup Codes
 
-You can view the backup codes at any time by calling `viewBackupCodes`. This action can only be performed on the server using `auth.api`.
+To display the backup codes to the user, you can call `viewBackupCodes` on the server. This will return the backup codes in the response. You should only this if the user has a fresh session - a session that was just created.
 
 <APIMethod
   path="/two-factor/view-backup-codes"
@@ -522,9 +536,9 @@ import { twoFactorClient } from "better-auth/client/plugins"
 const authClient =  createAuthClient({
     plugins: [
         twoFactorClient({ // [!code highlight]
-            onTwoFactorRedirect(){
-                window.location.href = "/2fa" // Handle the 2FA verification redirect
-            }
+            onTwoFactorRedirect(){ // [!code highlight]
+                window.location.href = "/2fa" // Handle the 2FA verification redirect // [!code highlight]
+            } // [!code highlight]
         }) // [!code highlight]
     ]
 })
