@@ -21,6 +21,7 @@ describe("mcp", async () => {
 			mcp({
 				loginPage: "/login",
 				oidcConfig: {
+					loginPage: "/login",
 					requirePKCE: true,
 
 					getAdditionalUserInfoClaim(user, scopes) {
@@ -89,14 +90,14 @@ describe("mcp", async () => {
 		});
 
 		publicClient = {
-			clientId: createdClient.data.client_id,
-			clientSecret: createdClient.data.client_secret,
-			redirectURLs: createdClient.data.redirect_uris,
+			clientId: (createdClient.data as any).client_id,
+			clientSecret: (createdClient.data as any).client_secret,
+			redirectURLs: (createdClient.data as any).redirect_uris,
 			metadata: {},
-			icon: createdClient.data.logo_uri || "",
+			icon: (createdClient.data as any).logo_uri || "",
 			type: "public",
 			disabled: false,
-			name: createdClient.data.client_name || "",
+			name: (createdClient.data as any).client_name || "",
 		};
 	});
 
@@ -131,14 +132,14 @@ describe("mcp", async () => {
 		});
 
 		confidentialClient = {
-			clientId: createdClient.data.client_id,
-			clientSecret: createdClient.data.client_secret,
-			redirectURLs: createdClient.data.redirect_uris,
+			clientId: (createdClient.data as any).client_id,
+			clientSecret: (createdClient.data as any).client_secret,
+			redirectURLs: (createdClient.data as any).redirect_uris,
 			metadata: {},
-			icon: createdClient.data.logo_uri || "",
+			icon: (createdClient.data as any).logo_uri || "",
 			type: "web",
 			disabled: false,
-			name: createdClient.data.client_name || "",
+			name: (createdClient.data as any).client_name || "",
 		};
 	});
 
@@ -227,8 +228,8 @@ describe("mcp", async () => {
 		});
 
 		expect(result.error).toBeTruthy();
-		expect(result.error.error).toBe("invalid_request");
-		expect(result.error.error_description).toContain(
+		expect((result.error as any).error).toBe("invalid_request");
+		expect((result.error as any).error_description).toContain(
 			"code verifier is missing",
 		);
 	});
@@ -248,7 +249,7 @@ describe("mcp", async () => {
 						{
 							providerId: "test-confidential",
 							clientId: confidentialClient.clientId,
-							clientSecret: confidentialClient.clientSecret,
+							clientSecret: confidentialClient.clientSecret || "",
 							authorizationUrl: "http://localhost:3001/api/auth/mcp/authorize",
 							tokenUrl: "http://localhost:3001/api/auth/mcp/token",
 							scopes: ["openid", "profile", "email"],
@@ -355,8 +356,8 @@ describe("mcp", async () => {
 
 		// Create a mock access token in the database to test refresh functionality
 		// We'll simulate an existing token with refresh capabilities
-		const clientId = createdClient.data.client_id;
-		const clientSecret = createdClient.data.client_secret;
+		const clientId = (createdClient.data as any).client_id;
+		const clientSecret = (createdClient.data as any).client_secret;
 
 		// Test the refresh token flow by creating a refresh token request
 		// For this test, we'll verify the endpoint handles refresh_token grant_type
@@ -372,8 +373,8 @@ describe("mcp", async () => {
 
 		// Should fail with invalid_grant error for invalid refresh token
 		expect(refreshTokenRequest.error).toBeTruthy();
-		expect(refreshTokenRequest.error.error).toBe("invalid_grant");
-		expect(refreshTokenRequest.error.error_description).toContain(
+		expect((refreshTokenRequest.error as any).error).toBe("invalid_grant");
+		expect((refreshTokenRequest.error as any).error_description).toContain(
 			"invalid refresh token",
 		);
 	});
@@ -393,9 +394,9 @@ describe("mcp", async () => {
 		});
 
 		const userinfoClient = {
-			clientId: createdClient.data.client_id,
-			clientSecret: createdClient.data.client_secret,
-			redirectURLs: createdClient.data.redirect_uris,
+			clientId: (createdClient.data as any).client_id,
+			clientSecret: (createdClient.data as any).client_secret,
+			redirectURLs: (createdClient.data as any).redirect_uris,
 		};
 
 		// Set up OAuth flow
@@ -472,8 +473,8 @@ describe("mcp", async () => {
 			},
 		});
 
-		const clientId = createdClient.data.client_id;
-		const clientSecret = createdClient.data.client_secret;
+		const clientId = (createdClient.data as any).client_id;
+		const clientSecret = (createdClient.data as any).client_secret;
 
 		// Test that token endpoint handles openid scope properly
 		// We'll test with invalid code but valid structure to verify ID token logic
@@ -484,15 +485,15 @@ describe("mcp", async () => {
 				client_id: clientId,
 				client_secret: clientSecret,
 				code: "invalid-auth-code",
-				redirect_uri: createdClient.data.redirect_uris[0],
+				redirect_uri: (createdClient.data as any).redirect_uris[0],
 				// Missing code_verifier but that's OK for confidential clients
 			},
 		});
 
 		// Should fail due to missing code verifier, but this tests the ID token flow exists
 		expect(tokenRequest.error).toBeTruthy();
-		expect(tokenRequest.error.error).toBe("invalid_request");
-		expect(tokenRequest.error.error_description).toContain(
+		expect((tokenRequest.error as any).error).toBe("invalid_request");
+		expect((tokenRequest.error as any).error_description).toContain(
 			"code verifier is missing",
 		);
 	});
