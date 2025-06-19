@@ -767,7 +767,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 			 * **client:**
 			 * `authClient.oauth2.link`
 			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oauth2#api-method-oauth2-link)
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/generic-oauth#api-method-oauth2-link)
 			 */
 			oAuth2LinkAccount: createAuthEndpoint(
 				"/oauth2/link",
