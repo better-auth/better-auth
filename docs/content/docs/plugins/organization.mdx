@@ -282,6 +282,11 @@ Active organization is the workspace the user is currently working on. By defaul
 
 You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
 
+<Callout>
+  In some applications, you may want the ability to un-set an active organization.
+  In this case, you can call this endpoint with `organizationId` set to `null`.
+</Callout>
+
 <APIMethod path="/organization/set-active" method="POST">
 ```ts
 type setActiveOrganization = {
@@ -440,7 +445,7 @@ type updateOrganization = {
         metadata?: Record<string, any> | null = { customerId: "test" }
     }
     /**
-     * The organization ID. 
+     * The organization ID. to update.
      */
     organizationId?: string = "org-id"
 }
@@ -582,7 +587,7 @@ If a user has sent out an invitation, you can use this method to cancel it.
 
 If you're looking for how a user can reject an invitation, you can find that [here](#reject-invitation).
 
-<APIMethod path="/organization/cancel-invitation" method="POST">
+<APIMethod path="/organization/cancel-invitation" method="POST" noResult>
 ```ts
 type cancelInvitation = {
     /**
@@ -597,7 +602,7 @@ type cancelInvitation = {
 
 If this user has recieved an invitation, but wants to decline it, this method will allow you to do so by rejecting it.
 
-<APIMethod path="/organization/reject-invitation" method="POST">
+<APIMethod path="/organization/reject-invitation" method="POST" noResult>
 ```ts
 type rejectInvitation = {
     /**
@@ -689,7 +694,7 @@ type updateMemberRole = {
 
 ### Get Active Member
 
-To get the current member of the organization you can use the `organization.getActiveMember` function. This function will return the current active member.
+To get the current member of the active organization you can use the `organization.getActiveMember` function. This function will return the user's member details in their active organization.
 
 <APIMethod
   path="/organization/get-active-member"
@@ -1083,11 +1088,22 @@ type updateTeam = {
      * A partial object containing options for you to update.
      */
     data: {
-        id?: string
-        name?: string
-        organizationId?: string
-        createdAt?: date
-        updatedAt?: date
+        /**
+         * The name of the team to be updated.
+         */
+        name?: string = "My new team name"
+        /**
+         * The organization ID which the team falls under.
+         */
+        organizationId?: string = "My new organization ID for this team"
+        /**
+         * The timestamp of when the team was created.
+         */
+        createdAt?: Date = new Date()
+        /**
+         * The timestamp of when the team was last updated.
+         */
+        updatedAt?: Date = new Date()
     }
 }
 ```
