@@ -25,6 +25,7 @@ type Property = {
 	isServerOnly: boolean;
 	path: string[];
 	isNullable: boolean;
+	isClientOnly: boolean;
 };
 
 const placeholderProperty: Property = {
@@ -37,6 +38,7 @@ const placeholderProperty: Property = {
 	isServerOnly: false,
 	path: [],
 	isNullable: false,
+	isClientOnly: false,
 };
 
 export const APIMethod = ({
@@ -292,7 +294,8 @@ function TypeTable({
 	isServer,
 }: { props: Property[]; isServer: boolean }) {
 	if (!isServer && !props.filter((x) => !x.isServerOnly).length) return null;
-	else if (!props.length) return null;
+	if (isServer && !props.filter((x) => !x.isClientOnly).length) return null;
+	if (!props.length) return null;
 
 	return (
 		<Table className="mt-2 mb-0 overflow-hidden">
@@ -305,7 +308,8 @@ function TypeTable({
 			</TableHeader>
 			<TableBody>
 				{props.map((prop, i) =>
-					prop.isServerOnly && isServer === false ? null : (
+					(prop.isServerOnly && isServer === false) ||
+					(prop.isClientOnly && isServer === true) ? null : (
 						<TableRow key={i}>
 							<TableCell>
 								<code>
@@ -382,8 +386,10 @@ function parseCode(children: JSX.Element) {
 	let withinApiMethodType = false;
 	let hasAlreadyDefinedApiMethodType = false;
 	let isServerOnly_ = false;
+	let isClientOnly_ = false;
 	let nestPath: string[] = []; // str arr segmented-path, eg: ["data", "metadata", "something"]
 	let serverOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
+	let clientOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
 	let isNullable = false;
 
 	let code_prefix = "";
@@ -441,6 +447,9 @@ function parseCode(children: JSX.Element) {
 				} else if (line.trim() === "@nullable") {
 					isNullable = true;
 					continue;
+				} else if (line.trim() === "@clientOnly") {
+					isClientOnly_ = true;
+					continue;
 				}
 				currentJSDocDescription += line + " ";
 			}
@@ -467,6 +476,13 @@ function parseCode(children: JSX.Element) {
 				if (isServerOnly_) {
 					serverOnlyPaths.push(nestPath.join("."));
 				}
+				if (isClientOnly_) {
+					clientOnlyPaths.push(nestPath.join("."));
+				}
+			}
+
+			if (clientOnlyPaths.includes(nestPath.join("."))) {
+				isClientOnly_ = true;
 			}
 
 			if (serverOnlyPaths.includes(nestPath.join("."))) {
@@ -512,6 +528,7 @@ function parseCode(children: JSX.Element) {
 				propName,
 				type: propType,
 				isServerOnly: isServerOnly_,
+				isClientOnly: isClientOnly_,
 				path: isTheStartOfNest
 					? nestPath.slice(0, nestPath.length - 1)
 					: nestPath.slice(),
@@ -519,6 +536,7 @@ function parseCode(children: JSX.Element) {
 			};
 
 			isServerOnly_ = false;
+			isClientOnly_ = false;
 			isNullable = false;
 			// console.log(property);
 			props.push(property);
@@ -593,6 +611,7 @@ function createServerBody({
 	let i = -1;
 	for (const prop of props) {
 		i++;
+		if (prop.isClientOnly) continue;
 		if (body2 === "") body2 += "{\n";
 
 		let addComment = false;
@@ -644,7 +663,7 @@ function createServerBody({
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
 	}
 
-	if (props.length > 0) {
+	if (props.filter((x) => !x.isClientOnly).length > 0) {
 		serverBody += "{\n";
 		if ((method === "POST" || forceAsBody) && !forceAsQuery) {
 			serverBody += `    body: ${body2}${fetchOptions}\n}`;
