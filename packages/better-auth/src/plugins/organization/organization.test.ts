@@ -74,6 +74,26 @@ describe("organization", async (it) => {
 		);
 	});
 
+	it("create organization with userId", async () => {
+		const { data } = await client.signUp.email({
+			email: "test10@test.com",
+			password: "test123456",
+			name: "test10",
+		});
+
+		const organization = await client.organization.create({
+			name: "test10",
+			slug: "test10",
+			userId: data?.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.data?.members.length).toBe(1);
+		expect(organization.data?.members[0].userId).toBe(data?.user.id);
+		expect(organization.data?.members[0].role).toBe("owner");
+	});
+
 	it("should create organization directly in the server without cookie", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
