@@ -124,6 +124,20 @@ export const auth = betterAuth({
 });
 ```
 
+**Example with [Kysely instance](https://kysely.dev/docs/getting-started#instantiation)**
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./kysely.ts" // Exported Kysely instance
+
+export const auth = betterAuth({
+  database: {
+    db,
+    type: "postgres" // default is "sqlite"
+  }
+});
+```
+
 **Adapters**
 
 If you prefer to use an ORM or if your database is not supported by Kysely, you can use one of the built-in adapters.
