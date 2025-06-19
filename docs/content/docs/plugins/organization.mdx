@@ -1443,16 +1443,18 @@ To change the schema table name or fields, you can pass `schema` option to the o
 
 ```ts title="auth.ts"
 const auth = betterAuth({
-  plugins: [organization({
-    schema: {
-      organization: {
-        modelName: "organizations",  //map the organization table to organizations
-        fields: {
-          name: "title" //map the name field to title
+  plugins: [
+    organization({
+      schema: {
+        organization: {
+          modelName: "organizations",  //map the organization table to organizations
+          fields: {
+            name: "title" //map the name field to title
+          }
         }
       }
-    }
-  })]
+    })
+  ]
 })
 ```
 
