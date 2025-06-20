@@ -160,15 +160,42 @@ export const APIMethod = ({
 				<TabsList className="relative flex justify-start w-full p-0 bg-transparent hover:[&>div>a>button]:opacity-100">
 					<TabsTrigger
 						value="client"
-						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
+						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
 					>
-						Client
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="1em"
+							height="1em"
+							viewBox="0 0 36 36"
+						>
+							<path
+								fill="currentColor"
+								d="M23.81 26c-.35.9-.94 1.5-1.61 1.5h-8.46c-.68 0-1.26-.6-1.61-1.5H1v1.75A2.45 2.45 0 0 0 3.6 30h28.8a2.45 2.45 0 0 0 2.6-2.25V26Z"
+							/>
+							<path
+								fill="currentColor"
+								d="M7 10h22v14h3V7.57A1.54 1.54 0 0 0 30.5 6h-25A1.54 1.54 0 0 0 4 7.57V24h3Z"
+							/>
+							<path fill="none" d="M0 0h36v36H0z" />
+						</svg>
+						<span>Client</span>
 					</TabsTrigger>
 					<TabsTrigger
 						value="server"
-						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/80 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/30"
+						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
 					>
-						Server
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="1em"
+							height="1em"
+							viewBox="0 0 24 24"
+						>
+							<path
+								fill="currentColor"
+								d="M3 3h18v18H3zm2 2v6h14V5zm14 8H5v6h14zM7 7h2v2H7zm2 8H7v2h2z"
+							/>
+						</svg>
+						<span>Server</span>
 					</TabsTrigger>
 					<div className="absolute right-0">
 						<a href={`#api-method${pathId}`}>
