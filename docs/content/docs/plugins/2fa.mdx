@@ -153,7 +153,7 @@ const authClient = createAuthClient({
 
 
 <Callout type="warn">
-#### With `auth.api`
+**With `auth.api`**
 
 When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will return an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. You can check using `in` instead to check if `twoFactorRedirect` is set to `true`.
 
