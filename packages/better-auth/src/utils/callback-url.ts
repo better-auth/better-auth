@@ -1,4 +1,5 @@
 import { APIError } from "better-call";
+import { wildcardMatch } from "./wildcard";
 import type { GenericEndpointContext } from "../types";
 
 /**
@@ -11,9 +12,18 @@ export const checkCallbackURL = (
 ) => {
 	const trustedOrigins = ctx.context.trustedOrigins;
 	const callbackOrigin = callbackURL ? new URL(callbackURL).origin : null;
-	if (callbackOrigin && !trustedOrigins.includes(callbackOrigin)) {
-		throw new APIError("FORBIDDEN", {
-			message: "Invalid callback URL",
+	if (callbackOrigin) {
+		const isTrusted = trustedOrigins.some((trustedOrigin) => {
+			if (trustedOrigin.includes("*")) {
+				return wildcardMatch(trustedOrigin, { separator: false })(callbackOrigin);
+			}
+			return trustedOrigin === callbackOrigin;
 		});
+
+		if (!isTrusted) {
+			throw new APIError("FORBIDDEN", {
+				message: "Invalid callback URL",
+			});
+		}
 	}
 };
