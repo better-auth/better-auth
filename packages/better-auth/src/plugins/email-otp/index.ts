@@ -874,6 +874,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					}
 
+					if (!user.user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(
+							user.user.id,
+							{
+								emailVerified: true,
+							},
+							ctx,
+						);
+					}
+
 					return ctx.json({
 						success: true,
 					});

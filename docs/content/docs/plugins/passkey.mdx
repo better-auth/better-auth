@@ -113,6 +113,10 @@ To sign in with a passkey you can use the `signIn.passkey` method. This will pro
 ```ts
 type signInPasskey = {
     /**
+     * The email of the user to sign in.
+     */
+    email: string = "example@gmail.com"
+    /**
      * Browser autofill, a.k.a. Conditional UI. Read more: https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui
     */
     autoFill?: boolean = true
@@ -171,9 +175,9 @@ You can update a passkey's name by calling `passkey.updatePasskey`:
 ```ts
 type updatePasskey = {
     /**
-     * The ID of the passkey which will be updated. 
+     * The ID of the passkey which you want to update.
      */
-    id: string = "passkey-id"
+    id: string = "id of passkey"
     /**
      * The new name which the passkey will be updated to. 
      */
