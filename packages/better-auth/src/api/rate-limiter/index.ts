@@ -34,7 +34,7 @@ function getRetryAfter(lastRequest: number, window: number) {
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
 }
 
-function createDBStorage(ctx: AuthContext, modelName?: string) {
+function createDBStorage(ctx: AuthContext) {
 	const model = "rateLimit";
 	const db = ctx.adapter;
 	return {
@@ -106,7 +106,7 @@ export function getRateLimitStorage(ctx: AuthContext) {
 			},
 		};
 	}
-	return createDBStorage(ctx, ctx.rateLimit.modelName);
+	return createDBStorage(ctx);
 }
 
 export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
