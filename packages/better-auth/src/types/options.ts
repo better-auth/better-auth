@@ -351,7 +351,10 @@ export type BetterAuthOptions = {
 			 *
 			 * to interrupt with error you can throw `APIError`
 			 */
-			beforeDelete?: (user: User, ctx?: GenericEndpointContext) => Promise<void>;
+			beforeDelete?: (
+				user: User,
+				ctx?: GenericEndpointContext,
+			) => Promise<void>;
 			/**
 			 * A function that is called after a user is deleted.
 			 *

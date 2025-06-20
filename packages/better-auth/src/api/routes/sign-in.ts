@@ -509,9 +509,9 @@ export const signInEmail = createAuthEndpoint(
 				ctx.context.secret,
 				user.user.email,
 			);
-			const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-				ctx.body.callbackURL || "/"
-			}`;
+			const url = `${
+				ctx.context.baseURL
+			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
 				{
 					user: user.user,
