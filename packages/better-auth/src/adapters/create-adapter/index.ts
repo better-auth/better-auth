@@ -318,7 +318,10 @@ export const createAdapter =
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
-				fields.id = idField({ customModelName: unsafe_model, forceAllowId });
+				fields.id = idField({
+					customModelName: unsafe_model,
+					forceAllowId: forceAllowId && "id" in data,
+				});
 			}
 			for (const field in fields) {
 				const value = data[field];

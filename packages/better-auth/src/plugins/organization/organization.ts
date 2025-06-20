@@ -446,6 +446,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			} satisfies AuthPluginSchema)
 		: undefined;
 
+	/**
+	 * the orgMiddleware type-asserts an empty object representing org options, roles, and a getSession function.
+	 * This `shimContext` function is used to add those missing properties to the context object.
+	 */
 	const api = shimContext(endpoints, {
 		orgOptions: options || {},
 		roles,
