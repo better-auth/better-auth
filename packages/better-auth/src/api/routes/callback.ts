@@ -126,6 +126,19 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (link) {
+			const trustedProviders =
+				c.context.options.account?.accountLinking?.trustedProviders;
+			const isTrustedProvider = trustedProviders?.includes(
+				provider.id as "apple",
+			);
+			if (
+				(!isTrustedProvider && !userInfo.emailVerified) ||
+				c.context.options.account?.accountLinking?.enabled === false
+			) {
+				c.context.logger.error("Unable to link account - untrusted provider");
+				return redirectOnError("unable_to_link_account");
+			}
+
 			const existingAccount = await c.context.internalAdapter.findAccount(
 				userInfo.id,
 			);
