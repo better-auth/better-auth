@@ -15,7 +15,9 @@ export const checkCallbackURL = (
 	if (callbackOrigin) {
 		const isTrusted = trustedOrigins.some((trustedOrigin) => {
 			if (trustedOrigin.includes("*")) {
-				return wildcardMatch(trustedOrigin, { separator: false })(callbackOrigin);
+				return wildcardMatch(trustedOrigin, { separator: false })(
+					callbackOrigin,
+				);
 			}
 			return trustedOrigin === callbackOrigin;
 		});
