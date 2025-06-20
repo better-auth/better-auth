@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 afterEach(() => {
-    vi.useRealTimers();
+	vi.useRealTimers();
 });
 
 describe(
