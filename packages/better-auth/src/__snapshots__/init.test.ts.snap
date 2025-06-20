@@ -87,6 +87,7 @@ exports[`init > should match config 1`] = `
     "findUserByEmail": [Function],
     "findUserById": [Function],
     "findVerificationValue": [Function],
+    "findVerificationValues": [Function],
     "linkAccount": [Function],
     "listSessions": [Function],
     "listUsers": [Function],

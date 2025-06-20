@@ -881,6 +881,34 @@ export const createInternalAdapter = (
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
+		findVerificationValues: async (identifier: string) => {
+			const verifications = await adapter.findMany<Verification>({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
+					},
+				],
+				sortBy: {
+					field: "createdAt",
+					direction: "desc",
+				},
+			});
+			if (!options.verification?.disableCleanup) {
+				await adapter.deleteMany({
+					model: "verification",
+					where: [
+						{
+							field: "expiresAt",
+							value: new Date(),
+							operator: "lt",
+						},
+					],
+				});
+			}
+			return verifications as Verification[];
+		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({
 				model: "verification",

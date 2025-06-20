@@ -289,6 +289,7 @@ describe("email-otp-verify", async () => {
 					},
 					sendVerificationOnSignUp: true,
 					disableSignUp: true,
+					allowMultipleOTPs: true,
 				}),
 			],
 		},
@@ -328,7 +329,12 @@ describe("email-otp-verify", async () => {
 		}
 	});
 
-	it("should verify email with last otp", async () => {
+	it("should verify email with old otp when multiple are allowed", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		const oldOtp = otp[otp.length - 1];
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "email-verification",
@@ -337,10 +343,15 @@ describe("email-otp-verify", async () => {
 			email: testUser.email,
 			type: "email-verification",
 		});
-		await client.emailOtp.sendVerificationOtp({
+		const res = await client.emailOtp.verifyEmail({
 			email: testUser.email,
-			type: "email-verification",
+			otp: oldOtp,
 		});
+		expect(res.data?.status).toBe(true);
+		const stored = await auth.api.getVerificationOTP({
+			query: { email: testUser.email, type: "email-verification" },
+		});
+		expect(stored.otp).toBeNull();
 	});
 
 	it("should block after exceeding allowed attempts", async () => {

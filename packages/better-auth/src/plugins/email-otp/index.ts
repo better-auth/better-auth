@@ -58,6 +58,13 @@ export interface EmailOTPOptions {
 	 * @default 3
 	 */
 	allowedAttempts?: number;
+	/**
+	 * Allow multiple OTPs to be valid within the expiry period.
+	 * If disabled, only the most recently generated OTP is accepted.
+	 *
+	 * @default false
+	 */
+	allowMultipleOTPs?: boolean;
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
@@ -66,6 +73,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
 		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
+		allowMultipleOTPs: false,
 		...options,
 	} satisfies EmailOTPOptions;
 	const ERROR_CODES = {
@@ -339,45 +347,68 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
-					const verificationValue =
-						await ctx.context.internalAdapter.findVerificationValue(
-							`email-verification-otp-${email}`,
-						);
+					const identifier = `email-verification-otp-${email}`;
+					const verifications = opts.allowMultipleOTPs
+						? await ctx.context.internalAdapter.findVerificationValues(
+								identifier,
+							)
+						: [
+								await ctx.context.internalAdapter.findVerificationValue(
+									identifier,
+								),
+							].filter(Boolean);
 
-					if (!verificationValue) {
+					if (!verifications.length) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
-					if (verificationValue.expiresAt < new Date()) {
+					const allowedAttempts = options?.allowedAttempts || 3;
+					let matched: (typeof verifications)[number] | null = null;
+					for (const v of verifications) {
+						const [val, attemptStr] = v.value.split(":");
+						if (attemptStr && parseInt(attemptStr) >= allowedAttempts) {
+							await ctx.context.internalAdapter.deleteVerificationValue(v.id);
+							continue;
+						}
+						if (ctx.body.otp === val) {
+							matched = v;
+							break;
+						}
+					}
+
+					const targetForUpdate = verifications[0];
+					if (!matched) {
+						if (targetForUpdate) {
+							const [val, attemptStr] = targetForUpdate.value.split(":");
+							await ctx.context.internalAdapter.updateVerificationValue(
+								targetForUpdate.id,
+								{
+									value: `${val}:${parseInt(attemptStr || "0") + 1}`,
+								},
+							);
+						}
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (matched.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							matched.id,
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = verificationValue.value.split(":");
-					const allowedAttempts = options?.allowedAttempts || 3;
-					if (attempts && parseInt(attempts) >= allowedAttempts) {
+					if (opts.allowMultipleOTPs) {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							identifier,
+						);
+					} else {
 						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
+							matched.id,
 						);
-						throw new APIError("FORBIDDEN", {
-							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
-						});
 					}
-					if (ctx.body.otp !== otpValue) {
-						await ctx.context.internalAdapter.updateVerificationValue(
-							verificationValue.id,
-							{
-								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-							},
-						);
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
-						});
-					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
@@ -477,44 +508,68 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const verificationValue =
-						await ctx.context.internalAdapter.findVerificationValue(
-							`sign-in-otp-${email}`,
-						);
-					if (!verificationValue) {
+					const identifier = `sign-in-otp-${email}`;
+					const verifications = opts.allowMultipleOTPs
+						? await ctx.context.internalAdapter.findVerificationValues(
+								identifier,
+							)
+						: [
+								await ctx.context.internalAdapter.findVerificationValue(
+									identifier,
+								),
+							].filter(Boolean);
+
+					if (!verifications.length) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
-					if (verificationValue.expiresAt < new Date()) {
+					const allowedAttempts = options?.allowedAttempts || 3;
+					let matched: (typeof verifications)[number] | null = null;
+					for (const v of verifications) {
+						const [val, attemptStr] = v.value.split(":");
+						if (attemptStr && parseInt(attemptStr) >= allowedAttempts) {
+							await ctx.context.internalAdapter.deleteVerificationValue(v.id);
+							continue;
+						}
+						if (ctx.body.otp === val) {
+							matched = v;
+							break;
+						}
+					}
+
+					const targetForUpdate = verifications[0];
+					if (!matched) {
+						if (targetForUpdate) {
+							const [val, attemptStr] = targetForUpdate.value.split(":");
+							await ctx.context.internalAdapter.updateVerificationValue(
+								targetForUpdate.id,
+								{
+									value: `${val}:${parseInt(attemptStr || "0") + 1}`,
+								},
+							);
+						}
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (matched.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							matched.id,
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = verificationValue.value.split(":");
-					const allowedAttempts = options?.allowedAttempts || 3;
-					if (attempts && parseInt(attempts) >= allowedAttempts) {
+					if (opts.allowMultipleOTPs) {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							identifier,
+						);
+					} else {
 						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
+							matched.id,
 						);
-						throw new APIError("FORBIDDEN", {
-							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
-						});
 					}
-					if (ctx.body.otp !== otpValue) {
-						await ctx.context.internalAdapter.updateVerificationValue(
-							verificationValue.id,
-							{
-								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-							},
-						);
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
-						});
-					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						if (opts.disableSignUp) {
@@ -702,47 +757,68 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
-					const verificationValue =
-						await ctx.context.internalAdapter.findVerificationValue(
-							`forget-password-otp-${email}`,
-						);
-					if (!verificationValue) {
+					const identifier = `forget-password-otp-${email}`;
+					const verifications = opts.allowMultipleOTPs
+						? await ctx.context.internalAdapter.findVerificationValues(
+								identifier,
+							)
+						: [
+								await ctx.context.internalAdapter.findVerificationValue(
+									identifier,
+								),
+							].filter(Boolean);
+
+					if (!verifications.length) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
-					if (verificationValue.expiresAt < new Date()) {
+					const allowedAttempts = options?.allowedAttempts || 3;
+					let matched: (typeof verifications)[number] | null = null;
+					for (const v of verifications) {
+						const [val, attemptStr] = v.value.split(":");
+						if (attemptStr && parseInt(attemptStr) >= allowedAttempts) {
+							await ctx.context.internalAdapter.deleteVerificationValue(v.id);
+							continue;
+						}
+						if (ctx.body.otp === val) {
+							matched = v;
+							break;
+						}
+					}
+
+					const targetForUpdate = verifications[0];
+					if (!matched) {
+						if (targetForUpdate) {
+							const [val, attemptStr] = targetForUpdate.value.split(":");
+							await ctx.context.internalAdapter.updateVerificationValue(
+								targetForUpdate.id,
+								{
+									value: `${val}:${parseInt(attemptStr || "0") + 1}`,
+								},
+							);
+						}
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (matched.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
+							matched.id,
 						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = verificationValue.value.split(":");
-					const allowedAttempts = options?.allowedAttempts || 3;
-					if (attempts && parseInt(attempts) >= allowedAttempts) {
+					if (opts.allowMultipleOTPs) {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							identifier,
+						);
+					} else {
 						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
+							matched.id,
 						);
-						throw new APIError("FORBIDDEN", {
-							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
-						});
 					}
-					if (ctx.body.otp !== otpValue) {
-						await ctx.context.internalAdapter.updateVerificationValue(
-							verificationValue.id,
-							{
-								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-							},
-						);
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
-						});
-					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const passwordHash = await ctx.context.password.hash(
 						ctx.body.password,
 					);
