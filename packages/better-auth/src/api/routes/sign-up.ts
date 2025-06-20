@@ -250,7 +250,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						url,
 						token,
 					},
-					ctx.request,
+					ctx,
 				);
 			}
 

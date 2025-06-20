@@ -10,7 +10,7 @@ describe("Email Verification", async () => {
 			requireEmailVerification: true,
 		},
 		emailVerification: {
-			async sendVerificationEmail({ user, url, token: _token }) {
+			async sendVerificationEmail({ user, url, token: _token }, ctx) {
 				token = _token;
 				mockSendEmail(user.email, url);
 			},
@@ -71,7 +71,7 @@ describe("Email Verification", async () => {
 				requireEmailVerification: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
+				async sendVerificationEmail({ user, url, token: _token }, ctx) {
 					token = _token;
 					mockSendEmail(user.email, url);
 				},
@@ -101,7 +101,7 @@ describe("Email Verification", async () => {
 				requireEmailVerification: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
+				async sendVerificationEmail({ user, url, token: _token }, ctx) {
 					token = _token;
 					mockSendEmail(user.email, url);
 				},
@@ -131,7 +131,7 @@ describe("Email Verification", async () => {
 				requireEmailVerification: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
+				async sendVerificationEmail({ user, url, token: _token }, ctx) {
 					token = _token;
 					mockSendEmail(user.email, url);
 				},
@@ -182,7 +182,7 @@ describe("Email Verification Secondary Storage", async () => {
 				enabled: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
+				async sendVerificationEmail({ user, url, token: _token }, ctx) {
 					token = _token;
 				},
 				autoSignInAfterVerification: true,
@@ -190,7 +190,7 @@ describe("Email Verification Secondary Storage", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					async sendChangeEmailVerification(data, request) {
+					async sendChangeEmailVerification(data, ctx) {
 						token = data.token;
 					},
 				},

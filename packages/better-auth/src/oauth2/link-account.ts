@@ -167,7 +167,7 @@ export async function handleOAuthUserInfo(
 						url,
 						token,
 					},
-					c.request,
+					c,
 				);
 			}
 		} catch (e: any) {

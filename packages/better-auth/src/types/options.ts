@@ -153,7 +153,7 @@ export type BetterAuthOptions = {
 			/**
 			 * The request object
 			 */
-			request?: Request,
+			ctx?: GenericEndpointContext,
 		) => Promise<void>;
 		/**
 		 * Send a verification email automatically
@@ -178,7 +178,10 @@ export type BetterAuthOptions = {
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+		onEmailVerification?: (
+			user: User,
+			ctx?: GenericEndpointContext,
+		) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -231,7 +234,7 @@ export type BetterAuthOptions = {
 			/**
 			 * The request object
 			 */
-			request?: Request,
+			ctx?: GenericEndpointContext,
 		) => Promise<void>;
 		/**
 		 * Number of seconds the reset password token is
@@ -317,7 +320,7 @@ export type BetterAuthOptions = {
 					url: string;
 					token: string;
 				},
-				request?: Request,
+				ctx?: GenericEndpointContext,
 			) => Promise<void>;
 		};
 		/**
@@ -341,20 +344,20 @@ export type BetterAuthOptions = {
 					url: string;
 					token: string;
 				},
-				request?: Request,
+				ctx?: GenericEndpointContext,
 			) => Promise<void>;
 			/**
 			 * A function that is called before a user is deleted.
 			 *
 			 * to interrupt with error you can throw `APIError`
 			 */
-			beforeDelete?: (user: User, request?: Request) => Promise<void>;
+			beforeDelete?: (user: User, ctx?: GenericEndpointContext) => Promise<void>;
 			/**
 			 * A function that is called after a user is deleted.
 			 *
 			 * This is useful for cleaning up user data
 			 */
-			afterDelete?: (user: User, request?: Request) => Promise<void>;
+			afterDelete?: (user: User, ctx?: GenericEndpointContext) => Promise<void>;
 			/**
 			 * The expiration time for the delete token.
 			 *
@@ -523,7 +526,7 @@ export type BetterAuthOptions = {
 	 */
 	trustedOrigins?:
 		| string[]
-		| ((request: Request) => string[] | Promise<string[]>);
+		| ((ctx: GenericEndpointContext) => string[] | Promise<string[]>);
 	/**
 	 * Rate limiting configuration
 	 */
@@ -562,7 +565,7 @@ export type BetterAuthOptions = {
 						 */
 						max: number;
 				  }
-				| ((request: Request) =>
+				| ((ctx: GenericEndpointContext) =>
 						| { window: number; max: number }
 						| Promise<{
 								window: number;
@@ -752,7 +755,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					user: User,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -763,7 +766,7 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is created.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (user: User, ctx?: GenericEndpointContext) => Promise<void>;
 			};
 			update?: {
 				/**
@@ -773,7 +776,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					user: Partial<User>,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -784,7 +787,7 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is updated.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (user: User, ctx?: GenericEndpointContext) => Promise<void>;
 			};
 		};
 		/**
@@ -799,7 +802,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					session: Session,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -812,7 +815,7 @@ export type BetterAuthOptions = {
 				 */
 				after?: (
 					session: Session,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<void>;
 			};
 			/**
@@ -826,7 +829,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					session: Partial<Session>,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -839,7 +842,7 @@ export type BetterAuthOptions = {
 				 */
 				after?: (
 					session: Session,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<void>;
 			};
 		};
@@ -855,7 +858,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					account: Account,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -868,7 +871,7 @@ export type BetterAuthOptions = {
 				 */
 				after?: (
 					account: Account,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<void>;
 			};
 			/**
@@ -882,7 +885,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					account: Partial<Account>,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -895,7 +898,7 @@ export type BetterAuthOptions = {
 				 */
 				after?: (
 					account: Account,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<void>;
 			};
 		};
@@ -911,7 +914,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					verification: Verification,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -924,7 +927,7 @@ export type BetterAuthOptions = {
 				 */
 				after?: (
 					verification: Verification,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<void>;
 			};
 			update?: {
@@ -935,7 +938,7 @@ export type BetterAuthOptions = {
 				 */
 				before?: (
 					verification: Partial<Verification>,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
@@ -948,7 +951,7 @@ export type BetterAuthOptions = {
 				 */
 				after?: (
 					verification: Verification,
-					context?: GenericEndpointContext,
+					ctx?: GenericEndpointContext,
 				) => Promise<void>;
 			};
 		};

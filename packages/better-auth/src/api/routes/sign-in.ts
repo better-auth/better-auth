@@ -498,28 +498,29 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				throw new APIError("FORBIDDEN", {
-					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+				ctx.context.logger.error(
+					"Email verification is not enabled. Make sure to enable it in the options on you `auth.ts` file. Check `https://better-auth.com/docs/concepts/email#email-verification` for more!",
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: "Email verification is not enabled",
 				});
 			}
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				user.user.email,
-				undefined,
-				ctx.context.options.emailVerification?.expiresIn,
 			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+			const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+				ctx.body.callbackURL || "/"
+			}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
 				{
 					user: user.user,
 					url,
 					token,
 				},
-				ctx.request,
+				ctx,
 			);
-			throw new APIError("FORBIDDEN", {
+			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
 		}
