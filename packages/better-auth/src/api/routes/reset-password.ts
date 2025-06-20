@@ -129,7 +129,7 @@ export const requestPasswordReset = createAuthEndpoint(
 				url,
 				token: verificationToken,
 			},
-			ctx.request,
+			ctx,
 		);
 		return ctx.json({
 			status: true,
@@ -239,7 +239,7 @@ export const forgetPassword = createAuthEndpoint(
 				url,
 				token: verificationToken,
 			},
-			ctx.request,
+			ctx,
 		);
 		return ctx.json({
 			status: true,

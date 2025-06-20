@@ -529,7 +529,7 @@ export type BetterAuthOptions = {
 	 */
 	trustedOrigins?:
 		| string[]
-		| ((ctx: GenericEndpointContext) => string[] | Promise<string[]>);
+		| ((request: Request) => string[] | Promise<string[]>);
 	/**
 	 * Rate limiting configuration
 	 */
@@ -568,7 +568,7 @@ export type BetterAuthOptions = {
 						 */
 						max: number;
 				  }
-				| ((ctx: GenericEndpointContext) =>
+				| ((request: Request) =>
 						| { window: number; max: number }
 						| Promise<{
 								window: number;
