@@ -296,7 +296,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 					},
 					invitation,
 				},
-				ctx
+				ctx,
 			);
 			return ctx.json(invitation);
 		},

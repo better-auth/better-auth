@@ -1,6 +1,11 @@
 import { APIError } from "better-call";
 import { z } from "zod";
-import type { AuthPluginSchema, Session, User, GenericEndpointContext } from "../../types";
+import type {
+	AuthPluginSchema,
+	Session,
+	User,
+	GenericEndpointContext,
+} from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";

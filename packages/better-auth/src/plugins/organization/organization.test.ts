@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
