@@ -137,9 +137,9 @@ const auth = betterAuth({
 
 ### Callback after successful email verification
 
-You can run custom code immediately after a user verifies their email using the `onEmailVerified` callback. This is useful for any side-effects you want to trigger, like granting access to special features or logging the event.
+You can run custom code immediately after a user verifies their email using the `afterEmailVerification` callback. This is useful for any side-effects you want to trigger, like granting access to special features or logging the event.
 
-The `onEmailVerified` function runs automatically when a user's email is confirmed, receiving the `user` object and `request` details so you can perform actions for that specific user.
+The `afterEmailVerification` function runs automatically when a user's email is confirmed, receiving the `user` object and `request` details so you can perform actions for that specific user.
 
 Here's how you can set it up:
 
@@ -148,7 +148,7 @@ import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
     emailVerification: {
-        async onEmailVerified(user, request) {
+        async afterEmailVerification(user, request) {
             // Your custom logic here, e.g., grant access to premium features
             console.log(`${user.email} has been successfully verified!`);
         }

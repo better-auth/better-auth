@@ -184,7 +184,7 @@ export type BetterAuthOptions = {
 		 * @param user the user that verified their email
 		 * @param request the request object
 		 */
-		onEmailVerified?: (user: User, request?: Request) => Promise<void>;
+		afterEmailVerification?: (user: User, request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication

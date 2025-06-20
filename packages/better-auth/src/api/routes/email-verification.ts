@@ -410,8 +410,8 @@ export const verifyEmail = createAuthEndpoint(
 			},
 			ctx,
 		);
-		if (ctx.context.options.emailVerification?.onEmailVerified) {
-			await ctx.context.options.emailVerification.onEmailVerified(
+		if (ctx.context.options.emailVerification?.afterEmailVerification) {
+			await ctx.context.options.emailVerification.afterEmailVerification(
 				updatedUser,
 				ctx.request,
 			);

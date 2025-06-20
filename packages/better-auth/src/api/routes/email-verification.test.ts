@@ -158,8 +158,8 @@ describe("Email Verification", async () => {
 		);
 	});
 
-	it("should call onEmailVerified callback when email is verified", async () => {
-		const onEmailVerifiedMock = vi.fn();
+	it("should call afterEmailVerification callback when email is verified", async () => {
+		const afterEmailVerificationMock = vi.fn();
 		const { auth, client, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
@@ -170,7 +170,7 @@ describe("Email Verification", async () => {
 					token = _token;
 					mockSendEmail(user.email, url);
 				},
-				onEmailVerified: onEmailVerifiedMock,
+				afterEmailVerification: afterEmailVerificationMock,
 			},
 		});
 
@@ -187,7 +187,7 @@ describe("Email Verification", async () => {
 		});
 
 		expect(res.data?.status).toBe(true);
-		expect(onEmailVerifiedMock).toHaveBeenCalledWith(
+		expect(afterEmailVerificationMock).toHaveBeenCalledWith(
 			expect.objectContaining({ email: testUser.email, emailVerified: true }),
 			expect.any(Object),
 		);
