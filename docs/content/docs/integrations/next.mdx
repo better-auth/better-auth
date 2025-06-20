@@ -95,7 +95,7 @@ export async function ServerComponent() {
 
 ### Server Action Cookies
 
-When you call a function that needs to set cookies, like `signInEmail` or `signUpEmail` in a server action, cookies won’t be set. This is because server actions need to use the `cookies` helper from Next.js to set cookies.
+When you call a function that needs to set cookies, like `signInEmail` or `signUpEmail` in a server action, cookies won't be set. This is because server actions need to use the `cookies` helper from Next.js to set cookies.
 
 To simplify this, you can use the `nextCookies` plugin, which will automatically set cookies for you whenever a `Set-Cookie` header is present in the response.
 
@@ -153,6 +153,14 @@ export const config = {
 	matcher: ["/dashboard"], // Specify the routes the middleware applies to
 };
 ```
+
+<Callout type="warn">
+	**Security Warning:** The `getSessionCookie` function only checks for the
+	existence of a session cookie; it does **not** validate it. Relying solely
+	on this check for security is dangerous, as anyone can manually create a
+	cookie to bypass it. You must always validate the session on your server for
+	any protected actions or pages.
+</Callout>
 
 <Callout type="info">
 If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
