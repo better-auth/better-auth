@@ -23,7 +23,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		? context.trustedOrigins
 		: [
 				...context.trustedOrigins,
-				...((await context.options.trustedOrigins?.(ctx.request)) || []),
+				...((await context.options.trustedOrigins?.(ctx)) || []),
 			];
 	const usesCookies = ctx.headers?.has("cookie");
 
@@ -84,7 +84,7 @@ export const originCheck = (
 			? context.trustedOrigins
 			: [
 					...context.trustedOrigins,
-					...((await context.options.trustedOrigins?.(ctx.request)) || []),
+					...((await context.options.trustedOrigins?.(ctx)) || []),
 				];
 
 		const matchesPattern = (url: string, pattern: string): boolean => {
