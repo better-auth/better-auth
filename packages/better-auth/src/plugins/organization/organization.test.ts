@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
@@ -16,7 +16,7 @@ describe("organization", async (it) => {
 			plugins: [
 				organization({
 					membershipLimit: 6,
-					async sendInvitationEmail(data, request) {},
+					async sendInvitationEmail(data, ctx) {},
 					schema: {
 						organization: {
 							modelName: "team",
@@ -862,7 +862,7 @@ describe("invitation limit", async () => {
 		plugins: [
 			organization({
 				invitationLimit: 1,
-				async sendInvitationEmail(data, request) {},
+				async sendInvitationEmail(data, ctx) {},
 			}),
 		],
 	});
