@@ -159,13 +159,14 @@ describe("session", async () => {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
+					const signedCookie = cookies.get("better-auth.session_token");
+					expect(signedCookie?.["max-age"]).toBe(undefined);
 					const dontRememberMe = cookies.get(
 						"better-auth.dont_remember",
 					)?.value;
 					headers.set(
 						"cookie",
-						`better-auth.session_token=${signedCookie};better-auth.dont_remember=${dontRememberMe}`,
+						`better-auth.session_token=${signedCookie?.value};better-auth.dont_remember=${dontRememberMe}`,
 					);
 				},
 			},
