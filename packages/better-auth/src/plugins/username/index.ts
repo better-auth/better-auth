@@ -30,6 +30,13 @@ export type UsernameOptions = {
 	 * By default, the username should only contain alphanumeric characters and underscores
 	 */
 	usernameValidator?: (username: string) => boolean | Promise<boolean>;
+	/**
+	 * Additional paths which allows user signup with username
+	 *
+	 * @example
+	 * ["/some-path"]
+	 */
+	additionalSignUpPaths?: string[];
 };
 
 function defaultUsernameValidator(username: string) {
@@ -232,7 +239,8 @@ export const username = (options?: UsernameOptions) => {
 					matcher(context) {
 						return (
 							context.path === "/sign-up/email" ||
-							context.path === "/update-user"
+							context.path === "/update-user" ||
+							!!options?.additionalSignUpPaths?.includes(context.path)
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
