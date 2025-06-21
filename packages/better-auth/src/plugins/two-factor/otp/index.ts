@@ -11,6 +11,7 @@ import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { generateRandomString } from "../../../crypto";
 import { setSessionCookie } from "../../../cookies";
 import { BASE_ERROR_CODES } from "../../../error/codes";
+import type { GenericEndpointContext } from "../../../types";
 
 export interface OTPOptions {
 	/**
@@ -31,7 +32,7 @@ export interface OTPOptions {
 	 *
 	 * @param user - The user to send the otp to
 	 * @param otp - The otp to send
-	 * @param request - The request object
+	 * @param ctx - The request context
 	 * @returns void | Promise<void>
 	 */
 	sendOTP?: (
@@ -47,7 +48,7 @@ export interface OTPOptions {
 		/**
 		 * The request object
 		 */
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => Promise<void> | void;
 	/**
 	 * The number of allowed attempts for the OTP
@@ -144,7 +145,7 @@ export const otp2fa = (options?: OTPOptions) => {
 			);
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
-				ctx.request,
+				ctx,
 			);
 			return ctx.json({ status: true });
 		},

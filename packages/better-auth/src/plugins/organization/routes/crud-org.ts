@@ -146,7 +146,7 @@ export const createOrganization = createAuthEndpoint(
 					},
 					user,
 				},
-				ctx.request,
+				ctx,
 			);
 			if (response && typeof response === "object" && "data" in response) {
 				hookResponse = response;
@@ -171,7 +171,7 @@ export const createOrganization = createAuthEndpoint(
 			const defaultTeam =
 				(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 					organization,
-					ctx.request,
+					ctx,
 				)) ||
 				(await adapter.createTeam({
 					organizationId: organization.id,
@@ -200,7 +200,7 @@ export const createOrganization = createAuthEndpoint(
 					user,
 					member,
 				},
-				ctx.request,
+				ctx,
 			);
 		}
 
@@ -429,17 +429,23 @@ export const deleteOrganization = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST");
 		}
 		if (option?.beforeDelete) {
-			await option.beforeDelete({
-				organization: org,
-				user: session.user,
-			});
+			await option.beforeDelete(
+				{
+					organization: org,
+					user: session.user,
+				},
+				ctx,
+			);
 		}
 		await adapter.deleteOrganization(organizationId);
 		if (option?.afterDelete) {
-			await option.afterDelete({
-				organization: org,
-				user: session.user,
-			});
+			await option.afterDelete(
+				{
+					organization: org,
+					user: session.user,
+				},
+				ctx,
+			);
 		}
 		return ctx.json(org);
 	},

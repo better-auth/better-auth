@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
@@ -16,7 +16,7 @@ export interface EmailOTPOptions {
 			otp: string;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => Promise<void>;
 	/**
 	 * Length of the OTP
@@ -38,7 +38,7 @@ export interface EmailOTPOptions {
 			email: string;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => string;
 	/**
 	 * Send email verification on sign-up
@@ -139,10 +139,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							});
 						}
 					}
-					const otp = opts.generateOTP(
-						{ email, type: ctx.body.type },
-						ctx.request,
-					);
+					const otp = opts.generateOTP({ email, type: ctx.body.type }, ctx);
 					await ctx.context.internalAdapter
 						.createVerificationValue(
 							{
@@ -173,7 +170,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							otp,
 							type: ctx.body.type,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						success: true,
@@ -213,10 +210,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const otp = opts.generateOTP(
-						{ email, type: ctx.body.type },
-						ctx.request,
-					);
+					const otp = opts.generateOTP({ email, type: ctx.body.type }, ctx);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${otp}:0`,
@@ -626,10 +620,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
-					const otp = opts.generateOTP(
-						{ email, type: "forget-password" },
-						ctx.request,
-					);
+					const otp = opts.generateOTP({ email, type: "forget-password" }, ctx);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${otp}:0`,
@@ -644,7 +635,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							otp,
 							type: "forget-password",
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						success: true,
@@ -798,10 +789,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}>(ctx);
 						const email = response?.user.email;
 						if (email) {
-							const otp = opts.generateOTP(
-								{ email, type: ctx.body.type },
-								ctx.request,
-							);
+							const otp = opts.generateOTP({ email, type: ctx.body.type }, ctx);
 							await ctx.context.internalAdapter.createVerificationValue(
 								{
 									value: `${otp}:0`,
@@ -816,7 +804,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									otp,
 									type: "email-verification",
 								},
-								ctx.request,
+								ctx,
 							);
 						}
 					}),

@@ -485,7 +485,7 @@ export const deleteUser = createAuthEndpoint(
 					url,
 					token,
 				},
-				ctx.request,
+				ctx,
 			);
 			return ctx.json({
 				success: true,
@@ -506,7 +506,7 @@ export const deleteUser = createAuthEndpoint(
 
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
 		if (beforeDelete) {
-			await beforeDelete(session.user, ctx.request);
+			await beforeDelete(session.user, ctx);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
@@ -514,7 +514,7 @@ export const deleteUser = createAuthEndpoint(
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
-			await afterDelete(session.user, ctx.request);
+			await afterDelete(session.user, ctx);
 		}
 		return ctx.json({
 			success: true,
@@ -591,7 +591,7 @@ export const deleteUserCallback = createAuthEndpoint(
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
 		if (beforeDelete) {
-			await beforeDelete(session.user, ctx.request);
+			await beforeDelete(session.user, ctx);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
@@ -602,7 +602,7 @@ export const deleteUserCallback = createAuthEndpoint(
 
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
-			await afterDelete(session.user, ctx.request);
+			await afterDelete(session.user, ctx);
 		}
 		if (ctx.query.callbackURL) {
 			throw ctx.redirect(ctx.query.callbackURL || "/");
@@ -731,7 +731,7 @@ export const changeEmail = createAuthEndpoint(
 						url,
 						token,
 					},
-					ctx.request,
+					ctx,
 				);
 			}
 
@@ -762,11 +762,11 @@ export const changeEmail = createAuthEndpoint(
 		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
 			{
 				user: ctx.context.session.user,
-				newEmail: newEmail,
+				newEmail,
 				url,
 				token,
 			},
-			ctx.request,
+			ctx,
 		);
 		return ctx.json({
 			status: true,
