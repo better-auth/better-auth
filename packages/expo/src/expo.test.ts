@@ -224,4 +224,15 @@ describe("expo with cookieCache", async () => {
 			expires: expect.any(String),
 		});
 	});
+
+	it("should add `exp://` to trusted origins", async () => {
+		vi.stubEnv("NODE_ENV", "development");
+		const auth = betterAuth({
+			plugins: [expo()],
+			trustedOrigins: ["http://localhost:3000"],
+		});
+		const ctx = await auth.$context;
+		expect(ctx.options.trustedOrigins).toContain("exp://");
+		expect(ctx.options.trustedOrigins).toContain("http://localhost:3000");
+	});
 });

@@ -71,7 +71,8 @@ export const auth = betterAuth({
     user: {
        additionalFields: {
           role: {
-              type: "string"
+              type: "string",
+              input: false
             } 
         }
     }
@@ -82,6 +83,26 @@ type Session = typeof auth.$Infer.Session
 ```
 
 In the example above, we added a `role` field to the user object. This field is now available on the `Session` type.
+
+
+### The `input` property
+
+The `input` property in an additional field configuration determines whether the field should be included in the user input. This property defaults to `true`, meaning the field will be part of the user input during operations like registration.
+
+To prevent a field from being part of the user input, you must explicitly set `input: false`:
+
+```ts
+additionalFields: {
+    role: {
+        type: "string",
+        input: false
+    }
+}
+```
+
+When `input` is set to `false`, the field will be excluded from user input, preventing users from passing a value for it.
+
+By default, additional fields are included in the user input, which can lead to security vulnerabilities if not handled carefully. For fields that should not be set by the user, like a `role`, it is crucial to set `input: false` in the configuration.
 
 ### Inferring Additional Fields on Client
 

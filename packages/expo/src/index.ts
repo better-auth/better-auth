@@ -13,9 +13,8 @@ export const expo = (options?: ExpoOptions) => {
 		id: "expo",
 		init: (ctx) => {
 			const trustedOrigins =
-				process.env.NODE_ENV === "development"
-					? [...(ctx.trustedOrigins || []), "exp://"]
-					: ctx.trustedOrigins;
+				process.env.NODE_ENV === "development" ? ["exp://"] : [];
+
 			return {
 				options: {
 					trustedOrigins,
