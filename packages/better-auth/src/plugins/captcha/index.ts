@@ -21,16 +21,21 @@ export const captcha = (options: CaptchaOptions) =>
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY);
 				}
 
-				const captchaResponseHeader = options.captchaResponseHeader && options.captchaResponseHeader.trim() !== ""
-					? options.captchaResponseHeader
-					: "x-captcha-response";
+				const captchaResponseHeader =
+					options.captchaResponseHeader &&
+					options.captchaResponseHeader.trim() !== ""
+						? options.captchaResponseHeader
+						: "x-captcha-response";
 
-				const remoteUserIPHeader = options.remoteUserIPHeader && options.remoteUserIPHeader.trim() !== ""
-					? options.remoteUserIPHeader
-					: "x-captcha-user-remote-ip";
+				const remoteUserIPHeader =
+					options.remoteUserIPHeader && options.remoteUserIPHeader.trim() !== ""
+						? options.remoteUserIPHeader
+						: "x-captcha-user-remote-ip";
 
 				const captchaResponse = request.headers.get(captchaResponseHeader);
-				const remoteUserIP = request.headers.get(remoteUserIPHeader) ?? undefined;
+
+				const remoteUserIP =
+					request.headers.get(remoteUserIPHeader) ?? undefined;
 
 				if (!captchaResponse) {
 					return middlewareResponse({
