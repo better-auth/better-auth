@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "../types";
 import type { LiteralString } from "../types/helper";
 
 export interface OAuth2Tokens {
@@ -184,3 +185,119 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	overrideUserInfoOnSignIn?: boolean;
 };
+
+/**
+ * OAuth state payload structure
+ */
+export interface OAuthStatePayload {
+	/**
+	 * The callback URL to redirect to after OAuth completion
+	 */
+	callbackURL: string;
+	/**
+	 * The PKCE code verifier for OAuth 2.0 flows
+	 */
+	codeVerifier: string;
+	/**
+	 * The error callback URL
+	 */
+	errorURL?: string;
+	/**
+	 * The new user callback URL
+	 */
+	newUserURL?: string;
+	/**
+	 * Link account information
+	 */
+	link?: {
+		email: string;
+		userId: string;
+	};
+	/**
+	 * Expiration timestamp in milliseconds
+	 */
+	expiresAt: number;
+	/**
+	 * Whether to request sign up
+	 */
+	requestSignUp?: boolean;
+}
+
+/**
+ * State management configuration
+ *
+ * Allows custom state generation and parsing strategies for OAuth flows.
+ * This is useful for implementing stateless state management, cross-environment
+ * OAuth flows, or other custom state handling requirements.
+ *
+ * @example
+ * ```ts
+ * // Stateless state management using encryption
+ * const stateManagement: StateManagement = {
+ *   generateState: async (ctx, payload) => {
+ *     const encryptedState = await symmetricEncrypt({
+ *       key: ctx.context.secret,
+ *       data: JSON.stringify(payload)
+ *     });
+ *     return encodeURIComponent(encryptedState);
+ *   },
+ *   parseState: async (ctx, state) => {
+ *     try {
+ *       const decryptedState = await symmetricDecrypt({
+ *         key: ctx.context.secret,
+ *         data: decodeURIComponent(state)
+ *       });
+ *       return JSON.parse(decryptedState);
+ *     } catch {
+ *       return undefined; // Fallback to default behavior
+ *     }
+ *   }
+ * };
+ * ```
+ *
+ * @example
+ * ```ts
+ * // Custom state management with Redis
+ * const stateManagement: StateManagement = {
+ *   generateState: async (ctx, payload) => {
+ *     const stateId = generateRandomString(32);
+ *     await redis.setex(`oauth:state:${stateId}`, 600, JSON.stringify(payload));
+ *     return stateId;
+ *   },
+ *   parseState: async (ctx, state) => {
+ *     const data = await redis.get(`oauth:state:${state}`);
+ *     if (data) {
+ *       await redis.del(`oauth:state:${state}`);
+ *       return JSON.parse(data);
+ *     }
+ *     return undefined; // Fallback to default behavior
+ *   }
+ * };
+ * ```
+ */
+export interface StateManagement {
+	/**
+	 * Custom state generation function
+	 *
+	 * @param ctx - The endpoint context
+	 * @param payload - The OAuth state payload to encode
+	 * @returns A string representing the state, or undefined to fallback to
+	 * default behavior
+	 */
+	generateState?: (
+		ctx: GenericEndpointContext,
+		payload: OAuthStatePayload
+	) => Promise<string | undefined>;
+	/**
+	 * Custom state parsing function
+	 *
+	 * @param ctx - The endpoint context
+	 * @param state - The state string to decode
+	 * @returns The parsed OAuth state payload, or undefined to fallback to
+	 * default behavior
+	 */
+	parseState?: (
+		ctx: GenericEndpointContext,
+		state: string
+	) => Promise<OAuthStatePayload | undefined>;
+}
