@@ -1,23 +1,24 @@
 import {
-	type GenericEndpointContext,
 	type BetterAuthPlugin,
+	type GenericEndpointContext,
 	logger,
 } from "better-auth";
+import {
+	APIError,
+	getSessionFromCtx,
+	originCheck,
+	sessionMiddleware,
+} from "better-auth/api";
+import { generateRandomString } from "better-auth/crypto";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
 import { z } from "zod";
-import {
-	sessionMiddleware,
-	APIError,
-	originCheck,
-	getSessionFromCtx,
-} from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
+import { getSchema } from "./schema";
 import type {
 	Customer,
 	InputSubscription,
@@ -26,7 +27,6 @@ import type {
 	Subscription,
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
-import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -1038,6 +1038,83 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									}
 								},
 							},
+							update: {
+								/**
+								 * Handles post-processing after a user update, specifically syncing the user's email with Stripe if it has changed and the email is verified.
+								 *
+								 * @param user - The updated user object.
+								 * @param ctx - The context object containing adapters, logger, and session information.
+								 *
+								 * This function attempts to:
+								 * - Check if the user's email is verified.
+								 * - Retrieve the corresponding Stripe customer using the user's ID.
+								 * - If a Stripe customer exists and the user has an email, update the Stripe customer's email.
+								 * - Call the `onCustomerEmailUpdate` callback if provided, passing relevant details.
+								 * - Log debug information about the Stripe customer ID.
+								 *
+								 * If an error occurs during the process:
+								 * - Logs the error with the user ID.
+								 * - Calls the `onCustomerEmailUpdateError` callback if provided, passing the user, email, and error.
+								 */
+								async after(user, ctx) {
+									try {
+										if (user.emailVerified) {
+											const stripeCustomer =
+												await ctx?.context.adapter.findOne<Customer>({
+													model: "user",
+													where: [
+														{
+															field: "id",
+															value: user.id,
+														},
+													],
+												});
+											ctx?.context.logger.debug(
+												`user: ${JSON.stringify(
+													stripeCustomer?.stripeCustomerId,
+													null,
+													2,
+												)}`,
+											);
+											if (stripeCustomer?.stripeCustomerId && user.email) {
+												await client.customers.update(
+													stripeCustomer.stripeCustomerId,
+													{
+														email: user.email,
+													},
+												);
+												await options.onCustomerEmailUpdate?.({
+													user,
+													oldEmail: ctx?.context.session?.user.email!,
+													newEmail: user.email,
+													stripeCustomerId: stripeCustomer.stripeCustomerId,
+												});
+											}
+										} else {
+											// If email is not verified, we don't update the Stripe customer email
+											// This is to prevent issues with unverified emails
+											// Email is updated in better-auth database
+											await options.onCustomerEmailUpdateError?.({
+												user,
+												email: user.email,
+												error: new Error(
+													"Email not verified, unable to update Stripe customer email",
+												),
+											});
+										}
+									} catch (error: any) {
+										ctx?.context.logger.error(
+											`Failed to update Stripe customer email for user ${user.id}: ${error.message}`,
+										);
+
+										await options.onCustomerEmailUpdateError?.({
+											user,
+											email: user.email,
+											error,
+										});
+									}
+								},
+							},
 						},
 					},
 				},
@@ -1047,4 +1124,4 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type { Subscription, StripePlan };
+export type { StripePlan, Subscription };
