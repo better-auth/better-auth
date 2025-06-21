@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { BetterAuthPlugin } from "../../types";
+import type { username } from ".";
 
 type UsernamePlugin<RequiredUsername extends boolean = false> =
 	BetterAuthPlugin & {
@@ -20,6 +21,7 @@ type UsernamePlugin<RequiredUsername extends boolean = false> =
 				};
 			};
 		};
+		endpoints: ReturnType<typeof username>["endpoints"];
 	};
 
 export const usernameClient = <
