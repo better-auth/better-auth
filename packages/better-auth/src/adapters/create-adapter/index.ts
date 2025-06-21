@@ -952,6 +952,7 @@ export const createAdapter =
 					}
 				: undefined,
 			options: {
+				isCreateAdapter: true,
 				adapterConfig: config,
 				...(adapterInstance.options ?? {}),
 			},
