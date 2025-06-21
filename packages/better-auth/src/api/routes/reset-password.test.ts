@@ -3,6 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("forget password", async (it) => {
 	const mockSendEmail = vi.fn();
+	const mockonPasswordReset = vi.fn();
 	let token = "";
 
 	const { client, testUser, auth } = await getTestInstance(
@@ -12,6 +13,9 @@ describe("forget password", async (it) => {
 				async sendResetPassword({ url }) {
 					token = url.split("?")[0].split("/").pop() || "";
 					await mockSendEmail();
+				},
+				onPasswordReset: async ({ user }) => {
+					await mockonPasswordReset(user);
 				},
 			},
 		},
@@ -139,6 +143,7 @@ describe("forget password", async (it) => {
 			newPassword: "new-password",
 			token,
 		});
+		expect(mockonPasswordReset).toHaveBeenCalled();
 		expect(res2.error?.status).toBe(400);
 	});
 
