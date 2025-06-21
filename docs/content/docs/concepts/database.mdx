@@ -570,6 +570,30 @@ export const auth = betterAuth({
 });
 ```
 
+#### Using the Context Object
+
+The context object (`ctx`), passed as the second argument to the hook, contains useful information. For `update` hooks, this includes the current `session`, which you can use to access the logged-in user's details.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  databaseHooks: {
+    user: {
+      update: {
+        before: async (data, ctx) => {
+          // You can access the session from the context object.
+          if (ctx.context.session) {
+            console.log("User update initiated by:", ctx.context.session.userId);
+          }
+          return { data };
+        },
+      },
+    },
+  },
+});
+```
+
 Much like standard hooks, database hooks also provide a `ctx` object that offers a variety of useful properties. Learn more in the [Hooks Documentation](/docs/concepts/hooks#ctx).
 
 ## Plugins Schema
