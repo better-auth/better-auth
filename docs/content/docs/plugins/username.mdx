@@ -119,9 +119,9 @@ The plugin requires 1 field to be added to the user table:
 
 ## Options
 
-### Min Username Length
+### Server
 
-The minimum length of the username. Default is `3`.
+**minUsernameLength**: The minimum length of the username. Default is `3`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -136,7 +136,7 @@ const auth = betterAuth({
 })
 ```
 
-### Max Username Length
+**maxUsernameLength**: The maximum length of the username. Default is `30`.
 
 The maximum length of the username. Default is `30`.
 
@@ -153,7 +153,7 @@ const auth = betterAuth({
 })
 ```
 
-### Username Validator 
+**usernameValidator**: A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters, underscores, and dots.
 
 A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters, underscores, and dots.
 
@@ -174,7 +174,7 @@ const auth = betterAuth({
 })
 ```
 
-### Required Username
+**requiredUsername**: Whether the username is required during user registration. Default is `false`.
 
 Whether the username is required during user registration. Default is `false`.
 
@@ -193,4 +193,19 @@ const auth = betterAuth({
 
 When set to `true`, users will be required to provide a username during sign up. When set to `false` (default), the username field is optional during registration.
 
+### Client
 
+**requiredUsername**: Whether the username is required during user registration. Affects `signUp.email` function. Default is `false`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { usernameClient } from "better-auth/client/plugins"
+
+const authClient = createAuthClient({
+    plugins: [
+        usernameClient({
+            requiredUsername: true
+        })
+    ]
+})
+```
