@@ -16,6 +16,7 @@ import {
 	getInvitation,
 	listInvitations,
 	rejectInvitation,
+	listUserInvitations,
 } from "./routes/crud-invites";
 import {
 	addMember,
@@ -386,6 +387,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		listUserInvitations,
 		checkOrganizationSlug,
 		addMember: addMember<O>(),
 		removeMember,

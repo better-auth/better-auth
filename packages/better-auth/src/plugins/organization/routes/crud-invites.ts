@@ -745,3 +745,44 @@ export const listInvitations = createAuthEndpoint(
 		return ctx.json(invitations);
 	},
 );
+
+/**
+ * List all invitations recieved for a user
+ */
+export const listUserInvitations = createAuthEndpoint(
+	"/organization/list-user-invitations",
+	{
+		method: "GET",
+		use: [orgMiddleware],
+		query: z
+			.object({
+				email: z
+					.string({
+						description:
+							"The email of the user to list invitations for. This only works for server side API calls.",
+					})
+					.optional(),
+			})
+			.optional(),
+	},
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+
+		if(ctx.request && ctx.query?.email){
+			throw new APIError("BAD_REQUEST", {
+				message: "User email cannot be passed for client side API calls.",
+			});
+		}
+
+		const userEmail = session?.user.email || ctx.query?.email;
+		if(!userEmail){
+			throw new APIError("BAD_REQUEST", {
+				message: "Missing session headers, or email query parameter.",
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+		const invitations = await adapter.listUserInvitations(userEmail);
+		return ctx.json(invitations);
+	},
+);
