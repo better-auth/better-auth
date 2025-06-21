@@ -114,11 +114,13 @@ describe("anonymous", async () => {
 				headers,
 			},
 		});
-		const singInRes = await client.signIn.social({
+		const signInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
-		const state = new URL(singInRes.data?.url || "").searchParams.get("state");
+		const state = signInRes.data?.url
+			? new URL(signInRes.data.url).searchParams.get("state")
+			: null;
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
