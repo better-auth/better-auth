@@ -92,19 +92,37 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 	return {
 		id: "backup_code",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/verify-backup-code`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyBackupCode`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.verifyBackupCode`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-verify-backup-code)
+			 */
 			verifyBackupCode: createAuthEndpoint(
 				"/two-factor/verify-backup-code",
 
 				{
 					method: "POST",
 					body: z.object({
-						code: z.string(),
+						code: z.string({
+							description: `A backup code to verify. Eg: "123456"`,
+						}),
 						/**
 						 * Disable setting the session cookie
 						 */
 						disableSession: z
 							.boolean({
-								description: "If true, the session cookie will not be set.",
+								description:
+									"If true, the session cookie will not be set. Eg: false",
 							})
 							.optional(),
 						/**
@@ -115,7 +133,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						trustDevice: z
 							.boolean({
 								description:
-									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
+									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
 							})
 							.optional(),
 					}),
@@ -294,12 +312,29 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/generate-backup-codes`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.generateBackupCodes`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.generateBackupCodes`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-generate-backup-codes)
+			 */
 			generateBackupCodes: createAuthEndpoint(
 				"/two-factor/generate-backup-codes",
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string(),
+						password: z.string({
+							description: "The users password.",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -366,12 +401,29 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/two-factor/view-backup-codes`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.viewBackupCodes`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.viewBackupCodes`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
+			 */
 			viewBackupCodes: createAuthEndpoint(
 				"/two-factor/view-backup-codes",
 				{
 					method: "GET",
 					body: z.object({
-						userId: z.coerce.string(),
+						userId: z.coerce.string({
+							description: `The user ID to view all backup codes. Eg: "user-id"`,
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,

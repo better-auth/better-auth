@@ -103,11 +103,17 @@ const authClient = createAuthClient({
 
 To link account with Dub, you need to use the `dub.link`.
 
+<APIMethod path="/dub/link" method="POST" requireSession>
 ```ts
-const response = await authClient.dub.link({
-  callbackURL: "/dashboard", // URL to redirect to after linking
-});
+type dubLink = {
+  /**
+   * URL to redirect to after linking
+   * @clientOnly
+  */
+  callbackURL: string = "/dashboard"
+}
 ```
+</APIMethod>
 
 ## Options
 
