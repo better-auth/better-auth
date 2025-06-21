@@ -25,7 +25,7 @@ export type UsernameOptions = {
 	 */
 	maxUsernameLength?: number;
 	/**
-	 * Whether the username is required
+	 * Whether the username is required when signing up
 	 *
 	 * @default false
 	 */
