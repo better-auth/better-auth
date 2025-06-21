@@ -2,8 +2,14 @@ import {
 	type GenericEndpointContext,
 	type BetterAuthPlugin,
 	logger,
+	type User,
 } from "better-auth";
-import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+	type Member,
+	type Organization,
+} from "better-auth/plugins";
 import Stripe from "stripe";
 import { z } from "zod";
 import {
@@ -78,8 +84,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			if (!session) {
 				throw new APIError("UNAUTHORIZED");
 			}
+			// TODO: Make the referenceId the activeOrganizationId if available or the user id
 			const referenceId =
-				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
+				ctx.body?.referenceId ||
+				ctx.query?.referenceId ||
+				session?.session?.activeOrganizationId ||
+				session.user.id;
 
 			if (ctx.body?.referenceId && !options.subscription?.authorizeReference) {
 				logger.error(
@@ -195,6 +205,58 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 			async (ctx) => {
 				const { user, session } = ctx.context.session;
+				const activeOrganizationId = session.activeOrganizationId;
+
+				let organization: (Organization & { stripeCustomerId: string }) | null =
+					null;
+
+				if (activeOrganizationId && options.createOrganizationCustomer) {
+					// Find the organization
+					organization = await ctx.context.adapter.findOne<
+						Organization & { stripeCustomerId: string }
+					>({
+						model: "organization",
+						where: [
+							{
+								field: "id",
+								value: activeOrganizationId ?? "",
+							},
+						],
+					});
+
+					// If the organization doesn't have a customer, create one
+					if (organization && !organization.stripeCustomerId) {
+						const stripeCustomer = await client.customers.create(
+							{
+								email: user.email,
+								name: organization.name,
+								metadata: {
+									...ctx.body.metadata,
+									organizationId: organization.id,
+								},
+							},
+							{
+								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
+							},
+						);
+
+						organization = await ctx.context.adapter.update<
+							Organization & { stripeCustomerId: string }
+						>({
+							model: "organization",
+							update: {
+								stripeCustomerId: stripeCustomer.id,
+							},
+							where: [
+								{
+									field: "id",
+									value: organization.id,
+								},
+							],
+						});
+					}
+				}
+
 				if (
 					!user.emailVerified &&
 					options.subscription?.requireEmailVerification
@@ -203,8 +265,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
 					});
 				}
-				const referenceId = ctx.body.referenceId || user.id;
+				const referenceId = ctx.body.referenceId || organization?.id || user.id;
+
 				const plan = await getPlanByName(options, ctx.body.plan);
+
 				if (!plan) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
@@ -235,7 +299,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 
 				let customerId =
-					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
+					subscriptionToUpdate?.stripeCustomerId ||
+					organization?.stripeCustomerId ||
+					user.stripeCustomerId;
 
 				if (!customerId) {
 					try {
@@ -297,7 +363,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							where: [
 								{
 									field: "referenceId",
-									value: ctx.body.referenceId || user.id,
+									value: ctx.body.referenceId || organization?.id || user.id,
 								},
 							],
 						});
@@ -379,6 +445,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						session,
 						plan,
 						subscription,
+						organization,
 					},
 					ctx.request,
 				);
@@ -447,6 +514,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								subscriptionId: subscription.id,
 								referenceId,
 								...params?.params?.metadata,
+								...(organization && options.createOrganizationCustomer
+									? { organizationId: organization.id }
+									: {}),
 							},
 						},
 						params?.options,
@@ -557,8 +627,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				],
 			},
 			async (ctx) => {
-				const referenceId =
-					ctx.body?.referenceId || ctx.context.session.user.id;
+				let referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+
+				if (options.createOrganizationCustomer) {
+					referenceId =
+						ctx.context.session.session.activeOrganizationId || referenceId;
+				}
+
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
 							model: "subscription",
@@ -681,8 +756,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
 			async (ctx) => {
-				const referenceId =
-					ctx.body?.referenceId || ctx.context.session.user.id;
+				let referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+
+				if (options.createOrganizationCustomer) {
+					referenceId =
+						ctx.context.session.session.activeOrganizationId || referenceId;
+				}
 
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
@@ -788,12 +867,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
 			},
 			async (ctx) => {
+				let referenceId = ctx.query?.referenceId || ctx.context.session.user.id;
+
+				if (options.createOrganizationCustomer) {
+					referenceId =
+						ctx.context.session.session.activeOrganizationId || referenceId;
+				}
+
 				const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 					model: "subscription",
 					where: [
 						{
 							field: "referenceId",
-							value: ctx.query?.referenceId || ctx.context.session.user.id,
+							value: referenceId,
 						},
 					],
 				});
@@ -835,11 +921,32 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
 					ctx,
 				);
+
+				const activeOrganizationId = session?.session?.activeOrganizationId;
+
 				if (!session) {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
+
 				const { user } = session;
 				const { callbackURL, subscriptionId } = ctx.query;
+
+				let organization: (Organization & { stripeCustomerId: string }) | null =
+					null;
+
+				if (activeOrganizationId && options.createOrganizationCustomer) {
+					organization = await ctx.context.adapter.findOne<
+						Organization & { stripeCustomerId: string }
+					>({
+						model: "organization",
+						where: [
+							{
+								field: "id",
+								value: activeOrganizationId ?? "",
+							},
+						],
+					});
+				}
 
 				const subscription = await ctx.context.adapter.findOne<Subscription>({
 					model: "subscription",
@@ -858,7 +965,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.redirect(getUrl(ctx, callbackURL));
 				}
 				const customerId =
-					subscription?.stripeCustomerId || user.stripeCustomerId;
+					subscription?.stripeCustomerId ||
+					organization?.stripeCustomerId ||
+					user.stripeCustomerId;
 
 				if (customerId) {
 					try {
@@ -1000,6 +1109,74 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		init(ctx) {
 			return {
 				options: {
+					hooks: {
+						after: createAuthMiddleware(async (ctx) => {
+							if (ctx.path !== "/organization/create") {
+								return;
+							}
+
+							const organization = ctx.context.returned as
+								| (Organization & { members: Member[] })
+								| APIError
+								| null
+								| undefined;
+
+							if (!organization || organization instanceof APIError) {
+								return logger.error(
+									"#BETTER_AUTH: Organization create hook returned an error or null",
+								);
+							}
+
+							if (
+								options.createOrganizationCustomer &&
+								organization.members?.[0]?.userId
+							) {
+								const user = await ctx.context.adapter.findOne<User>({
+									model: "user",
+									where: [
+										{
+											field: "id",
+											value: organization.members?.[0]?.userId,
+										},
+									],
+								});
+
+								const stripeCustomer = await client.customers.create({
+									name: organization.name,
+									email: user?.email,
+									metadata: {
+										organizationId: organization.id,
+									},
+								});
+
+								const customer = await ctx.context.adapter.update<Customer>({
+									model: "organization",
+									update: {
+										stripeCustomerId: stripeCustomer.id,
+									},
+									where: [
+										{
+											field: "id",
+											value: organization.id,
+										},
+									],
+								});
+
+								if (!customer) {
+									logger.error(
+										"#BETTER_AUTH: Failed to create organization customer",
+									);
+								} else {
+									await options.onCustomerCreate?.({
+										customer,
+										stripeCustomer,
+										type: "organization",
+										organization,
+									});
+								}
+							}
+						}),
+					},
 					databaseHooks: {
 						user: {
 							create: {
@@ -1026,12 +1203,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												],
 											},
 										);
+
 										if (!customer) {
 											logger.error("#BETTER_AUTH: Failed to create  customer");
 										} else {
 											await options.onCustomerCreate?.({
 												customer,
 												stripeCustomer,
+												type: "user",
 												user,
 											});
 										}
