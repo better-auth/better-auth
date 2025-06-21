@@ -65,7 +65,8 @@ export async function generateState(
 	let state: string | undefined;
 
 	// Check for custom state management
-	const customGenerateState = c.context.options.oauth?.stateManagement?.generateState;
+	const customGenerateState =
+		c.context.options.oauth?.stateManagement?.generateState;
 	if (customGenerateState) {
 		state = await customGenerateState(c, payload);
 	}
@@ -142,9 +143,9 @@ export async function parseState(c: GenericEndpointContext) {
 		})
 		.parse(data);
 
-    if (!parsedData.errorURL) {
-        parsedData.errorURL = `${c.context.baseURL}/error`;
-    }
+	if (!parsedData.errorURL) {
+		parsedData.errorURL = `${c.context.baseURL}/error`;
+	}
 	if (parsedData.expiresAt < Date.now()) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;

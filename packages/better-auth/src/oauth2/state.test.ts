@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { generateState, parseState, generateVerificationState, parseVerificationState } from "./state";
+import {
+	generateState,
+	parseState,
+	generateVerificationState,
+	parseVerificationState,
+} from "./state";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { OAuthStatePayload } from "./types";
 
 // Helper function to create a basic OAuth state payload
-function createTestPayload(overrides: Partial<OAuthStatePayload> = {}): OAuthStatePayload {
+function createTestPayload(
+	overrides: Partial<OAuthStatePayload> = {},
+): OAuthStatePayload {
 	return {
 		callbackURL: "/test",
 		codeVerifier: "test-code-verifier",
@@ -59,7 +66,7 @@ describe("Configurable State Management", async () => {
 		// Test the generateState function directly with a real context
 		const result = await generateState(
 			{ context: testAuthContext, body: { callbackURL: "/test" } } as any,
-			{ email: "test@example.com", userId: "123" }
+			{ email: "test@example.com", userId: "123" },
 		);
 
 		expect(result.state).toBe(customState);
@@ -77,9 +84,10 @@ describe("Configurable State Management", async () => {
 		const testAuth = instance.auth;
 		const testAuthContext = await testAuth.$context;
 
-		const result = await generateState(
-			{ context: testAuthContext, body: { callbackURL: "/test" } } as any
-		);
+		const result = await generateState({
+			context: testAuthContext,
+			body: { callbackURL: "/test" },
+		} as any);
 
 		expect(result.state).toMatch(/^[a-zA-Z0-9_-]{32}$/);
 		expect(result.codeVerifier).toMatch(/^[a-zA-Z0-9_-]{128}$/);
@@ -98,13 +106,14 @@ describe("Configurable State Management", async () => {
 		const testAuth = instance.auth;
 		const testAuthContext = await testAuth.$context;
 
-		const result = await parseState(
-			{ context: testAuthContext, query: { state: "test-state" } } as any
-		);
+		const result = await parseState({
+			context: testAuthContext,
+			query: { state: "test-state" },
+		} as any);
 
 		expect(result).toEqual({
 			...customPayload,
-			errorURL: `${testAuthContext.baseURL}/error`
+			errorURL: `${testAuthContext.baseURL}/error`,
 		});
 	});
 
@@ -123,12 +132,14 @@ describe("Configurable State Management", async () => {
 		const context = {
 			context: testAuthContext,
 			query: { state: "non-existent-state" },
-			redirect: vi.fn(() => { throw new Error("redirect"); }),
+			redirect: vi.fn(() => {
+				throw new Error("redirect");
+			}),
 		} as any;
 
 		await expect(parseState(context)).rejects.toThrow("redirect");
 		expect(context.redirect).toHaveBeenCalledWith(
-			`${testAuthContext.baseURL}/error?error=please_restart_the_process`
+			`${testAuthContext.baseURL}/error?error=please_restart_the_process`,
 		);
 	});
 
@@ -147,17 +158,20 @@ describe("Configurable State Management", async () => {
 
 		await generateState(
 			{ context: testAuthContext, body: { callbackURL: "/test" } } as any,
-			{ email: "test@example.com", userId: "123" }
+			{ email: "test@example.com", userId: "123" },
 		);
 
 		expect(mockGenerateState).toHaveBeenCalledWith(
-			expect.objectContaining({ context: testAuthContext, body: { callbackURL: "/test" } }),
+			expect.objectContaining({
+				context: testAuthContext,
+				body: { callbackURL: "/test" },
+			}),
 			expect.objectContaining({
 				callbackURL: "/test",
 				codeVerifier: expect.stringMatching(/^[a-zA-Z0-9_-]{128}$/),
 				link: { email: "test@example.com", userId: "123" },
 				expiresAt: expect.any(Number),
-			})
+			}),
 		);
 	});
 
@@ -190,9 +204,10 @@ describe("Configurable State Management", async () => {
 
 	it("should maintain backward compatibility when no custom state management is configured", async () => {
 		// Use the default instance without custom state management
-		const result = await generateState(
-			{ context: authContext, body: { callbackURL: "/test" } } as any
-		);
+		const result = await generateState({
+			context: authContext,
+			body: { callbackURL: "/test" },
+		} as any);
 
 		expect(result.state).toMatch(/^[a-zA-Z0-9_-]{32}$/);
 		expect(result.codeVerifier).toMatch(/^[a-zA-Z0-9_-]{128}$/);
@@ -203,14 +218,18 @@ describe("Configurable State Management", async () => {
 
 		const state = await generateVerificationState(
 			{ context: authContext, body: { callbackURL: "/test" } } as any,
-			payload
+			payload,
 		);
 
 		expect(state).toMatch(/^[a-zA-Z0-9_-]{32}$/);
 
-		const verification = await authContext.internalAdapter.findVerificationValue(state);
+		const verification =
+			await authContext.internalAdapter.findVerificationValue(state);
 		expect(verification).toBeTruthy();
-		expect(verification!.expiresAt.getTime()).toBeCloseTo(payload.expiresAt, -2);
+		expect(verification!.expiresAt.getTime()).toBeCloseTo(
+			payload.expiresAt,
+			-2,
+		);
 	});
 
 	it("should use parseVerificationState with expiration checking and cleanup", async () => {
@@ -219,19 +238,20 @@ describe("Configurable State Management", async () => {
 
 		const state = await generateVerificationState(
 			{ context: authContext, body: { callbackURL: "/test" } } as any,
-			payload
+			payload,
 		);
 
 		// Now parse it back
 		const parsedData = await parseVerificationState(
 			{ context: authContext, query: { state } } as any,
-			state
+			state,
 		);
 
 		expect(parsedData).toEqual(payload);
 
 		// The verification should be deleted immediately after parsing
-		const verification = await authContext.internalAdapter.findVerificationValue(state);
+		const verification =
+			await authContext.internalAdapter.findVerificationValue(state);
 		expect(verification).toBeUndefined();
 	});
 
@@ -240,16 +260,16 @@ describe("Configurable State Management", async () => {
 			oauth: {
 				stateManagement: {
 					generateState: async (ctx: any, payload: any) => {
-						return Buffer.from(JSON.stringify(payload)).toString('base64');
+						return Buffer.from(JSON.stringify(payload)).toString("base64");
 					},
 					parseState: async (ctx: any, state: string) => {
 						try {
-							const decoded = Buffer.from(state, 'base64').toString();
+							const decoded = Buffer.from(state, "base64").toString();
 							return JSON.parse(decoded);
 						} catch {
 							return undefined; // Fallback to database
 						}
-					}
+					},
 				},
 			},
 		});
@@ -257,21 +277,24 @@ describe("Configurable State Management", async () => {
 		const testAuthContext = await testAuth.$context;
 
 		// Generate state
-		const result = await generateState(
-			{ context: testAuthContext, body: { callbackURL: "/test" } } as any
-		);
+		const result = await generateState({
+			context: testAuthContext,
+			body: { callbackURL: "/test" },
+		} as any);
 
 		expect(result.state).toMatch(/^[A-Za-z0-9+/=]+$/); // Base64 format
 		expect(result.codeVerifier).toMatch(/^[a-zA-Z0-9_-]{128}$/);
 
 		// Verify no verification was created in database
-		const verification = await testAuthContext.internalAdapter.findVerificationValue(result.state);
+		const verification =
+			await testAuthContext.internalAdapter.findVerificationValue(result.state);
 		expect(verification).toBeUndefined();
 
 		// Parse state
-		const parsedData = await parseState(
-			{ context: testAuthContext, query: { state: result.state } } as any
-		);
+		const parsedData = await parseState({
+			context: testAuthContext,
+			query: { state: result.state },
+		} as any);
 
 		expect(parsedData.callbackURL).toBe("/test");
 		expect(parsedData.codeVerifier).toBe(result.codeVerifier);

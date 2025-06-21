@@ -286,7 +286,7 @@ export interface StateManagement {
 	 */
 	generateState?: (
 		ctx: GenericEndpointContext,
-		payload: OAuthStatePayload
+		payload: OAuthStatePayload,
 	) => Promise<string | undefined>;
 	/**
 	 * Custom state parsing function
@@ -298,6 +298,6 @@ export interface StateManagement {
 	 */
 	parseState?: (
 		ctx: GenericEndpointContext,
-		state: string
+		state: string,
 	) => Promise<OAuthStatePayload | undefined>;
 }
