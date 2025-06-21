@@ -4,7 +4,7 @@ type Params = {
 	status: number;
 };
 
-export const middlewareResponse = ({ message, status }: Params) => ({
+export const middlewareResponse = ({ code, message, status }: Params) => ({
 	response: new Response(
 		JSON.stringify({
 			code,
