@@ -173,3 +173,22 @@ const auth = betterAuth({
     ]
 })
 ```
+
+### Additional Sign Up Paths
+
+You can specify additional paths where the username plugin should validate and process usernames during signup.
+This is particularly useful when other plugins introduce custom signup endpoints - by adding those paths here,
+the username plugin will automatically validate and store usernames when they're included in the request body.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            additionalSignUpPaths: ["/some-path"]
+        })
+    ]
+})
+```
