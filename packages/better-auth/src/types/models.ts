@@ -25,20 +25,34 @@ export type Models =
 	| "two-factor";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "user", "input"> &
-		InferFieldsFromOptions<Options, "user", "input">;
+	InferFieldsFromPlugins<Options["plugins"], "user", "input"> &
+		InferFieldsFromOptions<
+			{ session: Options["session"]; user: Options["user"] },
+			"user",
+			"input"
+		>;
 
 export type AdditionalUserFieldsOutput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "user"> &
-		InferFieldsFromOptions<Options, "user">;
+	InferFieldsFromPlugins<Options["plugins"], "user"> &
+		InferFieldsFromOptions<
+			{ session: Options["session"]; user: Options["user"] },
+			"user"
+		>;
 
 export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "session", "input"> &
-		InferFieldsFromOptions<Options, "session", "input">;
+	InferFieldsFromPlugins<Options["plugins"], "session", "input"> &
+		InferFieldsFromOptions<
+			{ session: Options["session"]; user: Options["user"] },
+			"session",
+			"input"
+		>;
 
 export type AdditionalSessionFieldsOutput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "session"> &
-		InferFieldsFromOptions<Options, "session">;
+	InferFieldsFromPlugins<Options["plugins"], "session"> &
+		InferFieldsFromOptions<
+			{ session: Options["session"]; user: Options["user"] },
+			"session"
+		>;
 
 export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 	StripEmptyObjects<
