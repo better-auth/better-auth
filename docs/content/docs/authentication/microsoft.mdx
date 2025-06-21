@@ -8,7 +8,7 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
 <Steps>
     <Step> 
         ### Get your Microsoft credentials
-        To use Microsoft as a social provider, you need to get your Microsoft credentials. which involves generating your own Client ID and Client Secret using your Microsoft Entra ID dashboard account.
+        To use Microsoft as a social provider, you need to get your Microsoft credentials. Which involves generating your own Client ID and Client Secret using your Microsoft Entra ID dashboard account.
 
         Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/microsoft` for local development. For production, you should change it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
@@ -44,7 +44,7 @@ To sign in with Microsoft, you can use the `signIn.social` function provided by 
 
 - `provider`: The provider to use. It should be set to `microsoft`.
 
-```ts title="auth-client.ts"
+```ts title="auth-client.ts"  /
 import { createAuthClient } from "better-auth/client";
 
 const authClient = createAuthClient();
