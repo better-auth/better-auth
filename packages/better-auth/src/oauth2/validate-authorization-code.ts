@@ -24,6 +24,7 @@ export async function validateAuthorizationCode({
 	headers?: Record<string, string>;
 }) {
 	const body = new URLSearchParams();
+	const clientId = Array.isArray(options.clientId) ? options.clientId[0] : options.clientId;
 	const requestHeaders: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
@@ -38,11 +39,11 @@ export async function validateAuthorizationCode({
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
 		const encodedCredentials = base64Url.encode(
-			`${options.clientId}:${options.clientSecret}`,
+			`${clientId}:${options.clientSecret}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		body.set("client_id", options.clientId);
+		body.set("client_id", clientId);
 		body.set("client_secret", options.clientSecret);
 	}
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {

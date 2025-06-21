@@ -74,9 +74,16 @@ export const google = (options: GoogleOptions) => {
 				: ["email", "profile", "openid"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
+
+			// Get the first client ID if an array is provided
+			const clientId = Array.isArray(options.clientId) ? options.clientId[0] : options.clientId;
+
 			const url = await createAuthorizationURL({
 				id: "google",
-				options,
+				options: {
+					...options,
+					clientId, // Pass the selected client ID
+				},
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
 				scopes: _scopes,
 				state,
@@ -108,7 +115,7 @@ export const google = (options: GoogleOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientId: options.clientId,
+							clientId: Array.isArray(options.clientId) ? options.clientId[0] : options.clientId,
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
@@ -135,8 +142,13 @@ export const google = (options: GoogleOptions) => {
 			if (!tokenInfo) {
 				return false;
 			}
+
+			// Check if the audience matches any of the client IDs
+			const clientIds = Array.isArray(options.clientId) ? options.clientId : [options.clientId];
+			const isValidAudience = clientIds.includes(tokenInfo.aud);
+
 			const isValid =
-				tokenInfo.aud === options.clientId &&
+				isValidAudience &&
 				(tokenInfo.iss === "https://accounts.google.com" ||
 					tokenInfo.iss === "accounts.google.com");
 			return isValid;
