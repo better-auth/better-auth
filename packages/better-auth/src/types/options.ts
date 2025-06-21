@@ -19,6 +19,7 @@ import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
+import type { StateManagement } from "../oauth2";
 //@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
 
@@ -267,6 +268,35 @@ export type BetterAuthOptions = {
 	 * list of social providers
 	 */
 	socialProviders?: SocialProviders;
+	/**
+	 * OAuth configuration
+	 */
+	oauth?: {
+		/**
+		 * Configurable state management for OAuth flows
+		 *
+		 * Allows custom state generation and parsing strategies for alternative
+		 * state management approaches. When not configured, falls back to the
+		 * default database-based state management using the verification table.
+		 *
+		 * @example
+		 * ```ts
+		 * oauth: {
+		 *   stateManagement: {
+		 *     generateState: async (ctx, payload) => {
+		 *       // Custom state generation logic
+		 *       return encryptedState;
+		 *     },
+		 *     parseState: async (ctx, state) => {
+		 *       // Custom state parsing logic
+		 *       return parsedPayload;
+		 *     }
+		 *   }
+		 * }
+		 * ```
+		 */
+		stateManagement?: StateManagement;
+	};
 	/**
 	 * List of Better Auth plugins
 	 */
