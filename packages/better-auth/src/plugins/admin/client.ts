@@ -57,7 +57,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 						};
 			}>
 		>,
-		getActions: ($fetch) => ({
+		getActions: () => ({
 			admin: {
 				checkRolePermission: <
 					R extends O extends { roles: any }
