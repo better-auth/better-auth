@@ -54,7 +54,7 @@ import { createMcpHandler } from "@vercel/mcp-adapter";
 import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
-const handler = withMcpAuth(auth, (req, sesssion) => {
+const handler = withMcpAuth(auth, (req, session) => {
     //session => This isn’t a typical Better Auth session - instead, it returns the access token record along with the scopes and user ID.
 	return createMcpHandler(
 		(server) => {
