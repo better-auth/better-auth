@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin, Store } from "better-auth";
+import { BetterAuthClientPlugin, Store } from "better-auth/types";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";

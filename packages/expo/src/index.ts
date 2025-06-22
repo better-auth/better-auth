@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin } from "better-auth/types";
 import { createAuthMiddleware } from "better-auth/api";
 
 export interface ExpoOptions {
