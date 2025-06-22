@@ -174,8 +174,7 @@ describe("api-key", async () => {
 			err = error;
 		}
 		expect(err).toBeDefined();
-		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED)
-
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
 	});
 
 	it("should respect rateLimit configuration from plugin options", async () => {
