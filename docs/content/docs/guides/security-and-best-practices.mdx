@@ -62,23 +62,16 @@ import { z } from "zod";
 export const auth = betterAuth({
 	hooks: {
 		before: createAuthMiddleware(async (ctx) => {
-			// Check that the request is for the sign-up/email endpoint
 			if (ctx.path !== "/sign-up/email") return;
-
-			// Check that the image field is present
 			if (!ctx.body.image) return;
-			const img = ctx.body.image;
 
-			// Validate that the image URL is a valid URL
-			const url_validator = z.string().url();
-			if (!url_validator.safeParse(img).success) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Invalid image URL",
-				});
-			}
-			// Check that the image URL is valid
-			const url = new URL(img);
-			if (url.hostname !== "example.com") {
+			const { success, data } = z
+				.string()
+				.url()
+				.transform((url) => new URL(url))
+				.safeParse(ctx.body.image);
+
+			if (!success || data.hostname !== "example.com") {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid image URL",
 				});
