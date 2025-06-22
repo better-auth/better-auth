@@ -163,6 +163,13 @@ export type BetterAuthOptions = {
 		 */
 		sendOnSignUp?: boolean;
 		/**
+		 * Send a verification email automatically
+		 * on sign in when the user's email is not verified
+		 *
+		 * @default false
+		 */
+		sendOnSignIn?: boolean;
+		/**
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
