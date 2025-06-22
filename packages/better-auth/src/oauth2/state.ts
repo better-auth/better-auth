@@ -34,6 +34,17 @@ export async function generateVerificationState(
 	return identifier;
 }
 
+/**
+ * Generate OAuth state with support for custom state management strategies.
+ *
+ * **Critical Behavior**: This function returns `payload.codeVerifier` (not the
+ * original `codeVerifier` variable) to support custom state management
+ * implementations. The original `codeVerifier` is provided to custom
+ * `generateState` implementations, which may choose to use it as-is or replace
+ * it with a computed value. The function returns `payload.codeVerifier` to
+ * ensure the returned value matches what the custom implementation decided to
+ * use, regardless of whether it's the original or a computed value.
+ */
 export async function generateState(
 	c: GenericEndpointContext,
 	link?: {
@@ -76,6 +87,9 @@ export async function generateState(
 		state = await generateVerificationState(c, payload);
 	}
 
+	// CRITICAL: Return codeVerifier from the potentially modified payload This
+	// allows custom generateState implementations to optimize the codeVerifier
+	// while ensuring consistency between generation and parsing
 	return {
 		state,
 		codeVerifier: payload.codeVerifier,

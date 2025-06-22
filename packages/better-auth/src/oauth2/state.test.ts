@@ -299,4 +299,241 @@ describe("Configurable State Management", async () => {
 		expect(parsedData.callbackURL).toBe("/test");
 		expect(parsedData.codeVerifier).toBe(result.codeVerifier);
 	});
+
+	describe("codeVerifier optimization behavior", () => {
+		it("should return codeVerifier from modified payload when custom generateState computes a new one", async () => {
+			const computedCodeVerifier = "computed-optimized-verifier";
+			let originalPayload: OAuthStatePayload | null = null;
+
+			const mockGenerateState = vi
+				.fn()
+				.mockImplementation(async (c, payload) => {
+					// Capture the original payload before modification
+					originalPayload = { ...payload };
+
+					// Discard the original codeVerifier and compute a new one
+					payload.codeVerifier = computedCodeVerifier;
+					return "optimized-state";
+				});
+
+			const instance = await getTestInstance({
+				oauth: {
+					stateManagement: {
+						generateState: mockGenerateState,
+					},
+				},
+			});
+			const testAuth = instance.auth;
+			const testAuthContext = await testAuth.$context;
+
+			const result = await generateState({
+				context: testAuthContext,
+				body: { callbackURL: "/test" },
+			} as any);
+
+			// The returned codeVerifier should be the computed one from the modified payload
+			expect(result.codeVerifier).toBe(computedCodeVerifier);
+			expect(result.state).toBe("optimized-state");
+
+			// callArgs is the payload after modification
+			const callArgs = mockGenerateState.mock.calls[0][1];
+			expect(callArgs).toMatchObject({
+				callbackURL: "/test",
+				codeVerifier: computedCodeVerifier,
+				expiresAt: expect.any(Number),
+			});
+
+			// originalPayload is the payload before modification
+			expect(originalPayload).toMatchObject({
+				callbackURL: "/test",
+				codeVerifier: expect.stringMatching(/^[a-zA-Z0-9_-]{128}$/),
+				expiresAt: expect.any(Number),
+			});
+		});
+
+		it("should allow custom generateState to compute codeVerifier from state hash", async () => {
+			const mockGenerateState = vi
+				.fn()
+				.mockImplementation(async (c, payload) => {
+					// Simulate computing codeVerifier as a hash of the state
+					const stateValue = "computed-state-123";
+					const computedCodeVerifier = `hash-${stateValue}-${payload.expiresAt}`;
+
+					// Update the payload with the computed codeVerifier (discarding original)
+					payload.codeVerifier = computedCodeVerifier;
+
+					return stateValue;
+				});
+
+			const instance = await getTestInstance({
+				oauth: {
+					stateManagement: {
+						generateState: mockGenerateState,
+					},
+				},
+			});
+			const testAuth = instance.auth;
+			const testAuthContext = await testAuth.$context;
+
+			const result = await generateState({
+				context: testAuthContext,
+				body: { callbackURL: "/test" },
+			} as any);
+
+			// The returned codeVerifier should be the computed one
+			expect(result.codeVerifier).toMatch(/^hash-computed-state-123-\d+$/);
+			expect(result.state).toBe("computed-state-123");
+		});
+
+		it("should maintain codeVerifier consistency between generateState and parseState", async () => {
+			const storedPayloads = new Map<string, OAuthStatePayload>();
+
+			const mockGenerateState = vi
+				.fn()
+				.mockImplementation(async (c, payload) => {
+					// Simulate computing a new codeVerifier based on state
+					const stateValue = "stored-state-456";
+					const computedCodeVerifier = `computed-${stateValue}`;
+
+					// Update payload with computed codeVerifier (discarding original)
+					payload.codeVerifier = computedCodeVerifier;
+
+					// Store the modified payload for later retrieval
+					storedPayloads.set(stateValue, { ...payload });
+
+					return stateValue;
+				});
+
+			const mockParseState = vi.fn().mockImplementation(async (c, state) => {
+				// Retrieve the stored payload with the computed codeVerifier
+				const storedPayload = storedPayloads.get(state);
+				return storedPayload;
+			});
+
+			const instance = await getTestInstance({
+				oauth: {
+					stateManagement: {
+						generateState: mockGenerateState,
+						parseState: mockParseState,
+					},
+				},
+			});
+			const testAuth = instance.auth;
+			const testAuthContext = await testAuth.$context;
+
+			// Generate state
+			const generateResult = await generateState({
+				context: testAuthContext,
+				body: { callbackURL: "/test" },
+			} as any);
+
+			// Parse state
+			const parseResult = await parseState({
+				context: testAuthContext,
+				query: { state: generateResult.state },
+			} as any);
+
+			// The codeVerifier should be consistent between generation and parsing
+			expect(parseResult.codeVerifier).toBe(generateResult.codeVerifier);
+			expect(parseResult.codeVerifier).toBe("computed-stored-state-456");
+		});
+
+		it("should demonstrate stateless codeVerifier computation", async () => {
+			const mockGenerateState = vi
+				.fn()
+				.mockImplementation(async (c, payload) => {
+					// Create a state that can be used to recompute the codeVerifier
+					const stateValue = `stateless-${Date.now()}`;
+
+					// Compute codeVerifier as a deterministic function of the state
+					const salt = "consistent-salt";
+					const computedCodeVerifier = `hash-${stateValue}-${salt}`;
+
+					// Update payload with computed codeVerifier
+					payload.codeVerifier = computedCodeVerifier;
+
+					return stateValue;
+				});
+
+			const mockParseState = vi.fn().mockImplementation(async (c, state) => {
+				// Recompute the same codeVerifier from the state
+				const salt = "consistent-salt";
+				const recomputedCodeVerifier = `hash-${state}-${salt}`;
+
+				return {
+					callbackURL: "/test",
+					codeVerifier: recomputedCodeVerifier,
+					expiresAt: Date.now() + 60000,
+				};
+			});
+
+			const instance = await getTestInstance({
+				oauth: {
+					stateManagement: {
+						generateState: mockGenerateState,
+						parseState: mockParseState,
+					},
+				},
+			});
+			const testAuth = instance.auth;
+			const testAuthContext = await testAuth.$context;
+
+			// Generate state
+			const generateResult = await generateState({
+				context: testAuthContext,
+				body: { callbackURL: "/test" },
+			} as any);
+
+			// Parse state
+			const parseResult = await parseState({
+				context: testAuthContext,
+				query: { state: generateResult.state },
+			} as any);
+
+			// The codeVerifier should be consistent and computed from the state
+			expect(parseResult.codeVerifier).toBe(generateResult.codeVerifier);
+			expect(parseResult.codeVerifier).toMatch(
+				/^hash-stateless-\d+-consistent-salt$/,
+			);
+		});
+
+		it("should demonstrate the optimization benefit of custom state management", async () => {
+			const mockGenerateState = vi
+				.fn()
+				.mockImplementation(async (c, payload) => {
+					// Create a short state that can be used to compute the codeVerifier
+					const stateValue = `opt-${Date.now()}`;
+
+					// Compute a deterministic codeVerifier from the state
+					const computedCodeVerifier = `computed-${stateValue}`;
+
+					// Update payload with computed codeVerifier
+					payload.codeVerifier = computedCodeVerifier;
+
+					return stateValue;
+				});
+
+			const instance = await getTestInstance({
+				oauth: {
+					stateManagement: {
+						generateState: mockGenerateState,
+					},
+				},
+			});
+			const testAuth = instance.auth;
+			const testAuthContext = await testAuth.$context;
+
+			const result = await generateState({
+				context: testAuthContext,
+				body: { callbackURL: "/test" },
+			} as any);
+
+			// The state is much shorter than the original codeVerifier
+			expect(result.state.length).toBeLessThan(30);
+			expect(result.state).toMatch(/^opt-\d+$/);
+
+			// But we still have access to a computed codeVerifier
+			expect(result.codeVerifier).toMatch(/^computed-opt-\d+$/);
+		});
+	});
 });
