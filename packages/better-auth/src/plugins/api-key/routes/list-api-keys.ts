@@ -178,7 +178,7 @@ export function listApiKeys({
 			apiKeys = apiKeys.map((apiKey) => {
 				return {
 					...apiKey,
-					metadata: schema.apikey.fields.metadata.transform.output(
+					metadata: schema.apiKey.fields.metadata.transform.output(
 						apiKey.metadata as never as string,
 					),
 				};
