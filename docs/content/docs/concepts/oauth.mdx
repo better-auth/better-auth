@@ -201,3 +201,138 @@ After the user completes the login process, the provider redirects them back to 
 4. **Redirect:** Users are redirected to the specified URL provided during the initial request or `/`.
 
 If any error occurs during the process, Better Auth handles it and redirects the user to the error URL (if provided) or the callbackURL. And it includes the error message in the query string `?error=...`.
+
+## OAuth State Management
+
+Better Auth provides flexible OAuth state management to handle different deployment scenarios. OAuth state prevents CSRF attacks and stores essential information needed to complete the authentication flow.
+
+### Default Database-Based State Management
+
+By default, Better Auth stores OAuth state in the database for enhanced security. This approach:
+
+- Prevents CSRF attacks through state validation
+- Supports PKCE (Proof Key for Code Exchange) for additional security
+- Automatically cleans up expired state entries
+- Works seamlessly across all OAuth providers
+
+### Custom State Management
+
+For advanced use cases, such as OAuth proxy scenarios or stateless deployments, you can configure custom state management functions:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import type { OAuthStatePayload } from "better-auth/oauth2/types"
+
+export const auth = betterAuth({
+    oauth: {
+        stateManagement: {
+            generateState: async (context, payload: OAuthStatePayload) => {
+                // Example: Simple JSON encoding
+                // Note: Real implementations should encrypt or hash the payload for security
+                return JSON.stringify(payload);
+            },
+            parseState: async (context, state: string) => {
+                // Example: Simple JSON decoding
+                return JSON.parse(state) as OAuthStatePayload;
+            }
+        }
+    }
+})
+```
+
+### State Management Context
+
+The state management functions receive the following context:
+
+- `context`: The Better Auth endpoint context with access to database, configuration, and request data
+- `payload` (generateState): The OAuth state payload containing callback URL, PKCE verifier, and other flow data
+- `state` (parseState): The raw state string from the OAuth provider
+
+### Fallback Behavior
+
+If the `stateManagement` configuration is missing, or if either function returns `undefined`, Better Auth automatically falls back to the default database-based approach using the `verification` table.
+
+### Real-World Example: OAuth Proxy with Stateless State
+
+Here's a complete example of implementing stateless state management for an OAuth proxy scenario using the [OAuth Proxy plugin](/docs/plugins/oauth-proxy):
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { oAuthProxy } from "better-auth/plugins"
+import { symmetricEncrypt, symmetricDecrypt } from "better-auth/crypto"
+import type { OAuthStatePayload } from "better-auth/oauth2/types"
+
+export const auth = betterAuth({
+    plugins: [
+        oAuthProxy({
+            productionURL: "https://my-production-app.com",
+            currentURL: "http://localhost:3000",
+            oauth: {
+                stateManagement: {
+                    generateState: async (context, payload: OAuthStatePayload) => {
+                        // Encrypt the OAuth payload using Better Auth's crypto utilities
+                        return await symmetricEncrypt({
+                            key: context.context.options.secret,
+                            data: JSON.stringify(payload)
+                        });
+                    },
+                    parseState: async (context, state: string) => {
+                        // Decrypt the state using Better Auth's crypto utilities
+                        const decrypted = await symmetricDecrypt({
+                            key: context.context.options.secret,
+                            data: state
+                        });
+
+                        return JSON.parse(decrypted) as OAuthStatePayload;
+                    }
+                }
+            }
+        })
+    ],
+    socialProviders: {
+        github: {
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+            redirectURI: "https://my-production-app.com/api/auth/callback/github"
+        }
+    }
+})
+```
+
+This example demonstrates:
+
+- **Secure encryption** using Better Auth's built-in crypto utilities
+- **Simple payload encoding/decoding** without custom fields
+- **Uses configured secret** for encryption/decryption
+- **Type safety** with proper TypeScript types
+
+<Callout>
+This implementation uses the same secret configured for Better Auth, ensuring consistency across your application.
+</Callout>
+
+<Callout type="warn">
+When using stateless state management, consider the security implications of storing sensitive data in URL parameters.
+</Callout>
+
+### OAuth State Contents
+
+The OAuth state contains essential information needed to complete the OAuth flow:
+
+```ts
+interface OAuthStatePayload {
+    callbackURL: string;        // Where to redirect after successful authentication
+    codeVerifier: string;       // PKCE code verifier for OAuth 2.0 security
+    errorURL?: string;          // Where to redirect on error
+    newUserURL?: string;        // Where to redirect for new user signup
+    link?: {                    // Account linking information
+        email: string;
+        userId: string;
+    };
+    expiresAt: number;          // State expiration timestamp
+    requestSignUp?: boolean;    // Whether to request signup
+}
+```
+
+<Callout>
+The `expiresAt` field is validated by Better Auth after parsing your custom state, so you don't need to handle expiration in your `parseState` function.
+</Callout>

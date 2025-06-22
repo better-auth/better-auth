@@ -3,7 +3,7 @@ title: OAuth Proxy
 description: OAuth Proxy plugin for Better Auth
 ---
 
-A proxy plugin, that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider. 
+A proxy plugin, that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider.
 
 ## Installation
 
@@ -18,7 +18,7 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
         plugins: [ // [!code highlight]
             oAuthProxy({
                 productionURL: "https://my-main-app.com", // Optional - if the URL isn't inferred correctly // [!code highlight]
-                currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight] 
+                currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight]
             }), // [!code highlight]
         ] // [!code highlight]
     })
@@ -33,7 +33,7 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
     export const auth = betterAuth({
        plugins: [
            oAuthProxy(),
-       ], 
+       ],
        socialProviders: {
             github: {
                 clientId: "your-client-id",
@@ -44,7 +44,7 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
     })
     ```
     </Step>
-</Steps>    
+</Steps>
 
 
 ## How it works
@@ -63,6 +63,10 @@ When the OAuth provider returns the user to your server, the plugin automaticall
 <Callout>
 To share cookies between the proxy server and your main server it uses URL query parameters to pass the cookies encrypted in the URL. This is secure as the cookies are encrypted and can only be decrypted by the server.
 </Callout>
+
+## OAuth State Management
+
+The OAuth Proxy plugin is particularly useful in conjunction with the [`oauth.stateManagement` configuration](/docs/reference/options#statemanagement), especially in situations where the proxy does not share the same datastore as the reliant services. By default, OAuth state is stored in the database for security, but this can cause issues in proxy scenarios where the proxy server and your application have separate databases.
 
 ## Options
 

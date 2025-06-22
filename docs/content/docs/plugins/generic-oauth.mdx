@@ -16,13 +16,13 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { genericOAuth } from "better-auth/plugins" // [!code highlight]
-    
+
     export const auth = betterAuth({
         // ... other config options
-        plugins: [ 
+        plugins: [
             genericOAuth({ // [!code highlight]
                 config: [ // [!code highlight]
-                    { // [!code highlight] 
+                    { // [!code highlight]
                         providerId: "provider-id", // [!code highlight]
                         clientId: "test-client-id", // [!code highlight]
                         clientSecret: "test-client-secret", // [!code highlight]
@@ -45,7 +45,7 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
     import { genericOAuthClient } from "better-auth/client/plugins"
-    
+
     export const authClient = createAuthClient({
         plugins: [
             genericOAuthClient()
@@ -54,6 +54,10 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     ```
   </Step>
 </Steps>
+
+<Callout>
+The Generic OAuth plugin is fully compatible with Better Auth's configurable [OAuth state management](/docs/concepts/oauth#oauth-state-management). Custom state management functions configured at the root level will be used by all OAuth providers, including those configured through this plugin.
+</Callout>
 
 ## Usage
 

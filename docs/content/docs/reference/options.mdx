@@ -199,6 +199,39 @@ export const auth = betterAuth({
 })
 ```
 
+## `oauth`
+
+OAuth configuration options.
+
+```ts
+import { betterAuth } from "better-auth";
+import type { OAuthStatePayload } from "better-auth/oauth2/types";
+
+export const auth = betterAuth({
+    oauth: {
+        stateManagement: {
+            generateState: async (context, payload: OAuthStatePayload) => {
+                // Custom state generation logic
+                // Return undefined to use default database approach
+            },
+            parseState: async (context, state: string) => {
+                // Custom state parsing logic
+                // Return undefined to use default database approach
+            }
+        }
+    }
+})
+```
+
+### `stateManagement`
+
+Configuration for custom [OAuth state management](/docs/concepts/oauth#oauth-state-management), particularly when used in conjunction with the [OAuth Proxy Plugin](/docs/plugins/oauth-proxy).
+
+- `generateState`: Function to generate custom OAuth state. Receives the endpoint context and OAuth payload. Return `undefined` to use the default database approach.
+- `parseState`: Function to parse custom OAuth state. Receives the endpoint context and raw state string. Return `undefined` to use the default database approach.
+
+If the `stateManagement` configuration is missing, or if either function returns `undefined`, Better Auth automatically falls back to the default database-based state management using the `verification` table.
+
 ## `plugins`
 
 List of Better Auth plugins.
@@ -287,7 +320,7 @@ export const auth = betterAuth({
 		storeSessionInDatabase: true, // Store session in database when secondary storage is provided (default: `false`)
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
-			enabled: true, // Enable caching session in cookie (default: `false`)	
+			enabled: true, // Enable caching session in cookie (default: `false`)
 			maxAge: 300 // 5 minutes
 		}
 	},

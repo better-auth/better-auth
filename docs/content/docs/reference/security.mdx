@@ -28,11 +28,21 @@ Better Auth ensures CSRF protection by validating the Origin header in requests.
 
 ## OAuth State and PKCE
 
-To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) in the database. The state helps prevent CSRF attacks, while PKCE protects against code injection threats. Once the OAuth process completes, these values are removed from the database.
+To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) in the database by default. The state helps prevent CSRF attacks, while PKCE protects against code injection threats. Once the OAuth process completes, these values are removed from the database.
+
+### Configurable State Management
+
+Better Auth supports configurable [OAuth state management](/docs/concepts/oauth#oauth-state-management) strategies to accommodate different deployment scenarios:
+
+- **Storage-based (default)**: State is stored securely in the database with automatic cleanup
+- **Custom state management**: Implement your own state generation and parsing logic
+- **Stateless approaches**: Encrypt state data directly in the OAuth state parameter
+
+This flexibility is particularly useful for [OAuth proxy](/docs/plugins/oauth-proxy) scenarios where the proxy server and application server have separate datastores.
 
 ## Cookies
 
-Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
+Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie.
 
 For Cross-Subdomain Cookies, you can set the `crossSubDomainCookies` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
 
