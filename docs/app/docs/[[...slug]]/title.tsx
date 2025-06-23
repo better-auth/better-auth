@@ -1,7 +1,9 @@
+"use client";
 import { contents } from "@/components/sidebar-content";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Copy, Github } from "lucide-react";
+import { Check, Copy, Github, Loader2, X } from "lucide-react";
+import { useState } from "react";
 
 export const Title = ({
 	page,
@@ -19,6 +21,9 @@ export const Title = ({
 		x.list.find((x) => x.href === page.url),
 	);
 	const icon = <>{category?.list.find((x) => x.href === page.url)?.icon({})}</>;
+	const [copyStatus, setCopyStatus] = useState<
+		"idle" | "copying" | "success" | "error"
+	>("idle");
 	return (
 		<>
 			<img
@@ -44,23 +49,46 @@ export const Title = ({
 				<h2 className="mt-1 text-base md:text-xl text-muted-foreground">
 					{page.data.description}
 				</h2>
-				<div className="absolute bottom-0 left-0 hidden w-full gap-3 px-5 pb-5 md:flex">
+				<div className="absolute bottom-0 left-0 items-center hidden w-full gap-3 px-5 pb-5 md:flex">
 					<Button
 						variant={"outline"}
 						size={"sm"}
 						className="font-normal transition-all duration-100 ease-in-out cursor-pointer opacity-60 hover:opacity-100"
+						onClick={async () => {
+							setCopyStatus("copying");
+							const result = await fetch(
+								`https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/${page.url}.mdx`,
+							);
+							const markdown = await result.text();
+							navigator.clipboard.writeText(markdown);
+							await new Promise((resolve) => setTimeout(resolve, 200));
+							setCopyStatus("success");
+							setTimeout(() => {
+								setCopyStatus("idle");
+							}, 2000);
+						}}
+						disabled={copyStatus === "copying"}
 					>
-						<Copy />
+						{copyStatus === "idle" && <Copy />}
+						{copyStatus === "copying" && <Loader2 className="animate-spin" />}
+						{copyStatus === "success" && <Check />}
+						{copyStatus === "error" && <X />}
 						Copy Markdown
 					</Button>
-					<Button
-						variant={"outline"}
-						size={"sm"}
-						className="font-normal transition-all duration-100 ease-in-out cursor-pointer opacity-60 hover:opacity-100"
+					<a
+						href={`https://github.com/better-auth/better-auth/edit/main/docs/content/${page.url}.mdx`}
+						target="_blank"
+						className="h-8"
 					>
-						<Github />
-						Edit on Github
-					</Button>
+						<Button
+							variant={"outline"}
+							size={"sm"}
+							className="flex font-normal transition-all duration-100 ease-in-out cursor-pointer opacity-60 hover:opacity-100"
+						>
+							<Github />
+							Edit on Github
+						</Button>
+					</a>
 				</div>
 			</div>
 		</>
