@@ -46,7 +46,7 @@ export const Title = ({
 					</div>
 					<h1 className="text-xl md:text-3xl">{page.data.title}</h1>
 				</div>
-				<h2 className="mt-1 text-base md:text-xl text-muted-foreground">
+				<h2 className="mt-0.5 text-base font-medium md:text-xl text-muted-foreground">
 					{page.data.description}
 				</h2>
 				<div className="absolute bottom-0 left-0 items-center hidden w-full gap-3 px-5 pb-5 md:flex">
