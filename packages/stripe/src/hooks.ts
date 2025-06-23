@@ -74,12 +74,15 @@ export async function onCheckoutSessionCompleted(
 						],
 					});
 				}
-				await options.subscription?.onSubscriptionComplete?.({
-					event,
-					subscription: dbSubscription as Subscription,
-					stripeSubscription: subscription,
-					plan,
-				});
+				await options.subscription?.onSubscriptionComplete?.(
+					{
+						event,
+						subscription: dbSubscription as Subscription,
+						stripeSubscription: subscription,
+						plan,
+					},
+					ctx,
+				);
 				return;
 			}
 		}
@@ -183,14 +186,14 @@ export async function onSubscriptionUpdated(
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialEnd
 			) {
-				await plan.freeTrial.onTrialEnd({ subscription }, ctx.request);
+				await plan.freeTrial.onTrialEnd({ subscription }, ctx);
 			}
 			if (
 				subscriptionUpdated.status === "incomplete_expired" &&
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialExpired
 			) {
-				await plan.freeTrial.onTrialExpired(subscription, ctx.request);
+				await plan.freeTrial.onTrialExpired(subscription, ctx);
 			}
 		}
 	} catch (error: any) {
