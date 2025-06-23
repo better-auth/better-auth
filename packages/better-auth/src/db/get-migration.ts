@@ -46,7 +46,7 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["text", "varchar"],
+	string: ["varchar", "nvarchar"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
@@ -180,7 +180,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 						? "varchar(255)"
 						: field.references
 							? "varchar(36)"
-							: "text",
+							: "varchar(4000)",
 			},
 			boolean: {
 				sqlite: "integer",
