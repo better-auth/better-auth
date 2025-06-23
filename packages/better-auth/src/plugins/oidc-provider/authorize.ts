@@ -78,11 +78,9 @@ function isValidRedirectURI(
 				return false;
 			}
 
-			// Check hostname with wildcard
 			const requestedHost = requestedURL.hostname;
 
 			if (allowedHostPattern.startsWith("*.")) {
-				// Wildcard subdomain matching
 				const baseDomain = allowedHostPattern.slice(2);
 				return (
 					requestedHost.endsWith(baseDomain) &&
@@ -93,7 +91,6 @@ function isValidRedirectURI(
 				return allowedHostPattern === requestedHost;
 			}
 		} catch (e) {
-			// Invalid URL format
 			return false;
 		}
 	});
@@ -203,7 +200,6 @@ export async function authorize(
 		throw ctx.redirect(errorURL);
 	}
 
-	// Updated redirect URI validation with wildcard support
 	const isValidRedirect = query.redirect_uri
 		? isValidRedirectURI(client.redirectURLs, query.redirect_uri)
 		: false;
