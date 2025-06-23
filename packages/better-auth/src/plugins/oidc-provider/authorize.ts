@@ -37,41 +37,60 @@ function isValidRedirectURI(
 
 		// Handle wildcard matching
 		try {
-			const allowedURL = new URL(allowedURI);
 			const requestedURL = new URL(requestedURI);
 
-			// Protocol and port must match exactly
-			if (allowedURL.protocol !== requestedURL.protocol) {
+			// For wildcard URLs, we need to parse them manually
+			// Extract protocol, hostname pattern, port, pathname, and search
+			const wildcardMatch = allowedURI.match(
+				/^(https?:\/\/)([\w*.-]+)(:\d+)?(\/.*)?(\?.*)?$/,
+			);
+			if (!wildcardMatch) {
 				return false;
 			}
 
-			if (allowedURL.port !== requestedURL.port) {
+			const [
+				,
+				allowedProtocol,
+				allowedHostPattern,
+				allowedPort = "",
+				allowedPath = "/",
+				allowedSearch = "",
+			] = wildcardMatch;
+
+			// Protocol must match exactly
+			if (allowedProtocol !== requestedURL.protocol + "//") {
 				return false;
 			}
 
-			// Path and search parameters must match exactly
-			if (allowedURL.pathname !== requestedURL.pathname) {
+			// Port must match exactly
+			const requestedPort = requestedURL.port ? `:${requestedURL.port}` : "";
+			if (allowedPort !== requestedPort) {
 				return false;
 			}
 
-			if (allowedURL.search !== requestedURL.search) {
+			// Path must match exactly
+			if (allowedPath !== requestedURL.pathname) {
+				return false;
+			}
+
+			// Search parameters must match exactly
+			if (allowedSearch !== requestedURL.search) {
 				return false;
 			}
 
 			// Check hostname with wildcard
-			const allowedHost = allowedURL.hostname;
 			const requestedHost = requestedURL.hostname;
 
-			if (allowedHost.startsWith("*.")) {
+			if (allowedHostPattern.startsWith("*.")) {
 				// Wildcard subdomain matching
-				const baseDomain = allowedHost.slice(2); // Remove *.
+				const baseDomain = allowedHostPattern.slice(2);
 				return (
 					requestedHost.endsWith(baseDomain) &&
 					(requestedHost === baseDomain ||
 						requestedHost.endsWith("." + baseDomain))
 				);
 			} else {
-				return allowedHost === requestedHost;
+				return allowedHostPattern === requestedHost;
 			}
 		} catch (e) {
 			// Invalid URL format
