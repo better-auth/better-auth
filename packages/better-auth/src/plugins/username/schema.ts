@@ -9,11 +9,6 @@ export const schema = {
 				sortable: true,
 				unique: true,
 				returned: true,
-				transform: {
-					input(value) {
-						return value?.toString().toLowerCase();
-					},
-				},
 			},
 			displayUsername: {
 				type: "string",

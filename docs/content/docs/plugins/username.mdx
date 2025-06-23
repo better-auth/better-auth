@@ -98,7 +98,7 @@ const data = await authClient.updateUser({
 
 ## Schema
 
-The plugin requires 1 field to be added to the user table:
+The plugin requires 2 fields to be added to the user table:
 
 <DatabaseTable
     fields={[
@@ -168,6 +168,30 @@ const auth = betterAuth({
                 if (username === "admin") {
                     return false
                 }
+            }
+        })
+    ]
+})
+```
+
+### Username Normalization
+
+A function that normalizes the username, or `false` if you want to disable normalization.
+
+By default, usernames are case-insensitive, so "TestUser" and "testuser", for example, are considered the same username. The `username` field will contain the normalized (lower case) username, while `displayUsername` will contain the original `username`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            usernameNormalization: (username) => {
+                return username.toLowerCase()
+                    .replaceAll("0", "o")
+                    .replaceAll("3", "e")
+                    .replaceAll("4", "a");
             }
         })
     ]
