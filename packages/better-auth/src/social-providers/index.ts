@@ -2,6 +2,7 @@ import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
+import { faceit } from "./faceit";
 import { github } from "./github";
 import { google } from "./google";
 import { huggingface } from "./huggingface";
@@ -20,44 +21,45 @@ import { vk } from "./vk";
 import { kick } from "./kick";
 import { zoom } from "./zoom";
 export const socialProviders = {
-	apple,
-	discord,
-	facebook,
-	github,
-	microsoft,
-	google,
-	huggingface,
-	spotify,
-	twitch,
-	twitter,
-	dropbox,
-	kick,
-	linkedin,
-	gitlab,
-	tiktok,
-	reddit,
-	roblox,
-	vk,
-	zoom,
+  apple,
+  discord,
+  facebook,
+  faceit,
+  github,
+  microsoft,
+  google,
+  huggingface,
+  spotify,
+  twitch,
+  twitter,
+  dropbox,
+  kick,
+  linkedin,
+  gitlab,
+  tiktok,
+  reddit,
+  roblox,
+  vk,
+  zoom,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
-	"github",
-	...(keyof typeof socialProviders)[],
+  "github",
+  ...(keyof typeof socialProviders)[],
 ];
 
 export const SocialProviderListEnum = z
-	.enum(socialProviderList)
-	.or(z.string()) as z.ZodType<SocialProviderList[number] | (string & {})>;
+  .enum(socialProviderList)
+  .or(z.string()) as z.ZodType<SocialProviderList[number] | (string & {})>;
 
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
-	[K in SocialProviderList[number]]?: Prettify<
-		Parameters<(typeof socialProviders)[K]>[0] & {
-			enabled?: boolean;
-		}
-	>;
+  [K in SocialProviderList[number]]?: Prettify<
+    Parameters<(typeof socialProviders)[K]>[0] & {
+      enabled?: boolean;
+    }
+  >;
 };
 
 export * from "./github";
@@ -79,5 +81,6 @@ export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
+export * from "./faceit";
 
 export type SocialProviderList = typeof socialProviderList;
