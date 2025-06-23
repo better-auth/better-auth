@@ -676,7 +676,7 @@
     "@types/bun": "latest",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
-    "@types/react": "^18.3.14",
+    "@types/react": "^19.0.0",
     "better-sqlite3": "^11.6.0",
     "concurrently": "^9.1.2",
     "drizzle-orm": "^0.38.2",
