@@ -105,14 +105,6 @@ export default async function Page({
 						Accordion,
 						Accordions,
 						Endpoint,
-						Banner: (props: { name: string }) => {
-							return (
-								<img
-									src={`/banners/${props.name}.png`}
-									className="w-full h-auto"
-								/>
-							);
-						},
 						Callout: ({ children, ...props }) => (
 							<defaultMdxComponents.Callout
 								{...props}
