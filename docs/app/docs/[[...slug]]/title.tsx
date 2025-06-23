@@ -28,18 +28,18 @@ export const Title = ({
 		<>
 			<img
 				src={`/banners/light.png`}
-				className={cn("w-full h-auto rounded-lg dark:hidden block")}
+				className={cn("w-full h-auto dark:hidden block")}
 				draggable={false}
 				alt="dark page banner"
 			/>
 			<img
 				src={`/banners/dark.png`}
-				className={cn("w-full h-auto rounded-lg hidden dark:block")}
+				className={cn("w-full h-auto hidden dark:block")}
 				draggable={false}
 				alt="light page banner"
 			/>
 
-			<div className="absolute inset-0 flex flex-col w-full h-full gap-2 px-6 py-8 ">
+			<div className="absolute inset-0 flex flex-col w-full h-full gap-2 px-6 py-8">
 				<div className="flex items-center gap-2">
 					<div className="[&>*]:!size-7 [&>*]:text-xl [&>*]:flex [&>*]:justify-center [&>*]:items-center flex justify-center items-center text-center">
 						{icon}
