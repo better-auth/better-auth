@@ -62,7 +62,9 @@ export const myAdapter = (config: CustomAdapterConfig = {}) =>
       supportsJSON: false, // Whether the database supports JSON. (Default: false)
       supportsDates: true, // Whether the database supports dates. (Default: true)
       supportsBooleans: true, // Whether the database supports booleans. (Default: true)
-      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric IDs. (Default: true)
+      supportsArrays: true, // Whether the database supports arrays. (Default: true)
+      supportsNumbers: true, // Whether the database supports numbers. (Default: true)
+      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric ids. (Default: true)
     },
     // ...
   });
@@ -425,8 +427,7 @@ The name of the adapter.
 ### Optional Config
 
 ### `supportsNumericIds`
-
-Whether the database supports numeric IDs. If this is set to `false` and the user's config has enabled `useNumberId`, then we will throw an error.
+Whether the database supports numeric ids. If this is set to `false` and the users config has enabled `useNumberId`, then we will throw an error.
 
 ### `supportsJSON`
 
@@ -439,6 +440,18 @@ Whether the database supports dates. If the database doesn't support dates, we w
 ### `supportsBooleans`
 
 Whether the database supports booleans. If the database doesn't support booleans, we will use a `0` or `1` to save the boolean value. When we retrieve the data, we will safely parse the `0` or `1` back into a boolean value.
+
+Note: If `supportsBooleans` is false, and `supportsNumbers` is false, then we will use a string of `"0"` or `"1"` to save the boolean value.
+
+### `supportsArrays`
+
+Whether the database supports arrays. If the database doesn't support arrays, we will use a JSON.strigify `string` to save the array. When we retrieve the data, we will safely parse the `string` back into an array.
+
+### `supportsNumbers`
+
+Whether the database supports numbers. If the database doesn't support numbers, we will use a `string` to save the number. When we retrieve the data, we will safely parse the `string` back into a number.
+
+Note: If `supportsBooleans` is false, and `supportsNumbers` is false, then we will use a string of `"0"` or `"1"` to save the boolean value.
 
 ### `usePlural`
 
@@ -475,12 +488,10 @@ const adapter = myAdapter({
 ```
 
 ### `disableIdGeneration`
-
-Whether to disable ID generation. If this is set to `true`, then the user's `generateId` option will be ignored.
+Whether to disable id generation. If this is set to `true`, then the user's `generateId` option will be ignored.
 
 ### `customIdGenerator`
-
-If your database only supports a specific custom ID generation, then you can use this option to generate your own IDs.
+If your database only supports a specific custom id generation, then you can use this option to generate your own IDs.
 
 ### `mapKeysTransformInput`
 
@@ -523,7 +534,7 @@ mapKeysTransformOutput: () => {
 If you need to transform the input data before it is saved to the database, you can use this option to transform the data.
 
 <Callout type="warn">
-  If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then
+  If you're using `supportsJSON`, `supportsDates`, `supportsBooleans`, or any others, then
   the transformations will be applied before your `customTransformInput`
   function is called.
 </Callout>
@@ -539,11 +550,11 @@ The `customTransformInput` function receives the following arguments:
 
 The `customTransformInput` function runs at every key in the data object of a given action.
 
-```ts title="Example"
-customTransformInput: ({ field, data }) => {
-  if (field === "id") {
-    return "123"; // Force the ID to be "123"
-  }
+  ```ts title="Example"
+  customTransformInput: ({ field, data }) => {
+    if (field === "id") {
+      return "123"; // Force the id to be "123"
+    }
 
   return data;
 };

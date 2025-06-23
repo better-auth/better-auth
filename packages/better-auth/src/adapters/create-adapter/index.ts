@@ -59,6 +59,8 @@ export const createAdapter =
 			supportsBooleans: cfg.supportsBooleans ?? true,
 			supportsDates: cfg.supportsDates ?? true,
 			supportsJSON: cfg.supportsJSON ?? false,
+			supportsArrays: cfg.supportsArrays ?? true,
+			supportsNumbers: cfg.supportsNumbers ?? true,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 		};
@@ -372,7 +374,22 @@ export const createAdapter =
 					config.supportsBooleans === false &&
 					typeof newValue === "boolean"
 				) {
-					newValue = newValue ? 1 : 0;
+					if (config.supportsNumbers === false) {
+						newValue = newValue ? "1" : "0";
+					} else {
+						newValue = newValue ? 1 : 0;
+					}
+				} else if (
+					(config.supportsArrays === false &&
+						fieldAttributes.type === "number[]") ||
+					fieldAttributes.type === "string[]"
+				) {
+					newValue = JSON.stringify(newValue);
+				} else if (
+					config.supportsNumbers === false &&
+					fieldAttributes.type === "number"
+				) {
+					newValue = String(newValue);
 				}
 
 				if (config.customTransformInput) {
@@ -446,10 +463,24 @@ export const createAdapter =
 						newValue = new Date(newValue);
 					} else if (
 						config.supportsBooleans === false &&
-						typeof newValue === "number" &&
 						field.type === "boolean"
 					) {
-						newValue = newValue === 1;
+						if (config.supportsNumbers === false) {
+							newValue = newValue === "1";
+						} else {
+							newValue = newValue === 1;
+						}
+					} else if (
+						config.supportsArrays === false &&
+						typeof newValue === "string" &&
+						(field.type === "number[]" || field.type === "string[]")
+					) {
+						newValue = safeJSONParse(newValue);
+					} else if (
+						config.supportsNumbers === false &&
+						field.type === "number"
+					) {
+						newValue = Number(newValue);
 					}
 
 					if (config.customTransformOutput) {
