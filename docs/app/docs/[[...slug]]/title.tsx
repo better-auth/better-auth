@@ -53,7 +53,13 @@ export const Title = ({
 					<Button
 						variant={"outline"}
 						size={"sm"}
-						className="font-normal transition-all duration-100 ease-in-out cursor-pointer opacity-60 hover:opacity-100"
+						className={cn(
+							"font-normal transition-all duration-100 ease-in-out cursor-pointer select-none",
+							copyStatus === "idle" && "opacity-60 hover:opacity-100",
+							copyStatus === "copying" && "opacity-100",
+							copyStatus === "success" && "opacity-100",
+							copyStatus === "error" && "opacity-100",
+						)}
 						onClick={async () => {
 							setCopyStatus("copying");
 							const result = await fetch(
@@ -83,7 +89,7 @@ export const Title = ({
 						<Button
 							variant={"outline"}
 							size={"sm"}
-							className="flex font-normal transition-all duration-100 ease-in-out cursor-pointer opacity-60 hover:opacity-100"
+							className="flex font-normal transition-all duration-100 ease-in-out cursor-pointer select-none opacity-60 hover:opacity-100"
 						>
 							<Github />
 							Edit on Github
