@@ -28,13 +28,13 @@ export const Title = ({
 		<>
 			<img
 				src={`/banners/light.png`}
-				className={cn("w-full h-auto dark:hidden block")}
+				className={cn("w-full h-auto min-h-[240px] dark:hidden block")}
 				draggable={false}
 				alt="dark page banner"
 			/>
 			<img
 				src={`/banners/dark.png`}
-				className={cn("w-full h-auto hidden dark:block")}
+				className={cn("w-full h-auto min-h-[240px] hidden dark:block")}
 				draggable={false}
 				alt="light page banner"
 			/>
