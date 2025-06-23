@@ -95,7 +95,7 @@ export const Icons = {
 	),
 	fastify: (props?: SVGProps<any>) => (
 		<svg
-			className={cn('mt-2', props?.className)}
+			className={cn("mt-2", props?.className)}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
