@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
+import { Title } from "./title";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -59,7 +60,18 @@ export default async function Page({
 				component: <div className="w-10 h-4" />,
 			}}
 		>
-			<DocsTitle>{page.data.title}</DocsTitle>
+			<DocsTitle className="relative">
+				<Title
+					page={{
+						data: {
+							title: page.data.title,
+							description: page.data.description,
+							lastModified: page.data.lastModified,
+						},
+						url: page.url,
+					}}
+				/>
+			</DocsTitle>
 			<DocsBody>
 				<MDX
 					components={{
@@ -93,6 +105,14 @@ export default async function Page({
 						Accordion,
 						Accordions,
 						Endpoint,
+						Banner: (props: { name: string }) => {
+							return (
+								<img
+									src={`/banners/${props.name}.png`}
+									className="w-full h-auto"
+								/>
+							);
+						},
 						Callout: ({ children, ...props }) => (
 							<defaultMdxComponents.Callout
 								{...props}
