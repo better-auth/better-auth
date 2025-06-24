@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
 import type { PasswordStrengthOptions } from "./types";
 import { validatePassword } from "./utils";
+import { APIError } from "better-call";
 
 const DEFAULT_OPTIONS: Required<PasswordStrengthOptions> = {
 	minLength: 8,
@@ -11,13 +12,16 @@ const DEFAULT_OPTIONS: Required<PasswordStrengthOptions> = {
 	specialChars: "!@#$%^&*()_-+={[}]|:;\"'<,>.?/",
 };
 
+const ERROR_CODES = {
+	WEAK_PASSWORD: "WEAK_PASSWORD",
+} as const;
+
 export const passwordPlugin = (options?: PasswordStrengthOptions) =>
 	({
 		id: "passwordStrength",
 
 		init(ctx) {
 			const config = { ...DEFAULT_OPTIONS, ...options };
-
 			return {
 				context: {
 					password: {
@@ -27,15 +31,20 @@ export const passwordPlugin = (options?: PasswordStrengthOptions) =>
 							const result = validatePassword(password, config);
 
 							if (!result.isValid) {
-								throw new Error(
-									"Password validation failed: " + result.errors.join(", "),
-								);
+								throw new APIError("BAD_REQUEST", {
+									code: ERROR_CODES.WEAK_PASSWORD,
+									message: "Password validation failed",
+									data: {
+										isValid: result.isValid,
+										score: result.score,
+										errors: result.errors,
+									},
+								});
 							}
-
-							return result;
 						},
 					},
 				},
 			};
 		},
+		$ERROR_CODES: ERROR_CODES,
 	}) satisfies BetterAuthPlugin;
