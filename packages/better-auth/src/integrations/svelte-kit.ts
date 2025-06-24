@@ -26,7 +26,7 @@ export const svelteKitHandler = async ({
 		const envModule = await import("$app/environment")
 			.catch((e) => {})
 			.then((m) => m || {});
-		building = resolve.building;
+		building = envModule.building;
 	}
 	if (building) {
 		return resolve(event);
