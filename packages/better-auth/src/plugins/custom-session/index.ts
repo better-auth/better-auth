@@ -83,7 +83,7 @@ export const customSession = <
 					}).catch((e) => {
 						return null;
 					});
-					if (!session || !session.response) {
+					if (!session?.response) {
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
