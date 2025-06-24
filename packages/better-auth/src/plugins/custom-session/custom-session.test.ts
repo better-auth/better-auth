@@ -6,13 +6,21 @@ import { createAuthClient } from "../../client";
 import { customSessionClient } from "./client";
 import type { BetterAuthOptions } from "../../types";
 import { adminClient } from "../admin/client";
+import { getCookieCache, getSessionCookie } from "../../cookies";
+import { getSessionFromCtx } from "../../api";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
 		plugins: [admin()],
+		session: {
+			cookieCache: {
+				enabled: true,
+			},
+		},
 	} satisfies BetterAuthOptions;
 	const { auth, signInWithTestUser, testUser, customFetchImpl } =
 		await getTestInstance({
+			...options,
 			plugins: [
 				...options.plugins,
 				customSession(async ({ user, session }) => {
@@ -50,10 +58,36 @@ describe("Custom Session Plugin Tests", async () => {
 		await client.getSession({
 			fetchOptions: {
 				headers,
-				onResponse(context) {
+				onResponse(context: any) {
 					expect(context.response.headers.get("set-cookie")).toBeDefined();
 				},
 			},
 		});
+	});
+
+	it("should cache custom fields in session cookie", async () => {
+		const { headers } = await signInWithTestUser();
+
+		let responseHeaders: Headers | undefined;
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context: any) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		});
+
+		const cookie = responseHeaders?.get("set-cookie");
+		expect(cookie).toBeDefined();
+		const requestHeaders = new Headers();
+		if (cookie) {
+			requestHeaders.set("cookie", cookie);
+		}
+		console.log(cookie)
+		const cachedData = await getCookieCache(requestHeaders, {
+			secret: auth.options.secret,
+		});
+		expect((cachedData as any)?.newData).toEqual({ message: "Hello, World!" });
 	});
 });
