@@ -18,10 +18,10 @@ type InternalContext = InputContext<string, any> &
 		};
 	};
 const defuReplaceArrays = createDefu((obj, key, value) => {
-  if (Array.isArray(obj[key]) && Array.isArray(value)) {
-    obj[key] = value; // Replace instead of concat
-    return true;
-  }
+	if (Array.isArray(obj[key]) && Array.isArray(value)) {
+		obj[key] = value; // Replace instead of concat
+		return true;
+	}
 });
 
 export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
@@ -77,7 +77,6 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 					});
 				}
 				internalContext = defuReplaceArrays(rest, internalContext);
-
 			} else if (before) {
 				/* Return before hook response if it's anything other than a context return */
 				return before;
