@@ -23,7 +23,7 @@ export const svelteKitHandler = async ({
 }) => {
 	if (typeof building === "undefined") {
 		//@ts-expect-error
-		const resolve = await import("$app/environment")
+		const envModule = await import("$app/environment")
 			.catch((e) => {})
 			.then((m) => m || {});
 		building = resolve.building;
