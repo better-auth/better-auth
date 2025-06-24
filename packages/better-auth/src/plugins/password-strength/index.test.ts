@@ -105,12 +105,14 @@ describe("password-strength plugin", () => {
 		// Test with custom plugin options
 		const customInstance = await getTestInstance(
 			{
-				plugins: [passwordPlugin({
-					minLength: 6,
-					minUppercase: 0,
-					minNumbers: 2,
-					minSpecialChars: 0,
-				})],
+				plugins: [
+					passwordPlugin({
+						minLength: 6,
+						minUppercase: 0,
+						minNumbers: 2,
+						minSpecialChars: 0,
+					}),
+				],
 			},
 			{
 				disableTestUser: true,
@@ -134,12 +136,14 @@ describe("password-strength plugin", () => {
 	it("should fail with custom options when requirements not met", async () => {
 		const customInstance = await getTestInstance(
 			{
-				plugins: [passwordPlugin({
-					minLength: 10,
-					minUppercase: 2,
-					minNumbers: 3,
-					minSpecialChars: 2,
-				})],
+				plugins: [
+					passwordPlugin({
+						minLength: 10,
+						minUppercase: 2,
+						minNumbers: 3,
+						minSpecialChars: 2,
+					}),
+				],
 			},
 			{
 				disableTestUser: true,
@@ -159,9 +163,17 @@ describe("password-strength plugin", () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
 		expect(result.error?.message.isValid).toBe(false);
-		expect(result.error?.message.errors).toContain("Password must be at least 10 characters.");
-		expect(result.error?.message.errors).toContain("Password must contain at least 2 uppercase letter(s).");
-		expect(result.error?.message.errors).toContain("Password must contain at least 3 number(s).");
-		expect(result.error?.message.errors).toContain("Password must contain at least 2 special character(s).");
+		expect(result.error?.message.errors).toContain(
+			"Password must be at least 10 characters.",
+		);
+		expect(result.error?.message.errors).toContain(
+			"Password must contain at least 2 uppercase letter(s).",
+		);
+		expect(result.error?.message.errors).toContain(
+			"Password must contain at least 3 number(s).",
+		);
+		expect(result.error?.message.errors).toContain(
+			"Password must contain at least 2 special character(s).",
+		);
 	});
 });
