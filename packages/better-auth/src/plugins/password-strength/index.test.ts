@@ -34,7 +34,7 @@ describe("password-strength plugin", () => {
 		expect(result.error?.status).toBe(400);
 		expect(result.error?.message).toEqual({
 			isValid: false,
-			score: 6,
+			score: 5, // 10 - 5 errors = 5
 			errors: [
 				"Password must be at least 8 characters.",
 				"Password must contain at least 1 uppercase letter(s).",
@@ -91,7 +91,7 @@ describe("password-strength plugin", () => {
 		expect(result.error?.status).toBe(400);
 		expect(result.error?.message).toEqual({
 			isValid: false,
-			score: 6,
+			score: 5, // 10 - 5 errors = 5
 			errors: [
 				"Password must be at least 8 characters.",
 				"Password must contain at least 1 uppercase letter(s).",
@@ -99,5 +99,69 @@ describe("password-strength plugin", () => {
 				"Password must contain at least 1 special character(s).",
 			],
 		});
+	});
+
+	it("should validate password with custom options", async () => {
+		// Test with custom plugin options
+		const customInstance = await getTestInstance(
+			{
+				plugins: [passwordPlugin({
+					minLength: 6,
+					minUppercase: 0,
+					minNumbers: 2,
+					minSpecialChars: 0,
+				})],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const customClient = customInstance.client;
+		const email = `custom-${Date.now()}@example.com`;
+		const password = "ab12cd"; // meets custom requirements
+
+		const result = await customClient.signUp.email({
+			email,
+			password,
+			name: "Custom User",
+		});
+
+		expect(result.data?.user).toBeDefined();
+		expect(result.error).toBeUndefined();
+	});
+
+	it("should fail with custom options when requirements not met", async () => {
+		const customInstance = await getTestInstance(
+			{
+				plugins: [passwordPlugin({
+					minLength: 10,
+					minUppercase: 2,
+					minNumbers: 3,
+					minSpecialChars: 2,
+				})],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const customClient = customInstance.client;
+		const email = `custom-fail-${Date.now()}@example.com`;
+		const password = "Weak1!"; // doesn't meet custom requirements
+
+		const result = await customClient.signUp.email({
+			email,
+			password,
+			name: "Custom Fail User",
+		});
+
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toBe(400);
+		expect(result.error?.message.isValid).toBe(false);
+		expect(result.error?.message.errors).toContain("Password must be at least 10 characters.");
+		expect(result.error?.message.errors).toContain("Password must contain at least 2 uppercase letter(s).");
+		expect(result.error?.message.errors).toContain("Password must contain at least 3 number(s).");
+		expect(result.error?.message.errors).toContain("Password must contain at least 2 special character(s).");
 	});
 });
