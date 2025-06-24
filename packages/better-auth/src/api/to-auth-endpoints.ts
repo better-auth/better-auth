@@ -7,7 +7,7 @@ import {
 } from "better-call";
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
-import defu from "defu";
+import { createDefu } from "defu";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
@@ -17,6 +17,12 @@ type InternalContext = InputContext<string, any> &
 			responseHeaders?: Headers;
 		};
 	};
+const defuReplaceArrays = createDefu((obj, key, value) => {
+  if (Array.isArray(obj[key]) && Array.isArray(value)) {
+    obj[key] = value; // Replace instead of concat
+    return true;
+  }
+});
 
 export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	endpoints: E,
@@ -70,7 +76,8 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 						(internalContext.headers as Headers).set(key, value);
 					});
 				}
-				internalContext = defu(rest, internalContext);
+				internalContext = defuReplaceArrays(rest, internalContext);
+
 			} else if (before) {
 				/* Return before hook response if it's anything other than a context return */
 				return before;
@@ -154,7 +161,8 @@ async function runBeforeHooks(
 							modifiedContext.headers = headers;
 						}
 					}
-					modifiedContext = defu(rest, modifiedContext);
+					modifiedContext = defuReplaceArrays(rest, modifiedContext);
+
 					continue;
 				}
 				return result;
