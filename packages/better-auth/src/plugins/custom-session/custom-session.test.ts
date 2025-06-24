@@ -6,8 +6,7 @@ import { createAuthClient } from "../../client";
 import { customSessionClient } from "./client";
 import type { BetterAuthOptions } from "../../types";
 import { adminClient } from "../admin/client";
-import { getCookieCache, getSessionCookie } from "../../cookies";
-import { getSessionFromCtx } from "../../api";
+import { getCookieCache } from "../../cookies";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
@@ -84,7 +83,6 @@ describe("Custom Session Plugin Tests", async () => {
 		if (cookie) {
 			requestHeaders.set("cookie", cookie);
 		}
-		console.log(cookie)
 		const cachedData = await getCookieCache(requestHeaders, {
 			secret: auth.options.secret,
 		});

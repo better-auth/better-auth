@@ -88,7 +88,7 @@ export const customSession = <
 					}
 					const fnResult = await fn(session.response as any, ctx);
 					session.headers.forEach((value: string, key: string) => {
-						if (key.toLowerCase() !== 'set-cookie') {
+						if (key.toLowerCase() !== "set-cookie") {
 							ctx.setHeader(key, value);
 						}
 					});
