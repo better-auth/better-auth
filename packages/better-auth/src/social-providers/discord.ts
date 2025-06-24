@@ -75,6 +75,7 @@ export interface DiscordProfile extends Record<string, any> {
 
 export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
 	prompt?: "none" | "consent";
+	permissions?: number;
 }
 
 export const discord = (options: DiscordOptions) => {
@@ -85,6 +86,10 @@ export const discord = (options: DiscordOptions) => {
 			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
 			scopes && _scopes.push(...scopes);
 			options.scope && _scopes.push(...options.scope);
+			const hasBotScope = _scopes.includes("bot");
+			const permissionsParam = hasBotScope && options.permissions
+				? `&permissions=${options.permissions}`
+				: "";
 			return new URL(
 				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
 					"+",
@@ -92,7 +97,7 @@ export const discord = (options: DiscordOptions) => {
 					options.clientId
 				}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
-				)}&state=${state}&prompt=${options.prompt || "none"}`,
+				)}&state=${state}&prompt=${options.prompt || "none"}${permissionsParam}`,
 			);
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
