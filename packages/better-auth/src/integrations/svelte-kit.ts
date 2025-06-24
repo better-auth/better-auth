@@ -7,6 +7,8 @@ export const toSvelteKitHandler = (auth: {
 	return (event: { request: Request }) => auth.handler(event.request);
 };
 
+let building: any | undefined = undefined;
+
 export const svelteKitHandler = async ({
 	auth,
 	event,
@@ -19,10 +21,13 @@ export const svelteKitHandler = async ({
 	event: { request: Request; url: URL };
 	resolve: (event: any) => any;
 }) => {
-	//@ts-expect-error
-	const { building } = await import("$app/environment")
-		.catch((e) => {})
-		.then((m) => m || {});
+	if (typeof building === "undefined") {
+		//@ts-expect-error
+		const resolve = await import("$app/environment")
+			.catch((e) => {})
+			.then((m) => m || {});
+		building = resolve.building;
+	}
 	if (building) {
 		return resolve(event);
 	}
