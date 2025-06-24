@@ -1,18 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeAll } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { passwordPlugin } from "./index";
 
-describe("password-strength plugin", async () => {
-	const { client, auth } = await getTestInstance(
-		{
-			plugins: [passwordPlugin()],
-		},
-		{
-			disableTestUser: true,
-		},
-	);
+let client: any;
+let ctx: any;
 
-	const ctx = await auth.$context;
+describe("password-strength plugin", () => {
+	beforeAll(async () => {
+		const instance = await getTestInstance(
+			{
+				plugins: [passwordPlugin()],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		client = instance.client;
+		ctx = await instance.auth.$context;
+	});
 
 	it("should prevent account creation with weak password", async () => {
 		const email = `weak-${Date.now()}@example.com`;
@@ -26,7 +32,16 @@ describe("password-strength plugin", async () => {
 
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.message).toMatch(/Password validation failed/i);
+		expect(result.error?.message).toEqual({
+			isValid: false,
+			score: 6,
+			errors: [
+				"Password must be at least 8 characters.",
+				"Password must contain at least 1 uppercase letter(s).",
+				"Password must contain at least 1 number(s).",
+				"Password must contain at least 1 special character(s).",
+			],
+		});
 
 		const user = await ctx.internalAdapter.findUserByEmail(email);
 		expect(user).toBeNull();
@@ -43,6 +58,7 @@ describe("password-strength plugin", async () => {
 		});
 
 		expect(result.data?.user).toBeDefined();
+		expect(result.error).toBeUndefined();
 	});
 
 	it("should prevent updating to weak password", async () => {
@@ -57,6 +73,7 @@ describe("password-strength plugin", async () => {
 		});
 
 		const token = signUpRes.data?.token;
+		expect(token).toBeDefined();
 
 		const result = await client.changePassword(
 			{
@@ -72,6 +89,15 @@ describe("password-strength plugin", async () => {
 
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.message).toMatch(/Password validation failed/i);
+		expect(result.error?.message).toEqual({
+			isValid: false,
+			score: 6,
+			errors: [
+				"Password must be at least 8 characters.",
+				"Password must contain at least 1 uppercase letter(s).",
+				"Password must contain at least 1 number(s).",
+				"Password must contain at least 1 special character(s).",
+			],
+		});
 	});
 });
