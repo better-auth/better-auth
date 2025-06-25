@@ -1063,10 +1063,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 									const isEmailVerified = user?.emailVerified;
 
-									ctx?.context.logger.info(
-										`isEmailVerified: ${isEmailVerified}`,
-									);
-
 									if (requireEmailVerification && !isEmailVerified) {
 										await options.onCustomerEmailUpdateError?.({
 											user,
@@ -1106,13 +1102,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							},
 						],
 					});
-					ctx?.context.logger.debug(
-						`user: ${JSON.stringify(
-							stripeCustomer?.stripeCustomerId,
-							null,
-							2,
-						)}`,
-					);
 					if (stripeCustomer?.stripeCustomerId && user.email) {
 						await client.customers.update(stripeCustomer.stripeCustomerId, {
 							email: user.email,
@@ -1142,4 +1131,3 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 };
 
 export type { StripePlan, Subscription };
-
