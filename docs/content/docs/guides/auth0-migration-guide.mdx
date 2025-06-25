@@ -154,19 +154,6 @@ npm install auth0
 
 Create a new file called `migrate-auth0.ts` in the `scripts` folder and add the following code:
 
-```ts title="scripts/migrate-auth0.ts"
-import { ManagementClient } from 'auth0';
-import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
-import { auth } from '@/lib/auth';
-
-const auth0Client = new ManagementClient({
-    domain: process.env.AUTH0_DOMAIN!,
-    clientId: process.env.AUTH0_CLIENT_ID!,
-    clientSecret: process.env.AUTH0_SECRET!,
-});
-
-// for 
-
 <Callout type="info">
 Instead of using the Management API, you can use Auth0's bulk user export functionality and pass the exported JSON data directly to the auth0Users array. This is especially useful if you need to migrate password hashes, which are not available through the Management API. Example:
 ```ts
@@ -182,6 +169,20 @@ const auth0Users = [
 ];
 ```
 </Callout>
+
+```ts title="scripts/migrate-auth0.ts"
+import { ManagementClient } from 'auth0';
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
+import { auth } from '@/lib/auth';
+
+const auth0Client = new ManagementClient({
+    domain: process.env.AUTH0_DOMAIN!,
+    clientId: process.env.AUTH0_CLIENT_ID!,
+    clientSecret: process.env.AUTH0_SECRET!,
+});
+
+
+
 
 function safeDateConversion(timestamp?: string | number): Date {
     if (!timestamp) return new Date();
