@@ -23,6 +23,7 @@ import {
 	leaveOrganization,
 	removeMember,
 	updateMemberRole,
+	transferOwnership,
 } from "./routes/crud-members";
 import {
 	checkOrganizationSlug,
@@ -391,6 +392,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
+		transferOwnership,
 		leaveOrganization,
 		listInvitations,
 	};
@@ -451,7 +453,16 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	 * This `shimContext` function is used to add those missing properties to the context object.
 	 */
 	const api = shimContext(endpoints, {
-		orgOptions: options || {},
+		orgOptions: {
+			creatorRole: "owner",
+			roles: defaultRoles,
+			allowUserToCreateOrganization: true,
+			cancelPendingInvitationsOnReInvite: true,
+			invitationExpiresIn: 48 * 60 * 60 * 1000,
+			membershipLimit: 100,
+			organizationLimit: 100,
+			...options,
+		} satisfies OrganizationOptions,
 		roles,
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error

@@ -121,6 +121,101 @@ export const addMember = <O extends OrganizationOptions>() =>
 		},
 	);
 
+export const transferOwnership = createAuthEndpoint(
+	"/organization/transfer-ownership",
+	{
+		method: "POST",
+		body: z.object({
+			userId: z.string({
+				description: "The ID of the user to transfer ownership to",
+			}),
+			organizationId: z
+				.string({
+					description:
+						"The ID of the organization to transfer ownership to. Default is the active organization",
+				})
+				.optional(),
+			memberRole: z.union([z.string(), z.array(z.string())], {
+				description: "The role of current owner to downgrade to",
+			}),
+		}),
+		use: [orgMiddleware, orgSessionMiddleware],
+	},
+	async (ctx) => {
+		const session = ctx.context.session;
+		const organizationId =
+			ctx.body.organizationId || session.session.activeOrganizationId;
+		if (!organizationId) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const organization = await adapter.findOrganizationById(organizationId);
+		if (!organization) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			});
+		}
+		const member = await adapter.findMemberByOrgId({
+			userId: ctx.body.userId,
+			organizationId: organizationId,
+		});
+		if (!member) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			});
+		}
+		const currentMember = await adapter.findMemberByOrgId({
+			userId: session.user.id,
+			organizationId: organizationId,
+		});
+		if (
+			!currentMember ||
+			currentMember.role !== ctx.context.orgOptions.creatorRole
+		) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_TRANSFER_OWNERSHIP,
+			});
+		}
+
+		const newOwnerRole = ctx.context.orgOptions.creatorRole;
+		const previousOwnerRole = parseRoles(ctx.body.memberRole);
+
+		if (
+			previousOwnerRole.split(",").includes(newOwnerRole)
+		) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_KEEP_OWNER_ROLE_AFTER_TRANSFERRING_OWNERSHIP,
+			});
+		}
+
+		try {
+			await Promise.all([
+				adapter.updateMember(member.id, newOwnerRole),
+				adapter.updateMember(currentMember.id, previousOwnerRole),
+			]);
+			return ctx.json({
+				newOwner: {
+					...member,
+					role: newOwnerRole,
+				},
+				oldOwner: {
+					...currentMember,
+					role: previousOwnerRole,
+				},
+			});
+		} catch (error) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.FAILED_TO_TRANSFER_OWNERSHIP,
+			});
+		}
+	},
+);
+
 export const removeMember = createAuthEndpoint(
 	"/organization/remove-member",
 	{
