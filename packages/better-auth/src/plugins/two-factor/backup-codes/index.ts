@@ -31,7 +31,7 @@ export interface BackupCodeOptions {
 	 */
 	customBackupCodesGenerate?: () => string[];
 	/**
-	 * How to store the backup codes in the database, wether encrypted or plain.
+	 * How to store the backup codes in the database, whether encrypted or plain.
 	 */
 	storeBackupCodes?:
 		| "plain"
