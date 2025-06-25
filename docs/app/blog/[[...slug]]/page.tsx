@@ -201,7 +201,7 @@ export async function generateMetadata({
 			title,
 			description,
 			type: "website",
-			url: absoluteUrl(`blog/${slug.join("")}`),
+			url: absoluteUrl(`blog/${slug.join("/")}`),
 			images: [
 				{
 					url: url.toString(),
