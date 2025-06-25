@@ -218,7 +218,7 @@ export const navMenu: {
 		path: "/changelogs",
 	},
 	{
-		name: "blog",
+		name: "blogs",
 		path: "/blog",
 	},
 	{
