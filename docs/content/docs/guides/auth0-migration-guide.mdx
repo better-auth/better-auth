@@ -155,7 +155,13 @@ npm install auth0
 Create a new file called `migrate-auth0.ts` in the `scripts` folder and add the following code:
 
 <Callout type="info">
-Instead of using the Management API, you can use Auth0's bulk user export functionality and pass the exported JSON data directly to the auth0Users array. This is especially useful if you need to migrate password hashes, which are not available through the Management API. Example:
+Instead of using the Management API, you can use Auth0's bulk user export functionality and pass the exported JSON data directly to the `auth0Users` array. This is especially useful if you need to migrate password hashes, which are not available through the Management API.
+
+> **Note:** Exporting password hashes is only available on Auth0's paid plans. On the free plan, password hashes cannot be exported.  
+> - [Auth0 Bulk User Export Documentation](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports)
+> - [Exporting Password Hashes](https://auth0.com/docs/troubleshoot/customer-support/manage-subscriptions/export-data#user-passwords)
+
+Example:
 ```ts
 // Replace this with your exported users JSON data
 const auth0Users = [
