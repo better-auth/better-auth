@@ -22,6 +22,7 @@ import { BookIcon, GitHubIcon, XIcon } from "../_components/icons";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "../_components/stat-field";
 import Image from "next/image";
+import { BlogPage } from "../_components/blog-list";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -33,6 +34,9 @@ export default async function Page({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
+	if (!slug) {
+		return <BlogPage />;
+	}
 	const page = blogs.getPage(slug);
 	if (!page) {
 		notFound();
@@ -47,25 +51,27 @@ export default async function Page({
 				<Glow />
 
 				<div className="flex flex-col md:justify-center max-w-xl mx-auto h-full">
-					<div className="flex flex-col">
-						<div className="flex items-center cursor-pointer gap-x-2 text-xs w-full border-b border-white/20">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="2.5em"
-								height="2.5em"
-								className="rotate-180"
-								viewBox="0 0 24 24"
-							>
-								<path
-									fill="currentColor"
-									d="M2 13v-2h16.172l-3.95-3.95l1.414-1.414L22 12l-6.364 6.364l-1.414-1.414l3.95-3.95z"
-								></path>
-							</svg>
+					<Link href="/blog" className="text-gray-600 dark:text-gray-300">
+						<div className="flex flex-col">
+							<div className="flex items-center cursor-pointer gap-x-2 text-xs w-full  border-white/20">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="2.5em"
+									height="2.5em"
+									className="rotate-180"
+									viewBox="0 0 24 24"
+								>
+									<path
+										fill="currentColor"
+										d="M2 13v-2h16.172l-3.95-3.95l1.414-1.414L22 12l-6.364 6.364l-1.414-1.414l3.95-3.95z"
+									></path>
+								</svg>
+							</div>
+							<h1 className="mt-2 relative font-sans font-semibold tracking-tighter text-4xl mb-2 border-dashed">
+								{title}{" "}
+							</h1>
 						</div>
-						<h1 className="mt-2 relative font-sans font-semibold tracking-tighter text-4xl mb-2 border-dashed">
-							{title}{" "}
-						</h1>
-					</div>
+					</Link>
 
 					<p className="text-gray-600 dark:text-gray-300">{description}</p>
 					<div className="text-gray-600 text-sm dark:text-gray-400 flex items-center gap-x-1 text-left">
@@ -185,7 +191,11 @@ export async function generateMetadata({
 	const page = blogs.getPage(slug);
 	if (page == null) notFound();
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const url = new URL(`${baseUrl}/release-og/${slug.join("")}.png`);
+	const url = new URL(
+		`${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}${
+			page.data?.image
+		}`,
+	);
 	const { title, description } = page.data;
 
 	return {
@@ -195,7 +205,7 @@ export async function generateMetadata({
 			title,
 			description,
 			type: "website",
-			url: absoluteUrl(`blogs/${slug.join("")}`),
+			url: absoluteUrl(`blog/${slug.join("/")}`),
 			images: [
 				{
 					url: url.toString(),
