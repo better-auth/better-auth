@@ -5,11 +5,7 @@ import {
 	type BetterAuthPlugin,
 } from "..";
 import { sessionMiddleware } from "../../api";
-import {
-	generateRandomString,
-	symmetricDecrypt,
-	symmetricEncrypt,
-} from "../../crypto";
+import { generateRandomString } from "../../crypto";
 import type { GenericEndpointContext, Session, User } from "../../types";
 
 interface OneTimeTokenopts {

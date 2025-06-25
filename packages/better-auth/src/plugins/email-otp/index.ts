@@ -10,7 +10,6 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
-  
 
 export interface EmailOTPOptions {
 	/**
@@ -379,7 +378,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 
-					let [storedOtp, _attempts] = splitAtLastColon(verificationValue.value);
+					let [storedOtp, _attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
 					let otp = storedOtp;
 					if (opts.storeOTP === "encrypted") {
 						otp = await symmetricDecrypt({
@@ -473,8 +474,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 
-
-					const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
+					const [otpValue, attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
 					const allowedAttempts = options?.allowedAttempts || 3;
 					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
@@ -484,7 +486,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if(!await verifyStoredOTP(ctx, otpValue, ctx.body.otp)){
+					if (!(await verifyStoredOTP(ctx, otpValue, ctx.body.otp))) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{
@@ -611,7 +613,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
+					const [otpValue, attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
 					const allowedAttempts = options?.allowedAttempts || 3;
 					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
@@ -621,10 +625,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (!await verifyStoredOTP(ctx, otpValue, ctx.body.otp)) {
+					if (!(await verifyStoredOTP(ctx, otpValue, ctx.body.otp))) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
-							{ 
+							{
 								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 							},
 						);
@@ -840,7 +844,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
+					const [otpValue, attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
 					const allowedAttempts = options?.allowedAttempts || 3;
 					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
@@ -850,7 +856,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (!await verifyStoredOTP(ctx, otpValue, ctx.body.otp)) {
+					if (!(await verifyStoredOTP(ctx, otpValue, ctx.body.otp))) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{

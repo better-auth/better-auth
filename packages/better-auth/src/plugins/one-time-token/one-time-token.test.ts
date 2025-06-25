@@ -117,23 +117,21 @@ describe("One-time token", async () => {
 		});
 
 		describe("custom hasher", async () => {
-			const { auth, signInWithTestUser, client } = await getTestInstance(
-				{
-					plugins: [
-						oneTimeToken({
-							storeToken: {
-								type: "custom-hasher",
-								hash: async (token) => {
-									return token + "hashed";
-								},
+			const { auth, signInWithTestUser, client } = await getTestInstance({
+				plugins: [
+					oneTimeToken({
+						storeToken: {
+							type: "custom-hasher",
+							hash: async (token) => {
+								return token + "hashed";
 							},
-							async generateToken(session, ctx) {
-								return "123456";
-							},
-						}),
-					],
-				},
-			);
+						},
+						async generateToken(session, ctx) {
+							return "123456";
+						},
+					}),
+				],
+			});
 			const { internalAdapter } = await auth.$context;
 			it("should work with custom hasher", async () => {
 				const { headers } = await signInWithTestUser();
