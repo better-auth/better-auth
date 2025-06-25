@@ -1,0 +1,413 @@
+---
+title: Migrating from WorkOS to Better Auth
+description: A step-by-step guide to transitioning from WorkOS to Better Auth.
+---
+
+In this guide, we'll walk through the steps to migrate a project from WorkOS to Better Auth — including email/password authentication, social/external accounts, phone number verification, two-factor authentication (2FA), and more.
+
+<Callout type="warn">
+This migration will invalidate all active sessions. Make sure to plan the migration during a low-traffic period and notify your users in advance.
+</Callout>
+
+## Before You Begin
+
+Before starting the migration process, set up Better Auth in your project. Follow the [installation guide](/docs/installation) to get started.
+
+<Steps>
+<Step>
+### Connect to your database
+
+First, set up your database connection in Better Auth. You can use any supported database, but for this example, we'll use PostgreSQL:
+
+```package-install
+npm install pg
+```
+
+Configure your database connection:
+
+```ts title="auth.ts"
+import { Pool } from "pg";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    database: new Pool({ 
+        connectionString: process.env.DATABASE_URL 
+    }),
+})
+```
+</Step>
+
+<Step>
+### Enable Required Features
+
+Enable the authentication features that match your WorkOS setup:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { admin, twoFactor, phoneNumber } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    database: new Pool({ 
+        connectionString: process.env.DATABASE_URL 
+    }),
+    // Enable email/password authentication
+    emailAndPassword: {
+        enabled: true,
+    },
+    // Configure social providers (match your WorkOS SSO providers)
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+        // Add other providers as needed
+    },
+    // Add necessary plugins
+    plugins: [
+        // Admin plugin for user management
+        admin(),
+        // Two-factor authentication
+        twoFactor(),
+        // Phone number authentication
+        phoneNumber(),
+    ],
+    // Email verification configuration
+    emailVerification: {
+        sendVerificationEmail: async({ user, url }) => {
+            // Implement your email sending logic
+        }
+    }
+})
+```
+</Step>
+
+<Step>
+### Generate Schema
+
+Generate and apply the database schema:
+
+```sh
+# If using a custom database adapter
+npx @better-auth/cli generate
+
+# If using the default adapter
+npx @better-auth/cli migrate
+```
+</Step>
+
+<Step>
+### Create the Migration Script
+
+Create a new file called `migrate-workos.ts` in your `scripts` folder:
+
+```ts title="scripts/migrate-workos.ts"
+import { WorkOS } from "@workos-inc/node";
+import { auth } from "../src/lib/auth";
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
+
+// Ensure environment variables are set
+if (!process.env.WORKOS_API_KEY || !process.env.WORKOS_CLIENT_ID) {
+  throw new Error("Missing required environment variables WORKOS_API_KEY and/or WORKOS_CLIENT_ID");
+}
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// Helper function for safe date conversion
+const safeDateConversion = (date: string | number | null | undefined) => {
+  if (!date) return new Date();
+  return new Date(date);
+};
+
+// Helper function to generate backup codes for 2FA
+async function generateBackupCodes(secret: string) {
+  const backupCodes = Array.from({ length: 10 })
+    .fill(null)
+    .map(() => generateRandomString(10, "a-z", "0-9", "A-Z"))
+    .map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
+
+  const encCodes = await symmetricEncrypt({
+    data: JSON.stringify(backupCodes),
+    key: secret,
+  });
+  return encCodes;
+}
+
+// Main migration function
+async function migrateFromWorkOS() {
+  const ctx = await auth.$context;
+  let totalUsers = 0;
+  let migratedUsers = 0;
+  let failedUsers = 0;
+
+  let hasMoreUsers = true;
+  let before: string | undefined;
+  const limit = 100;
+
+  while (hasMoreUsers) {
+    try {
+      const response = await workos.userManagement.listUsers({
+        limit,
+        before,
+      });
+      
+      const workosUsers = response.data;
+      console.log(`Fetched ${workosUsers.length} users`);
+
+      before = response.listMetadata.before || undefined;
+      hasMoreUsers = workosUsers.length === limit;
+      totalUsers += workosUsers.length;
+
+      for (const workosUser of workosUsers) {
+        try {
+          console.log(`\nProcessing user: ${workosUser.email}`);
+
+          // Get user's authentication factors
+          const authFactorsResponse = await workos.userManagement.listAuthFactors({
+            userId: workosUser.id,
+          });
+          
+          const authFactors = authFactorsResponse.data;
+          console.log(`Found ${authFactors.length} auth factors`);
+
+          // Create the user
+          const createdUser = await ctx.adapter.create({
+            model: "user",
+            data: {
+              id: workosUser.id,
+              email: workosUser.email,
+              emailVerified: workosUser.emailVerified,
+              name: `${workosUser.firstName || ''} ${workosUser.lastName || ''}`.trim() || workosUser.email,
+              image: workosUser.profilePictureUrl,
+              createdAt: safeDateConversion(workosUser.createdAt),
+              updatedAt: safeDateConversion(workosUser.updatedAt),
+              role: "user",
+              banned: false,
+              twoFactorEnabled: authFactors.some(f => f.type === "totp"),
+              username: workosUser.email.split("@")[0],
+              phoneNumber: authFactors.find(f => f.type === "sms")?.sms_configuration?.phoneNumber,
+              phoneNumberVerified: !!authFactors.find(f => f.type === "sms")
+            },
+            forceAllowId: true
+          });
+
+          // Migrate email/password credentials
+          const emailFactor = authFactors.find(f => f.type === "email");
+          if (emailFactor) {
+            await ctx.adapter.create({
+              model: "account",
+              data: {
+                userId: createdUser.id,
+                type: "credentials",
+                provider: "credentials",
+                providerAccountId: workosUser.id,
+                password: emailFactor.email_configuration.hashedPassword,
+                createdAt: safeDateConversion(emailFactor.createdAt),
+                updatedAt: safeDateConversion(emailFactor.updatedAt)
+              },
+              forceAllowId: true
+            });
+          }
+          
+          // Migrate OAuth connections
+          try {
+            const connection = await workos.sso.getConnection(workosUser.id);
+            if (connection) {
+              await ctx.adapter.create({
+                model: "account",
+                data: {
+                  userId: createdUser.id,
+                  type: "oauth",
+                  provider: connection.type.toLowerCase(),
+                  providerAccountId: connection.id,
+                  createdAt: safeDateConversion(connection.createdAt),
+                  updatedAt: safeDateConversion(connection.updatedAt)
+                },
+                forceAllowId: true
+              });
+            }
+          } catch (error) {
+            console.warn(`No OAuth connection found for user ${workosUser.email}`);
+          }
+
+          // Migrate 2FA settings
+          for (const factor of authFactors) {
+            if (factor.type === "totp" && factor.totp_configuration) {
+              await ctx.adapter.create({
+                model: "twoFactor",
+                data: {
+                  userId: createdUser.id,
+                  secret: factor.totp_configuration.secret,
+                  backupCodes: await generateBackupCodes(factor.totp_configuration.secret)
+                },
+                forceAllowId: true
+              });
+            }
+          }
+
+          migratedUsers++;
+          console.log(`Successfully migrated user: ${workosUser.email}`);
+        } catch (error) {
+          console.error(`Failed to migrate user ${workosUser.email}:`, error);
+          failedUsers++;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+      break;
+    }
+  }
+
+  console.log(`
+Migration Summary:
+- Total Users: ${totalUsers}
+- Successfully Migrated: ${migratedUsers}
+- Failed: ${failedUsers}
+`);
+}
+
+migrateFromWorkOS().catch(console.error);
+```
+
+Make sure to replace the environment variables with your WorkOS API key and client ID.
+</Step>
+
+<Step>
+### Run the Migration
+
+Run the migration script:
+
+```sh
+# Using ts-node
+npx ts-node scripts/migrate-workos.ts
+
+# Or using Bun
+bun run scripts/migrate-workos.ts
+```
+
+<Callout type="warning">
+Important steps before running the migration:
+1. Test in a development environment first
+2. Back up your database
+3. Monitor the migration process
+4. Verify the migrated data
+5. Keep WorkOS active until migration is complete
+</Callout>
+</Step>
+
+<Step>
+### Update Your Components
+
+Update your authentication components to use Better Auth. Here's an example of a sign-in component:
+
+```tsx title="components/auth/sign-in.tsx"
+import { authClient } from "better-auth/client";
+
+export const SignIn = () => {
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const { data, error } = await authClient.signIn.email({
+      email: "user@example.com",
+      password: "password",
+    });
+    
+    if (error) {
+      console.error(error);
+      return;
+    }
+    
+    // Handle successful sign in
+  };
+
+  return (
+    <form onSubmit={handleSignIn}>
+      {/* Your form fields */}
+      <button type="submit">Sign in</button>
+    </form>
+  );
+};
+```
+</Step>
+
+<Step>
+### Update the Middleware
+
+Replace your WorkOS middleware with Better Auth's middleware:
+
+```ts title="middleware.ts"
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
+
+export async function middleware(request: NextRequest) {
+  const sessionCookie = getSessionCookie(request);
+  const { pathname } = request.nextUrl;
+
+  if (sessionCookie && ["/login", "/signup"].includes(pathname)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (!sessionCookie && pathname.startsWith("/dashboard")) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/dashboard", "/login", "/signup"],
+};
+```
+</Step>
+
+<Step>
+### Remove WorkOS Dependencies
+
+After verifying everything works, remove WorkOS dependencies:
+
+```bash
+npm uninstall @workos-inc/node
+# or
+yarn remove @workos-inc/node
+# or
+pnpm remove @workos-inc/node
+```
+</Step>
+</Steps>
+
+## Migration Notes
+
+### Data Mapping
+
+The migration script handles the following mappings:
+
+- Users (basic profile information)
+- Email/password credentials
+- OAuth connections
+- Two-factor authentication settings
+- Phone numbers
+- Email verification status
+
+### Limitations
+
+- Active sessions are not migrated
+- Organization/team data needs separate migration
+- Custom metadata needs manual mapping
+- Webhook configurations need to be recreated
+
+## Post-Migration Steps
+
+1. **Verify Data**: Check that all users, authentication methods, and 2FA settings were migrated correctly
+2. **Update Documentation**: Update any internal documentation to reflect the new authentication system
+3. **Monitor**: Watch for any authentication issues in the first few days after migration
+4. **User Communication**: Inform users about any necessary steps (like re-authenticating)
+
+## Additional Resources
+
+- [Better Auth Documentation](/docs)
+- [Authentication Concepts](/docs/concepts/authentication)
+- [Social Providers Setup](/docs/authentication/social-providers)
+- [Two-Factor Authentication](/docs/plugins/2fa)
+
+## Need Help?
+
+If you encounter any issues during migration, check out our [troubleshooting guide](/docs/troubleshooting) or reach out to our community for support. 
