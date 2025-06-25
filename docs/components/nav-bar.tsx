@@ -121,6 +121,10 @@ export const navMenu = [
 		path: "/changelogs",
 	},
 	{
+		name: "blog",
+		path: "/blog",
+	},
+	{
 		name: "community",
 		path: "/community",
 	},
