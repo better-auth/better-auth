@@ -1057,71 +1057,89 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								 * - Calls the `onCustomerEmailUpdateError` callback if provided, passing the user, email, and error.
 								 */
 								async after(user, ctx) {
-									try {
-										if (user.emailVerified) {
-											const stripeCustomer =
-												await ctx?.context.adapter.findOne<Customer>({
-													model: "user",
-													where: [
-														{
-															field: "id",
-															value: user.id,
-														},
-													],
-												});
-											ctx?.context.logger.debug(
-												`user: ${JSON.stringify(
-													stripeCustomer?.stripeCustomerId,
-													null,
-													2,
-												)}`,
-											);
-											if (stripeCustomer?.stripeCustomerId && user.email) {
-												await client.customers.update(
-													stripeCustomer.stripeCustomerId,
-													{
-														email: user.email,
-													},
-												);
-												await options.onCustomerEmailUpdate?.({
-													user,
-													oldEmail: ctx?.context.session?.user.email!,
-													newEmail: user.email,
-													stripeCustomerId: stripeCustomer.stripeCustomerId,
-												});
-											}
-										} else {
-											// If email is not verified, we don't update the Stripe customer email
-											// This is to prevent issues with unverified emails
-											// Email is updated in better-auth database
-											await options.onCustomerEmailUpdateError?.({
-												user,
-												email: user.email,
-												error: new Error(
-													"Email not verified, unable to update Stripe customer email",
-												),
-											});
-										}
-									} catch (error: any) {
-										ctx?.context.logger.error(
-											`Failed to update Stripe customer email for user ${user.id}: ${error.message}`,
-										);
+									const requireEmailVerification =
+										ctx?.context.options?.emailAndPassword
+											?.requireEmailVerification;
 
+									const isEmailVerified = user?.emailVerified;
+
+									ctx?.context.logger.info(
+										`isEmailVerified: ${isEmailVerified}`,
+									);
+
+									if (requireEmailVerification && !isEmailVerified) {
 										await options.onCustomerEmailUpdateError?.({
 											user,
 											email: user.email,
-											error,
+											error: new Error("Email not verified"),
 										});
+										return;
 									}
+
+									await handleEmailUpdate(ctx, user);
 								},
 							},
 						},
 					},
 				},
 			};
+
+			async function handleEmailUpdate(
+				ctx: GenericEndpointContext | undefined,
+				user: {
+					id: string;
+					name: string;
+					email: string;
+					emailVerified: boolean;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | null | undefined;
+				},
+			) {
+				try {
+					const stripeCustomer = await ctx?.context.adapter.findOne<Customer>({
+						model: "user",
+						where: [
+							{
+								field: "id",
+								value: user.id,
+							},
+						],
+					});
+					ctx?.context.logger.debug(
+						`user: ${JSON.stringify(
+							stripeCustomer?.stripeCustomerId,
+							null,
+							2,
+						)}`,
+					);
+					if (stripeCustomer?.stripeCustomerId && user.email) {
+						await client.customers.update(stripeCustomer.stripeCustomerId, {
+							email: user.email,
+						});
+						await options.onCustomerEmailUpdate?.({
+							user,
+							oldEmail: ctx?.context.session?.user.email!,
+							newEmail: user.email,
+							stripeCustomerId: stripeCustomer.stripeCustomerId,
+						});
+					}
+				} catch (error: any) {
+					ctx?.context.logger.error(
+						`Failed to update Stripe customer email for user ${user.id}: ${error.message}`,
+					);
+
+					await options.onCustomerEmailUpdateError?.({
+						user,
+						email: user.email,
+						error,
+					});
+				}
+			}
 		},
 		schema: getSchema(options),
 	} satisfies BetterAuthPlugin;
 };
 
 export type { StripePlan, Subscription };
+
