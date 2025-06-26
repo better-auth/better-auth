@@ -150,6 +150,12 @@ export const transferOwnership = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 			});
 		}
+		if (session.user.id === ctx.body.userId) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_CANNOT_TRANSFER_OWNERSHIP_TO_YOURSELF,
+			});
+		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const organization = await adapter.findOrganizationById(organizationId);
 		if (!organization) {
@@ -184,9 +190,7 @@ export const transferOwnership = createAuthEndpoint(
 		const newOwnerRole = ctx.context.orgOptions.creatorRole;
 		const previousOwnerRole = parseRoles(ctx.body.memberRole);
 
-		if (
-			previousOwnerRole.split(",").includes(newOwnerRole)
-		) {
+		if (previousOwnerRole.split(",").includes(newOwnerRole)) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_KEEP_OWNER_ROLE_AFTER_TRANSFERRING_OWNERSHIP,

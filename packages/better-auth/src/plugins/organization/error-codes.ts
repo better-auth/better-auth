@@ -29,6 +29,8 @@ export const ORGANIZATION_ERROR_CODES = {
 	FAILED_TO_TRANSFER_OWNERSHIP: "Failed to transfer ownership",
 	YOU_ARE_NOT_ALLOWED_TO_KEEP_OWNER_ROLE_AFTER_TRANSFERRING_OWNERSHIP:
 		"You are not allowed to keep owner role after transferring ownership",
+	YOU_CANNOT_TRANSFER_OWNERSHIP_TO_YOURSELF:
+		"You cannot transfer ownership to yourself",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION:
 		"You are not allowed to invite users to this organization",
 	USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION:
