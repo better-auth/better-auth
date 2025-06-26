@@ -75,6 +75,7 @@ function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
 		},
 		plugins: [
 			expoClient({
+				scheme: "better-auth",
 				storage: {
 					getItem: (key) => storage.get(key) || null,
 					setItem: async (key, value) => storage.set(key, value),
