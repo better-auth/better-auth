@@ -39,7 +39,7 @@ vi.mock("expo-constants", async () => {
 
 vi.mock("expo-linking", async () => {
 	return {
-		createURL: vi.fn((url) => `better-auth://${url}`),
+		createURL: vi.fn((url) => `better-auth:///${url}`),
 	};
 });
 
