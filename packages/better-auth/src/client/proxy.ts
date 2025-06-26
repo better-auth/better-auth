@@ -74,13 +74,18 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 
 				const method = getMethod(routePath, knownPathMethods, arg);
 
-				
 				let finalHeaders: HeadersInit;
 				if (options?.headers instanceof Headers) {
 					finalHeaders = options.headers;
 				} else if (Array.isArray(options?.headers)) {
-					finalHeaders = [["Content-Type", "application/json"], ...options.headers];
-				} else if (typeof options?.headers === "object" && options?.headers !== null) {
+					finalHeaders = [
+						["Content-Type", "application/json"],
+						...options.headers,
+					];
+				} else if (
+					typeof options?.headers === "object" &&
+					options?.headers !== null
+				) {
 					finalHeaders = {
 						"Content-Type": "application/json",
 						...options.headers,
@@ -99,7 +104,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 							: JSON.stringify({
 									...body,
 									...(options?.body || {}),
-							  }),
+								}),
 					headers: finalHeaders,
 					query: query || options?.query,
 					method,
