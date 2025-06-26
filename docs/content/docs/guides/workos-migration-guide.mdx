@@ -387,12 +387,80 @@ The migration script handles the following mappings:
 - Phone numbers
 - Email verification status
 
+### Password Migration
+
+Since WorkOS doesn't provide access to password hashes, Better Auth offers a secure password transition approach:
+
+1. **Automated Password Reset Flow**
+```typescript
+// Configure password reset in your Better Auth setup
+auth.init({
+  emailAndPassword: {
+    sendResetPassword: async ({ user, url }) => {
+      await sendEmail({
+        to: user.email,
+        subject: "Reset your password",
+        body: `Click here to set your new password: ${url}`
+      });
+    },
+  }
+});
+```
+
+2. **Migration Script**
+```typescript
+// In your migration script
+for (const user of workosUsers) {
+  await auth.api.requestPasswordReset({
+    body: {
+        email: user.email,
+        redirectTo: "https://your-app.com/reset-password"
+    }
+  });
+}
+```
+
+The password reset flow is secure by default:
+- Uses cryptographically secure tokens
+- Enforces password length requirements
+- Handles email verification automatically
+
+Choose one of these approaches:
+
+1. **Immediate Reset**: Send password reset emails to all users during migration
+2. **Gradual Migration**: Trigger password reset on first login attempt
+3. **OAuth-Only**: For users who only use OAuth, no password reset needed
+``
+
+**After Migration**
+   - Monitor password reset completion rates
+   - Provide support channels for users who need help
+   - Consider implementing a grace period where both systems work
+
+Example notification email template:
+```text
+Subject: Action Required: Reset Your Password
+
+Dear [User],
+
+We've upgraded our authentication system to provide you with better security. To continue accessing your account, please:
+
+1. Click the password reset link in the email you'll receive shortly
+2. Set up your new password
+3. Log in with your email and new password
+
+If you typically use Google, GitHub, or other social login methods, you can continue using those without any changes.
+
+Need help? Contact our support team.
+```
+
 ### Limitations
 
 - Active sessions are not migrated
 - Organization/team data needs separate migration
 - Custom metadata needs manual mapping
 - Webhook configurations need to be recreated
+- Password hashes cannot be directly migrated (requires password reset)
 
 ## Post-Migration Steps
 
