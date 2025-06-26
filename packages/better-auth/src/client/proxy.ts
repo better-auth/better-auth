@@ -62,41 +62,56 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 							segment.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
 						)
 						.join("/");
+
 				const arg = (args[0] || {}) as ProxyRequest;
 				const fetchOptions = (args[1] || {}) as BetterFetchOption;
 				const { query, fetchOptions: argFetchOptions, ...body } = arg;
+
 				const options = {
 					...fetchOptions,
 					...argFetchOptions,
 				} as BetterFetchOption;
+
 				const method = getMethod(routePath, knownPathMethods, arg);
+
+				
+				let finalHeaders: HeadersInit;
+				if (options?.headers instanceof Headers) {
+					finalHeaders = options.headers;
+				} else if (Array.isArray(options?.headers)) {
+					finalHeaders = [["Content-Type", "application/json"], ...options.headers];
+				} else if (typeof options?.headers === "object" && options?.headers !== null) {
+					finalHeaders = {
+						"Content-Type": "application/json",
+						...options.headers,
+					};
+				} else {
+					finalHeaders = {
+						"Content-Type": "application/json",
+					};
+				}
 
 				return await client(routePath, {
 					...options,
 					body:
 						method === "GET"
 							? undefined
-							: {
+							: JSON.stringify({
 									...body,
 									...(options?.body || {}),
-								},
+							  }),
+					headers: finalHeaders,
 					query: query || options?.query,
 					method,
 					async onSuccess(context) {
 						await options?.onSuccess?.(context);
-						/**
-						 * We trigger listeners
-						 */
 						const matches = atomListeners?.find((s) => s.matcher(routePath));
 						if (!matches) return;
 						const signal = atoms[matches.signal as any];
 						if (!signal) return;
-						/**
-						 * To avoid race conditions we set the signal in a setTimeout
-						 */
 						const val = signal.get();
 						setTimeout(() => {
-							//@ts-expect-error
+							// @ts-expect-error
 							signal.set(!val);
 						}, 10);
 					},
