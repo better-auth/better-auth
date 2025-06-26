@@ -94,7 +94,6 @@ export const linear = (options: LinearOptions) => {
 					}),
 				},
 			);
-
 			if (error || !profile?.data?.viewer) {
 				return null;
 			}
