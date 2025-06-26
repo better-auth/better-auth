@@ -189,6 +189,7 @@ describe("expo with cookieCache", async () => {
 			expires: expect.any(String),
 		});
 	});
+
 	it("should refresh session_data when it expired without erasing session_token", async () => {
 		vi.advanceTimersByTime(1000);
 		const { data } = await client.getSession();
