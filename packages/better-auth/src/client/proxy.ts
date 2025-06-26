@@ -75,7 +75,12 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 				const method = getMethod(routePath, knownPathMethods, arg);
 
 				let finalHeaders: HeadersInit;
+
 				if (options?.headers instanceof Headers) {
+					// Ensure "Content-Type" is present
+					if (!options.headers.has("Content-Type")) {
+						options.headers.set("Content-Type", "application/json");
+					}
 					finalHeaders = options.headers;
 				} else if (Array.isArray(options?.headers)) {
 					finalHeaders = [
