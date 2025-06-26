@@ -5,10 +5,10 @@ description: Salesforce provider setup and usage.
 
 ## Prerequisites
 
-This guide assumes that
+This guide assumes that:
 
-- you can create external client apps in Salesforce (e.g. System Administrator)
-- you have read Salesforce's [OAuth 2.0 Web Server Flow for Web App Integration](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_web_server_flow.htm)
+- You can create external client apps in Salesforce (e.g., System Administrator)
+- You have read Salesforce's [OAuth 2.0 Web Server Flow for Web App Integration](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_web_server_flow.htm)
 
 ## Creating an External Client App
 
@@ -19,7 +19,7 @@ This guide assumes that
 
 <Step>
   In the left sidebar, search for `External Client App Manager`. It should be
-  under `Platform Tools` -> `Apps` -> `External CLient Apps`. Click this menu
+  under `Platform Tools` -> `Apps` -> `External Client Apps`. Click this menu
   item.
 </Step>
 
@@ -39,11 +39,11 @@ This guide assumes that
 
 ### Policies Tab
 
-You may optionally edit the `Policies` tab based on your use case, e.g. custom `Oauth Start URL`,
-guest users, refresh token policy
+You may optionally edit the `Policies` tab based on your use case, e.g., custom `OAuth Start URL`,
+guest users, refresh token policy.
 
-However, the main option to note is `App Authorization` -> `IP Relaxation`, which you may need top
-modify to allow logins from IP addresses not configured by your organisations, if this is your
+However, the main option to note is `App Authorization` -> `IP Relaxation`, which you may need to
+modify to allow logins from IP addresses not configured by your organization, if this is your
 use case.
 
 If unsure, keep all settings in this tab the same as the default.
@@ -53,12 +53,12 @@ If unsure, keep all settings in this tab the same as the default.
 This is the second tab within `Policies`, `Settings`, `Package Defaults`.
 
 <Steps>
-  <Step>Once you are in the `Settings` tab , click `Edit`</Step>
+  <Step>Once you are in the `Settings` tab, click `Edit`</Step>
   <Step>
     Under the `OAuth Settings` accordion, tick the `Enable OAuth` checkbox
   </Step>
   <Step>
-    Under `App Settings` -> `Callback URL`, enter your better-auth callback URL.
+    Under `App Settings` -> `Callback URL`, enter your Better Auth callback URL.
     For example,
 
     ```text
@@ -69,32 +69,32 @@ This is the second tab within `Policies`, `Settings`, `Package Defaults`.
   <Step>
     Under `OAuth Scopes`, ensure that at minimum, the following are present:
     
-    1. Access the identity of URL service (id, profile, email, address, phone)
+    1. Access the identity URL service (id, profile, email, address, phone)
     2. Access unique user identifiers (openid)
 
   </Step>
   <Step>
-    Under `Flow Enablement`, tick the options
+    Under `Flow Enablement`, tick the options:
 
     1. Enable Authorization Code and Credentials Flow
-    1. Require user credentials in the POST body for Authorization Code and Credentials Flow
+    2. Require user credentials in the POST body for Authorization Code and Credentials Flow
 
     <Callout>
-    Note: the second option will only apear after ticking the first option.
+    Note: The second option will only appear after ticking the first option.
     </Callout>
 
   </Step>
 
   <Step>
-    Under `Security`, you can keep the defaults, which has the following enabled:
+    Under `Security`, you can keep the defaults, which have the following enabled:
 
     1. Require secret for Web Server Flow
-    1. Require secret for Refresh Token Flow
-    1. Require Proof Key for Code Exchange (PKCE) extension for Supported Authorization Flows
+    2. Require secret for Refresh Token Flow
+    3. Require Proof Key for Code Exchange (PKCE) extension for Supported Authorization Flows
 
   </Step>
   <Step>
-    Click `Save`, then scroll back up to `Oauth Settings` -> `App Settings`. There
+    Click `Save`, then scroll back up to `OAuth Settings` -> `App Settings`. There
     should now be a button for `Consumer Key and Secret` that you can click on.
   </Step>
   <Step>
@@ -117,7 +117,7 @@ This is the second tab within `Policies`, `Settings`, `Package Defaults`.
 
 ### Configure the provider
 
-To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+To configure the provider, import it and pass it to the `socialProviders` option of your auth instance.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -151,9 +151,9 @@ export const auth = betterAuth({
 
 <Step>
 
-### Sign In with Salesforce
+### Sign in with Salesforce
 
-To sign in with Salesforce, you can use the `signIn.social` function provided by the client.
+To sign in with Salesforce, use the `signIn.social` function provided by the client.
 You will need to specify `salesforce` as the provider.
 
 ```ts title="auth-client.ts"
