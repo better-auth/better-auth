@@ -1713,6 +1713,9 @@ importers:
       jose:
         specifier: ^5.9.6
         version: 5.10.0
+      oauth2-mock-server:
+        specifier: ^7.2.0
+        version: 7.2.1
       samlify:
         specifier: ^2.10.0
         version: 2.10.0

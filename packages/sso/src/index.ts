@@ -834,6 +834,9 @@ export const sso = (options?: SSOOptions) => {
 							redirect: true,
 						});
 					}
+					throw new APIError("BAD_REQUEST", {
+						message: "Invalid SSO provider",
+					});
 				},
 			),
 			callbackSSO: createAuthEndpoint(

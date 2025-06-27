@@ -135,6 +135,16 @@
         "default": "./dist/client/solid/index.cjs"
       }
     },
+    "./test": {
+      "import": {
+        "types": "./dist/test-utils/index.d.ts",
+        "default": "./dist/test-utils/index.mjs"
+      },
+      "require": {
+        "types": "./dist/test-utils/index.d.cts",
+        "default": "./dist/test-utils/index.cjs"
+      }
+    },
     "./api": {
       "import": {
         "types": "./dist/api/index.d.ts",
