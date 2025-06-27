@@ -4,8 +4,6 @@ import { setSessionCookie } from "better-auth/cookies";
 import { z } from "zod";
 import { betterFetch } from "@better-fetch/fetch";
 
-export * from "./client";
-
 const STEAM_BASE_URL = "https://api.steampowered.com/";
 
 export interface SteamAuthPluginOptions {
