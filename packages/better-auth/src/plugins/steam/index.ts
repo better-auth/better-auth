@@ -5,6 +5,7 @@ import { z } from "zod";
 import { betterFetch } from "@better-fetch/fetch";
 
 const STEAM_BASE_URL = "https://api.steampowered.com/";
+const STEAM_PARTNER_URL = `https://partner.steam-api.com`;
 
 export interface SteamAuthPluginOptions {
 	steamApiKey: string;
@@ -28,7 +29,7 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 				},
 				async (ctx) => {
 					const encodedCallbackURL = encodeURIComponent(
-						ctx.body.callbackURL || ctx.context.baseURL,
+						ctx.body.callbackURL || "/",
 					);
 					const returnUrl = `${ctx.context.baseURL}/steam/callback?callbackURL=${encodedCallbackURL}`;
 					const openidURL =
@@ -65,8 +66,12 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 						throw ctx.redirect(`${errorURL}?error=missing_request_url`);
 					}
 
-					const callbackUrl = new URL(ctx.request.url);
-					const params = Object.fromEntries(callbackUrl.searchParams.entries());
+					const searchParams = new URL(ctx.request.url).searchParams.entries();
+					const params = Object.fromEntries(searchParams);
+					const callbackURL = params.callbackURL || "/";
+					// biome-ignore lint/performance/noDelete: Types will complain if I set this to `undefined`.
+					delete params.callbackURL;
+					console.log(`callbackURL:`, callbackURL);
 					console.log(`params:`, params);
 
 					const verifyRes = await betterFetch<string>(
@@ -74,7 +79,7 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 						{
 							method: "POST",
 							body: new URLSearchParams({
-								...Object.fromEntries(callbackUrl.searchParams.entries()),
+								...Object.fromEntries(searchParams),
 								"openid.mode": "check_authentication",
 							}),
 							headers: {
@@ -82,6 +87,7 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 							},
 						},
 					);
+					console.log(`verifyRes: `, verifyRes);
 
 					if (verifyRes.error) {
 						ctx.context.logger.error(
@@ -105,6 +111,7 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 
 					const profileUrl = new URL(
 						`ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamid}`,
+						STEAM_PARTNER_URL,
 					);
 
 					type SteamProfile = {
@@ -113,7 +120,7 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 					};
 
 					const profileRes = await betterFetch<SteamProfile>(
-						`${STEAM_BASE_URL}${profileUrl.toString()}`,
+						new URL(profileUrl.toString(), STEAM_BASE_URL).toString(),
 					);
 
 					if (profileRes.error) {
@@ -183,9 +190,9 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 						user,
 					});
 
-					const url = new URL(params.callbackURL || ctx.context.baseURL);
-
-					throw ctx.redirect(url.toString());
+					throw ctx.redirect(
+						new URL(params.callbackURL || ctx.context.baseURL).toString(),
+					);
 				},
 			),
 		},
