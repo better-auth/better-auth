@@ -115,7 +115,7 @@ export const testClientPlugin2 = () => {
 				signal: "$test",
 			},
 			{
-				matcher: (path) => path === "/test2/sign-out",
+				matcher: (path) => path === "/test-2/sign-out",
 				signal: "$sessionSignal",
 			},
 		],
