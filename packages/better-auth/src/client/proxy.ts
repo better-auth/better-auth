@@ -70,7 +70,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					...argFetchOptions,
 				} as BetterFetchOption;
 				const method = getMethod(routePath, knownPathMethods, arg);
-
 				return await client(routePath, {
 					...options,
 					body:
@@ -82,34 +81,24 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 								},
 					query: query || options?.query,
 					method,
-					plugins: [
-						...(options?.plugins || []),
-						{
-							id: "global-on-success",
-							name: "global-on-success",
-							hooks: {
-								async onSuccess() {
-									/**
-									 * We trigger listeners
-									 */
-									const matches = atomListeners?.find((s) =>
-										s.matcher(routePath),
-									);
-									if (!matches) return;
-									const signal = atoms[matches.signal as any];
-									if (!signal) return;
-									/**
-									 * To avoid race conditions we set the signal in a setTimeout
-									 */
-									const val = signal.get();
-									setTimeout(() => {
-										//@ts-expect-error
-										signal.set(!val);
-									}, 10);
-								},
-							},
-						},
-					],
+					async onSuccess(context) {
+						await options?.onSuccess?.(context);
+						/**
+						 * We trigger listeners
+						 */
+						const matches = atomListeners?.find((s) => s.matcher(routePath));
+						if (!matches) return;
+						const signal = atoms[matches.signal as any];
+						if (!signal) return;
+						/**
+						 * To avoid race conditions we set the signal in a setTimeout
+						 */
+						const val = signal.get();
+						setTimeout(() => {
+							//@ts-expect-error
+							signal.set(!val);
+						}, 10);
+					},
 				});
 			},
 		});

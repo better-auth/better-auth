@@ -14,34 +14,45 @@ export const getClientConfig = (options?: ClientOptions) => {
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
 			.filter((pl) => pl !== undefined) || [];
-	const $fetch = createFetch({
-		baseURL,
-		...(isCredentialsSupported ? { credentials: "include" } : {}),
-		method: "GET",
-		jsonParser(text) {
-			if (!text) {
-				return null as any;
-			}
-			return parseJSON(text, {
-				strict: false,
-			});
-		},
-		customFetchImpl: async (input, init) => {
-			try {
-				return await fetch(input, init);
-			} catch (error) {
-				return Response.error();
-			}
-		},
-		...options?.fetchOptions,
-		plugins: options?.disableDefaultFetchPlugins
-			? [...(options?.fetchOptions?.plugins || []), ...pluginsFetchPlugins]
-			: [
-					redirectPlugin,
-					...(options?.fetchOptions?.plugins || []),
+			const lifeCyclePlugin = {
+				id: "lifecycle-hooks",
+				name: "lifecycle-hooks",
+				hooks: {
+					onSuccess: options?.fetchOptions?.onSuccess,
+					onError: options?.fetchOptions?.onError,
+					onRequest: options?.fetchOptions?.onRequest,
+					onResponse: options?.fetchOptions?.onResponse,
+				},
+			};
+			const { onSuccess, onError, onRequest, onResponse, ...restOfFetchOptions } =
+				options?.fetchOptions || {};
+			const $fetch = createFetch({
+				baseURL,
+				...(isCredentialsSupported ? { credentials: "include" } : {}),
+				method: "GET",
+				jsonParser(text) {
+					if (!text) {
+						return null as any;
+					}
+					return parseJSON(text, {
+						strict: false,
+					});
+				},
+				customFetchImpl: async (input, init) => {
+					try {
+						return await fetch(input, init);
+					} catch (error) {
+						return Response.error();
+					}
+				},
+				...restOfFetchOptions,
+				plugins: [
+					lifeCyclePlugin,
+					...(restOfFetchOptions.plugins || []),
+					...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
 					...pluginsFetchPlugins,
 				],
-	});
+			});
 	const { $sessionSignal, session } = getSessionAtom($fetch);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
