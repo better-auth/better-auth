@@ -16,7 +16,7 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 		id: "steamAuthPlugin",
 		endpoints: {
 			signInWithSteam: createAuthEndpoint(
-				"/sign-in/steam",
+				"/sign-in/social/steam",
 				{
 					method: "POST",
 					body: z.object({
@@ -46,13 +46,10 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 							"http://specs.openid.net/auth/2.0/identifier_select",
 						)}&`;
 
-					if (ctx.body.disableRedirect) {
-						return ctx.json({
-							url: openidURL,
-						});
-					}
-
-					return ctx.redirect(openidURL);
+					return ctx.json({
+						url: openidURL,
+						redirect: !ctx.body.disableRedirect,
+					});
 				},
 			),
 
