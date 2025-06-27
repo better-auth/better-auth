@@ -1,5 +1,5 @@
 import type { steamAuth } from "./index.js";
-import type { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "../../client/types.js"; 
 
 export const steamAuthClient = () => {
 	return {

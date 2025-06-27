@@ -1,6 +1,6 @@
-import { createAuthEndpoint } from "better-auth/api";
-import { type BetterAuthPlugin, type User } from "better-auth";
-import { setSessionCookie } from "better-auth/cookies";
+import { createAuthEndpoint } from "../../api"; 
+import { type BetterAuthPlugin, type User } from "../../types"; 
+import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { betterFetch } from "@better-fetch/fetch";
 
