@@ -635,7 +635,7 @@ export const sso = (options?: SSOOptions) => {
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 							})
 							.optional(),
-						provider: z.enum(["oidc", "saml"]).default("oidc"),
+						providerType: z.enum(["oidc", "saml"]).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -770,19 +770,19 @@ export const sso = (options?: SSOOptions) => {
 							message: "No provider found for the issuer",
 						});
 					}
-					if (body.provider) {
-						if (body.provider === "oidc" && !provider.oidcConfig) {
+					if (body.providerType) {
+						if (body.providerType === "oidc" && !provider.oidcConfig) {
 							throw new APIError("BAD_REQUEST", {
 								message: "OIDC provider is not configured",
 							});
 						}
-						if (body.provider === "saml" && !provider.samlConfig) {
+						if (body.providerType === "saml" && !provider.samlConfig) {
 							throw new APIError("BAD_REQUEST", {
 								message: "SAML provider is not configured",
 							});
 						}
 					}
-					if (provider.oidcConfig && body.provider !== "saml") {
+					if (provider.oidcConfig && body.providerType !== "saml") {
 						const state = await generateState(ctx);
 						const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
 						const authorizationURL = await createAuthorizationURL({

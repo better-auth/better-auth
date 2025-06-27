@@ -707,7 +707,6 @@ describe("SAML SSO", async () => {
 			body: {
 				providerId: "saml-provider-1",
 				callbackURL: "http://localhost:3000/dashboard",
-				provider: "saml",
 			},
 		});
 		expect(signInResponse).toEqual({
