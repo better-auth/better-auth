@@ -16,28 +16,20 @@ import { setSessionCookie } from "../../cookies";
 
 export interface SSOOptions {
 	/**
-	 * Configure whether new users are able to create new sso providers.
-	 * You can also pass a function that returns a boolean.
+	 * Configure the maximum number of SSO providers a user can register.
+	 * You can also pass a function that returns a number.
+	 * Set to 0 to disable SSO provider registration.
 	 *
-	 * 	@example
+	 * @example
 	 * ```ts
-	 * allowUserToRegisterProvider: async (user) => {
-	 * 		const limit = await getUserSSOLimit(user);
-	 *      return limit > 0;
+	 * providersLimit: async (user) => {
+	 *   const plan = await getUserPlan(user);
+	 *   return plan.name === "pro" ? 10 : 1;
 	 * }
 	 * ```
-	 * @default true
-	 */
-	allowUserToRegisterProvider?:
-		| boolean
-		| ((user: User) => Promise<boolean> | boolean);
-	/**
-	 * The maximum number of providers a user can create.
-	 *
-	 * You can also pass a function that returns a number
 	 * @default 10
 	 */
-	providerLimit?: number | ((user: User) => Promise<number> | number);
+	providersLimit?: number | ((user: User) => Promise<number> | number);
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
@@ -383,45 +375,33 @@ export const sso = (options?: SSOOptions) => {
 					},
 				},
 				async (ctx) => {
-					if (options?.allowUserToRegisterProvider === false) {
+					const user = ctx.context.session?.user;
+					if (!user) {
+						throw new APIError("UNAUTHORIZED");
+					}
+
+					const limit =
+						typeof options?.providersLimit === "function"
+							? await options.providersLimit(user)
+							: options?.providersLimit ?? 10;
+
+					if (!limit) {
 						throw new APIError("FORBIDDEN", {
 							message: "SSO provider registration is disabled",
 						});
 					}
 
-					const user = ctx.context.session?.user;
-					if (typeof options?.allowUserToRegisterProvider === "function") {
-						if (!user) {
-							throw new APIError("UNAUTHORIZED");
-						}
-						const canCreate = await options.allowUserToRegisterProvider(user);
-						if (!canCreate) {
-							throw new APIError("FORBIDDEN", {
-								message: "You are not allowed to register an SSO provider",
-							});
-						}
-					}
+					const providers = await ctx.context.adapter.findMany({
+						model: "ssoProvider",
+						where: [{ field: "userId", value: user.id }],
+					});
 
-					if (options?.providerLimit) {
-						if (!user) {
-							throw new APIError("UNAUTHORIZED");
-						}
-						const limit =
-							typeof options.providerLimit === "function"
-								? await options.providerLimit(user)
-								: options.providerLimit;
-
-						const providers = await ctx.context.adapter.findMany({
-							model: "ssoProvider",
-							where: [{ field: "userId", value: user.id }],
+					if (providers.length >= limit) {
+						throw new APIError("FORBIDDEN", {
+							message: "You have reached the maximum number of SSO providers",
 						});
-
-						if (providers.length >= limit) {
-							throw new APIError("FORBIDDEN", {
-								message: "You have reached the maximum number of SSO providers",
-							});
-						}
 					}
+
 					const body = ctx.body;
 					const issuerValidator = z.string().url();
 					if (issuerValidator.safeParse(body.issuer).error) {

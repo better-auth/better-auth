@@ -474,7 +474,7 @@ describe("provisioning", async (ctx) => {
 		expect(res.url).toContain("http://localhost:8080/authorize");
 	});
 });
-describe("SSO onfigurable limits", () => {
+describe("SSO configurable limits", () => {
 	let server = new OAuth2Server();
 
 	beforeAll(async () => {
@@ -486,9 +486,9 @@ describe("SSO onfigurable limits", () => {
 		await server.stop().catch(() => {});
 	});
 
-	it("should not allow creating a provider if registration is disabled", async () => {
+	it("should not allow creating a provider if registration is disabled with zero", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ allowUserToRegisterProvider: false })],
+			plugins: [sso({ providersLimit: 0 })],
 		});
 		const { headers } = await signInWithTestUser();
 		await expect(
@@ -507,32 +507,9 @@ describe("SSO onfigurable limits", () => {
 			body: { message: "SSO provider registration is disabled" },
 		});
 	});
-
-	it("should not allow creating a provider if function returns false", async () => {
-		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ allowUserToRegisterProvider: async () => false })],
-		});
-		const { headers } = await signInWithTestUser();
-		await expect(
-			auth.api.createOIDCProvider({
-				body: {
-					issuer: server.issuer.url!,
-					domain: "localhost.com",
-					clientId: "test",
-					clientSecret: "test",
-					providerId: "test",
-				},
-				headers,
-			}),
-		).rejects.toMatchObject({
-			status: "FORBIDDEN",
-			body: { message: "You are not allowed to register an SSO provider" },
-		});
-	});
-
 	it("should not allow creating a provider if limit is reached", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ providerLimit: 1 })],
+			plugins: [sso({ providersLimit: 1 })],
 		});
 		const { headers } = await signInWithTestUser();
 
@@ -568,7 +545,7 @@ describe("SSO onfigurable limits", () => {
 
 	it("should not allow creating a provider if limit from function is reached", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ providerLimit: async () => 1 })],
+			plugins: [sso({ providersLimit: async () => 1 })],
 		});
 		const { headers } = await signInWithTestUser();
 

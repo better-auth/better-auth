@@ -225,12 +225,19 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 
 ### Server
 
+**providersLimit**: Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.
+
 **provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
 
 **organizationProvisioning**: Options for provisioning users to an organization.
 
 <TypeTable
   type={{
+    providersLimit: {
+        description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
+        type: "number | function",
+        default: 10,
+    },
     provisionUser: {
         description: "A custom function to provision a user when they sign in with an SSO provider.",
         type: "function",
