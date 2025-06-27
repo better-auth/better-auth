@@ -352,7 +352,10 @@ export const ssoSAML = (options?: SAMLSSOOptions) => {
 					}
 
 					if (options?.organizationProvisioning?.enabled) {
-						const organizationId = await options.organizationProvisioning.getOrganizationId(userInfo);
+						const organizationId =
+							await options.organizationProvisioning.getOrganizationId(
+								userInfo,
+							);
 						if (organizationId) {
 							const existingMembership = await ctx.context.adapter.findOne({
 								model: "organizationMember",
@@ -368,17 +371,19 @@ export const ssoSAML = (options?: SAMLSSOOptions) => {
 									data: {
 										userId: user.id,
 										organizationId: organizationId,
-										role: options.organizationProvisioning.defaultRole || "member",
+										role:
+											options.organizationProvisioning.defaultRole || "member",
 									},
 								});
 							}
 						}
 					}
 
-					let session: Session = await ctx.context.internalAdapter.createSession(
-						user.id,
-						ctx.request as any,
-					);
+					let session: Session =
+						await ctx.context.internalAdapter.createSession(
+							user.id,
+							ctx.request as any,
+						);
 					await setSessionCookie(ctx, { session, user });
 					return ctx.json({
 						redirect: true,
