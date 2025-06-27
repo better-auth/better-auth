@@ -421,17 +421,14 @@ export const deleteUser = createAuthEndpoint(
 			throw new APIError("NOT_FOUND");
 		}
 		const session = ctx.context.session;
-		let canDelete = false;
 
-		const accounts = await ctx.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
-		);
-
-		// If the user has a password, we can try to delete the account
 		if (ctx.body.password) {
+			const accounts = await ctx.context.internalAdapter.findAccounts(
+				session.user.id,
+			);
+			const account = accounts.find(
+				(account) => account.providerId === "credential" && account.password,
+			);
 			if (!account || !account.password) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
@@ -446,10 +443,8 @@ export const deleteUser = createAuthEndpoint(
 					message: BASE_ERROR_CODES.INVALID_PASSWORD,
 				});
 			}
-			canDelete = true;
 		}
 
-		// If the user has a token, we can try to delete the account
 		if (ctx.body.token) {
 			//@ts-expect-error
 			await deleteUserCallback({
@@ -464,15 +459,7 @@ export const deleteUser = createAuthEndpoint(
 			});
 		}
 
-		// if user didn't provide a password or token, try sending email verification
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
-			// if the user has a password but it was not provided, we can't delete the account
-			if (account && account.password && !canDelete) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.USER_ALREADY_HAS_PASSWORD,
-				});
-			}
-
 			const token = generateRandomString(32, "0-9", "a-z");
 			await ctx.context.internalAdapter.createVerificationValue(
 				{
@@ -506,25 +493,15 @@ export const deleteUser = createAuthEndpoint(
 			});
 		}
 
-		// if the user didn't provide a password or token, or email verification is not enabled
-		// we can check if the session is fresh and delete based on that
-		if (ctx.context.options.session?.freshAge) {
+		if (!ctx.body.password && ctx.context.sessionConfig.freshAge !== 0) {
 			const currentAge = session.session.createdAt.getTime();
-			const freshAge = ctx.context.options.session.freshAge;
+			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
 			const now = Date.now();
 			if (now - currentAge > freshAge * 1000) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.SESSION_EXPIRED,
 				});
 			}
-			canDelete = true;
-		}
-
-		// if password/fresh session didn't work, we can't delete the account
-		if (!canDelete) {
-			throw new APIError("BAD_REQUEST", {
-				message: "User cannot be deleted. please provide a password or token",
-			});
 		}
 
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;

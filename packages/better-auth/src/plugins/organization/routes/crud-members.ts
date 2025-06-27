@@ -16,9 +16,26 @@ export const addMember = <O extends OrganizationOptions>() =>
 		{
 			method: "POST",
 			body: z.object({
-				userId: z.coerce.string(),
-				role: z.union([z.string(), z.array(z.string())]),
-				organizationId: z.string().optional(),
+				userId: z.coerce.string({
+					description:
+						'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
+				}),
+				role: z.union([z.string(), z.array(z.string())], {
+					description:
+						'The role(s) to assign to the new member. Eg: ["admin", "sale"]',
+				}),
+				organizationId: z
+					.string({
+						description:
+							'An optional organization ID to pass. If not provided, will default to the user\'s active organization. Eg: "org-id"',
+					})
+					.optional(),
+				teamId: z
+					.string({
+						description:
+							'An optional team ID to add the member to. Eg: "team-id"',
+					})
+					.optional(),
 			}),
 			use: [orgMiddleware],
 			metadata: {
@@ -127,7 +144,8 @@ export const removeMember = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			memberIdOrEmail: z.string({
-				description: "The ID or email of the member to remove",
+				description:
+					'The ID or email of the member to remove. Eg: "user@example.com"',
 			}),
 			/**
 			 * If not provided, the active organization will be used
@@ -135,7 +153,7 @@ export const removeMember = createAuthEndpoint(
 			organizationId: z
 				.string({
 					description:
-						"The ID of the organization to remove the member from. If not provided, the active organization will be used",
+						'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
 				})
 				.optional(),
 		}),
@@ -279,9 +297,20 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				role: z.union([z.string(), z.array(z.string())]),
-				memberId: z.string(),
-				organizationId: z.string().optional(),
+				role: z.union([z.string(), z.array(z.string())], {
+					description:
+						'The new role to be applied. This can be a string or array of strings representing the roles. Eg: ["admin", "sale"]',
+				}),
+				memberId: z.string({
+					description:
+						'The member id to apply the role update to. Eg: "member-id"',
+				}),
+				organizationId: z
+					.string({
+						description:
+							'An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization. Eg: "organization-id"',
+					})
+					.optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -428,6 +457,7 @@ export const getActiveMember = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],
+		requireHeaders: true,
 		metadata: {
 			openapi: {
 				description: "Get the active member in the organization",
@@ -494,8 +524,12 @@ export const leaveOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			organizationId: z.string(),
+			organizationId: z.string({
+				description:
+					'The organization Id for the member to leave. Eg: "organization-id"',
+			}),
 		}),
+		requireHeaders: true,
 		use: [sessionMiddleware, orgMiddleware],
 	},
 	async (ctx) => {
