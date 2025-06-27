@@ -6,7 +6,7 @@ export const steamAuthClient = () => {
 		id: "steam-auth-client",
 		$InferServerPlugin: {} as ReturnType<typeof steamAuth>,
 		pathMethods: {
-			"/sign-in/steam": "POST",
+			"/sign-in/social/steam": "POST",
 		},
 	} satisfies BetterAuthClientPlugin;
 };
