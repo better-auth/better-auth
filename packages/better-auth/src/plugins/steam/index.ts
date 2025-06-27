@@ -4,6 +4,8 @@ import { setSessionCookie } from "better-auth/cookies";
 import { z } from "zod";
 import { betterFetch } from "@better-fetch/fetch";
 
+export * from "./client";
+
 const STEAM_BASE_URL = "https://api.steampowered.com/";
 
 export interface SteamAuthPluginOptions {
@@ -11,7 +13,7 @@ export interface SteamAuthPluginOptions {
 	mapProfileToUser?: (profile: any) => Promise<User>;
 }
 
-export const steamAuthPlugin = (
+export const steamAuth = (
 	config: SteamAuthPluginOptions,
 ): BetterAuthPlugin => ({
 	id: "steamAuthPlugin",
