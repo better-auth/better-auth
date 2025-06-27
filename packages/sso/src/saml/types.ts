@@ -1,9 +1,37 @@
 import type { User } from "better-auth";
-export type SAMLConfig = {
+
+export interface SAMLConfig {
 	entryPoint: string;
+	providerId: string;
 	issuer: string;
 	cert: string;
 	callbackUrl: string;
+	audience?: string;
+	domain?: string;
+	mapping?: {
+		id?: string;
+		email?: string;
+		firstName?: string;
+		lastName?: string;
+		extraFields?: Record<string, string>;
+	};
+	idpMetadata?: {
+		metadata: string;
+		privateKey?: string;
+		privateKeyPass?: string;
+		isAssertionEncrypted?: boolean;
+		encPrivateKey?: string;
+		encPrivateKeyPass?: string;
+	};
+	spMetadata: {
+		metadata: string;
+		binding?: string;
+		privateKey?: string;
+		privateKeyPass?: string;
+		isAssertionEncrypted?: boolean;
+		encPrivateKey?: string;
+		encPrivateKeyPass?: string;
+	};
 	wantAssertionsSigned?: boolean;
 	signatureAlgorithm?: string;
 	digestAlgorithm?: string;
@@ -11,7 +39,45 @@ export type SAMLConfig = {
 	privateKey?: string;
 	decryptionPvk?: string;
 	additionalParams?: Record<string, string>;
-};
+}
+
+export interface SAMLUserInfo {
+	id: string;
+	email: string;
+	name?: string;
+	attributes: Record<string, any>;
+}
+
+export interface SAMLSSOOptions {
+	/**
+	 * A custom function to provision a user when they sign in with SAML.
+	 * This allows you to customize how users are created or updated in your system.
+	 */
+	provisionUser?: (userInfo: SAMLUserInfo) => Promise<User>;
+
+	/**
+	 * Options for provisioning users to an organization.
+	 */
+	organizationProvisioning?: {
+		/**
+		 * Whether to enable organization provisioning.
+		 * If true, users will be automatically added to organizations based on their SAML attributes.
+		 */
+		enabled: boolean;
+
+		/**
+		 * A function to determine which organization a user should be added to.
+		 * Returns the organization ID or null if the user shouldn't be added to any organization.
+		 */
+		getOrganizationId: (userInfo: SAMLUserInfo) => Promise<string | null>;
+
+		/**
+		 * The role to assign to users when they are added to an organization.
+		 * @default "member"
+		 */
+		defaultRole?: string;
+	};
+}
 
 export type SSOProvider = {
 	id: string;
@@ -20,26 +86,6 @@ export type SSOProvider = {
 	userId: string;
 	providerId: string;
 	organizationId?: string;
-};
-
-export type SAMLSSOOptions = {
-	binding?: "post" | "redirect";
-	provisionUser?: (data: {
-		user: User & Record<string, any>;
-		userInfo: Record<string, any>;
-		token: SAMLAssertion;
-		provider: SSOProvider;
-	}) => Promise<void>;
-	organizationProvisioning?: {
-		disabled?: boolean;
-		defaultRole?: "member" | "admin";
-		getRole?: (data: {
-			user: User & Record<string, any>;
-			userInfo: Record<string, any>;
-			token: SAMLAssertion;
-			provider: SSOProvider;
-		}) => Promise<"member" | "admin">;
-	};
 };
 
 export type SAMLAssertion = {

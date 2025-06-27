@@ -322,34 +322,63 @@ export const ssoSAML = (options?: SAMLSSOOptions) => {
 								.join(" ") || parsedResponse.extract.attributes?.displayName,
 						attributes: parsedResponse.extract.attributes,
 					};
-					const sessionRefs = extract.sessionIndex.sessionIndex;
+
 					let user: User;
-					const userExsists = await ctx.context.adapter.findOne<User>({
-						model: "user",
-						where: [
-							{
-								field: "email",
-								value: userInfo.email,
-							},
-						],
-					});
-					if (userExsists) {
-						user = userExsists;
+					if (options?.provisionUser) {
+						user = await options.provisionUser(userInfo);
 					} else {
-						user = await ctx.context.adapter.create({
+						const existingUser = await ctx.context.adapter.findOne<User>({
 							model: "user",
-							data: {
-								email: userInfo.email,
-								name: userInfo.name,
-								emailVerified: true,
-							},
+							where: [
+								{
+									field: "email",
+									value: userInfo.email,
+								},
+							],
 						});
+
+						if (existingUser) {
+							user = existingUser;
+						} else {
+							user = await ctx.context.adapter.create({
+								model: "user",
+								data: {
+									email: userInfo.email,
+									name: userInfo.name,
+									emailVerified: true,
+								},
+							});
+						}
 					}
-					let session: Session =
-						await ctx.context.internalAdapter.createSession(
-							user.id,
-							ctx.request,
-						);
+
+					if (options?.organizationProvisioning?.enabled) {
+						const organizationId = await options.organizationProvisioning.getOrganizationId(userInfo);
+						if (organizationId) {
+							const existingMembership = await ctx.context.adapter.findOne({
+								model: "organizationMember",
+								where: [
+									{ field: "userId", value: user.id },
+									{ field: "organizationId", value: organizationId },
+								],
+							});
+
+							if (!existingMembership) {
+								await ctx.context.adapter.create({
+									model: "organizationMember",
+									data: {
+										userId: user.id,
+										organizationId: organizationId,
+										role: options.organizationProvisioning.defaultRole || "member",
+									},
+								});
+							}
+						}
+					}
+
+					let session: Session = await ctx.context.internalAdapter.createSession(
+						user.id,
+						ctx.request as any,
+					);
 					await setSessionCookie(ctx, { session, user });
 					return ctx.json({
 						redirect: true,
@@ -373,6 +402,22 @@ export const ssoSAML = (options?: SAMLSSOOptions) => {
 						type: "string",
 						required: true,
 						unique: true,
+					},
+				},
+			},
+			organizationMember: {
+				fields: {
+					userId: {
+						type: "string",
+						required: true,
+					},
+					organizationId: {
+						type: "string",
+						required: true,
+					},
+					role: {
+						type: "string",
+						required: true,
 					},
 				},
 			},
