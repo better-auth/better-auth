@@ -394,7 +394,7 @@ export const sso = (options?: SSOOptions) => {
 								mapping: body.mapping,
 								scopes: body.scopes,
 								userInfoEndpoint: body.userInfoEndpoint,
-                alwaysFetchUserInfo: body.alwaysFetchUserInfo,
+								alwaysFetchUserInfo: body.alwaysFetchUserInfo,
 								overrideUserInfo:
 									ctx.body.overrideUserInfo ||
 									options?.defaultOverrideUserInfo ||

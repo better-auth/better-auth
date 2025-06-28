@@ -309,7 +309,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					async getUserInfo(tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl, c.alwaysFetchUserInfo);
+							: await getUserInfo(
+									tokens,
+									finalUserInfoUrl,
+									c.alwaysFetchUserInfo,
+								);
 						if (!userInfo) {
 							return null;
 						}
