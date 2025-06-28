@@ -548,11 +548,14 @@ export const signInEmail = createAuthEndpoint(
 				message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 			});
 		}
-		if (activeOrganizationId) {
-			await getOrgAdapter(ctx.context, orgOptions).setActiveOrganization(
-				session.token,
-				activeOrganizationId,
-			);
+		if (orgOptions) {
+			const orgIdToSet = activeOrganizationId || user.user.lastOrgId;
+			if (orgIdToSet) {
+				await getOrgAdapter(ctx.context, orgOptions).setActiveOrganization(
+					session.token,
+					orgIdToSet,
+				);
+			}
 		}
 		await setSessionCookie(
 			ctx,

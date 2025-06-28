@@ -2,6 +2,8 @@ import { createAuthEndpoint } from "../call";
 import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import type { OrganizationOptions } from "../../plugins/organization/organization";
+import { getSessionFromCtx } from "./session";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",
@@ -42,6 +44,26 @@ export const signOut = createAuthEndpoint(
 				message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 			});
 		}
+
+		const orgPlugin = ctx.context.options.plugins?.find(
+			(p) => p.id === "organization",
+		);
+
+		if (orgPlugin) {
+			const orgOptions = orgPlugin.options as OrganizationOptions;
+			if (orgOptions.autoCreateOrganizationOnSignUp) {
+				const session = await getSessionFromCtx(ctx);
+				if (session) {
+					const activeOrgId = session.session?.activeOrganizationId;
+					if (activeOrgId && session.user.id) {
+						await ctx.context.internalAdapter.updateUser(session.user.id, {
+							lastOrgId: activeOrgId,
+						});
+					}
+				}
+			}
+		}
+
 		await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 		deleteSessionCookie(ctx);
 		return ctx.json({

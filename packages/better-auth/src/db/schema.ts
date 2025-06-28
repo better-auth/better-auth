@@ -41,6 +41,7 @@ export const userSchema = z.object({
 	image: z.string().nullish(),
 	createdAt: z.date().default(() => new Date()),
 	updatedAt: z.date().default(() => new Date()),
+	lastOrgId: z.string().nullish(),
 });
 
 export const sessionSchema = z.object({

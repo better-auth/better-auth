@@ -124,6 +124,11 @@ export const getAuthTables = (
 		},
 	} satisfies BetterAuthDbSchema;
 
+	const orgPlugin = options.plugins?.find((p) => p.id === "organization");
+	const orgOptions = orgPlugin?.options as
+		| { autoCreateOrganizationOnSignUp?: boolean }
+		| undefined;
+
 	return {
 		user: {
 			modelName: options.user?.modelName || "user",
@@ -166,6 +171,16 @@ export const getAuthTables = (
 				},
 				...user?.fields,
 				...options.user?.additionalFields,
+				...(orgPlugin && orgOptions?.autoCreateOrganizationOnSignUp
+					? {
+							lastOrgId: {
+								type: "string" as const,
+								required: false,
+								fieldName:
+									(options.user?.fields as any)?.lastOrgId || "lastOrgId",
+							},
+						}
+					: {}),
 			},
 			order: 1,
 		},

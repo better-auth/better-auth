@@ -48,11 +48,14 @@ describe("sign-in", async (it) => {
 });
 
 describe("sign-in with organization", async (it) => {
-	const { auth } = await getTestInstance({
-		plugins: [organization({})],
-	});
-
 	it("should set active organization on sign in", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					autoCreateOrganizationOnSignUp: true,
+				}),
+			],
+		});
 		const newUserEmail = `test-user-${Date.now()}@example.com`;
 		const newUserPassword = "password123";
 		const signUpRes = await auth.api.signUpEmail({
@@ -62,7 +65,7 @@ describe("sign-in with organization", async (it) => {
 				name: "Test User Org",
 			},
 		});
-		console.log(signUpRes);
+
 		expect(signUpRes).toBeDefined();
 		if (!signUpRes) return;
 
@@ -70,8 +73,8 @@ describe("sign-in with organization", async (it) => {
 
 		const org = await auth.api.createOrganization({
 			body: {
-				name: "test-org",
-				slug: `test-org-${Date.now()}`, // needs to be unique
+				name: "test-org-1",
+				slug: `test-org-1-${Date.now()}`,
 				userId: newUserId,
 			},
 		});
@@ -83,7 +86,8 @@ describe("sign-in with organization", async (it) => {
 			body: {
 				email: newUserEmail,
 				password: newUserPassword,
-			},
+				activeOrganizationId: org.id,
+			} as any,
 			asResponse: true,
 		});
 
@@ -91,13 +95,12 @@ describe("sign-in with organization", async (it) => {
 		const parsed = parseSetCookieHeader(setCookie || "");
 		const sessionToken = parsed.get("better-auth.session_token");
 		expect(sessionToken).toBeDefined();
-
+		if (!sessionToken) return;
 		const session = await auth.api.getSession({
 			headers: new Headers({
-				cookie: `better-auth.session_token=${sessionToken?.value}`,
+				cookie: `better-auth.session_token=${sessionToken.value}`,
 			}),
 		});
-		console.log(session);
-		expect(session?.session.activeOrganizationId).toBe(org.id);
+		expect((session?.session as any).activeOrganizationId).toBe(org.id);
 	});
 });
