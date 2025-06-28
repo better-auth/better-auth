@@ -22,6 +22,7 @@ describe("general types", async (it) => {
 				emailVerified: boolean;
 				name: string;
 				image?: string | undefined | null;
+				lastOrgId?: string | undefined | null;
 				createdAt: Date;
 				updatedAt: Date;
 			};
@@ -38,6 +39,7 @@ describe("general types", async (it) => {
 			emailVerified: boolean;
 			name: string;
 			image?: string | undefined | null;
+			lastOrgId?: string | undefined | null;
 			createdAt: Date;
 			updatedAt: Date;
 			twoFactorEnabled: boolean | undefined | null;
