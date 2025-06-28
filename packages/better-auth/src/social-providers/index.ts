@@ -7,6 +7,7 @@ import { google } from "./google";
 import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { spotify } from "./spotify";
+import { soundcloud } from "./soundcloud";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { dropbox } from "./dropbox";
@@ -28,6 +29,7 @@ export const socialProviders = {
 	google,
 	huggingface,
 	spotify,
+	soundcloud,
 	twitch,
 	twitter,
 	dropbox,
@@ -66,6 +68,7 @@ export * from "./apple";
 export * from "./microsoft-entra-id";
 export * from "./discord";
 export * from "./spotify";
+export * from "./soundcloud";
 export * from "./twitch";
 export * from "./facebook";
 export * from "./twitter";
