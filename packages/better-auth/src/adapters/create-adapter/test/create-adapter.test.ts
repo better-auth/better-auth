@@ -165,6 +165,31 @@ describe("Create Adapter Helper", async () => {
 		expect(res.id).toBe("HARD-CODED-ID");
 	});
 
+	test("Should not generate an id if `advanced.database.generateId` is not defined or false", async () => {
+		const adapter = await createTestAdapter({
+			config: {},
+			options: {
+				advanced: {
+					database: { generateId: false, useNumberId: false },
+				},
+			},
+			adapter(args_0) {
+				return {
+					async create(data) {
+						expect(data.data.id).not.toBeDefined();
+						return data.data;
+					},
+				};
+			},
+		});
+
+		const testResult = await adapter.create({
+			model: "user",
+			data: { name: "test-name" },
+		});
+		expect(testResult.id).not.toBeDefined();
+	});
+
 	test("Should throw an error if the database doesn't support numeric ids and the user has enabled `useNumberId`", async () => {
 		let error: any | null = null;
 		try {
