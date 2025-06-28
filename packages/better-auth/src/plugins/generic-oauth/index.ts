@@ -82,12 +82,19 @@ export interface GenericOAuthConfig {
 	 */
 	accessType?: string;
 	/**
-	 * Custom function to fetch user info.
-	 * If provided, this function will be used instead of the default user info fetching logic.
+	 * Custom function or flag to fetch user info.
+	 * If provided as a function, it will be used instead of the default user info fetching logic.
+	 *
+	 * If explicitly set to `true`, the `userInfo` endpoint will be used to retrieve user info regardless of the presence of an ID token.
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
 	 */
 	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+	/**
+	 * Always fetch user info regardless of the presence of an ID token.
+	 * @default false
+	 */
+	alwaysFetchUserInfo?: boolean;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
@@ -157,8 +164,9 @@ interface GenericOAuthOptions {
 async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,
+	alwaysFetchUserInfo: boolean = false,
 ) {
-	if (tokens.idToken) {
+	if (tokens.idToken && !alwaysFetchUserInfo) {
 		const decoded = decodeJwt(tokens.idToken) as {
 			sub: string;
 			email_verified: boolean;
@@ -301,7 +309,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					async getUserInfo(tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl);
+							: await getUserInfo(
+									tokens,
+									finalUserInfoUrl,
+									c.alwaysFetchUserInfo,
+								);
 						if (!userInfo) {
 							return null;
 						}
@@ -621,9 +633,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						});
 					}
 					const userInfo = (
-						provider.getUserInfo
+						typeof provider.getUserInfo === "function"
 							? await provider.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl)
+							: await getUserInfo(
+									tokens,
+									finalUserInfoUrl,
+									provider.alwaysFetchUserInfo,
+								)
 					) as User | null;
 					if (!userInfo) {
 						throw redirectOnError("user_info_is_missing");
