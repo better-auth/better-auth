@@ -3,6 +3,8 @@ import type { BetterAuthPlugin } from "../types";
 import { createAuthMiddleware } from "../api";
 import { parseSetCookieHeader } from "../cookies";
 
+let isBuilding: boolean | undefined;
+
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => any;
 	options: BetterAuthOptions;
@@ -22,11 +24,17 @@ export const svelteKitHandler = async ({
 	event: { request: Request; url: URL };
 	resolve: (event: any) => any;
 }) => {
-	//@ts-expect-error
-	const { building } = await import("$app/environment")
-		.catch((e) => {})
-		.then((m) => m || {});
-	if (building) {
+	// Only check building state once and cache it
+	if (isBuilding === undefined) {
+		//@ts-expect-error
+		const { building } = await import("$app/environment")
+			.catch((e) => {})
+			.then((m) => m || {});
+
+		isBuilding = building || false;
+	}
+
+	if (isBuilding) {
 		return resolve(event);
 	}
 	const { request, url } = event;

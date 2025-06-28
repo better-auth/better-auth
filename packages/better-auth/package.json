@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.10-beta.1",
+  "version": "1.2.10",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -133,6 +133,16 @@
       "require": {
         "types": "./dist/client/solid/index.d.cts",
         "default": "./dist/client/solid/index.cjs"
+      }
+    },
+    "./test": {
+      "import": {
+        "types": "./dist/test-utils/index.d.ts",
+        "default": "./dist/test-utils/index.mjs"
+      },
+      "require": {
+        "types": "./dist/test-utils/index.d.cts",
+        "default": "./dist/test-utils/index.cjs"
       }
     },
     "./api": {
