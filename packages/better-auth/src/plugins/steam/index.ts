@@ -34,7 +34,7 @@ export interface SteamAuthPluginOptions {
 
 export const steamAuth = (config: SteamAuthPluginOptions) =>
 	({
-		id: "steamAuthPlugin",
+		id: "steam-auth",
 		endpoints: {
 			signInWithSteam: createAuthEndpoint(
 				"/sign-in/social/steam",
