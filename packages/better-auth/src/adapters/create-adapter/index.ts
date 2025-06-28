@@ -159,11 +159,20 @@ export const createAdapter =
 		 * then we should return the model name ending with an `s`.
 		 */
 		const getModelName = (model: string) => {
-			return schema[getDefaultModelName(model)].modelName !== model
-				? schema[getDefaultModelName(model)].modelName
-				: config.usePlural
-					? `${model}s`
-					: model;
+			const defaultModelKey = getDefaultModelName(model);
+			const usePlural = config && config.usePlural;
+			const useCustomModelName =
+				schema &&
+				schema[defaultModelKey] &&
+				schema[defaultModelKey].modelName !== model;
+
+			if (useCustomModelName) {
+				return usePlural
+					? `${schema[defaultModelKey].modelName}s`
+					: schema[defaultModelKey].modelName;
+			}
+
+			return usePlural ? `${model}s` : model;
 		};
 		/**
 		 * Get the field name which is expected to be saved in the database based on the user's schema.
