@@ -518,8 +518,6 @@ export const createAdapter =
 					model: defaultModelName,
 				});
 
-				console.log(defaultFieldName);
-
 				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
 					if (options.advanced?.database?.useNumberId) {
 						if (Array.isArray(value)) {
