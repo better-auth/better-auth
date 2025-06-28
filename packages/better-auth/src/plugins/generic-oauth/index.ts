@@ -89,7 +89,12 @@ interface GenericOAuthConfig {
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
 	 */
-	getUserInfo?: ((tokens: OAuth2Tokens) => Promise<User | null>) | boolean;
+	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+	/**
+	 * Always fetch user info regardless of the presence of an ID token.
+	 * @default false
+	 */
+	alwaysFetchUserInfo?: boolean;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
@@ -141,9 +146,9 @@ interface GenericOAuthOptions {
 async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,
-	force: boolean = false,
+	alwaysFetchUserInfo: boolean = false,
 ) {
-	if (tokens.idToken && !force) {
+	if (tokens.idToken && !alwaysFetchUserInfo) {
 		const decoded = decodeJwt(tokens.idToken) as {
 			sub: string;
 			email_verified: boolean;
@@ -289,7 +294,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								: await getUserInfo(
 										tokens,
 										finalUserInfoUrl,
-										c.getUserInfo === true,
+										c.alwaysFetchUserInfo,
 									);
 						if (!userInfo) {
 							return null;
@@ -612,7 +617,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							: await getUserInfo(
 									tokens,
 									finalUserInfoUrl,
-									provider.getUserInfo === true,
+									provider.alwaysFetchUserInfo,
 								)
 					) as User | null;
 
