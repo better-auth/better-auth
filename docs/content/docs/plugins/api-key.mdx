@@ -489,12 +489,9 @@ export const auth = betterAuth({
         );
         return apiKey;
       },
-      customAPIKeyValidator: ({ ctx, key }) => {
-        if (key.endsWith("_super_secret_api_key")) {
-          return true;
-        } else {
-          return false;
-        }
+      customAPIKeyValidator: async ({ ctx, key }) => {
+        const res = await keyService.verify(key)
+        return res.valid
       },
     }),
   ],
@@ -572,7 +569,7 @@ The header name to check for API key. Default is `x-api-key`.
 
 A custom function to get the API key from the context.
 
-`customAPIKeyValidator` <span className="opacity-70">`(options: { ctx: GenericEndpointContext; key: string; }) => boolean`</span>
+`customAPIKeyValidator` <span className="opacity-70">`(options: { ctx: GenericEndpointContext; key: string; }) => boolean | Promise<boolean>`</span>
 
 A custom function to validate the API key.
 

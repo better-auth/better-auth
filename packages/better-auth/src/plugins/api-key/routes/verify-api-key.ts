@@ -228,18 +228,18 @@ export function verifyApiKey({
 				});
 			}
 
-			if (
-				opts.customAPIKeyValidator &&
-				!opts.customAPIKeyValidator({ ctx, key })
-			) {
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
-				});
+			if (opts.customAPIKeyValidator) {
+				const isValid = await opts.customAPIKeyValidator({ ctx, key });
+				if (!isValid) {
+					return ctx.json({
+						valid: false,
+						error: {
+							message: ERROR_CODES.INVALID_API_KEY,
+							code: "KEY_NOT_FOUND" as const,
+						},
+						key: null,
+					});
+				}
 			}
 
 			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
