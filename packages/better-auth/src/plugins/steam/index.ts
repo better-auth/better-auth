@@ -1,15 +1,35 @@
 import { createAuthEndpoint } from "../../api";
-import { type BetterAuthPlugin, type User } from "../../types";
+import type { BetterAuthPlugin, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { betterFetch } from "@better-fetch/fetch";
 
 const STEAM_BASE_URL = "https://api.steampowered.com/";
-const STEAM_PARTNER_URL = `https://partner.steam-api.com`;
+
+export type SteamProfile = {
+	steamid: string;
+	communityvisibilitystate: number;
+	profilestate: number;
+	profileurl: string;
+	avatar: string;
+	avatarmedium: string;
+	avatarfull: string;
+	avatarhash: string;
+	lastlogoff: number;
+	personastate: number;
+	realname: string;
+	primaryclanid: string;
+	timecreated: number;
+	personastateflags: number;
+	loccountrycode: string;
+	locstatecode: string;
+};
 
 export interface SteamAuthPluginOptions {
 	steamApiKey: string;
-	mapProfileToUser?: (profile: any) => Promise<User>;
+	mapProfileToUser?: (
+		profile: SteamProfile & { email: string },
+	) => Promise<User>;
 }
 
 export const steamAuth = (config: SteamAuthPluginOptions) =>
@@ -21,34 +41,41 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 				{
 					method: "POST",
 					body: z.object({
-						callbackURL: z.string().optional(),
+						email: z.string(),
 						errorCallbackURL: z.string().optional(),
+						callbackURL: z.string().optional(),
 						newUserCallbackURL: z.string().optional(),
 						disableRedirect: z.boolean().optional(),
 					}),
 				},
 				async (ctx) => {
-					const encodedCallbackURL = encodeURIComponent(
-						ctx.body.callbackURL || "/",
+					const callbackURL = ctx.body.callbackURL || "/";
+					const email = ctx.body.email;
+					const errorCallbackURL = ctx.body.errorCallbackURL || undefined;
+
+					const queryParams = new URLSearchParams({
+						callbackURL,
+						email,
+						...(errorCallbackURL ? { errorCallbackURL } : {}),
+					});
+
+					const openidQueryParams = new URLSearchParams({
+						"openid.ns": "http://specs.openid.net/auth/2.0",
+						"openid.mode": "checkid_setup",
+						"openid.realm": new URL(ctx.context.baseURL).origin,
+						"openid.identity":
+							"http://specs.openid.net/auth/2.0/identifier_select",
+						"openid.claimed_id":
+							"http://specs.openid.net/auth/2.0/identifier_select",
+						"openid.return_to": `${ctx.context.baseURL}/steam/callback?${decodeURIComponent(queryParams.toString())}`,
+					});
+					const openidURL = new URL(
+						`/openid/login?${openidQueryParams.toString()}`,
+						`https://steamcommunity.com`,
 					);
-					const returnUrl = `${ctx.context.baseURL}/steam/callback?callbackURL=${encodedCallbackURL}`;
-					const openidURL =
-						`https://steamcommunity.com/openid/login?` +
-						`openid.ns=${encodeURIComponent(
-							"http://specs.openid.net/auth/2.0",
-						)}&` +
-						`openid.mode=checkid_setup&` +
-						`openid.return_to=${encodeURIComponent(returnUrl)}&` +
-						`openid.realm=${encodeURIComponent(ctx.context.baseURL)}&` +
-						`openid.identity=${encodeURIComponent(
-							"http://specs.openid.net/auth/2.0/identifier_select",
-						)}&` +
-						`openid.claimed_id=${encodeURIComponent(
-							"http://specs.openid.net/auth/2.0/identifier_select",
-						)}&`;
 
 					return ctx.json({
-						url: openidURL,
+						url: openidURL.toString(),
 						redirect: !ctx.body.disableRedirect,
 					});
 				},
@@ -58,36 +85,46 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 				"/steam/callback",
 				{ method: "GET" },
 				async (ctx) => {
-					const errorURL =
+					const baseErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
 						`${ctx.context.baseURL}/error`;
 
+					// If no request, throw.
 					if (!ctx?.request?.url) {
-						throw ctx.redirect(`${errorURL}?error=missing_request_url`);
+						throw ctx.redirect(`${baseErrorURL}?error=missing_request_url`);
 					}
 
-					const searchParams = new URL(ctx.request.url).searchParams.entries();
-					const params = Object.fromEntries(searchParams);
-					const callbackURL = params.callbackURL || "/";
-					// biome-ignore lint/performance/noDelete: Types will complain if I set this to `undefined`.
-					delete params.callbackURL;
-					console.log(`callbackURL:`, callbackURL);
-					console.log(`params:`, params);
+					const searchParamEntries = new URL(
+						ctx.request.url,
+					).searchParams.entries();
+
+					const { email, callbackURL, errorCallbackURL, ...params } =
+						Object.fromEntries(searchParamEntries);
+
+					const errorURL = errorCallbackURL || baseErrorURL;
+
+					const isValidEmail = z
+						.string()
+						.email()
+						.safeParse(email || "");
+
+					// If no email, throw. We need this since Steam OAuth doesn't provide an email.
+					if (!isValidEmail.success) {
+						ctx.context.logger.error(
+							`Invalid email during sign in with steam:`,
+							isValidEmail.error,
+						);
+						throw ctx.redirect(`${errorURL}?error=invalid_email`);
+					}
+
+					params["openid.mode"] = "check_authentication";
 
 					const verifyRes = await betterFetch<string>(
-						"https://steamcommunity.com/openid/login",
+						`https://steamcommunity.com/openid/login?${new URLSearchParams(params).toString()}`,
 						{
 							method: "POST",
-							body: new URLSearchParams({
-								...Object.fromEntries(searchParams),
-								"openid.mode": "check_authentication",
-							}),
-							headers: {
-								"Content-Type": "application/x-www-form-urlencoded",
-							},
 						},
 					);
-					console.log(`verifyRes: `, verifyRes);
 
 					if (verifyRes.error) {
 						ctx.context.logger.error(
@@ -109,19 +146,11 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 						throw ctx.redirect(`${errorURL}?error=steamid_missing`);
 					}
 
-					const profileUrl = new URL(
-						`ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamid}`,
-						STEAM_PARTNER_URL,
-					);
+					const profileUrl = `ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamid}`;
 
-					type SteamProfile = {
-						personaname: string;
-						avatarfull: string;
-					};
-
-					const profileRes = await betterFetch<SteamProfile>(
-						new URL(profileUrl.toString(), STEAM_BASE_URL).toString(),
-					);
+					const profileRes = await betterFetch<{
+						response: { players: SteamProfile[] };
+					}>(new URL(profileUrl, STEAM_BASE_URL).toString());
 
 					if (profileRes.error) {
 						ctx.context.logger.error(
@@ -131,22 +160,26 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 						throw ctx.redirect(`${errorURL}?error=steam_profile_fetch_failed`);
 					}
 
-					const profile = profileRes.data;
-					console.log(profile);
+					const profile = profileRes.data.response.players[0];
+
+					if (!profile) {
+						throw ctx.redirect(`${errorURL}?error=steam_profile_not_found`);
+					}
 
 					let account = await ctx.context.internalAdapter.findAccount(steamid);
 					let user: User | null = null;
 					if (!account) {
-						const userDetails =
-							(await config.mapProfileToUser?.(profile)) || ({} as User);
+						const userDetails = await config.mapProfileToUser?.({
+							...profile,
+							email,
+						});
 
 						user = await ctx.context.internalAdapter.createUser({
-							...userDetails,
-							id: userDetails.id || undefined,
-							name: userDetails.name || profile.personaname || "Unknown",
-							email: userDetails.email || `${steamid}@placeholder.com`,
-							emailVerified: userDetails.emailVerified || false,
-							image: userDetails.image || profile.avatarfull || "",
+							...(userDetails || {}),
+							name: userDetails?.name || profile.realname || "Unknown",
+							email: userDetails?.email || email,
+							emailVerified: userDetails?.emailVerified || false,
+							image: userDetails?.image || profile.avatarfull || "",
 						});
 						if (!user) {
 							ctx.context.logger.error(
