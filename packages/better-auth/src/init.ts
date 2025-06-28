@@ -31,11 +31,19 @@ import { BetterAuthError } from "./error";
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const logger = createLogger(options.logger);
-	
+
 	// If not using create-adapter, we need to warn them to tell the adapter maintainers to migrate over to create-adapter
 	// This is temporary. In the future, we should throw an error if the adapter isn't using create-adapter.
-	if(!(adapter.options && "isCreateAdapter" in adapter.options && adapter.options.isCreateAdapter === true)) {
-		logger.warn("This adapter is not using Better-Auth's create-adapter wrapper. For better compatibility and future support, please ask the adapter maintainers to migrate to create-adapter. Documentation: https://www.better-auth.com/docs/guides/create-a-db-adapter\nNote: Using create-adapter will be required in future versions.")
+	if (
+		!(
+			adapter.options &&
+			"isCreateAdapter" in adapter.options &&
+			adapter.options.isCreateAdapter === true
+		)
+	) {
+		logger.warn(
+			"This adapter is not using Better-Auth's create-adapter wrapper. For better compatibility and future support, please ask the adapter maintainers to migrate to create-adapter. Documentation: https://www.better-auth.com/docs/guides/create-a-db-adapter\nNote: Using create-adapter will be required in future versions.",
+		);
 	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
