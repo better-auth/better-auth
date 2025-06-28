@@ -93,7 +93,7 @@ export const createAdapter =
 			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
 			if (field === "id" || field === "_id") {
-				return "id"
+				return "id";
 			}
 			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
 
@@ -518,7 +518,7 @@ export const createAdapter =
 					model: defaultModelName,
 				});
 
-				console.log(defaultFieldName)
+				console.log(defaultFieldName);
 
 				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
 					if (options.advanced?.database?.useNumberId) {
