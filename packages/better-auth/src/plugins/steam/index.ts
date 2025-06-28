@@ -67,7 +67,9 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 							"http://specs.openid.net/auth/2.0/identifier_select",
 						"openid.claimed_id":
 							"http://specs.openid.net/auth/2.0/identifier_select",
-						"openid.return_to": `${ctx.context.baseURL}/steam/callback?${decodeURIComponent(queryParams.toString())}`,
+						"openid.return_to": `${
+							ctx.context.baseURL
+						}/steam/callback?${decodeURIComponent(queryParams.toString())}`,
 					});
 					const openidURL = new URL(
 						`/openid/login?${openidQueryParams.toString()}`,
@@ -120,7 +122,9 @@ export const steamAuth = (config: SteamAuthPluginOptions) =>
 					params["openid.mode"] = "check_authentication";
 
 					const verifyRes = await betterFetch<string>(
-						`https://steamcommunity.com/openid/login?${new URLSearchParams(params).toString()}`,
+						`https://steamcommunity.com/openid/login?${new URLSearchParams(
+							params,
+						).toString()}`,
 						{
 							method: "POST",
 						},
