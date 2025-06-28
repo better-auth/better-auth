@@ -159,38 +159,38 @@ export default function UserCard(props: {
 							Please verify your email address. Check your inbox for the
 							verification email. If you haven't received the email, click the
 							button below to resend.
+							<Button
+								size="sm"
+								variant="secondary"
+								className="mt-2"
+								onClick={async () => {
+									await client.sendVerificationEmail(
+										{
+											email: session?.user.email || "",
+										},
+										{
+											onRequest(context) {
+												setEmailVerificationPending(true);
+											},
+											onError(context) {
+												toast.error(context.error.message);
+												setEmailVerificationPending(false);
+											},
+											onSuccess() {
+												toast.success("Verification email sent successfully");
+												setEmailVerificationPending(false);
+											},
+										},
+									);
+								}}
+							>
+								{emailVerificationPending ? (
+									<Loader2 size={15} className="animate-spin" />
+								) : (
+									"Resend Verification Email"
+								)}
+							</Button>
 						</AlertDescription>
-						<Button
-							size="sm"
-							variant="secondary"
-							className="mt-2"
-							onClick={async () => {
-								await client.sendVerificationEmail(
-									{
-										email: session?.user.email || "",
-									},
-									{
-										onRequest(context) {
-											setEmailVerificationPending(true);
-										},
-										onError(context) {
-											toast.error(context.error.message);
-											setEmailVerificationPending(false);
-										},
-										onSuccess() {
-											toast.success("Verification email sent successfully");
-											setEmailVerificationPending(false);
-										},
-									},
-								);
-							}}
-						>
-							{emailVerificationPending ? (
-								<Loader2 size={15} className="animate-spin" />
-							) : (
-								"Resend Verification Email"
-							)}
-						</Button>
 					</Alert>
 				)}
 

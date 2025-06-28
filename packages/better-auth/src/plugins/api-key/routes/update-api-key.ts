@@ -389,10 +389,6 @@ export function updateApiKey({
 							field: "id",
 							value: apiKey.id,
 						},
-						{
-							field: "userId",
-							value: user.id,
-						},
 					],
 					update: {
 						lastRequest: new Date(),
