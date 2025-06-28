@@ -5,6 +5,8 @@ import { parseSetCookieHeader } from "../cookies";
 
 let isBuilding: boolean | undefined;
 
+let isBuilding: boolean | undefined;
+
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => any;
 	options: BetterAuthOptions;
