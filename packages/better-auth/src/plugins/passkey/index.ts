@@ -55,7 +55,7 @@ export interface PasskeyOptions {
 	rpName?: string;
 	/**
 	 * The URL at which registrations and authentications should occur.
-	 * 'http://localhost' and 'http://localhost:PORT' are also valid.
+	 * `http://localhost` and `http://localhost:PORT` are also valid.
 	 * Do NOT include any trailing /
 	 *
 	 * if this isn't provided. The client itself will
@@ -92,6 +92,7 @@ export type Passkey = {
 	backedUp: boolean;
 	transports?: string;
 	createdAt: Date;
+	aaguid?: string;
 };
 
 export const passkey = (options?: PasskeyOptions) => {
@@ -271,6 +272,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
 						userName: session.user.email || session.user.id,
+						userDisplayName: session.user.email || session.user.id,
 						attestationType: "none",
 						excludeCredentials: userPasskeys.map((passkey) => ({
 							id: passkey.credentialID,
@@ -302,16 +304,19 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: id,
-						value: JSON.stringify({
-							expectedChallenge: options.challenge,
-							userData: {
-								id: session.user.id,
-							},
-						}),
-						expiresAt: expirationTime,
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: id,
+							value: JSON.stringify({
+								expectedChallenge: options.challenge,
+								userData: {
+									id: session.user.id,
+								},
+							}),
+							expiresAt: expirationTime,
+						},
+						ctx,
+					);
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -468,11 +473,14 @@ export const passkey = (options?: PasskeyOptions) => {
 							maxAge: maxAgeInSeconds,
 						},
 					);
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: id,
-						value: JSON.stringify(data),
-						expiresAt: expirationTime,
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: id,
+							value: JSON.stringify(data),
+							expiresAt: expirationTime,
+						},
+						ctx,
+					);
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -569,6 +577,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							});
 						}
 						const {
+							aaguid,
 							// credentialID,
 							// credentialPublicKey,
 							// counter,
@@ -578,10 +587,9 @@ export const passkey = (options?: PasskeyOptions) => {
 							credentialType,
 						} = registrationInfo;
 						const pubKey = base64.encode(credential.publicKey);
-						const newPasskey: Passkey = {
+						const newPasskey: Omit<Passkey, "id"> = {
 							name: ctx.body.name,
 							userId: userData.id,
-							id: ctx.context.generateId({ model: "passkey" }),
 							credentialID: credential.id,
 							publicKey: pubKey,
 							counter: credential.counter,
@@ -589,8 +597,12 @@ export const passkey = (options?: PasskeyOptions) => {
 							transports: resp.response.transports.join(","),
 							backedUp: credentialBackedUp,
 							createdAt: new Date(),
+							aaguid: aaguid,
 						};
-						const newPasskeyRes = await ctx.context.adapter.create<Passkey>({
+						const newPasskeyRes = await ctx.context.adapter.create<
+							Omit<Passkey, "id">,
+							Passkey
+						>({
 							model: "passkey",
 							data: newPasskey,
 						});
@@ -726,7 +738,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 						const s = await ctx.context.internalAdapter.createSession(
 							passkey.userId,
-							ctx.request,
+							ctx,
 						);
 						if (!s) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -766,6 +778,35 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "GET",
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "List all passkeys for the authenticated user",
+							responses: {
+								"200": {
+									description: "Passkeys retrieved successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "array",
+												items: {
+													$ref: "#/components/schemas/Passkey",
+													required: [
+														"id",
+														"userId",
+														"publicKey",
+														"createdAt",
+														"updatedAt",
+													],
+												},
+												description:
+													"Array of passkey objects associated with the user",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const passkeys = await ctx.context.adapter.findMany<Passkey>({
@@ -785,6 +826,31 @@ export const passkey = (options?: PasskeyOptions) => {
 						id: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Delete a specific passkey",
+							responses: {
+								"200": {
+									description: "Passkey deleted successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates whether the deletion was successful",
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					await ctx.context.adapter.delete<Passkey>({
@@ -810,6 +876,29 @@ export const passkey = (options?: PasskeyOptions) => {
 						name: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Update a specific passkey's name",
+							responses: {
+								"200": {
+									description: "Passkey updated successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													passkey: {
+														$ref: "#/components/schemas/Passkey",
+													},
+												},
+												required: ["passkey"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const passkey = await ctx.context.adapter.findOne<Passkey>({
@@ -909,6 +998,10 @@ const schema = {
 			},
 			createdAt: {
 				type: "date",
+				required: false,
+			},
+			aaguid: {
+				type: "string",
 				required: false,
 			},
 		},

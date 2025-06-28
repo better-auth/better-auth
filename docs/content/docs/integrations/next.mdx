@@ -3,9 +3,7 @@ title: Next.js integration
 description: Integrate Better Auth with Next.js.
 ---
 
-Better Auth can be easily integrated with Next.js. It'll also comes with utilities to make it easier to use Better Auth with Next.js.
-
-Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+Better Auth can be easily integrated with Next.js. Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
 ### Create API Route
 
@@ -93,6 +91,8 @@ export async function ServerComponent() {
 }
 ```
 
+<Callout type="warn">As RSCs cannot set cookies, the [cookie cache](/docs/concepts/session-management#cookie-cache) will not be refreshed until the server is interacted with from the client via Server Actions or Route Handlers.</Callout>
+
 ### Server Action Cookies
 
 When you call a function that needs to set cookies, like `signInEmail` or `signUpEmail` in a server action, cookies won’t be set. This is because server actions need to use the `cookies` helper from Next.js to set cookies.
@@ -132,7 +132,7 @@ In Next.js middleware, it's recommended to only check for the existence of a ses
 You can use the `getSessionCookie` helper from Better Auth for this purpose:
 
 <Callout type="warn">
-The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
+The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, if you customized the cookie name or prefix, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
 </Callout>
 
 ```ts
@@ -140,12 +140,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 export async function middleware(request: NextRequest) {
-	const sessionCookie = getSessionCookie(request, {
-        // Optionally pass config if cookie name or prefix is customized in auth config.
-		cookieName: "session_token",
-		cookiePrefix: "better-auth",
-    });
+	const sessionCookie = getSessionCookie(request);
 
+    // THIS IS NOT SECURE!
+    // This is the recommended approach to optimistically redirect users
+    // We recommend handling auth checks in each page/route
 	if (!sessionCookie) {
 		return NextResponse.redirect(new URL("/", request.url));
 	}
@@ -156,6 +155,57 @@ export async function middleware(request: NextRequest) {
 export const config = {
 	matcher: ["/dashboard"], // Specify the routes the middleware applies to
 };
+```
+
+<Callout type="info">
+If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
+```ts
+const sessionCookie = getSessionCookie(request, {
+    cookieName: "my_session_cookie",
+    cookiePrefix: "my_prefix"
+});
+```
+</Callout>
+
+Alternatively, you can use the `getCookieCache` helper to get the session object from the cookie cache.
+
+```ts
+import { getCookieCache } from "better-auth/cookies";
+
+export async function middleware(request: NextRequest) {
+	const session = await getCookieCache(request);
+	if (!session) {
+		return NextResponse.redirect(new URL("/sign-in", request.url));
+	}
+	return NextResponse.next();
+}
+```
+
+### How to handle auth checks in each page/route
+
+In this example, we are using the `auth.api.getSession` function within a server component to get the session object,
+then we are checking if the session is valid. If it's not, we are redirecting the user to the sign-in page.
+
+```tsx title="app/dashboard/page.tsx"
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+export default async function DashboardPage() {
+    const session = await auth.api.getSession({
+        headers: await headers()
+    })
+
+    if(!session) {
+        redirect("/sign-in")
+    }
+
+    return (
+        <div>
+            <h1>Welcome {session.user.name}</h1>
+        </div>
+    )
+}
 ```
 
 ### For Next.js release `15.1.7` and below

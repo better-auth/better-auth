@@ -14,7 +14,7 @@ import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
 
-interface SSOOptions {
+export interface SSOOptions {
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
@@ -63,9 +63,14 @@ interface SSOOptions {
 	};
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
-	 * sign-in need to be calle dwith with requestSignUp as true to create new users.
+	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
 	disableImplicitSignUp?: boolean;
+	/**
+	 * Override user info with the provider info.
+	 * @default false
+	 */
+	defaultOverrideUserInfo?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -173,6 +178,13 @@ export const sso = (options?: SSOOptions) => {
 									"If organization plugin is enabled, the organization id to link the provider to",
 							})
 							.optional(),
+						overrideUserInfo: z
+							.boolean({
+								description:
+									"Override user info with the provider info. Defaults to false",
+							})
+							.default(false)
+							.optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -182,7 +194,173 @@ export const sso = (options?: SSOOptions) => {
 								"This endpoint is used to register an OIDC provider. This is used to configure the provider and link it to an organization",
 							responses: {
 								"200": {
-									description: "The created provider",
+									description: "OIDC provider created successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													issuer: {
+														type: "string",
+														format: "uri",
+														description: "The issuer URL of the provider",
+													},
+													domain: {
+														type: "string",
+														description:
+															"The domain of the provider, used for email matching",
+													},
+													oidcConfig: {
+														type: "object",
+														properties: {
+															issuer: {
+																type: "string",
+																format: "uri",
+																description: "The issuer URL of the provider",
+															},
+															pkce: {
+																type: "boolean",
+																description:
+																	"Whether PKCE is enabled for the authorization flow",
+															},
+															clientId: {
+																type: "string",
+																description: "The client ID for the provider",
+															},
+															clientSecret: {
+																type: "string",
+																description:
+																	"The client secret for the provider",
+															},
+															authorizationEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The authorization endpoint URL",
+															},
+															discoveryEndpoint: {
+																type: "string",
+																format: "uri",
+																description: "The discovery endpoint URL",
+															},
+															userInfoEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The user info endpoint URL",
+															},
+															scopes: {
+																type: "array",
+																items: { type: "string" },
+																nullable: true,
+																description:
+																	"The scopes requested from the provider",
+															},
+															tokenEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The token endpoint URL",
+															},
+															tokenEndpointAuthentication: {
+																type: "string",
+																enum: [
+																	"client_secret_post",
+																	"client_secret_basic",
+																],
+																nullable: true,
+																description:
+																	"Authentication method for the token endpoint",
+															},
+															jwksEndpoint: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "The JWKS endpoint URL",
+															},
+															mapping: {
+																type: "object",
+																nullable: true,
+																properties: {
+																	id: {
+																		type: "string",
+																		description:
+																			"Field mapping for user ID (defaults to 'sub')",
+																	},
+																	email: {
+																		type: "string",
+																		description:
+																			"Field mapping for email (defaults to 'email')",
+																	},
+																	emailVerified: {
+																		type: "string",
+																		nullable: true,
+																		description:
+																			"Field mapping for email verification (defaults to 'email_verified')",
+																	},
+																	name: {
+																		type: "string",
+																		description:
+																			"Field mapping for name (defaults to 'name')",
+																	},
+																	image: {
+																		type: "string",
+																		nullable: true,
+																		description:
+																			"Field mapping for image (defaults to 'picture')",
+																	},
+																	extraFields: {
+																		type: "object",
+																		additionalProperties: { type: "string" },
+																		nullable: true,
+																		description: "Additional field mappings",
+																	},
+																},
+																required: ["id", "email", "name"],
+															},
+														},
+														required: [
+															"issuer",
+															"pkce",
+															"clientId",
+															"clientSecret",
+															"discoveryEndpoint",
+														],
+														description: "OIDC configuration for the provider",
+													},
+													organizationId: {
+														type: "string",
+														nullable: true,
+														description:
+															"ID of the linked organization, if any",
+													},
+													userId: {
+														type: "string",
+														description:
+															"ID of the user who registered the provider",
+													},
+													providerId: {
+														type: "string",
+														description: "Unique identifier for the provider",
+													},
+													redirectURI: {
+														type: "string",
+														format: "uri",
+														description:
+															"The redirect URI for the provider callback",
+													},
+												},
+												required: [
+													"issuer",
+													"domain",
+													"oidcConfig",
+													"userId",
+													"providerId",
+													"redirectURI",
+												],
+											},
+										},
+									},
 								},
 							},
 						},
@@ -215,8 +393,12 @@ export const sso = (options?: SSOOptions) => {
 									`${body.issuer}/.well-known/openid-configuration`,
 								mapping: body.mapping,
 								scopes: body.scopes,
-								userinfoEndpoint: body.userInfoEndpoint,
-								alwaysFetchUserInfo: body.alwaysFetchUserInfo,
+								userInfoEndpoint: body.userInfoEndpoint,
+                alwaysFetchUserInfo: body.alwaysFetchUserInfo,
+								overrideUserInfo:
+									ctx.body.overrideUserInfo ||
+									options?.defaultOverrideUserInfo ||
+									false,
 							}),
 							organizationId: body.organizationId,
 							userId: ctx.context.session.user.id,
@@ -324,6 +506,34 @@ export const sso = (options?: SSOOptions) => {
 												},
 											},
 											required: ["callbackURL"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description:
+										"Authorization URL generated successfully for SSO sign-in",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+														format: "uri",
+														description:
+															"The authorization URL to redirect the user to for SSO sign-in",
+													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Indicates that the client should redirect to the provided URL",
+														enum: [true],
+													},
+												},
+												required: ["url", "redirect"],
+											},
 										},
 									},
 								},
@@ -443,9 +653,10 @@ export const sso = (options?: SSOOptions) => {
 					const { code, state, error, error_description } = ctx.query;
 					const stateData = await parseState(ctx);
 					if (!stateData) {
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=invalid_state`,
-						);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.baseURL}/error`;
+						throw ctx.redirect(`${errorURL}?error=invalid_state`);
 					}
 					const { callbackURL, errorURL, newUserURL, requestSignUp } =
 						stateData;
@@ -661,7 +872,9 @@ export const sso = (options?: SSOOptions) => {
 							refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
 							scope: tokenResponse.scopes?.join(","),
 						},
+						callbackURL,
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+						overrideUserInfo: config.overrideUserInfo,
 					});
 					if (linked.error) {
 						throw ctx.redirect(
@@ -775,7 +988,7 @@ export const sso = (options?: SSOOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-interface SSOProvider {
+export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
 	userId: string;
@@ -783,7 +996,7 @@ interface SSOProvider {
 	organizationId?: string;
 }
 
-interface OIDCConfig {
+export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
@@ -797,6 +1010,7 @@ interface OIDCConfig {
 	 */
 	alwaysFetchUserInfo?: boolean;
 	scopes?: string[];
+	overrideUserInfo?: boolean;
 	tokenEndpoint?: string;
 	tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic";
 	jwksEndpoint?: string;

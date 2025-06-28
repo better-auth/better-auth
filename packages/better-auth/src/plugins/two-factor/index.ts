@@ -17,6 +17,8 @@ import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createOTP } from "@better-auth/utils/otp";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -40,6 +42,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						password: z.string({
 							description: "User password",
 						}),
+						issuer: z
+							.string({
+								description: "Custom issuer for the TOTP URI",
+							})
+							.optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -77,7 +84,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password } = ctx.body;
+					const { password, issuer } = ctx.body;
 					const isPasswordValid = await validatePassword(ctx, {
 						password,
 						userId: user.id,
@@ -106,7 +113,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx.request,
+							ctx,
 							false,
 							ctx.context.session.session,
 						);
@@ -145,7 +152,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
-					}).url(options?.issuer || ctx.context.appName, user.email);
+					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
@@ -154,11 +161,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z
-							.string({
-								description: "User password",
-							})
-							.min(8),
+						password: z.string({
+							description: "User password",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -216,7 +221,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						ctx.request,
+						ctx,
 						false,
 						ctx.context.session.session,
 					);
@@ -291,21 +296,25 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
+						const maxAge = options?.otpOptions?.period || 60 * 5; // 5 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
-								maxAge: 60 * 10, // 10 minutes
+								maxAge,
 							},
 						);
-						/**
-						 * We set the user id and the session
-						 * id as a hash. Later will fetch for
-						 * sessions with the user id compare
-						 * the hash and set that as session.
-						 */
+						const identifier = `2fa-${generateRandomString(20)}`;
+						await ctx.context.internalAdapter.createVerificationValue(
+							{
+								value: data.user.id,
+								identifier,
+								expiresAt: new Date(Date.now() + maxAge * 1000),
+							},
+							ctx,
+						);
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
-							data.user.id,
+							identifier,
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
@@ -326,6 +335,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				max: 3,
 			},
 		],
+		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 

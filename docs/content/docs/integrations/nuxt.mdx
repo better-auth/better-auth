@@ -7,17 +7,17 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 
 ### Create API Route
 
-We need to mount the handler to an API route. Create a file inside `/server/api` called `[...auth].ts` and add the following code:
+We need to mount the handler to an API route. Create a file inside `/server/api/auth` called `[...all].ts` and add the following code:
 
-```ts title="server/api/[...auth].ts"
-import { auth } from "~/utils/auth"; // import your auth config
+```ts title="server/api/auth/[...all].ts"
+import { auth } from "~/lib/auth"; // import your auth config
 
 export default defineEventHandler((event) => {
 	return auth.handler(toWebRequest(event));
 });
 ```
 <Callout type="info">
- You can change the path on your better-auth configuration but it's recommended to keep it as `/api/[...auth]`
+ You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
 </Callout>
 
 ### Migrate the database
@@ -56,7 +56,7 @@ const session = authClient.useSession()
         <button v-if="!session?.data" @click="() => authClient.signIn.social({
             provider: 'github'
         })">
-            Continue with github
+            Continue with GitHub
         </button>
         <div>
             <pre>{{ session.data }}</pre>
@@ -127,5 +127,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 ### Resources & Examples
 
 - [Nuxt and Nuxt Hub example](https://github.com/atinux/nuxthub-better-auth) on GitHub.
-- [NuxtZzle is Nuxt,Drizzle ORM example](https://github.com/leamsigc/nuxt-better-auth-drizzle) on github [preview](https://nuxt-better-auth.giessen.dev/)
+- [NuxtZzle is Nuxt,Drizzle ORM example](https://github.com/leamsigc/nuxt-better-auth-drizzle) on GitHub [preview](https://nuxt-better-auth.giessen.dev/)
 - [Nuxt example](https://stackblitz.com/github/better-auth/better-auth/tree/main/examples/nuxt-example) on StackBlitz.
+- [NuxSaaS (Github)](https://github.com/NuxSaaS/NuxSaaS) is a full-stack SaaS Starter Kit that leverages Better Auth for secure and efficient user authentication. [Demo](https://nuxsaas.com/)

@@ -27,8 +27,14 @@ export type Adapter = {
 	id: string;
 	create: <T extends Record<string, any>, R = T>(data: {
 		model: string;
-		data: T;
+		data: Omit<T, "id">;
 		select?: string[];
+		/**
+		 * By default, any `id` provided in `data` will be ignored.
+		 *
+		 * If you want to force the `id` to be the same as the `data.id`, set this to `true`.
+		 */
+		forceAllowId?: boolean;
 	}) => Promise<R>;
 	findOne: <T>(data: {
 		model: string;

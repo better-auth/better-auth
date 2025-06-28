@@ -4,6 +4,7 @@ import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { github } from "./github";
 import { google } from "./google";
+import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { spotify } from "./spotify";
 import { twitch } from "./twitch";
@@ -17,6 +18,7 @@ import { roblox } from "./roblox";
 import { z } from "zod";
 import { vk } from "./vk";
 import { kick } from "./kick";
+import { zoom } from "./zoom";
 export const socialProviders = {
 	apple,
 	discord,
@@ -24,6 +26,7 @@ export const socialProviders = {
 	github,
 	microsoft,
 	google,
+	huggingface,
 	spotify,
 	twitch,
 	twitter,
@@ -35,6 +38,7 @@ export const socialProviders = {
 	reddit,
 	roblox,
 	vk,
+	zoom,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -42,9 +46,9 @@ export const socialProviderList = Object.keys(socialProviders) as [
 	...(keyof typeof socialProviders)[],
 ];
 
-export const SocialProviderListEnum = z.enum(socialProviderList, {
-	description: "OAuth2 provider to use",
-});
+export const SocialProviderListEnum = z
+	.enum(socialProviderList)
+	.or(z.string()) as z.ZodType<SocialProviderList[number] | (string & {})>;
 
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
@@ -72,6 +76,8 @@ export * from "./tiktok";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./vk";
+export * from "./zoom";
 export * from "./kick";
+export * from "./huggingface";
 
 export type SocialProviderList = typeof socialProviderList;

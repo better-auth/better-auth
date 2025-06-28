@@ -108,9 +108,6 @@ describe("multi-session", async () => {
 		});
 		await client.multiSession.revoke(
 			{
-				fetchOptions: {
-					headers,
-				},
 				sessionToken: token,
 			},
 			{
@@ -119,6 +116,7 @@ describe("multi-session", async () => {
 						`better-auth.session_token=`,
 					);
 				},
+				headers,
 			},
 		);
 		const res = await client.multiSession.listDeviceSessions({

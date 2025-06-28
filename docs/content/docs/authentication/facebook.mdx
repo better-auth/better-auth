@@ -34,9 +34,14 @@ description: Facebook provider setup and usage.
             },
         })
         ```
+
+        <Callout>
+        BetterAuth also supports Facebook Login for Business, all you need
+        to do is provide the `configId` as listed in **Facebook Login For Business > Configurations** alongside your `clientId` and `clientSecret`. Note that the app must be a Business app and, since BetterAuth expects to have an email address and account id, the configuration must be of the "User access token" type. "System-user access token" is not supported.
+        </Callout>
     </Step>
        <Step>
-        ### Sign In with Facebook 
+        ### Sign In with Facebook
         To sign in with Facebook, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `facebook`.
 
@@ -63,7 +68,7 @@ export const auth = betterAuth({
     socialProviders: {
         facebook: {
             clientId: process.env.FACEBOOK_CLIENT_ID as string,
-            clientSecret: process.env.FACEBOOK_CLIENT_ID as string,
+            clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string,
             scopes: ["email", "public_profile", "user_friends"], // Overwrites permissions
             fields: ["user_friends"], // Extending list of fields
         },
@@ -84,7 +89,7 @@ To sign in with Facebook using the ID Token, you can use the `signIn.social` fun
 This is useful when you have the ID Token from Facebook on the client-side and want to use it to sign in on the server.
 
 <Callout>
- If id token is provided no redirection will happen, and the user will be signed in directly.
+ If ID token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>
 
 For limited login, you need to pass `idToken.token`, for only `accessToken` you need to pass `idToken.accessToken` and `idToken.token` together because of (#1183)[https://github.com/better-auth/better-auth/issues/1183].

@@ -7,7 +7,7 @@
 @source '../../node_modules/fumadocs-ui/dist/**/*.js';
 @source '../node_modules/fumadocs-ui/dist/**/*.js';
 :root {
-	--fd-nav-height: 57px;
+	--fd-nav-height: 56px;
 
 	--background: oklch(1 0 0);
 
@@ -77,7 +77,7 @@
 }
 
 .dark {
-	--background: hsl(0 0% 2%);
+	--background: hsl(0 0% 0%);
 
 	--foreground: oklch(0.985 0.001 106.423);
 
@@ -241,10 +241,21 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground;
+		@apply bg-background text-foreground overscroll-none;
 	}
 }
 
 html {
 	scroll-behavior: smooth;
 }
+
+@layer utilities {
+	.no-scrollbar::-webkit-scrollbar {
+	  display: none;
+	}
+	.no-scrollbar {
+	  -ms-overflow-style: none;
+	  scrollbar-width: none;
+	}
+  }
+  

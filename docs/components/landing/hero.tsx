@@ -5,7 +5,7 @@ import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, CornerRightUp } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
@@ -73,14 +73,6 @@ export default function Hero() {
 											Own Your Auth
 										</span>
 									</div>
-									<Link href={"/changelogs/1-2"}>
-										<span className="bg-gradient-to-tr dark:from-stone-800/50 dark:to-black from-stone-200 to-white  px-2 rounded-none">
-											<span className="text-xs dark:text-zinc-200 tracking-tighter font-mono mb-0 underline underline-offset-4">
-												v1.2 is out
-											</span>
-											<CornerRightUp className="inline ml-1 w-3 h-3" />
-										</span>
-									</Link>
 								</div>
 							</div>
 
@@ -153,16 +145,16 @@ export default function Hero() {
 									</div>
 								</GradientBG>
 							</div>
+
 							{
 								<>
-									<div className="mt-8 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
+									<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
 										<Link
 											href="/docs"
 											className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
 										>
 											Get Started
 										</Link>
-
 										<Builder />
 									</div>
 								</>

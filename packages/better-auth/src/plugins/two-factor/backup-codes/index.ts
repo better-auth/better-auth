@@ -3,15 +3,14 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
-import { verifyTwoFactorMiddleware } from "../verify-middleware";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
 import { APIError } from "better-call";
-import { setSessionCookie } from "../../../cookies";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { verifyTwoFactor } from "../verify-two-factor";
 
 export interface BackupCodeOptions {
 	/**
@@ -120,10 +119,120 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							})
 							.optional(),
 					}),
-					use: [verifyTwoFactorMiddleware],
+					metadata: {
+						openapi: {
+							description: "Verify a backup code for two-factor authentication",
+							responses: {
+								"200": {
+									description: "Backup code verified successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														type: "object",
+														properties: {
+															id: {
+																type: "string",
+																description: "Unique identifier of the user",
+															},
+															email: {
+																type: "string",
+																format: "email",
+																nullable: true,
+																description: "User's email address",
+															},
+															emailVerified: {
+																type: "boolean",
+																nullable: true,
+																description: "Whether the email is verified",
+															},
+															name: {
+																type: "string",
+																nullable: true,
+																description: "User's name",
+															},
+															image: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "User's profile image URL",
+															},
+															twoFactorEnabled: {
+																type: "boolean",
+																description:
+																	"Whether two-factor authentication is enabled for the user",
+															},
+															createdAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was created",
+															},
+															updatedAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was last updated",
+															},
+														},
+														required: [
+															"id",
+															"twoFactorEnabled",
+															"createdAt",
+															"updatedAt",
+														],
+														description:
+															"The authenticated user object with two-factor details",
+													},
+													session: {
+														type: "object",
+														properties: {
+															token: {
+																type: "string",
+																description: "Session token",
+															},
+															userId: {
+																type: "string",
+																description:
+																	"ID of the user associated with the session",
+															},
+															createdAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the session was created",
+															},
+															expiresAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the session expires",
+															},
+														},
+														required: [
+															"token",
+															"userId",
+															"createdAt",
+															"expiresAt",
+														],
+														description:
+															"The current session object, included unless disableSession is true",
+													},
+												},
+												required: ["user", "session"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
+					const { session, valid } = await verifyTwoFactor(ctx);
+					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [
@@ -169,14 +278,19 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					});
 
 					if (!ctx.body.disableSession) {
-						await setSessionCookie(ctx, {
-							session: ctx.context.session.session,
-							user,
-						});
+						return valid(ctx);
 					}
 					return ctx.json({
-						user: user,
-						session: ctx.context.session,
+						token: session.session?.token,
+						user: {
+							id: session.user?.id,
+							email: session.user.email,
+							emailVerified: session.user.emailVerified,
+							name: session.user.name,
+							image: session.user.image,
+							createdAt: session.user.createdAt,
+							updatedAt: session.user.updatedAt,
+						},
 					});
 				},
 			),
@@ -188,6 +302,39 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						password: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description:
+								"Generate new backup codes for two-factor authentication",
+							responses: {
+								"200": {
+									description: "Backup codes generated successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the backup codes were generated successfully",
+														enum: [true],
+													},
+													backupCodes: {
+														type: "array",
+														items: { type: "string" },
+														description:
+															"Array of generated backup codes in plain text",
+													},
+												},
+												required: ["status", "backupCodes"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;

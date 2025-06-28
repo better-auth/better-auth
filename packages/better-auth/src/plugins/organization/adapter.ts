@@ -189,8 +189,8 @@ export const getOrgAdapter = (
 				},
 			};
 		},
-		createMember: async (data: MemberInput) => {
-			const member = await adapter.create<MemberInput, Member>({
+		createMember: async (data: Omit<MemberInput, "id">) => {
+			const member = await adapter.create<Omit<MemberInput, "id">, Member>({
 				model: "member",
 				data: {
 					...data,
@@ -350,11 +350,14 @@ export const getOrgAdapter = (
 			if (!org) return null;
 
 			const userIds = members.map((member) => member.userId);
-			const users = await adapter.findMany<User>({
-				model: "user",
-				where: [{ field: "id", value: userIds, operator: "in" }],
-				limit: options?.membershipLimit || 100,
-			});
+			const users =
+				userIds.length > 0
+					? await adapter.findMany<User>({
+							model: "user",
+							where: [{ field: "id", value: userIds, operator: "in" }],
+							limit: options?.membershipLimit || 100,
+						})
+					: [];
 
 			const userMap = new Map(users.map((user) => [user.id, user]));
 			const membersWithUsers = members.map((member) => {
@@ -411,8 +414,8 @@ export const getOrgAdapter = (
 			});
 			return organizations;
 		},
-		createTeam: async (data: TeamInput) => {
-			const team = await adapter.create<TeamInput, Team>({
+		createTeam: async (data: Omit<TeamInput, "id">) => {
+			const team = await adapter.create<Omit<TeamInput, "id">, Team>({
 				model: "team",
 				data,
 			});
@@ -576,7 +579,10 @@ export const getOrgAdapter = (
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
-			const invite = await adapter.create<InvitationInput, Invitation>({
+			const invite = await adapter.create<
+				Omit<InvitationInput, "id">,
+				Invitation
+			>({
 				model: "invitation",
 				data: {
 					status: "pending",
@@ -624,6 +630,40 @@ export const getOrgAdapter = (
 			return invitation.filter(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
+		},
+		findPendingInvitations: async (data: {
+			organizationId: string;
+		}) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+					{
+						field: "status",
+						value: "pending",
+					},
+				],
+			});
+			return invitations.filter(
+				(invite) => new Date(invite.expiresAt) > new Date(),
+			);
+		},
+		listInvitations: async (data: {
+			organizationId: string;
+		}) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+				],
+			});
+			return invitations;
 		},
 		updateInvitation: async (data: {
 			invitationId: string;

@@ -1,8 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import { decodeJwt } from "jose";
 import { z } from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { BASE_ERROR_CODES } from "../../error/codes";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
@@ -10,16 +12,14 @@ import {
 	type OAuthProvider,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
-import { decodeJwt } from "jose";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 
 /**
  * Configuration interface for generic OAuth providers.
  */
-interface GenericOAuthConfig {
+export interface GenericOAuthConfig {
 	/** Unique identifier for the OAuth provider */
 	providerId: string;
 	/**
@@ -134,6 +134,24 @@ interface GenericOAuthConfig {
 	 * @default "post"
 	 */
 	authentication?: "basic" | "post";
+	/**
+	 * Custom headers to include in the discovery request.
+	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
+	 */
+	discoveryHeaders?: Record<string, string>;
+	/**
+	 * Custom headers to include in the authorization request.
+	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
+	 */
+	authorizationHeaders?: Record<string, string>;
+	/**
+	 * Override user info with the provider info.
+	 *
+	 * This will update the user info with the provider info,
+	 * when the user signs in with the provider.
+	 * @default false
+	 */
+	overrideUserInfo?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -232,6 +250,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								userinfo_endpoint: string;
 							}>(c.discoveryUrl, {
 								method: "GET",
+								headers: c.discoveryHeaders,
 							});
 							if (discovery.data) {
 								finalTokenUrl = discovery.data.token_endpoint;
@@ -244,6 +263,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						return validateAuthorizationCode({
+							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
 							redirectURI: data.redirectURI,
@@ -264,6 +284,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								token_endpoint: string;
 							}>(c.discoveryUrl, {
 								method: "GET",
+								headers: c.discoveryHeaders,
 							});
 							if (discovery.data) {
 								finalTokenUrl = discovery.data.token_endpoint;
@@ -280,22 +301,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 							},
+							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
 
 					async getUserInfo(tokens) {
-						if (!finalUserInfoUrl) {
-							return null;
-						}
-						const userInfo =
-							typeof c.getUserInfo === "function"
-								? await c.getUserInfo(tokens)
-								: await getUserInfo(
-										tokens,
-										finalUserInfoUrl,
-										c.alwaysFetchUserInfo,
-									);
+						const userInfo = c.getUserInfo
+							? await c.getUserInfo(tokens)
+							: await getUserInfo(tokens, finalUserInfoUrl, c.alwaysFetchUserInfo);
 						if (!userInfo) {
 							return null;
 						}
@@ -421,6 +435,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authorization_endpoint: string;
 							token_endpoint: string;
 						}>(discoveryUrl, {
+							method: "GET",
+							headers: config.discoveryHeaders,
 							onError(context) {
 								ctx.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
@@ -557,11 +573,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const code = ctx.query.code;
 
 					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
+						const defaultErrorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.baseURL}/error`;
+						throw ctx.redirect(`${errorURL || defaultErrorURL}?error=${error}`);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;
@@ -572,6 +587,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							userinfo_endpoint: string;
 						}>(provider.discoveryUrl, {
 							method: "GET",
+							headers: provider.discoveryHeaders,
 						});
 						if (discovery.data) {
 							finalTokenUrl = discovery.data.token_endpoint;
@@ -585,6 +601,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						tokens = await validateAuthorizationCode({
+							headers: provider.authorizationHeaders,
 							code,
 							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
@@ -620,36 +637,65 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									provider.alwaysFetchUserInfo,
 								)
 					) as User | null;
-
-					if (!userInfo?.email) {
+					if (!userInfo) {
+						throw redirectOnError("user_info_is_missing");
+					}
+					const mapUser = provider.mapProfileToUser
+						? await provider.mapProfileToUser(userInfo)
+						: userInfo;
+					if (!mapUser?.email) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
 						throw redirectOnError("email_is_missing");
 					}
-
-					const mapUser = provider.mapProfileToUser
-						? await provider.mapProfileToUser(userInfo)
-						: null;
-
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== userInfo.email.toLowerCase()
+							link.email !== mapUser.email.toLowerCase()
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
-						const newAccount = await ctx.context.internalAdapter.createAccount({
-							userId: link.userId,
-							providerId: provider.providerId,
-							accountId: userInfo.id,
-							accessToken: tokens.accessToken,
-							refreshToken: tokens.refreshToken,
-							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-							scope: tokens.scopes?.join(","),
-						});
-						if (!newAccount) {
-							return redirectOnError("unable_to_link_account");
+						const existingAccount =
+							await ctx.context.internalAdapter.findAccountByProviderId(
+								userInfo.id,
+								provider.providerId,
+							);
+						if (existingAccount) {
+							if (existingAccount.userId !== link.userId) {
+								return redirectOnError(
+									"account_already_linked_to_different_user",
+								);
+							}
+							const updateData = Object.fromEntries(
+								Object.entries({
+									accessToken: tokens.accessToken,
+									idToken: tokens.idToken,
+									refreshToken: tokens.refreshToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+								}).filter(([_, value]) => value !== undefined),
+							);
+							await ctx.context.internalAdapter.updateAccount(
+								existingAccount.id,
+								updateData,
+							);
+						} else {
+							const newAccount =
+								await ctx.context.internalAdapter.createAccount({
+									userId: link.userId,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									accessToken: tokens.accessToken,
+									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+									scope: tokens.scopes?.join(","),
+									refreshToken: tokens.refreshToken,
+									idToken: tokens.idToken,
+								});
+							if (!newAccount) {
+								return redirectOnError("unable_to_link_account");
+							}
 						}
 						let toRedirectTo: string;
 						try {
@@ -672,9 +718,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						callbackURL: callbackURL,
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,
+						overrideUserInfo: provider.overrideUserInfo,
 					});
 
 					if (result.error) {
@@ -705,23 +753,68 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					method: "POST",
 					body: z.object({
 						providerId: z.string(),
+						/**
+						 * Callback URL to redirect to after the user has signed in.
+						 */
 						callbackURL: z.string(),
+						/**
+						 * Additional scopes to request when linking the account.
+						 * This is useful for requesting additional permissions when
+						 * linking a social account compared to the initial authentication.
+						 */
+						scopes: z
+							.array(z.string(), {
+								description:
+									"Additional scopes to request when linking the account",
+							})
+							.optional(),
+						/**
+						 * The URL to redirect to if there is an error during the link process.
+						 */
+						errorCallbackURL: z
+							.string({
+								description:
+									"The URL to redirect to if there is an error during the link process",
+							})
+							.optional(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Link an OAuth2 account to the current user session",
+							responses: {
+								"200": {
+									description:
+										"Authorization URL generated successfully for linking an OAuth2 account",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+														format: "uri",
+														description:
+															"The authorization URL to redirect the user to for linking the OAuth2 account",
+													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Indicates that the client should redirect to the provided URL",
+														enum: [true],
+													},
+												},
+												required: ["url", "redirect"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (c) => {
 					const session = c.context.session;
-					const account = await c.context.internalAdapter.findAccounts(
-						session.user.id,
-					);
-					const existingAccount = account.find(
-						(a) => a.providerId === c.body.providerId,
-					);
-					if (existingAccount) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
-						});
-					}
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
 					);
@@ -755,6 +848,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authorization_endpoint: string;
 							token_endpoint: string;
 						}>(discoveryUrl, {
+							method: "GET",
+							headers: provider.discoveryHeaders,
 							onError(context) {
 								c.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
@@ -783,13 +878,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							clientId,
 							clientSecret,
 							redirectURI:
-								redirectURI || `${c.context.baseURL}/oauth2/callback`,
+								redirectURI ||
+								`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state: state.state,
 						codeVerifier: pkce ? state.codeVerifier : undefined,
-						scopes: scopes || [],
-						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+						scopes: c.body.scopes || scopes || [],
+						redirectURI:
+							redirectURI ||
+							`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						prompt,
 						accessType,
 						additionalParams: authorizationUrlParams,

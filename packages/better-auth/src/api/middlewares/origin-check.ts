@@ -49,7 +49,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				matchesPattern(url, origin) ||
 				(url?.startsWith("/") &&
 					label !== "origin" &&
-					/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/]*(?:\?[\w\-.\+/=&%]*)?$/.test(url)),
+					/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)),
 		);
 		if (!isTrustedOrigin) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -94,7 +94,10 @@ export const originCheck = (
 			if (pattern.includes("*")) {
 				return wildcardMatch(pattern)(getHost(url));
 			}
-			return url.startsWith(pattern);
+			const protocol = getProtocol(url);
+			return protocol === "http:" || protocol === "https:" || !protocol
+				? pattern === getOrigin(url)
+				: url.startsWith(pattern);
 		};
 
 		const validateURL = (url: string | undefined, label: string) => {
@@ -106,7 +109,9 @@ export const originCheck = (
 					matchesPattern(url, origin) ||
 					(url?.startsWith("/") &&
 						label !== "origin" &&
-						/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/]*(?:\?[\w\-.\+/=&%]*)?$/.test(url)),
+						/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(
+							url,
+						)),
 			);
 			if (!isTrustedOrigin) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);

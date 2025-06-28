@@ -10,7 +10,6 @@ import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
-import type { Prettify } from "../../types/helper";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -21,14 +20,10 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as Partial<
-						Prettify<
-							AdditionalUserFieldsInput<O> & {
-								name?: string;
-								image?: string | null;
-							}
-						>
-					>,
+					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
+						name?: string;
+						image?: string;
+					},
 				},
 				openapi: {
 					description: "Update the current user",
@@ -59,9 +54,9 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 									schema: {
 										type: "object",
 										properties: {
-											user: {
-												type: "object",
-												ref: "#/components/schemas/User",
+											status: {
+												type: "boolean",
+												description: "Indicates if the update was successful",
 											},
 										},
 									},
@@ -155,17 +150,66 @@ export const changePassword = createAuthEndpoint(
 				description: "Change the password of the user",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "Password successfully changed",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
+										token: {
+											type: "string",
+											nullable: true, // Only present if revokeOtherSessions is true
+											description:
+												"New session token if other sessions were revoked",
+										},
 										user: {
-											description: "The user object",
-											$ref: "#/components/schemas/User",
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+													description: "The unique identifier of the user",
+												},
+												email: {
+													type: "string",
+													format: "email",
+													description: "The email address of the user",
+												},
+												name: {
+													type: "string",
+													description: "The name of the user",
+												},
+												image: {
+													type: "string",
+													format: "uri",
+													nullable: true,
+													description: "The profile image URL of the user",
+												},
+												emailVerified: {
+													type: "boolean",
+													description: "Whether the email has been verified",
+												},
+												createdAt: {
+													type: "string",
+													format: "date-time",
+													description: "When the user was created",
+												},
+												updatedAt: {
+													type: "string",
+													format: "date-time",
+													description: "When the user was last updated",
+												},
+											},
+											required: [
+												"id",
+												"email",
+												"name",
+												"emailVerified",
+												"createdAt",
+												"updatedAt",
+											],
 										},
 									},
+									required: ["user"],
 								},
 							},
 						},
@@ -223,7 +267,7 @@ export const changePassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
-				ctx.headers,
+				ctx,
 			);
 			if (!newSession) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -341,11 +385,23 @@ export const deleteUser = createAuthEndpoint(
 				description: "Delete the user",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "User deletion processed successfully",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
+									properties: {
+										success: {
+											type: "boolean",
+											description: "Indicates if the operation was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["User deleted", "Verification email sent"],
+											description: "Status message of the deletion process",
+										},
+									},
+									required: ["success", "message"],
 								},
 							},
 						},
@@ -387,17 +443,6 @@ export const deleteUser = createAuthEndpoint(
 					message: BASE_ERROR_CODES.INVALID_PASSWORD,
 				});
 			}
-		} else {
-			if (ctx.context.options.session?.freshAge) {
-				const currentAge = session.session.createdAt.getTime();
-				const freshAge = ctx.context.options.session.freshAge;
-				const now = Date.now();
-				if (now - currentAge > freshAge) {
-					throw new APIError("BAD_REQUEST", {
-						message: BASE_ERROR_CODES.SESSION_EXPIRED,
-					});
-				}
-			}
 		}
 
 		if (ctx.body.token) {
@@ -416,11 +461,19 @@ export const deleteUser = createAuthEndpoint(
 
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const token = generateRandomString(32, "0-9", "a-z");
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: session.user.id,
-				identifier: `delete-account-${token}`,
-				expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					value: session.user.id,
+					identifier: `delete-account-${token}`,
+					expiresAt: new Date(
+						Date.now() +
+							(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+								60 * 60 * 24) *
+								1000,
+					),
+				},
+				ctx,
+			);
 			const url = `${
 				ctx.context.baseURL
 			}/delete-user/callback?token=${token}&callbackURL=${
@@ -439,6 +492,18 @@ export const deleteUser = createAuthEndpoint(
 				message: "Verification email sent",
 			});
 		}
+
+		if (!ctx.body.password && ctx.context.sessionConfig.freshAge !== 0) {
+			const currentAge = session.session.createdAt.getTime();
+			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
+			const now = Date.now();
+			if (now - currentAge > freshAge * 1000) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.SESSION_EXPIRED,
+				});
+			}
+		}
+
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
@@ -467,6 +532,36 @@ export const deleteUserCallback = createAuthEndpoint(
 			callbackURL: z.string().optional(),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		metadata: {
+			openapi: {
+				description:
+					"Callback to complete user deletion with verification token",
+				responses: {
+					"200": {
+						description: "User successfully deleted",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: {
+											type: "boolean",
+											description: "Indicates if the deletion was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["User deleted"],
+											description: "Confirmation message",
+										},
+									},
+									required: ["success", "message"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
@@ -540,20 +635,24 @@ export const changeEmail = createAuthEndpoint(
 			openapi: {
 				responses: {
 					"200": {
-						description: "Success",
+						description: "Email change request processed successfully",
 						content: {
 							"application/json": {
 								schema: {
 									type: "object",
 									properties: {
-										user: {
-											type: "object",
-											ref: "#/components/schemas/User",
-										},
 										status: {
 											type: "boolean",
+											description: "Indicates if the request was successful",
+										},
+										message: {
+											type: "string",
+											enum: ["Email updated", "Verification email sent"],
+											description: "Status message of the email change process",
+											nullable: true,
 										},
 									},
+									required: ["status"],
 								},
 							},
 						},
