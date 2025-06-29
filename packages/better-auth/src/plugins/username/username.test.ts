@@ -112,3 +112,38 @@ describe("username", async (it) => {
 		expect(res.error?.status).toBe(422);
 	});
 });
+
+describe("with optional username", async (it) => {
+	const { client: optionalClient } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					requiredUsername: false, // explicitly set to false
+					minUsernameLength: 3,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should allow signup without username when requiredUsername is false", async () => {
+		const headers = new Headers();
+		const res = await optionalClient.signUp.email(
+			{
+				email: "optional-test@gmail.com",
+				password: "password123",
+				name: "Test User",
+			} as any,
+			{
+				onSuccess: (ctx) => {
+					headers.set("cookie", ctx.response.headers.get("set-cookie") || "");
+				},
+			},
+		);
+		expect((res.data?.user as any).username).toBeUndefined();
+	});
+});
