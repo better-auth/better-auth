@@ -1,0 +1,74 @@
+---
+title: Vercel BotID
+description: Vercel BotID plugin for Better Auth.
+---
+
+The Vercel BotID is a security feature built into the Vercel platform that protects your web applications from sophisticated
+bots and automated abuse. It's designed to be frictionless for both developers and end users,
+acting as an invisible CAPTCHA that doesn't interrupt the user experience.
+
+You can read more about it in the [Vercel documentation](https://vercel.com/docs/botid#get-started-with-botid).
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install and initialize the plugin
+
+    To install the plugin, run:
+
+    ```package-install
+    npm install @better-auth/botid
+    ```
+
+    Then, initialize the plugin in your `auth.ts` file:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { botId } from "@better-auth/botid";
+
+    export const auth = betterAuth({
+        plugins: [
+            botId()
+        ]
+    })
+    ```
+  </Step>
+  <Step>
+    ### And that's it!
+
+    The plugin will now check all endpoints for bots and automatically reject those requests!
+  </Step>
+</Steps>
+
+## Configuration
+
+Below is a list of possible configuration options for the plugin.
+
+### `endpoints`
+
+The endpoints to check for bots. By default the plugin will check all endpoints.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            endpoints: ["/sign-up/*", "/sign-in/*"] // or "all" for all endpoints // [!code highlight]
+        })
+    ]
+})
+```
+
+### `disable`
+
+Whether to disable Vercel BotID. By default the plugin is enabled.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            disable: true // [!code highlight]
+        })
+    ]
+})
+```

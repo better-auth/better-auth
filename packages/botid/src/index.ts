@@ -11,11 +11,11 @@ export type BotIdVerification = Awaited<ReturnType<typeof checkBotId>>;
 
 export type BotIdOptions = {
 	/**
-	 * Whether to enable bot detection.
+	 * Whether to disable Vercel BotID.
 	 *
-	 * @default true
+	 * @default false
 	 */
-	enabled?: boolean;
+	disable?: boolean;
 	/**
 	 * The endpoints which will be checked for bots.
 	 * This can be a list of endpoints or "all" to check all endpoints. Supports wildcards.
@@ -52,8 +52,12 @@ export const botId = (options: BotIdOptions) => {
 	 * Check if the path is valid for bot detection
 	 */
 	const isValidPath = (path: string) => {
-		if (options.enabled === false) return false;
-		if (options.endpoints === "all" || !options.endpoints?.length) return true;
+		if (
+			options.endpoints === "all" ||
+			!options.endpoints?.length ||
+			options.disable === true
+		)
+			return true;
 
 		const isMatch = wildcardMatch(options.endpoints);
 		return isMatch(path);
