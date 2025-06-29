@@ -1732,6 +1732,27 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "BotID",
+				isNew: true,
+				href: "/docs/plugins/botid",
+				icon: () => (
+					<svg
+						height="16"
+						strokeLinejoin="round"
+						fill="currentColor"
+						viewBox="0 0 16 16"
+						width="16"
+					>
+						<path
+							fillRule="evenodd"
+							clipRule="evenodd"
+							d="M8 1L16 15H0L8 1Z"
+							fill="currentColor"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Community Plugins",
 				href: "/docs/plugins/community-plugins",
 				icon: () => (
