@@ -304,7 +304,7 @@ describe("jwt", async (it) => {
 
 		it(`${algorithm.keyPairConfig.alg}${
 			algorithm.keyPairConfig.crv ? "(" + algorithm.keyPairConfig.crv + ")" : ""
-		} algorithm can be used to generate a token`, async () => {
+		} algorithm without private key encryption can be used to generate a token`, async () => {
 			checkToken(authToTest_noEncrypt, signInWithTestUserToTest_noEncrypt);
 		});
 	}
