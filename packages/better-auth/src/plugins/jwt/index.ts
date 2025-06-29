@@ -131,12 +131,15 @@ export async function getJwtToken(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
+		const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? { alg: 'EdDSA', crv: 'Ed25519' };
+		const keyPairConfig = {
+			...cfg,
+			extractable: true,
+		};
+
 		const { publicKey, privateKey } = await generateKeyPair(
-			options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-			options?.jwks?.keyPairConfig ?? {
-				crv: "Ed25519",
-				extractable: true,
-			},
+			alg,
+			keyPairConfig,
 		);
 
 		const publicWebKey = await exportJWK(publicKey);
@@ -292,13 +295,15 @@ export const jwt = (options?: JwtOptions) => {
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
-						const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+						const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? { alg: 'EdDSA', crv: 'Ed25519' };
+						const keyPairConfig = {
+							...cfg,
+							extractable: true,
+						};
+
 						const { publicKey, privateKey } = await generateKeyPair(
 							alg,
-							options?.jwks?.keyPairConfig ?? {
-								crv: "Ed25519",
-								extractable: true,
-							},
+							keyPairConfig,
 						);
 
 						const publicWebKey = await exportJWK(publicKey);
