@@ -44,6 +44,7 @@ export type BotIdOptions = {
 		request,
 		verification,
 	}: { request: Request; verification: BotIdVerification }) => Promise<boolean>;
+	checkBotIdOptions?: Parameters<typeof checkBotId>[0];
 };
 
 export const botId = (options: BotIdOptions) => {
@@ -60,25 +61,35 @@ export const botId = (options: BotIdOptions) => {
 
 	return {
 		id: "botid",
-		async onRequest(request, ctx) {
-			// Check if the path is valid
-			const basePath = new URL(ctx.baseURL).pathname;
-			const path = new URL(request.url).pathname.replace(basePath, "");
-			if (!isValidPath(path)) return;
+		hooks: {
+			before: [
+				{
+					matcher(context) {
+						return isValidPath(context.path);
+					},
+					async handler(ctx) {
+						// If no request, it means the endpoint was called directly from auth.api
+						if (!ctx.request) return;
 
-			// Check if the request is a bot
-			const verification = await checkBotId();
-			const customValidation = await options.validateRequest?.({
-				request,
-				verification,
-			});
-
-			if (customValidation ?? verification.isBot) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.BOT_DETECTED,
-					code: "BOT_DETECTED" as const,
-				});
-			}
+						// Check if the request is a bot
+						const verification = await checkBotId(options.checkBotIdOptions);
+						const customValidation = await options.validateRequest?.({
+							request: ctx.request,
+							verification,
+						});
+						if (
+							customValidation === undefined
+								? verification.isBot
+								: !customValidation
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.BOT_DETECTED,
+								code: "BOT_DETECTED" as const,
+							});
+						}
+					},
+				},
+			],
 		},
 	} satisfies BetterAuthPlugin;
 };
