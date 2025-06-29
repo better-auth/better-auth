@@ -138,7 +138,7 @@ export async function validateApiKey({
 
 		if (remaining === 0) {
 			// if there are no more remaining requests, than the key is invalid
-			throw new APIError("BAD_REQUEST", {
+			throw new APIError("TOO_MANY_REQUESTS", {
 				message: ERROR_CODES.USAGE_EXCEEDED,
 				code: "USAGE_EXCEEDED" as const,
 			});
