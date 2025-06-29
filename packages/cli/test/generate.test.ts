@@ -161,7 +161,6 @@ model Post {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		console.log(schema.code);
 		await fs.rm(dir, { recursive: true });
 
 		expect(schema.fileName).toBe(schemaPath);
