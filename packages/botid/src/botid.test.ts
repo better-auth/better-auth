@@ -9,7 +9,6 @@ const auth = betterAuth({
 	},
 	plugins: [
 		botId({
-			enabled: true,
 			async validateRequest({ request, verification }) {
 				return !verification.isBot;
 			},
