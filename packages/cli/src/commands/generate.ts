@@ -17,6 +17,7 @@ export async function generateAction(opts: any) {
 			cwd: z.string(),
 			config: z.string().optional(),
 			output: z.string().optional(),
+			schemaFile: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
 		})
@@ -48,6 +49,7 @@ export async function generateAction(opts: any) {
 	const schema = await generateSchema({
 		adapter,
 		file: options.output,
+		schemaFile: options.schemaFile,
 		options: config,
 	});
 
@@ -200,4 +202,5 @@ export const generate = new Command("generate")
 	.option("--output <output>", "the file to output to the generated schema")
 	.option("-y, --yes", "automatically answer yes to all prompts", false)
 	.option("--y", "(deprecated) same as --yes", false)
+	.option("--schema-file <path>", "Path to your prisma schema file.")
 	.action(generateAction);

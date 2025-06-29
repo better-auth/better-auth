@@ -3,6 +3,7 @@ import type { Adapter, BetterAuthOptions } from "better-auth";
 export interface SchemaGenerator {
 	(opts: {
 		file?: string;
+		schemaFile?: string;
 		adapter: Adapter;
 		options: BetterAuthOptions;
 	}): Promise<{
