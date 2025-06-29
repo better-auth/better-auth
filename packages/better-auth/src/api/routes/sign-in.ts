@@ -533,7 +533,13 @@ export const signInEmail = createAuthEndpoint(
 		if (orgOptions) {
 			const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
 			const orgs = await orgAdapter.listOrganizations(user.user.id);
-			if (orgs.length > 0) {
+			if (user.user.lastOrgId) {
+				const lastOrg = orgs.find((o) => o.id === user.user.lastOrgId);
+				if (lastOrg) {
+					activeOrganizationId = lastOrg.id;
+				}
+			}
+			if (!activeOrganizationId && orgs.length > 0) {
 				activeOrganizationId = orgs[0].id;
 			}
 		}
@@ -549,7 +555,7 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 		if (orgOptions) {
-			const orgIdToSet = activeOrganizationId || user.user.lastOrgId;
+			const orgIdToSet = activeOrganizationId;
 			if (orgIdToSet) {
 				await getOrgAdapter(ctx.context, orgOptions).setActiveOrganization(
 					session.token,
