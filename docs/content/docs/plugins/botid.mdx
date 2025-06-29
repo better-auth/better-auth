@@ -49,7 +49,7 @@ Below is a list of possible configuration options for the plugin.
 
 The endpoints to check for bots. By default the plugin will check all endpoints.
 
-```ts title="auth.ts"
+```ts
 export const auth = betterAuth({
     plugins: [
         botId({
@@ -59,15 +59,55 @@ export const auth = betterAuth({
 })
 ```
 
+### `validateRequest`
+
+A custom function to validate the request, this will override the default validation.
+
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            validateRequest: ({request, verification}) => { // [!code highlight]
+                return !verification.isBot; // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
+```
+
+<Callout>
+    This function will not be called if the request path doesn't match the `endpoints` option.
+</Callout>
+
+
 ### `disable`
 
 Whether to disable Vercel BotID. By default the plugin is enabled.
 
-```ts title="auth.ts"
+```ts
 export const auth = betterAuth({
     plugins: [
         botId({
             disable: true // [!code highlight]
+        })
+    ]
+})
+```
+
+### `checkBotIdOptions`
+
+The options to pass to the `checkBotId` function from the Vercel BotID library.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            checkBotIdOptions: {
+                developmentOptions: {
+                    bypass: "BAD-BOT"
+                }
+            }
         })
     ]
 })
