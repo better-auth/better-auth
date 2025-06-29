@@ -201,6 +201,39 @@ export interface StripeOptions {
 		},
 		request?: Request,
 	) => Promise<{}>;
+
+	/**
+	 * A callback to run after a customer has been updated
+	 * @param params - Parameters containing user, old email, new email and stripe customer id
+	 * @param params.user - User Data
+	 * @param params.oldEmail - Old email of the user
+	 * @param params.newEmail - New email of the user
+	 * @param params.stripeCustomerId - Stripe Customer ID
+	 * @description This is useful when you want to update the customer email in your database
+	 * @returns {Promise<void> | void}
+	 */
+	onCustomerEmailUpdate?: (params: {
+		user: User;
+		oldEmail: string;
+		newEmail: string;
+		stripeCustomerId: string;
+	}) => Promise<void> | void;
+
+	/**
+	 * A callback to run after a customer has failed to update
+	 * @param params - Parameters containing user, email, stripe customer id and error
+	 * @param params.user - User Data
+	 * @param params.email - Email of the user
+	 * @param params.error - Error object
+	 * @description This is useful when you want to log the error or notify the user
+	 * @returns {Promise<void> | void}
+	 */
+	onCustomerEmailUpdateError?: (params: {
+		user: User;
+		email: string;
+		error: any;
+	}) => Promise<void> | void;
+
 	/**
 	 * Subscriptions
 	 */
