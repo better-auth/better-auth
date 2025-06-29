@@ -70,16 +70,20 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					...argFetchOptions,
 				} as BetterFetchOption;
 				const method = getMethod(routePath, knownPathMethods, arg);
+				const requestBody =
+					method === "GET"
+						? undefined
+						: {
+								...body,
+								...((options?.body as Record<string, any>) || {}),
+							};
 
 				return await client(routePath, {
 					...options,
 					body:
-						method === "GET"
-							? undefined
-							: {
-									...body,
-									...(options?.body || {}),
-								},
+						typeof requestBody === "object" && requestBody !== null
+							? JSON.stringify(requestBody)
+							: requestBody,
 					query: query || options?.query,
 					method,
 					async onSuccess(context) {
