@@ -22,4 +22,13 @@ describe("open-api", async (it) => {
 			type: "string",
 		});
 	});
+
+	it("should use the api reference script src provided", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [openAPI({ apiReferenceScriptSrc: "TEST-SCRIPT-SRC" })],
+		});
+		const reference = await auth.api.openAPIReference();
+		const referenceHTML = await reference.text();
+		expect(referenceHTML).toContain("TEST-SCRIPT-SRC");
+	});
 });
