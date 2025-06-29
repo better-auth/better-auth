@@ -5,6 +5,7 @@ import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { ERROR_CODES } from "./email-otp-error";
 
 export interface EmailOTPOptions {
 	/**
@@ -68,13 +69,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
 		...options,
 	} satisfies EmailOTPOptions;
-	const ERROR_CODES = {
-		OTP_EXPIRED: "otp expired",
-		INVALID_OTP: "Invalid OTP",
-		INVALID_EMAIL: "Invalid email",
-		USER_NOT_FOUND: "User not found",
-		TOO_MANY_ATTEMPTS: "Too many attempts",
-	} as const;
 	return {
 		id: "email-otp",
 		endpoints: {
@@ -130,14 +124,19 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
-					if (ctx.body.type === "forget-password" || opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
+
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					// Allow silent success for forget-password requests (security measure)
+					if (ctx.body.type === "forget-password") {
 						if (!user) {
-							return ctx.json({
-								success: true,
-							});
+							return ctx.json({ success: true });
 						}
+					}
+					// Block unregistered users if sign-up is disabled
+					if (!user && opts.disableSignUp) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.USER_NOT_FOUND,
+						});
 					}
 					const otp = opts.generateOTP(
 						{ email, type: ctx.body.type },
@@ -803,7 +802,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						const email = response?.user.email;
 						if (email) {
 							const otp = opts.generateOTP(
-								{ email, type: ctx.body.type },
+								{ email, type: "email-verification" },
 								ctx.request,
 							);
 							await ctx.context.internalAdapter.createVerificationValue(
