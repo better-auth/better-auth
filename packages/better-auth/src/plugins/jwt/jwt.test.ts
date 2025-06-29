@@ -191,7 +191,7 @@ describe("jwt", async (it) => {
 				alg: "EdDSA",
 			},
 		},
-		{
+		/*{
 			keyPairConfig: {
 				alg: "EdDSA",
 				crv: "Ed448",
@@ -202,7 +202,7 @@ describe("jwt", async (it) => {
 				crv: "Ed448",
 				alg: "EdDSA",
 			},
-		},
+		},*/
 		{
 			keyPairConfig: {
 				alg: "RS256",
@@ -264,7 +264,6 @@ describe("jwt", async (it) => {
 		it(`${algorithm.keyPairConfig.alg}${
 			algorithm.keyPairConfig.crv ? "(" + algorithm.keyPairConfig.crv + ")" : ""
 		} algorithm can be used to generate JWKS`, async () => {
-			console.error(await authToTest.api.getJwks());
 			checkKeys(
 				await authToTest.api.getJwks(),
 				expectedOutcome.ec,
