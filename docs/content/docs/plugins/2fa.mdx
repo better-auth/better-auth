@@ -415,6 +415,11 @@ these are options for OTP.
         type: "number",
         default: 30,
     },
+    storeOTP: {
+        description: "How to store the otp in the database. Whether to store it as plain text, encrypted or hashed. You can also provide a custom encryptor or hasher.",
+        type: "string",
+        default: "plain",
+    },
   }}
   />
 
@@ -437,6 +442,11 @@ backup codes are generated and stored in the database when the user enabled two 
         customBackupCodesGenerate: {
             description: "A function that generates custom backup codes. It takes no parameters and returns an array of strings.",
             type: "function",
+        },
+        storeBackupCodes: {
+            description: "How to store the backup codes in the database. Whether to store it as plain text or encrypted. You can also provide a custom encryptor.",
+            type: "string",
+            default: "plain",
         },
     }}
 />

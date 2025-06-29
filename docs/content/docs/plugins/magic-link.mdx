@@ -103,3 +103,11 @@ and a `request` object as the second parameter.
   because it is used to verify who someone actually is in a confidential way. By
   default, we return a long and cryptographically secure string.
 </Callout>
+
+**storeToken**: The `storeToken` function is called to store the magic link token in the database. The default value is `"plain"`.
+
+The `storeToken` function can be one of the following:
+
+- `"plain"`: The token is stored in plain text.
+- `"hashed"`: The token is hashed using the default hasher.
+- `{ type: "custom-hasher", hash: (token: string) => Promise<string> }`: The token is hashed using a custom hasher.
