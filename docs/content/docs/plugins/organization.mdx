@@ -630,6 +630,21 @@ await authClient.organization.leave({
 })
 ```
 
+### Transfer Ownership
+
+To transfer ownership of an organization to another member, you can use the `transferOwnership` function.
+
+```ts title="auth-client.ts"
+await authClient.organization.transferOwnership({
+    userId: "user-id", // The user id to transfer the owner to.
+    memberRole: "admin", // The role of the previous owner to be transferred into. Supports multiple roles (e.g. ["admin", "sale"])
+    organizationId: "organization-id" // The organization which this interaction is happening on.
+})
+```
+The member will be updated to the creator role set in the plugin options.
+And the owner will be updated to the role provided in the `transferOwnership` properties. 
+
+
 ## Access Control
 
 The organization plugin providers a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.

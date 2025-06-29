@@ -6,6 +6,7 @@ import { organizationClient } from "./client";
 import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { APIError } from "better-call";
+import { getOrgAdapter } from "./adapter";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -737,6 +738,67 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(getFullOrganization.data?.members.length).toBe(6);
+	});
+
+	it("should transfer ownership", async () => {
+		const randomNumber = Math.random().toString(36).substring(2, 15);
+		const email = `new-owner-${randomNumber}@email.com`;
+		const ownerUser = await auth.api.signUpEmail({
+			body: {
+				email,
+				password: "password",
+				name: "new owner",
+			},
+		});
+		const memberUser = await auth.api.signUpEmail({
+			body: {
+				email: `new-member-${randomNumber}@email.com`,
+				password: "password",
+				name: "new member",
+			},
+		});
+		const ownerHeaders = new Headers({
+			Authorization: `Bearer ${ownerUser?.token}`,
+		});
+		const org = await auth.api.createOrganization({
+			body: {
+				name: `test-${randomNumber}`,
+				slug: `test-${randomNumber}`,
+			},
+			headers: ownerHeaders,
+		});
+		if (!org?.id) throw new Error("Organization not found");
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: memberUser.user.id,
+				role: "member",
+			},
+		});
+		if (!member) throw new Error("Member not found");
+
+		const transferOwnership = await auth.api.transferOwnership({
+			body: {
+				userId: memberUser.user.id,
+				memberRole: "member",
+				organizationId: org?.id,
+			},
+			headers: ownerHeaders,
+		});
+		const authCtx = await auth.$context;
+		const adapter = getOrgAdapter(authCtx);
+		const updatedOldMember = await adapter.findMemberByOrgId({
+			organizationId: org.id,
+			userId: memberUser.user.id,
+		});
+		expect(updatedOldMember?.role).toBe("owner");
+		expect(transferOwnership.newOwner.userId).toBe(memberUser.user.id);
+		const updatedOldOwner = await adapter.findMemberByOrgId({
+			organizationId: org.id,
+			userId: ownerUser.user.id,
+		});
+		expect(updatedOldOwner?.role).toBe("member");
+		expect(transferOwnership.oldOwner.userId).toBe(ownerUser.user.id);
 	});
 });
 
