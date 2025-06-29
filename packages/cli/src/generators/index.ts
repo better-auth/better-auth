@@ -12,6 +12,7 @@ export const adapters = {
 export const generateSchema = (opts: {
 	adapter: Adapter;
 	file?: string;
+	schemaFile?: string;
 	options: BetterAuthOptions;
 }) => {
 	const adapter = opts.adapter;
