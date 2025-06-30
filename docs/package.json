@@ -71,6 +71,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.9",
+    "@types/js-beautify": "^1.14.3",
     "@types/mdx": "^2.0.13",
     "@types/node": "22.13.8",
     "@types/react": "^19.0.10",
