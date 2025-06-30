@@ -48,24 +48,18 @@ export type BotIdOptions = {
 };
 
 export const botId = (options: BotIdOptions) => {
-	/**
-	 * Check if the path is valid for bot detection
-	 */
-	const isValidPath = (path: string) => {
-		if (options.endpoints === "all" || options.disable === true) return true;
-		if (!options.endpoints?.length) return false;
-
-		const isMatch = wildcardMatch(options.endpoints);
-		return isMatch(path);
-	};
-
 	return {
 		id: "botid",
 		hooks: {
 			before: [
 				{
 					matcher(context) {
-						return isValidPath(context.path);
+						if (options.endpoints === "all" || options.disable === true)
+							return true;
+						if (!options.endpoints?.length) return false;
+
+						const isMatch = wildcardMatch(options.endpoints);
+						return isMatch(context.path);
 					},
 					async handler(ctx) {
 						// If no request, it means the endpoint was called directly from auth.api
