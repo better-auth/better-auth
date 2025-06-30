@@ -52,12 +52,8 @@ export const botId = (options: BotIdOptions) => {
 	 * Check if the path is valid for bot detection
 	 */
 	const isValidPath = (path: string) => {
-		if (
-			options.endpoints === "all" ||
-			!options.endpoints?.length ||
-			options.disable === true
-		)
-			return true;
+		if (options.endpoints === "all" || options.disable === true) return true;
+		if (!options.endpoints?.length) return false;
 
 		const isMatch = wildcardMatch(options.endpoints);
 		return isMatch(path);
