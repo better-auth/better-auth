@@ -3,9 +3,10 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
 import { jwt } from "./index";
-import { importJWK, jwtVerify, JWK } from "jose";
+import { importJWK, jwtVerify, type JWK } from "jose";
 
 describe("jwt", async (it) => {
+	// Testing the default behaviour
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [jwt()],
 		logger: {
@@ -133,27 +134,30 @@ describe("jwt", async (it) => {
 
 	async function checkToken(auth: any, signInWithTestUser: any) {
 		const { headers } = await signInWithTestUser();
+		let token = undefined;
+		let error: any | null = null;
 
-		const client = createAuthClient({
-			plugins: [jwtClient()],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return auth.handler(new Request(url, init));
+		try {
+			const client = createAuthClient({
+				plugins: [jwtClient()],
+				baseURL: "http://localhost:3000/api/auth",
+				fetchOptions: {
+					customFetchImpl: async (url, init) => {
+						return auth.handler(new Request(url, init));
+					},
 				},
-			},
-		});
+			});
 
-		let token = "";
-		await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					token = context.response.headers.get("set-auth-jwt") || "";
+			token = await client.token({
+				fetchOptions: {
+					headers,
 				},
-			},
-		});
-		expect(token.length).toBeGreaterThan(10);
+			});
+		} catch (err) {
+			error = err;
+		}
+		expect(error).toBeNull();
+		expect(token?.data?.token).toBeDefined();
 	}
 
 	const algorithmsToTest = [
@@ -191,7 +195,7 @@ describe("jwt", async (it) => {
 				alg: "EdDSA",
 			},
 		},
-		// For some reason it still registers (or thinks it registered) their eliptic curve as "Ed25519". TODO: investigate further
+		// This is not supported (https://github.com/panva/jose/issues/210)
 		/*
 		{
 			keyPairConfig: {
