@@ -12,8 +12,8 @@ You can read more about it in the [Vercel documentation](https://vercel.com/docs
 ## Installation
 
 <Steps>
-  <Step>
-    ### Install and initialize the plugin
+<Step>
+    ### Installation
 
     To install the plugin, run:
 
@@ -21,7 +21,17 @@ You can read more about it in the [Vercel documentation](https://vercel.com/docs
     npm install @better-auth/botid
     ```
 
-    Then, initialize the plugin in your `auth.ts` file:
+    Then, install the Vercel BotID library:
+
+    ```package-install
+    npm install botid
+    ```
+
+</Step>
+  <Step>
+    ### Initialize the plugin
+
+    Initialize the plugin in your `auth.ts` file:
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
