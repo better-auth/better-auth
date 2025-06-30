@@ -100,8 +100,13 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						ctx.request.url,
 					).searchParams.entries();
 
-					const { email, callbackURL, errorCallbackURL, ...params } =
-						Object.fromEntries(searchParamEntries);
+					const {
+						email,
+						callbackURL,
+						errorCallbackURL,
+						newUserCallbackURL,
+						...params
+					} = Object.fromEntries(searchParamEntries);
 
 					const errorURL = errorCallbackURL || baseErrorURL;
 
@@ -172,7 +177,9 @@ export const steam = (config: SteamAuthPluginOptions) =>
 
 					let account = await ctx.context.internalAdapter.findAccount(steamid);
 					let user: User | null = null;
+					let isNewUser = false;
 					if (!account) {
+						isNewUser = true;
 						const userDetails = await config.mapProfileToUser?.({
 							...profile,
 							email,
@@ -227,8 +234,14 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						user,
 					});
 
+					const baseOrigin = new URL(ctx.context.baseURL).origin;
+
 					throw ctx.redirect(
-						new URL(params.callbackURL || ctx.context.baseURL).toString(),
+						new URL(
+							isNewUser
+								? newUserCallbackURL || callbackURL || baseOrigin
+								: callbackURL || baseOrigin,
+						).toString(),
 					);
 				},
 			),
