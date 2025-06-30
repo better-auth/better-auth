@@ -131,14 +131,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					if (opts.disableSignUp) {
-						const user = await ctx.context.internalAdapter.findUserByEmail(email);
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
 						if (!user) {
 							throw new APIError("BAD_REQUEST", {
 								message: ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 					} else if (ctx.body.type === "forget-password") {
-						const user = await ctx.context.internalAdapter.findUserByEmail(email);
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
 						if (!user) {
 							return ctx.json({
 								success: true,
