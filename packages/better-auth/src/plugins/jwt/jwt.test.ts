@@ -191,7 +191,9 @@ describe("jwt", async (it) => {
 				alg: "EdDSA",
 			},
 		},
-		/*{
+		// For some reason it still registers (or thinks it registered) their eliptic curve as "Ed25519". TODO: investigate further
+		/*
+		{
 			keyPairConfig: {
 				alg: "EdDSA",
 				crv: "Ed448",
@@ -213,6 +215,8 @@ describe("jwt", async (it) => {
 				alg: "RS256",
 			},
 		},
+		// We cannot sign using key exchange protocol, need to establish a key first (only allowed usage for these keys is `deriveBits`)
+		/*
 		{
 			keyPairConfig: {
 				alg: "ECDH-ES",
@@ -248,7 +252,7 @@ describe("jwt", async (it) => {
 				crv: "P-521",
 				alg: "ECDH-ES",
 			},
-		},
+		},*/
 	];
 
 	for (const algorithm of algorithmsToTest) {
