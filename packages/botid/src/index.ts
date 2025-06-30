@@ -54,9 +54,13 @@ export const botId = (options: BotIdOptions) => {
 			before: [
 				{
 					matcher(context) {
-						if (options.endpoints === "all" || options.disable === true)
+						if (
+							options.endpoints === "all" ||
+							options.disable === true ||
+							typeof options.endpoints === "undefined"
+						)
 							return true;
-						if (!options.endpoints?.length) return false;
+						if (!options.endpoints.length) return false;
 
 						const isMatch = wildcardMatch(options.endpoints);
 						return isMatch(context.path);
