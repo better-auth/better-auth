@@ -60,7 +60,7 @@ export async function sendVerificationEmailFn(
 			url,
 			token,
 		},
-		ctx.request,
+		ctx,
 	);
 }
 export const sendVerificationEmail = createAuthEndpoint(
@@ -369,7 +369,7 @@ export const verifyEmail = createAuthEndpoint(
 					}`,
 					token: newToken,
 				},
-				ctx.request,
+				ctx,
 			);
 
 			await setSessionCookie(ctx, {
@@ -399,7 +399,7 @@ export const verifyEmail = createAuthEndpoint(
 		}
 		await ctx.context.options.emailVerification?.onEmailVerification?.(
 			user.user,
-			ctx.request,
+			ctx,
 		);
 		await ctx.context.internalAdapter.updateUserByEmail(
 			parsed.email,

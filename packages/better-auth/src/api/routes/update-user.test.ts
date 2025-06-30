@@ -7,19 +7,17 @@ describe("updateUser", async () => {
 	const { client, testUser, sessionSetter, db, customFetchImpl } =
 		await getTestInstance({
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token }) {
+				async sendVerificationEmail({ user, url, token }, ctx) {
 					emailVerificationToken = token;
 				},
 			},
 			user: {
 				changeEmail: {
 					enabled: true,
-					sendChangeEmailVerification: async ({
-						user,
-						newEmail,
-						url,
-						token,
-					}) => {
+					sendChangeEmailVerification: async (
+						{ user, newEmail, url, token },
+						ctx,
+					) => {
 						sendChangeEmail(user, newEmail, url, token);
 					},
 				},
@@ -346,7 +344,7 @@ describe("delete user", async () => {
 			user: {
 				deleteUser: {
 					enabled: true,
-					async sendDeleteAccountVerification(data, _) {
+					async sendDeleteAccountVerification(data, ctx) {
 						token = data.token;
 					},
 				},

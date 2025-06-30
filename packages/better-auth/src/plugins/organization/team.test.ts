@@ -12,7 +12,7 @@ describe("team", async (it) => {
 			},
 			plugins: [
 				organization({
-					async sendInvitationEmail(data, request) {},
+					async sendInvitationEmail(data, ctx) {},
 					teams: {
 						enabled: true,
 					},

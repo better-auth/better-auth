@@ -12,7 +12,7 @@ import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import type { User } from "../../types";
+import type { User, GenericEndpointContext } from "../../types";
 import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
@@ -39,30 +39,30 @@ export interface PhoneNumberOptions {
 	 */
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => Promise<void> | void;
 	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
 	 * @param data - contains phone number and code
-	 * @param request - the request object
+	 * @param ctx - the request context
 	 * @returns
 	 */
 	sendPasswordResetOTP?: (
 		data: { phoneNumber: string; code: string },
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => Promise<void> | void;
 	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
 	 * @param data - contains phone number and code
-	 * @param request - the request object
+	 * @param ctx - the request context
 	 * @returns
 	 * @deprecated Use sendPasswordResetOTP instead. This function will be removed in the next major version.
 	 */
 	sendForgetPasswordOTP?: (
 		data: { phoneNumber: string; code: string },
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => Promise<void> | void;
 	/**
 	 * Expiry time of the OTP code in seconds
@@ -89,7 +89,7 @@ export interface PhoneNumberOptions {
 			phoneNumber: string;
 			user: UserWithPhoneNumber;
 		},
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => void | Promise<void>;
 	/**
 	 * Sign up user after phone number verification
@@ -235,7 +235,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 									phoneNumber,
 									code: otp,
 								},
-								ctx.request,
+								ctx,
 							);
 							throw new APIError("UNAUTHORIZED", {
 								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
@@ -374,7 +374,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({ message: "code sent" });
 				},
@@ -648,7 +648,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							phoneNumber: ctx.body.phoneNumber,
 							user,
 						},
-						ctx.request,
+						ctx,
 					);
 
 					if (!user) {
@@ -771,7 +771,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,
@@ -841,7 +841,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,
