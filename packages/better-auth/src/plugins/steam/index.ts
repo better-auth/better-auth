@@ -3,6 +3,7 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { betterFetch } from "@better-fetch/fetch";
+import { wildcardMatch } from "../../utils/wildcard";
 
 const STEAM_BASE_URL = "https://api.steampowered.com/";
 
@@ -109,6 +110,44 @@ export const steam = (config: SteamAuthPluginOptions) =>
 					} = Object.fromEntries(searchParamEntries);
 
 					const errorURL = errorCallbackURL || baseErrorURL;
+
+					const trustedOrigins =
+						typeof ctx.context.options.trustedOrigins === "function"
+							? await ctx.context.options.trustedOrigins(ctx.request)
+							: ctx.context.options.trustedOrigins || [];
+
+					const isMatch = wildcardMatch(trustedOrigins);
+
+					if (!isMatch(new URL(callbackURL).origin)) {
+						ctx.context.logger.error(
+							`The callback URL provided during sign in with steam is not part of the trusted origins:`,
+							callbackURL,
+						);
+						throw ctx.redirect(`${errorURL}?error=callback_url_not_trusted`);
+					}
+
+					if (!isMatch(new URL(newUserCallbackURL).origin)) {
+						ctx.context.logger.error(
+							`The new user callback URL provided during sign in with steam is not part of the trusted origins:`,
+							newUserCallbackURL,
+						);
+						throw ctx.redirect(
+							`${errorURL}?error=new_user_callback_url_not_trusted`,
+						);
+					}
+
+					if (
+						newUserCallbackURL &&
+						!isMatch(new URL(newUserCallbackURL).origin)
+					) {
+						ctx.context.logger.error(
+							`The new user callback URL provided during sign in with steam is not part of the trusted origins:`,
+							newUserCallbackURL,
+						);
+						throw ctx.redirect(
+							`${errorURL}?error=new_user_callback_url_not_trusted`,
+						);
+					}
 
 					const isValidEmail = z
 						.string()
