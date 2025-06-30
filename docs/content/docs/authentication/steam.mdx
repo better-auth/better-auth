@@ -44,14 +44,15 @@ Steam authentication is setup differently from other providers, as Steam does no
 <Step>
     ### Sign in with Steam
 
-    To sign in with Steam, call the `signIn.steam` method.
+    To sign in with Steam, call the `signIn.social.steam` method.
     
     You will need to pass the email of the user to the `email` option, as Steam does not provide an email address.
 
     ```ts
-    authClient.signIn.steam({
+    authClient.signIn.social.steam({
         email: "user@example.com",
-        callbackURL: "/dashboard"
+        callbackURL: "/dashboard",
+        newUserCallbackURL: "/onboarding"
     });
     ```
 </Step>
