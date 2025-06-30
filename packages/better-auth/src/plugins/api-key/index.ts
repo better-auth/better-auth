@@ -52,6 +52,7 @@ export const ERROR_CODES = {
 	SERVER_ONLY_PROPERTY:
 		"The property you're trying to set can only be set from the server auth instance only.",
 	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
+	NAME_REQUIRED: "API Key name is required.",
 };
 
 export const API_KEY_TABLE_NAME = "apikey";
@@ -67,6 +68,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
+		requireName: options?.requireName ?? false,
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
