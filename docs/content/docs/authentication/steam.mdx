@@ -1,0 +1,58 @@
+---
+title: Steam
+description: Steam provider setup and usage.
+---
+
+<Callout>
+Steam authentication is setup differently from other providers, as Steam does not fully comply with OAuth or OIDC standards.
+</Callout>
+
+<Steps>
+<Step>
+    ### Get your Steam API Key
+    To get your Steam API key, you need to create a new application on the [Steam Developer Portal](https://steamcommunity.com/dev/apikey).
+
+    Set the domain name to `localhost` for development.
+
+    Note: You may need another API key for production, with the domain name set to the production origin of your application.
+
+    Once you have your API key, add that to your environment variables:
+
+    ```env title=".env"
+    STEAM_API_KEY=your-api-key
+    ```
+</Step>
+
+<Step>
+    ### Configure the provider
+    To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { steam } from "@better-auth/steam"
+
+    export const auth = betterAuth({
+        plugins: [
+            steam({
+                steamApiKey: process.env.STEAM_API_KEY,
+            })
+        ]
+    })
+    ```
+</Step>
+
+<Step>
+    ### Sign in with Steam
+
+    To sign in with Steam, call the `signIn.steam` method.
+    
+    You will need to pass the email of the user to the `email` option, as Steam does not provide an email address.
+
+    ```ts
+    authClient.signIn.steam({
+        email: "user@example.com",
+        callbackURL: "/dashboard"
+    });
+    ```
+</Step>
+</Steps>
