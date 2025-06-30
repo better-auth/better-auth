@@ -256,6 +256,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			if (hasBeenLinked) {
 				return c.json({
 					redirect: false,
+					url: "", // this is for type inference
 					status: true,
 				});
 			}
@@ -316,6 +317,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 			return c.json({
 				redirect: false,
+				url: "", // this is for type inference
 				status: true,
 			});
 		}
