@@ -125,9 +125,9 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				},
 			});
 		},
-		invalid: async () => {
+		invalid: async (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
 			throw new APIError("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+				message: TWO_FACTOR_ERROR_CODES[errorKey],
 			});
 		},
 		session,
