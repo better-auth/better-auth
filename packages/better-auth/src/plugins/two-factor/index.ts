@@ -296,7 +296,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
-						const maxAge = options?.otpOptions?.period || 60 * 5; // 5 minutes
+						const maxAge = (options?.otpOptions?.period ?? 3) * 60; // 3 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
