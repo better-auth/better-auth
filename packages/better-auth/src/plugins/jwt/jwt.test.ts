@@ -102,18 +102,27 @@ describe("jwt", async (it) => {
 	});
 
 	async function createAuthTest(jwksConfig: any) {
-		return await getTestInstance({
-			plugins: [
-				jwt({
-					jwks: {
-						...jwksConfig,
-					},
-				}),
-			],
-			logger: {
-				level: "error",
-			},
-		});
+		let auth = undefined;
+		let signInWithTestUser = undefined;
+		let error: any | null = null;
+		try {
+			({ auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					jwt({
+						jwks: {
+							...jwksConfig,
+						},
+					}),
+				],
+				logger: {
+					level: "error",
+				},
+			}));
+		} catch (err) {
+			error = err;
+		}
+		expect(error).toBeNull();
+		return { auth, signInWithTestUser };
 	}
 
 	function checkKeys(
@@ -133,11 +142,13 @@ describe("jwt", async (it) => {
 	}
 
 	async function checkToken(auth: any, signInWithTestUser: any) {
-		const { headers } = await signInWithTestUser();
 		let token = undefined;
 		let error: any | null = null;
 
 		try {
+			const { headers } = await signInWithTestUser();
+			expect(headers).toBeDefined();
+
 			const client = createAuthClient({
 				plugins: [jwtClient()],
 				baseURL: "http://localhost:3000/api/auth",
@@ -269,23 +280,31 @@ describe("jwt", async (it) => {
 				},
 			});
 
-		it(`${algorithm.keyPairConfig.alg}${
-			algorithm.keyPairConfig.crv ? "(" + algorithm.keyPairConfig.crv + ")" : ""
-		} algorithm can be used to generate JWKS`, async () => {
-			checkKeys(
-				await authToTest.api.getJwks(),
-				expectedOutcome.ec,
-				expectedOutcome.length,
-				expectedOutcome.crv,
-				expectedOutcome.alg,
-			);
-		});
+		expect(authToTest).toBeDefined();
+		expect(signInWithTestUserToTest).toBeDefined();
+		if (authToTest && signInWithTestUserToTest) {
+			it(`${algorithm.keyPairConfig.alg}${
+				algorithm.keyPairConfig.crv
+					? "(" + algorithm.keyPairConfig.crv + ")"
+					: ""
+			} algorithm can be used to generate JWKS`, async () => {
+				checkKeys(
+					await authToTest.api.getJwks(),
+					expectedOutcome.ec,
+					expectedOutcome.length,
+					expectedOutcome.crv,
+					expectedOutcome.alg,
+				);
+			});
 
-		it(`${algorithm.keyPairConfig.alg}${
-			algorithm.keyPairConfig.crv ? "(" + algorithm.keyPairConfig.crv + ")" : ""
-		} algorithm can be used to generate a token`, async () => {
-			checkToken(authToTest, signInWithTestUserToTest);
-		});
+			it(`${algorithm.keyPairConfig.alg}${
+				algorithm.keyPairConfig.crv
+					? "(" + algorithm.keyPairConfig.crv + ")"
+					: ""
+			} algorithm can be used to generate a token`, async () => {
+				checkToken(authToTest, signInWithTestUserToTest);
+			});
+		}
 
 		const {
 			auth: authToTest_noEncrypt,
@@ -296,6 +315,10 @@ describe("jwt", async (it) => {
 			},
 			disablePrivateKeyEncryption: true,
 		});
+
+		expect(authToTest_noEncrypt).toBeDefined();
+		expect(signInWithTestUserToTest_noEncrypt).toBeDefined();
+		if (!(authToTest_noEncrypt && signInWithTestUserToTest_noEncrypt)) continue;
 
 		it(`${algorithm.keyPairConfig.alg}${
 			algorithm.keyPairConfig.crv ? "(" + algorithm.keyPairConfig.crv + ")" : ""
