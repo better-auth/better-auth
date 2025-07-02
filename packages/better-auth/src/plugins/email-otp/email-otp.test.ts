@@ -876,7 +876,6 @@ describe("custom storeOTP", async () => {
 						type: "sign-in",
 					},
 				});
-				console.log(`Should not reach here.`, result);
 			} catch (error: any) {
 				expect(error.statusCode).toBe(400);
 				expect(error.status).toBe("BAD_REQUEST");
