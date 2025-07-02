@@ -726,7 +726,6 @@ describe("custom storeOTP", async () => {
 							await sendVerificationOtpFn(d);
 						},
 						storeOTP: {
-							type: "custom-encryptor",
 							encrypt: async (otp) => {
 								return otp + "encrypted";
 							},
@@ -833,7 +832,6 @@ describe("custom storeOTP", async () => {
 							await sendVerificationOtpFn(d);
 						},
 						storeOTP: {
-							type: "custom-hasher",
 							hash: async (otp) => {
 								return otp + "hashed";
 							},
