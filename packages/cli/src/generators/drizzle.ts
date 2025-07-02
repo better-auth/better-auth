@@ -6,6 +6,7 @@ import {
 import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
+import prettier from "prettier";
 
 export function convertToSnakeCase(str: string) {
 	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
@@ -167,9 +168,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				});`;
 		code += `\n${schema}\n`;
 	}
-
+	const formattedCode = await prettier.format(code, {
+		parser: "typescript",
+	});
 	return {
-		code: code,
+		code: formattedCode,
 		fileName: filePath,
 		overwrite: fileExist,
 	};
