@@ -50,7 +50,6 @@ export const totp2fa = (options?: TOTPOptions) => {
 
 	const twoFactorTable = "twoFactor";
 
-
 	const generateTOTP = createAuthEndpoint(
 		"/totp/generate",
 		{
