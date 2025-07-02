@@ -870,12 +870,13 @@ describe("custom storeOTP", async () => {
 
 		it("should be allowed to get otp if storeOTP is custom hasher", async () => {
 			try {
-				await auth.api.getVerificationOTP({
+				const result = await auth.api.getVerificationOTP({
 					query: {
 						email: userEmail1,
 						type: "sign-in",
 					},
 				});
+				console.log(`Should not reach here.`, result)
 			} catch (error: any) {
 				expect(error.statusCode).toBe(400);
 				expect(error.status).toBe("BAD_REQUEST");

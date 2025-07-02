@@ -37,7 +37,6 @@ export interface BackupCodeOptions {
 		| "plain"
 		| "encrypted"
 		| {
-				type: "custom-encryptor";
 				encrypt: (token: string) => Promise<string>;
 				decrypt: (token: string) => Promise<string>;
 		  };
@@ -117,8 +116,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 		}
 		if (
 			typeof options?.storeBackupCodes === "object" &&
-			"type" in options?.storeBackupCodes &&
-			options?.storeBackupCodes.type === "custom-encryptor"
+			"encrypt" in options?.storeBackupCodes
 		) {
 			return await options?.storeBackupCodes.encrypt(backupCodes);
 		}
@@ -137,8 +135,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 		}
 		if (
 			typeof options?.storeBackupCodes === "object" &&
-			"type" in options?.storeBackupCodes &&
-			options?.storeBackupCodes.type === "custom-encryptor"
+			"decrypt" in options?.storeBackupCodes
 		) {
 			return await options?.storeBackupCodes.decrypt(backupCodes);
 		}

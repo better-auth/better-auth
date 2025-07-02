@@ -352,9 +352,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 					if (
 						opts.storeOTP === "hashed" ||
-						(typeof opts.storeOTP === "object" &&
-							"type" in opts.storeOTP &&
-							opts.storeOTP.type === "custom-hasher")
+						(typeof opts.storeOTP === "object" && "hash" in opts.storeOTP)
 					) {
 						throw new APIError("BAD_REQUEST", {
 							message: "OTP is hashed, cannot return the plain text OTP",

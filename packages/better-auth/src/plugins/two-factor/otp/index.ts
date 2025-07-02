@@ -65,9 +65,8 @@ export interface OTPOptions {
 		| "plain"
 		| "encrypted"
 		| "hashed"
-		| { type: "custom-hasher"; hash: (token: string) => Promise<string> }
+		| { hash: (token: string) => Promise<string> }
 		| {
-				type: "custom-encryptor";
 				encrypt: (token: string) => Promise<string>;
 				decrypt: (token: string) => Promise<string>;
 		  };
@@ -89,18 +88,10 @@ export const otp2fa = (options?: OTPOptions) => {
 		if (opts.storeOTP === "hashed") {
 			return await defaultKeyHasher(otp);
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-hasher"
-		) {
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
 			return await opts.storeOTP.hash(otp);
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-encryptor"
-		) {
+		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
 			return await opts.storeOTP.encrypt(otp);
 		}
 		if (opts.storeOTP === "encrypted") {
@@ -122,18 +113,10 @@ export const otp2fa = (options?: OTPOptions) => {
 				data: otp,
 			});
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-encryptor"
-		) {
+		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
 			return await opts.storeOTP.decrypt(otp);
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-hasher"
-		) {
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
 			return await opts.storeOTP.hash(otp);
 		}
 		return otp;
