@@ -73,9 +73,8 @@ export interface EmailOTPOptions {
 		| "hashed"
 		| "plain"
 		| "encrypted"
-		| { type: "custom-hasher"; hash: (otp: string) => Promise<string> }
+		| { hash: (otp: string) => Promise<string> }
 		| {
-				type: "custom-encryptor";
 				encrypt: (otp: string) => Promise<string>;
 				decrypt: (otp: string) => Promise<string>;
 		  };
@@ -108,18 +107,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		if (opts.storeOTP === "hashed") {
 			return await defaultKeyHasher(otp);
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-hasher"
-		) {
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
 			return await opts.storeOTP.hash(otp);
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-encryptor"
-		) {
+		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
 			return await opts.storeOTP.encrypt(otp);
 		}
 
@@ -142,18 +133,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		if (opts.storeOTP === "hashed") {
 			return (await defaultKeyHasher(otp)) === storedOtp;
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-hasher"
-		) {
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
 			return (await opts.storeOTP.hash(otp)) === storedOtp;
 		}
-		if (
-			typeof opts.storeOTP === "object" &&
-			"type" in opts.storeOTP &&
-			opts.storeOTP.type === "custom-encryptor"
-		) {
+		if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
 			return (await opts.storeOTP.decrypt(storedOtp)) === otp;
 		}
 
@@ -389,11 +372,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 
-					if (
-						typeof opts.storeOTP === "object" &&
-						"type" in opts.storeOTP &&
-						opts.storeOTP.type === "custom-encryptor"
-					) {
+					if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
 						otp = await opts.storeOTP.decrypt(storedOtp);
 					}
 

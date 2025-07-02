@@ -179,8 +179,7 @@ Alternatively, you can pass a custom encryptor or hasher to store the OTP in you
 
 ```ts title="auth.ts"
 emailOTP({
-    storeOTP: {
-        type: "custom-encryptor",
+    storeOTP: { 
         encrypt: async (otp) => {
             return myCustomEncryptor(otp);
         },
@@ -196,7 +195,6 @@ emailOTP({
 ```ts title="auth.ts"
 emailOTP({
     storeOTP: {
-        type: "custom-hasher",
         hash: async (otp) => {
             return myCustomHasher(otp);
         },
