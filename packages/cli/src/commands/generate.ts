@@ -10,6 +10,7 @@ import fs from "fs/promises";
 import chalk from "chalk";
 import { getAdapter } from "better-auth/db";
 import { getGenerator } from "../generators";
+import { getDrizzleConfigSchema } from "../utils/get-config";
 
 export async function generateAction(opts: any) {
 	const options = z
@@ -42,11 +43,22 @@ export async function generateAction(opts: any) {
 		process.exit(1);
 	});
 
+	let drizzleSchemaOutput: string | string[] | undefined = undefined;
+	if (adapter.id === "drizzle" && !options.output) {
+		drizzleSchemaOutput = await getDrizzleConfigSchema(cwd);
+	}
+
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
 	const schema = await getGenerator({
 		adapter,
-		file: options.output,
+		file:
+			options.output ||
+			(typeof drizzleSchemaOutput === "string"
+				? drizzleSchemaOutput
+				: Array.isArray(drizzleSchemaOutput)
+					? drizzleSchemaOutput[0]
+					: undefined),
 		options: config,
 	});
 
@@ -55,7 +67,10 @@ export async function generateAction(opts: any) {
 		logger.info("Your schema is already up to date.");
 		process.exit(0);
 	}
-	if (schema.append || schema.overwrite) {
+	if (
+		("append" in schema && schema.append) ||
+		("overwrite" in schema && schema.overwrite)
+	) {
 		let confirm = options.y;
 		if (!confirm) {
 			const response = await prompts({

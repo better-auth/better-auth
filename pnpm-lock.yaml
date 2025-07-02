@@ -1612,6 +1612,9 @@ importers:
       dotenv:
         specifier: ^16.4.7
         version: 16.5.0
+      drizzle-kit:
+        specifier: ^0.30.4
+        version: 0.30.6
       drizzle-orm:
         specifier: ^0.33.0
         version: 0.33.0(@cloudflare/workers-types@4.20250531.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.2)(@types/react@19.1.6)(better-sqlite3@11.10.0)(bun-types@1.2.17)(kysely@0.28.2)(mysql2@3.14.1)(pg@8.16.0)(prisma@5.22.0)(react@19.1.0)

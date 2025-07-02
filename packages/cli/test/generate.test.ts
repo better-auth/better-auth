@@ -7,6 +7,8 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { generateMigrations } from "../src/generators/kysely";
 import Database from "better-sqlite3";
 import type { BetterAuthOptions } from "better-auth";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -172,5 +174,38 @@ describe("generate", async () => {
 			adapter: {} as any,
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
+	});
+
+	it("should use schema from drizzle.config.ts if present and no file is provided", async () => {
+		// Setup temp dir and config
+		const tmpDir = await fs.mkdtemp(
+			path.join(process.cwd(), "drizzle_generate_test-"),
+		);
+		const schemaPath = "./src/custom-auth-schema.ts";
+		const configPath = path.join(tmpDir, "drizzle.config.ts");
+		await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
+		await fs.writeFile(
+			configPath,
+			`export default { schema: '${schemaPath}' }`,
+		);
+		const adapter = drizzleAdapter(
+			{},
+			{
+				provider: "sqlite",
+				schema: {},
+			},
+		)({} as BetterAuthOptions);
+		const schema = await generateDrizzleSchema({
+			file: schemaPath,
+			adapter,
+			options: {
+				database: adapter,
+				plugins: [],
+			},
+		});
+		expect(schema.fileName).toBe(schemaPath);
+		expect(schema.code).toBeTruthy();
+		// Cleanup
+		await fs.rm(tmpDir, { recursive: true });
 	});
 });

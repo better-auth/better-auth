@@ -10,6 +10,7 @@ import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
+import { defineConfig } from "drizzle-kit";
 
 let possiblePaths = [
 	"auth.ts",
@@ -215,6 +216,39 @@ export async function getConfig({
 		logger.error("Couldn't read your auth config.", e);
 		process.exit(1);
 	}
+}
+
+/**
+ * Reads drizzle.config.ts or drizzle.config.js from cwd and returns the `schema` property if present.
+ * Returns undefined if no config is found or schema is not set.
+ */
+export async function getDrizzleConfigSchema(
+	cwd: string,
+): Promise<string | string[] | undefined> {
+	const configFiles = [
+		"drizzle.config.ts",
+		"drizzle.config.mjs",
+		"drizzle.config.js",
+	];
+	for (const file of configFiles) {
+		const fullPath = path.join(cwd, file);
+		if (existsSync(fullPath)) {
+			let configModule: ReturnType<typeof defineConfig> | undefined;
+			try {
+				configModule = (await import(fullPath)).default;
+			} catch (e) {
+				try {
+					configModule = require(fullPath).default;
+				} catch (err) {
+					continue;
+				}
+			}
+			if (configModule && configModule.schema) {
+				return configModule.schema;
+			}
+		}
+	}
+	return undefined;
 }
 
 export { possiblePaths };
