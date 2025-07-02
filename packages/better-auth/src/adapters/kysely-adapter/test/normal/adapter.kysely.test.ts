@@ -203,7 +203,7 @@ describe("mssql", async () => {
 					email: "test-2@email.com",
 				},
 			});
-			expect(res.user.name).toBe("test");
+			expect(res.user?.name).toBe("test");
 			expect(res.token?.length).toBeTruthy();
 		});
 

@@ -127,15 +127,24 @@ describe("stripe", async () => {
 	}
 
 	it("should create a customer on sign up", async () => {
-		const userRes = await authClient.signUp.email(testUser, {
+		const uniqueTestUser = {
+			...testUser,
+			email: `test-customer-${Date.now()}@email.com`,
+		};
+		const userRes = await authClient.signUp.email(uniqueTestUser, {
 			throw: true,
 		});
+
+		// Ensure user was created successfully
+		expect(userRes.user).toBeDefined();
+		expect(userRes.user?.id).toBeDefined();
+
 		const res = await ctx.adapter.findOne<User>({
 			model: "user",
 			where: [
 				{
 					field: "id",
-					value: userRes.user.id,
+					value: userRes.user!.id,
 				},
 			],
 		});
@@ -146,12 +155,20 @@ describe("stripe", async () => {
 	});
 
 	it("should create a subscription", async () => {
-		const userRes = await authClient.signUp.email(testUser, {
+		const uniqueTestUser = {
+			...testUser,
+			email: `test-subscription-${Date.now()}@email.com`,
+		};
+		const userRes = await authClient.signUp.email(uniqueTestUser, {
 			throw: true,
 		});
 
+		// Ensure user was created successfully
+		expect(userRes.user).toBeDefined();
+		expect(userRes.user?.id).toBeDefined();
+
 		const headers = new Headers();
-		await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(uniqueTestUser, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
@@ -168,14 +185,14 @@ describe("stripe", async () => {
 			where: [
 				{
 					field: "referenceId",
-					value: userRes.user.id,
+					value: userRes.user!.id,
 				},
 			],
 		});
 		expect(subscription).toMatchObject({
 			id: expect.any(String),
 			plan: "starter",
-			referenceId: userRes.user.id,
+			referenceId: userRes.user!.id,
 			stripeCustomerId: expect.any(String),
 			status: "incomplete",
 			periodStart: undefined,
@@ -184,28 +201,24 @@ describe("stripe", async () => {
 	});
 
 	it("should list active subscriptions", async () => {
-		const userRes = await authClient.signUp.email(
-			{
-				...testUser,
-				email: "list-test@email.com",
-			},
-			{
-				throw: true,
-			},
-		);
-		const userId = userRes.user.id;
+		const uniqueTestUser = {
+			...testUser,
+			email: `test-list-${Date.now()}@email.com`,
+		};
+		const userRes = await authClient.signUp.email(uniqueTestUser, {
+			throw: true,
+		});
+
+		// Ensure user was created successfully
+		expect(userRes.user).toBeDefined();
+		expect(userRes.user?.id).toBeDefined();
+		const userId = userRes.user!.id;
 
 		const headers = new Headers();
-		await authClient.signIn.email(
-			{
-				...testUser,
-				email: "list-test@email.com",
-			},
-			{
-				throw: true,
-				onSuccess: setCookieToHeader(headers),
-			},
-		);
+		await authClient.signIn.email(uniqueTestUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
 
 		const listRes = await authClient.subscription.list({
 			fetchOptions: {
@@ -745,7 +758,7 @@ describe("stripe", async () => {
 			where: [
 				{
 					field: "referenceId",
-					value: userRes.user.id,
+					value: userRes.user!.id,
 				},
 			],
 		});
@@ -801,7 +814,7 @@ describe("stripe", async () => {
 			where: [
 				{
 					field: "referenceId",
-					value: userRes.user.id,
+					value: userRes.user!.id,
 				},
 			],
 		});
