@@ -300,3 +300,70 @@ jwt({
   }
 })
 ```
+
+### OIDC Plugin
+
+If you are making your system OIDC compatible, you must set this parameter to disable the /token endpoint and the ability to obtain tokens via the `set-auth-jwt`.
+
+```ts title="auth.ts"
+jwt({
+  usesOidcProviderPlugin: true,
+})
+```
+
+### Remote JWKS Url
+
+Disables the /jwks endpoint and uses this endpoint in any discovery such as OIDC.
+
+Useful if your JWKS are not managed at /jwks or if your jwks are signed with a certificate and placed on your CDN.
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+  }
+})
+```
+
+NOTE: If you are also using the OIDC plugin, you must specify which algorithm is used in signing as well.
+
+```ts title="auth.ts"
+jwt({
+  usesOidcProviderPlugin: true,
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  },
+})
+```
+
+### Custom Signing
+
+This is an advanced feature used if you are using a remote Key Management Service such as Google KMS, Amazon KMS, or Azure Key Vault.
+
+NOTE: `remoteUrl` must be defined if using the custom signing function.
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+  },
+  jwt: {
+    sign: async (jwtPayload: JWTPayload) => {
+      // this is pseudocode
+      const headers = { kid: '123', alg: 'ES256', typ: 'JWT' }
+      const payload = JSON.stringify(jwtPayload)
+      const encHeaders = Buffer.from(headers).toString('base64url')
+      const encPayload = Buffer.from(payload).toString('base64url')
+      const hash = createHash('sha256')
+      const data = `${encHeaders}.${encPayload}`
+      hash.update(Buffer.from(data))
+      const digest = hash.digest()
+      const sig = await remoteSign(digest)
+      return `${data}.${sig}`
+    },
+  },
+})
+```
