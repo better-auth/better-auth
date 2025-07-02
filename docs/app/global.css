@@ -77,7 +77,7 @@
 }
 
 .dark {
-	--background: hsl(0 0% 2%);
+	--background: hsl(0 0% 0%);
 
 	--foreground: oklch(0.985 0.001 106.423);
 
@@ -248,3 +248,14 @@
 html {
 	scroll-behavior: smooth;
 }
+
+@layer utilities {
+	.no-scrollbar::-webkit-scrollbar {
+	  display: none;
+	}
+	.no-scrollbar {
+	  -ms-overflow-style: none;
+	  scrollbar-width: none;
+	}
+  }
+  

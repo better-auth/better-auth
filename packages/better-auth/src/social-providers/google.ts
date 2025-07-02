@@ -87,6 +87,9 @@ export const google = (options: GoogleOptions) => {
 				display: display || options.display,
 				loginHint,
 				hd: options.hd,
+				additionalParams: {
+					include_granted_scopes: "true",
+				},
 			});
 			return url;
 		},
