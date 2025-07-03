@@ -137,14 +137,15 @@ export async function generateAuthConfig({
 					.trim();
 				const isPluginArrayEmpty = pluginArrayContent === "";
 				const isPluginArrayEndsWithComma = pluginArrayContent.endsWith(",");
+				const needsComma = !isPluginArrayEmpty && !isPluginArrayEndsWithComma;
 
 				new_content = insertContent({
 					line: end_of_plugins.line,
 					character: end_of_plugins.character,
 					content: opts.config,
-					insert_content: `${
-						isPluginArrayEmpty || isPluginArrayEndsWithComma ? "" : ","
-					}${opts.pluginFunctionName}(${opts.pluginContents})`,
+					insert_content: `${needsComma ? "," : ""}${opts.pluginFunctionName}(${
+						opts.pluginContents
+					})`,
 				});
 			}
 
