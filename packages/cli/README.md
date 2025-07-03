@@ -2,19 +2,6 @@
 
 Better Auth comes with a built-in CLI to help you manage the database schema needed for both core functionality and plugins.
 
-```bash
-# Using npm
-npm install @better-auth/cli
-
-# Using yarn
-yarn add @better-auth/cli
-
-# Using pnpm
-pnpm add @better-auth/cli
-
-# Using bun
-bun add @better-auth/cli
-```
 
 ### **Init**
 
