@@ -136,14 +136,15 @@ export async function generateAuthConfig({
 					.slice(start_of_plugins.index, end_of_plugins.index)
 					.trim();
 				const isPluginArrayEmpty = pluginArrayContent === "";
+				const isPluginArrayEndsWithComma = pluginArrayContent.endsWith(",");
 
 				new_content = insertContent({
 					line: end_of_plugins.line,
 					character: end_of_plugins.character,
 					content: opts.config,
-					insert_content: `${isPluginArrayEmpty ? "" : ","}${
-						opts.pluginFunctionName
-					}(${opts.pluginContents})`,
+					insert_content: `${
+						isPluginArrayEmpty || isPluginArrayEndsWithComma ? "" : ","
+					}${opts.pluginFunctionName}(${opts.pluginContents})`,
 				});
 			}
 
