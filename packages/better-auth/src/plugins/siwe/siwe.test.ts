@@ -1,7 +1,7 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siwe } from "./index";
-import { siweClientPlugin } from "./client";
+import { siweClient } from "./client";
 
 describe("siwe", async (it) => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
@@ -27,7 +27,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -57,7 +57,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -86,7 +86,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -122,7 +122,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -146,12 +146,12 @@ describe("siwe", async (it) => {
 								signature === "valid_signature" && message === "valid_message"
 							);
 						},
-					}),	
+					}),
 				],
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -183,7 +183,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -213,7 +213,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -246,7 +246,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -277,12 +277,12 @@ describe("siwe", async (it) => {
 								signature === "valid_signature" && message === "valid_message"
 							);
 						},
-					}),	
+					}),
 				],
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -320,7 +320,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -356,7 +356,7 @@ describe("siwe", async (it) => {
 			},
 			{
 				clientOptions: {
-					plugins: [siweClientPlugin()],
+					plugins: [siweClient()],
 				},
 			},
 		);
@@ -390,7 +390,7 @@ describe("siwe", async (it) => {
 				],
 			},
 			{
-				clientOptions: { plugins: [siweClientPlugin()] },
+				clientOptions: { plugins: [siweClient()] },
 			},
 		);
 
@@ -435,7 +435,7 @@ describe("siwe", async (it) => {
 				],
 			},
 			{
-				clientOptions: { plugins: [siweClientPlugin()] },
+				clientOptions: { plugins: [siweClient()] },
 			},
 		);
 
@@ -466,16 +466,19 @@ describe("siwe", async (it) => {
 								signature === "valid_signature" && message === "valid_message"
 							);
 						},
-					}),	
+					}),
 				],
 			},
 			{
-				clientOptions: { plugins: [siweClientPlugin()] },
+				clientOptions: { plugins: [siweClient()] },
 			},
 		);
 
 		// Use lowercase address
-		await client.siwe.nonce({ walletAddress: walletAddress.toLowerCase(), chainId });
+		await client.siwe.nonce({
+			walletAddress: walletAddress.toLowerCase(),
+			chainId,
+		});
 		const { data } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
@@ -485,15 +488,20 @@ describe("siwe", async (it) => {
 		expect(data?.success).toBe(true);
 
 		// Fetch wallet address from the adapter
-		const walletAddresses: any[] = await (await auth.$context).adapter.findMany({
-			model: "walletAddress",
-			where: [{ field: "address", operator: "eq", value: walletAddress }],
-		});
+		const walletAddresses: any[] = await (await auth.$context).adapter.findMany(
+			{
+				model: "walletAddress",
+				where: [{ field: "address", operator: "eq", value: walletAddress }],
+			},
+		);
 		expect(walletAddresses.length).toBe(1);
 		expect(walletAddresses[0]?.address).toBe(walletAddress); // checksummed
 
 		// Try with uppercase address, should not create a new wallet address entry
-		await client.siwe.nonce({ walletAddress: walletAddress.toUpperCase(), chainId });
+		await client.siwe.nonce({
+			walletAddress: walletAddress.toUpperCase(),
+			chainId,
+		});
 		const { data: data2, error: error2 } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
@@ -526,14 +534,17 @@ describe("siwe", async (it) => {
 					}),
 				],
 			},
-			{ clientOptions: { plugins: [siweClientPlugin()] } },
+			{ clientOptions: { plugins: [siweClient()] } },
 		);
 
 		const testAddress = "0x000000000000000000000000000000000000dEaD";
 		const testChainId = 1;
 
 		// First user successfully creates account with wallet address
-		await client.siwe.nonce({ walletAddress: testAddress, chainId: testChainId });
+		await client.siwe.nonce({
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
 		const firstUser = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
@@ -544,20 +555,25 @@ describe("siwe", async (it) => {
 		expect(firstUser.data?.success).toBe(true);
 
 		// Verify wallet address record was created
-		const walletAddresses: any[] = await (await auth.$context).adapter.findMany({
-			model: "walletAddress",
-			where: [
-				{ field: "address", operator: "eq", value: testAddress },
-				{ field: "chainId", operator: "eq", value: testChainId },
-			],
-		});
+		const walletAddresses: any[] = await (await auth.$context).adapter.findMany(
+			{
+				model: "walletAddress",
+				where: [
+					{ field: "address", operator: "eq", value: testAddress },
+					{ field: "chainId", operator: "eq", value: testChainId },
+				],
+			},
+		);
 		expect(walletAddresses.length).toBe(1);
 		expect(walletAddresses[0]?.address).toBe(testAddress);
 		expect(walletAddresses[0]?.chainId).toBe(testChainId);
 		expect(walletAddresses[0]?.isPrimary).toBe(true);
 
 		// Second attempt with same address + chainId should use existing user
-		await client.siwe.nonce({ walletAddress: testAddress, chainId: testChainId });
+		await client.siwe.nonce({
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
 		const secondUser = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
@@ -569,7 +585,9 @@ describe("siwe", async (it) => {
 		expect(secondUser.data?.user.id).toBe(firstUser.data?.user.id); // Same user ID
 
 		// Verify no duplicate wallet address records were created
-		const walletAddressesAfter: any[] = await (await auth.$context).adapter.findMany({
+		const walletAddressesAfter: any[] = await (
+			await auth.$context
+		).adapter.findMany({
 			model: "walletAddress",
 			where: [
 				{ field: "address", operator: "eq", value: testAddress },
@@ -582,8 +600,8 @@ describe("siwe", async (it) => {
 		const allUsers: any[] = await (await auth.$context).adapter.findMany({
 			model: "user",
 		});
-		const usersWithTestAddress = allUsers.filter(user => 
-			walletAddressesAfter.some(wa => wa.userId === user.id)
+		const usersWithTestAddress = allUsers.filter((user) =>
+			walletAddressesAfter.some((wa) => wa.userId === user.id),
 		);
 		expect(usersWithTestAddress.length).toBe(1); // Only one user should have this address
 	});
@@ -605,7 +623,7 @@ describe("siwe", async (it) => {
 					}),
 				],
 			},
-			{ clientOptions: { plugins: [siweClientPlugin()] } },
+			{ clientOptions: { plugins: [siweClient()] } },
 		);
 
 		const testAddress = "0x000000000000000000000000000000000000dEaD";
@@ -636,14 +654,20 @@ describe("siwe", async (it) => {
 		expect(polygonAuth.data?.user.id).toBe(ethereumAuth.data?.user.id); // Same user
 
 		// Verify both wallet address records exist
-		const allWalletAddresses: any[] = await (await auth.$context).adapter.findMany({
+		const allWalletAddresses: any[] = await (
+			await auth.$context
+		).adapter.findMany({
 			model: "walletAddress",
 			where: [{ field: "address", operator: "eq", value: testAddress }],
 		});
 		expect(allWalletAddresses.length).toBe(2);
 
-		const ethereumRecord = allWalletAddresses.find(wa => wa.chainId === chainId1);
-		const polygonRecord = allWalletAddresses.find(wa => wa.chainId === chainId2);
+		const ethereumRecord = allWalletAddresses.find(
+			(wa) => wa.chainId === chainId1,
+		);
+		const polygonRecord = allWalletAddresses.find(
+			(wa) => wa.chainId === chainId2,
+		);
 
 		expect(ethereumRecord).toBeDefined();
 		expect(polygonRecord).toBeDefined();

@@ -3,7 +3,7 @@ import type { siwe } from ".";
 
 type SiwePlugin = typeof siwe;
 
-export const siweClientPlugin = () => {
+export const siweClient = () => {
 	return {
 		id: "siwe",
 		$InferServerPlugin: {} as ReturnType<SiwePlugin>,
