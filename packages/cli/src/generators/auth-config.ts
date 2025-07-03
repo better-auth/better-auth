@@ -132,26 +132,16 @@ export async function generateAuthConfig({
 					insert_content: `${opts.pluginFunctionName}(${opts.pluginContents}),`,
 				});
 			} else {
-				let has_found_comma = false;
-				const str = opts.config
+				const pluginArrayContent = opts.config
 					.slice(start_of_plugins.index, end_of_plugins.index)
-					.split("")
-					.reverse();
-				for (let index = 0; index < str.length; index++) {
-					const char = str[index];
-					if (char === ",") {
-						has_found_comma = true;
-					}
-					if (char === ")") {
-						break;
-					}
-				}
+					.trim();
+				const isPluginArrayEmpty = pluginArrayContent === "";
 
 				new_content = insertContent({
 					line: end_of_plugins.line,
 					character: end_of_plugins.character,
 					content: opts.config,
-					insert_content: `${!has_found_comma ? "," : ""}${
+					insert_content: `${isPluginArrayEmpty ? "" : ","}${
 						opts.pluginFunctionName
 					}(${opts.pluginContents})`,
 				});
