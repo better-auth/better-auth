@@ -517,7 +517,7 @@ export const signInEmail = createAuthEndpoint(
 					url,
 					token,
 				},
-				ctx.request,
+				ctx,
 			);
 			throw new APIError("FORBIDDEN", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,

@@ -1,6 +1,11 @@
 import { APIError } from "better-call";
 import { z } from "zod";
-import type { AuthPluginSchema, Session, User } from "../../types";
+import type {
+	AuthPluginSchema,
+	Session,
+	User,
+	GenericEndpointContext,
+} from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
@@ -125,7 +130,7 @@ export interface OrganizationOptions {
 			 */
 			customCreateDefaultTeam?: (
 				organization: Organization & Record<string, any>,
-				request?: Request,
+				ctx?: GenericEndpointContext,
 			) => Promise<Team & Record<string, any>>;
 		};
 		/**
@@ -148,7 +153,7 @@ export interface OrganizationOptions {
 							session: Session;
 						} | null;
 					},
-					request?: Request,
+					ctx?: GenericEndpointContext,
 			  ) => number | Promise<number>)
 			| number;
 
@@ -259,7 +264,7 @@ export interface OrganizationOptions {
 		/**
 		 * The request object
 		 */
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => Promise<void>;
 
 	/**
@@ -318,7 +323,7 @@ export interface OrganizationOptions {
 				organization: Organization;
 				user: User;
 			},
-			request?: Request,
+			ctx?: GenericEndpointContext,
 		) => Promise<void>;
 		/**
 		 * A callback that runs after the organization is
@@ -333,7 +338,7 @@ export interface OrganizationOptions {
 				organization: Organization;
 				user: User;
 			},
-			request?: Request,
+			ctx?: GenericEndpointContext,
 		) => Promise<void>;
 	};
 	organizationCreation?: {
@@ -343,7 +348,7 @@ export interface OrganizationOptions {
 				organization: Omit<Organization, "id">;
 				user: User;
 			},
-			request?: Request,
+			ctx?: GenericEndpointContext,
 		) => Promise<void | {
 			data: Omit<Organization, "id">;
 		}>;
@@ -353,7 +358,7 @@ export interface OrganizationOptions {
 				member: Member;
 				user: User;
 			},
-			request?: Request,
+			ctx?: GenericEndpointContext,
 		) => Promise<void>;
 	};
 }

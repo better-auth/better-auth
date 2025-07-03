@@ -6,6 +6,7 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../../api";
+import type { GenericEndpointContext } from "../../types";
 
 interface MagicLinkOptions {
 	/**
@@ -22,7 +23,7 @@ interface MagicLinkOptions {
 			url: string;
 			token: string;
 		},
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => Promise<void> | void;
 	/**
 	 * Disable sign up if user is not found.
@@ -136,7 +137,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							url,
 							token: verificationToken,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,

@@ -16,7 +16,7 @@ describe("organization", async (it) => {
 			plugins: [
 				organization({
 					membershipLimit: 6,
-					async sendInvitationEmail(data, request) {},
+					async sendInvitationEmail(data, ctx) {},
 					schema: {
 						organization: {
 							modelName: "team",
@@ -862,7 +862,7 @@ describe("invitation limit", async () => {
 		plugins: [
 			organization({
 				invitationLimit: 1,
-				async sendInvitationEmail(data, request) {},
+				async sendInvitationEmail(data, ctx) {},
 			}),
 		],
 	});

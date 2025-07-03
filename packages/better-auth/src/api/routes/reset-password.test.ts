@@ -9,7 +9,7 @@ describe("forget password", async (it) => {
 		{
 			emailAndPassword: {
 				enabled: true,
-				async sendResetPassword({ url }) {
+				async sendResetPassword({ url }, ctx) {
 					token = url.split("?")[0].split("/").pop() || "";
 					await mockSendEmail();
 				},
@@ -91,7 +91,7 @@ describe("forget password", async (it) => {
 		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
-				async sendResetPassword({ token: _token }) {
+				async sendResetPassword({ token: _token }, ctx) {
 					token = _token;
 					await mockSendEmail();
 				},
@@ -148,7 +148,7 @@ describe("forget password", async (it) => {
 		const { client, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
-				async sendResetPassword(context) {
+				async sendResetPassword(context, ctx) {
 					url = context.url;
 					await mockSendEmail();
 				},
@@ -177,7 +177,7 @@ describe("revoke sessions on password reset", async (it) => {
 		{
 			emailAndPassword: {
 				enabled: true,
-				async sendResetPassword({ url }) {
+				async sendResetPassword({ url }, ctx) {
 					token = url.split("?")[0].split("/").pop() || "";
 					await mockSendEmail();
 				},
@@ -221,7 +221,7 @@ describe("revoke sessions on password reset", async (it) => {
 			{
 				emailAndPassword: {
 					enabled: true,
-					async sendResetPassword({ url }) {
+					async sendResetPassword({ url }, ctx) {
 						token = url.split("?")[0].split("/").pop() || "";
 						await mockSendEmail();
 					},

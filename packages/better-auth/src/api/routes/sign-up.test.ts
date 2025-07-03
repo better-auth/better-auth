@@ -25,7 +25,7 @@ describe("sign-up with custom fields", async (it) => {
 			},
 			emailVerification: {
 				sendOnSignUp: true,
-				sendVerificationEmail: async ({ user, url, token }, request) => {
+				sendVerificationEmail: async ({ user, url, token }, ctx) => {
 					mockFn(user, url);
 				},
 			},
