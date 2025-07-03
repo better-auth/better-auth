@@ -94,6 +94,7 @@ await authClient.sso.register({
         scopes: ["openid", "email", "profile"],
         pkce: true,
     },
+    : false,
     mapping: {
         id: "sub",
         email: "email",
@@ -121,6 +122,7 @@ await auth.api.registerSSOProvider({
             jwksEndpoint: "https://idp.example.com/jwks",
             discoveryEndpoint: "https://idp.example.com/.well-known/openid-configuration",
             scopes: ["openid", "email", "profile"],
+            alwaysFetchUserInfo: false,
             pkce: true,
         },
         mapping: {

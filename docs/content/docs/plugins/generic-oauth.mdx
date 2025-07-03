@@ -104,7 +104,8 @@ interface GenericOAuthConfig {
   prompt?: string;
   pkce?: boolean;
   accessType?: string;
-  getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+  getUserInfo?: ((tokens: OAuth2Tokens) => Promise<User | null>);
+  alwaysFetchUserInfo?: boolean;
 }
 ```
 
@@ -156,6 +157,8 @@ interface GenericOAuthConfig {
 
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
 
+**alwaysFetchUserInfo**: (Optional) Whether to always fetch user info from the user info endpoint regardless of the presence of an ID token.
+
 ## Advanced Usage
 
 ### Custom User Info Fetching
@@ -178,6 +181,20 @@ genericOAuth({
           // ... map other fields as needed
         };
       }
+    }
+  ]
+})
+```
+
+Or a boolean to always fetch from the `userInfoUrl`.
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      // ... other config options
+      getUserInfo: true // Always fetch from userInfoUrl
     }
   ]
 })
