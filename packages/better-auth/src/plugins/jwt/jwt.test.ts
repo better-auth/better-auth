@@ -104,7 +104,7 @@ describe("jwt", async (it) => {
 	async function createAuthTest(jwksConfig: any) {
 		let auth = undefined;
 		let signInWithTestUser = undefined;
-		let error: any | null = null;
+		let error: boolean = false;
 		try {
 			({ auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
@@ -119,9 +119,9 @@ describe("jwt", async (it) => {
 				},
 			}));
 		} catch (err) {
-			error = err;
+			error = true;
 		}
-		expect(error).toBeNull();
+		expect(error).toBeFalsy();
 		return { auth, signInWithTestUser };
 	}
 
