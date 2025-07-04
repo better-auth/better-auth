@@ -255,6 +255,16 @@
         "default": "./dist/adapters/drizzle-adapter/index.cjs"
       }
     },
+    "./adapters/kysely": {
+      "import": {
+        "types": "./dist/adapters/kysely-adapter/index.d.ts",
+        "default": "./dist/adapters/kysely-adapter/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/kysely-adapter/index.d.cts",
+        "default": "./dist/adapters/kysely-adapter/index.cjs"
+      }
+    },
     "./adapters/mongodb": {
       "import": {
         "types": "./dist/adapters/mongodb-adapter/index.d.ts",
@@ -583,6 +593,9 @@
       ],
       "adapters/drizzle": [
         "./dist/adapters/drizzle-adapter/index.d.ts"
+      ],
+      "adapters/kysely": [
+        "./dist/adapters/kysely-adapter/index.d.ts"
       ],
       "adapters/mongodb": [
         "./dist/adapters/mongodb-adapter/index.d.ts"
