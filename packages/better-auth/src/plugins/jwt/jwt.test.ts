@@ -125,7 +125,7 @@ describe("jwt", async (it) => {
 
 	const algorithmsToTest: {
 		keyPairConfig: JWKOptions;
-		expectedOutcome: any;
+		expectedOutcome: { ec: string; length: number; crv?: string; alg: string };
 	}[] = [
 		{
 			keyPairConfig: {
@@ -258,16 +258,16 @@ describe("jwt", async (it) => {
 				it(`${alg} algorithm ${enc} can be used to generate JWKS`, async () => {
 					const jwks = await auth.api.getJwks();
 
-					expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome.kty);
+					expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome.ec);
 					if (jwks.keys.at(0)?.crv)
 						expect(jwks.keys.at(0)?.crv).toBe(expectedOutcome.crv);
 					expect(jwks.keys.at(0)?.alg).toBe(expectedOutcome.alg);
 					if (jwks.keys.at(0)?.x)
-						expect(jwks.keys.at(0)?.x).toHaveLength(length);
+						expect(jwks.keys.at(0)?.x).toHaveLength(expectedOutcome.length);
 					if (jwks.keys.at(0)?.y)
-						expect(jwks.keys.at(0)?.y).toHaveLength(length);
+						expect(jwks.keys.at(0)?.y).toHaveLength(expectedOutcome.length);
 					if (jwks.keys.at(0)?.n)
-						expect(jwks?.keys.at(0)?.n).toHaveLength(length);
+						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
 				});
 
 				it(`${alg} algorithm ${enc} can be used to generate a token`, async () => {
