@@ -79,6 +79,12 @@ export interface ApiKeyOptions {
 	 */
 	maximumPrefixLength?: number;
 	/**
+	 * Whether to require a name for the API key.
+	 *
+	 * @default false
+	 */
+	requireName?: boolean;
+	/**
 	 * The minimum length of the prefix.
 	 *
 	 * @default 1

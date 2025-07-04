@@ -347,6 +347,10 @@ export function createApiKey({
 						message: ERROR_CODES.INVALID_NAME_LENGTH,
 					});
 				}
+			} else if (opts.requireName) {
+				throw new APIError("BAD_REQUEST", {
+					message: ERROR_CODES.NAME_REQUIRED,
+				});
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
