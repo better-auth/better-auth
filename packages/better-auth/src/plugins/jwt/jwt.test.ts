@@ -228,7 +228,6 @@ describe("jwt", async (it) => {
 	for (const algorithm of algorithmsToTest) {
 		const expectedOutcome = algorithm.expectedOutcome;
 		for (let disablePrivateKeyEncryption of [false, true]) {
-			let error: boolean = false;
 			try {
 				const { auth, signInWithTestUser } = await getTestInstance({
 					plugins: [
@@ -270,40 +269,7 @@ describe("jwt", async (it) => {
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
 				});
 
-				it(`${alg} algorithm ${enc} can be used to generate a token`, async () => {
-					let token = undefined;
-					let error: boolean = false;
-
-					try {
-						const { headers } = await signInWithTestUser();
-						expect(headers).toBeDefined();
-
-						const client = createAuthClient({
-							plugins: [jwtClient()],
-							baseURL: "http://localhost:3000/api/auth",
-							fetchOptions: {
-								customFetchImpl: async (url, init) => {
-									return auth.handler(new Request(url, init));
-								},
-							},
-						});
-
-						token = await client.token({
-							fetchOptions: {
-								headers,
-							},
-						});
-					} catch (err) {
-						console.error(err);
-						error = true;
-					}
-					expect(error).toBeFalsy();
-					expect(token?.data?.token).toBeDefined();
-				});
-
-				const { headers } = await signInWithTestUser();
-
-				const client = createAuthClient({
+				const client: any = createAuthClient({
 					plugins: [jwtClient()],
 					baseURL: "http://localhost:3000/api/auth",
 					fetchOptions: {
@@ -311,6 +277,18 @@ describe("jwt", async (it) => {
 							return auth.handler(new Request(url, init));
 						},
 					},
+				});
+				let headers: Headers | undefined = undefined;
+
+				it(`${alg} algorithm ${enc} client can sign in`, async () => {
+					try {
+						const { headers: heads } = await signInWithTestUser();
+						headers = heads;
+						expect(headers).toBeDefined();
+					} catch (err) {
+						console.error(err);
+						expect.unreachable();
+					}
 				});
 
 				it(`${alg} algorithm ${enc}: Client gets a token from session`, async () => {
@@ -373,9 +351,8 @@ describe("jwt", async (it) => {
 				});
 			} catch (err) {
 				console.error(err);
-				error = true;
+				expect.unreachable();
 			}
-			expect(error).toBeFalsy();
 		}
 	}
 });
