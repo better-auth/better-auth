@@ -278,10 +278,12 @@ describe("jwt", async (it) => {
 						},
 					},
 				});
+				let headers: Headers | undefined = undefined;
 
 				it(`${alg} algorithm${enc}: Client can sign in`, async () => {
 					try {
-						var { headers } = await signInWithTestUser();
+						const { headers: heads } = await signInWithTestUser();
+						headers = heads;
 						expect(headers).toBeDefined();
 					} catch (err) {
 						console.error(err);
