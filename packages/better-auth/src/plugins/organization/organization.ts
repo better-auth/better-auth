@@ -429,6 +429,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								model: "organization",
 								field: "id",
 							},
+							shouldIndex: true,
 							fieldName: options?.schema?.team?.fields?.organizationId,
 						},
 						createdAt: {
@@ -602,6 +603,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					activeOrganizationId: {
 						type: "string",
 						required: false,
+						shouldIndex: true,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
 					},
 				},
@@ -620,6 +622,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
+						shouldIndex: true,
 					},
 					logo: {
 						type: "string",
@@ -648,6 +651,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "organization",
 							field: "id",
 						},
+						shouldIndex: true,
 						fieldName: options?.schema?.member?.fields?.organizationId,
 					},
 					userId: {
@@ -658,6 +662,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "user",
 							field: "id",
 						},
+						shouldIndex: true,
 					},
 					role: {
 						type: "string",
@@ -673,6 +678,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 									required: false,
 									sortable: true,
 									fieldName: options?.schema?.member?.fields?.teamId,
+									shouldIndex: true,
 								},
 							}
 						: {}),
@@ -693,6 +699,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "organization",
 							field: "id",
 						},
+						shouldIndex: true,
 						fieldName: options?.schema?.invitation?.fields?.organizationId,
 					},
 					email: {
@@ -700,6 +707,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						required: true,
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
+						shouldIndex: true,
 					},
 					role: {
 						type: "string",
@@ -713,6 +721,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 									type: "string",
 									required: false,
 									sortable: true,
+									shouldIndex: true,
 									fieldName: options?.schema?.invitation?.fields?.teamId,
 								},
 							}
@@ -735,6 +744,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "user",
 							field: "id",
 						},
+						shouldIndex: true,
 						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
 					},
