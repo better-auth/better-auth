@@ -300,6 +300,77 @@ describe("jwt", async (it) => {
 					expect(error).toBeFalsy();
 					expect(token?.data?.token).toBeDefined();
 				});
+
+				const { headers } = await signInWithTestUser();
+
+				const client = createAuthClient({
+					plugins: [jwtClient()],
+					baseURL: "http://localhost:3000/api/auth",
+					fetchOptions: {
+						customFetchImpl: async (url, init) => {
+							return auth.handler(new Request(url, init));
+						},
+					},
+				});
+
+				it(`${alg} algorithm ${enc}: Client gets a token from session`, async () => {
+					let token = "";
+					await client.getSession({
+						fetchOptions: {
+							headers,
+							onSuccess(context) {
+								token = context.response.headers.get("set-auth-jwt") || "";
+							},
+						},
+					});
+
+					expect(token.length).toBeGreaterThan(10);
+				});
+
+				it(`${alg} algorithm ${enc}: Client gets a token`, async () => {
+					const token = await client.token({
+						fetchOptions: {
+							headers,
+						},
+					});
+
+					expect(token.data?.token).toBeDefined();
+				});
+				it(`${alg} algorithm ${enc}: Signed tokens can be validated with the JWKS`, async () => {
+					const token = await client.token({
+						fetchOptions: {
+							headers,
+						},
+					});
+
+					const jwks = await client.jwks();
+
+					const publicWebKey = await importJWK({
+						...jwks.data?.keys[0],
+						alg: algorithm.keyPairConfig.alg,
+					});
+					const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+
+					expect(decoded).toBeDefined();
+				});
+
+				it(`${alg} algorithm ${enc}: Should set subject to user id by default`, async () => {
+					const token = await client.token({
+						fetchOptions: {
+							headers,
+						},
+					});
+
+					const jwks = await client.jwks();
+
+					const publicWebKey = await importJWK({
+						...jwks.data?.keys[0],
+						alg: algorithm.keyPairConfig.alg,
+					});
+					const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+					expect(decoded.payload.sub).toBeDefined();
+					expect(decoded.payload.sub).toBe(decoded.payload.id);
+				});
 			} catch (err) {
 				console.error(err);
 				error = true;
