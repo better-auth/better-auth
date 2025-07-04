@@ -3,7 +3,29 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
 import { jwt } from "./index";
-import { importJWK, jwtVerify, type JWK } from "jose";
+import { importJWK, jwtVerify } from "jose";
+
+type JWKOptions =
+	| {
+			alg: "EdDSA"; // EdDSA with either Ed25519
+			crv?: "Ed25519";
+	  }
+	| {
+			alg: "ES256"; // ECDSA with P-256 curve
+			crv?: never; // Only one valid option, no need for crv
+	  }
+	| {
+			alg: "RS256"; // RSA with SHA-256
+			modulusLength?: number; // Default to 2048 or higher
+	  }
+	| {
+			alg: "PS256"; // RSA-PSS with SHA-256
+			modulusLength?: number; // Default to 2048 or higher
+	  }
+	| {
+			alg: "ES512"; // ECDSA with P-521 curve
+			crv?: never; // Only P-521 for ES512
+	  };
 
 describe("jwt", async (it) => {
 	// Testing the default behaviour
@@ -25,7 +47,7 @@ describe("jwt", async (it) => {
 		},
 	});
 
-	it("should get a token", async () => {
+	it("Client gets a token from session", async () => {
 		let token = "";
 		await client.getSession({
 			fetchOptions: {
@@ -39,7 +61,7 @@ describe("jwt", async (it) => {
 		expect(token.length).toBeGreaterThan(10);
 	});
 
-	it("Get a token", async () => {
+	it("Client gets a token", async () => {
 		const token = await client.token({
 			fetchOptions: {
 				headers,
@@ -101,77 +123,10 @@ describe("jwt", async (it) => {
 		expect(decoded.payload.sub).toBe(decoded.payload.id);
 	});
 
-	async function createAuthTest(jwksConfig: any) {
-		let auth = undefined;
-		let signInWithTestUser = undefined;
-		let error: boolean = false;
-		try {
-			({ auth, signInWithTestUser } = await getTestInstance({
-				plugins: [
-					jwt({
-						jwks: {
-							...jwksConfig,
-						},
-					}),
-				],
-				logger: {
-					level: "error",
-				},
-			}));
-		} catch (err) {
-			error = true;
-		}
-		expect(error).toBeFalsy();
-		return { auth, signInWithTestUser };
-	}
-
-	function checkKeys(
-		res: { keys: JWK[] } | undefined,
-		kty: string,
-		length: number,
-		crv: string | undefined,
-		alg: string,
-	) {
-		expect(res?.keys.at(0)?.kty).toBe(kty);
-		if (res?.keys.at(0)?.crv) expect(res?.keys.at(0)?.crv).toBe(crv);
-		expect(res?.keys.at(0)?.alg).toBe(alg);
-		if (res?.keys.at(0)?.x) expect(res?.keys.at(0)?.x).toHaveLength(length);
-		if (res?.keys.at(0)?.y) expect(res?.keys.at(0)?.y).toHaveLength(length);
-		if (res?.keys.at(0)?.n) expect(res?.keys.at(0)?.n).toHaveLength(length);
-		// Not checking RSA exponent
-	}
-
-	async function checkToken(auth: any, signInWithTestUser: any) {
-		let token = undefined;
-		let error: any | null = null;
-
-		try {
-			const { headers } = await signInWithTestUser();
-			expect(headers).toBeDefined();
-
-			const client = createAuthClient({
-				plugins: [jwtClient()],
-				baseURL: "http://localhost:3000/api/auth",
-				fetchOptions: {
-					customFetchImpl: async (url, init) => {
-						return auth.handler(new Request(url, init));
-					},
-				},
-			});
-
-			token = await client.token({
-				fetchOptions: {
-					headers,
-				},
-			});
-		} catch (err) {
-			error = err;
-		}
-		expect(error).toBeNull();
-		expect(token?.data?.token).toBeDefined();
-	}
-
-	const algorithmsToTest = [
+	const algorithmsToTest: {
+		keyPairConfig: JWKOptions;
+		expectedOutcome: any;
+	}[] = [
 		{
 			keyPairConfig: {
 				alg: "ES256",
@@ -272,70 +227,84 @@ describe("jwt", async (it) => {
 
 	for (const algorithm of algorithmsToTest) {
 		const expectedOutcome = algorithm.expectedOutcome;
+		for (let disablePrivateKeyEncryption of [false, true]) {
+			let error: boolean = false;
+			try {
+				const { auth, signInWithTestUser } = await getTestInstance({
+					plugins: [
+						jwt({
+							jwks: {
+								keyPairConfig: {
+									...algorithm.keyPairConfig,
+								},
+								disablePrivateKeyEncryption: disablePrivateKeyEncryption,
+							},
+						}),
+					],
+					logger: {
+						level: "error",
+					},
+				});
 
-		const { auth: authToTest, signInWithTestUser: signInWithTestUserToTest } =
-			await createAuthTest({
-				keyPairConfig: {
-					...algorithm.keyPairConfig,
-				},
-			});
+				const alg: string =
+					algorithm.keyPairConfig.alg +
+					("crv" in algorithm.keyPairConfig
+						? `(${algorithm.keyPairConfig.crv})`
+						: "");
+				const enc: string = disablePrivateKeyEncryption
+					? "without private key encryption "
+					: "";
 
-		expect(authToTest).toBeDefined();
-		expect(signInWithTestUserToTest).toBeDefined();
-		if (authToTest && signInWithTestUserToTest) {
-			it(`${algorithm.keyPairConfig.alg}${
-				algorithm.keyPairConfig.crv
-					? "(" + algorithm.keyPairConfig.crv + ")"
-					: ""
-			} algorithm can be used to generate JWKS`, async () => {
-				checkKeys(
-					await authToTest.api.getJwks(),
-					expectedOutcome.ec,
-					expectedOutcome.length,
-					expectedOutcome.crv,
-					expectedOutcome.alg,
-				);
-			});
+				it(`${alg} algorithm ${enc} can be used to generate JWKS`, async () => {
+					const jwks = await auth.api.getJwks();
 
-			it(`${algorithm.keyPairConfig.alg}${
-				algorithm.keyPairConfig.crv
-					? "(" + algorithm.keyPairConfig.crv + ")"
-					: ""
-			} algorithm can be used to generate a token`, async () => {
-				checkToken(authToTest, signInWithTestUserToTest);
-			});
+					expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome.kty);
+					if (jwks.keys.at(0)?.crv)
+						expect(jwks.keys.at(0)?.crv).toBe(expectedOutcome.crv);
+					expect(jwks.keys.at(0)?.alg).toBe(expectedOutcome.alg);
+					if (jwks.keys.at(0)?.x)
+						expect(jwks.keys.at(0)?.x).toHaveLength(length);
+					if (jwks.keys.at(0)?.y)
+						expect(jwks.keys.at(0)?.y).toHaveLength(length);
+					if (jwks.keys.at(0)?.n)
+						expect(jwks?.keys.at(0)?.n).toHaveLength(length);
+				});
+
+				it(`${alg} algorithm ${enc} can be used to generate a token`, async () => {
+					let token = undefined;
+					let error: boolean = false;
+
+					try {
+						const { headers } = await signInWithTestUser();
+						expect(headers).toBeDefined();
+
+						const client = createAuthClient({
+							plugins: [jwtClient()],
+							baseURL: "http://localhost:3000/api/auth",
+							fetchOptions: {
+								customFetchImpl: async (url, init) => {
+									return auth.handler(new Request(url, init));
+								},
+							},
+						});
+
+						token = await client.token({
+							fetchOptions: {
+								headers,
+							},
+						});
+					} catch (err) {
+						console.error(err);
+						error = true;
+					}
+					expect(error).toBeFalsy();
+					expect(token?.data?.token).toBeDefined();
+				});
+			} catch (err) {
+				console.error(err);
+				error = true;
+			}
+			expect(error).toBeFalsy();
 		}
-
-		const {
-			auth: authToTest_noEncrypt,
-			signInWithTestUser: signInWithTestUserToTest_noEncrypt,
-		} = await createAuthTest({
-			keyPairConfig: {
-				...algorithm.keyPairConfig,
-			},
-			disablePrivateKeyEncryption: true,
-		});
-
-		expect(authToTest_noEncrypt).toBeDefined();
-		expect(signInWithTestUserToTest_noEncrypt).toBeDefined();
-		if (!(authToTest_noEncrypt && signInWithTestUserToTest_noEncrypt)) continue;
-
-		it(`${algorithm.keyPairConfig.alg}${
-			algorithm.keyPairConfig.crv ? "(" + algorithm.keyPairConfig.crv + ")" : ""
-		} algorithm without private key encryption can be used to generate JWKS`, async () => {
-			checkKeys(
-				await authToTest_noEncrypt.api.getJwks(),
-				expectedOutcome.ec,
-				expectedOutcome.length,
-				expectedOutcome.crv,
-				expectedOutcome.alg,
-			);
-		});
-
-		it(`${algorithm.keyPairConfig.alg}${
-			algorithm.keyPairConfig.crv ? "(" + algorithm.keyPairConfig.crv + ")" : ""
-		} algorithm without private key encryption can be used to generate a token`, async () => {
-			checkToken(authToTest_noEncrypt, signInWithTestUserToTest_noEncrypt);
-		});
 	}
 });
