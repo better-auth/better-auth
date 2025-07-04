@@ -26,7 +26,7 @@ export interface ApiKeyOptions {
 	customAPIKeyValidator?: (options: {
 		ctx: GenericEndpointContext;
 		key: string;
-	}) => boolean;
+	}) => boolean | Promise<boolean>;
 	/**
 	 * custom key generation function
 	 */
