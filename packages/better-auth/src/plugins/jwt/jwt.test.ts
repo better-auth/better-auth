@@ -251,10 +251,10 @@ describe("jwt", async (it) => {
 						? `(${algorithm.keyPairConfig.crv})`
 						: "");
 				const enc: string = disablePrivateKeyEncryption
-					? "without private key encryption "
+					? " without private key encryption"
 					: "";
 
-				it(`${alg} algorithm ${enc} can be used to generate JWKS`, async () => {
+				it(`${alg} algorithm${enc} can be used to generate JWKS`, async () => {
 					const jwks = await auth.api.getJwks();
 
 					expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome.ec);
@@ -269,7 +269,7 @@ describe("jwt", async (it) => {
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
 				});
 
-				const client: any = createAuthClient({
+				const client = createAuthClient({
 					plugins: [jwtClient()],
 					baseURL: "http://localhost:3000/api/auth",
 					fetchOptions: {
@@ -278,12 +278,10 @@ describe("jwt", async (it) => {
 						},
 					},
 				});
-				let headers: Headers | undefined = undefined;
 
-				it(`${alg} algorithm ${enc} client can sign in`, async () => {
+				it(`${alg} algorithm${enc}: Client can sign in`, async () => {
 					try {
-						const { headers: heads } = await signInWithTestUser();
-						headers = heads;
+						var { headers } = await signInWithTestUser();
 						expect(headers).toBeDefined();
 					} catch (err) {
 						console.error(err);
@@ -291,7 +289,17 @@ describe("jwt", async (it) => {
 					}
 				});
 
-				it(`${alg} algorithm ${enc}: Client gets a token from session`, async () => {
+				it(`${alg} algorithm${enc}: Client gets a token`, async () => {
+					const token = await client.token({
+						fetchOptions: {
+							headers,
+						},
+					});
+
+					expect(token.data?.token).toBeDefined();
+				});
+
+				it(`${alg} algorithm${enc}: Client gets a token from session`, async () => {
 					let token = "";
 					await client.getSession({
 						fetchOptions: {
@@ -305,16 +313,7 @@ describe("jwt", async (it) => {
 					expect(token.length).toBeGreaterThan(10);
 				});
 
-				it(`${alg} algorithm ${enc}: Client gets a token`, async () => {
-					const token = await client.token({
-						fetchOptions: {
-							headers,
-						},
-					});
-
-					expect(token.data?.token).toBeDefined();
-				});
-				it(`${alg} algorithm ${enc}: Signed tokens can be validated with the JWKS`, async () => {
+				it(`${alg} algorithm${enc}: Signed tokens can be validated with the JWKS`, async () => {
 					const token = await client.token({
 						fetchOptions: {
 							headers,
@@ -332,7 +331,7 @@ describe("jwt", async (it) => {
 					expect(decoded).toBeDefined();
 				});
 
-				it(`${alg} algorithm ${enc}: Should set subject to user id by default`, async () => {
+				it(`${alg} algorithm${enc}: Should set subject to user id by default`, async () => {
 					const token = await client.token({
 						fetchOptions: {
 							headers,
