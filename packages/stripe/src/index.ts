@@ -812,7 +812,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						return {
 							...sub,
 							limits: plan?.limits,
-							priceId: plan?.priceId,
+							priceId: sub.priceId ?? plan?.priceId,
 						};
 					})
 					.filter((sub) => {
