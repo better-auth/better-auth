@@ -1184,7 +1184,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const user = await ctx.context.internalAdapter.findUserById(
 						ctx.body.userId,
 					);
-					
+
 					if (!user) {
 						throw new APIError("NOT_FOUND", {
 							message: "User not found",
