@@ -32,10 +32,14 @@ export async function validateAuthorizationCode({
 	};
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
+	console.log("[Better Auth] Code to validate: ", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
+	console.log("[Better Auth] Code to validate: ", codeVerifier);
 	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
+	console.log("[Better Auth] Options redirect URI: ", options.redirectURI);
+	console.log("[Better Auth] Redirect URI: ", redirectURI);
 	if (authentication === "basic") {
 		const encodedCredentials = base64Url.encode(
 			`${options.clientId}:${options.clientSecret}`,
