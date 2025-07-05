@@ -67,6 +67,7 @@ export const myAdapter = (config: CustomAdapterConfig = {}) =>
     // ...
   });
 ```
+
 </Step>
 
 <Step>
@@ -157,6 +158,7 @@ then it's expected that the `id` is provided in the `data` object. Otherwise, th
 
 Additionally, it's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
 We handle `forceAllowId` internally, so you don't need to worry about it.
+
 </Callout>
 
 parameters:
@@ -349,6 +351,30 @@ createSchema: async ({ file, tables }) => {
   // ... Custom logic to create a schema for the database.
 };
 ```
+
+The following flowchart shows how the `createAdapter` will transform the data before attempting to save it into the database.
+We recommend you use this flowchart to help you determine the field type to use when your database adapter doesn't support a
+given field type for your schema generation logic.
+
+For example, if your adapter doesn't support `JSONB` data type, then you should use the `json` field type,
+and if that isn't supported, then you should use the `string` field type.
+
+<img
+  src="/images/guides/create-a-db-adapter/data-translation-light.png"
+  alt="Data Translation"
+  className="dark:hidden h-[800px]"
+/>
+<img
+  src="/images/guides/create-a-db-adapter/data-translation-dark.png"
+  alt="Data Translation"
+  className="hidden dark:block h-[800px]"
+/>
+
+<Callout type="warn">
+  If your schema generation does not match the data type that is expected to be saved to the database,
+  then an error will be thrown. Please make sure to use the flowchart above to help you determine the
+  field type to use during schema generation.
+</Callout>
 
 ## Test your adapter
 

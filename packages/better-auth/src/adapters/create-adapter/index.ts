@@ -1,15 +1,22 @@
-import { safeJSONParse } from "../../utils/json";
-import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
-import { generateId as defaultGenerateId, logger } from "../../utils";
+import { logger } from "../../utils";
 import type {
 	AdapterConfig,
 	AdapterTestDebugLogs,
-	CleanedWhere,
 	CreateCustomAdapter,
 } from "./types";
-import type { FieldAttribute } from "../../db";
+import { initTransformInput } from "./transform-input";
+import { initTransformOutput } from "./transform-output";
+import { initTransformWhere } from "./transform-where";
+import { initDebugLogs } from "./debug-logs";
+import { initIdField } from "./id-field";
+import { initGetDefaultFieldName } from "./get-default-field-name";
+import { initGetDefaultModelName } from "./get-default-model-name";
+import { initGetModelName } from "./get-model-name";
+import { initGetFieldName } from "./get-field-name";
+import { initGetFieldAttributes } from "./get-field-attributes";
+
 export * from "./types";
 
 let debugLogs: any[] = [];
@@ -45,6 +52,27 @@ const colors = {
 	},
 };
 
+/**
+ * Throws an error if the adapter doesn't support numeric ids,
+ * yet the user enabled it in their auth config.
+ */
+function checkIfDatabaseSupportsNumberIds({
+	config,
+	options,
+}: {
+	config: AdapterConfig;
+	options: BetterAuthOptions;
+}) {
+	if (
+		options.advanced?.database?.useNumberId === true &&
+		config.supportsNumericIds === false
+	) {
+		throw new Error(
+			`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
+		);
+	}
+}
+
 export const createAdapter =
 	({
 		adapter,
@@ -58,251 +86,64 @@ export const createAdapter =
 			...cfg,
 			supportsBooleans: cfg.supportsBooleans ?? true,
 			supportsDates: cfg.supportsDates ?? true,
+			supportsJSONB: cfg.supportsJSONB ?? false,
 			supportsJSON: cfg.supportsJSON ?? false,
+			supportsArrays: cfg.supportsArrays ?? true,
+			supportsNumbers: cfg.supportsNumbers ?? true,
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 		};
 
-		if (
-			options.advanced?.database?.useNumberId === true &&
-			config.supportsNumericIds === false
-		) {
-			throw new Error(
-				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
-			);
-		}
+		checkIfDatabaseSupportsNumberIds({ config, options });
 
-		// End-user's Better-Auth instance's schema
+		const debugLog = initDebugLogs({ config, debugLogs });
 		const schema = getAuthTables(options);
-
-		/**
-		 * This function helps us get the default field name from the schema defined by devs.
-		 * Often times, the user will be using the `fieldName` which could had been customized by the users.
-		 * This function helps us get the actual field name useful to match against the schema. (eg: schema[model].fields[field])
-		 *
-		 * If it's still unclear what this does:
-		 *
-		 * 1. User can define a custom fieldName.
-		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
-		 */
-		const getDefaultFieldName = ({
-			field,
-			model: unsafe_model,
-		}: { model: string; field: string }) => {
-			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
-			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
-			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
-			if (field === "id" || field === "_id") {
-				return "id";
-			}
-			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
-
-			let f = schema[model]?.fields[field];
-			if (!f) {
-				//@ts-expect-error
-				f = Object.values(schema[model]?.fields).find(
-					(f) => f.fieldName === field,
-				);
-			}
-			if (!f) {
-				debugLog(`Field ${field} not found in model ${model}`);
-				debugLog(`Schema:`, schema);
-				throw new Error(`Field ${field} not found in model ${model}`);
-			}
-			return field;
-		};
-
-		/**
-		 * This function helps us get the default model name from the schema defined by devs.
-		 * Often times, the user will be using the `modelName` which could had been customized by the users.
-		 * This function helps us get the actual model name useful to match against the schema. (eg: schema[model])
-		 *
-		 * If it's still unclear what this does:
-		 *
-		 * 1. User can define a custom modelName.
-		 * 2. When using a custom modelName, doing something like `schema[model]` will not work.
-		 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
-		 */
-		const getDefaultModelName = (model: string) => {
-			// It's possible this `model` could had applied `usePlural`.
-			// Thus we'll try the search but without the trailing `s`.
-			if (config.usePlural && model.charAt(model.length - 1) === "s") {
-				let pluralessModel = model.slice(0, -1);
-				let m = schema[pluralessModel] ? pluralessModel : undefined;
-				if (!m) {
-					m = Object.entries(schema).find(
-						([_, f]) => f.modelName === pluralessModel,
-					)?.[0];
-				}
-
-				if (m) {
-					return m;
-				}
-			}
-
-			let m = schema[model] ? model : undefined;
-			if (!m) {
-				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
-			}
-
-			if (!m) {
-				debugLog(`Model "${model}" not found in schema`);
-				debugLog(`Schema:`, schema);
-				throw new Error(`Model "${model}" not found in schema`);
-			}
-			return m;
-		};
-
-		/**
-		 * Users can overwrite the default model of some tables. This function helps find the correct model name.
-		 * Furthermore, if the user passes `usePlural` as true in their adapter config,
-		 * then we should return the model name ending with an `s`.
-		 */
-		const getModelName = (model: string) => {
-			const defaultModelKey = getDefaultModelName(model);
-			const usePlural = config && config.usePlural;
-			const useCustomModelName =
-				schema &&
-				schema[defaultModelKey] &&
-				schema[defaultModelKey].modelName !== model;
-
-			if (useCustomModelName) {
-				return usePlural
-					? `${schema[defaultModelKey].modelName}s`
-					: schema[defaultModelKey].modelName;
-			}
-
-			return usePlural ? `${model}s` : model;
-		};
-		/**
-		 * Get the field name which is expected to be saved in the database based on the user's schema.
-		 *
-		 * This function is useful if you need to save the field name to the database.
-		 *
-		 * For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
-		 */
-		function getFieldName({
-			model: model_name,
-			field: field_name,
-		}: { model: string; field: string }) {
-			const model = getDefaultModelName(model_name);
-			const field = getDefaultFieldName({ model, field: field_name });
-
-			return schema[model]?.fields[field]?.fieldName || field;
-		}
-
-		const debugLog = (...args: any[]) => {
-			if (config.debugLogs === true || typeof config.debugLogs === "object") {
-				// If we're running adapter tests, we'll keep debug logs in memory, then print them out if a test fails.
-				if (
-					typeof config.debugLogs === "object" &&
-					"isRunningAdapterTests" in config.debugLogs
-				) {
-					if (config.debugLogs.isRunningAdapterTests) {
-						args.shift(); // Removes the {method: "..."} object from the args array.
-						debugLogs.push(args);
-					}
-					return;
-				}
-
-				if (
-					typeof config.debugLogs === "object" &&
-					config.debugLogs.logCondition &&
-					!config.debugLogs.logCondition?.()
-				) {
-					return;
-				}
-
-				if (typeof args[0] === "object" && "method" in args[0]) {
-					const method = args.shift().method;
-					// Make sure the method is enabled in the config.
-					if (typeof config.debugLogs === "object") {
-						if (method === "create" && !config.debugLogs.create) {
-							return;
-						} else if (method === "update" && !config.debugLogs.update) {
-							return;
-						} else if (
-							method === "updateMany" &&
-							!config.debugLogs.updateMany
-						) {
-							return;
-						} else if (method === "findOne" && !config.debugLogs.findOne) {
-							return;
-						} else if (method === "findMany" && !config.debugLogs.findMany) {
-							return;
-						} else if (method === "delete" && !config.debugLogs.delete) {
-							return;
-						} else if (
-							method === "deleteMany" &&
-							!config.debugLogs.deleteMany
-						) {
-							return;
-						} else if (method === "count" && !config.debugLogs.count) {
-							return;
-						}
-					}
-					logger.info(`[${config.adapterName}]`, ...args);
-				} else {
-					logger.info(`[${config.adapterName}]`, ...args);
-				}
-			}
-		};
-
-		const idField = ({
-			customModelName,
-			forceAllowId,
-		}: { customModelName?: string; forceAllowId?: boolean }) => {
-			const shouldGenerateId =
-				!config.disableIdGeneration &&
-				!options.advanced?.database?.useNumberId &&
-				!forceAllowId;
-			const model = getDefaultModelName(customModelName ?? "id");
-			return {
-				type: options.advanced?.database?.useNumberId ? "number" : "string",
-				required: shouldGenerateId ? true : false,
-				...(shouldGenerateId
-					? {
-							defaultValue() {
-								if (config.disableIdGeneration) return undefined;
-								const useNumberId = options.advanced?.database?.useNumberId;
-								let generateId = options.advanced?.database?.generateId;
-								if (options.advanced?.generateId !== undefined) {
-									logger.warn(
-										"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
-									);
-									generateId = options.advanced?.generateId;
-								}
-								if (generateId === false || useNumberId) return undefined;
-								if (generateId) {
-									return generateId({
-										model,
-									});
-								}
-								if (config.customIdGenerator) {
-									return config.customIdGenerator({ model });
-								}
-								return defaultGenerateId();
-							},
-						}
-					: {}),
-			} satisfies FieldAttribute;
-		};
-
-		const getFieldAttributes = ({
-			model,
-			field,
-		}: { model: string; field: string }) => {
-			const defaultModelName = getDefaultModelName(model);
-			const defaultFieldName = getDefaultFieldName({
-				field: field,
-				model: model,
-			});
-
-			const fields = schema[defaultModelName].fields;
-			fields.id = idField({ customModelName: defaultModelName });
-			return fields[defaultFieldName];
-		};
-
+		const getDefaultModelName = initGetDefaultModelName({
+			schema,
+			debugLog,
+			config,
+		});
+		const getDefaultFieldName = initGetDefaultFieldName({
+			schema,
+			debugLog,
+			getDefaultModelName,
+		});
+		const getModelName = initGetModelName({
+			config,
+			getDefaultModelName,
+			schema,
+		});
+		const getFieldName = initGetFieldName({
+			getDefaultFieldName,
+			getDefaultModelName,
+			schema,
+		});
+		const idField = initIdField({ config, options, getDefaultModelName });
+		const getFieldAttributes = initGetFieldAttributes({
+			getDefaultFieldName,
+			getDefaultModelName,
+			idField,
+			schema,
+		});
+		const transformInput = initTransformInput({
+			schema,
+			config,
+			options,
+			idField,
+		});
+		const transformOutput = initTransformOutput({
+			schema,
+			config,
+			options,
+		});
+		const transformWhereClause = initTransformWhere({
+			config,
+			getDefaultFieldName,
+			getDefaultModelName,
+			getFieldAttributes,
+			getFieldName,
+			options,
+		});
 		const adapterInstance = adapter({
 			options,
 			schema,
@@ -313,238 +154,6 @@ export const createAdapter =
 			getDefaultFieldName,
 			getFieldAttributes,
 		});
-
-		const transformInput = async (
-			data: Record<string, any>,
-			unsafe_model: string,
-			action: "create" | "update",
-			forceAllowId?: boolean,
-		) => {
-			const transformedData: Record<string, any> = {};
-			const fields = schema[unsafe_model].fields;
-			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			if (
-				!config.disableIdGeneration &&
-				!options.advanced?.database?.useNumberId
-			) {
-				fields.id = idField({
-					customModelName: unsafe_model,
-					forceAllowId: forceAllowId && "id" in data,
-				});
-			}
-			for (const field in fields) {
-				const value = data[field];
-				const fieldAttributes = fields[field];
-
-				let newFieldName: string =
-					newMappedKeys[field] || fields[field].fieldName || field;
-				if (
-					value === undefined &&
-					((!fieldAttributes.defaultValue &&
-						!fieldAttributes.transform?.input) ||
-						action === "update")
-				) {
-					continue;
-				}
-				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
-				let newValue = withApplyDefault(value, fieldAttributes, action);
-
-				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
-				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
-				if (fieldAttributes.transform?.input) {
-					newValue = await fieldAttributes.transform.input(newValue);
-				}
-
-				if (
-					fieldAttributes.references?.field === "id" &&
-					options.advanced?.database?.useNumberId
-				) {
-					if (Array.isArray(newValue)) {
-						newValue = newValue.map(Number);
-					} else {
-						newValue = Number(newValue);
-					}
-				} else if (
-					config.supportsJSON === false &&
-					typeof newValue === "object" &&
-					//@ts-expect-error -Future proofing
-					fieldAttributes.type === "json"
-				) {
-					newValue = JSON.stringify(newValue);
-				} else if (
-					config.supportsDates === false &&
-					newValue instanceof Date &&
-					fieldAttributes.type === "date"
-				) {
-					newValue = newValue.toISOString();
-				} else if (
-					config.supportsBooleans === false &&
-					typeof newValue === "boolean"
-				) {
-					newValue = newValue ? 1 : 0;
-				}
-
-				if (config.customTransformInput) {
-					newValue = config.customTransformInput({
-						data: newValue,
-						action,
-						field: newFieldName,
-						fieldAttributes: fieldAttributes,
-						model: unsafe_model,
-						schema,
-						options,
-					});
-				}
-
-				transformedData[newFieldName] = newValue;
-			}
-			return transformedData;
-		};
-
-		const transformOutput = async (
-			data: Record<string, any> | null,
-			unsafe_model: string,
-			select: string[] = [],
-		) => {
-			if (!data) return null;
-			const newMappedKeys = config.mapKeysTransformOutput ?? {};
-			const transformedData: Record<string, any> = {};
-			const tableSchema = schema[unsafe_model].fields;
-			const idKey = Object.entries(newMappedKeys).find(
-				([_, v]) => v === "id",
-			)?.[0];
-			tableSchema[idKey ?? "id"] = {
-				type: options.advanced?.database?.useNumberId ? "number" : "string",
-			};
-			for (const key in tableSchema) {
-				if (select.length && !select.includes(key)) {
-					continue;
-				}
-				const field = tableSchema[key];
-				if (field) {
-					const originalKey = field.fieldName || key;
-					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
-					let newValue =
-						data[
-							Object.entries(newMappedKeys).find(
-								([_, v]) => v === originalKey,
-							)?.[0] || originalKey
-						];
-
-					if (field.transform?.output) {
-						newValue = await field.transform.output(newValue);
-					}
-
-					let newFieldName: string = newMappedKeys[key] || key;
-
-					if (originalKey === "id" || field.references?.field === "id") {
-						// Even if `useNumberId` is true, we must always return a string `id` output.
-						if (typeof newValue !== "undefined") newValue = String(newValue);
-					} else if (
-						config.supportsJSON === false &&
-						typeof newValue === "string" &&
-						//@ts-expect-error - Future proofing
-						field.type === "json"
-					) {
-						newValue = safeJSONParse(newValue);
-					} else if (
-						config.supportsDates === false &&
-						typeof newValue === "string" &&
-						field.type === "date"
-					) {
-						newValue = new Date(newValue);
-					} else if (
-						config.supportsBooleans === false &&
-						typeof newValue === "number" &&
-						field.type === "boolean"
-					) {
-						newValue = newValue === 1;
-					}
-
-					if (config.customTransformOutput) {
-						newValue = config.customTransformOutput({
-							data: newValue,
-							field: newFieldName,
-							fieldAttributes: field,
-							select,
-							model: unsafe_model,
-							schema,
-							options,
-						});
-					}
-
-					transformedData[newFieldName] = newValue;
-				}
-			}
-			return transformedData as any;
-		};
-
-		const transformWhereClause = <W extends Where[] | undefined>({
-			model,
-			where,
-		}: { where: W; model: string }): W extends undefined
-			? undefined
-			: CleanedWhere[] => {
-			if (!where) return undefined as any;
-			const newMappedKeys = config.mapKeysTransformInput ?? {};
-
-			return where.map((w) => {
-				const {
-					field: unsafe_field,
-					value,
-					operator = "eq",
-					connector = "AND",
-				} = w;
-				if (operator === "in") {
-					if (!Array.isArray(value)) {
-						throw new Error("Value must be an array");
-					}
-				}
-
-				const defaultModelName = getDefaultModelName(model);
-				const defaultFieldName = getDefaultFieldName({
-					field: unsafe_field,
-					model,
-				});
-				const fieldName: string =
-					newMappedKeys[defaultFieldName] ||
-					getFieldName({
-						field: defaultFieldName,
-						model: defaultModelName,
-					});
-
-				const fieldAttr = getFieldAttributes({
-					field: defaultFieldName,
-					model: defaultModelName,
-				});
-
-				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
-					if (options.advanced?.database?.useNumberId) {
-						if (Array.isArray(value)) {
-							return {
-								operator,
-								connector,
-								field: fieldName,
-								value: value.map(Number),
-							} satisfies CleanedWhere;
-						}
-						return {
-							operator,
-							connector,
-							field: fieldName,
-							value: Number(value),
-						} satisfies CleanedWhere;
-					}
-				}
-
-				return {
-					operator,
-					connector,
-					field: fieldName,
-					value: value,
-				} satisfies CleanedWhere;
-			}) as any;
-		};
 
 		return {
 			create: async <T extends Record<string, any>, R = T>({
