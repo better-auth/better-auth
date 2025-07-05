@@ -8,7 +8,11 @@ import type {
 	Team,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
-import { type AccessControl, type Role } from "../access";
+import {
+	type AccessControl,
+	type MissingPermissions,
+	type Role,
+} from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
@@ -55,6 +59,10 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				permissions: PermissionType;
 				permission?: never;
 		  };
+	type CheckPermissionResult = {
+		success: boolean;
+		missingPermissions: MissingPermissions<PermissionType> | null;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -105,11 +113,12 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					R extends O extends { roles: any }
 						? keyof O["roles"]
 						: "admin" | "member" | "owner",
+					T extends boolean | undefined = false,
 				>(
 					data: PermissionExclusive & {
 						role: R;
 					},
-				) => {
+				): T extends true ? CheckPermissionResult : boolean => {
 					const isAuthorized = hasPermission({
 						role: data.role as string,
 						options: {
@@ -118,7 +127,10 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						},
 						permissions: (data.permissions ?? data.permission) as any,
 					});
-					return isAuthorized;
+
+					return isAuthorized as T extends true
+						? CheckPermissionResult
+						: boolean;
 				},
 			},
 		}),

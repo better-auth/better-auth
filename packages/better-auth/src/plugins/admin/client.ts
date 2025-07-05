@@ -1,5 +1,9 @@
 import type { BetterAuthClientPlugin } from "../../types";
-import { type AccessControl, type Role } from "../access";
+import {
+	type AccessControl,
+	type MissingPermissions,
+	type Role,
+} from "../access";
 import { adminAc, defaultStatements, userAc } from "./access";
 import type { admin } from "./admin";
 import { hasPermission } from "./has-permission";
@@ -35,6 +39,10 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 				permissions: PermissionType;
 				permission?: never;
 		  };
+	type CheckPermissionResult = {
+		success: boolean;
+		missingPermissions: MissingPermissions<PermissionType> | null;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -63,11 +71,12 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 					R extends O extends { roles: any }
 						? keyof O["roles"]
 						: "admin" | "user",
+					T extends boolean | undefined = false,
 				>(
 					data: PermissionExclusive & {
 						role: R;
 					},
-				) => {
+				): T extends true ? CheckPermissionResult : boolean => {
 					const isAuthorized = hasPermission({
 						role: data.role as string,
 						options: {
@@ -76,7 +85,9 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 						},
 						permissions: (data.permissions ?? data.permission) as any,
 					});
-					return isAuthorized;
+					return isAuthorized as T extends true
+						? CheckPermissionResult
+						: boolean;
 				},
 			},
 		}),
