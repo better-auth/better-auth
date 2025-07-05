@@ -106,13 +106,15 @@ The plugin requires 1 field to be added to the user table:
             name: "username", 
             type: "string", 
             description: "The username of the user",
-            isUnique: true
+            isUnique: true,
+            isOptional: true
         },
         { 
             name: "displayUsername", 
             type: "string", 
             description: "Non normalized username of the user",
-            isUnique: true
+            isUnique: true,
+            isOptional: true
         },
     ]}
 />
