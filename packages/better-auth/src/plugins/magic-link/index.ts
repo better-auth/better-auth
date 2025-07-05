@@ -136,7 +136,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 						ctx,
 					);
-					const url = new URL(`/magic-link/verify`, ctx.context.baseURL);
+					const realBaseURL = new URL(ctx.context.baseURL);
+					const url = new URL(
+						`${realBaseURL.pathname}/magic-link/verify`,
+						realBaseURL.origin,
+					);
 					url.searchParams.set("token", verificationToken);
 					url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");
 					if (ctx.body.newUserCallbackURL) {
