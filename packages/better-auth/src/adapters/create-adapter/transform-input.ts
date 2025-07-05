@@ -21,6 +21,15 @@ export const initTransformInput = ({
 		forceAllowId?: boolean,
 	) => {
 		const transformedData: Record<string, any> = {};
+		if (!schema[unsafe_model]) {
+			const err = new Error(`Model ${unsafe_model} not found in schema`);
+			err.stack = err.stack
+				?.split("\n")
+				.filter((_, i) => i !== 1)
+				.join("\n");
+
+			throw err;
+		}
 		const fields = schema[unsafe_model].fields;
 		const newMappedKeys = config.mapKeysTransformInput ?? {};
 		if (
@@ -54,11 +63,6 @@ export const initTransformInput = ({
 				newValue = await fieldAttributes.transform.input(newValue);
 			}
 			if (
-				!fieldAttributes.required &&
-				(newValue === null || newValue === undefined)
-			) {
-				newValue = null;
-			} else if (
 				fieldAttributes.references?.field === "id" &&
 				options.advanced?.database?.useNumberId
 			) {
@@ -68,13 +72,19 @@ export const initTransformInput = ({
 					newValue = Number(newValue);
 				}
 			} else if (
+				!fieldAttributes.required &&
+				(newValue === null || newValue === undefined)
+			) {
+				newValue = null;
+			} else if (
 				config.supportsJSON === false &&
 				fieldAttributes.type === "json"
 			) {
 				newValue = JSON.stringify(newValue);
 			} else if (
 				config.supportsJSONB === false &&
-				fieldAttributes.type === "jsonb"
+				fieldAttributes.type === "jsonb" &&
+				!config.supportsJSON
 			) {
 				newValue = JSON.stringify(newValue);
 			} else if (

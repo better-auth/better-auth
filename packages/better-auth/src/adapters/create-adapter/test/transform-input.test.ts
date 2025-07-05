@@ -3,6 +3,7 @@ import { initTransformInput } from "../transform-input";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../../types";
 import { getAuthTables } from "../../../db";
 import type { AdapterConfig } from "../types";
+import { merge } from "../../../utils/merger";
 
 /**
  * The purpose of this plugin is to introduce all of the different field types that we support
@@ -41,14 +42,13 @@ const testSchemaPlugin = {
 const init = (
 	config?: Partial<AdapterConfig>,
 	operation: "create" | "update" = "create",
+	options?: BetterAuthOptions,
 ) => {
-	const options = {
-		plugins: [testSchemaPlugin],
-	} satisfies BetterAuthOptions;
+	const optionsObject = merge([options ?? {}, { plugins: [testSchemaPlugin] }]);
 
 	const transformInput = initTransformInput({
-		schema: getAuthTables(options),
-		options,
+		schema: getAuthTables(optionsObject),
+		options: optionsObject,
 		idField: () => {
 			return {
 				type: "string",
@@ -69,7 +69,8 @@ const init = (
 		},
 	});
 
-	return (data: Record<string, any>) => transformInput(data, "test", operation);
+	return (data: Record<string, any>) =>
+		transformInput(data, "test", operation, true);
 };
 
 /**
@@ -99,6 +100,7 @@ const logDifferences = (expected: any, received: any) => {
  * Same goes with the string being a "1". Just for testing purposes to ensure transformInput doesn't get tricked.
  */
 const input = {
+	id: "123",
 	stringRequired: "1",
 	stringOptional: null,
 	numberRequired: 0,
@@ -217,17 +219,15 @@ describe("create adapter's transformInput", () => {
 		}
 	});
 
-	it("should transform arrays into string if arrays and JSON/JSONB is not supported", async () => {
+	it("should transform arrays into string if arrays and JSON is not supported", async () => {
 		const transformInput = init({
 			supportsArrays: false,
 			supportsJSON: false,
-			supportsJSONB: false
 		});
 		const result = await transformInput(input);
 		const expectedOutput = {
 			...input,
 			jsonRequired: JSON.stringify(input.jsonRequired),
-			jsonbRequired: JSON.stringify(input.jsonbRequired),
 			stringArrayRequired: JSON.stringify(input.stringArrayRequired),
 			numberArrayRequired: JSON.stringify(input.numberArrayRequired),
 		};
@@ -239,4 +239,22 @@ describe("create adapter's transformInput", () => {
 			throw error;
 		}
 	});
+
+	it("should transform JSONB into JSON if JSONB is not supported", async () => {
+		const transformInput = init({
+			supportsJSONB: false,
+		});
+		const result = await transformInput(input);
+		const expectedOutput = {
+			...input,
+		};
+
+		try {
+			expect(result).toEqual(expectedOutput);
+		} catch (error) {
+			logDifferences(expectedOutput, result);
+			throw error;
+		}
+	});
+
 });
