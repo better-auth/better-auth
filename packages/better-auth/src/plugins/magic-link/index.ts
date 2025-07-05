@@ -242,13 +242,18 @@ export const magicLink = (options: MagicLinkOptions) => {
 							: "/",
 						ctx.context.baseURL,
 					).toString();
-					const errorCallbackURL = new URL(ctx.query.errorCallbackURL
-						? decodeURIComponent(ctx.query.errorCallbackURL)
-						: callbackURL, ctx.context.baseURL).toString();
-					const newUserCallbackURL = new URL(ctx.query.newUserCallbackURL
-						? decodeURIComponent(ctx.query.newUserCallbackURL)
-						: callbackURL, ctx.context.baseURL).toString();
-				
+					const errorCallbackURL = new URL(
+						ctx.query.errorCallbackURL
+							? decodeURIComponent(ctx.query.errorCallbackURL)
+							: callbackURL,
+						ctx.context.baseURL,
+					).toString();
+					const newUserCallbackURL = new URL(
+						ctx.query.newUserCallbackURL
+							? decodeURIComponent(ctx.query.newUserCallbackURL)
+							: callbackURL,
+						ctx.context.baseURL,
+					).toString();
 
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(token);
@@ -313,7 +318,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 					);
 
 					if (!session) {
-						throw ctx.redirect(`${errorCallbackURL}?error=failed_to_create_session`);
+						throw ctx.redirect(
+							`${errorCallbackURL}?error=failed_to_create_session`,
+						);
 					}
 
 					await setSessionCookie(ctx, {
