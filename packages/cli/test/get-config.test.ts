@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { test } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { getConfig } from "../src/utils/get-config";
+import { getConfig, getDrizzleConfigSchema } from "../src/utils/get-config";
 
 interface TmpDirFixture {
 	tmpdir: string;
@@ -387,5 +387,75 @@ describe("getConfig", async () => {
 		expect(config).toMatchObject({
 			emailAndPassword: { enabled: true },
 		});
+	});
+});
+
+describe("getDrizzleConfigSchema", () => {
+	let tmpDir: string;
+	beforeEach(async () => {
+		const tmp = path.join(process.cwd(), "getDrizzleConfigSchema_test-");
+		tmpDir = await fs.mkdtemp(tmp);
+		console.log("Created tmpDir", tmpDir);
+	});
+	afterEach(async () => {
+		await fs.rm(tmpDir, { recursive: true });
+	});
+
+	it("returns undefined if no drizzle config exists", async () => {
+		const result = await getDrizzleConfigSchema(tmpDir);
+		expect(result).toBeUndefined();
+	});
+
+	it("returns schema string from drizzle.config.ts", async () => {
+		const configPath = path.join(tmpDir, "drizzle.config.ts");
+		await fs.writeFile(
+			configPath,
+			`export default { schema: './src/auth-schema.ts' }`,
+		);
+		const result = await getDrizzleConfigSchema(tmpDir);
+		expect(result).toBe("./src/auth-schema.ts");
+	});
+
+	it("returns schema string from drizzle.config.mjs", async () => {
+		const configPath = path.join(tmpDir, "drizzle.config.mjs");
+		await fs.writeFile(
+			configPath,
+			`import { defineConfig } from "drizzle-kit";
+
+			export default defineConfig({
+				schema: "./src/auth-schema.js",
+			});`,
+		);
+		const result = await getDrizzleConfigSchema(tmpDir);
+		expect(result).toBe("./src/auth-schema.js");
+	});
+
+	it("returns schema directory string from drizzle.config.js", async () => {
+		const configPath = path.join(tmpDir, "drizzle.config.js");
+		await fs.writeFile(
+			configPath,
+			`const { defineConfig } = require("drizzle-kit");
+
+			module.exports = defineConfig({
+				schema: "./src/db",
+			});`,
+		);
+		const result = await getDrizzleConfigSchema(tmpDir);
+		expect(result).toBe("./src/db");
+	});
+
+	it("returns schema array from drizzle.config.ts", async () => {
+		const configPath = path.join(tmpDir, "drizzle.config.ts");
+		await fs.writeFile(
+			configPath,
+			`import { defineConfig } from "drizzle-kit";
+
+			export default defineConfig({
+				schema: ["./src/one.ts", "./src/two.ts"],
+			});`,
+		);
+		const result = await getDrizzleConfigSchema(tmpDir);
+		expect(Array.isArray(result)).toBe(true);
+		expect(result).toEqual(["./src/one.ts", "./src/two.ts"]);
 	});
 });

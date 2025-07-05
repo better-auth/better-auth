@@ -217,4 +217,115 @@ export async function getConfig({
 	}
 }
 
+/**
+ * Reads drizzle.config.ts or drizzle.config.js from cwd and returns the `schema` property if present.
+ * Returns undefined if no config is found or schema is not set.
+ */
+export async function getDrizzleConfigSchema(
+	cwd: string,
+): Promise<string | string[] | undefined> {
+	const configFiles = [
+		"drizzle.config.ts",
+		"drizzle.config.mjs",
+		"drizzle.config.js",
+	];
+	for (const file of configFiles) {
+		const fullPath = path.join(cwd, file);
+		if (existsSync(fullPath)) {
+			if (file.endsWith(".ts")) {
+				// For TypeScript files, use regex parsing
+				try {
+					const fileContent = await fs.promises.readFile(fullPath, "utf-8");
+
+					const cleanContent = fileContent
+						.replace(/\/\*[\s\S]*?\*\//g, "")
+						.replace(/\/\/.*$/gm, "")
+						.replace(/\s+/g, " ")
+						.trim();
+
+					const defineConfigMatch = cleanContent.match(
+						/defineConfig\s*\(\s*\{([^}]+)\}\s*\)/,
+					);
+					if (defineConfigMatch && defineConfigMatch[1]) {
+						const configContent = defineConfigMatch[1];
+
+						const schemaMatch = configContent.match(
+							/schema\s*:\s*(\[[^\]]+\]|"[^"]*"|'[^']*')/,
+						);
+						if (schemaMatch && schemaMatch[1]) {
+							const schemaValue = schemaMatch[1];
+
+							if (schemaValue.startsWith("[") && schemaValue.endsWith("]")) {
+								const arrayContent = schemaValue.slice(1, -1);
+								const items = arrayContent
+									.split(",")
+									.map((item) => item.trim().replace(/['"]/g, ""))
+									.filter((item) => item.length > 0);
+								return items;
+							}
+
+							if (
+								(schemaValue.startsWith('"') && schemaValue.endsWith('"')) ||
+								(schemaValue.startsWith("'") && schemaValue.endsWith("'"))
+							) {
+								return schemaValue.slice(1, -1);
+							}
+						}
+					}
+
+					const directMatch = cleanContent.match(
+						/export\s+default\s*\{([^}]+)\}/,
+					);
+					if (directMatch && directMatch[1]) {
+						const configContent = directMatch[1];
+						const schemaMatch = configContent.match(
+							/schema\s*:\s*(\[[^\]]+\]|"[^"]*"|'[^']*')/,
+						);
+						if (schemaMatch && schemaMatch[1]) {
+							const schemaValue = schemaMatch[1];
+
+							if (schemaValue.startsWith("[") && schemaValue.endsWith("]")) {
+								const arrayContent = schemaValue.slice(1, -1);
+								const items = arrayContent
+									.split(",")
+									.map((item) => item.trim().replace(/['"]/g, ""))
+									.filter((item) => item.length > 0);
+								return items;
+							}
+
+							if (
+								(schemaValue.startsWith('"') && schemaValue.endsWith('"')) ||
+								(schemaValue.startsWith("'") && schemaValue.endsWith("'"))
+							) {
+								return schemaValue.slice(1, -1);
+							}
+						}
+					}
+				} catch (e) {
+					continue;
+				}
+			} else if (file.endsWith(".mjs")) {
+				try {
+					const configModule = (await import(fullPath)).default;
+					if (configModule && configModule.schema) {
+						return configModule.schema;
+					}
+				} catch (err) {
+					continue;
+				}
+			} else {
+				try {
+					const configModule = require(fullPath);
+					if (configModule && configModule.schema) {
+						return configModule.schema;
+					}
+				} catch (err) {
+					continue;
+				}
+			}
+		}
+	}
+	return undefined;
+}
+
 export { possiblePaths };
