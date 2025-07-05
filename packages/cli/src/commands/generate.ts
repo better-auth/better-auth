@@ -43,22 +43,28 @@ export async function generateAction(opts: any) {
 		process.exit(1);
 	});
 
-	let drizzleSchemaOutput: string | string[] | undefined = undefined;
+	let outputPath: string | undefined = undefined;
 	if (adapter.id === "drizzle" && !options.output) {
-		drizzleSchemaOutput = await getDrizzleConfigSchema(cwd);
+		const drizzleSchemaOutput = await getDrizzleConfigSchema(cwd);
+		if (drizzleSchemaOutput) {
+			let schemaPath: string;
+			if (typeof drizzleSchemaOutput === "string") {
+				schemaPath = drizzleSchemaOutput;
+			} else if (Array.isArray(drizzleSchemaOutput)) {
+				schemaPath = drizzleSchemaOutput[0]!;
+			} else {
+				schemaPath = drizzleSchemaOutput;
+			}
+			const schemaDir = path.dirname(schemaPath);
+			outputPath = path.join(schemaDir, "auth-schema.ts");
+		}
 	}
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
 	const schema = await getGenerator({
 		adapter,
-		file:
-			options.output ||
-			(typeof drizzleSchemaOutput === "string"
-				? drizzleSchemaOutput
-				: Array.isArray(drizzleSchemaOutput)
-					? drizzleSchemaOutput[0]
-					: undefined),
+		file: (options.output || outputPath) as string | undefined,
 		options: config,
 	});
 

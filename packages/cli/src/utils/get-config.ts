@@ -10,7 +10,6 @@ import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
-import { defineConfig } from "drizzle-kit";
 
 let possiblePaths = [
 	"auth.ts",
@@ -233,18 +232,96 @@ export async function getDrizzleConfigSchema(
 	for (const file of configFiles) {
 		const fullPath = path.join(cwd, file);
 		if (existsSync(fullPath)) {
-			let configModule: ReturnType<typeof defineConfig> | undefined;
-			try {
-				configModule = (await import(fullPath)).default;
-			} catch (e) {
+			if (file.endsWith(".ts")) {
+				// For TypeScript files, use regex parsing
 				try {
-					configModule = require(fullPath).default;
+					const fileContent = await fs.promises.readFile(fullPath, "utf-8");
+
+					const cleanContent = fileContent
+						.replace(/\/\*[\s\S]*?\*\//g, "")
+						.replace(/\/\/.*$/gm, "")
+						.replace(/\s+/g, " ")
+						.trim();
+
+					const defineConfigMatch = cleanContent.match(
+						/defineConfig\s*\(\s*\{([^}]+)\}\s*\)/,
+					);
+					if (defineConfigMatch && defineConfigMatch[1]) {
+						const configContent = defineConfigMatch[1];
+
+						const schemaMatch = configContent.match(
+							/schema\s*:\s*(\[[^\]]+\]|"[^"]*"|'[^']*')/,
+						);
+						if (schemaMatch && schemaMatch[1]) {
+							const schemaValue = schemaMatch[1];
+
+							if (schemaValue.startsWith("[") && schemaValue.endsWith("]")) {
+								const arrayContent = schemaValue.slice(1, -1);
+								const items = arrayContent
+									.split(",")
+									.map((item) => item.trim().replace(/['"]/g, ""))
+									.filter((item) => item.length > 0);
+								return items;
+							}
+
+							if (
+								(schemaValue.startsWith('"') && schemaValue.endsWith('"')) ||
+								(schemaValue.startsWith("'") && schemaValue.endsWith("'"))
+							) {
+								return schemaValue.slice(1, -1);
+							}
+						}
+					}
+
+					const directMatch = cleanContent.match(
+						/export\s+default\s*\{([^}]+)\}/,
+					);
+					if (directMatch && directMatch[1]) {
+						const configContent = directMatch[1];
+						const schemaMatch = configContent.match(
+							/schema\s*:\s*(\[[^\]]+\]|"[^"]*"|'[^']*')/,
+						);
+						if (schemaMatch && schemaMatch[1]) {
+							const schemaValue = schemaMatch[1];
+
+							if (schemaValue.startsWith("[") && schemaValue.endsWith("]")) {
+								const arrayContent = schemaValue.slice(1, -1);
+								const items = arrayContent
+									.split(",")
+									.map((item) => item.trim().replace(/['"]/g, ""))
+									.filter((item) => item.length > 0);
+								return items;
+							}
+
+							if (
+								(schemaValue.startsWith('"') && schemaValue.endsWith('"')) ||
+								(schemaValue.startsWith("'") && schemaValue.endsWith("'"))
+							) {
+								return schemaValue.slice(1, -1);
+							}
+						}
+					}
+				} catch (e) {
+					continue;
+				}
+			} else if (file.endsWith(".mjs")) {
+				try {
+					const configModule = (await import(fullPath)).default;
+					if (configModule && configModule.schema) {
+						return configModule.schema;
+					}
 				} catch (err) {
 					continue;
 				}
-			}
-			if (configModule && configModule.schema) {
-				return configModule.schema;
+			} else {
+				try {
+					const configModule = require(fullPath);
+					if (configModule && configModule.schema) {
+						return configModule.schema;
+					}
+				} catch (err) {
+					continue;
+				}
 			}
 		}
 	}

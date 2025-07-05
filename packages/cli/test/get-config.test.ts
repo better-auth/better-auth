@@ -420,29 +420,42 @@ describe("getDrizzleConfigSchema", () => {
 		const configPath = path.join(tmpDir, "drizzle.config.mjs");
 		await fs.writeFile(
 			configPath,
-			`export default { schema: './src/auth-schema.js' }`,
+			`import { defineConfig } from "drizzle-kit";
+
+			export default defineConfig({
+				schema: "./src/auth-schema.js",
+			});`,
 		);
 		const result = await getDrizzleConfigSchema(tmpDir);
 		expect(result).toBe("./src/auth-schema.js");
 	});
 
-	it("returns schema string from drizzle.config.js", async () => {
+	it("returns schema directory string from drizzle.config.js", async () => {
 		const configPath = path.join(tmpDir, "drizzle.config.js");
 		await fs.writeFile(
 			configPath,
-			`module.exports = { schema: './src/auth-schema.js' }`,
+			`const { defineConfig } = require("drizzle-kit");
+
+			module.exports = defineConfig({
+				schema: "./src/db",
+			});`,
 		);
 		const result = await getDrizzleConfigSchema(tmpDir);
-		expect(result).toBe("./src/auth-schema.js");
+		expect(result).toBe("./src/db");
 	});
 
-	it("returns first schema if schema is an array", async () => {
+	it("returns schema array from drizzle.config.ts", async () => {
 		const configPath = path.join(tmpDir, "drizzle.config.ts");
 		await fs.writeFile(
 			configPath,
-			`export default { schema: ['./src/one.ts', './src/two.ts'] }`,
+			`import { defineConfig } from "drizzle-kit";
+
+			export default defineConfig({
+				schema: ["./src/one.ts", "./src/two.ts"],
+			});`,
 		);
 		const result = await getDrizzleConfigSchema(tmpDir);
-		expect(Array.isArray(result) ? result[0] : result).toBe("./src/one.ts");
+		expect(Array.isArray(result)).toBe(true);
+		expect(result).toEqual(["./src/one.ts", "./src/two.ts"]);
 	});
 });
