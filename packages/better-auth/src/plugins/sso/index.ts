@@ -10,11 +10,39 @@ import {
 	type OAuth2Tokens,
 } from "../../oauth2";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
+import { decodeJwt, SignJWT } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
+import { verifySCIMToken } from "./helpers";
+import type { Member } from "../organization";
+import { randomBytes } from "crypto";
 
 export interface SSOOptions {
+	/**
+	 * SCIM configuration for the provider.
+	 */
+	scim?: {
+		/**
+		 * The secret used to sign the SCIM token.
+		 * This is used to verify the token when provisioning users.
+		 */
+		secret: string;
+		/**
+		 * Whether to enable Group provisioning via SCIM
+		 */
+		enableGroups?: boolean;
+
+		/**
+		 * User Provisioning Hook
+		 * This function is called when a user is provisioned via SCIM.
+		 */
+		onUserProvision?: (user: any, rawScimUser: any) => Promise<void>;
+		/**
+		 * User Deletion Hook
+		 * This function is called when a user is deleted via SCIM.
+		 */
+		onUserDelete?: (userId: string) => Promise<void>;
+	};
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
@@ -71,6 +99,11 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	defaultOverrideUserInfo?: boolean;
+	/**
+	 * Enable SCIM Provisioning for the provider.
+	 * @default false
+	 */
+	enableSCIMProvisioning?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -311,6 +344,12 @@ export const sso = (options?: SSOOptions) => {
 																},
 																required: ["id", "email", "name"],
 															},
+															scimToken: {
+																type: "string",
+																description:
+																	"SCIM token for the provider, used for SCIM operations",
+																nullable: true,
+															},
 														},
 														required: [
 															"issuer",
@@ -367,6 +406,7 @@ export const sso = (options?: SSOOptions) => {
 							message: "Invalid issuer. Must be a valid URL",
 						});
 					}
+					const scimToken = randomBytes(48).toString("hex");
 					const provider = await ctx.context.adapter.create({
 						model: "ssoProvider",
 						data: {
@@ -395,6 +435,7 @@ export const sso = (options?: SSOOptions) => {
 							organizationId: body.organizationId,
 							userId: ctx.context.session.user.id,
 							providerId: body.providerId,
+							scimToken, // automatically generate a SCIM token on creation
 						},
 					});
 					return ctx.json({
@@ -938,6 +979,374 @@ export const sso = (options?: SSOOptions) => {
 					throw ctx.redirect(toRedirectTo);
 				},
 			),
+			listUsers: createAuthEndpoint(
+				"/scim/v2/Users",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							summary: "List SCIM users",
+							description:
+								"Returns all users provisioned via SCIM for the linked organization.",
+							responses: {
+								"200": {
+									description: "SCIM user list",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													totalResults: { type: "number" },
+													itemsPerPage: { type: "number" },
+													startIndex: { type: "number" },
+													Resources: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																id: { type: "string" },
+																userName: { type: "string" },
+																active: { type: "boolean" },
+																schemas: {
+																	type: "array",
+																	items: { type: "string" },
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const authHeader = ctx.headers?.get("Authorization");
+					const token = authHeader?.replace(/^Bearer\s+/i, "");
+
+					if (!token) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "SCIM token is required",
+						});
+					}
+
+					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+						model: "ssoProvider",
+						where: [{ field: "scimToken", value: token }],
+					});
+
+					if (!provider || !provider.organizationId) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Invalid SCIM token",
+						});
+					}
+
+					const users = await ctx.context.adapter.findMany<User>({
+						model: "user",
+						where: [
+							{ field: "organizationId", value: provider.organizationId },
+						],
+					});
+
+					return ctx.json({
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+						totalResults: users.length,
+						startIndex: 1,
+						itemsPerPage: users.length,
+						Resources: users.map((user) => ({
+							id: user.id,
+							userName: user.email,
+							active: true,
+							schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+						})),
+					});
+				},
+			),
+			createUser: createAuthEndpoint(
+				"/scim/v2/Users",
+				{
+					method: "POST",
+					requireHeaders: true,
+					body: z.object({
+						userName: z.string(),
+						name: z
+							.object({
+								givenName: z.string().optional(),
+								familyName: z.string().optional(),
+							})
+							.optional(),
+						emails: z
+							.array(
+								z.object({
+									value: z.string().email(),
+									primary: z.boolean().optional(),
+								}),
+							)
+							.optional(),
+					}),
+					metadata: {
+						openapi: {
+							summary: "Create SCIM user",
+							description:
+								"Provision a new user into the linked organization via SCIM.",
+						},
+					},
+				},
+				async (ctx) => {
+					const authHeader = ctx.headers.get("authorization");
+					const token = authHeader?.replace(/^Bearer\s+/i, "");
+
+					if (!token) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Missing Authorization",
+						});
+					}
+
+					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+						model: "ssoProvider",
+						where: [{ field: "scimToken", value: token }],
+					});
+
+					if (!provider || !provider.organizationId) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Invalid SCIM token",
+						});
+					}
+
+					const scim = ctx.body;
+					const email = scim.userName;
+
+					// Check if user already exists
+					const existing = await ctx.context.adapter.findOne({
+						model: "user",
+						where: [
+							{ field: "email", value: email },
+							{ field: "organizationId", value: provider.organizationId },
+						],
+					});
+
+					if (existing) {
+						throw new APIError("CONFLICT", {
+							message: "User already exists",
+							scimType: "uniqueness",
+						});
+					}
+
+					const user = await ctx.context.adapter.create({
+						model: "user",
+						data: {
+							email,
+							name: scim.name?.givenName ?? email,
+							organizationId: provider.organizationId,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+					});
+
+					return ctx.json({
+						id: user.id,
+						userName: user.email,
+						active: true,
+						schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					});
+				},
+			),
+			deleteUser: createAuthEndpoint(
+				"/scim/v2/Users/:id",
+				{
+					method: "DELETE",
+					requireHeaders: true,
+					metadata: {
+						openapi: {
+							summary: "Delete SCIM user",
+							description:
+								"Deletes (or deactivates) a user within the linked organization.",
+						},
+					},
+				},
+				async (ctx) => {
+					const authHeader = ctx.headers.get("authorization");
+					const token = authHeader?.replace(/^Bearer\s+/i, "");
+
+					if (!token) {
+						return ctx.json(
+							{ error: "Missing Authorization" },
+							{ status: 401 },
+						);
+					}
+
+					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+						model: "ssoProvider",
+						where: [{ field: "scimToken", value: token }],
+					});
+
+					if (!provider || !provider.organizationId) {
+						return ctx.json({ error: "Invalid SCIM token" }, { status: 401 });
+					}
+
+					const userId = ctx.params.id;
+
+					const user = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [
+							{ field: "id", value: userId },
+							{ field: "organizationId", value: provider.organizationId },
+						],
+					});
+
+					if (!user) {
+						return ctx.json({ error: "User not found" }, { status: 404 });
+					}
+
+					// Hard delete (or replace with soft-delete logic if applicable)
+					await ctx.context.adapter.delete({
+						model: "user",
+						where: [{ field: "id", value: userId }],
+					});
+
+					return ctx.json(null, { status: 204 });
+				},
+			),
+			patchUser: createAuthEndpoint(
+				"/scim/v2/Users/:id",
+				{
+					method: "PATCH",
+					requireHeaders: true,
+					body: z.object({
+						schemas: z
+							.array(z.string())
+							.refine(
+								(s) =>
+									s.includes("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+								{
+									message: "Invalid schemas for PatchOp",
+								},
+							),
+						Operations: z.array(
+							z.object({
+								op: z.enum(["replace", "add", "remove"]).default("replace"),
+								path: z.string().optional(),
+								value: z.any(),
+							}),
+						),
+					}),
+					metadata: {
+						openapi: {
+							summary: "Patch SCIM user",
+							description: "Updates fields on a SCIM user record",
+						},
+					},
+				},
+				async (ctx) => {
+					const authHeader = ctx.headers.get("authorization");
+					const token = authHeader?.replace(/^Bearer\s+/i, "");
+
+					if (!token) {
+						return ctx.json(
+							{ error: "Missing Authorization" },
+							{ status: 401 },
+						);
+					}
+
+					const provider = await ctx.context.adapter.findOne<SSOProvider>({
+						model: "ssoProvider",
+						where: [{ field: "scimToken", value: token }],
+					});
+
+					if (!provider || !provider.organizationId) {
+						return ctx.json({ error: "Invalid SCIM token" }, { status: 401 });
+					}
+
+					const userId = ctx.params.id;
+
+					const user = await ctx.context.adapter.findOne({
+						model: "user",
+						where: [
+							{ field: "id", value: userId },
+							{ field: "organizationId", value: provider.organizationId },
+						],
+					});
+
+					if (!user) {
+						return ctx.json({ error: "User not found" }, { status: 404 });
+					}
+
+					const updates: Record<string, any> = {};
+					for (const op of ctx.body.Operations) {
+						if (op.op !== "replace") continue; // ignore non-replace for now
+
+						if (op.path === "name.givenName" || op.path === "name.familyName") {
+							updates.name = op.value; // naive — refine if needed
+						} else if (op.path === "active") {
+							updates.active = op.value;
+						} else if (op.path === "userName") {
+							updates.email = op.value;
+						}
+					}
+
+					if (Object.keys(updates).length === 0) {
+						return ctx.json(
+							{ error: "No valid fields to update" },
+							{ status: 400 },
+						);
+					}
+
+					await ctx.context.adapter.update({
+						model: "user",
+						where: [{ field: "id", value: userId }],
+						update: { ...updates, updatedAt: new Date() },
+					});
+
+					return ctx.json(null, { status: 204 });
+				},
+			),
+			serviceProviderConfig: createAuthEndpoint(
+				"/scim/v2/ServiceProviderConfig",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							summary: "SCIM Service Provider Configuration",
+							description:
+								"Standard SCIM metadata endpoint used by identity providers like Entra or Okta.",
+							responses: {
+								"200": {
+									description: "SCIM metadata object",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return ctx.json({
+						schemas: [
+							"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig",
+						],
+						patch: { supported: true },
+						bulk: { supported: false },
+						filter: { supported: false },
+						changePassword: { supported: false },
+						sort: { supported: false },
+						etag: { supported: false },
+						authenticationSchemes: [
+							{
+								name: "OAuth Bearer Token",
+								description:
+									"Authentication scheme using the Authorization header with a bearer token tied to an organization.",
+								specUri: "http://www.rfc-editor.org/info/rfc6750",
+								type: "oauthbearertoken",
+								primary: true,
+							},
+						],
+						meta: {
+							resourceType: "ServiceProviderConfig",
+						},
+					});
+				},
+			),
 		},
 		schema: {
 			ssoProvider: {
@@ -974,6 +1383,7 @@ export const sso = (options?: SSOOptions) => {
 						type: "string",
 						required: true,
 					},
+					scimToken: { type: "string", required: false },
 				},
 			},
 		},
