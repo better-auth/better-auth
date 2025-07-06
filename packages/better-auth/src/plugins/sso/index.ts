@@ -10,11 +10,9 @@ import {
 	type OAuth2Tokens,
 } from "../../oauth2";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { decodeJwt, SignJWT } from "jose";
+import { decodeJwt } from "jose";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { setSessionCookie } from "../../cookies";
-import { verifySCIMToken } from "./helpers";
-import type { Member } from "../organization";
 import { randomBytes } from "crypto";
 
 export interface SSOOptions {
