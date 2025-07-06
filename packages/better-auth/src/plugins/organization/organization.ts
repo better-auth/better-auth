@@ -729,6 +729,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						required: true,
 						fieldName: options?.schema?.invitation?.fields?.expiresAt,
 					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.invitation?.fields?.createdAt,
+					},
 					inviterId: {
 						type: "string",
 						references: {
