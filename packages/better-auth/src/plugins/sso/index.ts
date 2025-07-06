@@ -34,12 +34,15 @@ export interface SSOOptions {
 		 * User Provisioning Hook
 		 * This function is called when a user is provisioned via SCIM.
 		 */
-		onUserProvision?: (user: any, rawScimUser: any) => Promise<void>;
+		onUserProvision?: (
+			user: User & Record<string, any>,
+			rawScimUser: any,
+		) => Promise<void>;
 		/**
 		 * User Deletion Hook
 		 * This function is called when a user is deleted via SCIM.
 		 */
-		onUserDelete?: (userId: string) => Promise<void>;
+		onUserDelete?: (user: User & Record<string, any>) => Promise<void>;
 	};
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
@@ -1118,7 +1121,7 @@ export const sso = (options?: SSOOptions) => {
 					const email = scim.userName;
 
 					// Check if user already exists
-					const existing = await ctx.context.adapter.findOne({
+					const existing = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
 							{ field: "email", value: email },
@@ -1133,7 +1136,7 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 
-					const user = await ctx.context.adapter.create({
+					const user: User = await ctx.context.adapter.create({
 						model: "user",
 						data: {
 							email,
@@ -1143,6 +1146,9 @@ export const sso = (options?: SSOOptions) => {
 							updatedAt: new Date(),
 						},
 					});
+
+					// call the provisionUser hook if provided
+					await options?.scim?.onUserProvision?.(user, scim);
 
 					return ctx.json({
 						id: user.id,
@@ -1204,6 +1210,9 @@ export const sso = (options?: SSOOptions) => {
 						model: "user",
 						where: [{ field: "id", value: userId }],
 					});
+
+					// call deletion hook if provided
+					await options?.scim?.onUserDelete?.(user);
 
 					return ctx.json(null, { status: 204 });
 				},
