@@ -83,7 +83,7 @@ export default async function Page({
 						Files,
 						Tab,
 						Tabs: ({ children, ...props }) => (
-							<Tabs className="rounded-none" {...props}>
+							<Tabs className={cn("rounded-none", props.className)} {...props}>
 								{children}
 							</Tabs>
 						),
@@ -96,7 +96,7 @@ export default async function Page({
 						DatabaseTable,
 						Accordion,
 						Accordions: ({ children, ...props }) => (
-							<Accordions className="rounded-none" {...props}>
+							<Accordions className={cn("rounded-none", props.className)} {...props}>
 								{children}
 							</Accordions>
 						),
