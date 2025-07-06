@@ -95,7 +95,11 @@ export default async function Page({
 						ForkButton,
 						DatabaseTable,
 						Accordion,
-						Accordions,
+						Accordions: ({ children, ...props }) => (
+							<Accordions className="rounded-none" {...props}>
+								{children}
+							</Accordions>
+						),
 						Endpoint,
 						Callout: ({ children, ...props }) => (
 							<defaultMdxComponents.Callout
@@ -113,7 +117,7 @@ export default async function Page({
 						),
 						DividerText,
 						iframe: (props) => (
-							<iframe {...props} className="w-full h-[500px]" />
+							<iframe {...props} className="w-full h-[500px] rounded-none" />
 						),
 					}}
 				/>
