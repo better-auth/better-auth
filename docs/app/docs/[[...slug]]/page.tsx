@@ -96,7 +96,10 @@ export default async function Page({
 						DatabaseTable,
 						Accordion,
 						Accordions: ({ children, ...props }) => (
-							<Accordions className={cn("rounded-none", props.className)} {...props}>
+							<Accordions
+								className={cn("rounded-none", props.className)}
+								{...props}
+							>
 								{children}
 							</Accordions>
 						),
