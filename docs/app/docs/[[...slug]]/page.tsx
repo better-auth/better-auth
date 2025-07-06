@@ -82,7 +82,11 @@ export default async function Page({
 						Folder,
 						Files,
 						Tab,
-						Tabs,
+						Tabs: ({ children, ...props }) => (
+							<Tabs className="rounded-none" {...props}>
+								{children}
+							</Tabs>
+						),
 						AutoTypeTable,
 						GenerateSecret,
 						AnimatePresence,
@@ -114,11 +118,11 @@ export default async function Page({
 					}}
 				/>
 
-				<Cards className="mt-16">
+				<Cards className="mt-16 rounded-none">
 					{prevPage ? (
 						<Card
 							href={prevPage.url}
-							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
+							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full rounded-none"
 							description={<>{prevPage.data.description}</>}
 							title={
 								<div className="flex items-center gap-1">
@@ -140,7 +144,7 @@ export default async function Page({
 									<ChevronRight className="size-4" />
 								</div>
 							}
-							className="flex flex-col items-end text-right [&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
+							className="flex flex-col items-end text-right [&>p]:ml-1 [&>p]:truncate [&>p]:w-full rounded-none"
 						/>
 					) : (
 						<div></div>
