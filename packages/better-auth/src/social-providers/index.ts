@@ -20,7 +20,7 @@ import { vk } from "./vk";
 import { kick } from "./kick";
 import { zoom } from "./zoom";
 import { kakao } from "./kakao";
-import { naver } from "./naver"
+import { naver } from "./naver";
 
 export const socialProviders = {
 	apple,
