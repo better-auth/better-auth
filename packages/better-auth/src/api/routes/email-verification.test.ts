@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { APIError } from "better-auth/api";
 
 describe("Email Verification", async () => {
 	const mockSendEmail = vi.fn();
@@ -14,6 +15,9 @@ describe("Email Verification", async () => {
 				token = _token;
 				mockSendEmail(user.email, url);
 			},
+		},
+		logger: {
+			level: "error",
 		},
 	});
 
@@ -41,7 +45,7 @@ describe("Email Verification", async () => {
 	it("should not send a verification email when sendVerificationOnSignIn is false", async () => {
 		const mockDisabledSendEmail = vi.fn();
 		let verificationToken: string;
-		const { testUser, signInWithUser } = await getTestInstance({
+		const { testUser, auth } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
 				requireEmailVerification: true,
@@ -57,13 +61,27 @@ describe("Email Verification", async () => {
 
 		// Clear mock calls from user creation
 		mockDisabledSendEmail.mockClear();
-		
+
 		// Try signing in (this should fail with 403 but not send an email)
-		try {
-			await signInWithUser(testUser.email, testUser.password);
-		} catch (error) {
-			// Expected to fail with 403
-		}
+		expect(async () => {
+			try {
+				await auth.api.signInEmail({
+					body: { email: testUser.email, password: testUser.password },
+				});
+			} catch (err) {
+				throw err;
+			}
+		}).rejects.toThrowError(
+			new APIError(
+				403,
+				{
+					message: "Email not verified",
+					code: "EMAIL_NOT_VERIFIED",
+				},
+				undefined,
+				403,
+			),
+		);
 
 		expect(mockDisabledSendEmail).not.toHaveBeenCalled();
 	});
