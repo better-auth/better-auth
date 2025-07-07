@@ -153,7 +153,10 @@ export const username = (options?: UsernameOptions) => {
 						ctx.context.options.emailAndPassword?.requireEmailVerification
 					) {
 						// Check if sending verification email on sign-in is enabled (default is true)
-						if (ctx.context.options.emailAndPassword.sendVerificationOnSignIn !== false) {
+						if (
+							ctx.context.options.emailAndPassword.sendVerificationOnSignIn !==
+							false
+						) {
 							await sendVerificationEmailFn(ctx, user);
 						}
 						throw new APIError("FORBIDDEN", {

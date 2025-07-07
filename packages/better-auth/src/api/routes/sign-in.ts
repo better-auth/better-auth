@@ -502,9 +502,11 @@ export const signInEmail = createAuthEndpoint(
 					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
-			
+
 			// Check if sending verification email on sign-in is enabled (default is true)
-			if (ctx.context.options.emailAndPassword.sendVerificationOnSignIn !== false) {
+			if (
+				ctx.context.options.emailAndPassword.sendVerificationOnSignIn !== false
+			) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					user.user.email,
@@ -513,7 +515,9 @@ export const signInEmail = createAuthEndpoint(
 				);
 				const url = `${
 					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+				}/verify-email?token=${token}&callbackURL=${
+					ctx.body.callbackURL || "/"
+				}`;
 				await ctx.context.options.emailVerification.sendVerificationEmail(
 					{
 						user: user.user,
@@ -523,7 +527,7 @@ export const signInEmail = createAuthEndpoint(
 					ctx.request,
 				);
 			}
-			
+
 			throw new APIError("FORBIDDEN", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
