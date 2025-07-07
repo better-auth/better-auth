@@ -38,6 +38,36 @@ describe("Email Verification", async () => {
 		);
 	});
 
+	it("should not send a verification email when sendVerificationOnSignIn is false", async () => {
+		const mockDisabledSendEmail = vi.fn();
+		let verificationToken: string;
+		const { testUser, signInWithUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+				sendVerificationOnSignIn: false,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					verificationToken = token;
+					mockDisabledSendEmail(user.email, url);
+				},
+			},
+		});
+
+		// Clear mock calls from user creation
+		mockDisabledSendEmail.mockClear();
+		
+		// Try signing in (this should fail with 403 but not send an email)
+		try {
+			await signInWithUser(testUser.email, testUser.password);
+		} catch (error) {
+			// Expected to fail with 403
+		}
+
+		expect(mockDisabledSendEmail).not.toHaveBeenCalled();
+	});
+
 	it("should verify email", async () => {
 		const res = await client.verifyEmail({
 			query: {
