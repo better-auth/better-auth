@@ -95,6 +95,26 @@ const { data, error } = await authClient.emailOtp.resetPassword({
 })
 ```
 
+### Override Default Email Verification
+
+To override the default email verification, pass `overrideDefaultEmailVerification: true` in the options. This will make the system use an email OTP instead of the default verification link whenever email verification is triggered. In other words, the user will verify their email using an OTP rather than clicking a link.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  plugins: [
+    emailOTP({
+      overrideDefaultEmailVerification: true, // [!code highlight]
+      async sendVerificationOTP({ email, otp, type }) {
+        // Implement the sendVerificationOTP method to send the OTP to the user's email address
+      },
+    }),
+  ],
+});
+```
+
+
 ## Options
 
 - `sendVerificationOTP`: A function that sends the OTP to the user's email address. The function receives an object with the following properties:
