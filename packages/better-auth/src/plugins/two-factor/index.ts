@@ -113,7 +113,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx.headers,
+							ctx,
 							false,
 							ctx.context.session.session,
 						);
@@ -221,7 +221,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						ctx.headers,
+						ctx,
 						false,
 						ctx.context.session.session,
 					);
@@ -296,7 +296,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
-						const maxAge = options?.otpOptions?.period || 60 * 5; // 5 minutes
+						const maxAge = (options?.otpOptions?.period ?? 3) * 60; // 3 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
@@ -304,11 +304,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: data.user.id,
-							identifier,
-							expiresAt: new Date(Date.now() + maxAge * 1000),
-						});
+						await ctx.context.internalAdapter.createVerificationValue(
+							{
+								value: data.user.id,
+								identifier,
+								expiresAt: new Date(Date.now() + maxAge * 1000),
+							},
+							ctx,
+						);
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,

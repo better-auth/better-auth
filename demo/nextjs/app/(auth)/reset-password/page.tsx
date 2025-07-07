@@ -54,7 +54,9 @@ export default function ResetPassword() {
 								<PasswordInput
 									id="password"
 									value={password}
-									onChange={(e) => setPassword(e.target.value)}
+									onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+										setPassword(e.target.value)
+									}
 									autoComplete="password"
 									placeholder="Password"
 								/>
@@ -64,7 +66,9 @@ export default function ResetPassword() {
 								<PasswordInput
 									id="password"
 									value={confirmPassword}
-									onChange={(e) => setConfirmPassword(e.target.value)}
+									onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+										setConfirmPassword(e.target.value)
+									}
 									autoComplete="password"
 									placeholder="Password"
 								/>

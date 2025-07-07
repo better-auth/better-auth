@@ -6,8 +6,10 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../../api";
+import { defaultKeyHasher } from "./utils";
+import type { GenericEndpointContext } from "../../types";
 
-interface MagicLinkOptions {
+interface MagicLinkopts {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -46,9 +48,39 @@ interface MagicLinkOptions {
 	 * Custom function to generate a token
 	 */
 	generateToken?: (email: string) => Promise<string> | string;
+
+	/**
+	 * This option allows you to configure how the token is stored in your database.
+	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
+	 *
+	 * @default "plain"
+	 */
+	storeToken?:
+		| "plain"
+		| "hashed"
+		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
 }
 
-export const magicLink = (options: MagicLinkOptions) => {
+export const magicLink = (options: MagicLinkopts) => {
+	const opts = {
+		storeToken: "plain",
+		...options,
+	} satisfies MagicLinkopts;
+
+	async function storeToken(ctx: GenericEndpointContext, token: string) {
+		if (opts.storeToken === "hashed") {
+			return await defaultKeyHasher(token);
+		}
+		if (
+			typeof opts.storeToken === "object" &&
+			"type" in opts.storeToken &&
+			opts.storeToken.type === "custom-hasher"
+		) {
+			return await opts.storeToken.hash(token);
+		}
+		return token;
+	}
+
 	return {
 		id: "magic-link",
 		endpoints: {
@@ -101,7 +133,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 				async (ctx) => {
 					const { email } = ctx.body;
 
-					if (options.disableSignUp) {
+					if (opts.disableSignUp) {
 						const user =
 							await ctx.context.internalAdapter.findUserByEmail(email);
 
@@ -112,22 +144,26 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}
 					}
 
-					const verificationToken = options?.generateToken
-						? await options.generateToken(email)
+					const verificationToken = opts?.generateToken
+						? await opts.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: verificationToken,
-						value: JSON.stringify({ email, name: ctx.body.name }),
-						expiresAt: new Date(
-							Date.now() + (options.expiresIn || 60 * 5) * 1000,
-						),
-					});
+					const storedToken = await storeToken(ctx, verificationToken);
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: storedToken,
+							value: JSON.stringify({ email, name: ctx.body.name }),
+							expiresAt: new Date(
+								Date.now() + (opts.expiresIn || 60 * 5) * 1000,
+							),
+						},
+						ctx,
+					);
 					const url = `${
 						ctx.context.baseURL
-					}/magic-link/verify?token=${verificationToken}&callbackURL=${
-						ctx.body.callbackURL || "/"
-					}`;
-					await options.sendMagicLink(
+					}/magic-link/verify?token=${verificationToken}&callbackURL=${encodeURIComponent(
+						ctx.body.callbackURL || "/",
+					)}`;
+					await opts.sendMagicLink(
 						{
 							email,
 							url,
@@ -155,7 +191,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 							})
 							.optional(),
 					}),
-					use: [originCheck((ctx) => ctx.query.callbackURL)],
+					use: [
+						originCheck((ctx) => {
+							return ctx.query.callbackURL
+								? decodeURIComponent(ctx.query.callbackURL)
+								: "/";
+						}),
+					],
 					requireHeaders: true,
 					metadata: {
 						openapi: {
@@ -184,14 +226,20 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { token, callbackURL } = ctx.query;
+					const token = ctx.query.token;
+					const callbackURL = ctx.query.callbackURL
+						? decodeURIComponent(ctx.query.callbackURL)
+						: "/";
 					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
 							? `${ctx.context.options.baseURL}${callbackURL}`
 							: ctx.context.options.baseURL;
+					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
-						await ctx.context.internalAdapter.findVerificationValue(token);
+						await ctx.context.internalAdapter.findVerificationValue(
+							storedToken,
+						);
 					if (!tokenValue) {
 						throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
 					}
@@ -213,7 +261,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						.then((res) => res?.user);
 
 					if (!user) {
-						if (!options.disableSignUp) {
+						if (!opts.disableSignUp) {
 							const newUser = await ctx.context.internalAdapter.createUser(
 								{
 									email: email,
@@ -229,7 +277,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 								);
 							}
 						} else {
-							throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
+							throw ctx.redirect(
+								`${toRedirectTo}?error=new_user_signup_disabled`,
+							);
 						}
 					}
 
@@ -245,7 +295,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.headers,
+						ctx,
 					);
 
 					if (!session) {
@@ -258,7 +308,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						session,
 						user,
 					});
-					if (!callbackURL) {
+					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,
 							user: {
@@ -284,8 +334,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 						path.startsWith("/magic-link/verify")
 					);
 				},
-				window: options.rateLimit?.window || 60,
-				max: options.rateLimit?.max || 5,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 5,
 			},
 		],
 	} satisfies BetterAuthPlugin;

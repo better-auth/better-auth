@@ -27,6 +27,111 @@ export const auth = betterAuth({
 });
 ```
 
+## Usage
+
+### Sign In
+
+To sign in with a social provider, you can use the `signIn.social` function with the `authClient` or `auth.api` for server-side usage.
+
+```ts
+await authClient.signIn.social({
+  provider: "google", // or any other provider id
+})
+```
+
+server-side usage:
+
+```ts
+await auth.api.signInSocial({
+  body: {
+    provider: "google", // or any other provider id
+  },
+});
+```
+
+### Link account
+
+To link an account to a social provider, you can use the `linkAccount` function with the `authClient` or `auth.api` for server-side usage.
+
+```ts
+await authClient.linkSocial({
+  provider: "google", // or any other provider id
+})
+```
+
+server-side usage:
+
+```ts
+await auth.api.linkSocialAccount({
+  body: {
+    provider: "google", // or any other provider id
+  },
+  headers: // pass headers with authenticated token
+});
+```
+
+### Get Access Token
+
+To get the access token for a social provider, you can use the `getAccessToken` function with the `authClient` or `auth.api` for server-side usage. When you use this endpoint, if the access token is expired, it will be refreshed.
+
+```ts
+const { accessToken } = await authClient.getAccessToken({
+  providerId: "google", // or any other provider id
+  accountId: "accountId", // optional, if you want to get the access token for a specific account
+})
+```
+
+server-side usage:
+
+```ts
+await auth.api.getAccessToken({
+  body: {
+    providerId: "google", // or any other provider id
+    accountId: "accountId", // optional, if you want to get the access token for a specific account
+    userId: "userId", // optional, if you don't provide headers with authenticated token
+  },
+  headers: // pass headers with authenticated token
+});
+```
+
+### Get Account Info Provided by the provider
+
+To get provider specific account info you can use the `accountInfo` function with the `authClient` or `auth.api` for server-side usage.
+
+```ts
+const info = await authClient.accountInfo({
+  accountId: "accountId", // here you pass in the provider given account id, the provider is automatically detected from the account id
+})
+```
+
+server-side usage:
+
+```ts
+await auth.api.accountInfo({
+  body: { accountId: "accountId" },
+  headers: // pass headers with authenticated token
+});
+```
+
+### Requesting Additional Scopes
+
+Sometimes your application may need additional OAuth scopes after the user has already signed up (e.g., for accessing GitHub repositories or Google Drive). Users may not want to grant extensive permissions initially, preferring to start with minimal permissions and grant additional access as needed.
+
+You can request additional scopes by using the `linkSocial` method with the same provider. This will trigger a new OAuth flow that requests the additional scopes while maintaining the existing account connection.
+
+```ts
+const requestAdditionalScopes = async () => {
+    await authClient.linkSocial({
+        provider: "google",
+        scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+};
+```
+
+<Callout>
+Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
+</Callout>
+
 ### Other Provider Configurations
 
 **scope** The scope of the access request. For example, `email` or `profile`.

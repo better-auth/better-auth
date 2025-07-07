@@ -55,7 +55,7 @@ To sign in with Google using the ID Token, you can use the `signIn.social` funct
 This is useful when you have the ID Token from Google on the client-side and want to use it to sign in on the server.
 
 <Callout>
- If id token is provided no redirection will happen, and the user will be signed in directly.
+ If ID token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>
 
 ```ts title="auth-client.ts"
@@ -70,4 +70,40 @@ const data = await authClient.signIn.social({
 
 <Callout>
     If you want to use google one tap, you can use the [One Tap Plugin](/docs/plugins/one-tap) guide.
+</Callout>
+
+### Always ask to select an account
+
+If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.  
+
+```ts
+socialProviders: {
+    google: {
+        prompt: "select_account", // [!code highlight]
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+}
+```
+
+### Requesting Additional Google Scopes
+
+If your application needs additional Google scopes after the user has already signed up (e.g., for Google Drive, Gmail, or other Google services), you can request them using the `linkSocial` method with the same Google provider.
+
+```ts title="auth-client.ts"
+const requestGoogleDriveAccess = async () => {
+    await authClient.linkSocial({
+        provider: "google",
+        scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+};
+
+// Example usage in a React component
+return <button onClick={requestGoogleDriveAccess}>Add Google Drive Permissions</button>;
+```
+
+This will trigger a new OAuth flow that requests the additional scopes. After completion, your account will have the new scope in the database, and the access token will give you access to the requested Google APIs.
+
+<Callout>
+Ensure you're using Better Auth version 1.2.7 or later to avoid "Social account already linked" errors when requesting additional scopes from the same provider.
 </Callout>
