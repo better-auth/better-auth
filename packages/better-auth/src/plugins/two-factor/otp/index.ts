@@ -136,7 +136,7 @@ export const otp2fa = (options?: OTPOptions) => {
 			const code = generateRandomString(opts.digits, "0-9");
 			await ctx.context.internalAdapter.createVerificationValue(
 				{
-					value: `${code}!0`,
+					value: `${code}:0`,
 					identifier: `2fa-otp-${key}`,
 					expiresAt: new Date(Date.now() + opts.period),
 				},
@@ -256,7 +256,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,
 				);
-			const [otp, counter] = toCheckOtp?.value?.split("!") ?? [];
+			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -320,7 +320,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					toCheckOtp.id,
 					{
-						value: `${otp}!${parseInt(counter) + 1}`,
+						value: `${otp}:${(parseInt(counter, 10) || 0) + 1}`,
 					},
 				);
 				return invalid("INVALID_CODE");
