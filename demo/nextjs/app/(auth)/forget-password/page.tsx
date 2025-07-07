@@ -29,7 +29,7 @@ export default function Component() {
 		setError("");
 
 		try {
-			const res = await client.forgetPassword({
+			await client.requestPasswordReset({
 				email,
 				redirectTo: "/reset-password",
 			});
@@ -52,7 +52,7 @@ export default function Component() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<Alert>
+						<Alert variant="default">
 							<CheckCircle2 className="h-4 w-4" />
 							<AlertDescription>
 								If you don't see the email, check your spam folder.

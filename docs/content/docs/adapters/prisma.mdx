@@ -1,0 +1,58 @@
+---
+title: Prisma
+description: Integrate Better Auth with Prisma.
+---
+
+Prisma ORM is an open-source database toolkit that simplifies database access and management in applications by providing a type-safe query builder and an intuitive data modeling interface.
+Read more [here](https://www.prisma.io/).
+
+## Example Usage
+
+Make sure you have Prisma installed and configured.
+Then, you can use the Prisma adapter to connect to your database.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+export const auth = betterAuth({
+  database: prismaAdapter(prisma, {
+    provider: "sqlite",
+  }),
+});
+```
+
+<Callout type="warning">
+  If you have configured a custom output directory in your `schema.prisma` file (e.g., `output = "../src/generated/prisma"`), make sure to import the Prisma client from that location instead of `@prisma/client`. Learn more about custom output directories in the [Prisma documentation](https://www.prisma.io/docs/guides/nextjs#21-install-prisma-orm-and-create-your-first-models).
+</Callout>
+
+## Schema generation & migration
+
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
+
+<table>
+  <tr className="border-b">
+    <th>
+      <p className="font-bold text-[16px] mb-1">Prisma Schema Generation</p>
+    </th>
+    <th>
+      <p className="font-bold text-[16px] mb-1">Prisma Schema Migration</p>
+    </th>
+  </tr>
+  <tr className="h-10">
+    <td>✅ Supported</td>
+    <td>❌ Not Supported</td>
+  </tr>
+</table>
+
+```bash title="Schema Generation"
+npx @better-auth/cli@latest generate
+```
+
+## Additional Information
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

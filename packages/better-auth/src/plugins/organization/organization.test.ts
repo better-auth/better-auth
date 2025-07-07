@@ -1,11 +1,11 @@
-import { describe, expect, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
-import { createAccessControl } from "./access";
+import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { BetterAuthError } from "../../error";
+import { APIError } from "better-call";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -15,6 +15,7 @@ describe("organization", async (it) => {
 			},
 			plugins: [
 				organization({
+					membershipLimit: 6,
 					async sendInvitationEmail(data, request) {},
 					schema: {
 						organization: {
@@ -22,8 +23,12 @@ describe("organization", async (it) => {
 						},
 						member: {
 							modelName: "teamMembers",
+							fields: {
+								userId: "user_id",
+							},
 						},
 					},
+					invitationLimit: 3,
 				}),
 			],
 			logger: {
@@ -189,64 +194,73 @@ describe("organization", async (it) => {
 				name: "test4",
 			},
 		},
-	])(
-		"invites user to organization with $role role",
-		async ({ role, newUser }) => {
-			const { headers } = await signInWithTestUser();
-			const invite = await client.organization.inviteMember({
-				organizationId: organizationId,
-				email: newUser.email,
-				role: role,
-				fetchOptions: {
-					headers,
-				},
-			});
-			if (!invite.data) throw new Error("Invitation not created");
-			expect(invite.data.email).toBe(newUser.email);
-			expect(invite.data.role).toBe(role);
-			await client.signUp.email({
-				email: newUser.email,
-				password: newUser.password,
-				name: newUser.name,
-			});
-			const { headers: headers2 } = await signInWithUser(
-				newUser.email,
-				newUser.password,
-			);
+	])("invites user to organization with role", async ({ role, newUser }) => {
+		const { headers } = await signInWithTestUser();
+		const invite = await client.organization.inviteMember({
+			organizationId: organizationId,
+			email: newUser.email,
+			role: role as "owner",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data) throw new Error("Invitation not created");
+		expect(invite.data.email).toBe(newUser.email);
+		expect(invite.data.role).toBe(role);
+		await client.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+		const { headers: headers2 } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
 
-			const wrongInvitation = await client.organization.acceptInvitation({
-				invitationId: "123",
-				fetchOptions: {
-					headers: headers2,
-				},
-			});
-			expect(wrongInvitation.error?.status).toBe(400);
+		const wrongInvitation = await client.organization.acceptInvitation({
+			invitationId: "123",
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(wrongInvitation.error?.status).toBe(400);
 
-			const wrongPerson = await client.organization.acceptInvitation({
-				invitationId: invite.data.id,
-				fetchOptions: {
-					headers,
-				},
-			});
-			expect(wrongPerson.error?.status).toBe(403);
+		const wrongPerson = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(wrongPerson.error?.status).toBe(403);
 
-			const invitation = await client.organization.acceptInvitation({
-				invitationId: invite.data.id,
-				fetchOptions: {
-					headers: headers2,
-				},
-			});
-			expect(invitation.data?.invitation.status).toBe("accepted");
-			const invitedUserSession = await client.getSession({
-				fetchOptions: {
-					headers: headers2,
-				},
-			});
-			expect(
-				(invitedUserSession.data?.session as any).activeOrganizationId,
-			).toBe(organizationId);
-		},
-	);
+		const invitation = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(invitation.data?.invitation.status).toBe("accepted");
+		const invitedUserSession = await client.getSession({
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		);
+	});
+
+	it("should create invitation with multiple roles", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: organizationId,
+			email: "test5@test.com",
+			role: ["admin", "member"],
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invite.data?.role).toBe("admin,member");
+	});
 
 	it("should allow getting a member", async () => {
 		const { headers } = await signInWithTestUser();
@@ -267,7 +281,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow updating member", async () => {
-		const { headers } = await signInWithTestUser();
+		const { headers, user } = await signInWithTestUser();
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,
@@ -287,6 +301,65 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(member.data?.role).toBe("admin");
+	});
+
+	it("should allow setting multiple roles", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const c = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["member", "admin"],
+			memberId: org.data?.members[1].id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(c.data?.role).toBe("member,admin");
+	});
+
+	it("should allow setting multiple roles when you have multiple yourself", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const activeMember = org?.data?.members.find((m) => m.userId === user.id);
+
+		expect(activeMember?.role).toBe("owner");
+
+		const c1 = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["owner", "admin"],
+			memberId: activeMember?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(c1.data?.role).toBe("owner,admin");
+
+		const c2 = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["owner"],
+			memberId: activeMember!.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(c2.data?.role).toBe("owner");
 	});
 
 	const adminUser = {
@@ -343,6 +416,33 @@ describe("organization", async (it) => {
 		});
 	});
 
+	it("shouldn't allow updating owner role if you're not owner", async () => {
+		const { headers } = await signInWithTestUser();
+		const { members } = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+
+		const res = await client.organization.updateMemberRole({
+			organizationId: organizationId,
+			role: "admin",
+			memberId: members.find((m) => m.role === "owner")?.id!,
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow removing member from organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const orgBefore = await client.organization.getFullOrganization({
@@ -357,12 +457,11 @@ describe("organization", async (it) => {
 		expect(orgBefore.data?.members.length).toBe(4);
 		await client.organization.removeMember({
 			organizationId: organizationId,
-			memberIdOrEmail: "test2@test.com",
+			memberIdOrEmail: adminUser.email,
 			fetchOptions: {
 				headers,
 			},
 		});
-
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,
@@ -374,7 +473,7 @@ describe("organization", async (it) => {
 		expect(org.data?.members.length).toBe(3);
 	});
 
-	it("shouldn't allow removing owner from organization", async () => {
+	it("shouldn't allow removing last owner from organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const org = await client.organization.getFullOrganization({
 			query: {
@@ -384,16 +483,16 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
+
 		if (!org.data) throw new Error("Organization not found");
-		expect(org.data.members[0].role).toBe("owner");
-		const removedMember = await client.organization.removeMember({
+		const removedOwner = await client.organization.removeMember({
 			organizationId: org.data.id,
-			memberIdOrEmail: org.data.members[0].id,
+			memberIdOrEmail: org.data?.members.find((m) => m.role === "owner")!.id,
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(removedMember.error?.status).toBe(400);
+		expect(removedOwner.error?.status).toBe(400);
 	});
 
 	it("should validate permissions", async () => {
@@ -404,7 +503,7 @@ describe("organization", async (it) => {
 			},
 		});
 		const hasPermission = await client.organization.hasPermission({
-			permission: {
+			permissions: {
 				member: ["update"],
 			},
 			fetchOptions: {
@@ -412,13 +511,29 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(hasPermission.data?.success).toBe(true);
+
+		const hasMultiplePermissions = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"],
+				invitation: ["create"],
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
 	it("should allow deleting organization", async () => {
-		await client.organization.delete({
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+
+		const r = await client.organization.delete({
 			organizationId,
 			fetchOptions: {
-				headers,
+				headers: adminHeaders,
 			},
 		});
 		const org = await client.organization.getFullOrganization({
@@ -426,7 +541,7 @@ describe("organization", async (it) => {
 				organizationId,
 			},
 			fetchOptions: {
-				headers,
+				headers: adminHeaders,
 			},
 		});
 		expect(org.error?.status).toBe(403);
@@ -452,8 +567,8 @@ describe("organization", async (it) => {
 		});
 		const org = await auth.api.createOrganization({
 			body: {
-				name: "test",
-				slug: "test",
+				name: "test2",
+				slug: "test3",
 			},
 			headers,
 		});
@@ -465,6 +580,163 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(member?.role).toBe("admin");
+	});
+
+	it("should add member on the server with multiple roles", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "new-member-mr@email.com",
+				password: "password",
+				name: "new member mr",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${newUser?.token}`,
+			}),
+		});
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test2",
+				slug: "test4",
+			},
+			headers,
+		});
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: session?.user.id!,
+				role: ["admin", "member"],
+			},
+		});
+		expect(member?.role).toBe("admin,member");
+	});
+
+	it("should respect membershipLimit when adding members to organization", async () => {
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test-5-membership-limit",
+				slug: "test-5-membership-limit",
+			},
+			headers,
+		});
+
+		const users = [
+			"user1@emial.com",
+			"user2@email.com",
+			"user3@email.com",
+			"user4@email.com",
+		];
+
+		for (const user of users) {
+			const newUser = await auth.api.signUpEmail({
+				body: {
+					email: user,
+					password: "password",
+					name: user,
+				},
+			});
+			const session = await auth.api.getSession({
+				headers: new Headers({
+					Authorization: `Bearer ${newUser?.token}`,
+				}),
+			});
+			await auth.api.addMember({
+				body: {
+					organizationId: org?.id,
+					userId: session?.user.id!,
+					role: "admin",
+				},
+			});
+		}
+
+		const userOverLimit = {
+			email: "shouldthrowerror@email.com",
+			password: "password",
+			name: "name",
+		};
+		const userOverLimit2 = {
+			email: "shouldthrowerror2@email.com",
+			password: "password",
+			name: "name",
+		};
+
+		// test API method
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: userOverLimit.email,
+				password: userOverLimit.password,
+				name: userOverLimit.name,
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${newUser?.token}`,
+			}),
+		});
+		await auth.api
+			.addMember({
+				body: {
+					organizationId: org?.id,
+					userId: session?.user.id!,
+					role: "admin",
+				},
+			})
+			.catch((e: APIError) => {
+				expect(e).not.toBeNull();
+				expect(e).toBeInstanceOf(APIError);
+				expect(e.message).toBe(
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+				);
+			});
+		const invite = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: userOverLimit2.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data) throw new Error("Invitation not created");
+		await client.signUp.email({
+			email: userOverLimit.email,
+			password: userOverLimit.password,
+			name: userOverLimit.name,
+		});
+		const { res, headers: headers2 } = await signInWithUser(
+			userOverLimit2.email,
+			userOverLimit2.password,
+		);
+		await client.signUp.email(
+			{
+				email: userOverLimit2.email,
+				password: userOverLimit2.password,
+				name: userOverLimit2.name,
+			},
+			{
+				onSuccess: cookieSetter(headers2),
+			},
+		);
+
+		const invitation = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(invitation.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+		);
+
+		const getFullOrganization = await client.organization.getFullOrganization({
+			query: {
+				organizationId: org?.id,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(getFullOrganization.data?.members.length).toBe(6);
 	});
 });
 
@@ -537,13 +809,23 @@ describe("access control", async (it) => {
 	it("should return success", async () => {
 		const canCreateProject = checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["create"],
 			},
 		});
 		expect(canCreateProject).toBe(true);
-		const canCreateProjectServer = await hasPermission({
+
+		// To be removed when `permission` will be removed entirely
+		const canCreateProjectLegacy = checkRolePermission({
+			role: "admin",
 			permission: {
+				project: ["create"],
+			},
+		});
+		expect(canCreateProjectLegacy).toBe(true);
+
+		const canCreateProjectServer = await hasPermission({
+			permissions: {
 				project: ["create"],
 			},
 			fetchOptions: {
@@ -556,7 +838,7 @@ describe("access control", async (it) => {
 	it("should return not success", async () => {
 		const canCreateProject = checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["delete"],
 			},
 		});
@@ -564,20 +846,179 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		let error: BetterAuthError | null = null;
-		try {
-			checkRolePermission({
-				role: "admin",
-				permission: {
-					project: ["read"],
-					sales: ["delete"],
+		const res = checkRolePermission({
+			role: "admin",
+			permissions: {
+				project: ["read"],
+				sales: ["delete"],
+			},
+		});
+		expect(res).toBe(false);
+	});
+});
+
+describe("invitation limit", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				invitationLimit: 1,
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("should invite member to organization", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data?.id as string,
+			email: "test6@test.com",
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invite.data?.status).toBe("pending");
+	});
+
+	it("should throw error when invitation limit is reached", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data?.id as string,
+			email: "test7@test.com",
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invite.error?.status).toBe(403);
+		expect(invite.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+		);
+	});
+
+	it("should throw error with custom invitation limit", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					invitationLimit: async (data, ctx) => {
+						return 0;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		await auth.api
+			.createInvitation({
+				body: {
+					email: "test8@test.com",
+					role: "member",
+					organizationId: org?.id as string,
 				},
+				headers,
+			})
+			.catch((e: APIError) => {
+				expect(e.message).toBe(
+					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+				);
 			});
-		} catch (e) {
-			if (e instanceof BetterAuthError) {
-				error = e;
-			}
-		}
-		expect(error).toBeInstanceOf(BetterAuthError);
+	});
+});
+
+describe("cancel pending invitations on re-invite", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				cancelPendingInvitationsOnReInvite: true,
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("should cancel pending invitations on re-invite", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9@test.com",
+				role: "member",
+				resend: true,
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.data?.status).toBe("pending");
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(
+			listInvitations.data?.filter((invite) => invite.status === "pending")
+				.length,
+		).toBe(1);
+	});
+});
+
+describe("types", async (it) => {
+	const { auth } = await getTestInstance({
+		plugins: [organization({})],
+	});
+
+	it("should infer active organization", async () => {
+		type ActiveOrganization = typeof auth.$Infer.ActiveOrganization;
+
+		type FullOrganization = Awaited<
+			ReturnType<typeof auth.api.getFullOrganization>
+		>;
+		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization>();
 	});
 });

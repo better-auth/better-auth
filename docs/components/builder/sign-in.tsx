@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 export default function SignIn() {
 	const [options] = useAtom(optionsAtom);
 	return (
-		<Card className="z-50 rounded-none max-w-md">
+		<Card className="z-50 rounded-none max-w-full">
 			<CardHeader>
 				<CardTitle className="text-lg md:text-xl">Sign In</CardTitle>
 				<CardDescription className="text-xs md:text-sm">
@@ -46,7 +46,7 @@ export default function SignIn() {
 							<div className="grid gap-2">
 								<div className="flex items-center">
 									<Label htmlFor="password">Password</Label>
-									{options.forgetPassword && (
+									{options.requestPasswordReset && (
 										<Link
 											href="#"
 											className="ml-auto inline-block text-sm underline"
@@ -139,13 +139,15 @@ export default function SignIn() {
 				<CardFooter>
 					<div className="flex justify-center w-full border-t py-4">
 						<p className="text-center text-xs text-neutral-500">
-							Powered by{" "}
+							built with{" "}
 							<Link
 								href="https://better-auth.com"
 								className="underline"
 								target="_blank"
 							>
-								<span className="dark:text-orange-200/90">better-auth.</span>
+								<span className="dark:text-white/70 cursor-pointer">
+									better-auth.
+								</span>
 							</Link>
 						</p>
 					</div>
@@ -208,7 +210,7 @@ export default function SignIn() {
               <div className="flex items-center">
                 <Label htmlFor="password">Password</Label>
                 ${
-									options.forgetPassword
+									options.requestPasswordReset
 										? `<Link
                     href="#"
                     className="ml-auto inline-block text-sm underline"
@@ -259,10 +261,29 @@ export default function SignIn() {
                 }}
                 value={email}
               />
-              <Button className="gap-2" onClick={async () => {
-                await signIn.magicLink({ email });
-              }}>
-                Sign-in with Magic Link
+              <Button
+                disabled={loading}
+                className="gap-2"
+                onClick={async () => {
+                  await signIn.magicLink(
+                  {
+                    email
+                  },
+                  {
+                     onRequest: (ctx) => {
+                        setLoading(true);
+                      },
+                     onResponse: (ctx) => {
+                         setLoading(false);
+                     },
+                   },
+                  );
+                 }}>
+                  {loading ? (
+                     <Loader2 size={16} className="animate-spin" />
+                     ):(
+                         Sign-in with Magic Link
+                   )}
               </Button>
             </div>`
 							: ""
@@ -275,15 +296,28 @@ export default function SignIn() {
               className="w-full"
               disabled={loading}
               onClick={async () => {
-                await signIn.email({ email, password });
+                await signIn.email(
+                {
+                    email,
+                    password
+                },
+                {
+                  onRequest: (ctx) => {
+                    setLoading(true);
+                  },
+                  onResponse: (ctx) => {
+                    setLoading(false);
+                  },
+                },
+                );
               }}
             >
               {loading ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
-                "Login"
+                <p> Login </p>
               )}
-            </Button>`
+              </Button>`
 							: ""
 					}
 
@@ -291,9 +325,19 @@ export default function SignIn() {
 						options.passkey
 							? `<Button
               variant="secondary"
+              disabled={loading}
               className="gap-2"
               onClick={async () => {
-                await signIn.passkey();
+              await signIn.passkey(
+                {
+                  onRequest: (ctx) => {
+                    setLoading(true);
+                  },
+                  onResponse: (ctx) => {
+                    setLoading(false);
+                  },
+                },
+                )
               }}
             >
               <Key size={16} />
@@ -317,7 +361,7 @@ export default function SignIn() {
 									const icon =
 										socialProviders[provider as keyof typeof socialProviders]
 											?.stringIcon || "";
-									return `<Button
+									return `\n\t\t\t\t<Button
                   variant="outline"
                   className={cn(
                     ${
@@ -326,11 +370,22 @@ export default function SignIn() {
 												: '"w-full gap-2"'
 										}
                   )}
+                  disabled={loading}
                   onClick={async () => {
-                    await signIn.social({
+                    await signIn.social(
+                    {
                       provider: "${provider}",
                       callbackURL: "/dashboard"
-                    });
+                    },
+                    {
+                      onRequest: (ctx) => {
+                         setLoading(true);
+                      },
+                      onResponse: (ctx) => {
+                         setLoading(false);
+                      },
+                     },
+                    );
                   }}
                 >
                   ${icon}
@@ -354,13 +409,15 @@ export default function SignIn() {
 					? `<CardFooter>
           <div className="flex justify-center w-full border-t py-4">
             <p className="text-center text-xs text-neutral-500">
-              Powered by{" "}
+             built with{" "}
               <Link
                 href="https://better-auth.com"
                 className="underline"
                 target="_blank"
               >
-                <span className="dark:text-orange-200/90">better-auth.</span>
+                <span className="dark:text-white/70 cursor-pointer">
+									better-auth.
+								</span>
               </Link>
             </p>
           </div>

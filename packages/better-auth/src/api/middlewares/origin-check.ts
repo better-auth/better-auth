@@ -23,7 +23,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		? context.trustedOrigins
 		: [
 				...context.trustedOrigins,
-				...(context.options.trustedOrigins?.(ctx.request) || []),
+				...((await context.options.trustedOrigins?.(ctx.request)) || []),
 			];
 	const usesCookies = ctx.headers?.has("cookie");
 
@@ -32,6 +32,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			return false;
 		}
 		if (pattern.includes("*")) {
+			// For protocol-specific wildcards, match the full origin
+			if (pattern.includes("://")) {
+				return wildcardMatch(pattern)(getOrigin(url) || url);
+			}
+			// For host-only wildcards, match just the host
 			return wildcardMatch(pattern)(getHost(url));
 		}
 
@@ -47,7 +52,9 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		const isTrustedOrigin = trustedOrigins.some(
 			(origin) =>
 				matchesPattern(url, origin) ||
-				(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
+				(url?.startsWith("/") &&
+					label !== "origin" &&
+					/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)),
 		);
 		if (!isTrustedOrigin) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -68,7 +75,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 export const originCheck = (
-	getValue: (ctx: GenericEndpointContext) => string,
+	getValue: (ctx: GenericEndpointContext) => string | string[],
 ) =>
 	createAuthMiddleware(async (ctx) => {
 		if (!ctx.request) {
@@ -82,7 +89,7 @@ export const originCheck = (
 			? context.trustedOrigins
 			: [
 					...context.trustedOrigins,
-					...(context.options.trustedOrigins?.(ctx.request) || []),
+					...((await context.options.trustedOrigins?.(ctx.request)) || []),
 				];
 
 		const matchesPattern = (url: string, pattern: string): boolean => {
@@ -90,9 +97,17 @@ export const originCheck = (
 				return false;
 			}
 			if (pattern.includes("*")) {
+				// For protocol-specific wildcards, match the full origin
+				if (pattern.includes("://")) {
+					return wildcardMatch(pattern)(getOrigin(url) || url);
+				}
+				// For host-only wildcards, match just the host
 				return wildcardMatch(pattern)(getHost(url));
 			}
-			return url.startsWith(pattern);
+			const protocol = getProtocol(url);
+			return protocol === "http:" || protocol === "https:" || !protocol
+				? pattern === getOrigin(url)
+				: url.startsWith(pattern);
 		};
 
 		const validateURL = (url: string | undefined, label: string) => {
@@ -102,7 +117,11 @@ export const originCheck = (
 			const isTrustedOrigin = trustedOrigins.some(
 				(origin) =>
 					matchesPattern(url, origin) ||
-					(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
+					(url?.startsWith("/") &&
+						label !== "origin" &&
+						/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(
+							url,
+						)),
 			);
 			if (!isTrustedOrigin) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -113,5 +132,8 @@ export const originCheck = (
 				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 			}
 		};
-		callbackURL && validateURL(callbackURL, "callbackURL");
+		const callbacks = Array.isArray(callbackURL) ? callbackURL : [callbackURL];
+		for (const url of callbacks) {
+			validateURL(url, "callbackURL");
+		}
 	});

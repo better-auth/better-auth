@@ -3,7 +3,7 @@ title: Nitro Integration
 description: Integrate Better Auth with Nitro.
 ---
 
-Better Auth can be integrated with your [Nitro Application](https://nitro.build/)(an open source framework to build web servers).
+Better Auth can be integrated with your [Nitro Application](https://nitro.build/) (an open source framework to build web servers).
 
 This guide aims to help you integrate Better Auth with your Nitro application in a few simple steps.
 
@@ -78,7 +78,7 @@ npx prisma db push
 
 Follow steps 1 & 2 from the [installation guide](/docs/installation) to install Better Auth in your Nitro application & set up the environment variables.
 
-Once that is done, create your better auth instance within the `server/utils/auth.ts` file.
+Once that is done, create your Better Auth instance within the `server/utils/auth.ts` file.
 
 ```ts title="server/utils/auth.ts"
 import { betterAuth } from "better-auth";
@@ -121,7 +121,7 @@ export default defineEventHandler((event) => {
   This is a [catch-all](https://nitro.build/guide/routing#catch-all-route) route that will handle all requests to `/api/auth/*`.
 </Callout>
 
-### Cors
+### CORS
 
 You can configure CORS for your Nitro app by creating a plugin.
 
@@ -163,10 +163,10 @@ import { fromNodeHeaders } from "better-auth/node";
  * Can be extended to check for specific roles or permissions.
  */
 export const requireAuth: EventHandler = async (event: H3Event) => {
-  const headers = getRequestHeaders(event);
+  const headers = event.headers;
 
   const session = await auth.api.getSession({
-    headers: fromNodeHeaders(headers),
+    headers: headers,
   });
   if (!session)
     throw createError({

@@ -54,7 +54,13 @@ export const auth = betterAuth({
 
 Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `example.com`, and if you authenticate on `example.com`, you may want to access the same session on `app.example.com`.
 
-By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies. To enable them, configure `crossSubDomainCookies` in the `advanced` object of the auth options.
+By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies by configuring `crossSubDomainCookies` and `defaultCookieAttributes` in the `advanced` object of the auth options.
+
+<Callout>The leading period of the `domain` attribute broadens the cookie's scope beyond your main domain, making it accessible across all subdomains.</Callout>
+
+<Callout type="note">
+If your frontend and backend are on different domains, you must configure CORS on your backend, set <code>credentials: 'include'</code> in your frontend requests, and add your frontend domain to <code>trustedOrigins</code>. See the example above for cookie attributes and trustedOrigins usage.
+</Callout>
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -63,12 +69,16 @@ export const auth = betterAuth({
     advanced: {
         crossSubDomainCookies: {
             enabled: true,
-            domain: "example.com" // Optional. Defaults to the base url domain
-        }
-    }
+            domain: ".example.com", // your domain
+        },
+    },
+    trustedOrigins: [
+        'https://example.com',
+        'https://app1.example.com',
+        'https://app2.example.com',
+    ],
 })
 ```
-
 ### Secure Cookies
 
 By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.

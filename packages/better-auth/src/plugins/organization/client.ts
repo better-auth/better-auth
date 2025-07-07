@@ -1,27 +1,27 @@
 import { atom } from "nanostores";
 import type {
+	InferInvitation,
+	InferMember,
 	Invitation,
 	Member,
 	Organization,
+	Team,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
-import {
-	adminAc,
-	defaultStatements,
-	memberAc,
-	ownerAc,
-	type AccessControl,
-	type Role,
-} from "./access";
+import { type AccessControl, type Role } from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
-import { BetterAuthError } from "../../error";
+import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
+import { hasPermission } from "./has-permission";
 
 interface OrganizationClientOptions {
-	ac: AccessControl;
-	roles: {
+	ac?: AccessControl;
+	roles?: {
 		[key in string]: Role;
+	};
+	teams?: {
+		enabled: boolean;
 	};
 }
 
@@ -34,16 +34,45 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
-		? S extends Record<string, Array<any>>
-			? S & DefaultStatements
-			: DefaultStatements
+		? S
 		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
+
 	const roles = {
 		admin: adminAc,
 		member: memberAc,
 		owner: ownerAc,
 		...options?.roles,
 	};
+
+	type OrganizationReturn = O["teams"] extends { enabled: true }
+		? {
+				members: InferMember<O>[];
+				invitations: InferInvitation<O>[];
+				teams: Team[];
+			} & Organization
+		: {
+				members: InferMember<O>[];
+				invitations: InferInvitation<O>[];
+			} & Organization;
 	return {
 		id: "organization",
 		$InferServerPlugin: {} as ReturnType<
@@ -58,52 +87,38 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 							member: Role;
 							owner: Role;
 						};
+				teams: {
+					enabled: O["teams"] extends { enabled: true } ? true : false;
+				};
 			}>
 		>,
 		getActions: ($fetch) => ({
 			$Infer: {
-				ActiveOrganization: {} as Prettify<
-					Organization & {
-						members: Prettify<
-							Member & {
-								user: {
-									id: string;
-									name: string;
-									email: string;
-									image?: string | null;
-								};
-							}
-						>[];
-						invitations: Invitation[];
-					}
-				>,
+				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
-				Invitation: {} as Invitation,
-				Member: {} as Member,
+				Invitation: {} as InferInvitation<O>,
+				Member: {} as InferMember<O>,
+				Team: {} as Team,
 			},
 			organization: {
 				checkRolePermission: <
 					R extends O extends { roles: any }
 						? keyof O["roles"]
 						: "admin" | "member" | "owner",
-				>(data: {
-					role: R;
-					permission: {
-						//@ts-expect-error fix this later
-						[key in keyof Statements]?: Statements[key][number][];
-					};
-				}) => {
-					if (Object.keys(data.permission).length > 1) {
-						throw new BetterAuthError(
-							"you can only check one resource permission at a time.",
-						);
-					}
-					const role = roles[data.role as unknown as "admin"];
-					if (!role) {
-						return false;
-					}
-					const isAuthorized = role?.authorize(data.permission as any);
-					return isAuthorized.success;
+				>(
+					data: PermissionExclusive & {
+						role: R;
+					},
+				) => {
+					const isAuthorized = hasPermission({
+						role: data.role as string,
+						options: {
+							ac: options?.ac,
+							roles: roles,
+						},
+						permissions: (data.permissions ?? data.permission) as any,
+					});
+					return isAuthorized;
 				},
 			},
 		}),
@@ -176,6 +191,12 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					return path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
+			},
+			{
+				matcher(path) {
+					return path.startsWith("/organization/set-active");
+				},
+				signal: "$sessionSignal",
 			},
 			{
 				matcher(path) {

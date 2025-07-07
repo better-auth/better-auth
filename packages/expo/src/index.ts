@@ -1,8 +1,9 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 
 export interface ExpoOptions {
 	/**
-	 * Override origin header for expo api routes
+	 * Override origin header for expo API routes
 	 */
 	overrideOrigin?: boolean;
 }
@@ -12,9 +13,8 @@ export const expo = (options?: ExpoOptions) => {
 		id: "expo",
 		init: (ctx) => {
 			const trustedOrigins =
-				process.env.NODE_ENV === "development"
-					? [...(ctx.trustedOrigins || []), "exp://"]
-					: ctx.trustedOrigins;
+				process.env.NODE_ENV === "development" ? ["exp://"] : [];
+
 			return {
 				options: {
 					trustedOrigins,
@@ -47,15 +47,14 @@ export const expo = (options?: ExpoOptions) => {
 							context.path?.startsWith("/oauth2/callback")
 						);
 					},
-					handler: async (ctx) => {
-						const headers = ctx.context.returned?.headers as Headers;
-
-						if (!headers) {
+					handler: createAuthMiddleware(async (ctx) => {
+						const headers = ctx.context.responseHeaders;
+						const location = headers?.get("location");
+						if (!location) {
 							return;
 						}
-
-						const location = headers.get("location");
-						if (!location) {
+						const isProxyURL = location.includes("/oauth-proxy-callback");
+						if (isProxyURL) {
 							return;
 						}
 						const trustedOrigins = ctx.context.trustedOrigins.filter(
@@ -67,14 +66,14 @@ export const expo = (options?: ExpoOptions) => {
 						if (!isTrustedOrigin) {
 							return;
 						}
-						const cookie = headers.get("set-cookie");
+						const cookie = headers?.get("set-cookie");
 						if (!cookie) {
 							return;
 						}
 						const url = new URL(location);
 						url.searchParams.set("cookie", cookie);
 						ctx.setHeader("location", url.toString());
-					},
+					}),
 				},
 			],
 		},

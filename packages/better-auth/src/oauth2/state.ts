@@ -28,14 +28,18 @@ export async function generateState(
 		 * This is the actual expiry time of the state
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
+		requestSignUp: c.body?.requestSignUp,
 	});
 	const expiresAt = new Date();
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: data,
-		identifier: state,
-		expiresAt,
-	});
+	const verification = await c.context.internalAdapter.createVerificationValue(
+		{
+			value: data,
+			identifier: state,
+			expiresAt,
+		},
+		c,
+	);
 	if (!verification) {
 		c.context.logger.error(
 			"Unable to create verification. Make sure the database adapter is properly working and there is a verification table in the database",
@@ -57,9 +61,9 @@ export async function parseState(c: GenericEndpointContext) {
 		c.context.logger.error("State Mismatch. Verification not found", {
 			state,
 		});
-		throw c.redirect(
-			`${c.context.baseURL}/error?error=please_restart_the_process`,
-		);
+		const errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 	const parsedData = z
 		.object({
@@ -71,9 +75,10 @@ export async function parseState(c: GenericEndpointContext) {
 			link: z
 				.object({
 					email: z.string(),
-					userId: z.string(),
+					userId: z.coerce.string(),
 				})
 				.optional(),
+			requestSignUp: z.boolean().optional(),
 		})
 		.parse(JSON.parse(data.value));
 
@@ -82,12 +87,9 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 	if (parsedData.expiresAt < Date.now()) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
-		c.context.logger.error("State expired.", {
-			state,
-		});
-		throw c.redirect(
-			`${c.context.baseURL}/error?error=please_restart_the_process`,
-		);
+		const errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 	await c.context.internalAdapter.deleteVerificationValue(data.id);
 	return parsedData;

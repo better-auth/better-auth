@@ -1,0 +1,62 @@
+---
+title: PostgreSQL
+description: Integrate Better Auth with PostgreSQL.
+---
+
+PostgreSQL is a powerful, open-source relational database management system known for its advanced features, extensibility, and support for complex queries and large datasets.
+Read more [here](https://www.postgresql.org/).
+
+## Example Usage
+
+Make sure you have PostgreSQL installed and configured.
+Then, you can connect it straight into Better Auth.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { Pool } from "pg";
+
+export const auth = betterAuth({
+  database: new Pool({
+    connectionString: "postgres://user:password@localhost:5432/database",
+  }),
+});
+```
+
+<Callout>
+  For more information, read Kysely's documentation to the
+  [PostgresDialect](https://kysely-org.github.io/kysely-apidoc/classes/PostgresDialect.html).
+</Callout>
+
+## Schema generation & migration
+
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
+
+<table>
+  <tr className="border-b">
+    <th>
+      <p className="font-bold text-[16px] mb-1">PostgreSQL Schema Generation</p>
+    </th>
+    <th>
+      <p className="font-bold text-[16px] mb-1">PostgreSQL Schema Migration</p>
+    </th>
+  </tr>
+  <tr className="h-10">
+    <td>✅ Supported</td>
+    <td>✅ Supported</td>
+  </tr>
+</table>
+
+```bash title="Schema Generation"
+npx @better-auth/cli@latest generate
+```
+
+```bash title="Schema Migration"
+npx @better-auth/cli@latest migrate
+```
+
+## Additional Information
+
+PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

@@ -10,7 +10,7 @@ import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "text"],
+	string: ["character varying", "varchar", "text"],
 	number: [
 		"int4",
 		"integer",
@@ -64,15 +64,17 @@ export function matchType(
 	fieldType: FieldType,
 	dbType: KyselyDatabaseType,
 ) {
+	function normalize(type: string) {
+		return type.toLowerCase().split("(")[0].trim();
+	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
-	const type = Array.isArray(fieldType)
+	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
 		: types[fieldType].map((t) => t.toLowerCase());
-	const matches = type.includes(columnDataType.toLowerCase());
-	return matches;
+	return expected.includes(normalize(columnDataType));
 }
 
 export async function getMigrations(config: BetterAuthOptions) {
@@ -164,7 +166,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(field: FieldAttribute) {
+	function getType(field: FieldAttribute, fieldName: string) {
 		const type = field.type;
 		const typeMap = {
 			string: {
@@ -200,7 +202,20 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mysql: "datetime",
 				mssql: "datetime",
 			},
+			id: {
+				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
+				mysql: config.advanced?.database?.useNumberId
+					? "integer"
+					: "varchar(36)",
+				mssql: config.advanced?.database?.useNumberId
+					? "integer"
+					: "varchar(36)",
+				sqlite: config.advanced?.database?.useNumberId ? "integer" : "text",
+			},
 		} as const;
+		if (fieldName === "id" || field.references?.field === "id") {
+			return typeMap.id[dbType!];
+		}
 		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
 			return "text";
 		}
@@ -215,7 +230,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field);
+				const type = getType(field, fieldName);
 				const exec = db.schema
 					.alterTable(table.table)
 					.addColumn(fieldName, type, (col) => {
@@ -240,12 +255,26 @@ export async function getMigrations(config: BetterAuthOptions) {
 				.createTable(table.table)
 				.addColumn(
 					"id",
-					dbType === "mysql" || dbType === "mssql" ? "varchar(36)" : "text",
-					(col) => col.primaryKey().notNull(),
+					config.advanced?.database?.useNumberId
+						? dbType === "postgres"
+							? "serial"
+							: "integer"
+						: dbType === "mysql" || dbType === "mssql"
+							? "varchar(36)"
+							: "text",
+					(col) => {
+						if (config.advanced?.database?.useNumberId) {
+							if (dbType === "postgres") {
+								return col.primaryKey().notNull();
+							}
+							return col.autoIncrement().primaryKey().notNull();
+						}
+						return col.primaryKey().notNull();
+					},
 				);
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field);
+				const type = getType(field, fieldName);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
@@ -269,7 +298,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 	async function compileMigrations() {
 		const compiled = migrations.map((m) => m.compile().sql);
-		return compiled.join(";\n\n");
+		return compiled.join(";\n\n") + ";";
 	}
 	return { toBeCreated, toBeAdded, runMigrations, compileMigrations };
 }

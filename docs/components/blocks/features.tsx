@@ -38,8 +38,8 @@ const grid = [
 		description: "Manage user accounts and sessions with ease",
 	},
 	{
-		title: "Built In Rate Limiter",
-		description: "Built in rate limiter with custom rules",
+		title: "Built-In Rate Limiter",
+		description: "Built-in rate limiter with custom rules",
 	},
 	{
 		title: "Automatic Database Management",
@@ -47,7 +47,7 @@ const grid = [
 	},
 	{
 		title: "Social Sign-on",
-		description: "multiple social sign-on providers",
+		description: "Multiple social sign-on providers",
 	},
 	{
 		title: "Organization & Access Control",

@@ -12,7 +12,7 @@ import type {
 } from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
-import type { Session, User } from "../types";
+import type { BetterAuthOptions, Session, User } from "../types";
 import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {
@@ -36,7 +36,14 @@ export interface BetterAuthClientPlugin {
 	/**
 	 * Custom actions
 	 */
-	getActions?: ($fetch: BetterFetch, $store: Store) => Record<string, any>;
+	getActions?: (
+		$fetch: BetterFetch,
+		$store: Store,
+		/**
+		 * better-auth client options
+		 */
+		options: ClientOptions | undefined,
+	) => Record<string, any>;
 	/**
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
@@ -63,7 +70,9 @@ export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
+	basePath?: string;
 	disableDefaultFetchPlugins?: boolean;
+	$InferAuth?: BetterAuthOptions;
 }
 
 export type InferClientAPI<O extends ClientOptions> = InferRoutes<

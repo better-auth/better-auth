@@ -32,9 +32,9 @@ To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key fo
 
 ## Cookies
 
-Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `SameSite` attribute to `LAX` by default to prevent cross-site request forgery attacks. And the `HttpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
+Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
 
-For Cross Sub Domain cookies, you can set the `crossSubDomain` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
+For Cross-Subdomain Cookies, you can set the `crossSubDomainCookies` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
 
 ### Customizing Cookies
 
@@ -46,9 +46,83 @@ Plugins can also set custom cookie options to align with specific security needs
 
 Better Auth includes built-in rate limiting to safeguard against brute-force attacks. Rate limits are applied across all routes by default, with specific routes subject to stricter limits based on potential risk.
 
+## IP Address Headers
+
+Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the IP address from the standard `X-Forwarded-For` header. However, you can configure a specific trusted header to ensure accurate IP address detection and prevent IP spoofing attacks.
+
+You can configure the IP address header in your Better Auth configuration:
+
+```typescript
+{
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: ['cf-connecting-ip'] // or any other custom header
+    }
+  }
+}
+```
+
+This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
+
+> **Important**: When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+
 ## Trusted Origins
 
 Trusted origins prevent CSRF attacks and block open redirects. You can set a list of trusted origins in the `trustedOrigins` configuration option. Requests from origins not on this list are automatically blocked.
+
+### Basic Usage
+
+The most basic usage is to specify exact origins:
+
+```typescript
+{
+  trustedOrigins: [
+    "https://example.com",
+    "https://app.example.com",
+    "http://localhost:3000"
+  ]
+}
+```
+
+### Wildcard Domains
+
+Better Auth supports wildcard patterns in trusted origins, which allows you to trust multiple subdomains with a single entry:
+
+```typescript
+{
+  trustedOrigins: [
+    "*.example.com",             // Trust all subdomains of example.com (any protocol)
+    "https://*.example.com",     // Trust only HTTPS subdomains of example.com
+    "http://*.dev.example.com"   // Trust all HTTP subdomains of dev.example.com
+  ]
+}
+```
+
+#### Protocol-specific wildcards
+
+When using a wildcard pattern with a protocol prefix (like `https://`):
+- The protocol must match exactly
+- The domain can have any subdomain in place of the `*`
+- Requests using a different protocol will be rejected, even if the domain matches
+
+#### Protocol-agnostic wildcards
+
+When using a wildcard pattern without a protocol prefix (like `*.example.com`):
+- Any protocol (http, https, etc.) will be accepted
+- The domain must match the wildcard pattern
+
+### Custom Schemes
+
+Trusted origins also support custom schemes for mobile apps and browser extensions:
+
+```typescript
+{
+  trustedOrigins: [
+    "myapp://",                               // Mobile app scheme
+    "chrome-extension://YOUR_EXTENSION_ID"    // Browser extension
+  ]
+}
+```
 
 ## Reporting Vulnerabilities
 

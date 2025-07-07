@@ -10,10 +10,12 @@ import type {
 	AuthPluginSchema,
 	Session,
 	User,
+	AuthContext,
 } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
+import type { EndpointContext } from "better-call";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -44,7 +46,21 @@ export interface AnonymousOptions {
 	 */
 	disableDeleteAnonymousUser?: boolean;
 	/**
-	 * Custom schema for the admin plugin
+	 * A hook to generate a name for the anonymous user.
+	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
+	 * @returns The name for the anonymous user.
+	 */
+	generateName?: (
+		ctx: EndpointContext<
+			"/sign-in/anonymous",
+			{
+				method: "POST";
+			},
+			AuthContext
+		>,
+	) => Promise<string> | string;
+	/**
+	 * Custom schema for the anonymous plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 }
@@ -105,27 +121,26 @@ export const anonymous = (options?: AnonymousOptions) => {
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
-					const newUser = await ctx.context.internalAdapter.createUser({
-						id,
-						email,
-						emailVerified: false,
-						isAnonymous: true,
-						name: "Anonymous",
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					});
+					const name = (await options?.generateName?.(ctx)) || "Anonymous";
+					const newUser = await ctx.context.internalAdapter.createUser(
+						{
+							email,
+							emailVerified: false,
+							isAnonymous: true,
+							name,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+						ctx,
+					);
 					if (!newUser) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: ERROR_CODES.FAILED_TO_CREATE_USER,
-								status: 500,
-							},
+						throw ctx.error("INTERNAL_SERVER_ERROR", {
+							message: ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
-						ctx.request,
+						ctx,
 					);
 					if (!session) {
 						return ctx.json(null, {
@@ -156,26 +171,20 @@ export const anonymous = (options?: AnonymousOptions) => {
 		hooks: {
 			after: [
 				{
-					matcher(context) {
-						const setCookie = context.responseHeader.get("set-cookie");
-						const hasSessionToken = setCookie?.includes(
-							context.context.authCookies.sessionToken.name,
-						);
+					matcher(ctx) {
 						return (
-							context.path.startsWith("/sign-in") ||
-							context.path.startsWith("/sign-up") ||
-							context.path.startsWith("/callback") ||
-							context.path.startsWith("/oauth2/callback") ||
-							context.path.startsWith("/magic-link/verify") ||
-							context.path.startsWith("/email-otp/verify-email")
+							ctx.path.startsWith("/sign-in") ||
+							ctx.path.startsWith("/sign-up") ||
+							ctx.path.startsWith("/callback") ||
+							ctx.path.startsWith("/oauth2/callback") ||
+							ctx.path.startsWith("/magic-link/verify") ||
+							ctx.path.startsWith("/email-otp/verify-email") ||
+							ctx.path.startsWith("/phone-number/verify")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const headers =
-							ctx.context.returned instanceof APIError
-								? ctx.context.returned.headers
-								: ctx.responseHeader;
-						const setCookie = headers.get("set-cookie");
+						const setCookie = ctx.context.responseHeaders?.get("set-cookie");
+
 						/**
 						 * We can consider the user is about to sign in or sign up
 						 * if the response contains a session token.
@@ -192,7 +201,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							return;
 						}
 						/**
-						 * Make sure the use had an anonymous session.
+						 * Make sure the user had an anonymous session.
 						 */
 						const session = await getSessionFromCtx<{ isAnonymous: boolean }>(
 							ctx,

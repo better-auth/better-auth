@@ -1,9 +1,14 @@
 import type { ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode, createAuthorizationURL } from "../oauth2";
+import {
+	validateAuthorizationCode,
+	createAuthorizationURL,
+	refreshAccessToken,
+} from "../oauth2";
 import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../utils/logger";
 import { decodeJwt } from "jose";
+import { base64 } from "@better-auth/utils/base64";
 
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	sub: string;
@@ -28,12 +33,6 @@ export interface MicrosoftOptions
 	 * Disable profile photo
 	 */
 	disableProfilePhoto?: boolean;
-
-	/**
-	 * Require user to select their account even if only one account is logged in
-	 * @default false
-	 */
-	requireSelectAccount?: boolean;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {
@@ -44,9 +43,11 @@ export const microsoft = (options: MicrosoftOptions) => {
 		id: "microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
-			const scopes = data.scopes || ["openid", "profile", "email", "User.Read"];
+			const scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email", "User.Read", "offline_access"];
 			options.scope && scopes.push(...options.scope);
-
+			data.scopes && scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,
@@ -55,7 +56,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				codeVerifier: data.codeVerifier,
 				scopes,
 				redirectURI: data.redirectURI,
-				prompt: options.requireSelectAccount || false,
+				prompt: options.prompt,
 			});
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {
@@ -89,8 +90,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 						try {
 							const response = context.response.clone();
 							const pictureBuffer = await response.arrayBuffer();
-							const pictureBase64 =
-								Buffer.from(pictureBuffer).toString("base64");
+							const pictureBase64 = base64.encode(pictureBuffer);
 							user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
 						} catch (e) {
 							logger.error(
@@ -116,5 +116,26 @@ export const microsoft = (options: MicrosoftOptions) => {
 				data: user,
 			};
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					const scopes = options.disableDefaultScope
+						? []
+						: ["openid", "profile", "email", "User.Read", "offline_access"];
+					options.scope && scopes.push(...options.scope);
+
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientSecret: options.clientSecret,
+						},
+						extraParams: {
+							scope: scopes.join(" "), // Include the scopes in request to microsoft
+						},
+						tokenEndpoint,
+					});
+				},
+		options,
 	} satisfies OAuthProvider;
 };

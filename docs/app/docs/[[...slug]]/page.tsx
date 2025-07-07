@@ -1,4 +1,4 @@
-import { source } from "@/app/source";
+import { source } from "@/lib/source";
 import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";
@@ -19,6 +19,8 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Card, Cards } from "fumadocs-ui/components/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
+import { Endpoint } from "@/components/endpoint";
+import { DividerText } from "@/components/divider-text";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -45,7 +47,8 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				path: "/docs/content/docs",
+				sha: "main",
+				path: `/docs/content/docs/${page.file.path}`,
 			}}
 			tableOfContent={{
 				style: "clerk",
@@ -89,6 +92,22 @@ export default async function Page({
 						DatabaseTable,
 						Accordion,
 						Accordions,
+						Endpoint,
+						Callout: ({ children, ...props }) => (
+							<defaultMdxComponents.Callout
+								{...props}
+								className={cn(
+									props,
+									"bg-none rounded-none border-dashed border-border",
+									props.type === "info" && "border-l-blue-500/50",
+									props.type === "warn" && "border-l-amber-700/50",
+									props.type === "error" && "border-l-red-500/50",
+								)}
+							>
+								{children}
+							</defaultMdxComponents.Callout>
+						),
+						DividerText,
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
 						),
@@ -101,7 +120,6 @@ export default async function Page({
 							href={prevPage.url}
 							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
 							description={<>{prevPage.data.description}</>}
-							//@ts-expect-error - this works
 							title={
 								<div className="flex items-center gap-1">
 									<ChevronLeft className="size-4" />
@@ -116,7 +134,6 @@ export default async function Page({
 						<Card
 							href={nextPage.url}
 							description={<>{nextPage.data.description}</>}
-							//@ts-expect-error - this works
 							title={
 								<div className="flex items-center gap-1">
 									{nextPage.data.title}
@@ -143,7 +160,9 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
 	params,
-}: { params: Promise<{ slug?: string[] }> }) {
+}: {
+	params: Promise<{ slug?: string[] }>;
+}) {
 	const { slug } = await params;
 	const page = source.getPage(slug);
 	if (page == null) notFound();

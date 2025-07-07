@@ -13,6 +13,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import type { User } from "../../types";
+import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -41,6 +42,29 @@ export interface PhoneNumberOptions {
 		request?: Request,
 	) => Promise<void> | void;
 	/**
+	 * a callback to send otp on user requesting to reset their password
+	 *
+	 * @param data - contains phone number and code
+	 * @param request - the request object
+	 * @returns
+	 */
+	sendPasswordResetOTP?: (
+		data: { phoneNumber: string; code: string },
+		request?: Request,
+	) => Promise<void> | void;
+	/**
+	 * a callback to send otp on user requesting to reset their password
+	 *
+	 * @param data - contains phone number and code
+	 * @param request - the request object
+	 * @returns
+	 * @deprecated Use sendPasswordResetOTP instead. This function will be removed in the next major version.
+	 */
+	sendForgetPasswordOTP?: (
+		data: { phoneNumber: string; code: string },
+		request?: Request,
+	) => Promise<void> | void;
+	/**
 	 * Expiry time of the OTP code in seconds
 	 * @default 300
 	 */
@@ -51,6 +75,12 @@ export interface PhoneNumberOptions {
 	 * by default any string is accepted
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean | Promise<boolean>;
+	/**
+	 * Require a phone number verification before signing in
+	 *
+	 * @default false
+	 */
+	requireVerification?: boolean;
 	/**
 	 * Callback when phone number is verified
 	 */
@@ -93,6 +123,11 @@ export interface PhoneNumberOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Allowed attempts for the OTP code
+	 * @default 3
+	 */
+	allowedAttempts?: number;
 }
 
 export const phoneNumber = (options?: PhoneNumberOptions) => {
@@ -106,12 +141,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		createdAt: "createdAt",
 	};
 
-	const ERROR_CODES = {
-		INVALID_PHONE_NUMBER: "Invalid phone number",
-		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
-		UNEXPECTED_ERROR: "Unexpected error",
-		OTP_NOT_FOUND: "OTP not found",
-	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
@@ -190,6 +219,29 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
+					if (opts.requireVerification) {
+						if (!user.phoneNumberVerified) {
+							const otp = generateOTP(opts.otpLength);
+							await ctx.context.internalAdapter.createVerificationValue(
+								{
+									value: otp,
+									identifier: phoneNumber,
+									expiresAt: getDate(opts.expiresIn, "sec"),
+								},
+								ctx,
+							);
+							await opts.sendOTP?.(
+								{
+									phoneNumber,
+									code: otp,
+								},
+								ctx.request,
+							);
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+							});
+						}
+					}
 					const accounts =
 						await ctx.context.internalAdapter.findAccountByUserId(user.id);
 					const credentialAccount = accounts.find(
@@ -222,7 +274,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.headers,
+						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -309,11 +361,14 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
-						identifier: ctx.body.phoneNumber,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: ctx.body.phoneNumber,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
 					await options.sendOTP(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -321,14 +376,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						},
 						ctx.request,
 					);
-					return ctx.json(
-						{ code },
-						{
-							body: {
-								message: "Code sent",
-							},
-						},
-					);
+					return ctx.json({ message: "code sent" });
 				},
 			),
 			verifyPhoneNumber: createAuthEndpoint(
@@ -374,20 +422,89 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							summary: "Verify phone number",
 							description: "Use this endpoint to verify phone number",
 							responses: {
-								200: {
-									description: "Success",
+								"200": {
+									description: "Phone number verified successfully",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													user: {
-														$ref: "#/components/schemas/User",
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the verification was successful",
+														enum: [true],
 													},
-													session: {
-														$ref: "#/components/schemas/Session",
+													token: {
+														type: "string",
+														nullable: true,
+														description:
+															"Session token if session is created, null if disableSession is true or no session is created",
+													},
+													user: {
+														type: "object",
+														nullable: true,
+														properties: {
+															id: {
+																type: "string",
+																description: "Unique identifier of the user",
+															},
+															email: {
+																type: "string",
+																format: "email",
+																nullable: true,
+																description: "User's email address",
+															},
+															emailVerified: {
+																type: "boolean",
+																nullable: true,
+																description: "Whether the email is verified",
+															},
+															name: {
+																type: "string",
+																nullable: true,
+																description: "User's name",
+															},
+															image: {
+																type: "string",
+																format: "uri",
+																nullable: true,
+																description: "User's profile image URL",
+															},
+															phoneNumber: {
+																type: "string",
+																description: "User's phone number",
+															},
+															phoneNumberVerified: {
+																type: "boolean",
+																description:
+																	"Whether the phone number is verified",
+															},
+															createdAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was created",
+															},
+															updatedAt: {
+																type: "string",
+																format: "date-time",
+																description:
+																	"Timestamp when the user was last updated",
+															},
+														},
+														required: [
+															"id",
+															"phoneNumber",
+															"phoneNumberVerified",
+															"createdAt",
+															"updatedAt",
+														],
+														description:
+															"User object with phone number details, null if no user is created or found",
 													},
 												},
+												required: ["status"],
 											},
 										},
 									},
@@ -406,7 +523,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 					if (!otp || otp.expiresAt < new Date()) {
 						if (otp && otp.expiresAt < new Date()) {
-							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 							throw new APIError("BAD_REQUEST", {
 								message: "OTP expired",
 							});
@@ -415,7 +531,18 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.OTP_NOT_FOUND,
 						});
 					}
-					if (otp.value !== ctx.body.code) {
+					const [otpValue, attempts] = otp.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (otpValue !== ctx.body.code) {
+						await ctx.context.internalAdapter.updateVerificationValue(otp.id, {
+							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+						});
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid OTP",
 						});
@@ -430,12 +557,28 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
+						const existingUser =
+							await ctx.context.adapter.findMany<UserWithPhoneNumber>({
+								model: "user",
+								where: [
+									{
+										field: "phoneNumber",
+										value: ctx.body.phoneNumber,
+									},
+								],
+							});
+						if (existingUser.length) {
+							throw ctx.error("BAD_REQUEST", {
+								message: ERROR_CODES.PHONE_NUMBER_EXIST,
+							});
+						}
 						let user = await ctx.context.internalAdapter.updateUser(
 							session.user.id,
 							{
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
 							},
+							ctx,
 						);
 						return ctx.json({
 							status: true,
@@ -465,18 +608,21 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 					if (!user) {
 						if (options?.signUpOnVerification) {
-							user = await ctx.context.internalAdapter.createUser({
-								email: options.signUpOnVerification.getTempEmail(
-									ctx.body.phoneNumber,
-								),
-								name: options.signUpOnVerification.getTempName
-									? options.signUpOnVerification.getTempName(
-											ctx.body.phoneNumber,
-										)
-									: ctx.body.phoneNumber,
-								[opts.phoneNumber]: ctx.body.phoneNumber,
-								[opts.phoneNumberVerified]: true,
-							});
+							user = await ctx.context.internalAdapter.createUser(
+								{
+									email: options.signUpOnVerification.getTempEmail(
+										ctx.body.phoneNumber,
+									),
+									name: options.signUpOnVerification.getTempName
+										? options.signUpOnVerification.getTempName(
+												ctx.body.phoneNumber,
+											)
+										: ctx.body.phoneNumber,
+									[opts.phoneNumber]: ctx.body.phoneNumber,
+									[opts.phoneNumberVerified]: true,
+								},
+								ctx,
+							);
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
 									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -484,9 +630,13 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							}
 						}
 					} else {
-						user = await ctx.context.internalAdapter.updateUser(user.id, {
-							[opts.phoneNumberVerified]: true,
-						});
+						user = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								[opts.phoneNumberVerified]: true,
+							},
+							ctx,
+						);
 					}
 
 					if (!user) {
@@ -510,7 +660,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx.request,
+							ctx,
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -555,8 +705,261 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 				},
 			),
+			/**
+			 * @deprecated Use requestPasswordResetPhoneNumber instead. This endpoint will be removed in the next major version.
+			 */
+			forgetPasswordPhoneNumber: createAuthEndpoint(
+				"/phone-number/forget-password",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+					}),
+					metadata: {
+						openapi: {
+							description: "Request OTP for password reset via phone number",
+							responses: {
+								"200": {
+									description: "OTP sent successfully for password reset",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the OTP was sent successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
+						model: "user",
+						where: [
+							{
+								value: ctx.body.phoneNumber,
+								field: opts.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "phone number isn't registered",
+						});
+					}
+					const code = generateOTP(opts.otpLength);
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
+					await options?.sendForgetPasswordOTP?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx.request,
+					);
+					return ctx.json({
+						status: true,
+					});
+				},
+			),
+			requestPasswordResetPhoneNumber: createAuthEndpoint(
+				"/phone-number/request-password-reset",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+					}),
+					metadata: {
+						openapi: {
+							description: "Request OTP for password reset via phone number",
+							responses: {
+								"200": {
+									description: "OTP sent successfully for password reset",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the OTP was sent successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
+						model: "user",
+						where: [
+							{
+								value: ctx.body.phoneNumber,
+								field: opts.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "phone number isn't registered",
+						});
+					}
+					const code = generateOTP(opts.otpLength);
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
+					await options?.sendPasswordResetOTP?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx.request,
+					);
+					return ctx.json({
+						status: true,
+					});
+				},
+			),
+			resetPasswordPhoneNumber: createAuthEndpoint(
+				"/phone-number/reset-password",
+				{
+					method: "POST",
+					body: z.object({
+						otp: z.string(),
+						phoneNumber: z.string(),
+						newPassword: z.string(),
+					}),
+					metadata: {
+						openapi: {
+							description: "Reset password using phone number OTP",
+							responses: {
+								"200": {
+									description: "Password reset successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the password was reset successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const verification =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`${ctx.body.phoneNumber}-request-password-reset`,
+						);
+					if (!verification) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_NOT_FOUND,
+						});
+					}
+					if (verification.expiresAt < new Date()) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
+						});
+					}
+					const [otpValue, attempts] = verification.value.split(":");
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verification.id,
+						);
+						throw new APIError("FORBIDDEN", {
+							message: "Too many attempts",
+						});
+					}
+					if (ctx.body.otp !== otpValue) {
+						await ctx.context.internalAdapter.updateVerificationValue(
+							verification.id,
+							{
+								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+							},
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					const user = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "phoneNumber",
+								value: ctx.body.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.UNEXPECTED_ERROR,
+						});
+					}
+					const hashedPassword = await ctx.context.password.hash(
+						ctx.body.newPassword,
+					);
+					await ctx.context.internalAdapter.updatePassword(
+						user.id,
+						hashedPassword,
+					);
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verification.id,
+					);
+					return ctx.json({
+						status: true,
+					});
+				},
+			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path.startsWith("/phone-number");
+				},
+				window: 60 * 1000,
+				max: 10,
+			},
+		],
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

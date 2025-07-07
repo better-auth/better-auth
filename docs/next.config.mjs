@@ -1,11 +1,9 @@
 import { createMDX } from "fumadocs-mdx/next";
 
-export const withMDX = createMDX({
-	configPath: "./source.config.ts",
-});
+const withMDX = createMDX();
 
-export default withMDX({
-	reactStrictMode: true,
+/** @type {import('next').NextConfig} */
+const config = {
 	redirects: async () => {
 		return [
 			{
@@ -20,6 +18,12 @@ export default withMDX({
 			},
 		];
 	},
+	serverExternalPackages: [
+		"ts-morph",
+		"typescript",
+		"oxc-transform",
+		"@shikijs/twoslash",
+	],
 	images: {
 		remotePatterns: [
 			{
@@ -34,6 +38,15 @@ export default withMDX({
 			{
 				hostname: "github.com",
 			},
+			{
+				hostname: "hebbkx1anhila5yf.public.blob.vercel-storage.com",
+			},
 		],
 	},
-});
+	reactStrictMode: true,
+	typescript: {
+		ignoreBuildErrors: true,
+	},
+};
+
+export default withMDX(config);

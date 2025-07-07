@@ -6,17 +6,19 @@ import type {
 	InferPluginTypes,
 	InferSession,
 	InferUser,
-	PrettifyDeep,
-	Expand,
 	AuthContext,
 } from "./types";
-import { getBaseURL } from "./utils/url";
+import type { PrettifyDeep, Expand } from "./types/helper";
+import { getBaseURL, getOrigin } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";
+import { BetterAuthError } from "./error";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
+export const betterAuth = <O extends BetterAuthOptions>(
+	options: O & Record<never, never>,
+) => {
 	const authContext = init(options as O);
 	const { api } = getEndpoints(authContext, options as O);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
@@ -32,21 +34,24 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 		handler: async (request: Request) => {
 			const ctx = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
-			const url = new URL(request.url);
 			if (!ctx.options.baseURL) {
-				const baseURL =
-					getBaseURL(undefined, basePath) || `${url.origin}${basePath}`;
-				ctx.options.baseURL = baseURL;
-				ctx.baseURL = baseURL;
+				const baseURL = getBaseURL(undefined, basePath, request);
+				if (baseURL) {
+					ctx.baseURL = baseURL;
+					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+				} else {
+					throw new BetterAuthError(
+						"Could not get base URL from request. Please provide a valid base URL.",
+					);
+				}
 			}
 			ctx.trustedOrigins = [
 				...(options.trustedOrigins
 					? Array.isArray(options.trustedOrigins)
 						? options.trustedOrigins
-						: options.trustedOrigins(request)
+						: await options.trustedOrigins(request)
 					: []),
-				ctx.baseURL,
-				url.origin,
+				ctx.options.baseURL!,
 			];
 			const { handler } = router(ctx, options);
 			return handler(request);

@@ -10,7 +10,13 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
-import type { Adapter, AuthContext, BetterAuthOptions, Where } from "../types";
+import type {
+	Adapter,
+	AuthContext,
+	BetterAuthOptions,
+	GenericEndpointContext,
+	Where,
+} from "../types";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -31,6 +37,7 @@ export const createInternalAdapter = (
 			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
+			context?: GenericEndpointContext,
 		) => {
 			const createdUser = await createWithHooks(
 				{
@@ -39,6 +46,8 @@ export const createInternalAdapter = (
 					...user,
 				},
 				"user",
+				undefined,
+				context,
 			);
 			const createdAccount = await createWithHooks(
 				{
@@ -48,6 +57,8 @@ export const createInternalAdapter = (
 					updatedAt: new Date(),
 				},
 				"account",
+				undefined,
+				context,
 			);
 			return {
 				user: createdUser,
@@ -58,6 +69,7 @@ export const createInternalAdapter = (
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
 				Record<string, any>,
+			context?: GenericEndpointContext,
 		) => {
 			const createdUser = await createWithHooks(
 				{
@@ -65,9 +77,11 @@ export const createInternalAdapter = (
 					updatedAt: new Date(),
 					emailVerified: false,
 					...user,
-					email: user.email.toLowerCase(),
+					email: user.email?.toLowerCase(),
 				},
 				"user",
+				undefined,
+				context,
 			);
 			return createdUser as T & User;
 		},
@@ -75,6 +89,7 @@ export const createInternalAdapter = (
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account> &
 				Record<string, any>,
+			context?: GenericEndpointContext,
 		) => {
 			const createdAccount = await createWithHooks(
 				{
@@ -83,6 +98,8 @@ export const createInternalAdapter = (
 					...account,
 				},
 				"account",
+				undefined,
+				context,
 			);
 			return createdAccount as T & Account;
 		},
@@ -143,6 +160,16 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
+		countTotalUsers: async (where?: Where[]) => {
+			const total = await adapter.count({
+				model: "user",
+				where,
+			});
+			if (typeof total === "string") {
+				return parseInt(total);
+			}
+			return total;
+		},
 		deleteUser: async (userId: string) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(`active-sessions-${userId}`);
@@ -181,14 +208,18 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request: Request | Headers | undefined,
+			ctx: GenericEndpointContext,
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
+			overrideAll?: boolean,
 		) => {
-			const headers = request instanceof Request ? request.headers : request;
+			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
-				ipAddress: request ? getIp(request, ctx.options) || "" : "",
+				ipAddress:
+					ctx.request || ctx.headers
+						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
+						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -203,6 +234,7 @@ export const createInternalAdapter = (
 				token: generateId(32),
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...(overrideAll ? rest : {}),
 			};
 			const res = await createWithHooks(
 				data,
@@ -242,6 +274,7 @@ export const createInternalAdapter = (
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
 					: undefined,
+				ctx,
 			);
 			return res as Session;
 		},
@@ -253,26 +286,27 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified) {
+				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
 					return null;
 				}
-
-				const s = JSON.parse(sessionStringified);
-				const parsedSession = parseSessionOutput(ctx.options, {
-					...s.session,
-					expiresAt: new Date(s.session.expiresAt),
-					createdAt: new Date(s.session.createdAt),
-					updatedAt: new Date(s.session.updatedAt),
-				});
-				const parsedUser = parseUserOutput(ctx.options, {
-					...s.user,
-					createdAt: new Date(s.user.createdAt),
-					updatedAt: new Date(s.user.updatedAt),
-				});
-				return {
-					session: parsedSession,
-					user: parsedUser,
-				};
+				if (sessionStringified) {
+					const s = JSON.parse(sessionStringified);
+					const parsedSession = parseSessionOutput(ctx.options, {
+						...s.session,
+						expiresAt: new Date(s.session.expiresAt),
+						createdAt: new Date(s.session.createdAt),
+						updatedAt: new Date(s.session.updatedAt),
+					});
+					const parsedUser = parseUserOutput(ctx.options, {
+						...s.user,
+						createdAt: new Date(s.user.createdAt),
+						updatedAt: new Date(s.user.updatedAt),
+					});
+					return {
+						session: parsedSession,
+						user: parsedUser,
+					};
+				}
 			}
 
 			const session = await adapter.findOne<Session>({
@@ -378,6 +412,7 @@ export const createInternalAdapter = (
 		updateSession: async (
 			sessionToken: string,
 			session: Partial<Session> & Record<string, any>,
+			context?: GenericEndpointContext,
 		) => {
 			const updatedSession = await updateWithHooks<Session>(
 				session,
@@ -405,6 +440,7 @@ export const createInternalAdapter = (
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
 					: undefined,
+				context,
 			);
 			return updatedSession;
 		},
@@ -440,17 +476,13 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteAccount: async (providerId: string, userId: string) => {
+		deleteAccount: async (accountId: string) => {
 			await adapter.delete({
 				model: "account",
 				where: [
 					{
-						field: "providerId",
-						value: providerId,
-					},
-					{
-						field: "userId",
-						value: userId,
+						field: "id",
+						value: accountId,
 					},
 				],
 			});
@@ -500,19 +532,20 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
-			const account = await adapter.findOne<Account>({
-				model: "account",
-				where: [
-					{
-						value: accountId,
-						field: "accountId",
-					},
-					{
-						value: providerId,
-						field: "providerId",
-					},
-				],
-			});
+			// we need to find account first to avoid missing user if the email changed with the provider for the same account
+			const account = await adapter
+				.findMany<Account>({
+					model: "account",
+					where: [
+						{
+							value: accountId,
+							field: "accountId",
+						},
+					],
+				})
+				.then((accounts) => {
+					return accounts.find((a) => a.providerId === providerId);
+				});
 			if (account) {
 				const user = await adapter.findOne<User>({
 					model: "user",
@@ -529,6 +562,21 @@ export const createInternalAdapter = (
 						accounts: [account],
 					};
 				} else {
+					const user = await adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								value: email.toLowerCase(),
+								field: "email",
+							},
+						],
+					});
+					if (user) {
+						return {
+							user,
+							accounts: [account],
+						};
+					}
 					return null;
 				}
 			} else {
@@ -609,6 +657,7 @@ export const createInternalAdapter = (
 		linkAccount: async (
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
+			context?: GenericEndpointContext,
 		) => {
 			const _account = await createWithHooks(
 				{
@@ -617,12 +666,15 @@ export const createInternalAdapter = (
 					updatedAt: new Date(),
 				},
 				"account",
+				undefined,
+				context,
 			);
 			return _account;
 		},
 		updateUser: async (
 			userId: string,
 			data: Partial<User> & Record<string, any>,
+			context?: GenericEndpointContext,
 		) => {
 			const user = await updateWithHooks<User>(
 				data,
@@ -633,26 +685,70 @@ export const createInternalAdapter = (
 					},
 				],
 				"user",
+				undefined,
+				context,
 			);
+			if (secondaryStorage && user) {
+				const listRaw = await secondaryStorage.get(`active-sessions-${userId}`);
+				if (listRaw) {
+					const now = Date.now();
+					const list =
+						safeJSONParse<{ token: string; expiresAt: number }[]>(listRaw) ||
+						[];
+					const validSessions = list.filter((s) => s.expiresAt > now);
+					await Promise.all(
+						validSessions.map(async ({ token }) => {
+							const cached = await secondaryStorage.get(token);
+							if (!cached) return;
+							const parsed = safeJSONParse<{
+								session: Session;
+								user: User;
+							}>(cached);
+							if (!parsed) return;
+							const sessionTTL = Math.max(
+								Math.floor(
+									(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
+								),
+								0,
+							);
+							await secondaryStorage.set(
+								token,
+								JSON.stringify({
+									session: parsed.session,
+									user,
+								}),
+								sessionTTL,
+							);
+						}),
+					);
+				}
+			}
 			return user;
 		},
 		updateUserByEmail: async (
 			email: string,
 			data: Partial<User & Record<string, any>>,
+			context?: GenericEndpointContext,
 		) => {
 			const user = await updateWithHooks<User>(
 				data,
 				[
 					{
 						field: "email",
-						value: email,
+						value: email.toLowerCase(),
 					},
 				],
 				"user",
+				undefined,
+				context,
 			);
 			return user;
 		},
-		updatePassword: async (userId: string, password: string) => {
+		updatePassword: async (
+			userId: string,
+			password: string,
+			context?: GenericEndpointContext,
+		) => {
 			await updateManyWithHooks(
 				{
 					password,
@@ -668,6 +764,8 @@ export const createInternalAdapter = (
 					},
 				],
 				"account",
+				undefined,
+				context,
 			);
 		},
 		findAccounts: async (userId: string) => {
@@ -694,6 +792,22 @@ export const createInternalAdapter = (
 			});
 			return account;
 		},
+		findAccountByProviderId: async (accountId: string, providerId: string) => {
+			const account = await adapter.findOne<Account>({
+				model: "account",
+				where: [
+					{
+						field: "accountId",
+						value: accountId,
+					},
+					{
+						field: "providerId",
+						value: providerId,
+					},
+				],
+			});
+			return account;
+		},
 		findAccountByUserId: async (userId: string) => {
 			const account = await adapter.findMany<Account>({
 				model: "account",
@@ -706,17 +820,24 @@ export const createInternalAdapter = (
 			});
 			return account;
 		},
-		updateAccount: async (accountId: string, data: Partial<Account>) => {
+		updateAccount: async (
+			id: string,
+			data: Partial<Account>,
+			context?: GenericEndpointContext,
+		) => {
 			const account = await updateWithHooks<Account>(
 				data,
-				[{ field: "id", value: accountId }],
+				[{ field: "id", value: id }],
 				"account",
+				undefined,
+				context,
 			);
 			return account;
 		},
 		createVerificationValue: async (
 			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 				Partial<Verification>,
+			context?: GenericEndpointContext,
 		) => {
 			const verification = await createWithHooks(
 				{
@@ -725,6 +846,8 @@ export const createInternalAdapter = (
 					...data,
 				},
 				"verification",
+				undefined,
+				context,
 			);
 			return verification as Verification;
 		},
@@ -743,6 +866,18 @@ export const createInternalAdapter = (
 				},
 				limit: 1,
 			});
+			if (!options.verification?.disableCleanup) {
+				await adapter.deleteMany({
+					model: "verification",
+					where: [
+						{
+							field: "expiresAt",
+							value: new Date(),
+							operator: "lt",
+						},
+					],
+				});
+			}
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
@@ -771,11 +906,14 @@ export const createInternalAdapter = (
 		updateVerificationValue: async (
 			id: string,
 			data: Partial<Verification>,
+			context?: GenericEndpointContext,
 		) => {
 			const verification = await updateWithHooks<Verification>(
 				data,
 				[{ field: "id", value: id }],
 				"verification",
+				undefined,
+				context,
 			);
 			return verification;
 		},

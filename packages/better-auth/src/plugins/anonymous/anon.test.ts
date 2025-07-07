@@ -94,7 +94,7 @@ describe("anonymous", async () => {
 
 	it("link anonymous user account", async () => {
 		expect(linkAccountFn).toHaveBeenCalledTimes(0);
-		await client.signIn.email(testUser, {
+		const res = await client.signIn.email(testUser, {
 			headers,
 		});
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
@@ -127,5 +127,30 @@ describe("anonymous", async () => {
 			headers,
 		});
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+
+	it("should work with generateName", async () => {
+		const { customFetchImpl, sessionSetter } = await getTestInstance({
+			plugins: [
+				anonymous({
+					generateName() {
+						return "i-am-anonymous";
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [anonymousClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(res.data?.user.name).toBe("i-am-anonymous");
 	});
 });

@@ -55,7 +55,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
     import { createAuthClient } from "better-auth/client"
     import { anonymousClient } from "better-auth/client/plugins"
     
-    const authClient =  createAuthClient({
+    export const authClient = createAuthClient({
         plugins: [
             anonymousClient()
         ]
@@ -76,7 +76,7 @@ const user = await authClient.signIn.anonymous()
 
 ### Link Account
 
-If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method, their anonymous activities can linked to the new account.
+If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method, their anonymous activities can be linked to the new account.
 
 To do that you first need to provide `onLinkAccount` callback to the plugin.
 
@@ -121,6 +121,7 @@ export const auth = betterAuth({
 
 - `disableDeleteAnonymousUser`: By default, the anonymous user is deleted when the account is linked to a new authentication method. Set this option to `true` to disable this behavior.
 
+- `generateName`: A callback function that is called to generate a name for the anonymous user. Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
 
 ## Schema
 

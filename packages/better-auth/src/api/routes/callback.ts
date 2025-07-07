@@ -5,12 +5,15 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
+import { safeJSONParse } from "../../utils/json";
 
 const schema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
+	device_id: z.string().optional(),
 	error_description: z.string().optional(),
 	state: z.string().optional(),
+	user: z.string().optional(),
 });
 
 export const callbackOAuth = createAuthEndpoint(
@@ -23,6 +26,8 @@ export const callbackOAuth = createAuthEndpoint(
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
+		const defaultErrorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		try {
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
@@ -33,25 +38,43 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
+			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
+		}
+
+		const { code, error, state, error_description, device_id } = queryOrBody;
+
+		if (error) {
 			throw c.redirect(
-				`${c.context.baseURL}/error?error=invalid_callback_request`,
+				`${defaultErrorURL}?error=${error}&error_description=${error_description}`,
 			);
 		}
 
-		const { code, error, state, error_description } = queryOrBody;
-
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			throw c.redirect(`${c.context.baseURL}/error?error=state_not_found`);
+			throw c.redirect(`${defaultErrorURL}?error=state_not_found`);
+		}
+		const {
+			codeVerifier,
+			callbackURL,
+			link,
+			errorURL,
+			newUserURL,
+			requestSignUp,
+		} = await parseState(c);
+
+		function redirectOnError(error: string) {
+			let url = errorURL || defaultErrorURL;
+			if (url.includes("?")) {
+				url = `${url}&error=${error}`;
+			} else {
+				url = `${url}?error=${error}`;
+			}
+			throw c.redirect(url);
 		}
 
 		if (!code) {
 			c.context.logger.error("Code not found");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=${
-					error || "no_code"
-				}&error_description=${error_description}`,
-			);
+			throw redirectOnError("no_code");
 		}
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
@@ -63,39 +86,28 @@ export const callbackOAuth = createAuthEndpoint(
 				c.params.id,
 				"not found",
 			);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
-			);
+			throw redirectOnError("oauth_provider_not_found");
 		}
-		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
-			await parseState(c);
 
 		let tokens: OAuth2Tokens;
 		try {
 			tokens = await provider.validateAuthorizationCode({
 				code: code,
 				codeVerifier,
+				deviceId: device_id,
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
+			throw redirectOnError("invalid_code");
 		}
 		const userInfo = await provider
-			.getUserInfo(tokens)
+			.getUserInfo({
+				...tokens,
+				user: c.body?.user ? safeJSONParse<any>(c.body.user) : undefined,
+			})
 			.then((res) => res?.user);
 
-		function redirectOnError(error: string) {
-			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
-			if (url.includes("?")) {
-				url = `${url}&error=${error}`;
-			} else {
-				url = `${url}?error=${error}`;
-			}
-			throw c.redirect(url);
-		}
 		if (!userInfo) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError("unable_to_get_user_info");
@@ -110,34 +122,59 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
+			throw redirectOnError("no_callback_url");
 		}
+
 		if (link) {
+			const trustedProviders =
+				c.context.options.account?.accountLinking?.trustedProviders;
+			const isTrustedProvider = trustedProviders?.includes(
+				provider.id as "apple",
+			);
 			if (
-				c.context.options.account?.accountLinking?.allowDifferentEmails !==
-					true &&
-				link.email !== userInfo.email.toLowerCase()
+				(!isTrustedProvider && !userInfo.emailVerified) ||
+				c.context.options.account?.accountLinking?.enabled === false
 			) {
-				return redirectOnError("email_doesn't_match");
+				c.context.logger.error("Unable to link account - untrusted provider");
+				return redirectOnError("unable_to_link_account");
 			}
+
 			const existingAccount = await c.context.internalAdapter.findAccount(
 				userInfo.id,
 			);
+
 			if (existingAccount) {
-				if (existingAccount && existingAccount.userId !== link.userId) {
+				if (existingAccount.userId.toString() !== link.userId.toString()) {
 					return redirectOnError("account_already_linked_to_different_user");
 				}
-				return redirectOnError("account_already_linked");
-			}
-			const newAccount = await c.context.internalAdapter.createAccount({
-				userId: link.userId,
-				providerId: provider.id,
-				accountId: userInfo.id,
-			});
-			if (!newAccount) {
-				return redirectOnError("unable_to_link_account");
+				const updateData = Object.fromEntries(
+					Object.entries({
+						accessToken: tokens.accessToken,
+						idToken: tokens.idToken,
+						refreshToken: tokens.refreshToken,
+						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+						scope: tokens.scopes?.join(","),
+					}).filter(([_, value]) => value !== undefined),
+				);
+				await c.context.internalAdapter.updateAccount(
+					existingAccount.id,
+					updateData,
+				);
+			} else {
+				const newAccount = await c.context.internalAdapter.createAccount(
+					{
+						userId: link.userId,
+						providerId: provider.id,
+						accountId: userInfo.id,
+						...tokens,
+						scope: tokens.scopes?.join(","),
+					},
+					c,
+				);
+				if (!newAccount) {
+					return redirectOnError("unable_to_link_account");
+				}
 			}
 			let toRedirectTo: string;
 			try {
@@ -162,6 +199,10 @@ export const callbackOAuth = createAuthEndpoint(
 				scope: tokens.scopes?.join(","),
 			},
 			callbackURL,
+			disableSignUp:
+				(provider.disableImplicitSignUp && !requestSignUp) ||
+				provider.options?.disableSignUp,
+			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

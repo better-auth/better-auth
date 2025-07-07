@@ -1,0 +1,29 @@
+---
+title: MongoDB Adapter
+description: Integrate Better Auth with MongoDB.
+---
+
+MongoDB is a popular NoSQL database that is widely used for building scalable and flexible applications. It provides a flexible schema that allows for easy data modeling and querying.
+Read more here: [MongoDB](https://www.mongodb.com/).
+
+## Example Usage
+
+Make sure you have MongoDB installed and configured.
+Then, you can use the mongodb adapter.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongodbAdapter } from "better-auth/adapters/mongodb";
+
+const client = new MongoClient("mongodb://localhost:27017/database");
+const db = client.db();
+
+export const auth = betterAuth({
+  database: mongodbAdapter(db),
+});
+```
+
+## Schema generation & migration
+
+For MongoDB, we don't need to generate or migrate the schema.

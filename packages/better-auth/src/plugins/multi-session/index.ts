@@ -58,16 +58,24 @@ export const multiSession = (options?: MultiSessionConfig) => {
 										await ctx.getSignedCookie(key, ctx.context.secret),
 								),
 						)
-					).filter((v) => v !== undefined);
+					).filter((v) => v !== null);
+
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionTokens);
-
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);
-
-					return ctx.json(validSessions);
+					const uniqueUserSessions = validSessions.reduce(
+						(acc, session) => {
+							if (!acc.find((s) => s.user.id === session.user.id)) {
+								acc.push(session);
+							}
+							return acc;
+						},
+						[] as typeof validSessions,
+					);
+					return ctx.json(uniqueUserSessions);
 				},
 			),
 			setActiveSession: createAuthEndpoint(
@@ -106,7 +114,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
+					const multiSessionCookieName = `${
+						ctx.context.authCookies.sessionToken.name
+					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
@@ -167,7 +177,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
+					const multiSessionCookieName = `${
+						ctx.context.authCookies.sessionToken.name
+					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
@@ -232,25 +244,17 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const headers =
-							ctx.context.returned instanceof APIError
-								? ctx.context.returned.headers
-								: ctx.responseHeader;
-						const cookieString = headers.get("set-cookie");
+						const cookieString = ctx.context.responseHeaders?.get("set-cookie");
 						if (!cookieString) return;
 						const setCookies = parseSetCookieHeader(cookieString);
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
-						const sessionToken = setCookies.get(
-							sessionCookieConfig.name,
-						)?.value;
+						const sessionToken = ctx.context.newSession?.session.token;
 						if (!sessionToken) return;
-
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
-						const rawSession = sessionToken.split(".")[0];
-						if (!rawSession) {
-							return;
-						}
-						const cookieName = `${sessionCookieConfig.name}_multi-${rawSession}`;
+
+						const cookieName = `${
+							sessionCookieConfig.name
+						}_multi-${sessionToken.toLowerCase()}`;
 
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
 
@@ -259,13 +263,13 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								isMultiSessionCookie,
 							).length + (cookieString.includes("session_token") ? 1 : 0);
 
-						if (currentMultiSessions > opts.maximumSessions) {
+						if (currentMultiSessions >= opts.maximumSessions) {
 							return;
 						}
 
 						await ctx.setSignedCookie(
 							cookieName,
-							rawSession,
+							sessionToken,
 							ctx.context.secret,
 							sessionCookieConfig.options,
 						);
@@ -280,9 +284,12 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						const ids = Object.keys(cookies)
 							.map((key) => {
 								if (isMultiSessionCookie(key)) {
-									ctx.setCookie(key, "", { maxAge: 0 });
-									const id = key.split("_multi-")[1];
-									return id;
+									ctx.setCookie(key.toLowerCase(), "", {
+										...ctx.context.authCookies.sessionToken.options,
+										maxAge: 0,
+									});
+									const token = cookies[key].split(".")[0];
+									return token;
 								}
 								return null;
 							})

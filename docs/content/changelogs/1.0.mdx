@@ -1,0 +1,52 @@
+---
+title: v1.0
+description: Built-in CLI for managing your project.
+date: 2021-10-01
+---
+
+Version update
+
+Better Auth comes with a built-in CLI to help you manage the database schema needed for both core functionality and plugins.
+
+## Generate
+
+The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest generate
+```
+
+### Options
+
+- `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+- `--y` - Skip the confirmation prompt and generate the schema directly.
+
+## Migrate
+
+The migrate command applies the Better Auth schema directly to your database. This is available if you’re using the built-in Kysely adapter.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest migrate
+```
+
+### Options
+
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+- `--y` - Skip the confirmation prompt and apply the schema directly.
+
+## Common Issues
+
+**Error: Cannot find module X**
+
+If you see this error, it means the CLI can’t resolve imported modules in your Better Auth config file. We're working on a fix for many of these issues, but in the meantime, you can try the following:
+
+- Remove any import aliases in your config file and use relative paths instead. After running the CLI, you can revert to using aliases.
+
+## Secret
+
+The CLI also provides a way to generate a secret key for your Better Auth instance.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest secret
+```
