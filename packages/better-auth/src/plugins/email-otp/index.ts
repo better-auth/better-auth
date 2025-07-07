@@ -1,10 +1,15 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types";
-import { generateRandomString } from "../../crypto";
+import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
 export interface EmailOTPOptions {
 	/**
@@ -59,11 +64,20 @@ export interface EmailOTPOptions {
 	 */
 	allowedAttempts?: number;
 	/**
-	 * Override the default email verification to use email otp instead
+	 * Store the OTP in your database in a secure way
+	 * Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database
 	 *
-	 * @default false
+	 * @default "plain"
 	 */
-	overrideDefaultEmailVerification?: boolean;
+	storeOTP?:
+		| "hashed"
+		| "plain"
+		| "encrypted"
+		| { hash: (otp: string) => Promise<string> }
+		| {
+				encrypt: (otp: string) => Promise<string>;
+				decrypt: (otp: string) => Promise<string>;
+		  };
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
@@ -72,6 +86,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
 		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
+		storeOTP: "plain",
 		...options,
 	} satisfies EmailOTPOptions;
 	const ERROR_CODES = {
@@ -82,32 +97,84 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		TOO_MANY_ATTEMPTS: "Too many attempts",
 	} as const;
 
-	const endpoints = {
-		sendVerificationOTP: createAuthEndpoint(
-			"/email-otp/send-verification-otp",
-			{
-				method: "POST",
-				body: z.object({
-					email: z.string({
-						description: "Email address to send the OTP",
+	async function storeOTP(ctx: GenericEndpointContext, otp: string) {
+		if (opts.storeOTP === "encrypted") {
+			return await symmetricEncrypt({
+				key: ctx.context.secret,
+				data: otp,
+			});
+		}
+		if (opts.storeOTP === "hashed") {
+			return await defaultKeyHasher(otp);
+		}
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
+			return await opts.storeOTP.hash(otp);
+		}
+		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
+			return await opts.storeOTP.encrypt(otp);
+		}
+
+		return otp;
+	}
+
+	async function verifyStoredOTP(
+		ctx: GenericEndpointContext,
+		storedOtp: string,
+		otp: string,
+	): Promise<boolean> {
+		if (opts.storeOTP === "encrypted") {
+			return (
+				(await symmetricDecrypt({
+					key: ctx.context.secret,
+					data: storedOtp,
+				})) === otp
+			);
+		}
+		if (opts.storeOTP === "hashed") {
+			const hashedOtp = await defaultKeyHasher(otp);
+			return hashedOtp === storedOtp;
+		}
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
+			const hashedOtp = await opts.storeOTP.hash(otp);
+			return hashedOtp === storedOtp;
+		}
+		if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
+			const decryptedOtp = await opts.storeOTP.decrypt(storedOtp);
+			return decryptedOtp === otp;
+		}
+
+		return otp === storedOtp;
+	}
+
+	return {
+		id: "email-otp",
+		endpoints: {
+			sendVerificationOTP: createAuthEndpoint(
+				"/email-otp/send-verification-otp",
+				{
+					method: "POST",
+					body: z.object({
+						email: z.string({
+							description: "Email address to send the OTP",
+						}),
+						type: z.enum(types, {
+							description: "Type of the OTP",
+						}),
 					}),
-					type: z.enum(types, {
-						description: "Type of the OTP",
-					}),
-				}),
-				metadata: {
-					openapi: {
-						description: "Send verification OTP",
-						responses: {
-							200: {
-								description: "Success",
-								content: {
-									"application/json": {
-										schema: {
-											type: "object",
-											properties: {
-												success: {
-													type: "boolean",
+					metadata: {
+						openapi: {
+							description: "Send verification OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
 												},
 											},
 										},
@@ -117,104 +184,84 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 					},
 				},
-			},
-			async (ctx) => {
-				if (!options?.sendVerificationOTP) {
-					ctx.context.logger.error(
-						"send email verification is not implemented",
-					);
-					throw new APIError("BAD_REQUEST", {
-						message: "send email verification is not implemented",
-					});
-				}
-				const email = ctx.body.email;
-				const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-				if (!emailRegex.test(email)) {
-					throw ctx.error("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_EMAIL,
-					});
-				}
-				if (opts.disableSignUp) {
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
-						});
-					}
-				} else if (ctx.body.type === "forget-password") {
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						return ctx.json({
-							success: true,
-						});
-					}
-				}
-				const otp = opts.generateOTP(
-					{ email, type: ctx.body.type },
-					ctx.request,
-				);
-				await ctx.context.internalAdapter
-					.createVerificationValue(
-						{
-							value: `${otp}:0`,
-							identifier: `${ctx.body.type}-otp-${email}`,
-							expiresAt: getDate(opts.expiresIn, "sec"),
-						},
-						ctx,
-					)
-					.catch(async (error) => {
-						// might be duplicate key error
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`${ctx.body.type}-otp-${email}`,
+				async (ctx) => {
+					if (!options?.sendVerificationOTP) {
+						ctx.context.logger.error(
+							"send email verification is not implemented",
 						);
-						//try again
-						await ctx.context.internalAdapter.createVerificationValue(
+						throw new APIError("BAD_REQUEST", {
+							message: "send email verification is not implemented",
+						});
+					}
+					const email = ctx.body.email;
+					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+					if (!emailRegex.test(email)) {
+						throw ctx.error("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_EMAIL,
+						});
+					}
+					if (opts.disableSignUp) {
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
+						if (!user) {
+							throw new APIError("BAD_REQUEST", {
+								message: ERROR_CODES.USER_NOT_FOUND,
+							});
+						}
+					} else if (ctx.body.type === "forget-password") {
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
+						if (!user) {
+							return ctx.json({
+								success: true,
+							});
+						}
+					}
+					let otp = opts.generateOTP(
+						{ email, type: ctx.body.type },
+						ctx.request,
+					);
+
+					let storedOTP = await storeOTP(ctx, otp);
+
+					await ctx.context.internalAdapter
+						.createVerificationValue(
 							{
-								value: `${otp}:0`,
+								value: `${storedOTP}:0`,
 								identifier: `${ctx.body.type}-otp-${email}`,
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							},
 							ctx,
-						);
-					});
-				await options.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: ctx.body.type,
-					},
-					ctx.request,
-				);
-				return ctx.json({
-					success: true,
-				});
-			},
-		),
-	};
-	return {
-		id: "email-otp",
-		init(ctx) {
-			return {
-				options: {
-					emailVerification: {
-						async sendVerificationEmail(data, request) {
-							await endpoints.sendVerificationOTP({
-								//@ts-expect-error - we need to pass the context
-								context: ctx,
-								body: {
-									email: data.user.email,
-									type: "email-verification",
+						)
+						.catch(async (error) => {
+							// might be duplicate key error
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								`${ctx.body.type}-otp-${email}`,
+							);
+							//try again
+							await ctx.context.internalAdapter.createVerificationValue(
+								{
+									value: `${storedOTP}:0`,
+									identifier: `${ctx.body.type}-otp-${email}`,
+									expiresAt: getDate(opts.expiresIn, "sec"),
 								},
-								request,
-							});
+								ctx,
+							);
+						});
+					await options.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: ctx.body.type,
 						},
-					},
+						ctx.request,
+					);
+					return ctx.json({
+						success: true,
+					});
 				},
-			};
-		},
-		endpoints: {
-			...endpoints,
+			),
 			createVerificationOTP: createAuthEndpoint(
 				"/email-otp/create-verification-otp",
 				{
@@ -252,9 +299,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						{ email, type: ctx.body.type },
 						ctx.request,
 					);
+					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
-							value: `${otp}:0`,
+							value: `${storedOTP}:0`,
 							identifier: `${ctx.body.type}-otp-${email}`,
 							expiresAt: getDate(opts.expiresIn, "sec"),
 						},
@@ -313,8 +361,32 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							otp: null,
 						});
 					}
+					if (
+						opts.storeOTP === "hashed" ||
+						(typeof opts.storeOTP === "object" && "hash" in opts.storeOTP)
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message: "OTP is hashed, cannot return the plain text OTP",
+						});
+					}
+
+					let [storedOtp, _attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
+					let otp = storedOtp;
+					if (opts.storeOTP === "encrypted") {
+						otp = await symmetricDecrypt({
+							key: ctx.context.secret,
+							data: storedOtp,
+						});
+					}
+
+					if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
+						otp = await opts.storeOTP.decrypt(storedOtp);
+					}
+
 					return ctx.json({
-						otp: verificationValue.value,
+						otp,
 					});
 				},
 			),
@@ -389,7 +461,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = verificationValue.value.split(":");
+
+					const [otpValue, attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
 					const allowedAttempts = options?.allowedAttempts || 3;
 					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
@@ -399,7 +474,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (ctx.body.otp !== otpValue) {
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{
@@ -530,7 +606,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = verificationValue.value.split(":");
+					const [otpValue, attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
 					const allowedAttempts = options?.allowedAttempts || 3;
 					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
@@ -540,7 +618,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (ctx.body.otp !== otpValue) {
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{
@@ -669,9 +748,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						{ email, type: "forget-password" },
 						ctx.request,
 					);
+					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
-							value: `${otp}:0`,
+							value: `${storedOTP}:0`,
 							identifier: `forget-password-otp-${email}`,
 							expiresAt: getDate(opts.expiresIn, "sec"),
 						},
@@ -758,7 +838,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const [otpValue, attempts] = verificationValue.value.split(":");
+					const [otpValue, attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
 					const allowedAttempts = options?.allowedAttempts || 3;
 					if (attempts && parseInt(attempts) >= allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
@@ -768,7 +850,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (ctx.body.otp !== otpValue) {
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{
@@ -841,9 +924,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								{ email, type: ctx.body.type },
 								ctx.request,
 							);
+							let storedOTP = await storeOTP(ctx, otp);
 							await ctx.context.internalAdapter.createVerificationValue(
 								{
-									value: `${otp}:0`,
+									value: `${storedOTP}:0`,
 									identifier: `email-verification-otp-${email}`,
 									expiresAt: getDate(opts.expiresIn, "sec"),
 								},
