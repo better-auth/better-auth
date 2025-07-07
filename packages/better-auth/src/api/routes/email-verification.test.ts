@@ -63,7 +63,7 @@ describe("Email Verification", async () => {
 		mockDisabledSendEmail.mockClear();
 
 		// Try signing in (this should fail with 403 but not send an email)
-		expect(async () => {
+		await expect(async () => {
 			try {
 				await auth.api.signInEmail({
 					body: { email: testUser.email, password: testUser.password },
