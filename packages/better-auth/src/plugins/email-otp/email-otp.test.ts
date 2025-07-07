@@ -3,6 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
 import { bearer } from "../bearer";
+import { createAuthClient } from "../../client";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
@@ -467,5 +468,90 @@ describe("custom generate otpFn", async () => {
 			otp: "123456",
 		});
 		expect(res.data?.status).toBe(true);
+	});
+});
+
+describe("override default email verification", async () => {
+	let otp = "";
+	const { cookieSetter, customFetchImpl } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+		emailVerification: {
+			sendOnSignUp: true,
+		},
+		plugins: [
+			emailOTP({
+				async sendVerificationOTP(data, request) {
+					otp = data.otp;
+				},
+				overrideDefaultEmailVerification: true,
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [emailOTPClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const headers = new Headers();
+	it("should send verification email on sign up", async () => {
+		await client.signUp.email(
+			{
+				email: "test-otp-override@email.com",
+				password: "password",
+				name: "Test User",
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(otp.length).toBe(6);
+	});
+
+	it("should verify email with otp", async () => {
+		const res = await client.emailOtp.verifyEmail({
+			email: "test-otp-override@email.com",
+			otp,
+		});
+		expect(res.data?.status).toBe(true);
+		expect(res.data?.user.emailVerified).toBe(true);
+	});
+
+	it("should by default not override default email verification", async () => {
+		const sendVerificationOTP = vi.fn();
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				sendOnSignUp: true,
+				async sendVerificationEmail(data, request) {
+					sendVerificationOTP(data, request);
+				},
+			},
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP(data, request) {
+						//
+					},
+				}),
+			],
+		});
+		await client.signUp.email(
+			{
+				email: "test-otp-override@email.com",
+				password: "password",
+				name: "Test User",
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(sendVerificationOTP).toHaveBeenCalled();
 	});
 });

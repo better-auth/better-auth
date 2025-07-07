@@ -58,6 +58,12 @@ export interface EmailOTPOptions {
 	 * @default 3
 	 */
 	allowedAttempts?: number;
+	/**
+	 * Override the default email verification to use email otp instead
+	 *
+	 * @default false
+	 */
+	overrideDefaultEmailVerification?: boolean;
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
@@ -75,35 +81,33 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		USER_NOT_FOUND: "User not found",
 		TOO_MANY_ATTEMPTS: "Too many attempts",
 	} as const;
-	return {
-		id: "email-otp",
-		endpoints: {
-			sendVerificationOTP: createAuthEndpoint(
-				"/email-otp/send-verification-otp",
-				{
-					method: "POST",
-					body: z.object({
-						email: z.string({
-							description: "Email address to send the OTP",
-						}),
-						type: z.enum(types, {
-							description: "Type of the OTP",
-						}),
+
+	const endpoints = {
+		sendVerificationOTP: createAuthEndpoint(
+			"/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				body: z.object({
+					email: z.string({
+						description: "Email address to send the OTP",
 					}),
-					metadata: {
-						openapi: {
-							description: "Send verification OTP",
-							responses: {
-								200: {
-									description: "Success",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													success: {
-														type: "boolean",
-													},
+					type: z.enum(types, {
+						description: "Type of the OTP",
+					}),
+				}),
+				metadata: {
+					openapi: {
+						description: "Send verification OTP",
+						responses: {
+							200: {
+								description: "Success",
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												success: {
+													type: "boolean",
 												},
 											},
 										},
@@ -113,81 +117,104 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
-					if (!options?.sendVerificationOTP) {
-						ctx.context.logger.error(
-							"send email verification is not implemented",
-						);
-						throw new APIError("BAD_REQUEST", {
-							message: "send email verification is not implemented",
-						});
-					}
-					const email = ctx.body.email;
-					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-					if (!emailRegex.test(email)) {
-						throw ctx.error("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_EMAIL,
-						});
-					}
-					if (opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
-						if (!user) {
-							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.USER_NOT_FOUND,
-							});
-						}
-					} else if (ctx.body.type === "forget-password") {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
-						if (!user) {
-							return ctx.json({
-								success: true,
-							});
-						}
-					}
-					const otp = opts.generateOTP(
-						{ email, type: ctx.body.type },
-						ctx.request,
+			},
+			async (ctx) => {
+				if (!options?.sendVerificationOTP) {
+					ctx.context.logger.error(
+						"send email verification is not implemented",
 					);
-					await ctx.context.internalAdapter
-						.createVerificationValue(
+					throw new APIError("BAD_REQUEST", {
+						message: "send email verification is not implemented",
+					});
+				}
+				const email = ctx.body.email;
+				const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+				if (!emailRegex.test(email)) {
+					throw ctx.error("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_EMAIL,
+					});
+				}
+				if (opts.disableSignUp) {
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+				} else if (ctx.body.type === "forget-password") {
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						return ctx.json({
+							success: true,
+						});
+					}
+				}
+				const otp = opts.generateOTP(
+					{ email, type: ctx.body.type },
+					ctx.request,
+				);
+				await ctx.context.internalAdapter
+					.createVerificationValue(
+						{
+							value: `${otp}:0`,
+							identifier: `${ctx.body.type}-otp-${email}`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					)
+					.catch(async (error) => {
+						// might be duplicate key error
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`${ctx.body.type}-otp-${email}`,
+						);
+						//try again
+						await ctx.context.internalAdapter.createVerificationValue(
 							{
 								value: `${otp}:0`,
 								identifier: `${ctx.body.type}-otp-${email}`,
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							},
 							ctx,
-						)
-						.catch(async (error) => {
-							// might be duplicate key error
-							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-								`${ctx.body.type}-otp-${email}`,
-							);
-							//try again
-							await ctx.context.internalAdapter.createVerificationValue(
-								{
-									value: `${otp}:0`,
-									identifier: `${ctx.body.type}-otp-${email}`,
-									expiresAt: getDate(opts.expiresIn, "sec"),
-								},
-								ctx,
-							);
-						});
-					await options.sendVerificationOTP(
-						{
-							email,
-							otp,
-							type: ctx.body.type,
-						},
-						ctx.request,
-					);
-					return ctx.json({
-						success: true,
+						);
 					});
+				await options.sendVerificationOTP(
+					{
+						email,
+						otp,
+						type: ctx.body.type,
+					},
+					ctx.request,
+				);
+				return ctx.json({
+					success: true,
+				});
+			},
+		),
+	};
+	return {
+		id: "email-otp",
+		init(ctx) {
+			return {
+				options: {
+					emailVerification: {
+						async sendVerificationEmail(data, request) {
+							await endpoints.sendVerificationOTP({
+								//@ts-expect-error - we need to pass the context
+								context: ctx,
+								body: {
+									email: data.user.email,
+									type: "email-verification",
+								},
+								request,
+							});
+						},
+					},
 				},
-			),
+			};
+		},
+		endpoints: {
+			...endpoints,
 			createVerificationOTP: createAuthEndpoint(
 				"/email-otp/create-verification-otp",
 				{
