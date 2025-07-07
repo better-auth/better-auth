@@ -1,5 +1,5 @@
 import { ObjectId, type Db } from "mongodb";
-import { getAuthTables } from "../../db";
+import { getAuthTables } from "../../db/get-tables";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { withApplyDefault } from "../utils";
 

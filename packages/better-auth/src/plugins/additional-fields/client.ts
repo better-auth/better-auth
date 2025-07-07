@@ -1,4 +1,4 @@
-import type { FieldAttribute } from "../../db";
+import type { FieldAttribute } from "../../db/field";
 import type { BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
 import type { BetterAuthPlugin } from "../../types";
 

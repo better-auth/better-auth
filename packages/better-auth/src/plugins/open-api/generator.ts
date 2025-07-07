@@ -6,7 +6,7 @@ import type {
 } from "better-call";
 import { ZodObject, ZodOptional, ZodSchema } from "zod";
 import { getEndpoints } from "../../api";
-import { getAuthTables } from "../../db";
+import { getAuthTables } from "../../db/get-tables";
 import type { AuthContext, BetterAuthOptions } from "../../types";
 
 export interface Path {

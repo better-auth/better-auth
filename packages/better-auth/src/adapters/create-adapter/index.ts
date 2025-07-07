@@ -9,7 +9,7 @@ import type {
 	CleanedWhere,
 	CreateCustomAdapter,
 } from "./types";
-import type { FieldAttribute } from "../../db";
+import type { FieldAttribute } from "../../db/field";
 export * from "./types";
 
 let debugLogs: any[] = [];
