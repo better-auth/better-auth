@@ -82,8 +82,11 @@ export const init = async (options: BetterAuthOptions) => {
 		.filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
-		if (typeof options?.advanced?.generateId === "function") {
+		if (typeof options.advanced?.generateId === "function") {
 			return options.advanced.generateId({ model, size });
+		}
+		if (typeof options?.advanced?.database?.generateId === "function") {
+			return options.advanced.database.generateId({ model, size });
 		}
 		return generateId(size);
 	};
@@ -153,7 +156,6 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 	};
 	let { context } = runPluginInit(ctx);
-	context;
 	return context;
 };
 
@@ -225,7 +227,7 @@ function runPluginInit(ctx: AuthContext) {
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = plugin.init(ctx);
+			const result = plugin.init(context);
 			if (typeof result === "object") {
 				if (result.options) {
 					const { databaseHooks, ...restOpts } = result.options;
@@ -274,6 +276,11 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
 		trustedOrigins.push(...envTrustedOrigins.split(","));
+	}
+	if (trustedOrigins.filter((x) => !x).length) {
+		throw new BetterAuthError(
+			"A provided trusted origin is invalid, make sure your trusted origins list is properly defined.",
+		);
 	}
 	return trustedOrigins;
 }

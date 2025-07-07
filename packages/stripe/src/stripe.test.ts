@@ -11,6 +11,9 @@ import type { StripeOptions, Subscription } from "./types";
 
 describe("stripe", async () => {
 	const mockStripe = {
+		prices: {
+			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
+		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
 		},
@@ -32,6 +35,7 @@ describe("stripe", async () => {
 		subscriptions: {
 			retrieve: vi.fn(),
 			list: vi.fn().mockResolvedValue({ data: [] }),
+			update: vi.fn(),
 		},
 		webhooks: {
 			constructEvent: vi.fn(),
@@ -58,10 +62,12 @@ describe("stripe", async () => {
 				{
 					priceId: process.env.STRIPE_PRICE_ID_1!,
 					name: "starter",
+					lookupKey: "lookup_key_123",
 				},
 				{
 					priceId: process.env.STRIPE_PRICE_ID_2!,
 					name: "premium",
+					lookupKey: "lookup_key_234",
 				},
 			],
 		},
@@ -243,19 +249,15 @@ describe("stripe", async () => {
 	});
 
 	it("should handle subscription webhook events", async () => {
-		const testSubscriptionId = "sub_123456";
-		const testReferenceId = "user_123";
-		await ctx.adapter.create({
+		const { id: testReferenceId } = await ctx.adapter.create({
 			model: "user",
 			data: {
-				id: testReferenceId,
 				email: "test@email.com",
 			},
 		});
-		await ctx.adapter.create({
+		const { id: testSubscriptionId } = await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: testSubscriptionId,
 				referenceId: testReferenceId,
 				stripeCustomerId: "cus_mock123",
 				status: "active",
@@ -353,22 +355,19 @@ describe("stripe", async () => {
 		});
 	});
 
-	it("should handle subscription deletion webhook", async () => {
-		const userId = "test_user";
-		const subId = "test_sub_delete";
+	const { id: userId } = await ctx.adapter.create({
+		model: "user",
+		data: {
+			email: "delete-test@email.com",
+		},
+	});
 
-		await ctx.adapter.create({
-			model: "user",
-			data: {
-				id: userId,
-				email: "delete-test@email.com",
-			},
-		});
+	it("should handle subscription deletion webhook", async () => {
+		const subId = "test_sub_delete";
 
 		await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: subId,
 				referenceId: userId,
 				stripeCustomerId: "cus_delete_test",
 				status: "active",
@@ -501,7 +500,6 @@ describe("stripe", async () => {
 		};
 
 		const mockSubscription = {
-			id: "sub_123",
 			status: "active",
 			items: {
 				data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
@@ -532,11 +530,10 @@ describe("stripe", async () => {
 			plugins: [stripe(eventTestOptions)],
 		});
 
-		await ctx.adapter.create({
+		const { id: testSubscriptionId } = await ctx.adapter.create({
 			model: "subscription",
 			data: {
-				id: "sub_123",
-				referenceId: "user_123",
+				referenceId: userId,
 				stripeCustomerId: "cus_123",
 				stripeSubscriptionId: "sub_123",
 				status: "incomplete",
@@ -570,7 +567,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					items: {
@@ -608,7 +605,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					cancel_at_period_end: true,
@@ -644,7 +641,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "active",
 					cancel_at_period_end: true,
@@ -679,12 +676,12 @@ describe("stripe", async () => {
 			type: "customer.subscription.deleted",
 			data: {
 				object: {
-					id: "sub_123",
+					id: testSubscriptionId,
 					customer: "cus_123",
 					status: "canceled",
 					metadata: {
-						referenceId: "user_123",
-						subscriptionId: "sub_123",
+						referenceId: userId,
+						subscriptionId: testSubscriptionId,
 					},
 				},
 			},
@@ -707,5 +704,117 @@ describe("stripe", async () => {
 		await eventTestAuth.handler(deleteRequest);
 
 		expect(onSubscriptionDeleted).toHaveBeenCalled();
+	});
+
+	it("should allow seat upgrades for the same plan", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "seat-upgrade@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "seat-upgrade@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 5,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(upgradeRes.data?.url).toBeDefined();
+	});
+
+	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "duplicate-prevention@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "duplicate-prevention@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				seats: 3,
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(upgradeRes.error).toBeDefined();
+		expect(upgradeRes.error?.message).toContain("already subscribed");
 	});
 });

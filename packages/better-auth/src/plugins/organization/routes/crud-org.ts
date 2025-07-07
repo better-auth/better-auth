@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -156,7 +155,6 @@ export const createOrganization = createAuthEndpoint(
 
 		const organization = await adapter.createOrganization({
 			organization: {
-				id: generateId(),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
 				logo: ctx.body.logo,
@@ -176,7 +174,6 @@ export const createOrganization = createAuthEndpoint(
 					ctx.request,
 				)) ||
 				(await adapter.createTeam({
-					id: generateId(),
 					organizationId: organization.id,
 					name: `${organization.name}`,
 					createdAt: new Date(),
@@ -324,7 +321,7 @@ export const updateOrganization = createAuthEndpoint(
 			});
 		}
 		const canUpdateOrg = hasPermission({
-			permission: {
+			permissions: {
 				organization: ["update"],
 			},
 			role: member.role,
@@ -406,7 +403,7 @@ export const deleteOrganization = createAuthEndpoint(
 		}
 		const canDeleteOrg = hasPermission({
 			role: member.role,
-			permission: {
+			permissions: {
 				organization: ["delete"],
 			},
 			options: ctx.context.orgOptions,
@@ -510,6 +507,7 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 				(member) => member.userId === session.user.id,
 			);
 			if (!isMember) {
+				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,

@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
-import { generateId } from "../../../utils";
 import { getSessionFromCtx } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import type { OrganizationOptions } from "../organization";
@@ -22,6 +21,55 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				name: z.string(),
 			}),
 			use: [orgMiddleware],
+			metadata: {
+				openapi: {
+					description: "Create a new team within an organization",
+					responses: {
+						"200": {
+							description: "Team created successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+												description: "Unique identifier of the created team",
+											},
+											name: {
+												type: "string",
+												description: "Name of the team",
+											},
+											organizationId: {
+												type: "string",
+												description:
+													"ID of the organization the team belongs to",
+											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was created",
+											},
+											updatedAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was last updated",
+											},
+										},
+										required: [
+											"id",
+											"name",
+											"organizationId",
+											"createdAt",
+											"updatedAt",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
@@ -51,7 +99,7 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				const canCreate = hasPermission({
 					role: member.role,
 					options: ctx.context.orgOptions,
-					permission: {
+					permissions: {
 						team: ["create"],
 					},
 				});
@@ -83,7 +131,6 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				});
 			}
 			const createdTeam = await adapter.createTeam({
-				id: generateId(),
 				name: ctx.body.name,
 				organizationId,
 				createdAt: new Date(),
@@ -102,6 +149,32 @@ export const removeTeam = createAuthEndpoint(
 			organizationId: z.string().optional(),
 		}),
 		use: [orgMiddleware],
+		metadata: {
+			openapi: {
+				description: "Remove a team from an organization",
+				responses: {
+					"200": {
+						description: "Team removed successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										message: {
+											type: "string",
+											description:
+												"Confirmation message indicating successful removal",
+											enum: ["Team removed successfully."],
+										},
+									},
+									required: ["message"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
@@ -128,14 +201,14 @@ export const removeTeam = createAuthEndpoint(
 			if (!member || member.teamId === ctx.body.teamId) {
 				throw new APIError("FORBIDDEN", {
 					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM,
 				});
 			}
 
 			const canRemove = hasPermission({
 				role: member.role,
 				options: ctx.context.orgOptions,
-				permission: {
+				permissions: {
 					team: ["delete"],
 				},
 			});
@@ -179,6 +252,54 @@ export const updateTeam = createAuthEndpoint(
 			data: teamSchema.partial(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Update an existing team in an organization",
+				responses: {
+					"200": {
+						description: "Team updated successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										id: {
+											type: "string",
+											description: "Unique identifier of the updated team",
+										},
+										name: {
+											type: "string",
+											description: "Updated name of the team",
+										},
+										organizationId: {
+											type: "string",
+											description: "ID of the organization the team belongs to",
+										},
+										createdAt: {
+											type: "string",
+											format: "date-time",
+											description: "Timestamp when the team was created",
+										},
+										updatedAt: {
+											type: "string",
+											format: "date-time",
+											description: "Timestamp when the team was last updated",
+										},
+									},
+									required: [
+										"id",
+										"name",
+										"organizationId",
+										"createdAt",
+										"updatedAt",
+									],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -208,7 +329,7 @@ export const updateTeam = createAuthEndpoint(
 		const canUpdate = hasPermission({
 			role: member.role,
 			options: ctx.context.orgOptions,
-			permission: {
+			permissions: {
 				team: ["update"],
 			},
 		});
@@ -247,6 +368,59 @@ export const listOrganizationTeams = createAuthEndpoint(
 				organizationId: z.string().optional(),
 			}),
 		),
+		metadata: {
+			openapi: {
+				description: "List all teams in an organization",
+				responses: {
+					"200": {
+						description: "Teams retrieved successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+												description: "Unique identifier of the team",
+											},
+											name: {
+												type: "string",
+												description: "Name of the team",
+											},
+											organizationId: {
+												type: "string",
+												description:
+													"ID of the organization the team belongs to",
+											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was created",
+											},
+											updatedAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was last updated",
+											},
+										},
+										required: [
+											"id",
+											"name",
+											"organizationId",
+											"createdAt",
+											"updatedAt",
+										],
+									},
+									description: "Array of team objects within the organization",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {

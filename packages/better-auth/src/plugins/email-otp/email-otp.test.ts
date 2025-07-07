@@ -69,7 +69,6 @@ describe("email-otp", async () => {
 				},
 			},
 		);
-
 		expect(verifiedUser.data?.token).toBeDefined();
 	});
 
@@ -300,33 +299,19 @@ describe("email-otp-verify", async () => {
 		},
 	);
 
-	it("should not create verification otp when disableSignUp and user not registered", async () => {
-		for (let param of [
-			{
-				email: "test-email@domain.com",
-				isNull: true,
-			},
-			{
-				email: testUser.email,
-				isNull: false,
-			},
-		]) {
-			await client.emailOtp.sendVerificationOtp({
-				email: param.email,
-				type: "email-verification",
-			});
-			const res = await auth.api.getVerificationOTP({
-				query: {
-					email: param.email,
-					type: "email-verification",
-				},
-			});
-			if (param.isNull) {
-				expect(res.otp).toBeNull();
-			} else {
-				expect(res.otp).not.toBeNull();
-			}
-		}
+	it("should return USER_NOT_FOUND error when disableSignUp and user not registered", async () => {
+		const response = await client.emailOtp.sendVerificationOtp({
+			email: "non-existent@domain.com",
+			type: "email-verification",
+		});
+
+		expect(response.error?.message).toBe("User not found");
+		// Existing user should still succeed
+		const successRes = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		expect(successRes.error).toBeFalsy();
 	});
 
 	it("should verify email with last otp", async () => {
@@ -342,6 +327,56 @@ describe("email-otp-verify", async () => {
 			email: testUser.email,
 			type: "email-verification",
 		});
+	});
+
+	it("should block after exceeding allowed attempts", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.emailOtp.verifyEmail({
+				email: testUser.email,
+				otp: "wrong-otp",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		//Try one more time - should be blocked
+		const res = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: "000000",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
+	});
+
+	it("should block reset password after exceeding allowed attempts", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.emailOtp.resetPassword({
+				email: testUser.email,
+				otp: "wrong-otp",
+				password: "new-password",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		// Try one more time - should be blocked
+		const res = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: "000000",
+			password: "new-password",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
 	});
 });
 

@@ -58,6 +58,10 @@ By default, cookies are not shared between subdomains. However, if you need to a
 
 <Callout>The leading period of the `domain` attribute broadens the cookie's scope beyond your main domain, making it accessible across all subdomains.</Callout>
 
+<Callout type="note">
+If your frontend and backend are on different domains, you must configure CORS on your backend, set <code>credentials: 'include'</code> in your frontend requests, and add your frontend domain to <code>trustedOrigins</code>. See the example above for cookie attributes and trustedOrigins usage.
+</Callout>
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
@@ -65,13 +69,7 @@ export const auth = betterAuth({
     advanced: {
         crossSubDomainCookies: {
             enabled: true,
-            domain: ".example.com", // Domain with a leading period
-        },
-        defaultCookieAttributes: {
-            secure: true,
-            httpOnly: true,
-            sameSite: "none",  // Allows CORS-based cookie sharing across subdomains
-            partitioned: true, // New browser standards will mandate this for foreign cookies
+            domain: ".example.com", // your domain
         },
     },
     trustedOrigins: [
@@ -81,9 +79,6 @@ export const auth = betterAuth({
     ],
 })
 ```
-
-<Callout type="warn">Setting your `sameSite` cookie attribute to `none` makes you vulnerable to CSRF attacks. To mitigate risks, configure `trustedOrigins` with an array of authorized origins to allow.</Callout>
-
 ### Secure Cookies
 
 By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.

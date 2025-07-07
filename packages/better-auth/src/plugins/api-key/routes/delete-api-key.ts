@@ -5,7 +5,7 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-
+import { API_KEY_TABLE_NAME } from "..";
 export function deleteApiKey({
 	opts,
 	schema,
@@ -28,6 +28,47 @@ export function deleteApiKey({
 				}),
 			}),
 			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Delete an existing API key",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										keyId: {
+											type: "string",
+											description: "The id of the API key to delete",
+										},
+									},
+									required: ["keyId"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "API key deleted successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+												description:
+													"Indicates if the API key was successfully deleted",
+											},
+										},
+										required: ["success"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const { keyId } = ctx.body;
@@ -38,7 +79,7 @@ export function deleteApiKey({
 				});
 			}
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "id",
@@ -55,7 +96,7 @@ export function deleteApiKey({
 
 			try {
 				await ctx.context.adapter.delete<ApiKey>({
-					model: schema.apikey.modelName,
+					model: API_KEY_TABLE_NAME,
 					where: [
 						{
 							field: "id",

@@ -8,7 +8,6 @@ import {
 	oneTap,
 	oAuthProxy,
 	openAPI,
-	oidcProvider,
 	customSession,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
@@ -52,8 +51,8 @@ const STARTER_PRICE_ID = {
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
-		dialect,
-		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
+		dialect: libsql,
+		type: "sqlite",
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
@@ -159,9 +158,7 @@ export const auth = betterAuth({
 		multiSession(),
 		oAuthProxy(),
 		nextCookies(),
-		oidcProvider({
-			loginPage: "/sign-in",
-		}),
+
 		oneTap(),
 		customSession(async (session) => {
 			return {
@@ -198,4 +195,5 @@ export const auth = betterAuth({
 			},
 		}),
 	],
+	trustedOrigins: ["exp://"],
 });

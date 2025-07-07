@@ -73,7 +73,7 @@ Here's an example of how to use `getSession` in an Express route:
 
 ```ts title="server.ts"
 import { fromNodeHeaders } from "better-auth/node";
-import { auth } from "./auth"; //your better auth instance
+import { auth } from "./auth"; // Your Better Auth instance
 
 app.get("/api/me", async (req, res) => {
  	const session = await auth.api.getSession({

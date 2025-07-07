@@ -24,6 +24,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
+						callbackURL?: string;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -59,33 +60,65 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					},
 					responses: {
 						"200": {
-							description: "Success",
+							description: "Successfully created user",
 							content: {
 								"application/json": {
 									schema: {
 										type: "object",
 										properties: {
-											id: {
+											token: {
 												type: "string",
-												description: "The id of the user",
+												nullable: true,
+												description: "Authentication token for the session",
 											},
-											email: {
-												type: "string",
-												description: "The email of the user",
-											},
-											name: {
-												type: "string",
-												description: "The name of the user",
-											},
-											image: {
-												type: "string",
-												description: "The image of the user",
-											},
-											emailVerified: {
-												type: "boolean",
-												description: "If the email is verified",
+											user: {
+												type: "object",
+												properties: {
+													id: {
+														type: "string",
+														description: "The unique identifier of the user",
+													},
+													email: {
+														type: "string",
+														format: "email",
+														description: "The email address of the user",
+													},
+													name: {
+														type: "string",
+														description: "The name of the user",
+													},
+													image: {
+														type: "string",
+														format: "uri",
+														nullable: true,
+														description: "The profile image URL of the user",
+													},
+													emailVerified: {
+														type: "boolean",
+														description: "Whether the email has been verified",
+													},
+													createdAt: {
+														type: "string",
+														format: "date-time",
+														description: "When the user was created",
+													},
+													updatedAt: {
+														type: "string",
+														format: "date-time",
+														description: "When the user was last updated",
+													},
+												},
+												required: [
+													"id",
+													"email",
+													"name",
+													"emailVerified",
+													"createdAt",
+													"updatedAt",
+												],
 											},
 										},
+										required: ["user"], // token is optional
 									},
 								},
 							},
@@ -146,6 +179,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options,
 				additionalFields as any,
 			);
+			/**
+			 * Hash the password
+			 *
+			 * This is done prior to creating the user
+			 * to ensure that any plugin that
+			 * may break the hashing should break
+			 * before the user is created.
+			 */
+			const hash = await ctx.context.password.hash(password);
 			let createdUser: User;
 			try {
 				createdUser = await ctx.context.internalAdapter.createUser(
@@ -167,6 +209,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				if (isDevelopment) {
 					ctx.context.logger.error("Failed to create user", e);
 				}
+				if (e instanceof APIError) {
+					throw e;
+				}
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					details: e,
@@ -177,10 +222,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 				});
 			}
-			/**
-			 * Link the account to the user
-			 */
-			const hash = await ctx.context.password.hash(password);
 			await ctx.context.internalAdapter.linkAccount(
 				{
 					userId: createdUser.id,
@@ -233,7 +274,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
-				ctx.request,
+				ctx,
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {
