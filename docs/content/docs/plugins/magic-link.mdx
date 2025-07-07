@@ -56,11 +56,30 @@ To sign in with a magic link, you need to call `signIn.magicLink` with the user'
 ```ts title="magic-link.ts"
 const { data, error } = await authClient.signIn.magicLink({
   email: "user@email.com",
-  callbackURL: "/dashboard", //redirect after successful login (optional)
+  callbackURL: "/",
 });
 ```
 
 If the user has not signed up, unless `disableSignUp` is set to `true`, the user will be signed up automatically.
+
+### Callback URLs
+
+We offer 3 different callback URLs that are optional:
+
+```ts
+const { data, error } = await authClient.signIn.magicLink({
+  email: "user@email.com",
+  callbackURL: "/dashboard",
+  errorCallbackURL: "/error",
+  newUserCallbackURL: "/welcome",
+});
+```
+
+- `callbackURL`: Redirect after login.
+- `errorCallbackURL`: Redirect after error.
+- `newUserCallbackURL`: Redirect after new user signup.
+
+If only callbackURL is provided but without an `errorCallbackURL` then they will be redirected to the callbackURL with an `error` query parameter.
 
 ### Verify Magic Link
 
