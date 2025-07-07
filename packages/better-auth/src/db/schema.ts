@@ -86,7 +86,7 @@ export function parseOutputData<T extends Record<string, any>>(
 }
 
 export function getAllFields(options: BetterAuthOptions, table: string) {
-	return getSchema(options)[table].fields;
+	return getSchema(options)[table]?.fields || {};
 }
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {

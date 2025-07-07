@@ -2,7 +2,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types/plugins";
-import { mergeSchema } from "../../db";
+import { mergeSchema } from "../../db/schema";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
