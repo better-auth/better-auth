@@ -130,7 +130,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
-					if (ctx.body.type === "forget-password" || opts.disableSignUp) {
+					if (opts.disableSignUp) {
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
+						if (!user) {
+							throw new APIError("BAD_REQUEST", {
+								message: ERROR_CODES.USER_NOT_FOUND,
+							});
+						}
+					} else if (ctx.body.type === "forget-password") {
 						const user =
 							await ctx.context.internalAdapter.findUserByEmail(email);
 						if (!user) {
@@ -391,6 +399,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							emailVerified: true,
 						},
 						ctx,
+					);
+					await ctx.context.options.emailVerification?.onEmailVerification?.(
+						updatedUser,
+						ctx.request,
 					);
 
 					if (
@@ -763,6 +775,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						await ctx.context.internalAdapter.updatePassword(
 							user.user.id,
 							passwordHash,
+							ctx,
+						);
+					}
+
+					if (!user.user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(
+							user.user.id,
+							{
+								emailVerified: true,
+							},
 							ctx,
 						);
 					}
