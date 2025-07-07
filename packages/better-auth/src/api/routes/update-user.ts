@@ -443,17 +443,6 @@ export const deleteUser = createAuthEndpoint(
 					message: BASE_ERROR_CODES.INVALID_PASSWORD,
 				});
 			}
-		} else {
-			if (ctx.context.options.session?.freshAge) {
-				const currentAge = session.session.createdAt.getTime();
-				const freshAge = ctx.context.options.session.freshAge;
-				const now = Date.now();
-				if (now - currentAge > freshAge) {
-					throw new APIError("BAD_REQUEST", {
-						message: BASE_ERROR_CODES.SESSION_EXPIRED,
-					});
-				}
-			}
 		}
 
 		if (ctx.body.token) {
@@ -503,6 +492,18 @@ export const deleteUser = createAuthEndpoint(
 				message: "Verification email sent",
 			});
 		}
+
+		if (!ctx.body.password && ctx.context.sessionConfig.freshAge !== 0) {
+			const currentAge = session.session.createdAt.getTime();
+			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
+			const now = Date.now();
+			if (now - currentAge > freshAge * 1000) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.SESSION_EXPIRED,
+				});
+			}
+		}
+
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);

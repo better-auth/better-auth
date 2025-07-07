@@ -140,7 +140,9 @@ export const username = (options?: UsernameOptions) => {
 						// Hash password to prevent timing attacks from revealing valid usernames
 						// By hashing passwords for invalid usernames, we ensure consistent response times
 						await ctx.context.password.hash(ctx.body.password);
-						ctx.context.logger.error("User not found", { username });
+						ctx.context.logger.error("User not found", {
+							username: ctx.body.username,
+						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -176,7 +178,9 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
-						ctx.context.logger.error("Password not found", { username });
+						ctx.context.logger.error("Password not found", {
+							username: ctx.body.username,
+						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -221,6 +225,42 @@ export const username = (options?: UsernameOptions) => {
 							createdAt: user.createdAt,
 							updatedAt: user.updatedAt,
 						},
+					});
+				},
+			),
+			isUsernameAvailable: createAuthEndpoint(
+				"/is-username-available",
+				{
+					method: "POST",
+					body: z.object({
+						username: z.string({
+							description: "The username to check",
+						}),
+					}),
+				},
+				async (ctx) => {
+					const username = ctx.body.username;
+					if (!username) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+					const user = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "username",
+								value: username.toLowerCase(),
+							},
+						],
+					});
+					if (user) {
+						return ctx.json({
+							available: false,
+						});
+					}
+					return ctx.json({
+						available: true,
 					});
 				},
 			),

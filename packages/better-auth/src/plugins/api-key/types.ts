@@ -47,7 +47,7 @@ export interface ApiKeyOptions {
 	 */
 	startingCharactersConfig?: {
 		/**
-		 * Wether to store the starting characters in the database. If false, we will set `start` to `null`.
+		 * Whether to store the starting characters in the database. If false, we will set `start` to `null`.
 		 *
 		 * @default true
 		 */
@@ -115,7 +115,7 @@ export interface ApiKeyOptions {
 		 */
 		defaultExpiresIn?: number | null;
 		/**
-		 * Wether to disable the expires time passed from the client.
+		 * Whether to disable the expires time passed from the client.
 		 *
 		 * If `true`, the expires time will be based on the default values.
 		 *

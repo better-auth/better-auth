@@ -430,7 +430,7 @@ export const getActiveMember = createAuthEndpoint(
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
-				description: "Get the active member in the organization",
+				description: "Get the member details of the active organization",
 				responses: {
 					"200": {
 						description: "Success",
