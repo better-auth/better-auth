@@ -1355,10 +1355,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						throw new APIError("UNAUTHORIZED");
 					}
 					const user =
-						session?.user ||
-						((await ctx.context.internalAdapter.findUserById(
-							ctx.body.userId as string,
-						)) as { role?: string; id: string }) ||
+						session?.user ??
+						(ctx.body.userId
+							? ((await ctx.context.internalAdapter.findUserById(
+									ctx.body.userId,
+								)) as { role?: string; id: string } | null)
+							: null) ??
 						(ctx.body.role ? { id: "", role: ctx.body.role } : null);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
