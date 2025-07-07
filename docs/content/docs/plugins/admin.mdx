@@ -128,6 +128,10 @@ const users = await authClient.admin.listUsers({
 });
 ```
 
+#### Query Filtering
+
+The `listUsers` function supports various filter operators including `eq`, `contains`, `starts_with`, and `ends_with`.
+
 #### Pagination
 
 The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:
@@ -469,10 +473,12 @@ await auth.api.userHasPermission({
 
 **Check Role Permission**:
 
-Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
+Use the `checkRolePermission` function on the client side to verify whether a given **role** has a specific **permission**. This is helpful after defining roles and their permissions, as it allows you to perform permission checks without needing to contact the server.
+
+Note that this function does **not** check the permissions of the currently logged-in user directly. Instead, it checks what permissions are assigned to a specified role. The function is synchronous, so you don't need to use `await` when calling it.
 
 ```ts title="auth-client.ts"
-const canCreateProject = await authClient.admin.checkRolePermission({
+const canCreateProject = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
   },
@@ -480,7 +486,7 @@ const canCreateProject = await authClient.admin.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndRevokeSession = await authClient.admin.checkRolePermission({
+const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
     session: ["revoke"]

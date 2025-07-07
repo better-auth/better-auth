@@ -53,6 +53,7 @@ export function getWithHooks(
 				? await adapter.create<T>({
 						model,
 						data: actualData as any,
+						forceAllowId: true,
 					})
 				: customCreated;
 

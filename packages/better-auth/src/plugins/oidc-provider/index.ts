@@ -23,7 +23,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 
-const getMetadata = (
+export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
 ): OIDCMetadata => {
@@ -50,6 +50,7 @@ const getMetadata = (
 			"client_secret_basic",
 			"client_secret_post",
 		],
+		code_challenge_methods_supported: ["S256"],
 		claims_supported: [
 			"sub",
 			"iss",
@@ -623,7 +624,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
 					const idToken = await new SignJWT({
@@ -800,7 +801,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 					};
 					const userClaims = options.getAdditionalUserInfoClaim
-						? options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: baseUserClaims;
 					return ctx.json({
 						...baseUserClaims,

@@ -92,6 +92,7 @@ export type Passkey = {
 	backedUp: boolean;
 	transports?: string;
 	createdAt: Date;
+	aaguid?: string;
 };
 
 export const passkey = (options?: PasskeyOptions) => {
@@ -576,6 +577,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							});
 						}
 						const {
+							aaguid,
 							// credentialID,
 							// credentialPublicKey,
 							// counter,
@@ -595,6 +597,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							transports: resp.response.transports.join(","),
 							backedUp: credentialBackedUp,
 							createdAt: new Date(),
+							aaguid: aaguid,
 						};
 						const newPasskeyRes = await ctx.context.adapter.create<
 							Omit<Passkey, "id">,
@@ -995,6 +998,10 @@ const schema = {
 			},
 			createdAt: {
 				type: "date",
+				required: false,
+			},
+			aaguid: {
+				type: "string",
 				required: false,
 			},
 		},

@@ -50,6 +50,19 @@ const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	}`;
 };
 
+async function resolvePriceIdFromLookupKey(
+	stripeClient: Stripe,
+	lookupKey: string,
+): Promise<string | undefined> {
+	if (!lookupKey) return undefined;
+	const prices = await stripeClient.prices.list({
+		lookup_keys: [lookupKey],
+		active: true,
+		limit: 1,
+	});
+	return prices.data[0]?.id;
+}
+
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
@@ -200,7 +213,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const subscriptionToUpdate = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
 							model: "subscription",
-							where: [{ field: "id", value: ctx.body.subscriptionId }],
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+								{
+									field: "stripeSubscriptionId",
+									value: ctx.body.subscriptionId,
+									connector: "OR",
+								},
+							],
 						})
 					: null;
 
@@ -257,7 +281,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							})
 							.then((res) =>
 								res.data.find(
-									(subscription) => subscription.id === ctx.body.subscriptionId,
+									(subscription) =>
+										subscription.id ===
+											subscriptionToUpdate?.stripeSubscriptionId ||
+										ctx.body.subscriptionId,
 								),
 							)
 							.catch((e) => null)
@@ -282,7 +309,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				if (
 					existingSubscription &&
 					existingSubscription.status === "active" &&
-					existingSubscription.plan === ctx.body.plan
+					existingSubscription.plan === ctx.body.plan &&
+					existingSubscription.seats === (ctx.body.seats || 1)
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
@@ -301,7 +329,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									items: [
 										{
 											id: activeSubscription.items.data[0]?.id as string,
-											quantity: 1,
+											quantity: ctx.body.seats || 1,
 											price: ctx.body.annual
 												? plan.annualDiscountPriceId
 												: plan.priceId,
@@ -361,6 +389,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						}
 					: undefined;
 
+				let priceIdToUse: string | undefined = undefined;
+				if (ctx.body.annual) {
+					priceIdToUse = plan.annualDiscountPriceId;
+					if (!priceIdToUse && plan.annualDiscountLookupKey) {
+						priceIdToUse = await resolvePriceIdFromLookupKey(
+							client,
+							plan.annualDiscountLookupKey,
+						);
+					}
+				} else {
+					priceIdToUse = plan.priceId;
+					if (!priceIdToUse && plan.lookupKey) {
+						priceIdToUse = await resolvePriceIdFromLookupKey(
+							client,
+							plan.lookupKey,
+						);
+					}
+				}
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
@@ -386,9 +432,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 							line_items: [
 								{
-									price: ctx.body.annual
-										? plan.annualDiscountPriceId
-										: plan.priceId,
+									price: priceIdToUse,
 									quantity: ctx.body.seats || 1,
 								},
 							],

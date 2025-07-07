@@ -69,7 +69,7 @@ describe("db", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user?.image).toBe("test-image");
+		expect(session?.user?.image).toBe("test-image");
 		expect(callback).toBe(true);
 	});
 
@@ -94,6 +94,6 @@ describe("db", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.email).toBe("test@email.com");
+		expect(session?.user.email).toBe("test@email.com");
 	});
 });

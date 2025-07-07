@@ -4,11 +4,13 @@ import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { github } from "./github";
 import { google } from "./google";
+import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { spotify } from "./spotify";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { dropbox } from "./dropbox";
+import { linear } from "./linear";
 import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
@@ -25,11 +27,13 @@ export const socialProviders = {
 	github,
 	microsoft,
 	google,
+	huggingface,
 	spotify,
 	twitch,
 	twitter,
 	dropbox,
 	kick,
+	linear,
 	linkedin,
 	gitlab,
 	tiktok,
@@ -68,6 +72,7 @@ export * from "./twitch";
 export * from "./facebook";
 export * from "./twitter";
 export * from "./dropbox";
+export * from "./linear";
 export * from "./linkedin";
 export * from "./gitlab";
 export * from "./tiktok";
@@ -76,5 +81,6 @@ export * from "./roblox";
 export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
+export * from "./huggingface";
 
 export type SocialProviderList = typeof socialProviderList;
