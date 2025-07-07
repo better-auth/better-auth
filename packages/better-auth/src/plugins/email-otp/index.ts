@@ -463,7 +463,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (!(await verifyStoredOTP(ctx, otpValue, ctx.body.otp))) {
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{
@@ -602,7 +603,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (!(await verifyStoredOTP(ctx, otpValue, ctx.body.otp))) {
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{
@@ -833,7 +835,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
-					if (!(await verifyStoredOTP(ctx, otpValue, ctx.body.otp))) {
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
 						await ctx.context.internalAdapter.updateVerificationValue(
 							verificationValue.id,
 							{
