@@ -1,8 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import { decodeJwt } from "jose";
 import { z } from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { BASE_ERROR_CODES } from "../../error/codes";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
@@ -10,16 +12,14 @@ import {
 	type OAuthProvider,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
-import { decodeJwt } from "jose";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 
 /**
  * Configuration interface for generic OAuth providers.
  */
-interface GenericOAuthConfig {
+export interface GenericOAuthConfig {
 	/** Unique identifier for the OAuth provider */
 	providerId: string;
 	/**
@@ -132,6 +132,11 @@ interface GenericOAuthConfig {
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
 	 */
 	discoveryHeaders?: Record<string, string>;
+	/**
+	 * Custom headers to include in the authorization request.
+	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
+	 */
+	authorizationHeaders?: Record<string, string>;
 	/**
 	 * Override user info with the provider info.
 	 *
@@ -250,6 +255,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						return validateAuthorizationCode({
+							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
 							redirectURI: data.redirectURI,
@@ -293,9 +299,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 
 					async getUserInfo(tokens) {
-						if (!finalUserInfoUrl) {
-							return null;
-						}
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
@@ -590,6 +593,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							});
 						}
 						tokens = await validateAuthorizationCode({
+							headers: provider.authorizationHeaders,
 							code,
 							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
@@ -640,7 +644,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							return redirectOnError("email_doesn't_match");
 						}
 						const existingAccount =
-							await ctx.context.internalAdapter.findAccount(userInfo.id);
+							await ctx.context.internalAdapter.findAccountByProviderId(
+								userInfo.id,
+								provider.providerId,
+							);
 						if (existingAccount) {
 							if (existingAccount.userId !== link.userId) {
 								return redirectOnError(
@@ -671,6 +678,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 									scope: tokens.scopes?.join(","),
+									refreshToken: tokens.refreshToken,
+									idToken: tokens.idToken,
 								});
 							if (!newAccount) {
 								return redirectOnError("unable_to_link_account");
@@ -697,6 +706,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						callbackURL: callbackURL,
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,
@@ -731,7 +741,30 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					method: "POST",
 					body: z.object({
 						providerId: z.string(),
+						/**
+						 * Callback URL to redirect to after the user has signed in.
+						 */
 						callbackURL: z.string(),
+						/**
+						 * Additional scopes to request when linking the account.
+						 * This is useful for requesting additional permissions when
+						 * linking a social account compared to the initial authentication.
+						 */
+						scopes: z
+							.array(z.string(), {
+								description:
+									"Additional scopes to request when linking the account",
+							})
+							.optional(),
+						/**
+						 * The URL to redirect to if there is an error during the link process.
+						 */
+						errorCallbackURL: z
+							.string({
+								description:
+									"The URL to redirect to if there is an error during the link process",
+							})
+							.optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -839,8 +872,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state: state.state,
 						codeVerifier: pkce ? state.codeVerifier : undefined,
-						scopes: scopes || [],
-						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+						scopes: c.body.scopes || scopes || [],
+						redirectURI:
+							redirectURI ||
+							`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						prompt,
 						accessType,
 						additionalParams: authorizationUrlParams,

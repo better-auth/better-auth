@@ -30,7 +30,7 @@ export const auth = betterAuth({
         import { createAuthClient } from "better-auth/client"
         import { multiSessionClient } from "better-auth/client/plugins"
 
-        const authClient =  createAuthClient({
+        export const authClient = createAuthClient({
             plugins: [
                 multiSessionClient()
             ]

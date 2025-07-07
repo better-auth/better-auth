@@ -7,7 +7,7 @@ import { getDate } from "../../../utils/date";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
-
+import { API_KEY_TABLE_NAME } from "..";
 export function updateApiKey({
 	opts,
 	schema,
@@ -272,7 +272,7 @@ export function updateApiKey({
 			}
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "id",
@@ -383,15 +383,11 @@ export function updateApiKey({
 			let newApiKey: ApiKey = apiKey;
 			try {
 				let result = await ctx.context.adapter.update<ApiKey>({
-					model: schema.apikey.modelName,
+					model: API_KEY_TABLE_NAME,
 					where: [
 						{
 							field: "id",
 							value: apiKey.id,
-						},
-						{
-							field: "userId",
-							value: user.id,
 						},
 					],
 					update: {

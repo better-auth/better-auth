@@ -134,11 +134,14 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const code = generateRandomString(opts.digits, "0-9");
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}!0`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: new Date(Date.now() + opts.period),
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					value: `${code}:0`,
+					identifier: `2fa-otp-${key}`,
+					expiresAt: new Date(Date.now() + opts.period),
+				},
+				ctx,
+			);
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx.request,
@@ -253,11 +256,13 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,
 				);
-			const [otp, counter] = toCheckOtp?.value?.split("!") ?? [];
+			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					`2fa-otp-${key}`,
-				);
+				if (toCheckOtp) {
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						toCheckOtp.id,
+					);
+				}
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				});
@@ -265,7 +270,7 @@ export const otp2fa = (options?: OTPOptions) => {
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
-					`2fa-otp-${key}`,
+					toCheckOtp.id,
 				);
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
@@ -286,7 +291,7 @@ export const otp2fa = (options?: OTPOptions) => {
 					);
 					const newSession = await ctx.context.internalAdapter.createSession(
 						session.user.id,
-						ctx.headers,
+						ctx,
 						false,
 						session.session,
 					);
@@ -315,7 +320,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					toCheckOtp.id,
 					{
-						value: `${otp}!${parseInt(counter) + 1}`,
+						value: `${otp}:${(parseInt(counter, 10) || 0) + 1}`,
 					},
 				);
 				return invalid("INVALID_CODE");

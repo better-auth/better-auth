@@ -156,7 +156,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 	return {
 		id: "admin",
-		init(ctx) {
+		init() {
 			return {
 				options: {
 					databaseHooks: {
@@ -174,8 +174,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						session: {
 							create: {
-								async before(session) {
-									const user = (await ctx.internalAdapter.findUserById(
+								async before(session, ctx) {
+									if (!ctx) {
+										return;
+									}
+									const user = (await ctx.context.internalAdapter.findUserById(
 										session.userId,
 									)) as UserWithRole;
 
@@ -184,12 +187,28 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 											user.banExpires &&
 											user.banExpires.getTime() < Date.now()
 										) {
-											await ctx.internalAdapter.updateUser(session.userId, {
-												banned: false,
-												banReason: null,
-												banExpires: null,
-											});
+											await ctx.context.internalAdapter.updateUser(
+												session.userId,
+												{
+													banned: false,
+													banReason: null,
+													banExpires: null,
+												},
+											);
 											return;
+										}
+
+										if (
+											ctx &&
+											(ctx.path.startsWith("/callback") ||
+												ctx.path.startsWith("/oauth2/callback"))
+										) {
+											const redirectURI =
+												ctx.context.options.onAPIError?.errorURL ||
+												`${ctx.context.baseURL}/error`;
+											throw ctx.redirect(
+												`${redirectURI}?error=banned&error_description=${opts.bannedUserMessage}`,
+											);
 										}
 
 										throw new APIError("FORBIDDEN", {
@@ -570,7 +589,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte"], {
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"], {
 								description: "The operator to use for the filter",
 							})
 							.optional(),
@@ -796,6 +815,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							banned: false,
 							banExpires: null,
 							banReason: null,
+							updatedAt: new Date(),
 						},
 					);
 					return ctx.json({
@@ -886,6 +906,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: options?.defaultBanExpiresIn
 									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
+							updatedAt: new Date(),
 						},
 						ctx,
 					);
@@ -962,7 +983,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						targetUser.id,
-						undefined,
+						ctx,
 						true,
 						{
 							impersonatedBy: ctx.context.session.user.id,
@@ -970,7 +991,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								? getDate(options.impersonationSessionDuration, "sec")
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
-						ctx,
 						true,
 					);
 					if (!session) {
@@ -984,8 +1004,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.context.authCookies.dontRememberToken.name,
 						ctx.context.secret,
 					);
+					const adminCookieProp = ctx.context.createAuthCookie("admin_session");
 					await ctx.setSignedCookie(
-						"admin_session",
+						adminCookieProp.name,
 						`${ctx.context.session.session.token}:${
 							dontRememberMeCookie || ""
 						}`,
@@ -1034,8 +1055,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: "Failed to find user",
 						});
 					}
+					const adminCookieName =
+						ctx.context.createAuthCookie("admin_session").name;
 					const adminCookie = await ctx.getSignedCookie(
-						"admin_session",
+						adminCookieName,
 						ctx.context.secret,
 					);
 
@@ -1229,6 +1252,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
+					const user = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: "User not found",
+						});
+					}
+
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 					return ctx.json({
 						success: true,
@@ -1418,6 +1451,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
+		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
 

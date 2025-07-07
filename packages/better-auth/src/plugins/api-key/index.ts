@@ -1,14 +1,25 @@
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { APIError, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { mergeSchema } from "../../db/schema";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
-import type { ApiKey, ApiKeyOptions } from "./types";
-import { createApiKeyRoutes } from "./routes";
+import type { ApiKeyOptions } from "./types";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import type { User } from "../../types";
+import { validateApiKey } from "./routes/verify-api-key";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+
+export const defaultKeyHasher = async (key: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(key),
+	);
+	const hashed = base64Url.encode(new Uint8Array(hash), {
+		padding: false,
+	});
+	return hashed;
+};
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
@@ -40,7 +51,10 @@ export const ERROR_CODES = {
 		"API Key getter returned an invalid key type. Expected string.",
 	SERVER_ONLY_PROPERTY:
 		"The property you're trying to set can only be set from the server auth instance only.",
+	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
 };
+
+export const API_KEY_TABLE_NAME = "apikey";
 
 export const apiKey = (options?: ApiKeyOptions) => {
 	const opts = {
@@ -52,6 +66,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		maximumNameLength: options?.maximumNameLength ?? 32,
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
+		disableKeyHashing: options?.disableKeyHashing ?? false,
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -148,28 +163,19 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						}
 
-						const hash = await createHash("SHA-256").digest(
-							new TextEncoder().encode(key),
-						);
-						const hashed = base64Url.encode(new Uint8Array(hash), {
-							padding: false,
+						const hashed = opts.disableKeyHashing
+							? key
+							: await defaultKeyHasher(key);
+
+						const apiKey = await validateApiKey({
+							hashedKey: hashed,
+							ctx,
+							opts,
+							schema,
 						});
 
-						const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-							model: schema.apikey.modelName,
-							where: [
-								{
-									field: "key",
-									value: hashed,
-								},
-							],
-						});
+						await deleteAllExpiredApiKeys(ctx.context);
 
-						if (!apiKey) {
-							throw new APIError("UNAUTHORIZED", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
-						}
 						let user: User;
 						try {
 							const userResult = await ctx.context.internalAdapter.findUserById(
@@ -226,6 +232,6 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			deleteApiKey: routes.deleteApiKey,
 			listApiKeys: routes.listApiKeys,
 		},
-		schema: schema,
+		schema,
 	} satisfies BetterAuthPlugin;
 };

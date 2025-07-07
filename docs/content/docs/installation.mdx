@@ -133,7 +133,8 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
-        import { PrismaClient } from "@prisma/client";
+        // If your Prisma file is located elsewhere, you can change the path
+        import { PrismaClient } from "@/generated/prisma";
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
@@ -302,6 +303,18 @@ Better Auth supports any backend framework with standard Request and Response ob
     </Tab>
 
     <Tab value="express">
+    <Callout type="warn">
+        ExpressJS v5 introduced breaking changes to route path matching by switching to `path-to-regexp@6`. Wildcard routes like `*` should now be written using the new named syntax, e.g. `/{*any}`, to properly capture catch-all patterns. This ensures compatibility and predictable behavior across routing scenarios.
+        See the [Express v5 migration guide](https://expressjs.com/en/guide/migrating-5.html) for details.
+
+        As a result, the implementation in ExpressJS v5 should look like this:
+
+        ```ts
+        app.all('/api/auth/{*any}', toNodeHandler(auth));
+        ```
+        *The name any is arbitrary and can be replaced with any identifier you prefer.*
+    </Callout>
+
     ```ts title="server.ts"
     import express from "express";
     import { toNodeHandler } from "better-auth/node";
@@ -320,7 +333,7 @@ Better Auth supports any backend framework with standard Request and Response ob
         console.log(`Better Auth app listening on port ${port}`);
     });
     ```
-    This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
+    This will also work for any other node server framework like express, fastify, hapi, etc., but may require some modifications. See [fastify guide](/docs/integrations/fastify). Note that CommonJS (cjs) isn't supported.
     </Tab>
     <Tab value="astro">
     ```ts title="/pages/api/auth/[...all].ts"
@@ -361,15 +374,15 @@ Better Auth supports any backend framework with standard Request and Response ob
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
     import { auth } from '~/lib/server/auth'
-    import { createAPIFileRoute } from '@tanstack/react-start/api'
+    import { createServerFileRoute } from '@tanstack/react-start/server'
 
-    export const APIRoute = createAPIFileRoute('/api/auth/$')({
-        GET: ({ request }) => {
-            return auth.handler(request)
-        },
-        POST: ({ request }) => {
-            return auth.handler(request)
-        },
+    export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
+    GET: ({ request }) => {
+        return auth.handler(request)
+    },
+    POST: ({ request }) => {
+        return auth.handler(request)
+    },
     });
     ```
     </Tab>

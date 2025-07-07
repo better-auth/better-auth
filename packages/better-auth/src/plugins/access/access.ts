@@ -1,7 +1,7 @@
 import { BetterAuthError } from "../../error";
 import type { Statements, Subset } from "./types";
 
-export type AuthortizeResponse =
+export type AuthorizeResponse =
 	| { success: false; error: string }
 	| { success: true; error?: never };
 
@@ -17,7 +17,7 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 					  };
 			},
 			connector: "OR" | "AND" = "AND",
-		): AuthortizeResponse {
+		): AuthorizeResponse {
 			let success = false;
 			for (const [requestedResource, requestedActions] of Object.entries(
 				request,
