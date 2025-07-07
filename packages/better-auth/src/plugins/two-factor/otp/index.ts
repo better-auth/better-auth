@@ -191,7 +191,7 @@ export const otp2fa = (options?: OTPOptions) => {
 			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue(
 				{
-					value: `${hashedCode}!0`,
+					value: `${hashedCode}:0`,
 					identifier: `2fa-otp-${key}`,
 					expiresAt: new Date(Date.now() + opts.period),
 				},
@@ -311,7 +311,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,
 				);
-			const [otp, counter] = toCheckOtp?.value?.split("!") ?? [];
+			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
 			const decryptedOtp = await decryptOTP(ctx, otp);
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
