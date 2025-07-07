@@ -131,13 +131,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			);
 		}
 		if (opts.storeOTP === "hashed") {
-			return (await defaultKeyHasher(otp)) === storedOtp;
+			const hashedOtp = await defaultKeyHasher(otp);
+			return hashedOtp === storedOtp;
 		}
 		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
-			return (await opts.storeOTP.hash(otp)) === storedOtp;
+			const hashedOtp = await opts.storeOTP.hash(otp);
+			return hashedOtp === storedOtp;
 		}
 		if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
-			return (await opts.storeOTP.decrypt(storedOtp)) === otp;
+			const decryptedOtp = await opts.storeOTP.decrypt(storedOtp);
+			return decryptedOtp === otp;
 		}
 
 		return otp === storedOtp;
