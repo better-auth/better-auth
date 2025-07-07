@@ -79,6 +79,29 @@ export const auth = betterAuth({
 })
 ```
 
+##### Controlling verification email sending
+
+By default, when `requireEmailVerification` is true, verification emails are automatically sent during sign-in attempts if the user's email isn't verified. This might not be the desired behavior for all applications.
+
+If you want more control over when verification emails are sent, you can disable automatic sending:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        requireEmailVerification: true,
+        sendVerificationOnSignIn: false // Email verification still required, but emails won't be sent automatically
+    }
+})
+```
+
+With this configuration:
+- Email verification is still required to sign in
+- Users with unverified emails will still receive a 403 error when trying to sign in
+- However, verification emails won't be automatically sent during sign-in attempts
+- You'll need to explicitly trigger verification emails using the `sendVerificationEmail` function
+
+This gives you more control over your authentication flow, similar to how OTP verification works.
+
 if a user tries to sign in without verifying their email, you can handle the error and show a message to the user.
 
 ```ts title="auth-client.ts"
