@@ -533,56 +533,44 @@ export const emailOTP = <CustomType extends LiteralString>(
 							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
-					if (user.user.emailVerified && user.user.email === email) {
-						return ctx.json({
-							status: true,
-							token: null,
-							user: {
-								id: user.user.id,
-								email: user.user.email,
-								emailVerified: user.user.emailVerified,
-								name: user.user.name,
-								image: user.user.image,
-								createdAt: user.user.createdAt,
-								updatedAt: user.user.updatedAt,
+					if (user.user.emailVerified || user.user.email !== email) {
+						user.user = await ctx.context.internalAdapter.updateUser(
+							user.user.id,
+							{
+								email,
+								emailVerified: true,
 							},
-						});
+							ctx,
+						);
+						await ctx.context.options.emailVerification?.onEmailVerification?.(
+							user.user,
+							ctx.request,
+						);
 					}
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.user.id,
-						{
-							email,
-							emailVerified: true,
-						},
-						ctx,
-					);
-					await ctx.context.options.emailVerification?.onEmailVerification?.(
-						updatedUser,
-						ctx.request,
-					);
-
 					if (
-						ctx.context.options.emailVerification?.autoSignInAfterVerification
+						ctx.context.options.emailVerification
+							?.autoSignInAfterVerification &&
+						!ctx.context.session
 					) {
 						const session = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
+							user.user.id,
 							ctx,
 						);
 						await setSessionCookie(ctx, {
 							session,
-							user: updatedUser,
+							user: user.user,
 						});
 						return ctx.json({
 							status: true,
 							token: session.token,
 							user: {
-								id: updatedUser.id,
-								email: updatedUser.email,
-								emailVerified: updatedUser.emailVerified,
-								name: updatedUser.name,
-								image: updatedUser.image,
-								createdAt: updatedUser.createdAt,
-								updatedAt: updatedUser.updatedAt,
+								id: user.user.id,
+								email: user.user.email,
+								emailVerified: true,
+								name: user.user.name,
+								image: user.user.image,
+								createdAt: user.user.createdAt,
+								updatedAt: user.user.updatedAt,
 							},
 						});
 					}
@@ -591,13 +579,13 @@ export const emailOTP = <CustomType extends LiteralString>(
 						status: true,
 						token: null,
 						user: {
-							id: updatedUser.id,
-							email: updatedUser.email,
-							emailVerified: updatedUser.emailVerified,
-							name: updatedUser.name,
-							image: updatedUser.image,
-							createdAt: updatedUser.createdAt,
-							updatedAt: updatedUser.updatedAt,
+							id: user.user.id,
+							email: user.user.email,
+							emailVerified: true,
+							name: user.user.name,
+							image: user.user.image,
+							createdAt: user.user.createdAt,
+							updatedAt: user.user.updatedAt,
 						},
 					});
 				},
