@@ -54,29 +54,8 @@ description: Apple provider setup and usage.
         6.  **Generate the Client Secret (JWT):**
             Apple requires a JSON Web Token (JWT) to be generated dynamically using the downloaded `.p8` key, the Key ID, and your Team ID. This JWT serves as your `clientSecret`.
 
-            You can use the guide below from Apple's documentation to understand how to generate this client secret:
-            <Link href="https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret">
-               Creating a client secret
-            </Link>
+            You can use the guide below from [Apple's documentation](https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret) to understand how to generate this client secret. You can also use our built in generator [below](#generate-apple-client-secret-jwt) to generate the client secret JWT required for 'Sign in with Apple'.
 
-            or you can use our built in generator below
-    ## Generate Apple Client Secret (JWT)
-
-Provide your Apple Developer details below to generate the client secret JWT required for 'Sign in with Apple'.
-
-
-<GenerateAppleJwt />
-
----
-
-### Explanation
-
-*   **Team ID:** Your 10-character Apple Developer Team ID.
-*   **Client ID (Service ID):** The identifier (e.g., `com.yourdomain.app`) you configured for your App ID or Services ID.
-*   **Key ID:** The 10-character ID generated when you created your `.p8` private key.
-*   **Private Key Content:** The full text content of the `.p8` file you downloaded from Apple Developer. It must start with `-----BEGIN PRIVATE KEY-----` and end with `-----END PRIVATE KEY-----`.
-
-The component uses the `jose` library to sign the JWT payload with your private key using the ES256 algorithm, following Apple's requirements. The generated JWT is valid for 180 days.
 
     </Step>
     <Step>
@@ -146,3 +125,7 @@ This is useful when you have the ID Token from Apple on the client-side and want
         }
     })
 ```
+
+## Generate Apple Client Secret (JWT)
+
+<GenerateAppleJwt />
