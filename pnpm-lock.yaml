@@ -1480,7 +1480,7 @@ importers:
         specifier: ^0.11.3
         version: 0.11.4
       zod:
-        specifier: ^3.24.1
+        specifier: ^3.25.23
         version: 3.25.42
     devDependencies:
       '@prisma/client':
