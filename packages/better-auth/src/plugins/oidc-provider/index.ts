@@ -656,7 +656,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 						// Accept both CryptoKey and KeyLike objects returned by importJWK
 						// In some environments (Node.js, certain polyfills), importJWK returns KeyLike instead of CryptoKey
-						if (!privateKey || (typeof privateKey !== 'object')) {
+						if (!privateKey || typeof privateKey !== "object") {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
 								error_description: `JWK import returned ${typeof privateKey} instead of CryptoKey or KeyLike. This may indicate an environment compatibility issue.`,
 								error: "server_error",
