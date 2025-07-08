@@ -24,6 +24,14 @@ export type BetterAuthDbSchema = Record<
 	}
 >;
 
+// Only the overrides we care about for picking the column name of the
+// session token/id. We don't need the full Session field map here – keeping
+// it minimal avoids unsafe casts later.
+interface SessionFieldOverrides {
+	token?: string;
+	id?: string;
+}
+
 export const getAuthTables = (
 	options: BetterAuthOptions,
 ): BetterAuthDbSchema => {
@@ -84,7 +92,12 @@ export const getAuthTables = (
 				token: {
 					type: "string",
 					required: true,
-					fieldName: options.session?.fields?.token || "token",
+					fieldName: (() => {
+						const fields = options.session?.fields as
+							| SessionFieldOverrides
+							| undefined;
+						return fields?.token ?? fields?.id ?? "token";
+					})(),
 					unique: true,
 				},
 				createdAt: {
