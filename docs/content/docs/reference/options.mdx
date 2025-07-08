@@ -224,6 +224,8 @@ User configuration options.
 
 ```ts
 import { betterAuth } from "better-auth";
+import { z } from "zod";
+
 export const auth = betterAuth({
 	user: {
 		modelName: "users",
@@ -236,6 +238,13 @@ export const auth = betterAuth({
 				type: "string",
 			}
 		},
+		schema: z.object({
+			id: z.string(),
+			email: z.string(),
+			username: z.string(),
+			role: z.enum(["admin", "user", "moderator"]),
+			organizationId: z.string().optional(),
+		}),
 		changeEmail: {
 			enabled: true,
 			sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
@@ -261,6 +270,7 @@ export const auth = betterAuth({
 - `modelName`: The model name for the user (default: `"user"`)
 - `fields`: Map fields to different column names
 - `additionalFields`: Additional fields for the user table
+- `schema`: Custom Zod schema for the user model. When provided, this schema will be used to define the user table structure and TypeScript types. This takes precedence over additionalFields.
 - `changeEmail`: Configuration for changing email
 - `deleteUser`: Configuration for user deletion
 
