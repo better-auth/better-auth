@@ -4,7 +4,6 @@ import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type {
 	TwoFactorProvider,
-	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
@@ -66,7 +65,6 @@ export const otp2fa = (options?: OTPOptions) => {
 		digits: options?.digits || 6,
 		period: (options?.period || 3) * 60 * 1000,
 	};
-	const twoFactorTable = "twoFactor";
 
 	/**
 	 * Generate OTP and send it to the user.
@@ -119,16 +117,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const { session, key } = await verifyTwoFactor(ctx);
-			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
-				model: twoFactorTable,
-				where: [
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
-			if (!twoFactor) {
+			if (!session.user.twoFactorEnabled) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
 				});
@@ -238,20 +227,6 @@ export const otp2fa = (options?: OTPOptions) => {
 		},
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
-			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
-				model: twoFactorTable,
-				where: [
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
-			if (!twoFactor) {
-				throw new APIError("BAD_REQUEST", {
-					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
-				});
-			}
 			const toCheckOtp =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,
