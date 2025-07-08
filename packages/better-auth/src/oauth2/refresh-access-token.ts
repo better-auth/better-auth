@@ -19,6 +19,7 @@ export async function refreshAccessToken({
 	grantType?: string;
 }): Promise<OAuth2Tokens> {
 	const body = new URLSearchParams();
+	const clientId = Array.isArray(options.clientId) ? options.clientId[0] : options.clientId;
 	const headers: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
@@ -32,7 +33,7 @@ export async function refreshAccessToken({
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		body.set("client_id", options.clientId);
+		body.set("client_id", clientId);
 		body.set("client_secret", options.clientSecret);
 	}
 
