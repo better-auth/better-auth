@@ -96,7 +96,7 @@ export const getAuthTables = (
 						const fields = options.session?.fields as
 							| SessionFieldOverrides
 							| undefined;
-						return fields?.token ?? fields?.id ?? "token";
+						return fields?.token || fields?.id || "token";
 					})(),
 					unique: true,
 				},
