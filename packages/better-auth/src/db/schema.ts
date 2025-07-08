@@ -87,7 +87,19 @@ export function parseOutputData<T extends Record<string, any>>(
 }
 
 export function getAllFields(options: BetterAuthOptions, table: string) {
-	return getSchema(options)[table]?.fields || {};
+	let schema: Record<string, FieldAttribute> = {
+		...(table === "user" ? options.user?.additionalFields : {}),
+		...(table === "session" ? options.session?.additionalFields : {}),
+	};
+	for (const plugin of options.plugins || []) {
+		if (plugin.schema && plugin.schema[table]) {
+			schema = {
+				...schema,
+				...plugin.schema[table].fields,
+			};
+		}
+	}
+	return schema;
 }
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {
