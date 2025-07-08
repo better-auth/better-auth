@@ -2,10 +2,7 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactor } from "../verify-two-factor";
-import type {
-	TwoFactorProvider,
-	UserWithTwoFactor,
-} from "../types";
+import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { generateRandomString } from "../../../crypto";
 import { setSessionCookie } from "../../../cookies";
