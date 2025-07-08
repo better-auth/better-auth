@@ -132,6 +132,37 @@ describe("generate", async () => {
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
 	});
 
+	it("should generate drizzle schema with number id", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						useNumberId: true,
+					},
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-number-id.txt",
+		);
+	});
+
 	it("should generate kysely schema", async () => {
 		const schema = await generateMigrations({
 			file: "test.sql",

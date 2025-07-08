@@ -9,6 +9,7 @@ import { gitlab } from "./gitlab";
 import { google } from "./google";
 import { kick } from "./kick";
 import { linkedin } from "./linkedin";
+import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { notion } from "./notion";
 import { reddit } from "./reddit";
@@ -26,6 +27,7 @@ export const socialProviders = {
 	github,
 	microsoft,
 	google,
+	huggingface,
 	spotify,
 	twitch,
 	twitter,
@@ -79,5 +81,7 @@ export * from "./twitch";
 export * from "./twitter";
 export * from "./vk";
 export * from "./zoom";
+export * from "./kick";
+export * from "./huggingface";
 
 export type SocialProviderList = typeof socialProviderList;

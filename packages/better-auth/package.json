@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.10-beta.1",
+  "version": "1.2.12",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -664,10 +664,22 @@
     "@simplewebauthn/server": "^13.0.0",
     "better-call": "catalog:",
     "defu": "^6.1.4",
-    "jose": "^5.9.6",
+    "jose": "^6.0.11",
     "kysely": "^0.28.2",
     "nanostores": "^0.11.3",
     "zod": "^3.24.1"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
@@ -690,6 +702,7 @@
     "pg": "^8.13.1",
     "prisma": "^5.22.0",
     "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "react-native": "~0.74.6",
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
