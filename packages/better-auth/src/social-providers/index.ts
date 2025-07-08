@@ -18,6 +18,14 @@ import { spotify } from "./spotify";
 import { tiktok } from "./tiktok";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
+import { dropbox } from "./dropbox";
+import { linear } from "./linear";
+import { linkedin } from "./linkedin";
+import { gitlab } from "./gitlab";
+import { tiktok } from "./tiktok";
+import { reddit } from "./reddit";
+import { roblox } from "./roblox";
+import { z } from "zod";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
 export const socialProviders = {
@@ -33,6 +41,7 @@ export const socialProviders = {
 	twitter,
 	dropbox,
 	kick,
+	linear,
 	linkedin,
 	gitlab,
 	tiktok,
@@ -67,6 +76,8 @@ export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
 export * from "./github";
+export * from "./linear";
+export * from "./linkedin";
 export * from "./gitlab";
 export * from "./google";
 export * from "./kick";
