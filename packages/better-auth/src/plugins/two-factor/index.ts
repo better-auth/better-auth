@@ -305,7 +305,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								const newToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
-								).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
+								).sign(ctx.context.secret, `${data.user.id}!${data.session.token}`);
 								await ctx.setSignedCookie(
 									trustDeviceCookieName.name,
 									`${newToken}!${data.session.token}`,
