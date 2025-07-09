@@ -9,7 +9,11 @@ import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
+import {
+	TWO_FACTOR_COOKIE_NAME,
+	TRUST_DEVICE_COOKIE_NAME,
+	TRUST_DEVICE_COOKIE_MAX_AGE,
+} from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -286,13 +290,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							return;
 						}
 						// Check for trust device cookie
-						const trustDeviceCookieName = ctx.context.createAuthCookie(
-							TRUST_DEVICE_COOKIE_NAME,
-						);
 						const trustDeviceCookie = await ctx.getSignedCookie(
-							trustDeviceCookieName.name,
+							TRUST_DEVICE_COOKIE_NAME,
 							ctx.context.secret,
 						);
+
 						if (trustDeviceCookie) {
 							const [token, sessionToken] = trustDeviceCookie.split("!");
 							const expectedToken = await createHMAC(
@@ -302,15 +304,24 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
+								const newTrustDeviceCookie = ctx.context.createAuthCookie(
+									TRUST_DEVICE_COOKIE_NAME,
+									{
+										maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+									},
+								);
 								const newToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
-								).sign(ctx.context.secret, `${data.user.id}!${data.session.token}`);
+								).sign(
+									ctx.context.secret,
+									`${data.user.id}!${data.session.token}`,
+								);
 								await ctx.setSignedCookie(
-									trustDeviceCookieName.name,
+									newTrustDeviceCookie.name,
 									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
-									trustDeviceCookieName.attributes,
+									newTrustDeviceCookie.attributes,
 								);
 								return;
 							}
