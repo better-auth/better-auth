@@ -26,9 +26,9 @@ import {
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
-import { schema } from "./schema";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+import { schema } from "./schema";
 export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions | undefined) => {
@@ -325,6 +325,12 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 							// Checks if the token is signed correctly, not that its the current session token
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
+								const newTrustDeviceCookie = ctx.context.createAuthCookie(
+									TRUST_DEVICE_COOKIE_NAME,
+									{
+										maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+									},
+								);
 								const newToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
@@ -333,7 +339,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 									`${data.user.id}!${data.session.token}`,
 								);
 								await ctx.setSignedCookie(
-									trustDeviceCookieAttrs.name,
+									newTrustDeviceCookie.name,
 									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
 									trustDeviceCookieAttrs.attributes,
