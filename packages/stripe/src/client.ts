@@ -27,15 +27,6 @@ export const stripeClient = <
 						}
 			>
 		>,
-		getActions($fetch, $store, options) {
-			return {
-				async useCustomer(data: {
-					expand: ["invoices", "subscriptions"];
-				}) {
-					return {};
-				},
-			};
-		},
 		pathMethods: {
 			"/subscription/restore": "POST",
 		},
