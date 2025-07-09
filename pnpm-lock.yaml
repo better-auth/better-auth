@@ -10,8 +10,8 @@ catalogs:
       specifier: ^1.1.18
       version: 1.1.18
     better-call:
-      specifier: ^1.0.8
-      version: 1.0.9
+      specifier: ^1.0.12
+      version: 1.0.12
     typescript:
       specifier: ^5.7.3
       version: 5.8.3
@@ -188,7 +188,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
@@ -1472,7 +1472,7 @@ importers:
         version: 13.1.1
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1675,7 +1675,7 @@ importers:
         version: 1.1.18
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       zod:
         specifier: ^3.23.8
         version: 3.25.42
@@ -1740,7 +1740,7 @@ importers:
         version: 5.0.3
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       vitest:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@22.13.8)(happy-dom@15.11.7)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)
@@ -1759,7 +1759,7 @@ importers:
         version: 7.6.13
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
@@ -10236,8 +10236,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.9:
-    resolution: {integrity: sha512-Qfm0gjk0XQz0oI7qvTK1hbqTsBY4xV2hsHAxF8LZfUYl3RaECCIifXuVqtPpZJWvlCCMlQSvkvhhyuApGUba6g==}
+  better-call@1.0.12:
+    resolution: {integrity: sha512-ssq5OfB9Ungv2M1WVrRnMBomB0qz1VKuhkY2WxjHaLtlsHoSe9EPolj1xf7xf8LY9o3vfk3Rx6rCWI4oVHeBRg==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -32020,7 +32020,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.9:
+  better-call@1.0.12:
     dependencies:
       '@better-fetch/fetch': 1.1.18
       rou3: 0.5.1
