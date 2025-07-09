@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.polar.sh)",
+      "WebFetch(domain:docs.polar.sh)",
+      "Bash(rg:*)"
+    ],
+    "deny": []
+  }
+}
