@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "better-auth";
 import type { stripe } from "./index";
+import { createAuthClient } from "better-auth/client";
 
 export const stripeClient = <
 	O extends {
@@ -27,8 +28,41 @@ export const stripeClient = <
 						}
 			>
 		>,
+		getActions($fetch, $store, options) {
+			return {
+				async useCustomer(data: {
+					expand: ["invoices", "subscriptions"];
+				}) {
+					return {};
+				},
+			};
+		},
 		pathMethods: {
 			"/subscription/restore": "POST",
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+
+export const testClient = () => {
+	return {
+		id: "stripe-client",
+		getActions($fetch, $store, options) {
+			return {
+				//return any action here
+				async useCustomer(data: {
+					expand: ["invoices", "subscriptions"];
+				}) {
+					return {};
+				},
+			};
+		},
+	} satisfies BetterAuthClientPlugin;
+};
+
+const cl = createAuthClient({
+	plugins: [stripeClient()],
+});
+
+cl.useCustomer({
+	expand: ["invoices", "subscriptions"],
+});
