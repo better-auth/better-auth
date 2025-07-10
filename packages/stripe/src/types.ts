@@ -3,22 +3,21 @@ import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
 
 export enum AggregationFormula {
-  /**
-   * Sum all values in the time window
-   */
-  SUM = "sum",
-  
-  /**
-   * Count the number of events in the time window
-   */
-  COUNT = "count",
-  
-  /**
-   * Use the last value in the time window
-   */
-  LAST = "last"
-}
+	/**
+	 * Sum all values in the time window
+	 */
+	SUM = "sum",
 
+	/**
+	 * Count the number of events in the time window
+	 */
+	COUNT = "count",
+
+	/**
+	 * Use the last value in the time window
+	 */
+	LAST = "last",
+}
 
 export type StripePlan = {
 	/**
