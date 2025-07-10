@@ -20,66 +20,81 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 - Usage tracking for usage billing and periodic limits
 - Custom plans and pricing changes through Autumn's dashboard
 
-## Setup
 
-First, create your pricing plans in Autumn's [dashboard](https://app.useautumn.com), where you define what each plan and product gets access to and how it should be billed. In this example, we're handling the free and pro plans for an AI chatbot, which comes with a number of `messages` per month.
+<Steps>
+  <Step>
+    ### Setup Autumn Account
+    First, create your pricing plans in Autumn's [dashboard](https://app.useautumn.com), where you define what each plan and product gets access to and how it should be billed. In this example, we're handling the free and pro plans for an AI chatbot, which comes with a number of `messages` per month.
+  </Step>
+  <Step>
+    ### Install Autumn SDK
 
-## Installation
+    ```package-install
+    autumn-js
+    ```
+    <Callout>
+      If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
+    </Callout>
+  </Step>
 
-Install autumn-js
+  <Step>
+    ### Add `AUTUMN_SECRET_KEY` to your environment variables
 
-```bash
-npm i better-auth autumn-js
-```
+    You can find it in Autumn's dashboard under "[Developer](https://app.useautumn.com/sandbox/onboarding)".
 
-Add `AUTUMN_SECRET_KEY` to your environment variables. You can find it in Autumn's dashboard under "[Developer](https://app.useautumn.com/sandbox/onboarding)".
+    ```bash title=".env"
+    AUTUMN_SECRET_KEY=am_sk_xxxxxxxxxx
+    ```
+  </Step>
 
-```bash title=".env"
-AUTUMN_SECRET_KEY=am_sk_xxxxxxxxxx
-```
+  <Step>
+    ### Add the Autumn plugin to your `auth` config
 
-Add the Autumn plugin to your `auth` config
+    ```ts title="auth.ts"
+    import { autumn } from "autumn-js/better-auth";
 
-```ts title="auth.ts"
-import { autumn } from "autumn-js/better-auth";
+    export const auth = betterAuth({
+      // ...
+      plugins: [autumn()],
+    });
+    ```
+  <Callout>
+    Autumn will auto-create your customers when they sign up, and assign them any
+    default plans you created (eg your Free plan)
+  </Callout>
+  </Step>
 
-export const auth = betterAuth({
-  // ...
-  plugins: [autumn()],
-});
-```
+  <Step>
+      ### Add `<AutumnProvider />`
 
-<Callout>
-  Autumn will auto-create your customers when they sign up, and assign them any
-  default plans you created (eg your Free plan)
-</Callout>
+      Client side, wrap your application with the AutumnProvider component, and pass in the `baseUrl` that you define within better-auth's `authClient`.
 
-## Add `<AutumnProvider />`
+      ```tsx title="app/layout.tsx"
+      import { AutumnProvider } from "autumn-js/react";
 
-Client side, wrap your application with the AutumnProvider component, and pass in the `baseUrl` that you define within better-auth's `authClient`.
+      export default function RootLayout({
+        children,
+      }: {
+        children: React.ReactNode;
+      }) {
+        return (
+          <html>
+            <body>
+              {/* or meta.env.BETTER_AUTH_URL for vite */}
+              <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BETTER_AUTH_URL}>
+                {children}
+              </AutumnProvider>
+            </body>
+          </html>
+        );
+      }
+      ```
+  </Step>  
+</Steps>
 
-```tsx title="app/layout.tsx"
-import { AutumnProvider } from "autumn-js/react";
+## Usage
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html>
-      <body>
-        {/* or meta.env.BETTER_AUTH_URL for vite */}
-        <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BETTER_AUTH_URL}>
-          {children}
-        </AutumnProvider>
-      </body>
-    </html>
-  );
-}
-```
-
-## Handle payments
+### Handle payments
 
 Call `attach` to redirect the customer to a Stripe checkout page when they want to purchase the Pro plan.
 
@@ -116,7 +131,7 @@ export default function PurchaseButton() {
 The AttachDialog component can be used directly from the `autumn-js/react`
 library (as shown in the example above), or downloaded as a [shadcn/ui component](https://docs.useautumn.com/quickstart/shadcn) to customize.
 
-## Integrate Pricing Logic
+### Integrate Pricing Logic
 
 Integrate your client and server pricing tiers logic with the following functions:
 
