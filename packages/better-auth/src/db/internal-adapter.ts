@@ -878,10 +878,7 @@ export const createInternalAdapter = (
 					],
 				});
 			}
-
-			if (!verification.length) return null;
-
-			const lastVerification = verification[0];
+			const lastVerification = verification[0] ?? null;
 			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
