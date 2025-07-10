@@ -19,7 +19,7 @@ Learn more in our [security documentation](/docs/reference/security).
 1. Fork the repo
 2. clone your fork.
 3. install node.js (preferable latest LTS).
-4. run `cp -n ./docs/.env.example ./docs/.env` to create a `.env` file (if it doesn't exist)
+4. run `cp -n ./docs/.env.example ./docs/.env` (or `copy /Y .\docs\.env.example .\docs\.env` on windows) to create a `.env` file (if it doesn't exist)
 5. run `pnpm i` in your terminal to install dependencies.
 6. create a branch.
 7. build the project using `pnpm build`

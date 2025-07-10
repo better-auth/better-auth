@@ -69,7 +69,7 @@ export function Intro() {
 					GitHub
 				</IconLink>
 				<IconLink
-					href="https://discord.com/better-auth"
+					href="https://discord.gg/better-auth"
 					icon={DiscordLogoIcon}
 					className="flex-none text-gray-600 dark:text-gray-300"
 				>

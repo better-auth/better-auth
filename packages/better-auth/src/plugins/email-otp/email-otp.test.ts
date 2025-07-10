@@ -299,33 +299,19 @@ describe("email-otp-verify", async () => {
 		},
 	);
 
-	it("should not create verification otp when disableSignUp and user not registered", async () => {
-		for (let param of [
-			{
-				email: "test-email@domain.com",
-				isNull: true,
-			},
-			{
-				email: testUser.email,
-				isNull: false,
-			},
-		]) {
-			await client.emailOtp.sendVerificationOtp({
-				email: param.email,
-				type: "email-verification",
-			});
-			const res = await auth.api.getVerificationOTP({
-				query: {
-					email: param.email,
-					type: "email-verification",
-				},
-			});
-			if (param.isNull) {
-				expect(res.otp).toBeNull();
-			} else {
-				expect(res.otp).not.toBeNull();
-			}
-		}
+	it("should return USER_NOT_FOUND error when disableSignUp and user not registered", async () => {
+		const response = await client.emailOtp.sendVerificationOtp({
+			email: "non-existent@domain.com",
+			type: "email-verification",
+		});
+
+		expect(response.error?.message).toBe("User not found");
+		// Existing user should still succeed
+		const successRes = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		expect(successRes.error).toBeFalsy();
 	});
 
 	it("should verify email with last otp", async () => {

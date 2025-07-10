@@ -18,6 +18,9 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		accessTokenExpiresAt: data.expires_in
 			? getDate(data.expires_in, "sec")
 			: undefined,
+		refreshTokenExpiresAt: data.refresh_token_expires_in
+			? getDate(data.refresh_token_expires_in, "sec")
+			: undefined,
 		scopes: data?.scope
 			? typeof data.scope === "string"
 				? data.scope.split(" ")

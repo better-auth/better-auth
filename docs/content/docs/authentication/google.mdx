@@ -107,3 +107,27 @@ This will trigger a new OAuth flow that requests the additional scopes. After co
 <Callout>
 Ensure you're using Better Auth version 1.2.7 or later to avoid "Social account already linked" errors when requesting additional scopes from the same provider.
 </Callout>
+
+
+### Always get refresh token
+
+Google only issues a refresh token the first time a user consents to your app.
+If the user has already authorized your app, subsequent OAuth flows will only return an access token, not a refresh token.
+
+To always get a refresh token, you can set the `accessType` to `offline`, and `prompt` to `select_account+consent` in the provider options.
+
+```ts
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        accessType: "offline", // [!code highlight]
+        prompt: "select_account+consent", // [!code highlight]
+    },
+}
+```
+
+<Callout>
+    **Revoking Access:** If you want to get a new refresh token for a user who has already authorized your app,
+    you must have them revoke your app's access in their Google account settings, then re-authorize.
+</Callout>

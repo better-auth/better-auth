@@ -1181,6 +1181,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
+					const user = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: "User not found",
+						});
+					}
+
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 					return ctx.json({
 						success: true,
@@ -1370,6 +1380,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
+		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
 

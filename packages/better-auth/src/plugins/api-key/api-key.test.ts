@@ -1651,7 +1651,7 @@ describe("api-key", async () => {
 			result.error = error;
 		}
 
-		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.status).toEqual("TOO_MANY_REQUESTS");
 		expect(result.error?.body?.message).toEqual(ERROR_CODES.USAGE_EXCEEDED);
 		expect(result.error?.body?.code).toEqual("USAGE_EXCEEDED");
 	});

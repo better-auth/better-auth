@@ -296,12 +296,17 @@ describe("verify phone-number", async (it) => {
 
 describe("reset password flow attempts", async (it) => {
 	let otp = "";
+	let resetOtp = "";
 
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
 				async sendOTP({ code }) {
+					console.log("sendOTP", code);
 					otp = code;
+				},
+				sendPasswordResetOTP(data, request) {
+					resetOtp = data.code;
 				},
 				signUpOnVerification: {
 					getTempEmail(phoneNumber) {
@@ -357,17 +362,27 @@ describe("reset password flow attempts", async (it) => {
 	});
 
 	it("should successfully reset password with correct code", async () => {
-		await client.phoneNumber.sendOtp({
+		await client.phoneNumber.requestPasswordReset({
 			phoneNumber: testPhoneNumber,
 		});
 
-		const res = await client.phoneNumber.verify({
+		const resetPasswordRes = await client.phoneNumber.resetPassword({
 			phoneNumber: testPhoneNumber,
-			code: otp,
+			otp: resetOtp,
+			newPassword: "password",
 		});
 
-		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expect(resetPasswordRes.error).toBe(null);
+		expect(resetPasswordRes.data?.status).toBe(true);
+	});
+
+	it("shouldn't allow to re-use the same OTP code", async () => {
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: testPhoneNumber,
+			otp: resetOtp,
+			newPassword: "password",
+		});
+		expect(res.error?.status).toBe(400);
 	});
 });
 

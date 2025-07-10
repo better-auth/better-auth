@@ -116,7 +116,7 @@ export async function validateApiKey({
 			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 		}
 
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("TOO_MANY_REQUESTS", {
 			message: ERROR_CODES.USAGE_EXCEEDED,
 			code: "USAGE_EXCEEDED" as const,
 		});
@@ -138,8 +138,7 @@ export async function validateApiKey({
 
 		if (remaining === 0) {
 			// if there are no more remaining requests, than the key is invalid
-
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("TOO_MANY_REQUESTS", {
 				message: ERROR_CODES.USAGE_EXCEEDED,
 				code: "USAGE_EXCEEDED" as const,
 			});

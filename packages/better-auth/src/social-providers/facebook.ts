@@ -76,12 +76,15 @@ export const facebook = (options: FacebookOptions) => {
 
 			/* limited login */
 			// check is limited token
-			if (token.split(".").length) {
+			if (token.split(".").length === 3) {
 				try {
 					const { payload: jwtClaims } = await jwtVerify(
 						token,
 						createRemoteJWKSet(
-							new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
+							// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
+							new URL(
+								"https://limited.facebook.com/.well-known/oauth/openid/jwks/",
+							),
 						),
 						{
 							algorithms: ["RS256"],
@@ -122,7 +125,7 @@ export const facebook = (options: FacebookOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			if (token.idToken) {
+			if (token.idToken && token.idToken.split(".").length === 3) {
 				const profile = decodeJwt(token.idToken) as {
 					sub: string;
 					email: string;

@@ -505,7 +505,7 @@ export const getOrgAdapter = (
 		},
 
 		listTeams: async (organizationId: string) => {
-			const teams = await adapter.findMany({
+			const teams = await adapter.findMany<Team>({
 				model: "team",
 				where: [
 					{

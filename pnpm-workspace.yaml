@@ -6,10 +6,10 @@ packages:
   - demo/*
 catalogs:
   react18:
-    '@types/react': ^18.3.14
-    '@types/react-dom': ^18.3.2
-    react: 18.3.1
-    react-dom: 18.3.1
+    '@types/react': ^19.1.0
+    '@types/react-dom': ^19.1.0
+    react: 19.1.0
+    react-dom: 19.1.0
 catalog:
   "better-call": "^1.0.8"
   "@better-fetch/fetch": "^1.1.18"
