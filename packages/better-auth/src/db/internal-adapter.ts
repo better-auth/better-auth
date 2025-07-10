@@ -878,6 +878,9 @@ export const createInternalAdapter = (
 					],
 				});
 			}
+
+			if (!verification.length) return;
+
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
