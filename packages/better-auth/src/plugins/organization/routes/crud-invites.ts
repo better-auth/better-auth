@@ -357,7 +357,14 @@ export const acceptInvitation = createAuthEndpoint(
 				message: "Not authenticated",
 			});
 		}
-		const email = session?.user.email || ctx.body.email;
+		const email =
+			session?.user.email ||
+			ctx.body.email ||
+			(ctx.body.userId
+				? await ctx.context.internalAdapter
+						.findUserById(ctx.body.userId!)
+						.then((user) => user?.email)
+				: null);
 		if (!email) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Email is required",
