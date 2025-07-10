@@ -9,7 +9,7 @@ import { createAuthClient } from "better-auth/client";
 import { bearer } from "better-auth/plugins";
 import { stripeClient } from "./client";
 
-describe("metered", async () => {
+describe("metered", () => {
 	const mockStripe = {
 		prices: {
 			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
@@ -182,7 +182,6 @@ describe("metered", async () => {
 		},
 		plugins: [stripe(stripeOptions)],
 	});
-	const ctx = await auth.$context;
 
 	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
@@ -206,6 +205,7 @@ describe("metered", async () => {
 	};
 
 	it("should create a customer on sign up", async () => {
+		const ctx = await auth.$context;
 		const userRes = await authClient.signUp.email(testUser, {
 			throw: true,
 		});
@@ -272,7 +272,7 @@ describe("metered", async () => {
 
 	it("should reactivate a metered billing", async () => {
 		var res = await authClient.meteredBilling.reactivate({
-			meterId: "meter_12345",
+			meterId: "meter_123",
 		});
 		expect(res.data?.id).toBe("meter_123");
 		expect(res.data?.status).toBe("active");
