@@ -154,13 +154,13 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						}
 
-						if (
-							opts.customAPIKeyValidator &&
-							!opts.customAPIKeyValidator({ ctx, key })
-						) {
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
+						if (opts.customAPIKeyValidator) {
+							const isValid = await opts.customAPIKeyValidator({ ctx, key });
+							if (!isValid) {
+								throw new APIError("FORBIDDEN", {
+									message: ERROR_CODES.INVALID_API_KEY,
+								});
+							}
 						}
 
 						const hashed = opts.disableKeyHashing
