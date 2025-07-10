@@ -497,6 +497,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					body: z
 						.object({
 							organizationId: z.string().optional(),
+							organizationSlug: z.string().optional(),
 						})
 						.and(
 							z.union([
@@ -515,6 +516,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						$Infer: {
 							body: {} as PermissionExclusive & {
 								organizationId?: string;
+								organizationSlug?: string;
 							},
 						},
 						openapi: {
@@ -565,30 +567,69 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
-					const activeOrganizationId =
-						ctx.body.organizationId ||
+					const adapter = getOrgAdapter(ctx.context);
+
+					// Determine the organization identifier (ID from body, slug, or active organization ID)
+					const organizationIdentifier =
+						ctx.body.organizationSlug ??
+						ctx.body.organizationId ??
 						ctx.context.session.session.activeOrganizationId;
-					if (!activeOrganizationId) {
+
+					if (!organizationIdentifier) {
 						throw new APIError("BAD_REQUEST", {
 							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 						});
 					}
-					const adapter = getOrgAdapter(ctx.context);
-					const member = await adapter.findMemberByOrgId({
-						userId: ctx.context.session.user.id,
-						organizationId: activeOrganizationId,
-					});
-					if (!member) {
-						throw new APIError("UNAUTHORIZED", {
-							message:
-								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+
+					let memberRole: string | undefined;
+
+					if (ctx.body.organizationSlug) {
+						// Optimized path: directly fetch the member by userId and organization slug
+						const slug = ctx.body.organizationSlug!;
+						const member = await adapter.findMemberByOrgSlug({
+							userId: ctx.context.session.user.id,
+							organizationSlug: slug,
 						});
+
+						if (!member) {
+							// Determine whether the organization itself exists to return proper error code
+							const orgExists = await adapter.findOrganizationBySlug(slug);
+							if (!orgExists) {
+								throw new APIError("BAD_REQUEST", {
+									message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+								});
+							}
+
+							throw new APIError("UNAUTHORIZED", {
+								message:
+									ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+							});
+						}
+
+						memberRole = member.role;
+					} else {
+						// organizationId path – current behaviour
+						const member = await adapter.findMemberByOrgId({
+							userId: ctx.context.session.user.id,
+							organizationId: organizationIdentifier,
+						});
+
+						if (!member) {
+							throw new APIError("UNAUTHORIZED", {
+								message:
+									ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+							});
+						}
+
+						memberRole = member.role;
 					}
+
 					const result = hasPermission({
-						role: member.role,
+						role: memberRole,
 						options: options || {},
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
+
 					return ctx.json({
 						error: null,
 						success: result,

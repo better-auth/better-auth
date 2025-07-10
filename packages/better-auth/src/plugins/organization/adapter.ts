@@ -154,6 +154,54 @@ export const getOrgAdapter = (
 				},
 			};
 		},
+		// Optimized lookup: fetch member directly by organization slug instead of loading all members
+		findMemberByOrgSlug: async (data: {
+			userId: string;
+			organizationSlug: string;
+		}) => {
+			// First, resolve the organization ID from the slug. We only need the id field.
+			const organization = await adapter.findOne<Organization>({
+				model: "organization",
+				where: [
+					{
+						field: "slug",
+						value: data.organizationSlug,
+					},
+				],
+				// We don't need additional fields, but the underlying adapter returns the full row anyway.
+			});
+			if (!organization) {
+				return null;
+			}
+
+			const [member, user] = await Promise.all([
+				adapter.findOne<Member>({
+					model: "member",
+					where: [
+						{ field: "userId", value: data.userId },
+						{ field: "organizationId", value: organization.id },
+					],
+				}),
+				adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: data.userId }],
+				}),
+			]);
+
+			if (!user || !member) {
+				return null;
+			}
+
+			return {
+				...member,
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					image: user.image,
+				},
+			};
+		},
 		findMemberById: async (memberId: string) => {
 			const member = await adapter.findOne<Member>({
 				model: "member",
