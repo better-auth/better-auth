@@ -41,15 +41,6 @@ const STRIPE_ERROR_CODES = {
 		"Subscription is not scheduled for cancellation",
 } as const;
 
-const getUrl = (ctx: GenericEndpointContext, url: string) => {
-	if (url.startsWith("http")) {
-		return url;
-	}
-	return `${ctx.context.options.baseURL}${
-		url.startsWith("/") ? url : `/${url}`
-	}`;
-};
-
 /**
  * Helper function to check for existing Stripe customer by email
  */
@@ -73,6 +64,15 @@ const findExistingCustomer = async (
 		logger.error("Error checking for existing Stripe customer", error);
 		return null;
 	}
+};
+
+const getUrl = (ctx: GenericEndpointContext, url: string) => {
+	if (url.startsWith("http")) {
+		return url;
+	}
+	return `${ctx.context.options.baseURL}${
+		url.startsWith("/") ? url : `/${url}`
+	}`;
 };
 
 export const stripe = <O extends StripeOptions>(options: O) => {
