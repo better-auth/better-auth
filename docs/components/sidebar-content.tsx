@@ -570,6 +570,7 @@ export const contents: Content[] = [
 			{
 				title: "Slack",
 				href: "/docs/authentication/slack",
+				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
