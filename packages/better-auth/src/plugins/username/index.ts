@@ -56,6 +56,11 @@ export const username = (options?: UsernameOptions) => {
 								description: "Remember the user session",
 							})
 							.optional(),
+						callbackURL: z
+							.string({
+								description: "The URL to redirect to after the user signs in",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
