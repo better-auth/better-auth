@@ -259,7 +259,8 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 					"function"
 						? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
 								teamId: ctx.body.teamId,
-								session: session,
+								invitedUserEmail: ctx.body.email,
+								invitedUserId: session.user.id,
 								organizationId: organizationId,
 							})
 						: ctx.context.orgOptions.teams.maximumMembersPerTeam;
@@ -310,8 +311,19 @@ export const acceptInvitation = createAuthEndpoint(
 			invitationId: z.string({
 				description: "The ID of the invitation to accept",
 			}),
+			email: z
+				.string({
+					description: "The ID of the user to accept the invitation for",
+				})
+				.optional(),
+			userId: z
+				.string({
+					description:
+						"The ID of the user to accept the invitation for. If this is provided, it'll not fetch the user from the database.",
+				})
+				.optional(),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware],
 		metadata: {
 			openapi: {
 				description: "Accept an invitation to an organization",
@@ -340,6 +352,26 @@ export const acceptInvitation = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
+		if (ctx.request && !session) {
+			throw new APIError("UNAUTHORIZED", {
+				message: "Not authenticated",
+			});
+		}
+		const email = session?.user.email || ctx.body.email;
+		if (!email) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Email is required",
+			});
+		}
+		const userId =
+			session?.user.id ||
+			ctx.body.userId ||
+			(await ctx.context.internalAdapter.findUserByEmail(email))?.user.id;
+		if (!userId) {
+			throw new APIError("BAD_REQUEST", {
+				message: "User not found",
+			});
+		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const invitation = await adapter.findInvitationById(ctx.body.invitationId);
 		if (
@@ -351,18 +383,17 @@ export const acceptInvitation = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 			});
 		}
-		if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+		if (invitation.email.toLowerCase() !== email.toLowerCase()) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 			});
 		}
 		const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
-		const members = await adapter.listMembers({
+		const count = await adapter.countMembers({
 			organizationId: invitation.organizationId,
 		});
-
-		if (members.length >= membershipLimit) {
+		if (count >= membershipLimit) {
 			throw new APIError("FORBIDDEN", {
 				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 			});
@@ -399,7 +430,8 @@ export const acceptInvitation = createAuthEndpoint(
 				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam === "function"
 					? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
 							teamId: acceptedI.teamId,
-							session: session,
+							invitedUserEmail: email,
+							invitedUserId: userId,
 							organizationId: invitation.organizationId,
 						})
 					: ctx.context.orgOptions.teams.maximumMembersPerTeam;
@@ -412,7 +444,7 @@ export const acceptInvitation = createAuthEndpoint(
 
 		const member = await adapter.createMember({
 			organizationId: invitation.organizationId,
-			userId: session.user.id,
+			userId: userId,
 			role: invitation.role,
 			createdAt: new Date(),
 			...("teamId" in acceptedI
@@ -421,10 +453,12 @@ export const acceptInvitation = createAuthEndpoint(
 					}
 				: {}),
 		});
-		await adapter.setActiveOrganization(
-			session.session.token,
-			invitation.organizationId,
-		);
+		if (session) {
+			await adapter.setActiveOrganization(
+				session.session.token,
+				invitation.organizationId,
+			);
+		}
 		if (!acceptedI) {
 			return ctx.json(null, {
 				status: 400,

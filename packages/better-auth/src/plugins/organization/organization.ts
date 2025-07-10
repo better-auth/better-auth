@@ -163,7 +163,8 @@ export interface OrganizationOptions {
 			| number
 			| ((data: {
 					teamId: string;
-					session: { user: User; session: Session };
+					invitedUserEmail: string;
+					invitedUserId: string;
 					organizationId: string;
 			  }) => Promise<number> | number)
 			| undefined;
@@ -752,6 +753,5 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
-		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
