@@ -768,14 +768,14 @@ export const listUserInvitations = createAuthEndpoint(
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 
-		if(ctx.request && ctx.query?.email){
+		if (ctx.request && ctx.query?.email) {
 			throw new APIError("BAD_REQUEST", {
 				message: "User email cannot be passed for client side API calls.",
 			});
 		}
 
 		const userEmail = session?.user.email || ctx.query?.email;
-		if(!userEmail){
+		if (!userEmail) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Missing session headers, or email query parameter.",
 			});
