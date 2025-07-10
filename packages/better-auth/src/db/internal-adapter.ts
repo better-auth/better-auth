@@ -879,7 +879,7 @@ export const createInternalAdapter = (
 				});
 			}
 
-			if (!verification.length) return;
+			if (!verification.length) return null;
 
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
