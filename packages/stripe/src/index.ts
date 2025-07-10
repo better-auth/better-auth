@@ -2,6 +2,7 @@ import {
 	type GenericEndpointContext,
 	type BetterAuthPlugin,
 	logger,
+	type User,
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
@@ -13,6 +14,7 @@ import {
 	getSessionFromCtx,
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import { AggregationFormula } from "./types";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -923,6 +925,365 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 	} as const;
+
+	const meteredBillingEndpoints = {
+		createMeteredBilling: createAuthEndpoint(
+			"/metered-billing/create",
+			{
+				method: "POST",
+				body: z.object({
+					displayName: z.string({
+						description: "The meter's name. Not visible to the customer.",
+					}),
+					eventName: z.string({
+						description:
+							"The name of the meter event to record usage for. Corresponds with the event_name field on meter events.",
+					}),
+					aggregationFormula: z.nativeEnum(AggregationFormula, {
+						description:
+							"Specifies how events are aggregated. Allowed values are 'count' to count the number of events, 'sum' to sum each event's value and 'last' to take the last event's value in the window.",
+					}),
+					stripeCustomerId: z.string({
+						description:
+							"Map a meter event to a customer by passing a customer ID in the event's payload.",
+					}),
+				}),
+			},
+			async (ctx) => {
+				// Check for required fields
+				const { displayName, eventName, aggregationFormula, stripeCustomerId } =
+					ctx.body;
+				if (
+					!displayName ||
+					!eventName ||
+					!aggregationFormula ||
+					!stripeCustomerId
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Missing required fields",
+					});
+				}
+
+				// Check for valid aggregation formula
+				if (
+					aggregationFormula !== "count" &&
+					aggregationFormula !== "sum" &&
+					aggregationFormula !== "last"
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Invalid default aggregation formula",
+					});
+				}
+
+				// Check if user exists
+				const user = await ctx.context.adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							field: "stripeCustomerId",
+							value: stripeCustomerId,
+						},
+					],
+				});
+				if (!user) {
+					throw new APIError("BAD_REQUEST", {
+						message: "User not found",
+					});
+				}
+
+				// Create Meter
+				const createMetereResponse = await client.billing.meters
+					.create({
+						display_name: displayName,
+						event_name: eventName,
+						default_aggregation: {
+							formula: aggregationFormula,
+						},
+						value_settings: {
+							event_payload_key: "value",
+						},
+						customer_mapping: {
+							type: "by_id",
+							event_payload_key: stripeCustomerId,
+						},
+					})
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({
+					...createMetereResponse,
+				});
+			},
+		),
+
+		updateMeteredBilling: createAuthEndpoint(
+			"/metered-billing/update",
+			{
+				method: "POST",
+				body: z.object({
+					meterId: z.string({
+						description: "Unique identifier for the meter.",
+					}),
+					updatedDisplayName: z.string({
+						description: "The meter's new name. Not visible to the customer.",
+					}),
+				}),
+			},
+			async (ctx) => {
+				// Check for required fields
+				const { meterId, updatedDisplayName } = ctx.body;
+				if (!meterId || !updatedDisplayName) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Missing required fields",
+					});
+				}
+
+				// Check if meter exists
+				const meter = await client.billing.meters.retrieve(meterId);
+				if (!meter) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Meter not found",
+					});
+				}
+
+				// Update Meter
+				const updateMeterSession = await client.billing.meters
+					.update(meterId, {
+						display_name: updatedDisplayName,
+					})
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({
+					...updateMeterSession,
+				});
+			},
+		),
+
+		retrieveMeteredBilling: createAuthEndpoint(
+			"/metered-billing/retrieve",
+			{
+				method: "POST",
+				body: z.object({
+					meterId: z.string({
+						description: "Unique identifier for the meter.",
+					}),
+				}),
+			},
+			async (ctx) => {
+				// Check for required fields
+				const { meterId } = ctx.body;
+				if (!meterId) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Missing Meter ID",
+					});
+				}
+
+				// Check if meter exists
+				const meter = await client.billing.meters.retrieve(meterId);
+				if (!meter) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Meter not found",
+					});
+				}
+
+				// Retrieve Meter
+				const retrieveMeterSession = await client.billing.meters
+					.retrieve(meterId)
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({
+					...retrieveMeterSession,
+				});
+			},
+		),
+
+		listMeteredBilling: createAuthEndpoint(
+			"/metered-billing/list",
+			{
+				method: "GET",
+			},
+			async (ctx) => {
+				const retrieveMeter = await client.billing.meters
+					.list()
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({
+					...retrieveMeter,
+				});
+			},
+		),
+
+		deactivateMeteredBilling: createAuthEndpoint(
+			"/metered-billing/deactivate",
+			{
+				method: "POST",
+				body: z.object({
+					meterId: z.string({
+						description: "Unique identifier for the meter.",
+					}),
+				}),
+			},
+			async (ctx) => {
+				// Check for required fields
+				const { meterId } = ctx.body;
+				if (!meterId) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Missing Meter ID",
+					});
+				}
+
+				// Check if meter exists
+				const meter = await client.billing.meters.retrieve(meterId);
+				if (!meter) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Meter not found",
+					});
+				}
+
+				// Retrieve Meter
+				const retrieveMeterSession = await client.billing.meters
+					.deactivate(meterId)
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({
+					...retrieveMeterSession,
+				});
+			},
+		),
+
+		reactivateMeteredBilling: createAuthEndpoint(
+			"/metered-billing/reactivate",
+			{
+				method: "POST",
+				body: z.object({
+					meterId: z.string({
+						description: "Unique identifier for the meter.",
+					}),
+				}),
+			},
+			async (ctx) => {
+				// Check for required fields
+				const { meterId } = ctx.body;
+				if (!meterId) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Missing Meter ID",
+					});
+				}
+
+				// Check if meter exists
+				const meter = await client.billing.meters.retrieve(meterId);
+				if (!meter) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Meter not found",
+					});
+				}
+
+				// Check if meter is deactivated
+				if (meter.status_transitions?.deactivated_at == null) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Meter is already active",
+					});
+				}
+
+				// Retrieve Meter
+				const retrieveMeterSession = await client.billing.meters
+					.reactivate(meterId)
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({
+					...retrieveMeterSession,
+				});
+			},
+		),
+
+		createMeterEvent: createAuthEndpoint(
+			"/metered-billing/event",
+			{
+				method: "POST",
+				body: z.object({
+					eventName: z.string({
+						description:
+							"The name of the meter event to record usage for. Corresponds with the event_name field on meter events.",
+					}),
+					stripeCustomerId: z.string({
+						description:
+							"Map a meter event to a customer by passing a customer ID in the event's payload.",
+					}),
+					value: z.string({
+						description: "The value of the meter event to record usage for.",
+					}),
+				}),
+			},
+			async (ctx) => {
+				// Check for required fields
+				const { eventName, stripeCustomerId, value } = ctx.body;
+				if (!eventName || !stripeCustomerId || !value) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Missing required fields",
+					});
+				}
+
+				// Check if user exists
+				const user = await ctx.context.adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							field: "stripeCustomerId",
+							value: stripeCustomerId,
+						},
+					],
+				});
+				if (!user) {
+					throw new APIError("BAD_REQUEST", {
+						message: "User not found",
+					});
+				}
+
+				// Create Meter
+				const createMetereResponse = await client.v2?.billing?.meterEvents
+					?.create({
+						event_name: eventName,
+						payload: {
+							value: value,
+							stripe_customer_id: stripeCustomerId,
+						},
+					})
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({
+					...createMetereResponse,
+				});
+			},
+		),
+	} as const;
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -989,6 +1350,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.json({ success: true });
 				},
 			),
+			...meteredBillingEndpoints,
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {
