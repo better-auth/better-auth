@@ -50,6 +50,31 @@ const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	}`;
 };
 
+/**
+ * Helper function to check for existing Stripe customer by email
+ */
+const findExistingCustomer = async (
+	client: Stripe,
+	email: string,
+	options: StripeOptions,
+): Promise<Stripe.Customer | null> => {
+	if (!options.preventDuplicateCustomers) {
+		return null;
+	}
+
+	try {
+		const existingCustomers = await client.customers.list({
+			email,
+			limit: 1,
+		});
+
+		return existingCustomers.data.length > 0 ? existingCustomers.data[0] : null;
+	} catch (error) {
+		logger.error("Error checking for existing Stripe customer", error);
+		return null;
+	}
+};
+
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
@@ -219,21 +244,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 						// Check for existing customer if preventDuplicateCustomers is enabled
 						if (options.preventDuplicateCustomers) {
-							try {
-								const existingCustomers = await client.customers.list({
-									email: user.email,
-									limit: 1,
-								});
-
-								if (existingCustomers.data.length > 0) {
-									stripeCustomer = existingCustomers.data[0];
-								}
-							} catch (error) {
-								logger.error(
-									"Error checking for existing Stripe customer",
-									error,
-								);
-							}
+							stripeCustomer = await findExistingCustomer(client, user.email, options);
 						}
 
 						// Create new customer if not found
@@ -990,21 +1001,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 										// Check for existing customer if preventDuplicateCustomers is enabled
 										if (options.preventDuplicateCustomers) {
-											try {
-												const existingCustomers = await client.customers.list({
-													email: user.email,
-													limit: 1,
-												});
-
-												if (existingCustomers.data.length > 0) {
-													stripeCustomer = existingCustomers.data[0];
-												}
-											} catch (error) {
-												logger.error(
-													"Error checking for existing Stripe customer",
-													error,
-												);
-											}
+											stripeCustomer = await findExistingCustomer(client, user.email, options);
 										}
 
 										// Create new customer if not found
