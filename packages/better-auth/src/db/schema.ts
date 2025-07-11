@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { FieldAttribute } from ".";
+import { getSchema } from "./get-schema";
+import type { FieldAttribute } from "./field";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
@@ -154,7 +155,11 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key].defaultValue && action === "create") {
-			parsedData[key] = fields[key].defaultValue;
+			if (typeof fields[key].defaultValue === "function") {
+				parsedData[key] = fields[key].defaultValue();
+			} else {
+				parsedData[key] = fields[key].defaultValue;
+			}
 			continue;
 		}
 

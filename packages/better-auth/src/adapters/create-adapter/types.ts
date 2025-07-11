@@ -1,4 +1,4 @@
-import type { FieldAttribute } from "../../db";
+import type { FieldAttribute } from "../../db/field";
 import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
 	AdapterSchemaCreation,

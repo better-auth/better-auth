@@ -1,5 +1,7 @@
 import { ObjectId, type Db } from "mongodb";
-import type { BetterAuthOptions, Where } from "../../types";
+import { getAuthTables } from "../../db/get-tables";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { withApplyDefault } from "../utils";
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface MongoDBAdapterConfig {
