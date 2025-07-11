@@ -58,7 +58,7 @@ export const username = (options?: UsernameOptions) => {
 							.optional(),
 						callbackURL: z
 							.string({
-								description: "The URL to redirect to after the user signs in",
+								description: "The URL to redirect to after email verification",
 							})
 							.optional(),
 					}),
