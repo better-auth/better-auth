@@ -1,6 +1,6 @@
 import { z, ZodLiteral } from "zod";
 import { generateId } from "../../utils";
-import type { OrganizationOptions } from "./organization";
+import type { OrganizationOptions } from "./types";
 
 export const role = z.string();
 export const invitationStatus = z
