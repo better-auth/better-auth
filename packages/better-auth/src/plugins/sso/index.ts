@@ -645,9 +645,10 @@ export const sso = (options?: SSOOptions) => {
 					const { code, state, error, error_description } = ctx.query;
 					const stateData = await parseState(ctx);
 					if (!stateData) {
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=invalid_state`,
-						);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.baseURL}/error`;
+						throw ctx.redirect(`${errorURL}?error=invalid_state`);
 					}
 					const { callbackURL, errorURL, newUserURL, requestSignUp } =
 						stateData;
@@ -863,6 +864,7 @@ export const sso = (options?: SSOOptions) => {
 							refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
 							scope: tokenResponse.scopes?.join(","),
 						},
+						callbackURL,
 						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 						overrideUserInfo: config.overrideUserInfo,
 					});

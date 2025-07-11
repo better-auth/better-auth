@@ -1,9 +1,15 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.2.8-beta.4",
+  "version": "1.3.0-beta.8",
   "description": "",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/expo"
+  },
+  "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
     "build": "unbuild --clean",
@@ -32,9 +38,14 @@
       ]
     }
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "auth",
+    "expo",
+    "react-native",
+    "typescript",
+    "better-auth"
+  ],
+  "license": "MIT",
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",

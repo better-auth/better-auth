@@ -61,7 +61,7 @@ const { data, error } = await authClient.emailOtp.sendVerificationOtp({
 
 ### Sign in with OTP
 
-Once the user provides the OTP, you can sign in the user using the `signIn.emailOTP()` method.
+Once the user provides the OTP, you can sign in the user using the `signIn.emailOtp()` method.
 
 ```ts title="example.ts"
 const { data, error } = await authClient.signIn.emailOtp({
@@ -94,6 +94,26 @@ const { data, error } = await authClient.emailOtp.resetPassword({
     password: "password"
 })
 ```
+
+### Override Default Email Verification
+
+To override the default email verification, pass `overrideDefaultEmailVerification: true` in the options. This will make the system use an email OTP instead of the default verification link whenever email verification is triggered. In other words, the user will verify their email using an OTP rather than clicking a link.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  plugins: [
+    emailOTP({
+      overrideDefaultEmailVerification: true, // [!code highlight]
+      async sendVerificationOTP({ email, otp, type }) {
+        // Implement the sendVerificationOTP method to send the OTP to the user's email address
+      },
+    }),
+  ],
+});
+```
+
 
 ## Options
 
@@ -150,7 +170,7 @@ export const auth = betterAuth({
 
 - `generateOTP`: A function that generates the OTP. Defaults to a random 6-digit number.
 
-- `maxAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
+- `allowedAttempts`: The maximum number of attempts allowed for verifying an OTP. Defaults to `3`. After exceeding this limit, the OTP becomes invalid and the user needs to request a new one.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -158,7 +178,7 @@ import { betterAuth } from "better-auth"
 export const auth = betterAuth({
     plugins: [
         emailOTP({
-            maxAttempts: 5, // Allow 5 attempts before invalidating the OTP
+            allowedAttempts: 5, // Allow 5 attempts before invalidating the OTP
             expiresIn: 300
         })
     ]
@@ -166,3 +186,38 @@ export const auth = betterAuth({
 ```
 
 When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `MAX_ATTEMPTS_EXCEEDED`.
+
+- `storeOTP`: The method to store the OTP in your database, wether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+
+<Callout>
+Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database.
+</Callout>
+
+Alternatively, you can pass a custom encryptor or hasher to store the OTP in your database.
+
+**Custom encryptor**
+
+```ts title="auth.ts"
+emailOTP({
+    storeOTP: { 
+        encrypt: async (otp) => {
+            return myCustomEncryptor(otp);
+        },
+        decrypt: async (otp) => {
+            return myCustomDecryptor(otp);
+        },
+    }
+})
+```
+
+**Custom hasher**
+
+```ts title="auth.ts"
+emailOTP({
+    storeOTP: {
+        hash: async (otp) => {
+            return myCustomHasher(otp);
+        },
+    }
+})
+```

@@ -16,6 +16,7 @@ import {
 	getInvitation,
 	listInvitations,
 	rejectInvitation,
+	listUserInvitations,
 } from "./routes/crud-invites";
 import {
 	addMember,
@@ -151,6 +152,22 @@ export interface OrganizationOptions {
 					request?: Request,
 			  ) => number | Promise<number>)
 			| number;
+
+		/**
+		 * The maximum number of members per team.
+		 *
+		 * if `undefined`, there is no limit.
+		 *
+		 * @default undefined
+		 */
+		maximumMembersPerTeam?:
+			| number
+			| ((data: {
+					teamId: string;
+					session: { user: User; session: Session };
+					organizationId: string;
+			  }) => Promise<number> | number)
+			| undefined;
 		/**
 		 * By default, if an organization does only have one team, they'll not be able to remove it.
 		 *
@@ -370,6 +387,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		listUserInvitations,
 		checkOrganizationSlug,
 		addMember: addMember<O>(),
 		removeMember,
@@ -430,6 +448,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			} satisfies AuthPluginSchema)
 		: undefined;
 
+	/**
+	 * the orgMiddleware type-asserts an empty object representing org options, roles, and a getSession function.
+	 * This `shimContext` function is used to add those missing properties to the context object.
+	 */
 	const api = shimContext(endpoints, {
 		orgOptions: options || {},
 		roles,
@@ -566,7 +588,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					}
 					const result = hasPermission({
 						role: member.role,
-						options: options as OrganizationOptions,
+						options: options || {},
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					});
 					return ctx.json({
@@ -732,5 +754,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
+		options: options as any,
 	} satisfies BetterAuthPlugin;
 };

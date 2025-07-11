@@ -12,7 +12,7 @@ import type {
 } from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
-import type { Session, User } from "../types";
+import type { BetterAuthOptions, Session, User } from "../types";
 import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {
@@ -36,7 +36,14 @@ export interface BetterAuthClientPlugin {
 	/**
 	 * Custom actions
 	 */
-	getActions?: ($fetch: BetterFetch, $store: Store) => Record<string, any>;
+	getActions?: (
+		$fetch: BetterFetch,
+		$store: Store,
+		/**
+		 * better-auth client options
+		 */
+		options: ClientOptions | undefined,
+	) => Record<string, any>;
 	/**
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
@@ -65,6 +72,7 @@ export interface ClientOptions {
 	baseURL?: string;
 	basePath?: string;
 	disableDefaultFetchPlugins?: boolean;
+	$InferAuth?: BetterAuthOptions;
 }
 
 export type InferClientAPI<O extends ClientOptions> = InferRoutes<
@@ -87,7 +95,7 @@ export type InferClientAPI<O extends ClientOptions> = InferRoutes<
 	O
 >;
 
-export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
+export type InferActions<O extends ClientOptions> = (O["plugins"] extends Array<
 	infer Plugin
 >
 	? UnionToIntersection<
@@ -97,7 +105,22 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 					: {}
 				: {}
 		>
-	: {};
+	: {}) &
+	//infer routes from auth config
+	InferRoutes<
+		O["$InferAuth"] extends {
+			plugins: infer Plugins;
+		}
+			? Plugins extends Array<infer Plugin>
+				? Plugin extends {
+						endpoints: infer Endpoints;
+					}
+					? Endpoints
+					: {}
+				: {}
+			: {},
+		O
+	>;
 
 export type InferErrorCodes<O extends ClientOptions> =
 	O["plugins"] extends Array<infer Plugin>

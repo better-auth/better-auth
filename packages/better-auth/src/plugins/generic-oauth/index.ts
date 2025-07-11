@@ -299,9 +299,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 
 					async getUserInfo(tokens) {
-						if (!finalUserInfoUrl) {
-							return null;
-						}
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
@@ -709,6 +706,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						callbackURL: callbackURL,
 						disableSignUp:
 							(provider.disableImplicitSignUp && !requestSignUp) ||
 							provider.disableSignUp,
@@ -743,7 +741,30 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					method: "POST",
 					body: z.object({
 						providerId: z.string(),
+						/**
+						 * Callback URL to redirect to after the user has signed in.
+						 */
 						callbackURL: z.string(),
+						/**
+						 * Additional scopes to request when linking the account.
+						 * This is useful for requesting additional permissions when
+						 * linking a social account compared to the initial authentication.
+						 */
+						scopes: z
+							.array(z.string(), {
+								description:
+									"Additional scopes to request when linking the account",
+							})
+							.optional(),
+						/**
+						 * The URL to redirect to if there is an error during the link process.
+						 */
+						errorCallbackURL: z
+							.string({
+								description:
+									"The URL to redirect to if there is an error during the link process",
+							})
+							.optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -851,8 +872,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state: state.state,
 						codeVerifier: pkce ? state.codeVerifier : undefined,
-						scopes: scopes || [],
-						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+						scopes: c.body.scopes || scopes || [],
+						redirectURI:
+							redirectURI ||
+							`${c.context.baseURL}/oauth2/callback/${providerId}`,
 						prompt,
 						accessType,
 						additionalParams: authorizationUrlParams,

@@ -236,6 +236,40 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				});
 			}
 
+			if (
+				ctx.context.orgOptions.teams &&
+				ctx.context.orgOptions.teams.enabled &&
+				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+					"undefined" &&
+				"teamId" in ctx.body &&
+				ctx.body.teamId
+			) {
+				const team = await adapter.findTeamById({
+					teamId: ctx.body.teamId,
+					organizationId: organizationId,
+					includeTeamMembers: true,
+				});
+				if (!team) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					});
+				}
+				const maximumMembersPerTeam =
+					typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+					"function"
+						? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+								teamId: ctx.body.teamId,
+								session: session,
+								organizationId: organizationId,
+							})
+						: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+				if (team.members.length >= maximumMembersPerTeam) {
+					throw new APIError("FORBIDDEN", {
+						message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+					});
+				}
+			}
+
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					role: roles,
@@ -342,6 +376,40 @@ export const acceptInvitation = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 			});
 		}
+
+		if (
+			ctx.context.orgOptions.teams &&
+			ctx.context.orgOptions.teams.enabled &&
+			typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+				"undefined" &&
+			"teamId" in acceptedI &&
+			acceptedI.teamId
+		) {
+			const team = await adapter.findTeamById({
+				teamId: acceptedI.teamId,
+				organizationId: invitation.organizationId,
+				includeTeamMembers: true,
+			});
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+			const maximumMembersPerTeam =
+				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam === "function"
+					? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+							teamId: acceptedI.teamId,
+							session: session,
+							organizationId: invitation.organizationId,
+						})
+					: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+			if (team.members.length >= maximumMembersPerTeam) {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+				});
+			}
+		}
+
 		const member = await adapter.createMember({
 			organizationId: invitation.organizationId,
 			userId: session.user.id,
@@ -674,6 +742,47 @@ export const listInvitations = createAuthEndpoint(
 		const invitations = await adapter.listInvitations({
 			organizationId: orgId,
 		});
+		return ctx.json(invitations);
+	},
+);
+
+/**
+ * List all invitations recieved for a user
+ */
+export const listUserInvitations = createAuthEndpoint(
+	"/organization/list-user-invitations",
+	{
+		method: "GET",
+		use: [orgMiddleware],
+		query: z
+			.object({
+				email: z
+					.string({
+						description:
+							"The email of the user to list invitations for. This only works for server side API calls.",
+					})
+					.optional(),
+			})
+			.optional(),
+	},
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+
+		if (ctx.request && ctx.query?.email) {
+			throw new APIError("BAD_REQUEST", {
+				message: "User email cannot be passed for client side API calls.",
+			});
+		}
+
+		const userEmail = session?.user.email || ctx.query?.email;
+		if (!userEmail) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Missing session headers, or email query parameter.",
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+		const invitations = await adapter.listUserInvitations(userEmail);
 		return ctx.json(invitations);
 	},
 );

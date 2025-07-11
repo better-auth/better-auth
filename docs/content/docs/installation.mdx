@@ -133,7 +133,8 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
-        import { PrismaClient } from "@prisma/client";
+        // If your Prisma file is located elsewhere, you can change the path
+        import { PrismaClient } from "@/generated/prisma";
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
@@ -373,15 +374,15 @@ Better Auth supports any backend framework with standard Request and Response ob
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
     import { auth } from '~/lib/server/auth'
-    import { createAPIFileRoute } from '@tanstack/react-start/api'
+    import { createServerFileRoute } from '@tanstack/react-start/server'
 
-    export const APIRoute = createAPIFileRoute('/api/auth/$')({
-        GET: ({ request }) => {
-            return auth.handler(request)
-        },
-        POST: ({ request }) => {
-            return auth.handler(request)
-        },
+    export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
+    GET: ({ request }) => {
+        return auth.handler(request)
+    },
+    POST: ({ request }) => {
+        return auth.handler(request)
+    },
     });
     ```
     </Tab>

@@ -518,7 +518,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte"], {
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"], {
 								description: "The operator to use for the filter",
 							})
 							.optional(),
@@ -933,8 +933,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.context.authCookies.dontRememberToken.name,
 						ctx.context.secret,
 					);
+					const adminCookieProp = ctx.context.createAuthCookie("admin_session");
 					await ctx.setSignedCookie(
-						"admin_session",
+						adminCookieProp.name,
 						`${ctx.context.session.session.token}:${
 							dontRememberMeCookie || ""
 						}`,
@@ -983,8 +984,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: "Failed to find user",
 						});
 					}
+					const adminCookieName =
+						ctx.context.createAuthCookie("admin_session").name;
 					const adminCookie = await ctx.getSignedCookie(
-						"admin_session",
+						adminCookieName,
 						ctx.context.secret,
 					);
 
@@ -1178,6 +1181,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
+					const user = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: "User not found",
+						});
+					}
+
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 					return ctx.json({
 						success: true,
@@ -1367,6 +1380,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
+		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
 

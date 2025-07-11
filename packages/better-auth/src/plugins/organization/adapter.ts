@@ -350,11 +350,14 @@ export const getOrgAdapter = (
 			if (!org) return null;
 
 			const userIds = members.map((member) => member.userId);
-			const users = await adapter.findMany<User>({
-				model: "user",
-				where: [{ field: "id", value: userIds, operator: "in" }],
-				limit: options?.membershipLimit || 100,
-			});
+			const users =
+				userIds.length > 0
+					? await adapter.findMany<User>({
+							model: "user",
+							where: [{ field: "id", value: userIds, operator: "in" }],
+							limit: options?.membershipLimit || 100,
+						})
+					: [];
 
 			const userMap = new Map(users.map((user) => [user.id, user]));
 			const membersWithUsers = members.map((member) => {
@@ -502,7 +505,7 @@ export const getOrgAdapter = (
 		},
 
 		listTeams: async (organizationId: string) => {
-			const teams = await adapter.findMany({
+			const teams = await adapter.findMany<Team>({
 				model: "team",
 				where: [
 					{
@@ -558,7 +561,13 @@ export const getOrgAdapter = (
 			});
 			return invitations;
 		},
-
+		listUserInvitations: async (email: string) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [{ field: "email", value: email }],
+			});
+			return invitations;
+		},
 		createInvitation: async ({
 			invitation,
 			user,

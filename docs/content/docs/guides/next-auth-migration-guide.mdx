@@ -21,7 +21,9 @@ Instead of altering your existing database column names, you can map them to mat
 
 #### User Schema
 
-Your existing user schema is likely compatible with Better Auth, so no changes are needed.
+Map the following fields in the user schema:
+
+- (next-auth v4) `emailVerified`: datetime → boolean
 
 #### Session Schema
 
@@ -29,6 +31,8 @@ Map the following fields in the session schema:
 
 - `expires` → `expiresAt`
 - `sessionToken` → `token`
+- (next-auth v4) add `createdAt` with datetime type
+- (next-auth v4) add `updatedAt` with datetime type
 
 ```typescript title="auth.ts"
 export const auth = betterAuth({
@@ -48,11 +52,15 @@ Make sure to have `createdAt` and `updatedAt` fields on your session schema.
 
 Map these fields in the account schema:
 
+- (next-auth v4) `provider` → `providerId`
 - `providerAccountId` → `accountId`
 - `refresh_token` → `refreshToken`
 - `access_token` → `accessToken`
-- `access_token_expires` → `accessTokenExpiresAt`
+- (next-auth v3) `access_token_expires` → `accessTokenExpiresAt` and int → datetime
+- (next-auth v4) `expires_at` → `accessTokenExpiresAt` and int → datetime
 - `id_token` → `idToken`
+- (next-auth v4) add `createdAt` with datetime type
+- (next-auth v4) add `updatedAt` with datetime type
 
 Remove the `session_state`, `type`, and `token_type` fields, as they are not required by Better Auth.
 
