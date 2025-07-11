@@ -773,13 +773,13 @@ describe("SAML SSO", async () => {
 			},
 			body: new URLSearchParams({
 				SAMLResponse: samlResponse.samlResponse,
-				RelayState: "http://localhost:3000/dashboard",
+				RelayState: "http://localhost:3000",
 			}),
 			onError: (context) => {
 				expect(context.response.status).toBe(302);
 				redirectLocation = context.response.headers.get("location") || "";
 			},
 		});
-		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(redirectLocation).toBe("http://localhost:3000");
 	});
 });
