@@ -757,7 +757,6 @@ describe("SAML SSO", async () => {
 			url: expect.stringContaining("http://localhost:8081"),
 			redirect: true,
 		});
-
 		let samlResponse: any;
 		await betterFetch(signInResponse?.url as string, {
 			onSuccess: async (context) => {
