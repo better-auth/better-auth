@@ -1328,10 +1328,8 @@ export const sso = (options?: SSOOptions) => {
 					let session: Session =
 						await ctx.context.internalAdapter.createSession(user.id, ctx);
 					await setSessionCookie(ctx, { session, user });
-					return ctx.json({
-						redirect: true,
-						url: RelayState || `${parsedSamlConfig.issuer}/dashboard`,
-					});
+					console.log("RelayState: ", RelayState);
+					throw ctx.redirect(RelayState || `${parsedSamlConfig.issuer}/dashboard`);
 				},
 			),
 		},
