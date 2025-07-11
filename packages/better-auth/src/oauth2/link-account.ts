@@ -4,7 +4,7 @@ import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
 import { isDevelopment } from "../utils/env";
 import type { OrganizationOptions } from "../plugins/organization/organization";
-
+import { getOrgAdapter } from "../plugins/organization/adapter";
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	{
@@ -207,7 +207,6 @@ export async function handleOAuthUserInfo(
 		(p) => p.id === "organization",
 	)?.options as OrganizationOptions;
 	if (orgOptions) {
-		const { getOrgAdapter } = await import("../plugins/organization/adapter");
 		const orgAdapter = getOrgAdapter(c.context, orgOptions);
 		const orgs = await orgAdapter.listOrganizations(user.id);
 		let activeOrganizationId: string | undefined;
