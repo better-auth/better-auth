@@ -113,6 +113,15 @@ export const getOrgAdapter = (
 			});
 			return members;
 		},
+		countMembers: async (data: {
+			organizationId: string;
+		}) => {
+			const count = await adapter.count({
+				model: "member",
+				where: [{ field: "organizationId", value: data.organizationId }],
+			});
+			return count;
+		},
 		findMemberByOrgId: async (data: {
 			userId: string;
 			organizationId: string;
@@ -505,7 +514,7 @@ export const getOrgAdapter = (
 		},
 
 		listTeams: async (organizationId: string) => {
-			const teams = await adapter.findMany<Team>({
+			const teams = await adapter.findMany({
 				model: "team",
 				where: [
 					{
