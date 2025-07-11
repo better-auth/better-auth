@@ -10,6 +10,7 @@ import {
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
+import {betterFetch} from "@better-fetch/fetch"
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { IdentityProvider, ServiceProvider } from "samlify";
@@ -17,6 +18,8 @@ import { sso } from ".";
 import { ssoClient } from "./client";
 import { createServer } from "http";
 import * as saml from "samlify";
+import type { Application as ExpressApp, Request as ExpressRequest, Response as ExpressResponse } from "express";
+// @ts-ignore
 import express from "express";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";
@@ -347,7 +350,7 @@ const createTemplateCallback =
 		};
 	};
 class MockSAMLIdP {
-	private app: express.Application;
+	private app: ExpressApp;
 	private server: ReturnType<typeof createServer> | undefined;
 	private port: number;
 	private idp: ReturnType<typeof IdentityProvider>;
@@ -391,7 +394,7 @@ class MockSAMLIdP {
 		this.sp = ServiceProvider({
 			metadata: spMetadata,
 		});
-		this.app.get("/api/sso/saml2/idp/post", async (req, res) => {
+		this.app.get("/api/sso/saml2/idp/post", async (req: ExpressRequest, res: ExpressResponse) => {
 			const user = { emailAddress: "test@email.com", famName: "hello world" };
 			const { context, entityEndpoint } = await this.idp.createLoginResponse(
 				this.sp,
@@ -402,7 +405,7 @@ class MockSAMLIdP {
 			);
 			res.status(200).send({ samlResponse: context, entityEndpoint });
 		});
-		this.app.get("/api/sso/saml2/idp/redirect", async (req, res) => {
+		this.app.get("/api/sso/saml2/idp/redirect", async (req: ExpressRequest, res: ExpressResponse) => {
 			const user = { emailAddress: "test@email.com", famName: "hello world" };
 			const { context, entityEndpoint } = await this.idp.createLoginResponse(
 				this.sp,
@@ -414,7 +417,7 @@ class MockSAMLIdP {
 			res.status(200).send({ samlResponse: context, entityEndpoint });
 		});
 		// @ts-ignore
-		this.app.post("/api/sso/saml2/sp/acs", async (req, res) => {
+		this.app.post("/api/sso/saml2/sp/acs", async (req: ExpressRequest, res: ExpressResponse) => {
 			try {
 				const parseResult = await this.sp.parseLoginResponse(
 					this.idp,
@@ -435,6 +438,28 @@ class MockSAMLIdP {
 				console.error("Error handling SAML ACS endpoint:", error);
 				res.status(500).send({ error: "Failed to process SAML response." });
 			}
+		});
+		this.app.post("/api/sso/saml2/callback", async (req: ExpressRequest, res: ExpressResponse) => {
+			const { SAMLResponse, RelayState } = req.body;
+			
+			try {
+				const parseResult = await this.sp.parseLoginResponse(
+					this.idp,
+					saml.Constants.wording.binding.post,
+					{ body: { SAMLResponse } }
+				);
+
+				const { attributes, nameID } = parseResult.extract;
+				
+				res.redirect(302, RelayState || "http://localhost:3000/dashboard");
+			} catch (error) {
+				console.error("Error processing SAML callback:", error);
+				res.status(500).send({ error: "Failed to process SAML response" });
+			}
+		});
+		this.app.get("/api/sso/saml2/idp/metadata", (req: ExpressRequest, res: ExpressResponse) => {
+			res.type("application/xml");
+			res.send(idpMetadata);
 		});
 	}
 
@@ -580,7 +605,7 @@ describe("SAML SSO", async () => {
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
-						metadata: idpMetadata,
+						metadata: spMetadata,
 						binding: "post",
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
@@ -672,9 +697,9 @@ describe("SAML SSO", async () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/sp/acs",
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -687,9 +712,8 @@ describe("SAML SSO", async () => {
 						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
 					},
 					spMetadata: {
-						metadata: idpMetadata,
+						metadata: spMetadata,
 						binding: "post",
-						// we can do a mapping of property here
 						privateKey: spPrivateKey,
 						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
 						isAssertionEncrypted: true,
@@ -709,25 +733,34 @@ describe("SAML SSO", async () => {
 				callbackURL: "http://localhost:3000/dashboard",
 			},
 		});
+
 		expect(signInResponse).toEqual({
 			url: expect.stringContaining("http://localhost:8081"),
 			redirect: true,
 		});
-		const loginResponse = await fetch(signInResponse?.url as string);
-		const resultValue = await loginResponse.json();
-		const result = await auth.api.callbackSSOSAML({
-			body: {
-				SAMLResponse: resultValue.samlResponse,
-				RelayState: "http://localhost:3001/dashboard",
-			},
-			params: {
-				providerId: provider.providerId,
-			},
-		});
 
-		expect(result).toEqual({
-			redirect: true,
-			url: "http://localhost:3001/dashboard",
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url as string, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
 		});
+		let redirectLocation = "";
+		await betterFetch("http://localhost:8081/api/sso/saml2/callback", {
+			method: "POST",
+			redirect: "manual",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "http://localhost:3000/dashboard",
+			}),
+			onError: (context) => {
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
 	});
 });
