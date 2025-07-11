@@ -53,9 +53,15 @@ export interface GithubProfile {
 	};
 }
 
-export interface GithubOptions extends ProviderOptions<GithubProfile> {}
+export interface GithubOptions extends ProviderOptions<GithubProfile> {
+	tokenEndpointUrl?: string
+	refreshTokenUrl?: string
+    userInfoUrl?: string
+}
 export const github = (options: GithubOptions) => {
-	const tokenEndpoint = "https://github.com/login/oauth/access_token";
+	const tokenEndpoint = options.tokenEndpointUrl ?? "https://github.com/login/oauth/access_token";
+    const userInfoUrl = options.userInfoUrl ?? "https://api.github.com/user";
+    const refreshTokenUrl = options.refreshTokenUrl ?? "https://github.com/login/oauth/token";
 	return {
 		id: "github",
 		name: "GitHub",
@@ -94,7 +100,7 @@ export const github = (options: GithubOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://github.com/login/oauth/access_token",
+						tokenEndpoint: refreshTokenUrl,
 					});
 				},
 		async getUserInfo(token) {
@@ -102,7 +108,7 @@ export const github = (options: GithubOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<GithubProfile>(
-				"https://api.github.com/user",
+				userInfoUrl,
 				{
 					headers: {
 						"User-Agent": "better-auth",
