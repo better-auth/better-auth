@@ -1328,7 +1328,9 @@ export const sso = (options?: SSOOptions) => {
 					let session: Session =
 						await ctx.context.internalAdapter.createSession(user.id, ctx);
 					await setSessionCookie(ctx, { session, user });
-					throw ctx.redirect(RelayState || `${parsedSamlConfig.issuer}/dashboard`);
+					throw ctx.redirect(
+						RelayState || `${parsedSamlConfig.issuer}/dashboard`,
+					);
 				},
 			),
 		},

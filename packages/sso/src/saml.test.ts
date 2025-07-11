@@ -10,7 +10,7 @@ import {
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
-import {betterFetch} from "@better-fetch/fetch"
+import { betterFetch } from "@better-fetch/fetch";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { IdentityProvider, ServiceProvider } from "samlify";
@@ -18,7 +18,11 @@ import { sso } from ".";
 import { ssoClient } from "./client";
 import { createServer } from "http";
 import * as saml from "samlify";
-import type { Application as ExpressApp, Request as ExpressRequest, Response as ExpressResponse } from "express";
+import type {
+	Application as ExpressApp,
+	Request as ExpressRequest,
+	Response as ExpressResponse,
+} from "express";
 // @ts-ignore
 import express from "express";
 import bodyParser from "body-parser";
@@ -394,73 +398,88 @@ class MockSAMLIdP {
 		this.sp = ServiceProvider({
 			metadata: spMetadata,
 		});
-		this.app.get("/api/sso/saml2/idp/post", async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
-			const { context, entityEndpoint } = await this.idp.createLoginResponse(
-				this.sp,
-				{} as any,
-				saml.Constants.wording.binding.post,
-				user,
-				createTemplateCallback(this.idp, this.sp, user.emailAddress),
-			);
-			res.status(200).send({ samlResponse: context, entityEndpoint });
-		});
-		this.app.get("/api/sso/saml2/idp/redirect", async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
-			const { context, entityEndpoint } = await this.idp.createLoginResponse(
-				this.sp,
-				{} as any,
-				saml.Constants.wording.binding.post,
-				user,
-				createTemplateCallback(this.idp, this.sp, user.emailAddress),
-			);
-			res.status(200).send({ samlResponse: context, entityEndpoint });
-		});
+		this.app.get(
+			"/api/sso/saml2/idp/post",
+			async (req: ExpressRequest, res: ExpressResponse) => {
+				const user = { emailAddress: "test@email.com", famName: "hello world" };
+				const { context, entityEndpoint } = await this.idp.createLoginResponse(
+					this.sp,
+					{} as any,
+					saml.Constants.wording.binding.post,
+					user,
+					createTemplateCallback(this.idp, this.sp, user.emailAddress),
+				);
+				res.status(200).send({ samlResponse: context, entityEndpoint });
+			},
+		);
+		this.app.get(
+			"/api/sso/saml2/idp/redirect",
+			async (req: ExpressRequest, res: ExpressResponse) => {
+				const user = { emailAddress: "test@email.com", famName: "hello world" };
+				const { context, entityEndpoint } = await this.idp.createLoginResponse(
+					this.sp,
+					{} as any,
+					saml.Constants.wording.binding.post,
+					user,
+					createTemplateCallback(this.idp, this.sp, user.emailAddress),
+				);
+				res.status(200).send({ samlResponse: context, entityEndpoint });
+			},
+		);
 		// @ts-ignore
-		this.app.post("/api/sso/saml2/sp/acs", async (req: ExpressRequest, res: ExpressResponse) => {
-			try {
-				const parseResult = await this.sp.parseLoginResponse(
-					this.idp,
-					saml.Constants.wording.binding.post,
-					req,
-				);
-				const { extract } = parseResult;
-				const { attributes } = extract;
-				const relayState = req.body.RelayState;
-				if (relayState) {
-					return res.status(200).send({ relayState, attributes });
-				} else {
-					return res
-						.status(200)
-						.send({ extract, message: "RelayState is missing." });
+		this.app.post(
+			"/api/sso/saml2/sp/acs",
+			async (req: ExpressRequest, res: ExpressResponse) => {
+				try {
+					const parseResult = await this.sp.parseLoginResponse(
+						this.idp,
+						saml.Constants.wording.binding.post,
+						req,
+					);
+					const { extract } = parseResult;
+					const { attributes } = extract;
+					const relayState = req.body.RelayState;
+					if (relayState) {
+						return res.status(200).send({ relayState, attributes });
+					} else {
+						return res
+							.status(200)
+							.send({ extract, message: "RelayState is missing." });
+					}
+				} catch (error) {
+					console.error("Error handling SAML ACS endpoint:", error);
+					res.status(500).send({ error: "Failed to process SAML response." });
 				}
-			} catch (error) {
-				console.error("Error handling SAML ACS endpoint:", error);
-				res.status(500).send({ error: "Failed to process SAML response." });
-			}
-		});
-		this.app.post("/api/sso/saml2/callback", async (req: ExpressRequest, res: ExpressResponse) => {
-			const { SAMLResponse, RelayState } = req.body;
-			
-			try {
-				const parseResult = await this.sp.parseLoginResponse(
-					this.idp,
-					saml.Constants.wording.binding.post,
-					{ body: { SAMLResponse } }
-				);
+			},
+		);
+		this.app.post(
+			"/api/sso/saml2/callback",
+			async (req: ExpressRequest, res: ExpressResponse) => {
+				const { SAMLResponse, RelayState } = req.body;
 
-				const { attributes, nameID } = parseResult.extract;
-				
-				res.redirect(302, RelayState || "http://localhost:3000/dashboard");
-			} catch (error) {
-				console.error("Error processing SAML callback:", error);
-				res.status(500).send({ error: "Failed to process SAML response" });
-			}
-		});
-		this.app.get("/api/sso/saml2/idp/metadata", (req: ExpressRequest, res: ExpressResponse) => {
-			res.type("application/xml");
-			res.send(idpMetadata);
-		});
+				try {
+					const parseResult = await this.sp.parseLoginResponse(
+						this.idp,
+						saml.Constants.wording.binding.post,
+						{ body: { SAMLResponse } },
+					);
+
+					const { attributes, nameID } = parseResult.extract;
+
+					res.redirect(302, RelayState || "http://localhost:3000/dashboard");
+				} catch (error) {
+					console.error("Error processing SAML callback:", error);
+					res.status(500).send({ error: "Failed to process SAML response" });
+				}
+			},
+		);
+		this.app.get(
+			"/api/sso/saml2/idp/metadata",
+			(req: ExpressRequest, res: ExpressResponse) => {
+				res.type("application/xml");
+				res.send(idpMetadata);
+			},
+		);
 	}
 
 	start() {
