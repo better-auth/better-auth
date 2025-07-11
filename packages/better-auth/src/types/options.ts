@@ -457,6 +457,11 @@ export type BetterAuthOptions = {
 		 * @default 1 day (60 * 60 * 24)
 		 */
 		freshAge?: number;
+		/**
+		 * Enable session debug logs
+		 * @default false
+		 */
+		enableSessionDebugLogs?: boolean;
 	};
 	account?: {
 		modelName?: string;
