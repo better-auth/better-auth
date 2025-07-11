@@ -244,7 +244,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 						// Check for existing customer if preventDuplicateCustomers is enabled
 						if (options.preventDuplicateCustomers) {
-							stripeCustomer = await findExistingCustomer(client, user.email, options);
+							stripeCustomer = await findExistingCustomer(
+								client,
+								user.email,
+								options,
+							);
 						}
 
 						// Create new customer if not found
@@ -1001,7 +1005,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 										// Check for existing customer if preventDuplicateCustomers is enabled
 										if (options.preventDuplicateCustomers) {
-											stripeCustomer = await findExistingCustomer(client, user.email, options);
+											stripeCustomer = await findExistingCustomer(
+												client,
+												user.email,
+												options,
+											);
 										}
 
 										// Create new customer if not found
