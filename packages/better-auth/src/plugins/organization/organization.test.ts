@@ -48,7 +48,7 @@ describe("organization", async (it) => {
 	});
 
 	let organizationId: string;
-	it.only("create organization", async () => {
+	it("create organization", async () => {
 		const organization = await client.organization.create({
 			name: "test",
 			slug: "test",
@@ -75,7 +75,7 @@ describe("organization", async (it) => {
 	});
 	it("should check if organization slug is available", async () => {
 		const { headers } = await signInWithTestUser();
-		
+
 		const unusedSlug = await client.organization.checkSlug({
 			slug: "unused-slug",
 			fetchOptions: {
@@ -85,7 +85,7 @@ describe("organization", async (it) => {
 		expect(unusedSlug.data?.status).toBe(true);
 
 		const existingSlug = await client.organization.checkSlug({
-			slug: "test", 
+			slug: "test",
 			fetchOptions: {
 				headers,
 			},
