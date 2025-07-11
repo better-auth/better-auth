@@ -48,7 +48,7 @@ describe("organization", async (it) => {
 	});
 
 	let organizationId: string;
-	it("create organization", async () => {
+	it.only("create organization", async () => {
 		const organization = await client.organization.create({
 			name: "test",
 			slug: "test",
@@ -72,6 +72,26 @@ describe("organization", async (it) => {
 		expect((session.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
 		);
+	});
+	it("should check if organization slug is available", async () => {
+		const { headers } = await signInWithTestUser();
+		
+		const unusedSlug = await client.organization.checkSlug({
+			slug: "unused-slug",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(unusedSlug.data?.status).toBe(true);
+
+		const existingSlug = await client.organization.checkSlug({
+			slug: "test", 
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(existingSlug.error?.status).toBe(400);
+		expect(existingSlug.error?.message).toBe("slug is taken");
 	});
 
 	it("should create organization directly in the server without cookie", async () => {
