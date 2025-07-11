@@ -122,7 +122,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					: null;
 
 				if (sessionDataPayload) {
-				sessionDebugLogs(ctx, "Verifying session data payload...");
+					sessionDebugLogs(ctx, "Verifying session data payload...");
 
 					const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
 						ctx.context.secret,
@@ -133,19 +133,21 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						sessionDataPayload.signature,
 					);
 					if (!isValid) {
-						sessionDebugLogs(ctx, "Session data payload is invalid, removing cookie and returning null");
+						sessionDebugLogs(
+							ctx,
+							"Session data payload is invalid, removing cookie and returning null",
+						);
 						const dataCookie = ctx.context.authCookies.sessionData.name;
 						ctx.setCookie(dataCookie, "", {
 							maxAge: 0,
 						});
 						return ctx.json(null);
 					}
-					sessionDebugLogs(ctx, "Session data payload is valid");	
+					sessionDebugLogs(ctx, "Session data payload is valid");
 				} else {
 					sessionDebugLogs(ctx, "No session data payload found");
 				}
-				
-				
+
 				const dontRememberMe = await ctx.getSignedCookie(
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
@@ -153,7 +155,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				sessionDebugLogs(ctx, "DontRememberMe:", dontRememberMe);
 				/**
 				 * If session data is present in the cookie, return it
-				*/
+				 */
 				if (
 					sessionDataPayload?.session &&
 					ctx.context.options.session?.cookieCache?.enabled &&
@@ -165,7 +167,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						sessionDataPayload.expiresAt < Date.now() ||
 						session.session.expiresAt < new Date();
 					if (!hasExpired) {
-						sessionDebugLogs(ctx, "Session is not expired, returning session data payload from cookie cache");
+						sessionDebugLogs(
+							ctx,
+							"Session is not expired, returning session data payload from cookie cache",
+						);
 						return ctx.json(
 							session as {
 								session: InferSession<Option>;
@@ -173,23 +178,31 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							},
 						);
 					} else {
-						sessionDebugLogs(ctx, "Session is expired, removing cookie and returning null");
+						sessionDebugLogs(
+							ctx,
+							"Session is expired, removing cookie and returning null",
+						);
 						const dataCookie = ctx.context.authCookies.sessionData.name;
 						ctx.setCookie(dataCookie, "", {
 							maxAge: 0,
 						});
 					}
-				}else{
-					sessionDebugLogs(ctx, "No session data payload found, fetching session from database");
+				} else {
+					sessionDebugLogs(
+						ctx,
+						"No session data payload found, fetching session from database",
+					);
 				}
-
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
 				sessionDebugLogs(ctx, "Session:", session);
 				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
-					sessionDebugLogs(ctx, "Session is expired, removing cookie and returning null");
+					sessionDebugLogs(
+						ctx,
+						"Session is expired, removing cookie and returning null",
+					);
 					deleteSessionCookie(ctx);
 					if (session) {
 						/**
@@ -206,7 +219,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * or if the session refresh is disabled
 				 */
 				if (dontRememberMe || ctx.query?.disableRefresh) {
-					sessionDebugLogs(ctx, "disableRefresh is enabled, returning session data payload");
+					sessionDebugLogs(
+						ctx,
+						"disableRefresh is enabled, returning session data payload",
+					);
 					return ctx.json(
 						session as unknown as {
 							session: InferSession<Option>;
@@ -235,7 +251,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					(!ctx.query?.disableRefresh ||
 						!ctx.context.options.session?.disableSessionRefresh)
 				) {
-					sessionDebugLogs(ctx, "Session is due to be updated due to expiration, updating session");
+					sessionDebugLogs(
+						ctx,
+						"Session is due to be updated due to expiration, updating session",
+					);
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
 							session.session.token,
@@ -245,7 +264,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							},
 						);
 					if (!updatedSession) {
-						sessionDebugLogs(ctx, "Session update failed, removing cookie and returning null with 401");
+						sessionDebugLogs(
+							ctx,
+							"Session update failed, removing cookie and returning null with 401",
+						);
 						/**
 						 * Handle case where session update fails (e.g., concurrent deletion)
 						 */
@@ -254,7 +276,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					const maxAge =
 						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
-					sessionDebugLogs(ctx, "Session update successful, setting session cookie and returning updated session");
+					sessionDebugLogs(
+						ctx,
+						"Session update successful, setting session cookie and returning updated session",
+					);
 					await setSessionCookie(
 						ctx,
 						{
@@ -275,7 +300,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-				sessionDebugLogs(ctx, "Session is not due to be updated, setting session cache and returning session");
+				sessionDebugLogs(
+					ctx,
+					"Session is not due to be updated, setting session cache and returning session",
+				);
 				await setCookieCache(ctx, session);
 				sessionDebugLogs(ctx, "Session cache set, returning session");
 				return ctx.json(
