@@ -57,11 +57,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				if (field.references.field) {
 					if (databaseType === "mysql") {
 						return `varchar('${name}', { length: 36 })`;
-					} else if (databaseType === "pg") {
-						return `text('${name}')`;
-					} else {
-						return `text('${name}')`;
-					}
+					}	
 				}
 				return `text('${name}')`;
 			}
