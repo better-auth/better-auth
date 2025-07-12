@@ -1,6 +1,16 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import {
+	type JWTHeaderParameters,
+	type JWTPayload,
+	decodeJwt,
+	decodeProtectedHeader,
+	importJWK,
+	jwtVerify,
+	importPKCS8,
+	SignJWT,
+} from "jose";
+
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	refreshAccessToken,
@@ -68,12 +78,29 @@ export interface AppleNonConformUser {
 	email: string;
 }
 
-export interface AppleOptions extends ProviderOptions<AppleProfile> {
+interface BaseAppleOptions extends ProviderOptions<AppleProfile> {
 	appBundleIdentifier?: string;
 }
 
+interface AppleOptionsClientSecret extends BaseAppleOptions {}
+
+interface AppleOptionsPrivateKey
+	extends Omit<BaseAppleOptions, "clientSecret"> {
+	teamId: string;
+	privateKeyId: string;
+	privateKey: string;
+}
+
+export type AppleOptions = AppleOptionsClientSecret | AppleOptionsPrivateKey;
+
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
+
+	const getSecret =
+		"clientSecret" in options
+			? async () => options.clientSecret
+			: createAppleClientSecretGenerator(options);
+
 	return {
 		id: "apple",
 		name: "Apple",
@@ -83,7 +110,10 @@ export const apple = (options: AppleOptions) => {
 			scopes && _scope.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "apple",
-				options,
+				options: {
+					...options,
+					clientSecret: await getSecret(),
+				},
 				authorizationEndpoint: "https://appleid.apple.com/auth/authorize",
 				scopes: _scope,
 				state,
@@ -98,7 +128,10 @@ export const apple = (options: AppleOptions) => {
 				code,
 				codeVerifier,
 				redirectURI,
-				options,
+				options: {
+					...options,
+					clientSecret: await getSecret(),
+				},
 				tokenEndpoint,
 			});
 		},
@@ -137,7 +170,7 @@ export const apple = (options: AppleOptions) => {
 						options: {
 							clientId: options.clientId,
 							clientKey: options.clientKey,
-							clientSecret: options.clientSecret,
+							clientSecret: await getSecret(),
 						},
 						tokenEndpoint: "https://appleid.apple.com/auth/token",
 					});
@@ -172,7 +205,19 @@ export const apple = (options: AppleOptions) => {
 				data: profile,
 			};
 		},
-		options,
+		get options() {
+			return {
+				...options,
+				get clientSecret() {
+					if ("clientSecret" in options) {
+						return options.clientSecret;
+					}
+					throw new Error(
+						"Client secret is dynamically generated when using private key and cannot be accessed directly",
+					);
+				},
+			};
+		},
 	} satisfies OAuthProvider<AppleProfile>;
 };
 
@@ -200,3 +245,53 @@ export const getApplePublicKey = async (kid: string) => {
 	}
 	return await importJWK(jwk, jwk.alg);
 };
+
+const createAppleClientSecretGenerator = ({
+	privateKeyId,
+	privateKey,
+	teamId,
+	clientId,
+}: {
+	teamId: string;
+	privateKeyId: string;
+	clientId: string;
+	privateKey: string;
+}) => {
+	let cryptoKey: CryptoKey;
+	return async () => {
+		if (!cryptoKey) {
+			cryptoKey = await importPKCS8(privateKey, "ES256");
+		}
+		const header = {
+			alg: "ES256",
+			kid: privateKeyId,
+		};
+		const now = Math.floor(Date.now() / 1000);
+		const payload = {
+			iss: teamId,
+			sub: clientId,
+			aud: "https://appleid.apple.com",
+			iat: now,
+			exp: now + 60 * 5,
+		};
+		return signJWT(header, payload, cryptoKey);
+	};
+};
+
+async function signJWT(
+	header: JWTHeaderParameters,
+	payload: JWTPayload,
+	privateKey: CryptoKey,
+) {
+	try {
+		const jwt = await new SignJWT(payload)
+			.setProtectedHeader(header)
+			.sign(privateKey);
+
+		return jwt;
+	} catch (error) {
+		const errorMessage =
+			error instanceof Error ? error.message : "Unknown error";
+		throw new Error(`JWT signing failed: ${errorMessage}`);
+	}
+}
