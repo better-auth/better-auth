@@ -194,3 +194,6 @@ android/
 .vinxi
 # Turborepo
 .turbo
+
+.json-autotranslate-cache/
+packages/better-auth/src/plugins/localization/google-service-account.json
