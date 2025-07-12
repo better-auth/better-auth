@@ -21,6 +21,7 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { base64 } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
+
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/get-session",
@@ -333,6 +334,7 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		session,
 	};
 });
+
 /**
  * user active sessions list
  */
@@ -465,6 +467,7 @@ export const revokeSession = createAuthEndpoint(
 		});
 	},
 );
+
 /**
  * revoke all user sessions
  */
@@ -572,6 +575,80 @@ export const revokeOtherSessions = createAuthEndpoint(
 				ctx.context.internalAdapter.deleteSession(session.token),
 			),
 		);
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+export const updateSession = createAuthEndpoint(
+	"/update-session",
+	{
+		method: "POST",
+		body: z.object({
+			dontRememberMe: z.boolean({
+				description: "If true, the session will not be remembered",
+			}),
+		}),
+		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Update the current session",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+											description:
+												"Indicates if the session was updated successfully",
+										},
+									},
+									required: ["status"],
+								},
+							},
+						},
+					},
+					"401": {
+						description: "Unauthorized",
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const update: Partial<Session> & Record<string, any> = {};
+
+		if (ctx.body.dontRememberMe) {
+			update.expiresAt = new Date(Date.now() + 60 * 60 * 24 * 1000); // 1 day
+		}
+
+		if (Object.keys(update).length === 0) {
+			return ctx.json({
+				status: false,
+			});
+		}
+
+		const { session, user } = ctx.context.session;
+
+		const updatedSession = await ctx.context.internalAdapter.updateSession(
+			session.token,
+			update,
+		);
+
+		await setSessionCookie(
+			ctx,
+			{
+				session: updatedSession,
+				user,
+			},
+			ctx.body.dontRememberMe,
+		);
+
 		return ctx.json({
 			status: true,
 		});
