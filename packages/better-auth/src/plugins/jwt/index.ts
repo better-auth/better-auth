@@ -175,9 +175,10 @@ export async function getJwtToken(
 		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 	);
 
+	const session = ctx.context.session || ctx.context.newSession
 	const payload = !options?.jwt?.definePayload
-		? ctx.context.session!.user
-		: await options?.jwt.definePayload(ctx.context.session!);
+		? session!.user
+		: await options?.jwt.definePayload(session!);
 
 	const jwt = await new SignJWT(payload)
 		.setProtectedHeader({
@@ -189,8 +190,8 @@ export async function getJwtToken(
 		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
 		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
 		.setSubject(
-			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
-				ctx.context.session!.user.id,
+			(await options?.jwt?.getSubject?.(session!)) ??
+				session!.user.id,
 		)
 		.sign(privateKey);
 	return jwt;
