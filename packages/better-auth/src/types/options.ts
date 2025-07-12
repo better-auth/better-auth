@@ -19,6 +19,7 @@ import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
+import type { z } from "zod";
 //@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
 
@@ -291,11 +292,38 @@ export type BetterAuthOptions = {
 		 */
 		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
-		 * Additional fields for the session
+		 * Additional fields for the user
 		 */
 		additionalFields?: {
 			[key: string]: FieldAttribute;
 		};
+		/**
+		 * Custom Zod schema for the user model
+		 * 
+		 * When provided, this schema will be used to define the user table structure
+		 * and TypeScript types. This takes precedence over additionalFields.
+		 * 
+		 * @example
+		 * ```ts
+		 * import { z } from "zod";
+		 * 
+		 * const customUserSchema = z.object({
+		 *   id: z.string(),
+		 *   email: z.string(),
+		 *   username: z.string(),
+		 *   role: z.enum(["admin", "user"]),
+		 *   organizationId: z.string().optional(),
+		 * });
+		 * 
+		 * // Use in options
+		 * {
+		 *   user: {
+		 *     schema: customUserSchema
+		 *   }
+		 * }
+		 * ```
+		 */
+		schema?: z.ZodObject<any>;
 		/**
 		 * Changing email configuration
 		 */
