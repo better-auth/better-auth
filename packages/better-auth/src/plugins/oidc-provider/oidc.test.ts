@@ -112,7 +112,7 @@ describe("oidc", async () => {
 						{
 							providerId: "test",
 							clientId: application.clientId,
-							clientSecret: application.clientSecret,
+							clientSecret: application.clientSecret || "",
 							authorizationUrl:
 								"http://localhost:3000/api/auth/oauth2/authorize",
 							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
@@ -180,7 +180,7 @@ describe("oidc", async () => {
 							{
 								providerId: "test",
 								clientId: application.clientId,
-								clientSecret: application.clientSecret,
+								clientSecret: application.clientSecret || "",
 								authorizationUrl:
 									"http://localhost:3000/api/auth/oauth2/authorize",
 								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
@@ -262,7 +262,7 @@ describe("oidc", async () => {
 							{
 								providerId: "test",
 								clientId: application.clientId,
-								clientSecret: application.clientSecret,
+								clientSecret: application.clientSecret || "",
 								authorizationUrl:
 									"http://localhost:3000/api/auth/oauth2/authorize",
 								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
