@@ -408,6 +408,18 @@ export const resetPassword = createAuthEndpoint(
 			hashedPassword,
 			ctx,
 		);
+		await ctx.context.adapter.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "id",
+					value: userId,
+				},
+			],
+		});
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
