@@ -308,6 +308,8 @@ export const signInSocial = createAuthEndpoint(
 					emailVerified: data.data!.user.emailVerified,
 					createdAt: data.data!.user.createdAt,
 					updatedAt: data.data!.user.updatedAt,
+					role: data.data!.user.role,
+					username: data.data!.user.username,
 				},
 			});
 		}
@@ -557,6 +559,8 @@ export const signInEmail = createAuthEndpoint(
 				emailVerified: user.user.emailVerified,
 				createdAt: user.user.createdAt,
 				updatedAt: user.user.updatedAt,
+				role: user.user.role,
+				username: user.user.username,
 			},
 		});
 	},
