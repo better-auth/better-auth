@@ -215,7 +215,18 @@ export const createInternalAdapter = (
 		) => {
 			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
-			const data: Omit<Session, "id"> = {
+			const sessionId = generateId(32);
+
+			// If user mapped a custom `token` column, generate a separate
+			// secret value; otherwise use the same value to avoid writing two
+			// different values to the same DB column (token falls back to id
+			// when it's not mapped).
+			const tokenValue = ctx.context.options.session?.fields?.token
+				? generateId(32)
+				: sessionId;
+
+			const data: Session = {
+				id: sessionId,
 				ipAddress:
 					ctx.request || ctx.headers
 						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
@@ -231,7 +242,7 @@ export const createInternalAdapter = (
 					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
 				userId,
-				token: generateId(32),
+				token: tokenValue,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),
