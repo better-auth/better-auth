@@ -113,13 +113,6 @@ export const callbackOAuth = createAuthEndpoint(
 			return redirectOnError("unable_to_get_user_info");
 		}
 
-		if (!userInfo.email) {
-			c.context.logger.error(
-				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
-			);
-			return redirectOnError("email_not_found");
-		}
-
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
 			throw redirectOnError("no_callback_url");
@@ -184,6 +177,13 @@ export const callbackOAuth = createAuthEndpoint(
 				toRedirectTo = callbackURL;
 			}
 			throw c.redirect(toRedirectTo);
+		}
+
+		if (!userInfo.email) {
+			c.context.logger.error(
+				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
+			);
+			return redirectOnError("email_not_found");
 		}
 
 		const result = await handleOAuthUserInfo(c, {

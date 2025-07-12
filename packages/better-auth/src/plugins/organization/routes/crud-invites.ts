@@ -5,7 +5,8 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { type InferOrganizationRolesFromOption } from "../schema";
 import { APIError } from "better-call";
-import { parseRoles, type OrganizationOptions } from "../organization";
+import { parseRoles } from "../organization";
+import { type OrganizationOptions } from "../types";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 
