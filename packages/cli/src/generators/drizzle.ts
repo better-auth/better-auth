@@ -48,12 +48,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (field.references?.field === "id") {
 				if (options.advanced?.database?.useNumberId) {
 					if (databaseType === "pg") {
-						return `serial('${name}').primaryKey()`;
+						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
-						return `int('${name}').autoIncrement().primaryKey()`;
+						return `int('${name}')`;
 					} else {
 						// using sqlite
-						return `integer({ mode: 'number' }).primaryKey({ autoIncrement: true })`;
+						return `integer('${name}')`;
 					}
 				}
 				return `text('${name}')`;
