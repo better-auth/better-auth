@@ -157,6 +157,14 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number;
+	/**
+	 * Created at timestamp
+	 */
+	createdAt?: Date;
+	/**
+	 * Updated at timestamp
+	 */
+	updatedAt?: Date;
 }
 
 export interface StripeOptions {

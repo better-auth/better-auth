@@ -256,6 +256,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							model: "user",
 							update: {
 								stripeCustomerId: stripeCustomer.id,
+								updatedAt: new Date(),
 							},
 							where: [
 								{
@@ -516,6 +517,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								update: {
 									status: currentSubscription?.status,
 									cancelAtPeriodEnd: true,
+									updatedAt: new Date(),
 								},
 								where: [
 									{
@@ -649,6 +651,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									model: "subscription",
 									update: {
 										cancelAtPeriodEnd: true,
+										updatedAt: new Date(),
 									},
 									where: [
 										{
@@ -1017,6 +1020,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												model: "user",
 												update: {
 													stripeCustomerId: stripeCustomer.id,
+													updatedAt: new Date(),
 												},
 												where: [
 													{
