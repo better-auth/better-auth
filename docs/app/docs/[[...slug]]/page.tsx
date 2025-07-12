@@ -82,7 +82,11 @@ export default async function Page({
 						Folder,
 						Files,
 						Tab,
-						Tabs,
+						Tabs: ({ children, ...props }) => (
+							<Tabs className={cn("rounded-none", props.className)} {...props}>
+								{children}
+							</Tabs>
+						),
 						AutoTypeTable,
 						GenerateSecret,
 						AnimatePresence,
@@ -91,7 +95,14 @@ export default async function Page({
 						ForkButton,
 						DatabaseTable,
 						Accordion,
-						Accordions,
+						Accordions: ({ children, ...props }) => (
+							<Accordions
+								className={cn("rounded-none", props.className)}
+								{...props}
+							>
+								{children}
+							</Accordions>
+						),
 						Endpoint,
 						Callout: ({ children, ...props }) => (
 							<defaultMdxComponents.Callout
@@ -109,16 +120,16 @@ export default async function Page({
 						),
 						DividerText,
 						iframe: (props) => (
-							<iframe {...props} className="w-full h-[500px]" />
+							<iframe {...props} className="w-full h-[500px] rounded-none" />
 						),
 					}}
 				/>
 
-				<Cards className="mt-16">
+				<Cards className="mt-16 rounded-none">
 					{prevPage ? (
 						<Card
 							href={prevPage.url}
-							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
+							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full rounded-none"
 							description={<>{prevPage.data.description}</>}
 							title={
 								<div className="flex items-center gap-1">
@@ -140,7 +151,7 @@ export default async function Page({
 									<ChevronRight className="size-4" />
 								</div>
 							}
-							className="flex flex-col items-end text-right [&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
+							className="flex flex-col items-end text-right [&>p]:ml-1 [&>p]:truncate [&>p]:w-full rounded-none"
 						/>
 					) : (
 						<div></div>

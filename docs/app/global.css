@@ -259,3 +259,7 @@ html {
 	}
   }
   
+.fd-codeblock {
+  @apply rounded-none;
+}
+  
