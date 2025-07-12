@@ -55,7 +55,7 @@ export const ERROR_CODES = {
 	NAME_REQUIRED: "API Key name is required.",
 };
 
-export const API_KEY_TABLE_NAME = "apikey";
+export const API_KEY_TABLE_NAME = "apiKey";
 
 export const apiKey = (options?: ApiKeyOptions) => {
 	const opts = {
