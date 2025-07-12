@@ -15,14 +15,15 @@ npx @better-auth/cli@latest generate
 
 ### Options
 
-- `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
+- `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it's an SQL file saved as schema.sql in your project root.
+- `--schema-file` (Prisma only) - The path to your Prisma schema file. By default, the CLI will search for a `schema.prisma` file in `prisma` directory.
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
 - `--y` - Skip the confirmation prompt and generate the schema directly.
 
 
 ## Migrate
 
-The migrate command applies the Better Auth schema directly to your database. This is available if you’re using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
+The migrate command applies the Better Auth schema directly to your database. This is available if you're using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
 
 ```bash title="Terminal"
 npx @better-auth/cli@latest migrate
@@ -61,6 +62,6 @@ npx @better-auth/cli@latest secret
 
 **Error: Cannot find module X**
 
-If you see this error, it means the CLI can’t resolve imported modules in your Better Auth config file. We're working on a fix for many of these issues, but in the meantime, you can try the following:
+If you see this error, it means the CLI can't resolve imported modules in your Better Auth config file. We're working on a fix for many of these issues, but in the meantime, you can try the following:
 
 - Remove any import aliases in your config file and use relative paths instead. After running the CLI, you can revert to using aliases.
