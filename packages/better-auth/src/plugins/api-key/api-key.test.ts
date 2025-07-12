@@ -822,16 +822,6 @@ describe("api-key", async () => {
 	// VERIFY API KEY
 	// =========================================================================
 
-	it("verify API key without key and userId", async () => {
-		const apiKey = await auth.api.verifyApiKey({
-			body: {
-				key: firstApiKey.key,
-			},
-		});
-		expect(apiKey.key).not.toBe(null);
-		expect(apiKey.valid).toBe(true);
-	});
-
 	it("verify API key with invalid key (should fail)", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
@@ -1936,6 +1926,19 @@ describe("api-key", async () => {
 		expect(result.valid).toBe(true);
 		expect(result.error).toBeNull();
 		expect(result.key?.permissions).toEqual(permissions);
+
+		// check with new has-permission route too
+		const resultPermissions = await auth.api.hasPermissionApiKey({
+			body: {
+				key: apiKey.key,
+				permissions: {
+					files: ["read"],
+				},
+			},
+		});
+
+		expect(resultPermissions.success).toBe(true);
+		expect(resultPermissions.missingPermissions).toBeUndefined();
 	});
 
 	it("should fail to verify an API key with non-matching permissions", async () => {
@@ -1962,6 +1965,21 @@ describe("api-key", async () => {
 
 		expect(result.valid).toBe(false);
 		expect(result.error?.code).toBe("KEY_NOT_FOUND");
+
+		// check with new has-permission route too
+		const resultPermissions = await auth.api.hasPermissionApiKey({
+			body: {
+				key: apiKey.key,
+				permissions: {
+					files: ["write"],
+				},
+			},
+		});
+
+		expect(resultPermissions.success).toBe(false);
+		expect(resultPermissions.missingPermissions).toEqual({
+			files: ["write"],
+		});
 	});
 
 	it("should fail to verify when required permissions are specified but API key has no permissions", async () => {

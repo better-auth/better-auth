@@ -8,6 +8,7 @@ import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
+import { hasPermissionApiKey } from "./has-permission-api-key";
 import { API_KEY_TABLE_NAME } from "..";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
@@ -89,6 +90,11 @@ export function createApiKeyRoutes({
 		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		listApiKeys: listApiKeys({ opts, schema, deleteAllExpiredApiKeys }),
 		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
+			deleteAllExpiredApiKeys,
+		}),
+		hasPermissionApiKey: hasPermissionApiKey({
+			opts,
+			schema,
 			deleteAllExpiredApiKeys,
 		}),
 	};

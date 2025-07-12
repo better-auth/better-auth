@@ -1270,6 +1270,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						.object({
 							userId: z.coerce.string().optional(),
 							role: z.string().optional(),
+							returnMissingPermissions: z.boolean().optional(),
 						})
 						.and(
 							z.union([
@@ -1301,6 +1302,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 													type: "object",
 													description: "The permission to check",
 												},
+												returnMissingPermissions: {
+													type: "boolean",
+													description:
+														"Whether to return the missing permissions",
+												},
 											},
 											required: ["permissions"],
 										},
@@ -1321,6 +1327,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 													success: {
 														type: "boolean",
 													},
+													missingPermissions: {
+														type: ["object", "null"],
+													},
 												},
 												required: ["success"],
 											},
@@ -1333,6 +1342,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							body: {} as PermissionExclusive & {
 								userId?: string;
 								role?: InferAdminRolesFromOption<O>;
+								returnMissingPermissions?: boolean;
 							},
 						},
 					},
@@ -1370,11 +1380,21 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						role: user.role,
 						options: options as AdminOptions,
 						permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+						returnMissingPermissions: ctx.body.returnMissingPermissions,
 					});
-					return ctx.json({
+
+					const baseResponse = {
 						error: null,
-						success: result,
-					});
+						success: typeof result === "boolean" ? result : result.success,
+					};
+					const ctxRes = {
+						...baseResponse,
+						...(typeof result === "object" && {
+							missingPermissions: result.missingPermissions,
+						}),
+					};
+
+					return ctx.json(ctxRes);
 				},
 			),
 		},
