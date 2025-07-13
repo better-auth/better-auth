@@ -82,7 +82,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						method === "GET"
 							? undefined
 							: isFormData
-								? args
+								? arg
 								: {
 										...body,
 										...(options?.body || {}),
