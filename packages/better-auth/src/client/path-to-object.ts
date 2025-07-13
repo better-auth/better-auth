@@ -60,7 +60,7 @@ export type InferCtx<
 	supportsFormData: boolean;
 }
 	?
-			| { formData: FormData }
+			| { formData: 1 }
 			| (C["body"] extends Record<string, any>
 					? C["body"] & {
 							fetchOptions?: FetchOptions;
