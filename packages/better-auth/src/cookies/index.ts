@@ -156,7 +156,6 @@ export async function setCookieCache(
 				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
 			);
 		}
-
 		ctx.setCookie(
 			ctx.context.authCookies.sessionData.name,
 			data,

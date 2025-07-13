@@ -71,7 +71,7 @@ describe("Custom Session Plugin Tests", async () => {
 		await client.getSession({
 			fetchOptions: {
 				headers,
-				onResponse(context: any) {
+				onResponse(context) {
 					responseHeaders = context.response.headers;
 				},
 			},
@@ -86,6 +86,7 @@ describe("Custom Session Plugin Tests", async () => {
 		const cachedData = await getCookieCache(requestHeaders, {
 			secret: auth.options.secret,
 		});
+		console.log(cachedData);
 		expect((cachedData as any)?.newData).toEqual({ message: "Hello, World!" });
 	});
 });
