@@ -80,4 +80,4 @@ export interface AdminOptions {
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
 	O extends { roles: Record<string, unknown> }
 		? keyof O["roles"]
-		: "user" | "admin"; 
+		: "user" | "admin";

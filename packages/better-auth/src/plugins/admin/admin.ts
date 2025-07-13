@@ -5,23 +5,21 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import {
-	type BetterAuthPlugin,
-	type InferOptionSchema,
-	type AuthPluginSchema,
-	type Session,
-	type User,
-	type Where,
-} from "../../types";
+import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
-import { type AccessControl, type Role } from "../access";
+import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-import { type AdminOptions, type UserWithRole, type SessionWithImpersonatedBy, type InferAdminRolesFromOption } from "./types";
+import {
+	type AdminOptions,
+	type UserWithRole,
+	type SessionWithImpersonatedBy,
+	type InferAdminRolesFromOption,
+} from "./types";
 import { schema } from "./schema";
 
 function parseRoles(roles: string | string[]): string {

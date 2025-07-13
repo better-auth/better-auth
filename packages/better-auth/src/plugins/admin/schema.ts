@@ -36,4 +36,4 @@ export const schema = {
 	},
 } satisfies AuthPluginSchema;
 
-export type AdminSchema = typeof schema; 
+export type AdminSchema = typeof schema;
