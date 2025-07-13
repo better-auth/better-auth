@@ -18,7 +18,7 @@ function getMethod(
 	if (fetchOptions?.method) {
 		return fetchOptions.method;
 	}
-	if (args instanceof FormData) return "POST";
+	if (typeof FormData !== "undefined" && args instanceof FormData) return "POST";
 	if (body && Object.keys(body).length > 0) {
 		return "POST";
 	}
