@@ -61,40 +61,44 @@ export type InferCtx<
 }
 	?
 			| { formData: 1 }
-			| (C["body"] extends Record<string, any>
-					? C["body"] & {
-							fetchOptions?: FetchOptions;
-						}
-					: C["query"] extends Record<string, any>
-						? {
-								query: C["query"];
+			| Prettify<
+					C["body"] extends Record<string, any>
+						? C["body"] & {
 								fetchOptions?: FetchOptions;
 							}
-						: C["query"] extends Record<string, any> | undefined
+						: C["query"] extends Record<string, any>
 							? {
-									query?: C["query"];
+									query: C["query"];
 									fetchOptions?: FetchOptions;
 								}
-							: {
-									fetchOptions?: FetchOptions;
-								})
-	: C["body"] extends Record<string, any>
-		? C["body"] & {
-				fetchOptions?: FetchOptions;
-			}
-		: C["query"] extends Record<string, any>
-			? {
-					query: C["query"];
-					fetchOptions?: FetchOptions;
-				}
-			: C["query"] extends Record<string, any> | undefined
-				? {
-						query?: C["query"];
+							: C["query"] extends Record<string, any> | undefined
+								? {
+										query?: C["query"];
+										fetchOptions?: FetchOptions;
+									}
+								: {
+										fetchOptions?: FetchOptions;
+									}
+			  >
+	: Prettify<
+			C["body"] extends Record<string, any>
+				? C["body"] & {
 						fetchOptions?: FetchOptions;
 					}
-				: {
-						fetchOptions?: FetchOptions;
-					};
+				: C["query"] extends Record<string, any>
+					? {
+							query: C["query"];
+							fetchOptions?: FetchOptions;
+						}
+					: C["query"] extends Record<string, any> | undefined
+						? {
+								query?: C["query"];
+								fetchOptions?: FetchOptions;
+							}
+						: {
+								fetchOptions?: FetchOptions;
+							}
+		>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -126,27 +130,19 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 										InferCtx<C, FetchOptions, T["options"]["metadata"]>
 									> extends true
 										? [
-												Prettify<
-													T["path"] extends `/sign-up/email`
-														? InferSignUpEmailCtx<COpts, FetchOptions>
-														: InferCtx<
-																C,
-																FetchOptions,
-																T["options"]["metadata"]
-															>
-												>,
+												T["path"] extends `/sign-up/email`
+													? InferSignUpEmailCtx<COpts, FetchOptions>
+													: InferCtx<C, FetchOptions, T["options"]["metadata"]>,
 												FetchOptions?,
 											]
 										: [
-												Prettify<
-													T["path"] extends `/update-user`
-														? InferUserUpdateCtx<COpts, FetchOptions>
-														: InferCtx<
-																C,
-																FetchOptions,
-																T["options"]["metadata"]
-															>
-												>?,
+												(T["path"] extends `/update-user`
+													? InferUserUpdateCtx<COpts, FetchOptions>
+													: InferCtx<
+															C,
+															FetchOptions,
+															T["options"]["metadata"]
+														>)?,
 												FetchOptions?,
 											]
 								) => Promise<
