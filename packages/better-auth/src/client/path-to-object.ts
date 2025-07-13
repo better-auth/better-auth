@@ -56,9 +56,11 @@ export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
 > = C["body"] extends Record<string, any>
-	? (C["body"] & {
-			fetchOptions?: FetchOptions;
-		} | FormData)
+	?
+			| (C["body"] & {
+					fetchOptions?: FetchOptions;
+			  })
+			| FormData
 	: C["query"] extends Record<string, any>
 		? {
 				query: C["query"];
