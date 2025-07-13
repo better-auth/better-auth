@@ -55,13 +55,12 @@ export type InferUserUpdateCtx<
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
-	supportsFormData extends boolean = false,
 > = C["body"] extends Record<string, any>
-	? supportsFormData extends true
-		? { formData: FormData; fetchOptions?: FetchOptions }
-		: C["body"] & {
-				fetchOptions?: FetchOptions;
-			}
+	?
+			| (C["body"] & {
+					fetchOptions?: FetchOptions;
+			  })
+			| FormData
 	: C["query"] extends Record<string, any>
 		? {
 				query: C["query"];
@@ -103,32 +102,13 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 									>,
 								>(
 									...data: HasRequiredKeys<
-										InferCtx<
-											C,
-											FetchOptions,
-											T["options"]["metadata"] extends Record<string, any>
-												? T["options"]["metadata"]["supportsFormData"] extends true
-													? true
-													: false
-												: false
-										>
+										InferCtx<C, FetchOptions>
 									> extends true
 										? [
 												Prettify<
 													T["path"] extends `/sign-up/email`
 														? InferSignUpEmailCtx<COpts, FetchOptions>
-														: InferCtx<
-																C,
-																FetchOptions,
-																T["options"]["metadata"] extends Record<
-																	string,
-																	any
-																>
-																	? T["options"]["metadata"]["supportsFormData"] extends true
-																		? true
-																		: false
-																	: false
-															>
+														: InferCtx<C, FetchOptions>
 												>,
 												FetchOptions?,
 											]
@@ -136,18 +116,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 												Prettify<
 													T["path"] extends `/update-user`
 														? InferUserUpdateCtx<COpts, FetchOptions>
-														: InferCtx<
-																C,
-																FetchOptions,
-																T["options"]["metadata"] extends Record<
-																	string,
-																	any
-																>
-																	? T["options"]["metadata"]["supportsFormData"] extends true
-																		? true
-																		: false
-																	: false
-															>
+														: InferCtx<C, FetchOptions>
 												>?,
 												FetchOptions?,
 											]
