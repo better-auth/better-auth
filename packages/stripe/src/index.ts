@@ -931,7 +931,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					referenceId: z.string().optional(),
 					returnUrl: z.string().default("/"),
 				}),
-				use: [sessionMiddleware],
+				use: [sessionMiddleware, originCheck((ctx) => ctx.body.returnUrl), referenceMiddleware("billing-portal")],
 			},
 			async (ctx) => {
 				const { user } = ctx.context.session;
