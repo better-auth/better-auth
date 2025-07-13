@@ -55,25 +55,25 @@ export type InferUserUpdateCtx<
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
-> = C["body"] extends Record<string, any>
-	?
-			| (C["body"] & {
-					fetchOptions?: FetchOptions;
-			  })
-			| FormData
-	: C["query"] extends Record<string, any>
-		? {
-				query: C["query"];
+> = C["body"] extends FormData
+	? FormData
+	: C["body"] extends Record<string, any>
+		? C["body"] & {
 				fetchOptions?: FetchOptions;
 			}
-		: C["query"] extends Record<string, any> | undefined
+		: C["query"] extends Record<string, any>
 			? {
-					query?: C["query"];
+					query: C["query"];
 					fetchOptions?: FetchOptions;
 				}
-			: {
-					fetchOptions?: FetchOptions;
-				};
+			: C["query"] extends Record<string, any> | undefined
+				? {
+						query?: C["query"];
+						fetchOptions?: FetchOptions;
+					}
+				: {
+						fetchOptions?: FetchOptions;
+					};
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
