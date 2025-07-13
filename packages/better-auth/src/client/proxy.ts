@@ -18,7 +18,8 @@ function getMethod(
 	if (fetchOptions?.method) {
 		return fetchOptions.method;
 	}
-	if (typeof FormData !== "undefined" && args instanceof FormData) return "POST";
+	if (typeof FormData !== "undefined" && args instanceof FormData)
+		return "POST";
 	if (body && Object.keys(body).length > 0) {
 		return "POST";
 	}
@@ -72,15 +73,20 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 				} as BetterFetchOption;
 				const method = getMethod(routePath, knownPathMethods, arg);
 
+				const isFormData =
+					typeof FormData !== "undefined" && args instanceof FormData;
+
 				return await client(routePath, {
 					...options,
 					body:
 						method === "GET"
 							? undefined
-							: {
-									...body,
-									...(options?.body || {}),
-								},
+							: isFormData
+								? args
+								: {
+										...body,
+										...(options?.body || {}),
+									},
 					query: query || options?.query,
 					method,
 					async onSuccess(context) {
