@@ -56,31 +56,33 @@ export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
 	Metadata extends Record<string, any> | undefined = {},
-> = Metadata extends {
-	supportsFormData: true;
-}
-	?
-			| { formData: FormData; fetchOptions?: FetchOptions }
-			| (C["body"] & {
-					fetchOptions?: FetchOptions;
-			  })
-	: C["body"] extends Record<string, any>
-		? C["body"] & {
-				fetchOptions?: FetchOptions;
-			}
-		: C["query"] extends Record<string, any>
-			? {
-					query: C["query"];
-					fetchOptions?: FetchOptions;
-				}
-			: C["query"] extends Record<string, any> | undefined
-				? {
-						query?: C["query"];
-						fetchOptions?: FetchOptions;
-					}
-				: {
-						fetchOptions?: FetchOptions;
-					};
+> = Metadata & {hey: 1}
+
+// Metadata extends {
+// 	supportsFormData: true;
+// }
+// 	?
+// 			| { formData: FormData; fetchOptions?: FetchOptions }
+// 			| (C["body"] & {
+// 					fetchOptions?: FetchOptions;
+// 			  })
+// 	: C["body"] extends Record<string, any>
+// 		? C["body"] & {
+// 				fetchOptions?: FetchOptions;
+// 			}
+// 		: C["query"] extends Record<string, any>
+// 			? {
+// 					query: C["query"];
+// 					fetchOptions?: FetchOptions;
+// 				}
+// 			: C["query"] extends Record<string, any> | undefined
+// 				? {
+// 						query?: C["query"];
+// 						fetchOptions?: FetchOptions;
+// 					}
+// 				: {
+// 						fetchOptions?: FetchOptions;
+// 					};
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
