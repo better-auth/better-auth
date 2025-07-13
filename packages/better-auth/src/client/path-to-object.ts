@@ -59,46 +59,31 @@ export type InferCtx<
 > = Metadata extends {
 	supportsFormData: boolean;
 }
-	?
-			| { formData: 1 }
-			| Prettify<
-					C["body"] extends Record<string, any>
-						? C["body"] & {
-								fetchOptions?: FetchOptions;
-							}
-						: C["query"] extends Record<string, any>
-							? {
-									query: C["query"];
-									fetchOptions?: FetchOptions;
-								}
-							: C["query"] extends Record<string, any> | undefined
-								? {
-										query?: C["query"];
-										fetchOptions?: FetchOptions;
-									}
-								: {
-										fetchOptions?: FetchOptions;
-									}
-			  >
-	: Prettify<
-			C["body"] extends Record<string, any>
-				? C["body"] & {
+	? { formData: FormData } | GetBodyOrQuery<C, FetchOptions>
+	: GetBodyOrQuery<C, FetchOptions>;
+
+type GetBodyOrQuery<
+	C extends InputContext<any, any>,
+	FetchOptions extends BetterFetchOption,
+> = Prettify<
+	C["body"] extends Record<string, any>
+		? C["body"] & {
+				fetchOptions?: FetchOptions;
+			}
+		: C["query"] extends Record<string, any>
+			? {
+					query: C["query"];
+					fetchOptions?: FetchOptions;
+				}
+			: C["query"] extends Record<string, any> | undefined
+				? {
+						query?: C["query"];
 						fetchOptions?: FetchOptions;
 					}
-				: C["query"] extends Record<string, any>
-					? {
-							query: C["query"];
-							fetchOptions?: FetchOptions;
-						}
-					: C["query"] extends Record<string, any> | undefined
-						? {
-								query?: C["query"];
-								fetchOptions?: FetchOptions;
-							}
-						: {
-								fetchOptions?: FetchOptions;
-							}
-		>;
+				: {
+						fetchOptions?: FetchOptions;
+					}
+>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
