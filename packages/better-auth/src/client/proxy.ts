@@ -18,7 +18,11 @@ function getMethod(
 	if (fetchOptions?.method) {
 		return fetchOptions.method;
 	}
-	if (typeof FormData !== "undefined" && args instanceof FormData)
+	if (
+		"formData" in body &&
+		typeof FormData !== "undefined" &&
+		body.formData instanceof FormData
+	)
 		return "POST";
 	if (body && Object.keys(body).length > 0) {
 		return "POST";
@@ -74,7 +78,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 				const method = getMethod(routePath, knownPathMethods, arg);
 
 				const isFormData =
-					typeof FormData !== "undefined" && arg instanceof FormData;
+					typeof FormData !== "undefined" && arg.formData instanceof FormData;
 
 				return await client(routePath, {
 					...options,
@@ -82,7 +86,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						method === "GET"
 							? undefined
 							: isFormData
-								? arg
+								? arg.formData
 								: {
 										...body,
 										...(options?.body || {}),
