@@ -620,7 +620,7 @@ export type BetterAuthOptions = {
 			 *
 			 * Ip address is used for rate limiting and session tracking
 			 *
-			 * @example ["x-client-ip", "x-forwarded-for"]
+			 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 			 *
 			 * @default
 			 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
