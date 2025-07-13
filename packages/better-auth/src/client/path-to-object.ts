@@ -55,8 +55,15 @@ export type InferUserUpdateCtx<
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
-> = C["body"] extends FormData
-	? FormData
+	Metadata extends Record<string, any> | undefined = {},
+> = Metadata extends {
+	supportsFormData: true;
+}
+	?
+			| { formData: FormData; fetchOptions?: FetchOptions }
+			| (C["body"] & {
+					fetchOptions?: FetchOptions;
+			  })
 	: C["body"] extends Record<string, any>
 		? C["body"] & {
 				fetchOptions?: FetchOptions;
@@ -102,13 +109,13 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 									>,
 								>(
 									...data: HasRequiredKeys<
-										InferCtx<C, FetchOptions>
+										InferCtx<C, FetchOptions, T["options"]["metadata"]>
 									> extends true
 										? [
 												Prettify<
 													T["path"] extends `/sign-up/email`
 														? InferSignUpEmailCtx<COpts, FetchOptions>
-														: InferCtx<C, FetchOptions>
+														: InferCtx<C, FetchOptions, T["options"]["metadata"]>
 												>,
 												FetchOptions?,
 											]
@@ -116,7 +123,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 												Prettify<
 													T["path"] extends `/update-user`
 														? InferUserUpdateCtx<COpts, FetchOptions>
-														: InferCtx<C, FetchOptions>
+														: InferCtx<C, FetchOptions, T["options"]["metadata"]>
 												>?,
 												FetchOptions?,
 											]
