@@ -1,0 +1,32 @@
+name: Nix CI
+
+on:
+  push:
+    paths:
+      - '**/*.nix'
+      - '**/*.lock'
+    branches:
+      - main
+      - 'v**'
+  pull_request:
+    paths:
+      - '**/*.nix'
+      - '**/*.lock'
+    types:
+      - opened
+      - synchronize
+  merge_group: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Run flake check
+        run: nix flake check
