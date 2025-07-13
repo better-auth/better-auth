@@ -60,10 +60,24 @@ export type InferCtx<
 	supportsFormData: boolean;
 }
 	?
-			| { formData: FormData; fetchOptions?: FetchOptions }
-			| (C["body"] & {
-					fetchOptions?: FetchOptions;
-			  })
+			| { formData: FormData }
+			| (C["body"] extends Record<string, any>
+					? C["body"] & {
+							fetchOptions?: FetchOptions;
+						}
+					: C["query"] extends Record<string, any>
+						? {
+								query: C["query"];
+								fetchOptions?: FetchOptions;
+							}
+						: C["query"] extends Record<string, any> | undefined
+							? {
+									query?: C["query"];
+									fetchOptions?: FetchOptions;
+								}
+							: {
+									fetchOptions?: FetchOptions;
+								})
 	: C["body"] extends Record<string, any>
 		? C["body"] & {
 				fetchOptions?: FetchOptions;
