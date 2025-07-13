@@ -74,7 +74,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 				const method = getMethod(routePath, knownPathMethods, arg);
 
 				const isFormData =
-					typeof FormData !== "undefined" && args instanceof FormData;
+					typeof FormData !== "undefined" && arg instanceof FormData;
 
 				return await client(routePath, {
 					...options,
