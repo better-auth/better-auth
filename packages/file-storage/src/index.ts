@@ -102,7 +102,7 @@ export const fileStorage = <FileRouter extends Record<any, FileRoute<any>>>(
 		}
 
 		// Check if the file is supported
-		const buffer = await blob.arrayBuffer();
+		const buffer = Buffer.from(await blob.arrayBuffer());
 		const fileType = await fileTypeFromBuffer(buffer);
 		if (!fileType?.mime) {
 			ctx.context.logger.error("Uploaded file MIME type is not supported", {
