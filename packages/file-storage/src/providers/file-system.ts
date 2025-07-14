@@ -13,7 +13,10 @@ export class FileSystemProvider extends FileStorageProvider {
 		this.directory = directory;
 	}
 
-	override async uploadFile({ file, signal }: { file: File; signal?: AbortSignal }) {
+	override async uploadFile({
+		file,
+		signal,
+	}: { file: File; signal?: AbortSignal }) {
 		const fileId = crypto.randomUUID();
 		const filePath = this.getFilePath(file.name);
 

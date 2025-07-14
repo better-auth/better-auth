@@ -38,11 +38,11 @@ export const fileStorageClient = <
 					return $fetch<
 						Awaited<ReturnType<FileStorageFunctions["uploadFile"]>>
 					>(`/fs/upload/${encodeURIComponent(options.path as string)}`, {
+						...options.fetchOptions,
 						method: "POST",
 						body: file,
 						headers: {
 							"Content-Type": file.type,
-							"Content-Length": file.size.toString(),
 							...(options.fetchOptions?.headers ?? {}),
 						},
 						query: {
@@ -50,7 +50,6 @@ export const fileStorageClient = <
 							...(options.fetchOptions?.query ?? {}),
 						},
 						signal: options.signal,
-						...options.fetchOptions,
 					});
 				},
 				getFile: (
@@ -73,9 +72,9 @@ export const fileStorageClient = <
 							options.path as string,
 						)}/${encodeURIComponent(fileName)}`,
 						{
+							...options.fetchOptions,
 							method: "GET",
 							signal: options.signal,
-							...options.fetchOptions,
 						},
 					);
 				},
@@ -94,9 +93,9 @@ export const fileStorageClient = <
 							options.path as string,
 						)}/${encodeURIComponent(fileName)}`,
 						{
+							...options.fetchOptions,
 							method: "POST",
 							signal: options.signal,
-							...options.fetchOptions,
 						},
 					);
 				},
