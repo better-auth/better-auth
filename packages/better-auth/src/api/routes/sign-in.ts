@@ -271,15 +271,7 @@ export const signInSocial = createAuthEndpoint(
 				redirect: false,
 				token: data.data!.session.token,
 				url: undefined,
-				user: {
-					id: data.data!.user.id,
-					email: data.data!.user.email,
-					name: data.data!.user.name,
-					image: data.data!.user.image,
-					emailVerified: data.data!.user.emailVerified,
-					createdAt: data.data!.user.createdAt,
-					updatedAt: data.data!.user.updatedAt,
-				},
+				user: parseUserOutput(c.context.options, data.data!.user),
 			});
 		}
 
