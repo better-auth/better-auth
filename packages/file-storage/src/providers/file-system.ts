@@ -10,7 +10,9 @@ export class FileSystemProvider extends FileStorageProvider {
 
 	constructor({ directory }: { directory: string }) {
 		super();
-		this.directory = directory;
+		this.directory = directory.startsWith("/")
+			? directory
+			: join(process.cwd(), directory);
 	}
 
 	override async uploadFile({
