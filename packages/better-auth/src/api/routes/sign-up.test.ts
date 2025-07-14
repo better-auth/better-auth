@@ -40,6 +40,7 @@ describe("sign-up with custom fields", async (it) => {
 				email: "email@test.com",
 				password: "password",
 				name: "Test Name",
+				image: "https://picsum.photos/200",
 			},
 		});
 		expect(res.token).toBeDefined();
