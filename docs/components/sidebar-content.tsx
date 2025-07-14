@@ -15,8 +15,6 @@ import {
 	Database,
 	KeyRound,
 	Book,
-	File,
-	PaintBucket,
 	HardDriveUpload,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
