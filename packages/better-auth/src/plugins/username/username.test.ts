@@ -78,7 +78,9 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+		);
 	});
 
 	it("should fail on duplicate username in update-user if user is different", async () => {
@@ -101,7 +103,9 @@ describe("username", async (it) => {
 			},
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+		);
 	});
 
 	it("should succeed on duplicate username in update-user if user is the same", async () => {
