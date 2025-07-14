@@ -90,7 +90,7 @@ You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and mo
     export const auth = betterAuth({
         database: new Pool({
             // connection options
-        })
+        }),
     })
     ```
     </Tab>
@@ -102,14 +102,14 @@ You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and mo
     export const auth = betterAuth({
         database: createPool({
             // connection options
-        })
+        }),
     })
     ```
     </Tab>
 
 </Tabs>
 
-Alternatively, if you prefer to use an ORM or if your database is not supported by Kysely, you can use one of the built-in adapters.
+Alternatively, if you prefer to use an ORM, you can use one of the built-in adapters.
 
 <Tabs items={["drizzle", "prisma", "mongodb"]}>
 
@@ -122,7 +122,7 @@ Alternatively, if you prefer to use an ORM or if your database is not supported 
     export const auth = betterAuth({
         database: drizzleAdapter(db, {
             provider: "pg", // or "mysql", "sqlite"
-        })
+        }),
     });
     ```
     </Tab>
@@ -149,7 +149,7 @@ Alternatively, if you prefer to use an ORM or if your database is not supported 
     import { client } from "@/db"; // your mongodb client
 
     export const auth = betterAuth({
-        database: mongodbAdapter(client)
+        database: mongodbAdapter(client),
     });
     ```
     </Tab>
@@ -157,7 +157,9 @@ Alternatively, if you prefer to use an ORM or if your database is not supported 
 </Tabs>
 
 <Callout>
-  If your database is not listed above, check out our other supported [databases](/docs/adapters/other-relational-databases) for more information.
+  If your database is not listed above, check out our other supported
+  [databases](/docs/adapters/other-relational-databases) for more information,
+  or use one of the supported ORMs.
 </Callout>
 
 </Step>
