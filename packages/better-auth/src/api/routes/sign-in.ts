@@ -7,6 +7,7 @@ import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
+import { parseUserOutput } from "../../db";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -549,15 +550,7 @@ export const signInEmail = createAuthEndpoint(
 			redirect: !!ctx.body.callbackURL,
 			token: session.token,
 			url: ctx.body.callbackURL,
-			user: {
-				id: user.user.id,
-				email: user.user.email,
-				name: user.user.name,
-				image: user.user.image,
-				emailVerified: user.user.emailVerified,
-				createdAt: user.user.createdAt,
-				updatedAt: user.user.updatedAt,
-			},
+			user: parseUserOutput(ctx.context.options, user.user),
 		});
 	},
 );

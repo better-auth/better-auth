@@ -8,7 +8,7 @@ import type {
 	BetterAuthOptions,
 	User,
 } from "../../types";
-import { parseUserInput } from "../../db/schema";
+import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 
@@ -279,15 +279,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			) {
 				return ctx.json({
 					token: null,
-					user: {
-						id: createdUser.id,
-						email: createdUser.email,
-						name: createdUser.name,
-						image: createdUser.image,
-						emailVerified: createdUser.emailVerified,
-						createdAt: createdUser.createdAt,
-						updatedAt: createdUser.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, createdUser),
 				});
 			}
 
@@ -311,15 +303,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			);
 			return ctx.json({
 				token: session.token,
-				user: {
-					id: createdUser.id,
-					email: createdUser.email,
-					name: createdUser.name,
-					image: createdUser.image,
-					emailVerified: createdUser.emailVerified,
-					createdAt: createdUser.createdAt,
-					updatedAt: createdUser.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, createdUser),
 			});
 		},
 	);
