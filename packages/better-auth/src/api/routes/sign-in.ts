@@ -7,7 +7,7 @@ import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
-import { parseUserOutput } from "../../db";
+import { parseUserOutput } from "../../db/schema";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
