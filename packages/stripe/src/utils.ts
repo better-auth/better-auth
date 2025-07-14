@@ -1,35 +1,40 @@
-import type { StripeOptions } from "./types";
+import type { StripeOptions, Storage } from "./types";
 import type Stripe from "stripe";
 
-const priceIdCache = new Map<string, string>();
+/**
+ * Key prefix used when persisting lookupKey → priceId mappings in secondaryStorage.
+ * Exported in case other modules need to share the same cache namespace.
+ */
+export const PRICE_ID_CACHE_KEY_PREFIX = "stripe-priceid-";
 
-const CACHE_MAX_SIZE = 100;
-
-function cacheSet(key: string, value: string) {
-	if (priceIdCache.size >= CACHE_MAX_SIZE) {
-		const oldestKey = priceIdCache.keys().next().value as string | undefined;
-		if (oldestKey !== undefined) {
-			priceIdCache.delete(oldestKey);
-		}
-	}
-	priceIdCache.set(key, value);
-}
-
+/**
+ * Resolve a Stripe lookupKey to its actual priceId.
+ * Results are cached in Better Auth `secondaryStorage` when provided.
+ *
+ * A 24-hour TTL is used by default so the mapping is refreshed daily but we
+ * avoid hammering Stripe on every request.
+ */
 async function resolvePriceId(
 	client: Stripe,
 	lookupKey: string,
+	storage?: Storage,
 ): Promise<string | undefined> {
 	if (!lookupKey) return undefined;
-	if (priceIdCache.has(lookupKey)) return priceIdCache.get(lookupKey);
+	const cacheKey = `${PRICE_ID_CACHE_KEY_PREFIX}${lookupKey}`;
 	try {
+		if (storage) {
+			const cached = await storage.get(cacheKey);
+			if (cached) return cached;
+		}
 		const prices = await client.prices.list({
 			lookup_keys: [lookupKey],
 			active: true,
 			limit: 1,
 		});
 		const id = prices.data[0]?.id;
-		if (id) {
-			cacheSet(lookupKey, id);
+		if (id && storage) {
+			// Cache for 24h (can be tweaked by replacing the literal below)
+			await storage.set(cacheKey, id, 60 * 60 * 24);
 		}
 		return id;
 	} catch (error) {
@@ -72,26 +77,20 @@ export async function getPlanByPriceId(
 			if (p.annualDiscountLookupKey) lookupKeys.add(p.annualDiscountLookupKey);
 		}
 
-		// 2. Resolve all keys concurrently while leveraging cache
-		const keyArray = Array.from(lookupKeys);
-		const keyToId: Record<string, string | undefined> = {};
-		// Fill from cache first
-		for (const k of keyArray) {
-			if (priceIdCache.has(k)) {
-				keyToId[k] = priceIdCache.get(k);
-			}
-		}
+		const storage = options.secondaryStorage;
 
-		// Fetch remaining keys concurrently
-		const keysToFetch = keyArray.filter((k) => keyToId[k] === undefined);
-		if (keysToFetch.length) {
-			const resolvedIds = await Promise.all(
-				keysToFetch.map((k) => resolvePriceId(stripeClient, k)),
-			);
-			resolvedIds.forEach((id, idx) => {
-				keyToId[keysToFetch[idx]] = id;
-			});
-		}
+		// 2. Resolve all keys concurrently using secondaryStorage for caching
+		const keyArray = Array.from(lookupKeys);
+		const resolvedIds = await Promise.all(
+			keyArray.map((k) => resolvePriceId(stripeClient, k, storage)),
+		);
+		const keyToId = keyArray.reduce<Record<string, string | undefined>>(
+			(acc, key, idx) => {
+				acc[key] = resolvedIds[idx];
+				return acc;
+			},
+			{},
+		);
 
 		// 3. Use resolved IDs to match and return the correct plan
 		for (const plan of res) {
@@ -111,3 +110,5 @@ export async function getPlanByName(options: StripeOptions, name: string) {
 		res?.find((plan) => plan.name.toLowerCase() === name.toLowerCase()),
 	);
 }
+
+export type { Storage };
