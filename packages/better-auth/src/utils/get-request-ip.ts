@@ -10,7 +10,7 @@ export function getIp(
 	}
 
 	if (isTest) {
-		return "127.0.0.1";  // Use a fixed IP for test environments
+		return "127.0.0.1"; // Use a fixed IP for test environments
 	}
 
 	const headers = "headers" in req ? req.headers : req;
