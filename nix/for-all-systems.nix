@@ -7,6 +7,6 @@ let
     "aarch64-darwin"
   ];
 
-  overlays = [ ];
+  overlays = [ (import ./overlay.nix) ];
 in
 nixpkgs.lib.genAttrs systems (system: function (import nixpkgs { inherit system overlays; }))

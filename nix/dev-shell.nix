@@ -7,7 +7,7 @@ pkgs.mkShell {
     pkgs.nodejs
   ];
 
-  BIOME_BINARY = "${pkgs.biome}/bin/biome";
+  # BIOME_BINARY = "${pkgs.biome}/bin/biome";
 
   shellHook = ''
     cp -n ./docs/.env.example ./docs/.env
