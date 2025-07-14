@@ -438,7 +438,7 @@ export const fileStorage = <FileRouter extends Record<any, FileRoute<any>>>(
 
 	return {
 		id: "file-storage",
-		
+
 		endpoints: {
 			uploadFile: createAuthEndpoint(
 				"/fs/upload/:path",
