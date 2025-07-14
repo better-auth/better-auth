@@ -138,7 +138,7 @@ export type FileRoute<Metadata extends Record<string, any> | false = false> = {
 	 *
 	 * @default 1024 * 1024 * 10 // 10MB
 	 */
-	maximumFileSize?: number;
+	maxFileSize?: number;
 	/**
 	 * A function that is called to generate a file name.
 	 *

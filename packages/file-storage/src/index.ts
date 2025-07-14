@@ -18,6 +18,7 @@ import { fileTypeFromBuffer } from "file-type";
 export * from "./create-route";
 export * from "./types";
 export * from "./providers";
+export * from "./routes";
 
 const defaultMaximumFileSize = 1024 * 1024 * 10; // 10MB
 const defaultValidEndpoints = [
@@ -128,7 +129,7 @@ export const fileStorage = <FileRouter extends Record<any, FileRoute<any>>>(
 
 		// Check if the file size is allowed
 		const fileSize = blob.size;
-		const maxSize = router.maximumFileSize ?? defaultMaximumFileSize;
+		const maxSize = router.maxFileSize ?? defaultMaximumFileSize;
 		if (fileSize > maxSize) {
 			throw new APIError("PAYLOAD_TOO_LARGE", {
 				code: "FILE_SIZE_TOO_LARGE",

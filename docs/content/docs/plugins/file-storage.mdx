@@ -1,0 +1,244 @@
+---
+title: File Storage
+description: File Storage plugin for BetterAuth
+---
+
+The file storage plugin allows you to securely upload, and manage files from a storage provider of your choice.
+Useful in cases such as uploading a profile picture during sign-up, or storing user uploaded content.
+
+## Features
+
+- Securley upload, download and delete files with fine-grain authorization.
+- Supports multiple storage providers.
+- Allows other plugins to extend off of the file storage plugin to leverage it's capabilities.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Install the plugin
+
+        ```package-install
+        npm install @better-auth/file-storage
+        ```
+    </Step>
+    <Step>
+        ### Configure the plugin
+
+        Import the `fileStorage` plugin and a storage provider of your choice.
+        You can see a list of storage providers [here](#storage-providers).
+
+        ```ts title="auth.ts"
+        import { fileStorage, FileSystemProvider } from "@better-auth/file-storage";
+        import { betterAuth } from "better-auth";
+
+        export const auth = betterAuth({
+            plugins: [
+                fileStorage({ // [!code highlight]
+                    provider: new FileSystemProvider({ directory: "./uploads" }), // [!code highlight]
+                }), // [!code highlight]
+            ]
+        });
+        ```
+        <Callout>
+            We intend to support multiple storage providers in the future, but for now we only support the file system provider.
+        </Callout>
+    </Step>
+    <Step>
+        ### Setting up the file router
+
+        The file router is responsible for handling all file-related requests, such as uploading, downloading, and deleting files.
+        It allows you to define rules for things like allowed file types, maximum file sizes, and custom authorization
+        logic for file operations.
+
+        To configure the file router, add the `fileRouter` property to your plugin configuration. Within `fileRouter`,
+        you can define multiple file routes, each with its own settings. Use the `createRoute` function to specify the
+        configuration for each route.
+
+        ```ts title="auth.ts"
+        import { fileStorage, FileSystemProvider, createRoute } from "@better-auth/file-storage";
+        import { betterAuth } from "better-auth";
+        import { APIError } from "better-auth/api";
+        import { z } from "zod";
+
+        export const auth = betterAuth({
+            plugins: [
+                fileStorage({
+                    provider: new FileSystemProvider({ directory: "./uploads" }),
+                    fileRouter: { // [!code highlight]
+                        myPathName: createRoute({ // [!code highlight]
+                            mimeTypes: ["image/*"], // Allow images only // [!code highlight]
+                            maxFileSize: 1024 * 1024 * 10, // 10MB // [!code highlight]
+                            canUpload: async ({ session }) => { // [!code highlight]
+                                if (!session) return false; // [!code highlight]
+                                return true; // [!code highlight]
+                            }, // [!code highlight]
+                            // ... // [!code highlight]
+                        }), // [!code highlight]
+                    }, // [!code highlight]
+                }),
+            ]
+        });
+        ```
+
+        <Callout>
+            There are a lot of different configurations you can set up for a file route.
+            We recommend using your IDE's auto-complete to see all the different options.
+        </Callout>
+    </Step>
+    <Step>
+        ### Uploading a file
+
+        To upload a file, you can use the `uploadFile` function.
+
+        ```ts title="gallery.ts"
+        import { authClient } from "@/lib/auth-client";
+
+        const myFile = new File([], "myFile.png"); // Get file from somewhere
+
+        const { data, error } = await authClient.uploadFile(myFile, { // [!code highlight]
+    		path: "myPathName", // The path name defined in the file router // [!code highlight]
+    	}); // [!code highlight]
+        ```
+    </Step>
+
+</Steps>
+
+## Theory
+
+There are two main ways for the file-storage plugin to be used:
+
+1. **Defining a file route to manually use via authClient:** Useful for custom file/content management
+   situations where existing plugins don't provide the functionality you need. Such as a messaging app needing to store message media attachments.
+
+2. **Defining a file route for existing plugins leverage:** Existing plugins can utilize the file-storage plugin within endpoints to upload,
+   get and delete files. One example is the built-in `/sign-up/email` endpoint.
+
+## User Profile Image
+
+If configured, our built-in endpoints will leverage the file-storage plugin specifically for the user's profile image.
+The expected file route name is `userImage`. (this is not configurable)
+
+Endpoints using the file-storage plugin for user profile images:
+
+- `/sign-up/email`: Upload profile image during sign-up
+- `/update-user`: Update or delete user profile image
+- `/delete-user`: Delete user profile image
+
+### Setting up the file route
+
+The easiest way to set up the file route is to use our `userImageRoute` function, this provides our
+recommended default configurations for the file route.
+
+Alternaitvely, if you want full control over the file route, you can manually define the file route.
+
+<Tabs items={["Recommended", "Manual"]}>
+    <Tab item="Recommended">
+        You can pass in a partial config to overwrite the default configurations,
+        however the `metadata` and `validateMetadata` functions are not configurable.
+
+        ```ts title="auth.ts"
+        import { fileStorage, userImageRoute } from "@better-auth/file-storage";
+
+        fileStorage({
+            // ...
+            fileRouter: {
+                userImage: userImageRoute(),
+            },
+        });
+        ```
+    </Tab>
+    <Tab item="Manual">
+        If you want full control over the file route, you can manually define the file route.
+        Note that the `userImage` file route path name is not configurable.
+
+        ```ts title="auth.ts"
+        import { fileStorage, createRoute } from "@better-auth/file-storage";
+
+        fileStorage({
+            // ...
+            fileRouter: {
+                userImage: createRoute({
+                    mimeTypes: ["image/*"],
+                    maxFileSize: 1024 * 1024 * 10, // 10MB
+                    validEndpoints: [
+                        "/sign-up/email",
+                        "/update-user",
+                        "/delete-user",
+                        "/fs/get/:path/:fileName",
+                    ],
+                    canUpload: async ({ session }) => {
+                        // Ensure the user is authenticated
+                        if (!session) return false;
+
+                        // If admin plugin is enabled, check if the user is banned:
+                        if ("banned" in session.user && session.user.banned) {
+                            throw new APIError("FORBIDDEN", {
+                                message: "You are banned",
+                            });
+                        }
+
+                        // Ensure user is not anonymous
+                        if ("is_anonymous" in session.user && session.user.is_anonymous) {
+                            throw new APIError("FORBIDDEN", {
+                                message: "You are anonymous",
+                            });
+                        }
+
+                        return true;
+                    },
+                    canDelete: async ({ session, metadata }) => {
+                        if (!session) return false;
+                        if (metadata.userId !== session.user.id) {
+                            throw new APIError("FORBIDDEN", {
+                                message: "You are not allowed to delete this file",
+                            });
+                        }
+                        return true;
+                    },
+                    canGet: () => true,
+                    metadata: z.object({
+                        userId: z.string(),
+                    }),
+                    validateMetadata: async (metadata, { session }) => {
+                        if (!session) throw new APIError("UNAUTHORIZED");
+                        // Forcefully override the metadata to be the user's ID.
+                        return { userId: session.user.id };
+                    },
+                }),
+            },
+        });
+        ```
+    </Tab>
+</Tabs>
+
+### Upload image during sign-up
+
+To upload an image during sign-up, you must provide a `FormData` to the sign-up endpoint.
+
+```ts title="sign-up.ts"
+const myFile = new File([], "image.png");
+
+const formData = new FormData();
+formData.append("name", "John Doe");
+formData.append("email", "test@test.com");
+formData.append("password", "password");
+formData.append("image", myFile);
+
+const { data, error } = await authClient.signUp.email({ formData }); // [!code highlight]
+```
+
+This will automatically upload the image to your configured storage provider, and set the user's `image` field to the expected file URL.
+
+## File Route
+
+A file route is a configuration object that defines the rules for a specific file-related operation.
+It allows you to specify the allowed file types, maximum file sizes, and custom authorization logic for file operations.
+
+File routes are defined in the `fileRouter` property of the plugin configuration.
+
+## Storage Providers
+
+## Events
+
+## Hooks
