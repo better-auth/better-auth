@@ -1,4 +1,4 @@
-import type { User, Session, AuthContext } from "../../types";
+import type { AuthContext, Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type { Invitation, Member, Organization, Team } from "./schema";
 
@@ -37,7 +37,18 @@ export interface OrganizationOptions {
 	 *
 	 * @default 100
 	 */
-	membershipLimit?: number;
+	membershipLimit?:
+		| number
+		| ((
+				data: {
+					organizationId: string;
+					session: {
+						user: User;
+						session: Session;
+					} | null;
+				},
+				request?: Request,
+		  ) => number | Promise<number>);
 	/**
 	 * Configure the roles and permissions for the
 	 * organization plugin.

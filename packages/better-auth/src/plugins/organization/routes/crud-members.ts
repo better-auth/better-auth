@@ -1,14 +1,14 @@
+import { APIError } from "better-call";
 import { z } from "zod";
+import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { createAuthEndpoint } from "../../../api/call";
+import { BASE_ERROR_CODES } from "../../../error/codes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { InferOrganizationRolesFromOption, Member } from "../schema";
-import { APIError } from "better-call";
-import { parseRoles } from "../organization";
-import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { BASE_ERROR_CODES } from "../../../error/codes";
 import { hasPermission } from "../has-permission";
+import { parseRoles } from "../organization";
+import type { InferOrganizationRolesFromOption, Member } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 export const addMember = <O extends OrganizationOptions>() =>
@@ -100,10 +100,19 @@ export const addMember = <O extends OrganizationOptions>() =>
 				}
 			}
 
-			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+			const maximum =
+				typeof ctx.context.orgOptions.membershipLimit === "function"
+					? await ctx.context.orgOptions.membershipLimit(
+							{
+								organizationId: orgId,
+								session,
+							},
+							ctx.request,
+						)
+					: ctx.context.orgOptions.membershipLimit || 100;
 			const members = await adapter.listMembers({ organizationId: orgId });
-
-			if (members.length >= membershipLimit) {
+			const maximumMembersReached = maximum ? members.length >= maximum : false;
+			if (maximumMembersReached) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
