@@ -170,37 +170,7 @@ export const signInSocial = createAuthEndpoint(
 												nullable: true,
 											},
 											user: {
-												type: "object",
-												properties: {
-													id: { type: "string" },
-													email: { type: "string" },
-													name: {
-														type: "string",
-														nullable: true,
-													},
-													image: {
-														type: "string",
-														nullable: true,
-													},
-													emailVerified: {
-														type: "boolean",
-													},
-													createdAt: {
-														type: "string",
-														format: "date-time",
-													},
-													updatedAt: {
-														type: "string",
-														format: "date-time",
-													},
-												},
-												required: [
-													"id",
-													"email",
-													"emailVerified",
-													"createdAt",
-													"updatedAt",
-												],
+												$ref: "#/components/schemas/User",
 											},
 										},
 									},
@@ -395,37 +365,7 @@ export const signInEmail = createAuthEndpoint(
 											nullable: true,
 										},
 										user: {
-											type: "object",
-											properties: {
-												id: { type: "string" },
-												email: { type: "string" },
-												name: {
-													type: "string",
-													nullable: true,
-												},
-												image: {
-													type: "string",
-													nullable: true,
-												},
-												emailVerified: {
-													type: "boolean",
-												},
-												createdAt: {
-													type: "string",
-													format: "date-time",
-												},
-												updatedAt: {
-													type: "string",
-													format: "date-time",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											$ref: "#/components/schemas/User",
 										},
 									},
 									required: ["redirect", "token", "user"],
