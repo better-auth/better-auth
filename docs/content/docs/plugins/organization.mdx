@@ -1284,7 +1284,7 @@ const auth = betterAuth({
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
 
-**membershipLimit**: `number` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want.
+**membershipLimit**: `number` | `((data: { organizationId: string, session: { user: User, session: Session } | null }, request?: Request) => number | Promise<number>)` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want or a function that returns a number.
 
 **sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
 
