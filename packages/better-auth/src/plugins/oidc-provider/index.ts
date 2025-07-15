@@ -1,5 +1,5 @@
 import { SignJWT } from "jose";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	APIError,
 	createAuthEndpoint,

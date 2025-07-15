@@ -1,5 +1,5 @@
 import { generateRandomString } from "../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";

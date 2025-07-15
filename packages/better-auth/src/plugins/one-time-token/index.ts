@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, type BetterAuthPlugin } from "..";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";

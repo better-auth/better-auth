@@ -5,7 +5,7 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	sessionMiddleware,
 	APIError,
@@ -115,14 +115,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * The name of the plan to subscribe
 					 */
 					plan: z.string({
-						description: "The name of the plan to upgrade to",
+						error: "The name of the plan to upgrade to",
 					}),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
 						.boolean({
-							description: "Whether to upgrade to an annual plan",
+							error: "Whether to upgrade to an annual plan",
 						})
 						.optional(),
 					/**
@@ -132,7 +132,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					referenceId: z
 						.string({
-							description: "Reference id of the subscription to upgrade",
+							error: "Reference id of the subscription to upgrade",
 						})
 						.optional(),
 					/**
@@ -142,7 +142,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					subscriptionId: z
 						.string({
-							description: "The id of the subscription to upgrade",
+							error: "The id of the subscription to upgrade",
 						})
 						.optional(),
 					/**
@@ -155,7 +155,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					seats: z
 						.number({
-							description: "Number of seats to upgrade to (if applicable)",
+							error: "Number of seats to upgrade to (if applicable)",
 						})
 						.optional(),
 					/**
@@ -163,7 +163,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					successUrl: z
 						.string({
-							description:
+							error:
 								"Callback URL to redirect back after successful subscription",
 						})
 						.default("/"),
@@ -172,7 +172,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 */
 					cancelUrl: z
 						.string({
-							description:
+							error:
 								"Callback URL to redirect back after successful subscription",
 						})
 						.default("/"),

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -124,7 +124,7 @@ export const changePassword = createAuthEndpoint(
 			 * revoke all sessions that are not the
 			 * current one logged in by the user
 			 */
-			revokeOtherSessions: z.coerce
+			revokeOtherSessions: z
 				.boolean({
 					error: "Must be a boolean value",
 				})

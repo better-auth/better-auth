@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, getSession } from "../../api";
 import { setCookieCache } from "../../cookies";
 import type {

@@ -15,7 +15,7 @@ import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { vk } from "./vk";
 import { kick } from "./kick";
 import { zoom } from "./zoom";
