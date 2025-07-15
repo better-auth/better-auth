@@ -32,9 +32,28 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				},
 				openapi: {
 					description: "Update the current user",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										name: {
+											type: "string",
+											description: "The name of the user",
+										},
+										image: {
+											type: "string",
+											description: "The image of the user",
+										},
+									},
+								},
+							},
+						},
+					},
 					responses: {
 						"200": {
-							description: "User updated successfully",
+							description: "Success",
 							content: {
 								"application/json": {
 									schema: {
