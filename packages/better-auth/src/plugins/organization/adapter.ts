@@ -23,7 +23,11 @@ function serializeInvitationMetadata(data: any) {
 }
 
 function parseInvitationMetadata(invitation: any) {
-	if (invitation && invitation.metadata && typeof invitation.metadata === "string") {
+	if (
+		invitation &&
+		invitation.metadata &&
+		typeof invitation.metadata === "string"
+	) {
 		return { ...invitation, metadata: parseJSON(invitation.metadata) };
 	}
 	return invitation;

@@ -77,7 +77,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						 * the user is already invited
 						 */
 						resend?: boolean;
-						metadata?:  Record<string, any>;
+						metadata?: Record<string, any>;
 					} & (O extends { teams: { enabled: true } }
 						? {
 								/**
