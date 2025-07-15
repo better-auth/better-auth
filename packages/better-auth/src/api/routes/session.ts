@@ -32,22 +32,16 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * If cookie cache is enabled, it will disable the cache
 					 * and fetch the session from the database
 					 */
-					disableCookieCache: z
-						.optional(
-							z
-								.boolean({
-									description:
-										"Disable cookie cache and fetch session from database",
-								})
-								.or(z.string().transform((v) => v === "true")),
-						)
-						.optional(),
-					disableRefresh: z
+					disableCookieCache: z.coerce
 						.boolean({
-							description:
+							error: "Disable cookie cache and fetch session from database",
+						})
+						.optional(),
+					disableRefresh: z.coerce
+						.boolean({
+							error:
 								"Disable session refresh. Useful for checking session status, without updating the session",
 						})
-						.or(z.string().transform((v) => v === "true"))
 						.optional(),
 				}),
 			),
@@ -391,7 +385,7 @@ export const revokeSession = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			token: z.string({
-				description: "The token to revoke",
+				error: "The token to revoke",
 			}),
 		}),
 		use: [sessionMiddleware],

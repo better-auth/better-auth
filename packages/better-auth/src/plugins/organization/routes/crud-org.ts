@@ -22,30 +22,30 @@ export const createOrganization = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			name: z.string({
-				description: "The name of the organization",
+				error: "The name of the organization",
 			}),
 			slug: z.string({
-				description: "The slug of the organization",
+				error: "The slug of the organization",
 			}),
 			userId: z.coerce
 				.string({
-					description:
+					error:
 						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
 				})
 				.optional(),
 			logo: z
 				.string({
-					description: "The logo of the organization",
+					error: "The logo of the organization",
 				})
 				.optional(),
 			metadata: z
 				.record(z.string(), z.any(), {
-					description: "The metadata of the organization",
+					error: "The metadata of the organization",
 				})
 				.optional(),
 			keepCurrentActiveOrganization: z
 				.boolean({
-					description:
+					error:
 						"Whether to keep the current active organization active after creating a new one",
 				})
 				.optional(),
@@ -251,22 +251,22 @@ export const updateOrganization = createAuthEndpoint(
 				.object({
 					name: z
 						.string({
-							description: "The name of the organization",
+							error: "The name of the organization",
 						})
 						.optional(),
 					slug: z
 						.string({
-							description: "The slug of the organization",
+							error: "The slug of the organization",
 						})
 						.optional(),
 					logo: z
 						.string({
-							description: "The logo of the organization",
+							error: "The logo of the organization",
 						})
 						.optional(),
 					metadata: z
 						.record(z.string(), z.any(), {
-							description: "The metadata of the organization",
+							error: "The metadata of the organization",
 						})
 						.optional(),
 				})
@@ -347,7 +347,7 @@ export const deleteOrganization = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			organizationId: z.string({
-				description: "The organization id to delete",
+				error: "The organization id to delete",
 			}),
 		}),
 		requireHeaders: true,
@@ -454,12 +454,12 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 				z.object({
 					organizationId: z
 						.string({
-							description: "The organization id to get",
+							error: "The organization id to get",
 						})
 						.optional(),
 					organizationSlug: z
 						.string({
-							description: "The organization slug to get",
+							error: "The organization slug to get",
 						})
 						.optional(),
 				}),
@@ -540,14 +540,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 			body: z.object({
 				organizationId: z
 					.string({
-						description:
+						error:
 							"The organization id to set as active. It can be null to unset the active organization",
 					})
 					.nullable()
 					.optional(),
 				organizationSlug: z
 					.string({
-						description:
+						error:
 							"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
 					})
 					.optional(),

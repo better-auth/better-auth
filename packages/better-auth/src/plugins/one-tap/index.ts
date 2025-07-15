@@ -31,7 +31,7 @@ export const oneTap = (options?: OneTapOptions) =>
 					method: "POST",
 					body: z.object({
 						idToken: z.string({
-							description:
+							error:
 								"Google ID token, which the client obtains from the One Tap API",
 						}),
 					}),

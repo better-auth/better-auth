@@ -163,7 +163,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				rememberMe,
 				...additionalFields
 			} = body;
-			const isValidEmail = z.string().email().safeParse(email);
+			const isValidEmail = z.email().safeParse(email);
 
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {

@@ -39,12 +39,10 @@ export const requestPasswordReset = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z
-				.string({
-					description:
-						"The email address of the user to send a password reset email to",
-				})
-				.email(),
+			email: z.email({
+				description:
+					"The email address of the user to send a password reset email to",
+			}),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
@@ -149,12 +147,10 @@ export const forgetPassword = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z
-				.string({
-					description:
-						"The email address of the user to send a password reset email to",
-				})
-				.email(),
+			email: z.email({
+				description:
+					"The email address of the user to send a password reset email to",
+			}),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?

@@ -97,7 +97,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			 */
 			callbackURL: z
 				.string({
-					description: "The URL to redirect to after the user has signed in",
+					error: "The URL to redirect to after the user has signed in",
 				})
 				.optional(),
 			/**
@@ -127,7 +127,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			 */
 			scopes: z
 				.array(z.string(), {
-					description: "Additional scopes to request from the provider",
+					error: "Additional scopes to request from the provider",
 				})
 				.optional(),
 			/**
@@ -135,7 +135,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			 */
 			errorCallbackURL: z
 				.string({
-					description:
+					error:
 						"The URL to redirect to if there is an error during the link process",
 				})
 				.optional(),
@@ -409,16 +409,16 @@ export const getAccessToken = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			providerId: z.string({
-				description: "The provider ID for the OAuth provider",
+				error: "The provider ID for the OAuth provider",
 			}),
 			accountId: z
 				.string({
-					description: "The account ID associated with the refresh token",
+					error: "The account ID associated with the refresh token",
 				})
 				.optional(),
 			userId: z
 				.string({
-					description: "The user ID associated with the account",
+					error: "The user ID associated with the account",
 				})
 				.optional(),
 		}),
@@ -550,16 +550,16 @@ export const refreshToken = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			providerId: z.string({
-				description: "The provider ID for the OAuth provider",
+				error: "The provider ID for the OAuth provider",
 			}),
 			accountId: z
 				.string({
-					description: "The account ID associated with the refresh token",
+					error: "The account ID associated with the refresh token",
 				})
 				.optional(),
 			userId: z
 				.string({
-					description: "The user ID associated with the account",
+					error: "The user ID associated with the account",
 				})
 				.optional(),
 		}),
@@ -723,7 +723,7 @@ export const accountInfo = createAuthEndpoint(
 		},
 		body: z.object({
 			accountId: z.string({
-				description:
+				error:
 					"The provider given account id for which to get the account info",
 			}),
 		}),

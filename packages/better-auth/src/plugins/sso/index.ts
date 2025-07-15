@@ -83,36 +83,36 @@ export const sso = (options?: SSOOptions) => {
 					method: "POST",
 					body: z.object({
 						providerId: z.string({
-							description:
+							error:
 								"The ID of the provider. This is used to identify the provider during login and callback",
 						}),
 						issuer: z.string({
-							description:
+							error:
 								"The issuer url of the provider (e.g. https://idp.example.com)",
 						}),
 						domain: z.string({
-							description:
+							error:
 								"The domain of the provider. This is used for email matching",
 						}),
 						clientId: z.string({
-							description: "The client ID",
+							error: "The client ID",
 						}),
 						clientSecret: z.string({
-							description: "The client secret",
+							error: "The client secret",
 						}),
 						authorizationEndpoint: z
 							.string({
-								description: "The authorization endpoint",
+								error: "The authorization endpoint",
 							})
 							.optional(),
 						tokenEndpoint: z
 							.string({
-								description: "The token endpoint",
+								error: "The token endpoint",
 							})
 							.optional(),
 						userInfoEndpoint: z
 							.string({
-								description: "The user info endpoint",
+								error: "The user info endpoint",
 							})
 							.optional(),
 						tokenEndpointAuthentication: z
@@ -120,60 +120,60 @@ export const sso = (options?: SSOOptions) => {
 							.optional(),
 						jwksEndpoint: z
 							.string({
-								description: "The JWKS endpoint",
+								error: "The JWKS endpoint",
 							})
 							.optional(),
 						discoveryEndpoint: z.string().optional(),
 						scopes: z
 							.array(z.string(), {
-								description:
+								error:
 									"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']",
 							})
 							.optional(),
 						pkce: z
 							.boolean({
-								description: "Whether to use PKCE for the authorization flow",
+								error: "Whether to use PKCE for the authorization flow",
 							})
 							.default(true)
 							.optional(),
 						mapping: z
 							.object({
 								id: z.string({
-									description:
+									error:
 										"The field in the user info response that contains the id. Defaults to 'sub'",
 								}),
 								email: z.string({
-									description:
+									error:
 										"The field in the user info response that contains the email. Defaults to 'email'",
 								}),
 								emailVerified: z
 									.string({
-										description:
+										error:
 											"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'",
 									})
 									.optional(),
 								name: z.string({
-									description:
+									error:
 										"The field in the user info response that contains the name. Defaults to 'name'",
 								}),
 								image: z
 									.string({
-										description:
+										error:
 											"The field in the user info response that contains the image. Defaults to 'picture'",
 									})
 									.optional(),
-								extraFields: z.record(z.string()).optional(),
+								extraFields: z.record(z.string(), z.any()).optional(),
 							})
 							.optional(),
 						organizationId: z
 							.string({
-								description:
+								error:
 									"If organization plugin is enabled, the organization id to link the provider to",
 							})
 							.optional(),
 						overrideUserInfo: z
 							.boolean({
-								description:
+								error:
 									"Override user info with the provider info. Defaults to false",
 							})
 							.default(false)
@@ -411,48 +411,47 @@ export const sso = (options?: SSOOptions) => {
 					body: z.object({
 						email: z
 							.string({
-								description:
+								error:
 									"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
 							})
 							.optional(),
 						organizationSlug: z
 							.string({
-								description: "The slug of the organization to sign in with",
+								error: "The slug of the organization to sign in with",
 							})
 							.optional(),
 						providerId: z
 							.string({
-								description:
+								error:
 									"The ID of the provider to sign in with. This can be provided instead of email or issuer",
 							})
 							.optional(),
 						domain: z
 							.string({
-								description: "The domain of the provider.",
+								error: "The domain of the provider.",
 							})
 							.optional(),
 						callbackURL: z.string({
-							description: "The URL to redirect to after login",
+							error: "The URL to redirect to after login",
 						}),
 						errorCallbackURL: z
 							.string({
-								description: "The URL to redirect to after login",
+								error: "The URL to redirect to after login",
 							})
 							.optional(),
 						newUserCallbackURL: z
 							.string({
-								description:
-									"The URL to redirect to after login if the user is new",
+								error: "The URL to redirect to after login if the user is new",
 							})
 							.optional(),
 						scopes: z
 							.array(z.string(), {
-								description: "Scopes to request from the provider.",
+								error: "Scopes to request from the provider.",
 							})
 							.optional(),
 						requestSignUp: z
 							.boolean({
-								description:
+								error:
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 							})
 							.optional(),

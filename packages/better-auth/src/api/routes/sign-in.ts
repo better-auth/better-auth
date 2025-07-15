@@ -19,8 +19,7 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			callbackURL: z
 				.string({
-					description:
-						"Callback URL to redirect to after the user has signed in",
+					error: "Callback URL to redirect to after the user has signed in",
 				})
 				.optional(),
 			/**
@@ -37,7 +36,7 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			errorCallbackURL: z
 				.string({
-					description: "Callback URL to redirect to if an error happens",
+					error: "Callback URL to redirect to if an error happens",
 				})
 				.optional(),
 			/**
@@ -52,7 +51,7 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			disableRedirect: z
 				.boolean({
-					description:
+					error:
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
@@ -73,14 +72,14 @@ export const signInSocial = createAuthEndpoint(
 					 * ID token from the provider
 					 */
 					token: z.string({
-						description: "ID token from the provider",
+						error: "ID token from the provider",
 					}),
 					/**
 					 * The nonce used to generate the token
 					 */
 					nonce: z
 						.string({
-							description: "Nonce used to generate the token",
+							error: "Nonce used to generate the token",
 						})
 						.optional(),
 					/**
@@ -88,7 +87,7 @@ export const signInSocial = createAuthEndpoint(
 					 */
 					accessToken: z
 						.string({
-							description: "Access token from the provider",
+							error: "Access token from the provider",
 						})
 						.optional(),
 					/**
@@ -96,7 +95,7 @@ export const signInSocial = createAuthEndpoint(
 					 */
 					refreshToken: z
 						.string({
-							description: "Refresh token from the provider",
+							error: "Refresh token from the provider",
 						})
 						.optional(),
 					/**
@@ -104,18 +103,14 @@ export const signInSocial = createAuthEndpoint(
 					 */
 					expiresAt: z
 						.number({
-							description: "Expiry date of the token",
+							error: "Expiry date of the token",
 						})
 						.optional(),
 				}),
-				{
-					description:
-						"ID token from the provider to sign in the user with id token",
-				},
 			),
 			scopes: z
 				.array(z.string(), {
-					description:
+					error:
 						"Array of scopes to request from the provider. This will override the default scopes passed.",
 				})
 				.optional(),
@@ -128,7 +123,7 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			requestSignUp: z
 				.boolean({
-					description:
+					error:
 						"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 				})
 				.optional(),
@@ -137,8 +132,7 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			loginHint: z
 				.string({
-					description:
-						"The login hint to use for the authorization code request",
+					error: "The login hint to use for the authorization code request",
 				})
 				.optional(),
 		}),
@@ -337,13 +331,13 @@ export const signInEmail = createAuthEndpoint(
 			 * Email of the user
 			 */
 			email: z.string({
-				description: "Email of the user",
+				error: "Email of the user",
 			}),
 			/**
 			 * Password of the user
 			 */
 			password: z.string({
-				description: "Password of the user",
+				error: "Password of the user",
 			}),
 			/**
 			 * Callback URL to use as a redirect for email
@@ -351,8 +345,7 @@ export const signInEmail = createAuthEndpoint(
 			 */
 			callbackURL: z
 				.string({
-					description:
-						"Callback URL to use as a redirect for email verification",
+					error: "Callback URL to use as a redirect for email verification",
 				})
 				.optional(),
 			/**
@@ -361,7 +354,7 @@ export const signInEmail = createAuthEndpoint(
 			 */
 			rememberMe: z
 				.boolean({
-					description:
+					error:
 						"If this is false, the session will not be remembered. Default is `true`.",
 				})
 				.default(true)

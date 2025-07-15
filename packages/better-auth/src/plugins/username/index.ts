@@ -46,19 +46,14 @@ export const username = (options?: UsernameOptions) => {
 					method: "POST",
 					body: z.object({
 						username: z.string({
-							description: "The username of the user",
+							error: "The username of the user",
 						}),
 						password: z.string({
-							description: "The password of the user",
+							error: "The password of the user",
 						}),
 						rememberMe: z
 							.boolean({
-								description: "Remember the user session",
-							})
-							.optional(),
-						callbackURL: z
-							.string({
-								description: "The URL to redirect to after email verification",
+								error: "Remember the user session",
 							})
 							.optional(),
 					}),
@@ -279,14 +274,7 @@ export const username = (options?: UsernameOptions) => {
 									},
 								],
 							});
-
-							const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
-							const blockChangeUpdateUser =
-								ctx.path === "/update-user" &&
-								user &&
-								ctx.context.session &&
-								user.id !== ctx.context.session.session.userId;
-							if (blockChangeSignUp || blockChangeUpdateUser) {
+							if (user) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});

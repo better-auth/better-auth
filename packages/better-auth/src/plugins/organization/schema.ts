@@ -13,7 +13,7 @@ export const organizationSchema = z.object({
 	slug: z.string(),
 	logo: z.string().nullish().optional(),
 	metadata: z
-		.record(z.string())
+		.record(z.string(), z.unknown())
 		.or(z.string().transform((v) => JSON.parse(v)))
 		.optional(),
 	createdAt: z.date(),

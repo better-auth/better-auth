@@ -63,10 +63,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					method: "GET",
 					query: z.object({
 						callbackURL: z.string({
-							description: "The URL to redirect to after the proxy",
+							error: "The URL to redirect to after the proxy",
 						}),
 						cookies: z.string({
-							description: "The cookies to set after the proxy",
+							error: "The cookies to set after the proxy",
 						}),
 					}),
 					use: [originCheck((ctx) => ctx.query.callbackURL)],

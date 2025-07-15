@@ -34,16 +34,14 @@ export const customSession = <
 							 * If cookie cache is enabled, it will disable the cache
 							 * and fetch the session from the database
 							 */
-							disableCookieCache: z
+							disableCookieCache: z.coerce
 								.boolean({
-									description:
-										"Disable cookie cache and fetch session from database",
+									error: "Disable cookie cache and fetch session from database",
 								})
-								.or(z.string().transform((v) => v === "true"))
 								.optional(),
-							disableRefresh: z
+							disableRefresh: z.coerce
 								.boolean({
-									description:
+									error:
 										"Disable session refresh. Useful for checking session status, without updating the session",
 								})
 								.optional(),
@@ -53,6 +51,28 @@ export const customSession = <
 						CUSTOM_SESSION: true,
 						openapi: {
 							description: "Get custom session data",
+							parameters: [
+								{
+									name: "disableCookieCache",
+									in: "query",
+									description:
+										"Disable cookie cache and fetch session from database",
+									required: false,
+									schema: {
+										type: "boolean",
+									},
+								},
+								{
+									name: "disableRefresh",
+									in: "query",
+									description:
+										"Disable session refresh. Useful for checking session status, without updating the session",
+									required: false,
+									schema: {
+										type: "boolean",
+									},
+								},
+							],
 							responses: {
 								"200": {
 									description: "Success",
