@@ -109,7 +109,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 							},
 							ctx.request,
 						)
-					: ctx.context.orgOptions.membershipLimit || 100;
+					: ctx.context.orgOptions.membershipLimit ?? 100;
 			const members = await adapter.listMembers({ organizationId: orgId });
 			const maximumMembersReached = maximum ? members.length >= maximum : false;
 			if (maximumMembersReached) {
