@@ -48,6 +48,10 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						description: "The team ID to invite the user to",
 					})
 					.optional(),
+				metadata: z
+					.record(z.string())
+					.or(z.string().transform((v) => JSON.parse(v)))
+					.optional(),
 			}),
 			metadata: {
 				$Infer: {
@@ -73,6 +77,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						 * the user is already invited
 						 */
 						resend?: boolean;
+						metadata?:  Record<string, any>;
 					} & (O extends { teams: { enabled: true } }
 						? {
 								/**
@@ -113,6 +118,11 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 											},
 											expiresAt: {
 												type: "string",
+											},
+											metadata: {
+												type: "object",
+												description: "Optional metadata for the invitation",
+												nullable: true,
 											},
 										},
 										required: [
@@ -281,6 +291,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 								teamId: ctx.body.teamId,
 							}
 						: {}),
+					...(ctx.body.metadata ? { metadata: ctx.body.metadata } : {}),
 				},
 				user: session.user,
 			});

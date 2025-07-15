@@ -15,6 +15,20 @@ import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
 
+function serializeInvitationMetadata(data: any) {
+	if (data && typeof data.metadata === "object" && data.metadata !== null) {
+		return { ...data, metadata: JSON.stringify(data.metadata) };
+	}
+	return data;
+}
+
+function parseInvitationMetadata(invitation: any) {
+	if (invitation && invitation.metadata && typeof invitation.metadata === "string") {
+		return { ...invitation, metadata: parseJSON(invitation.metadata) };
+	}
+	return invitation;
+}
+
 export const getOrgAdapter = (
 	context: AuthContext,
 	options?: OrganizationOptions,
@@ -524,6 +538,7 @@ export const getOrgAdapter = (
 			organizationId,
 			inviterId,
 			expiresIn = 1000 * 60 * 60 * 48, // Default expiration: 48 hours
+			metadata,
 		}: {
 			email: string;
 			role: string;
@@ -531,12 +546,13 @@ export const getOrgAdapter = (
 			organizationId: string;
 			inviterId: string;
 			expiresIn?: number;
+			metadata?: Record<string, any>;
 		}) => {
 			const expiresAt = getDate(expiresIn); // Get expiration date
 
 			const invitation = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",
-				data: {
+				data: serializeInvitationMetadata({
 					email,
 					role,
 					organizationId,
@@ -544,10 +560,11 @@ export const getOrgAdapter = (
 					inviterId,
 					status: "pending",
 					expiresAt,
-				},
+					metadata,
+				}),
 			});
 
-			return invitation;
+			return parseInvitationMetadata(invitation);
 		},
 		findInvitationsByTeamId: async (teamId: string) => {
 			const invitations = await adapter.findMany<Invitation>({
@@ -571,6 +588,7 @@ export const getOrgAdapter = (
 				role: string;
 				organizationId: string;
 				teamId?: string;
+				metadata?: Record<string, any>;
 			};
 			user: User;
 		}) => {
@@ -584,15 +602,15 @@ export const getOrgAdapter = (
 				Invitation
 			>({
 				model: "invitation",
-				data: {
+				data: serializeInvitationMetadata({
 					status: "pending",
 					expiresAt,
 					inviterId: user.id,
 					...invitation,
-				},
+				}),
 			});
 
-			return invite;
+			return parseInvitationMetadata(invite);
 		},
 		findInvitationById: async (id: string) => {
 			const invitation = await adapter.findOne<Invitation>({
@@ -604,13 +622,13 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-			return invitation;
+			return parseInvitationMetadata(invitation);
 		},
 		findPendingInvitation: async (data: {
 			email: string;
 			organizationId: string;
 		}) => {
-			const invitation = await adapter.findMany<Invitation>({
+			const invitations = await adapter.findMany<Invitation>({
 				model: "invitation",
 				where: [
 					{
@@ -627,9 +645,9 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-			return invitation.filter(
-				(invite) => new Date(invite.expiresAt) > new Date(),
-			);
+			return invitations
+				.filter((invite) => new Date(invite.expiresAt) > new Date())
+				.map(parseInvitationMetadata);
 		},
 		findPendingInvitations: async (data: {
 			organizationId: string;
@@ -647,9 +665,9 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-			return invitations.filter(
-				(invite) => new Date(invite.expiresAt) > new Date(),
-			);
+			return invitations
+				.filter((invite) => new Date(invite.expiresAt) > new Date())
+				.map(parseInvitationMetadata);
 		},
 		listInvitations: async (data: {
 			organizationId: string;
@@ -663,11 +681,12 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-			return invitations;
+			return invitations.map(parseInvitationMetadata);
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
 			status: "accepted" | "canceled" | "rejected";
+			metadata?: Record<string, any>;
 		}) => {
 			const invitation = await adapter.update<Invitation>({
 				model: "invitation",
@@ -677,11 +696,12 @@ export const getOrgAdapter = (
 						value: data.invitationId,
 					},
 				],
-				update: {
+				update: serializeInvitationMetadata({
 					status: data.status,
-				},
+					...(data.metadata ? { metadata: data.metadata } : {}),
+				}),
 			});
-			return invitation;
+			return parseInvitationMetadata(invitation);
 		},
 	};
 };

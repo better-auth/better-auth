@@ -282,6 +282,24 @@ describe("organization", async (it) => {
 		expect(invite.data?.role).toBe("admin,member");
 	});
 
+	it("should create an invitation with metadata and retrieve it", async () => {
+		const { headers } = await signInWithTestUser();
+		const testMetadata = { invitedBy: "metadata-tester", reason: "unit-test" };
+		const invite = await client.organization.inviteMember({
+			organizationId: organizationId,
+			email: "meta-invite@test.com",
+			role: "member",
+			metadata: testMetadata,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invite.data).toBeDefined();
+		expect(invite.data?.email).toBe("meta-invite@test.com");
+		expect(invite.data?.role).toBe("member");
+		expect(invite.data?.metadata).toMatchObject(testMetadata);
+	});
+
 	it("should allow getting a member", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.setActive({
