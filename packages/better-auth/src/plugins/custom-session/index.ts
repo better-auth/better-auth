@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint, getSession } from "../../api";
+import { setCookieCache } from "../../cookies";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -34,12 +35,14 @@ export const customSession = <
 							 * If cookie cache is enabled, it will disable the cache
 							 * and fetch the session from the database
 							 */
-							disableCookieCache: z.coerce
+							disableCookieCache: z
 								.boolean({
-									error: "Disable cookie cache and fetch session from database",
+									error:
+										"Disable cookie cache and fetch session from database",
 								})
+								.or(z.string().transform((v) => v === "true"))
 								.optional(),
-							disableRefresh: z.coerce
+							disableRefresh: z
 								.boolean({
 									error:
 										"Disable session refresh. Useful for checking session status, without updating the session",
@@ -51,28 +54,6 @@ export const customSession = <
 						CUSTOM_SESSION: true,
 						openapi: {
 							description: "Get custom session data",
-							parameters: [
-								{
-									name: "disableCookieCache",
-									in: "query",
-									description:
-										"Disable cookie cache and fetch session from database",
-									required: false,
-									schema: {
-										type: "boolean",
-									},
-								},
-								{
-									name: "disableRefresh",
-									in: "query",
-									description:
-										"Disable session refresh. Useful for checking session status, without updating the session",
-									required: false,
-									schema: {
-										type: "boolean",
-									},
-								},
-							],
 							responses: {
 								"200": {
 									description: "Success",
@@ -106,9 +87,12 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
-					session.headers.forEach((value, key) => {
-						ctx.setHeader(key, value);
+					session.headers.forEach((value: string, key: string) => {
+						if (key.toLowerCase() !== "set-cookie") {
+							ctx.setHeader(key, value);
+						}
 					});
+					await setCookieCache(ctx, fnResult as any);
 					return ctx.json(fnResult);
 				},
 			),
