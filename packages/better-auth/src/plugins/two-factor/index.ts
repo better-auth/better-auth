@@ -9,7 +9,11 @@ import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME, TRUST_DEVICE_COOKIE_MAX_AGE } from "./constant";
+import {
+	TWO_FACTOR_COOKIE_NAME,
+	TRUST_DEVICE_COOKIE_NAME,
+	TRUST_DEVICE_COOKIE_MAX_AGE,
+} from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -284,7 +288,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								const newToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
-								).sign(ctx.context.secret, `${data.user.id}!${data.session.token}`);
+								).sign(
+									ctx.context.secret,
+									`${data.user.id}!${data.session.token}`,
+								);
 								await ctx.setSignedCookie(
 									newTrustDeviceCookie.name,
 									`${newToken}!${data.session.token}`,

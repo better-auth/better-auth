@@ -1,5 +1,9 @@
 import { APIError } from "better-call";
-import { TRUST_DEVICE_COOKIE_MAX_AGE, TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
+import {
+	TRUST_DEVICE_COOKIE_MAX_AGE,
+	TRUST_DEVICE_COOKIE_NAME,
+	TWO_FACTOR_COOKIE_NAME,
+} from "./constant";
 import { setSessionCookie } from "../../cookies";
 import { getSessionFromCtx } from "../../api";
 import type { UserWithTwoFactor } from "./types";
