@@ -1,4 +1,5 @@
 import type {
+	AuthContext,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 	HookEndpointContext,
@@ -12,7 +13,6 @@ import {
 	exportJWK,
 	generateKeyPair,
 	importJWK,
-	JWTHeaderParameters,
 	JWTPayload,
 	SignJWT
 } from "jose";
@@ -158,11 +158,73 @@ export interface JwtOptions {
 	}) => Promise<string> | string;
 }
 
+export const getJwtPlugin = (ctx: AuthContext) => {
+	const plugin: (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions }) | undefined = ctx.options.plugins?.find(
+		(plugin) => plugin.id === "jwt",
+	);
+	if (!plugin) {
+		throw new BetterAuthError('jwt_config', 'jwt plugin not found')
+	}
+	return plugin;
+};
+
+export async function createJwk(
+	ctx: GenericEndpointContext,
+	options?: JwtPluginOptions,
+) {
+	if (!options) {
+		options = getJwtPlugin(ctx.context).options
+	}
+
+	const { publicKey, privateKey } = await generateKeyPair(
+		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+		options?.jwks?.keyPairConfig ?? {
+			crv: "Ed25519",
+			extractable: true,
+		},
+	);
+
+	const publicWebKey = await exportJWK(publicKey);
+	const privateWebKey = await exportJWK(privateKey);
+	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+	const privateKeyEncryptionEnabled =
+		!options?.jwks?.disablePrivateKeyEncryption;
+
+	let jwk: Partial<Jwk> = {
+		publicKey: JSON.stringify(publicWebKey),
+		privateKey: privateKeyEncryptionEnabled
+			? JSON.stringify(
+					await symmetricEncrypt({
+						key: ctx.context.secret,
+						data: stringifiedPrivateWebKey,
+					}),
+				)
+			: stringifiedPrivateWebKey,
+		createdAt: new Date(),
+	};
+
+	const adapter = getJwksAdapter(ctx.context.adapter);
+	const key = await adapter.createJwk(jwk as Jwk);
+
+	return key
+}
+
+/**
+ * Signs a payload in jwt format
+ *
+ * @param ctx - endpoint context
+ * @param payload - payload to sign
+ * @param options - Jwt signing options. If not provided, uses the jwtPlugin options
+ */
 export async function signJwt(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
 	options?: JwtPluginOptions,
-) {
+): Promise<string> {
+	if (!options) {
+		options = getJwtPlugin(ctx.context).options
+	}
+
 	// Custom/remote signing function
 	if (options?.jwt?.sign && payload) {
 		return options.jwt.sign(payload)
@@ -176,32 +238,7 @@ export async function signJwt(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		const { publicKey, privateKey } = await generateKeyPair(
-			options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-			options?.jwks?.keyPairConfig ?? {
-				crv: "Ed25519",
-				extractable: true,
-			},
-		);
-
-		const publicWebKey = await exportJWK(publicKey);
-		const privateWebKey = await exportJWK(privateKey);
-		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-
-		let jwk: Partial<Jwk> = {
-			publicKey: JSON.stringify(publicWebKey),
-			privateKey: privateKeyEncryptionEnabled
-				? JSON.stringify(
-						await symmetricEncrypt({
-							key: ctx.context.secret,
-							data: stringifiedPrivateWebKey,
-						}),
-					)
-				: stringifiedPrivateWebKey,
-			createdAt: new Date(),
-		};
-
-		key = await adapter.createJwk(jwk as Jwk);
+		key = await createJwk(ctx, options)
 	}
 
 	let privateWebKey = privateKeyEncryptionEnabled
@@ -220,30 +257,41 @@ export async function signJwt(
 		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 	);
 
-	const jwt = await new SignJWT(payload)
+	const jwt = new SignJWT(payload)
 		.setProtectedHeader({
 			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 			kid: key.id,
 			typ: 'JWT',
 		})
-		.setIssuedAt()
-		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
-		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
-		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
-		.setSubject(
-			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
-				ctx.context.session!.user.id,
+		.setIssuedAt(payload.iat)
+		.setIssuer(
+			payload.iss
+			?? options?.jwt?.issuer
+			?? ctx.context.options.baseURL!
 		)
-		.sign(privateKey);
-	return jwt;
+		.setAudience(
+			payload.aud
+			?? options?.jwt?.audience
+			?? ctx.context.options.baseURL!
+		)
+		.setExpirationTime(
+			payload.exp
+			?? options?.jwt?.expirationTime
+			?? "15m"
+		)
+	const sub = (await options?.jwt?.getSubject?.(ctx.context.session!)) ??
+		payload.sub ??
+		ctx.context.session?.user.id
+	if (sub) jwt.setSubject(sub)
+	return await jwt.sign(privateKey);
 }
 
 export const jwt = (options?: JwtPluginOptions) => {
 	const endpoints: BetterAuthPlugin['endpoints'] = {}
 
-	// Signing function is required with remote url
+	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
-		throw new Error("jwks.remoteUrl must be set when using jwt.sign")
+		throw new BetterAuthError("jwks_config", "jwks.remoteUrl must be set when using jwt.sign")
 	}
 
 	// Alg is required to be specified when using oidc plugin and remote url (needed in openid metadata)
@@ -252,7 +300,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 		options.jwks?.remoteUrl &&
 		!options.jwks?.keyPairConfig?.alg
 	) {
-		throw new Error("must specify alg when using the oidc plugin and jwks.remoteUrl")
+		throw new BetterAuthError("jwks_config", "must specify alg when using the oidc plugin and jwks.remoteUrl")
 	}
 
 	// Disables endpoint if using remote url strategy
@@ -347,47 +395,11 @@ export const jwt = (options?: JwtPluginOptions) => {
 			async (ctx) => {
 				const adapter = getJwksAdapter(ctx.context.adapter);
 
-				const keySets = await adapter.getAllKeys();
+				let keySets = await adapter.getAllKeys();
 
 				if (keySets.length === 0) {
-					const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
-					const { publicKey, privateKey } = await generateKeyPair(
-						alg,
-						options?.jwks?.keyPairConfig ?? {
-							crv: "Ed25519",
-							extractable: true,
-						},
-					);
-
-					const publicWebKey = await exportJWK(publicKey);
-					const privateWebKey = await exportJWK(privateKey);
-					const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-					const privateKeyEncryptionEnabled =
-						!options?.jwks?.disablePrivateKeyEncryption;
-					let jwk: Partial<Jwk> = {
-						publicKey: JSON.stringify({ alg, ...publicWebKey }),
-						privateKey: privateKeyEncryptionEnabled
-							? JSON.stringify(
-									await symmetricEncrypt({
-										key: ctx.context.secret,
-										data: stringifiedPrivateWebKey,
-									}),
-								)
-							: stringifiedPrivateWebKey,
-						createdAt: new Date(),
-					};
-
-					await adapter.createJwk(jwk as Jwk);
-
-					return ctx.json({
-						keys: [
-							{
-								...publicWebKey,
-								alg,
-								kid: jwk.id,
-							},
-						],
-					});
+					const key = await createJwk(ctx, options)
+					keySets.push(key)
 				}
 
 				return ctx.json({
@@ -503,6 +515,16 @@ export const jwt = (options?: JwtPluginOptions) => {
 
 	return {
 		id: "jwt",
+		init: (ctx) => {
+			// Add the jwt plugin options to ctx
+			const plugin = ctx.options.plugins?.find(
+				(plugin) => plugin.id === "jwt",
+			);
+			if (!plugin) {
+				throw Error("Plugin should have been register! Should never hit!")
+			}
+			plugin.options = options
+		},
 		endpoints,
 		hooks: {
 			after: getSessionHook ? [ getSessionHook ] : undefined,
