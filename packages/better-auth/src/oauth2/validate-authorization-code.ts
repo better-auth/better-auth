@@ -2,6 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
+import { encodeBasicAuthHeader } from "../utils/encode-basic-auth";
 
 export async function validateAuthorizationCode({
 	code,
@@ -38,10 +39,10 @@ export async function validateAuthorizationCode({
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		const encodedCredentials = Buffer.from(
-			`${options.clientId}:${options.clientSecret}`,
-		).toString("base64");
-		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
+		requestHeaders["authorization"] = encodeBasicAuthHeader(
+			options.clientId,
+			options.clientSecret,
+		);
 	} else {
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
