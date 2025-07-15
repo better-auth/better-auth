@@ -83,7 +83,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.email({
+						email: z.string({
 							error: "A valid email address is required",
 						}),
 						type: z.enum(types, {
@@ -124,7 +124,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 					const email = ctx.body.email;
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
 					if (!emailRegex.test(email)) {
 						throw ctx.error("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_EMAIL,
