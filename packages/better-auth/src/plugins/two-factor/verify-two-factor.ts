@@ -1,15 +1,15 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { APIError } from "better-call";
-import { getSessionFromCtx } from "../../api";
-import { setSessionCookie } from "../../cookies";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
+import { setSessionCookie } from "../../cookies";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import type { UserWithTwoFactor } from "./types";
+import { getSessionFromCtx } from "../../api";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
