@@ -265,7 +265,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
-							authentication: c.authentication || "post",
+							authentication: c.authentication,
 						});
 					},
 					async refreshAccessToken(
@@ -604,7 +604,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
-							authentication: provider.authentication || "basic",
+							authentication: provider.authentication,
 						});
 					} catch (e) {
 						ctx.context.logger.error(

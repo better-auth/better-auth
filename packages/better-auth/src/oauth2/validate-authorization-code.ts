@@ -2,7 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
-import { encodeBasicAuthHeader } from "../utils/encode-basic-auth";
+import { base64 } from "@better-auth/utils/base64";
 
 export async function validateAuthorizationCode({
 	code,
@@ -20,7 +20,7 @@ export async function validateAuthorizationCode({
 	codeVerifier?: string;
 	deviceId?: string;
 	tokenEndpoint: string;
-	authentication: "basic" | "post";
+	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
 }) {
 	const body = new URLSearchParams();
@@ -39,7 +39,7 @@ export async function validateAuthorizationCode({
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		requestHeaders["authorization"] = encodeBasicAuthHeader(
+		requestHeaders["authorization"] = base64.encode(
 			options.clientId,
 			options.clientSecret,
 		);
