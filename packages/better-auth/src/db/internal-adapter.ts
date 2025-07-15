@@ -278,6 +278,45 @@ export const createInternalAdapter = (
 			);
 			return res as Session;
 		},
+		findSessionById: async (
+			sessionId: string,
+		): Promise<{
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
+		} | null> => {
+			const session = await adapter.findOne<Session>({
+				model: "session",
+				where: [
+					{
+						field: "id",
+						value: sessionId,
+					},
+				],
+			});
+			if (!session) {
+				return null;
+			}
+
+			const user = await adapter.findOne<User>({
+				model: "user",
+				where: [
+					{
+						value: session.userId,
+						field: "id",
+					},
+				],
+			});
+			if (!user) {
+				return null;
+			}
+			const parsedSession = parseSessionOutput(ctx.options, session);
+			const parsedUser = parseUserOutput(ctx.options, user);
+
+			return {
+				session: parsedSession,
+				user: parsedUser,
+			};
+		},
 		findSession: async (
 			token: string,
 		): Promise<{
@@ -408,6 +447,41 @@ export const createInternalAdapter = (
 				session: Session;
 				user: User;
 			}[];
+		},
+		updateSessionById: async (
+			sessionId: string,
+			session: Partial<Session> & Record<string, any>,
+			context?: GenericEndpointContext,
+		) => {
+			const updatedSession = await updateWithHooks<Session>(
+				session,
+				[{ field: "id", value: sessionId }],
+				"session",
+				secondaryStorage
+					? {
+							async fn(data) {
+								const currentSession = await secondaryStorage.get(sessionId);
+								let updatedSession: Session | null = null;
+								if (currentSession) {
+									const parsedSession = JSON.parse(currentSession) as {
+										session: Session;
+										user: User;
+									};
+									updatedSession = {
+										...parsedSession.session,
+										...data,
+									};
+									return updatedSession;
+								} else {
+									return null;
+								}
+							},
+							executeMainFn: options.session?.storeSessionInDatabase,
+						}
+					: undefined,
+				context,
+			);
+			return updatedSession;
 		},
 		updateSession: async (
 			sessionToken: string,

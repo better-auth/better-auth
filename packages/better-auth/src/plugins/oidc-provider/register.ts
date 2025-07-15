@@ -23,7 +23,7 @@ export async function registerEndpoint(
     });
   }
 
-  const body = ctx.body;
+  const body = ctx.body as OauthClient;
   const session = await getSessionFromCtx(ctx);
 
   // Check authorization
@@ -68,8 +68,7 @@ export async function registerEndpoint(
   // Validate redirect URIs for redirect-based flows
   if (
     (!body.grant_types ||
-      body.grant_types.includes("authorization_code") ||
-      body.grant_types.includes("implicit")) &&
+      body.grant_types.includes("authorization_code")) &&
     (!body.redirect_uris || body.redirect_uris.length === 0)
   ) {
     throw new APIError("BAD_REQUEST", {
@@ -92,16 +91,6 @@ export async function registerEndpoint(
         "When 'authorization_code' grant type is used, 'code' response type must be included",
     });
   }
-  if (
-    grantTypes.includes("implicit") &&
-    !responseTypes.includes("token")
-  ) {
-    throw new APIError("BAD_REQUEST", {
-      error: "invalid_client_metadata",
-      error_description:
-        "When 'implicit' grant type is used, 'token' response type must be included",
-    });
-  }
 
   // Generate clientId and clientSecret based on its type
   const clientId =
@@ -118,22 +107,21 @@ export async function registerEndpoint(
   const requestedScopes = (body?.scope as string | undefined)?.split(" ").filter((v) => v.length)
   let scope: string | undefined
   if (!requestedScopes?.length) {
-    scope = opts.newlyRegisteredClientScopes?.join(" ")
-  } else {
-    const allowedScopes = opts.newlyRegisteredClientScopes
-    if (allowedScopes) {
-      for (const requestedScope of requestedScopes) {
-        if (!allowedScopes.includes(requestedScope)) {
-          throw new APIError("BAD_REQUEST", {
-            error: "invalid_scope",
-            error_description: `cannot request scope ${requestedScope}`,
-          })
-        }
+    scope = opts.clientRegistrationDefaultScopes?.join(" ")
+  }
+  const allowedScopes =
+    opts.clientRegistrationAllowedScopes ??
+    opts.scopes
+  if (allowedScopes) {
+    for (const requestedScope of (requestedScopes ?? [])) {
+      if (!allowedScopes?.includes(requestedScope)) {
+        throw new APIError("BAD_REQUEST", {
+          error: "invalid_scope",
+          error_description: `cannot request scope ${requestedScope}`,
+        })
       }
     }
-    scope = requestedScopes.join(" ")
   }
-  console.log(scope)
 
   // Create the client with the existing schema
   const schema = oauthToSchema({
@@ -156,7 +144,7 @@ export async function registerEndpoint(
     user_id: session?.session.userId,
   }, true)
   const client = await ctx.context.adapter.create({
-    model: opts.schema?.oauthClient?.modelName ?? 'oauthApplication',
+    model: opts.schema?.oauthClient?.modelName ?? 'oauthClient',
     data: {
       ...schema,
       contacts: schema.contacts?.join(","),

@@ -5,8 +5,9 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
 import { oidcClient } from "./client";
 
-describe("oidc - /register", async (it) => {
+describe("oidc register", async (it) => {
   const baseUrl = "http://localhost:3000"
+  const rpBaseUrl = "http://localhost:5000"
 	const {
 		signInWithTestUser,
 		customFetchImpl,
@@ -18,7 +19,16 @@ describe("oidc - /register", async (it) => {
 			}),
 			oidcProvider({
 				loginPage: "/login",
+        consentPage: "/consent",
         allowDynamicClientRegistration: true,
+        scopes: [
+          "openid",
+          "profile",
+          "email",
+          "offline_access",
+          "create:test",
+          "delete:test",
+        ],
 			}),
 		],
 	});
@@ -31,6 +41,9 @@ describe("oidc - /register", async (it) => {
 			headers,
 		},
 	});
+
+  const providerId = "test"
+  const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
   it("should fail without body", async () => {
     const response = await serverClient.$fetch(
@@ -49,9 +62,7 @@ describe("oidc - /register", async (it) => {
       },
     });
     const applicationRedirectOnly: Partial<OauthClient>= {
-			redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
+			redirect_uris: [ redirectUri ],
 		}
     const response = await unauthenticatedClient.$fetch(
       "/oauth2/register", {
@@ -63,9 +74,7 @@ describe("oidc - /register", async (it) => {
 
 	it("should register private client with minimum requirements", async () => {
 		const applicationRedirectOnly: Partial<OauthClient>= {
-			redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
+			redirect_uris: [ redirectUri ],
 		}
 		const response = await serverClient.$fetch<OauthClient>(
       '/oauth2/register', {
@@ -77,58 +86,10 @@ describe("oidc - /register", async (it) => {
     expect(response.data?.client_secret).toBeDefined();
 	});
 
-  it("should register implicit", async () => {
-    const applicationImplicit: Partial<OauthClient>= {
-			grant_types: ["implicit"],
-      response_types: ["token"],
-      redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
-		}
-		const response = await serverClient.$fetch<OauthClient>(
-      '/oauth2/register', {
-      method: 'POST',
-      body: applicationImplicit,
-    })
-    expect(response.data?.client_id).toBeDefined();
-    expect(response.data?.user_id).toBeDefined();
-    expect(response.data?.client_secret).toBeDefined();
-	});
-
-  it("should fail implicit without redirect", async () => {
-    const applicationImplicit: Partial<OauthClient>= {
-			grant_types: ["implicit"],
-      response_types: ["token"],
-		}
-		const response = await serverClient.$fetch<OauthClient>(
-      '/oauth2/register', {
-      method: 'POST',
-      body: applicationImplicit,
-    })
-    expect(response.error?.status).toBe(400);
-	});
-
-  it("should fail implicit without response type token", async () => {
-    const applicationImplicit: Partial<OauthClient>= {
-			grant_types: ["implicit"],
-      redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
-		}
-		const response = await serverClient.$fetch<OauthClient>(
-      '/oauth2/register', {
-      method: 'POST',
-      body: applicationImplicit,
-    })
-    expect(response.error?.status).toBe(400);
-	});
-
   it("should fail authorization_code without response type code", async () => {
     const applicationImplicit: Partial<OauthClient>= {
       response_types: ["token"],
-      redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
+      redirect_uris: [ redirectUri ],
 		}
 		const response = await serverClient.$fetch<OauthClient>(
       '/oauth2/register', {
@@ -142,9 +103,7 @@ describe("oidc - /register", async (it) => {
     const applicationImplicit: Partial<OauthClient>= {
       token_endpoint_auth_method: "none",
       type: 'web',
-      redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
+      redirect_uris: [ redirectUri ],
 		}
 		const response = await serverClient.$fetch<OauthClient>(
       '/oauth2/register', {
@@ -158,9 +117,7 @@ describe("oidc - /register", async (it) => {
     const applicationImplicit: Partial<OauthClient>= {
       token_endpoint_auth_method: "client_secret_post",
       type: 'native',
-      redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
+      redirect_uris: [ redirectUri ],
 		}
 		const response = await serverClient.$fetch<OauthClient>(
       '/oauth2/register', {
@@ -210,12 +167,8 @@ describe("oidc - /register", async (it) => {
       token_endpoint_auth_method: "client_secret_post",
       grant_types: [
         "authorization_code",
-        "implicit",
-        "password",
         "client_credentials",
         "refresh_token",
-        "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        "urn:ietf:params:oauth:grant-type:saml2-bearer"
       ],
       response_types: ["code", "token"],
       //---- RFC6749 Spec ----//
@@ -267,18 +220,20 @@ describe("oidc - /register", async (it) => {
 	});
 })
 
-describe("oidc - /register unauthenticated", async (it) => {
-  const baseUrl = "http://localhost:3000"
+describe("oidc register - unauthenticated", async (it) => {
+  const authServerBaseUrl = "http://localhost:3000"
+  const rpBaseUrl = "http://localhost:5000"
 	const {
 		customFetchImpl,
 	} = await getTestInstance({
-		baseURL: baseUrl,
+		baseURL: authServerBaseUrl,
 		plugins: [
 			jwt({
 				usesOidcProviderPlugin: true,
 			}),
 			oidcProvider({
 				loginPage: "/login",
+        consentPage: "/consent",
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
 			}),
@@ -286,18 +241,19 @@ describe("oidc - /register unauthenticated", async (it) => {
 	});
 	const unauthenticatedClient = createAuthClient({
 		plugins: [oidcClient()],
-		baseURL: baseUrl,
+		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
 		},
 	});
 
+  const providerId = "test"
+  const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
   it("should create public clients without authentication", async () => {
     const applicationRedirectOnly: Partial<OauthClient>= {
       token_endpoint_auth_method: "none",
-    	redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
+      redirect_uris: [ redirectUri ],
     }
     const response = await unauthenticatedClient.$fetch<OauthClient>(
       "/oauth2/register", {
@@ -311,9 +267,7 @@ describe("oidc - /register unauthenticated", async (it) => {
 
   it("should not create confidential clients without authentication", async () => {
     const applicationRedirectOnly: Partial<OauthClient>= {
-    	redirect_uris: [
-        "http://localhost:3000/api/auth/oauth2/callback/test"
-      ],
+      redirect_uris: [ redirectUri ],
     }
     const response = await unauthenticatedClient.$fetch<OauthClient>(
       "/oauth2/register", {

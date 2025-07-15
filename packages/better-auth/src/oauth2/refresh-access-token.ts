@@ -3,28 +3,24 @@ import type { OAuth2Tokens } from "./types";
 import type { ProviderOptions } from "./types";
 import { base64Url } from "@better-auth/utils/base64";
 
-export async function refreshAccessToken({
+export function createRefreshAccessTokenRequest({
 	refreshToken,
 	options,
-	tokenEndpoint,
 	authentication,
 	extraParams,
-	grantType = "refresh_token",
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
-	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	extraParams?: Record<string, string>;
-	grantType?: string;
-}): Promise<OAuth2Tokens> {
+}) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
 
-	body.set("grant_type", grantType);
+	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
 	if (authentication === "basic") {
 		const encodedCredentials = base64Url.encode(
@@ -41,6 +37,35 @@ export async function refreshAccessToken({
 			body.set(key, value);
 		}
 	}
+
+	return {
+		body,
+		headers,
+	}
+}
+
+export async function refreshAccessToken({
+	refreshToken,
+	options,
+	tokenEndpoint,
+	authentication,
+	extraParams,
+}: {
+	refreshToken: string;
+	options: ProviderOptions;
+	tokenEndpoint: string;
+	authentication?: "basic" | "post";
+	extraParams?: Record<string, string>;
+}): Promise<OAuth2Tokens> {
+	const {
+		body,
+		headers,
+	} = createRefreshAccessTokenRequest({
+		refreshToken,
+		options,
+		authentication,
+		extraParams,
+	})
 
 	const { data, error } = await betterFetch<{
 		access_token: string;

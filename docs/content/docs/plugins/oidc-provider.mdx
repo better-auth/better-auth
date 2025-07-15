@@ -7,17 +7,28 @@ The **OIDC Provider Plugin** enables you to build and manage your own OpenID Con
 
 **Key Features**:
 
-- **Client Registration**: Register clients to authenticate with your OIDC provider.
-- **Dynamic Client Registration**: Allow clients to register dynamically.
+- **Dynamic Client Registration**: Allow clients to register dynamically with your OIDC provider.
 - **Authorization Code Flow**: Support the Authorization Code Flow.
-- **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
 - **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
-- **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
+- **Client Credentials Flow**: Support for client credentials flow for both public and confidential clients.
+- **OAuth Consent**: Implements OAuth consent screens for user authorization.
 - **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.
 
-<Callout type="warn">
-This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
-</Callout>
+**Required Plugins**
+
+- **(JWT)[./jwt]** Manages signed tokens
+
+By default, the OIDC Provider follows (oAuth 2.1)[https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/]. While the OIDC spec currently usage states oAuth 2.0 and oAuth 2.1 in current draft, this plugin SHALL be hardened only with oAuth 2.1 principles including:
+
+- Requirement of PKCE for Authorization Code Grant
+- Redirect URI are compared with exact string matching
+- Removal of Implicit Grant
+- Removal of Resource Owner Password Grant
+- Removal of bearer token in query string of URIs
+- Refresh tokens are one-time use (for all client types by default)
+- Client Credentials support through body credentials
+
+**NOTE:** oAuth 2.1 only hardens the Authorization Server security principles, so oAuth 2.0 compatable clients should still work. The server just fails, instead of authorizes, depreciated methods.
 
 ## Installation
 
@@ -32,10 +43,16 @@ This plugin is in active development and may not be suitable for production use.
         import { oidcProvider } from "better-auth/plugins";
 
         const auth = betterAuth({
-            plugins: [oidcProvider({
-                loginPage: "/sign-in", // path to the login page
+            plugins: [
+              jwt({
+					      usesOidcProviderPlugin: true,
+				      }),
+              oidcProvider({
+                loginPage: "/sign-in", // path to the login page (ie prompt='login')
+                consentPage: "/consent" // path to a consent page (ie prompt='consent')
                 // ...other options
-            })]
+              })
+            ]
         })
         ```
     </Step>
@@ -96,7 +113,7 @@ const application = await client.oauth2.register({
 
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
 
-This Endpoint support [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
+This Endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
 
 ### UserInfo Endpoint
 
@@ -126,7 +143,7 @@ The `getAdditionalUserInfoClaim` function receives the user object and the reque
 
 ### Consent Screen
 
-When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.
+When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -148,7 +165,7 @@ const res = await client.oauth2.consent({
 });
 ```
 
-The `client_id` and other necessary information are stored in the browser cookie, so you don't need to pass them in the request. If they don't exist in the cookie, the consent method will return an error.
+The `client_id` and other necessary information are stored in a browser cookie, so you don't need to pass them in the request. If they don't exist in the cookie, the consent method will return an error.
 
 ### Handling Login
 
@@ -168,9 +185,17 @@ You don't need to handle anything from your side; when a new session is created,
 
 ## Configuration
 
-### OIDC Metadata
+### Scopes
 
-Customize the OIDC metadata by providing a configuration object during initialization.
+Scopes allow clients specific access to specific resources.
+By default, we support the following scopes are supported:
+
+- `openid`: Returns the user's ID (`sub` claim).
+- `profile`: Returns name, picture, given_name, family_name
+- `email`: Returns email and email_verified
+- `offline_access`: Returns a refresh token
+
+The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server, otherwise this is a standard OAuth 2.1 server. All supported scopes must be in this array.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -178,23 +203,90 @@ import { oidcProvider } from "better-auth/plugins";
 
 export const auth = betterAuth({
     plugins: [oidcProvider({
-        metadata: {
-            issuer: "https://your-domain.com",
-            authorization_endpoint: "/custom/oauth2/authorize",
-            token_endpoint: "/custom/oauth2/token",
-            // ...other custom metadata
+        scopes: [ "openid", "profile", "offline_access", "read:post", "write:post" ],
+    })]
+})
+```
+
+### Claims
+
+Claims are fields defined in your access and id tokens. You can add more claims using the `customClaims`.
+
+By internally, we support the following claims are supported: ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp"].
+
+The claims configuration can only be appended to the internal supported claims. Claims should be namespaced when possible to avoid potential future conflicts.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [oidcProvider({
+        customClaims: [ "locale", "https://example.com/roles" ],
+        // Attach claims to id tokens
+        customIdTokenClaims: (_user: User, _scopes: string[]) => {
+          return {
+            locale: "en-GB",
+          }
+        },
+        // Attach claims to access tokens
+        customJwtClaims: (_user: User, _scopes: string[]) => {
+          return {
+            "https://example.com/roles": ["admin", "editor"],
+          }
+        },
+        // Additional user info claims
+        getAdditionalUserInfoClaim: (_user: User, _scopes: string[]) => {
+          return {
+            locale: "en-GB",
+            "https://example.com/roles": ["admin", "editor"],
+          }
+        },
+    })]
+})
+```
+
+### Well-known Configuration
+
+You may wish to hide specific scopes and claims from your well-known configuration. To do so, use the `advertisedMetadata` setting to advertise different scope and claims. This MUST be in your scopes list otherwise the plugin will fail.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [oidcProvider({
+        advertisedMetadata: {
+            scopes_supported: [ "openid", "profile", "offline_access" ],
+            claims_supported: [ "sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp" ],
         }
     })]
 })
 ```
 
-### JWKS Endpoint (Not Fully Implemented)
+### JWT
 
-For JWKS support, you need to use the `jwt` plugin. It exposes the `/jwks` endpoint to provide the public keys.
+This plugin uses the JWT plugin to issue and sign JWT tokens. It exposes the `/jwks` endpoint to provide the public keys for verification.
 
-<Callout type="warn">
-Currently, the token is signed with the application's secret key. The JWKS endpoint is not fully implemented yet.
-</Callout>
+You must set `usesOidcProviderPlugin` to ensure the JWT plugin is OIDC compatable. The JWT plugin must also be registered before OIDC plugin.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [jwt({
+        usesOidcProviderPlugin: true,
+        // ...other options
+      }),
+      oidcProvider({
+        loginPage: "/sign-in", // path to the login page
+        consentPage: "/consent" // path to a consent page
+        // ...other options
+      }),
+    ]
+})
+```
 
 ### Dynamic Client Registration
 
@@ -208,7 +300,102 @@ const auth = betterAuth({
 })
 ```
 
-This will allow clients to register using the `/register` endpoint to be publicly available.
+If you wish to also allow clients to register clients without authentication, such as for MCP, you can enable this feature by setting the `allowUnauthenticatedClientRegistration` option to `true`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+    })]
+})
+```
+
+#### Dynamic Client Registration Scopes
+
+To set a list of default scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationDefaultScopes` field. All scopes must be defined in `scopes`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        scopes: ["reader", "editor"],
+        clientRegistrationDefaultScopes: ["reader"],
+    })]
+})
+```
+
+To also set a list of allowed scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationAllowedScopes` field. These are **in addition** to the `clientRegistrationDefaultScopes`. All scopes must be defined in `scopes`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        scopes: ["reader", "editor"],
+        clientRegistrationDefaultScopes: ["reader"],
+        clientRegistrationAllowedScopes: ["editor"],
+    })]
+})
+```
+
+### Refresh Token Customization
+
+You can choose to format your session tokens in a different string format using the `encodeRefreshToken` and `decodeRefreshToken` functions.
+
+These functions allow you to add additional functionality on the refresh token itself such as refresh token encryption or storage for session replay attacks.
+
+If defined, both `encodeRefreshToken` and `decodeRefreshToken` functions. must be defined.
+
+Example with change in refresh token format and backwards compatablity with v0 token-only format:
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        encodeRefreshToken: (token, session) {
+          const res = session ? `1.${token}.${session}` : token;
+          return res;
+        },
+        decodeRefreshToken: (token) {
+          const tokenSplit = token.split('.');
+          if (tokenSplit.length === 3 && tokenSplit.at(0) === '1') {
+            return {
+              token: tokenSplit.at(1),
+              sessionId: tokenSplit.at(2),
+            };
+          }
+          return { token };
+        },
+    })]
+})
+```
+
+Pseudocode for a token encryption:
+
+```ts title="auth.ts"
+import { CompactEncrypt, compactDecrypt } from 'jose'
+
+const secret = "SOME_SECRET_OR_KEY"
+const alg = "A256KW"
+consts enc = "A256GCM"
+
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        encodeRefreshToken: (token, session) {
+          const value = JSON.stringify({
+            sessionId: session.id,
+            token,
+          });
+          const jwe = await new CompactEncrypt(Buffer.from(value))
+            .setProtectedHeader({ alg, enc })
+            .encrypt(secret);
+          return jwe;
+        },
+        decodeRefreshToken: (token) {
+          const { plaintext } = await compactDecrypt(token, secret);
+          const payload = new TextDecoder().decode(plaintext);
+          return JSON.parse(payload);
+        },
+    })]
+})
+```
 
 ## Schema
 
@@ -216,111 +403,170 @@ The OIDC Provider plugin adds the following tables to the database:
 
 ### OAuth Application
 
-Table Name: `oauthApplication`
-
-<DatabaseTable
-  fields={[
-   {
-      name: "id",
-      type: "string",
-      description: "Database ID of the OAuth client",
-      isPrimaryKey: true
-   },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true
-    },
-    { 
-      name: "clientSecret", 
-      type: "string", 
-      description: "Secret key for the OAuth client",
-      isRequired: true
-    },
-    { 
-      name: "name", 
-      type: "string", 
-      description: "Name of the OAuth client",
-      isRequired: true
-    },
-    { 
-      name: "redirectURLs", 
-      type: "string", 
-      description: "Comma-separated list of redirect URLs",
-      isRequired: true
-    },
-    { 
-      name: "metadata", 
-      type: "string",
-      description: "Additional metadata for the OAuth client",
-      isOptional: true
-    },
-    { 
-      name: "type", 
-      type: "string",
-      description: "Type of OAuth client (e.g., web, mobile)",
-      isRequired: true
-    },
-    { 
-      name: "disabled", 
-      type: "boolean", 
-      description: "Indicates if the client is disabled",
-      isRequired: true
-    },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user who owns the client. (optional)",
-      isOptional: true
-    },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the OAuth client was created" 
-    },
-   {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the OAuth client was last updated"
-   }
-  ]}
-/>
-
-### OAuth Access Token
-
-Table Name: `oauthAccessToken`
+Table Name: `oauthClient`
 
 <DatabaseTable
   fields={[
     {
       name: "id",
       type: "string",
-      description: "Database ID of the access token",
+      description: "Database ID of the OAuth client",
       isPrimaryKey: true
-   },
+    },
+    {
+      name: "clientId",
+      type: "string",
+      isForeignKey: true,
+      references: { model: "oauthClient", field: "clientId" }
+      description: "Unique identifier for each OAuth client",
+      isPrimaryKey: true
+    },
     { 
-      name: "accessToken", 
+      name: "clientSecret",
+      type: "string",
+      description: "Secret key for the OAuth client",
+      isRequired: false
+    },
+    { 
+      name: "disabled",
+      type: "boolean",
+      description: "Indicates if the client is disabled",
+      isRequired: true
+    },
+    {
+      name: "scope",
+      type: "string",
+      description: "Space-separated list of scopes",
+      isRequired: true
+    },
+    { 
+      name: "userId",
+      type: "string",
+      description: "ID of the user who owns the client. (optional)",
+      isOptional: true,
+      isForeignKey: true,
+      references: { model: "user", field: "id" }
+    },
+    { 
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was created" 
+      isOptional: true
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was last updated"
+    }
+    { 
+      name: "name", 
+      type: "string", 
+      description: "Name of the OAuth client",
+      isOptional: true
+    },
+    { 
+      name: "uri", 
+      type: "string", 
+      description: "Client homepage",
+      isOptional: true
+    },
+    {
+      name: "icon", 
+      type: "string", 
+      description: "Logo of the client",
+      isOptional: true,
+    },
+    {
+      name: "contacts", 
+      type: "string", 
+      description: "Comma-separated list of support contacts (likely email)",
+      isOptional: true
+    },
+    {
+      name: "tos", 
+      type: "string", 
+      description: "Terms of Service uri of the client",
+      isOptional: true
+    },
+    {
+      name: "policy", 
+      type: "string", 
+      description: "policy uri of the client",
+      isOptional: true
+    },
+    {
+      name: "softwareId", 
+      type: "string", 
+      description: "Client defined software id",
+      isOptional: true
+    },
+    {
+      name: "softwareVersion", 
+      type: "string", 
+      description: "Version of the software id",
+      isOptional: true
+    },
+    {
+      name: "softwareStatement", 
+      type: "string", 
+      description: "Jwt signed statement of the software",
+      isOptional: true
+    },
+    {
+      name: "redirectURLs", 
+      type: "string", 
+      description: "Comma-separated list of redirect URLs",
+      isRequired: true
+    },
+    {
+      name: "tokenEndpointAuthMethod", 
+      type: "string", 
+      description: "Comma-separated token endpoint auth methods allowed",
+      isOptional: true
+    },
+    {
+      name: "grantTypes", 
+      type: "string", 
+      description: "Comma-separated grant types allowed",
+      isOptional: true
+    },
+    {
+      name: "responseTypes", 
+      type: "string", 
+      description: "Comma-separated response types allowed",
+      isOptional: true
+    },
+    {
+      name: "public", 
+      type: "string",
+      description: "Type of OAuth client (e.g., web, mobile)",
+      isRequired: true
+    },
+    {
+      name: "type", 
+      type: "string",
+      description: "Type of OAuth client (e.g., web, mobile)",
+      isOptional: true
+    },
+    {
+      name: "metadata", 
+      type: "string",
+      description: "Additional metadata for the OAuth client",
+      isOptional: true
+    },
+  ]}
+/>
+
+### Session
+
+Merges with `session` schema. Additional fields:
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "token", 
       type: "string", 
       description: "Access token issued to the client",
-    },
-    { 
-      name: "refreshToken", 
-      type: "string", 
-      description: "Refresh token issued to the client",
-      isRequired: true
-    },
-    { 
-      name: "accessTokenExpiresAt", 
-      type: "Date", 
-      description: "Expiration date of the access token",
-      isRequired: true
-    },
-    { 
-      name: "refreshTokenExpiresAt", 
-      type: "Date", 
-      description: "Expiration date of the refresh token",
-      isRequired: true
     },
     { 
       name: "clientId", 
@@ -330,28 +576,11 @@ Table Name: `oauthAccessToken`
       references: { model: "oauthClient", field: "clientId" }
     },
     { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user associated with the token",
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
-    },
-    { 
       name: "scopes", 
       type: "string", 
       description: "Comma-separated list of scopes granted",
       isRequired: true
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the access token was created" 
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the access token was last updated"
-    }
   ]}
 />
 
@@ -408,12 +637,73 @@ Table Name: `oauthConsent`
 
 ## Options
 
-**allowDynamicClientRegistration**: `boolean` - Enable or disable dynamic client registration.
+### Required
 
-**metadata**: `OIDCMetadata` - Customize the OIDC provider metadata.
+**loginPage** `string` - The URL to the login page. This is used if the client requests the `login`
+prompt.
 
-**loginPage**: `string` - Path to the custom login page.
+**consentPage** `string` - A URL to the consent page where the user will be redirected if the client
+requests consent.
 
-**consentPage**: `string` - Path to the custom consent page.
+After the user consents, they should be redirected by the client to the `redirect_uri` with the authorization code.
 
-**getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.
+When the server redirects the user to the consent page, it will include the
+following query parameters:
+
+- `client_id` - The ID of the client.
+- `scope` - The requested scopes.
+- `code` - The authorization code.
+
+once the user consents, you need to call the `/oauth2/consent` endpoint
+with the code and `accept: true` to complete the authorization. Which will
+then return the client to the `redirect_uri` with the authorization code.
+
+### Optional
+
+**accessTokenExpiresIn**: `number` @default 10 minutes - The amount of time in seconds that the access token is valid for. 10 min is recommended by the [OIDC spec](https://openid.net/specs/oauth-v2-jarm.html#section-2.1-2.3.1)
+
+**m2mAccessTokenExpiresIn** `number` @default 1 hour - The amount of time in seconds that a client credentials grant access token is valid for.
+
+**idTokenExpiresIn** `number` @default 10 hours - The amount of time in seconds that id token is valid for.
+
+**refreshTokenExpiresIn** `number` @default 30 days - The amount of time in seconds that the refresh token is valid for.
+
+**codeExpiresIn** `number` @default 10 minutes - The amount of time in seconds that the authorization code is valid for.
+
+**allowUnauthenticatedClientRegistration** `boolean` @default false - Allow dynamic client registration.
+
+**allowDynamicClientRegistration** `boolean` @default false - Allow dynamic client registration.
+
+**clientRegistrationDefaultScopes** `string[]` - List of scopes for newly registered clients if not requested
+
+**clientRegistrationAllowedScopes** `string[]` @default `clientRegistrationDefaultScopes` - List of scopes for allowed clients in addition to those listed in the default scope. Finalized allowed list is the union of `clientRegistrationDefaultScopes` and this list. If both `clientRegistrationDefaultScopes` and this are undefined, only scopes listed in the `scopes` option are allowed.
+
+**clientCredentialGrantDefaultScopes** `string[]` - List of scopes a newly registered client can have. Leave undefined to throw error if no scope was sent
+
+**scopes** `string[]` @default ["openid", "profile", "email", "offline_access"] - The scopes that the client is allowed to request. Must contain "openid" to be considered an [OIDC server](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims), otherwise it is just an OAuth server.
+
+**generateClientId** `() => string` - Custom function to generate a client ID.
+
+**generateClientSecret** `() => string` - Custom function to generate a client secret.
+
+**customClaims** `string[]` - List of all additional claims returned from customIdTokenClaims and customJwtClaims. Must be defined when using customIdTokenClaims or customJwtClaims
+
+**getAdditionalUserInfoClaim** `(user: User & Record<string, any>, scopes: string[]) => Awaitable<Record<string, any>>` - Get the additional user info claims. This applies only to the OIDC `userinfo` endpoint.
+
+**customIdTokenClaims** `(user: User & Record<string, any>, scopes: string[]) => Awaitable<Record<string, any>>` - Custom claims attached to id tokens. To remain OIDC compliant, claims should be namespaced with a URI. For example, a site example.com should namespace roles at https://example.com/roles.
+
+**customJwtClaims** `(user: User & Record<string, any>, scopes: string[]) => Awaitable<Record<string, any>>` - Custom claims attached to access tokens.
+
+**encodeRefreshToken** `(token: string, session?: Omit<Session, 'token'> & { token?: string }) => Awaitable<string>;` - Custom session token formatter. You can choose to perform additional functionality such as refresh token encryption or store the raw token for session replay attacks. Must be defined when using decodeRefreshToken.
+
+**decodeRefreshToken** `(token: string) => Awaitable<{ sessionId?: string, token: string }>;` - Decodes a custom session token format. If you changed the format after production deployment, ensure that the prior version can still be decoded. Must be defined when using encodeRefreshToken.
+
+#### Advertised Metadata
+
+Overwrite specific /.well-known/openid-configuration values so they are not available publically. This may be important if not all clients need specific scopes.
+
+NOTE: this does not prevent the system from issuing these scopes and returning those claims (use `scopes` and `customClaims` instead).
+
+**scopes_supported** `string[]` - scopes_supported field for openid configuration. All values must be found in the scope field.
+
+**claims_supported** `string[]` - claims_supported field for openid configuration. All values must be found in the customizedClaims field or be an internally supported claim. Internally supported claims: `["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp"]`

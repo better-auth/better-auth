@@ -4,12 +4,11 @@ import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
 
-export async function validateAuthorizationCode({
+export function createAuthorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
 	options,
-	tokenEndpoint,
 	authentication,
 	deviceId,
 	headers,
@@ -19,7 +18,6 @@ export async function validateAuthorizationCode({
 	options: ProviderOptions;
 	codeVerifier?: string;
 	deviceId?: string;
-	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
 }) {
@@ -45,6 +43,45 @@ export async function validateAuthorizationCode({
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
 	}
+
+	return {
+		body,
+		headers: requestHeaders,
+	}
+}
+
+export async function validateAuthorizationCode({
+	code,
+	codeVerifier,
+	redirectURI,
+	options,
+	tokenEndpoint,
+	authentication,
+	deviceId,
+	headers,
+}: {
+	code: string;
+	redirectURI: string;
+	options: ProviderOptions;
+	codeVerifier?: string;
+	deviceId?: string;
+	tokenEndpoint: string;
+	authentication?: "basic" | "post";
+	headers?: Record<string, string>;
+}) {
+	const {
+		body,
+		headers: requestHeaders,
+	} = createAuthorizationCodeRequest({
+		code,
+		codeVerifier,
+		redirectURI,
+		options,
+		authentication,
+		deviceId,
+		headers,
+	})
+
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,

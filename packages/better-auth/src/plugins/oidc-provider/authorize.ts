@@ -1,15 +1,30 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
-import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
+import type { AuthorizationQuery, SchemaClient, OIDCOptions, VerificationValue } from "./types";
 import { generateRandomString } from "../../crypto";
 
-function formatErrorURL(url: string, error: string, description: string) {
-	return `${
-		url.includes("?") ? "&" : "?"
-	}error=${error}&error_description=${description}`;
+/**
+ * Formats an error url
+ */
+export function formatErrorURL(
+	url: string,
+	error: string,
+	description: string,
+	state?: string,
+) {
+	const searchParams = new URLSearchParams({
+		error,
+		error_description: description
+	})
+	state && searchParams.append('state', state)
+	return `${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
 }
 
+/**
+ * Error page url if redirect_uri has not been verified yet
+ * Generates Url for custom error page
+ */
 function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: string,
@@ -37,18 +52,6 @@ export async function authorize(
 		}
 	};
 
-	const opts = {
-		codeExpiresIn: 600,
-		defaultScope: "openid",
-		...options,
-		scopes: [
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-			...(options?.scopes || []),
-		],
-	};
 	if (!ctx.request) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "request not found",
@@ -66,9 +69,10 @@ export async function authorize(
 			JSON.stringify(ctx.query),
 			ctx.context.secret,
 			{
+				httpOnly: true,
 				maxAge: 600,
-				path: "/",
-				sameSite: "lax",
+				path: "/oauth2",
+				sameSite: "strict",
 			},
 		);
 		const queryFromURL = ctx.request.url?.split("?")[1];
@@ -91,14 +95,22 @@ export async function authorize(
 			"invalid_request",
 			"response_type is required",
 		);
-		throw ctx.redirect(
-			getErrorURL(ctx, "invalid_request", "response_type is required"),
-		);
+		throw ctx.redirect(errorURL);
 	}
 
+	if (!(query.response_type === "code")) {
+		const errorURL = getErrorURL(
+			ctx,
+			"unsupported_response_type",
+			"unsupported response type",
+		);
+		throw ctx.redirect(errorURL);
+	}
+
+	/** Check client */
 	const client = await ctx.context.adapter
-		.findOne<Record<string, any>>({
-			model: "oauthApplication",
+		.findOne<Record<string,string|null>>({
+			model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 			where: [
 				{
 					field: "clientId",
@@ -112,9 +124,12 @@ export async function authorize(
 			}
 			return {
 				...res,
-				redirectURLs: res.redirectURLs.split(","),
+				contacts: res.contacts?.split(",") ?? undefined,
+				grantTypes: res.grantTypes?.split(",") ?? undefined,
+				responseTypes: res.responseTypes?.split(",") ?? undefined,
+				redirectUris: res?.redirectUris?.split(",") ?? undefined,
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
+			} as SchemaClient;
 		});
 	if (!client) {
 		const errorURL = getErrorURL(
@@ -124,39 +139,33 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs.find(
-		(url) => url === ctx.query.redirect_uri,
-	);
-
-	if (!redirectURI || !query.redirect_uri) {
-		/**
-		 * show UI error here warning the user that the redirect URI is invalid
-		 */
-		throw new APIError("BAD_REQUEST", {
-			message: "Invalid redirect URI",
-		});
-	}
 	if (client.disabled) {
-		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
-		throw ctx.redirect(errorURL);
-	}
-
-	if (query.response_type !== "code") {
 		const errorURL = getErrorURL(
 			ctx,
-			"unsupported_response_type",
-			"unsupported response type",
+			"client_disabled",
+			"client is disabled"
+		);
+		throw ctx.redirect(errorURL);
+	}
+	const redirectURI = client.redirectUris?.find(
+		(url) => url === ctx.query.redirect_uri,
+	);
+	if (!redirectURI || !query.redirect_uri) {
+		const errorURL = getErrorURL(
+			ctx,
+			"invalid_redirect",
+			"invalid redirect uri"
 		);
 		throw ctx.redirect(errorURL);
 	}
 
 	const requestScope =
-		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
+		query.scope?.split(" ").filter((s) => s) ?? [];
 	const invalidScopes = requestScope.filter((scope) => {
-		const isInvalid =
-			!opts.scopes.includes(scope) ||
-			(scope === "offline_access" && query.prompt !== "consent");
-		return isInvalid;
+		// invalid in scopes list
+		return !options.scopes?.includes(scope) ||
+			// offline access must be requested through PKCE
+			(scope === "offline_access" && (query.code_challenge_method?.toLowerCase() !== "s256" || !query.code_challenge));
 	});
 	if (invalidScopes.length) {
 		return handleRedirect(
@@ -164,40 +173,37 @@ export async function authorize(
 				query.redirect_uri,
 				"invalid_scope",
 				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
-			),
+				query.state,
+			)
 		);
 	}
 
-	if (
-		(!query.code_challenge || !query.code_challenge_method) &&
-		options.requirePKCE
-	) {
+	if ((!query.code_challenge || !query.code_challenge_method)) {
 		return handleRedirect(
-			formatErrorURL(query.redirect_uri, "invalid_request", "pkce is required"),
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"pkce is required",
+				query.state,
+			)
 		);
 	}
 
-	if (!query.code_challenge_method) {
-		query.code_challenge_method = "plain";
-	}
-
-	if (
-		![
-			"s256",
-			options.allowPlainCodeChallengeMethod ? "plain" : "s256",
-		].includes(query.code_challenge_method?.toLowerCase() || "")
-	) {
+	// Check code challenges
+	const codeChallengesSupported = ["s256"]
+	if (!codeChallengesSupported.includes(query.code_challenge_method?.toLowerCase())) {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,
 				"invalid_request",
 				"invalid code_challenge method",
+				query.state,
 			),
 		);
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const codeExpiresInMs = opts.codeExpiresIn * 1000;
+	const codeExpiresInMs = (options.codeExpiresIn ?? 0) * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
 	try {
 		/**
@@ -205,32 +211,19 @@ export async function authorize(
 		 */
 		await ctx.context.internalAdapter.createVerificationValue(
 			{
+				identifier: code,
+				expiresAt,
 				value: JSON.stringify({
 					clientId: client.clientId,
-					redirectURI: query.redirect_uri,
-					scope: requestScope,
 					userId: session.user.id,
-					authTime: session.session.createdAt.getTime(),
-					/**
-					 * If the prompt is set to `consent`, then we need
-					 * to require the user to consent to the scopes.
-					 *
-					 * This means the code now needs to be treated as a
-					 * consent request.
-					 *
-					 * once the user consents, the code will be updated
-					 * with the actual code. This is to prevent the
-					 * client from using the code before the user
-					 * consents.
-					 */
 					requireConsent: query.prompt === "consent",
-					state: query.prompt === "consent" ? query.state : null,
+					redirectUri: query.redirect_uri,
+					scopes: requestScope.join(" "),
+					state: query.state,
 					codeChallenge: query.code_challenge,
 					codeChallengeMethod: query.code_challenge_method,
 					nonce: query.nonce,
-				}),
-				identifier: code,
-				expiresAt,
+				} as VerificationValue)
 			},
 			ctx,
 		);
@@ -240,6 +233,7 @@ export async function authorize(
 				query.redirect_uri,
 				"server_error",
 				"An error occurred while processing the request",
+				query.state,
 			),
 		);
 	}
@@ -256,7 +250,7 @@ export async function authorize(
 		.findOne<{
 			consentGiven: boolean;
 		}>({
-			model: "oauthConsent",
+			model: options.schema?.oauthConsent?.modelName ?? "oauthConsent",
 			where: [
 				{
 					field: "clientId",
@@ -274,39 +268,23 @@ export async function authorize(
 		return handleRedirect(redirectURIWithCode.toString());
 	}
 
-	if (options?.consentPage) {
-		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
-			maxAge: 600,
-			path: "/",
-			sameSite: "lax",
-		});
-		const consentURI = `${options.consentPage}?client_id=${
-			client.clientId
-		}&scope=${requestScope.join(" ")}`;
-
-		return handleRedirect(consentURI);
-	}
-	const htmlFn = options?.getConsentHTML;
-
-	if (!htmlFn) {
+	if (!options.consentPage) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message: "No consent page provided",
 		});
 	}
 
-	return new Response(
-		htmlFn({
-			scopes: requestScope,
-			clientMetadata: client.metadata,
-			clientIcon: client?.icon,
-			clientId: client.clientId,
-			clientName: client.name,
-			code,
-		}),
-		{
-			headers: {
-				"content-type": "text/html",
-			},
-		},
-	);
+	await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
+		httpOnly: true,
+		maxAge: 600,
+		path: "/",
+		sameSite: "strict",
+	});
+	const params = new URLSearchParams({
+		client_id: client.clientId,
+		scope: requestScope.join(" "),
+	})
+	const consentURI = `${options.consentPage}?${params.toString()}`;
+
+	return handleRedirect(consentURI);
 }
