@@ -620,7 +620,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.record(z.any() , z.any()),
+						response: z.record(z.any(), z.any()),
 					}),
 					metadata: {
 						openapi: {

@@ -55,9 +55,7 @@ export function updateApiKey({
 						error: "The refill interval",
 					})
 					.optional(),
-				metadata: z
-					.any()
-					.optional(),
+				metadata: z.any().optional(),
 				expiresIn: z
 					.number({
 						error: "Expiration time of the Api Key in seconds",
@@ -72,12 +70,14 @@ export function updateApiKey({
 					.optional(),
 				rateLimitTimeWindow: z
 					.number({
-						error: "The duration in milliseconds where each request is counted.",
+						error:
+							"The duration in milliseconds where each request is counted.",
 					})
 					.optional(),
 				rateLimitMax: z
 					.number({
-						error: "Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
+						error:
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
 					})
 					.optional(),
 				permissions: z

@@ -58,19 +58,21 @@ export type TeamInput = z.infer<typeof teamSchema>;
 
 const defaultRoles = ["admin", "member", "owner"] as const;
 export const defaultRolesSchema = z.union([
-  z.enum(defaultRoles),
-  z.array(z.enum(defaultRoles))
+	z.enum(defaultRoles),
+	z.array(z.enum(defaultRoles)),
 ]);
 
 type CustomRolesSchema<O> = O extends { roles: { [key: string]: any } }
-  ? z.ZodType<keyof O["roles"] | Array<keyof O["roles"]>>
-  : typeof defaultRolesSchema;
+	? z.ZodType<keyof O["roles"] | Array<keyof O["roles"]>>
+	: typeof defaultRolesSchema;
 
-export type InferOrganizationZodRolesFromOption<O extends OrganizationOptions | undefined> = 
-  CustomRolesSchema<O>;
+export type InferOrganizationZodRolesFromOption<
+	O extends OrganizationOptions | undefined,
+> = CustomRolesSchema<O>;
 
-export type InferOrganizationRolesFromOption<O extends OrganizationOptions | undefined> = 
-  O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+export type InferOrganizationRolesFromOption<
+	O extends OrganizationOptions | undefined,
+> = O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
