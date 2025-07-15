@@ -414,7 +414,7 @@ export const createInternalAdapter = (
 			session: Partial<Session> & Record<string, any>,
 			context?: GenericEndpointContext,
 		) => {
-			const updatedSession = await updateWithHooks<Session>(
+			const updatedSession = await updateWithHooks<Partial<Session>>(
 				session,
 				[{ field: "token", value: sessionToken }],
 				"session",
