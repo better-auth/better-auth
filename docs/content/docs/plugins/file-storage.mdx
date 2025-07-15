@@ -10,6 +10,7 @@ Useful in cases such as uploading a profile picture during sign-up, or storing u
 
 - Securley upload, download and delete files with fine-grain authorization.
 - Supports multiple storage providers.
+- Securely attach metadata to files.
 - Allows other plugins to extend off of the file storage plugin to leverage it's capabilities.
 
 ## Installation
@@ -91,7 +92,9 @@ Useful in cases such as uploading a profile picture during sign-up, or storing u
 
         To upload a file, you can use the `uploadFile` function.
 
-        ```ts title="gallery.ts"
+        <Tabs items={["authClient", "auth"]}>
+        <Tab item="authClient">
+        ```ts
         import { authClient } from "@/lib/auth-client";
 
         const myFile = new File([], "myFile.png"); // Get file from somewhere
@@ -100,6 +103,20 @@ Useful in cases such as uploading a profile picture during sign-up, or storing u
     		path: "myPathName", // The path name defined in the file router // [!code highlight]
     	}); // [!code highlight]
         ```
+        </Tab>
+        <Tab item="auth">
+        ```ts
+        import { auth } from "@/lib/auth";
+
+        const myFile = new File([], "myFile.png");
+
+        auth.api.uploadFile({
+            body: myFile,
+            params: { path: "myPathName" },
+        });
+        ```
+        </Tab>
+        </Tabs>
     </Step>
 
 </Steps>
@@ -119,11 +136,15 @@ There are two main ways for the file-storage plugin to be used:
 If configured, our built-in endpoints will leverage the file-storage plugin specifically for the user's profile image.
 The expected file route name is `userImage`. (this is not configurable)
 
-Endpoints using the file-storage plugin for user profile images:
+<Callout>
+**Good to know** 
+
+Endpoints that use the `userImage` file route:
 
 - `/sign-up/email`: Upload profile image during sign-up
 - `/update-user`: Update or delete user profile image
 - `/delete-user`: Delete user profile image
+</Callout>
 
 ### Setting up the file route
 
@@ -214,9 +235,11 @@ Alternaitvely, if you want full control over the file route, you can manually de
 
 ### Upload image during sign-up
 
+<Tabs items={["authClient", "auth"]}>
+<Tab item="authClient">
 To upload an image during sign-up, you must provide a `FormData` to the sign-up endpoint.
 
-```ts title="sign-up.ts"
+```ts
 const myFile = new File([], "image.png");
 
 const formData = new FormData();
@@ -227,6 +250,24 @@ formData.append("image", myFile);
 
 const { data, error } = await authClient.signUp.email({ formData }); // [!code highlight]
 ```
+</Tab>
+<Tab item="auth">
+Unlike the authClient, you do not need to provide a `FormData` object, you can simply pass in the `image` as a `File` object.
+
+```ts
+const myFile = new File([], "image.png");
+
+const { data, error } = await auth.api.signUpEmail({ // [!code highlight]
+    body: { // [!code highlight]
+        name: "John Doe", // [!code highlight]
+        email: "test@test.com", // [!code highlight]
+        password: "password", // [!code highlight]
+        image: myFile, // [!code highlight]
+    }, // [!code highlight]
+}); // [!code highlight]
+```
+</Tab>
+</Tabs>
 
 This will automatically upload the image to your configured storage provider, and set the user's `image` field to the expected file URL.
 
