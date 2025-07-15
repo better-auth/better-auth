@@ -165,7 +165,7 @@ describe("email-otp", async () => {
 		expect(res.data?.token).toBeDefined();
 	});
 
-	it.only("should fail on invalid email", async () => {
+	it("should fail on invalid email", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
 			email: "invalid-email",
 			type: "email-verification",
