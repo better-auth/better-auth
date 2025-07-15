@@ -1482,12 +1482,6 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.0.5
-      zod-error:
-        specifier: ^1.5.0
-        version: 1.5.0
-      zod-to-json-schema:
-        specifier: ^3.21.1
-        version: 3.24.5(zod@4.0.5)
     devDependencies:
       '@prisma/client':
         specifier: ^5.22.0
@@ -1677,8 +1671,8 @@ importers:
         specifier: 'catalog:'
         version: 1.0.9
       zod:
-        specifier: ^3.23.8
-        version: 3.25.42
+        specifier: ^4.0.0
+        version: 4.0.5
     devDependencies:
       better-auth:
         specifier: workspace:*
@@ -1714,8 +1708,8 @@ importers:
         specifier: workspace:^
         version: link:../better-auth
       zod:
-        specifier: ^3.24.1
-        version: 3.25.42
+        specifier: ^4.0.0
+        version: 4.0.5
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.12
@@ -19904,9 +19898,6 @@ packages:
   zip-stream@6.0.1:
     resolution: {integrity: sha512-zK7YHHz4ZXpW89AHXUPbQVGKI7uvkd3hzusTdotCg1UxyaVtg0zFJSTfW/Dq5f7OBBVnq6cZIaC8Ti4hb6dtCA==}
     engines: {node: '>= 14'}
-
-  zod-error@1.5.0:
-    resolution: {integrity: sha512-zzopKZ/skI9iXpqCEPj+iLCKl9b88E43ehcU+sbRoHuwGd9F1IDVGQ70TyO6kmfiRL1g4IXkjsXK+g1gLYl4WQ==}
 
   zod-to-json-schema@3.24.5:
     resolution: {integrity: sha512-/AuWwMP+YqiPbsJx5D6TfgRTc4kTLjsh5SOcd4bLsfUg2RcEXrFMJl1DGgdHy2aCfsIA/cr/1JM0xcB2GZji8g==}
@@ -45227,17 +45218,9 @@ snapshots:
       compress-commons: 6.0.2
       readable-stream: 4.7.0
 
-  zod-error@1.5.0:
-    dependencies:
-      zod: 3.25.42
-
   zod-to-json-schema@3.24.5(zod@3.25.42):
     dependencies:
       zod: 3.25.42
-
-  zod-to-json-schema@3.24.5(zod@4.0.5):
-    dependencies:
-      zod: 4.0.5
 
   zod-to-ts@1.2.0(typescript@5.8.3)(zod@3.25.42):
     dependencies:
