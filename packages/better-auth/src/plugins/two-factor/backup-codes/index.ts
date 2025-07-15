@@ -104,7 +104,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						 */
 						disableSession: z
 							.boolean({
-								description: "If true, the session cookie will not be set.",
+								error: "If true, the session cookie will not be set.",
 							})
 							.optional(),
 						/**
@@ -114,7 +114,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						 */
 						trustDevice: z
 							.boolean({
-								description:
+								error:
 									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
 							})
 							.optional(),

@@ -26,62 +26,58 @@ export function updateApiKey({
 			method: "POST",
 			body: z.object({
 				keyId: z.string({
-					description: "The id of the Api Key",
+					error: "The id of the Api Key",
 				}),
 				userId: z.coerce.string().optional(),
 				name: z
 					.string({
-						description: "The name of the key",
+						error: "The name of the key",
 					})
 					.optional(),
 				enabled: z
 					.boolean({
-						description: "Whether the Api Key is enabled or not",
+						error: "Whether the Api Key is enabled or not",
 					})
 					.optional(),
 				remaining: z
 					.number({
-						description: "The number of remaining requests",
+						error: "The number of remaining requests",
 					})
 					.min(1)
 					.optional(),
 				refillAmount: z
 					.number({
-						description: "The refill amount",
+						error: "The refill amount",
 					})
 					.optional(),
 				refillInterval: z
 					.number({
-						description: "The refill interval",
+						error: "The refill interval",
 					})
 					.optional(),
 				metadata: z
-					.any({
-						description: "The metadata of the Api Key",
-					})
+					.any()
 					.optional(),
 				expiresIn: z
 					.number({
-						description: "Expiration time of the Api Key in seconds",
+						error: "Expiration time of the Api Key in seconds",
 					})
 					.min(1)
 					.optional()
 					.nullable(),
 				rateLimitEnabled: z
 					.boolean({
-						description: "Whether the key has rate limiting enabled.",
+						error: "Whether the key has rate limiting enabled.",
 					})
 					.optional(),
 				rateLimitTimeWindow: z
 					.number({
-						description:
-							"The duration in milliseconds where each request is counted.",
+						error: "The duration in milliseconds where each request is counted.",
 					})
 					.optional(),
 				rateLimitMax: z
 					.number({
-						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
+						error: "Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
 					})
 					.optional(),
 				permissions: z

@@ -202,7 +202,7 @@ export function verifyApiKey({
 			method: "POST",
 			body: z.object({
 				key: z.string({
-					description: "The key to verify",
+					error: "The key to verify",
 				}),
 				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),

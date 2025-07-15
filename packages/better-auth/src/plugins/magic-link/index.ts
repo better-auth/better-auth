@@ -60,18 +60,18 @@ export const magicLink = (options: MagicLinkOptions) => {
 					body: z.object({
 						email: z
 							.string({
-								description: "Email address to send the magic link",
+								error: "Email address to send the magic link",
 							})
 							.email(),
 						name: z
 							.string({
-								description:
+								error:
 									"User display name. Only used if the user is registering for the first time.",
 							})
 							.optional(),
 						callbackURL: z
 							.string({
-								description: "URL to redirect after magic link verification",
+								error: "URL to redirect after magic link verification",
 							})
 							.optional(),
 					}),
@@ -149,11 +149,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 					method: "GET",
 					query: z.object({
 						token: z.string({
-							description: "Verification token",
+							error: "Verification token",
 						}),
 						callbackURL: z
 							.string({
-								description:
+								error:
 									"URL to redirect after magic link verification, if not provided will return session",
 							})
 							.optional(),

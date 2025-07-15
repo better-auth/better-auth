@@ -150,14 +150,14 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					method: "POST",
 					body: z.object({
 						phoneNumber: z.string({
-							description: "Phone number to sign in",
+							error: "Phone number to sign in",
 						}),
 						password: z.string({
-							description: "Password to use for sign in",
+							error: "Password to use for sign in",
 						}),
 						rememberMe: z
 							.boolean({
-								description: "Remember the session",
+								error: "Remember the session",
 							})
 							.optional(),
 					}),
@@ -314,7 +314,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					method: "POST",
 					body: z.object({
 						phoneNumber: z.string({
-							description: "Phone number to send OTP",
+							error: "Phone number to send OTP",
 						}),
 					}),
 					metadata: {
@@ -388,13 +388,13 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 * Phone number
 						 */
 						phoneNumber: z.string({
-							description: "Phone number to verify",
+							error: "Phone number to verify",
 						}),
 						/**
 						 * OTP code
 						 */
 						code: z.string({
-							description: "OTP code",
+							error: "OTP code",
 						}),
 						/**
 						 * Disable session creation after verification
@@ -402,7 +402,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 */
 						disableSession: z
 							.boolean({
-								description: "Disable session creation after verification",
+								error: "Disable session creation after verification",
 							})
 							.optional(),
 						/**
@@ -412,7 +412,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 */
 						updatePhoneNumber: z
 							.boolean({
-								description:
+								error:
 									"Check if there is a session and update the phone number",
 							})
 							.optional(),

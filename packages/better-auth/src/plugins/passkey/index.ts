@@ -330,7 +330,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						.object({
 							email: z
 								.string({
-									description: "The email address of the user",
+									error: "The email address of the user",
 								})
 								.optional(),
 						})
@@ -491,12 +491,10 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.any({
-							description: "The response from the authenticator",
-						}),
+						response: z.any(),
 						name: z
 							.string({
-								description: "Name of the passkey",
+								error: "Name of the passkey",
 							})
 							.optional(),
 					}),
@@ -622,7 +620,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.record(z.any()),
+						response: z.record(z.any() , z.any()),
 					}),
 					metadata: {
 						openapi: {
