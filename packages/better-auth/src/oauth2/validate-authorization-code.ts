@@ -1,4 +1,3 @@
-import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
@@ -20,7 +19,7 @@ export async function validateAuthorizationCode({
 	codeVerifier?: string;
 	deviceId?: string;
 	tokenEndpoint: string;
-	authentication?: "basic" | "post";
+	authentication: "basic" | "post";
 	headers?: Record<string, string>;
 }) {
 	const body = new URLSearchParams();
@@ -36,10 +35,12 @@ export async function validateAuthorizationCode({
 	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
+	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
+	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		const encodedCredentials = base64Url.encode(
+		const encodedCredentials = Buffer.from(
 			`${options.clientId}:${options.clientSecret}`,
-		);
+		).toString("base64");
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
 		body.set("client_id", options.clientId);
