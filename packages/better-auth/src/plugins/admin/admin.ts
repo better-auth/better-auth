@@ -5,14 +5,7 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import {
-	type BetterAuthPlugin,
-	type InferOptionSchema,
-	type AuthPluginSchema,
-	type Session,
-	type User,
-	type Where,
-} from "../../types";
+import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -101,6 +94,7 @@ export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
 	O extends { roles: Record<string, unknown> }
 		? keyof O["roles"]
 		: "user" | "admin";
+
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -584,7 +578,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte"], {
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"], {
 								description: "The operator to use for the filter",
 							})
 							.optional(),
@@ -999,8 +993,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.context.authCookies.dontRememberToken.name,
 						ctx.context.secret,
 					);
+					const adminCookieProp = ctx.context.createAuthCookie("admin_session");
 					await ctx.setSignedCookie(
-						"admin_session",
+						adminCookieProp.name,
 						`${ctx.context.session.session.token}:${
 							dontRememberMeCookie || ""
 						}`,
@@ -1049,8 +1044,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: "Failed to find user",
 						});
 					}
+					const adminCookieName =
+						ctx.context.createAuthCookie("admin_session").name;
 					const adminCookie = await ctx.getSignedCookie(
-						"admin_session",
+						adminCookieName,
 						ctx.context.secret,
 					);
 
@@ -1244,6 +1241,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
+					const user = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: "User not found",
+						});
+					}
+
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 					return ctx.json({
 						success: true,
@@ -1433,41 +1440,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
+		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
-
-const schema = {
-	user: {
-		fields: {
-			role: {
-				type: "string",
-				required: false,
-				input: false,
-			},
-			banned: {
-				type: "boolean",
-				defaultValue: false,
-				required: false,
-				input: false,
-			},
-			banReason: {
-				type: "string",
-				required: false,
-				input: false,
-			},
-			banExpires: {
-				type: "date",
-				required: false,
-				input: false,
-			},
-		},
-	},
-	session: {
-		fields: {
-			impersonatedBy: {
-				type: "string",
-				required: false,
-			},
-		},
-	},
-} satisfies AuthPluginSchema;

@@ -1,8 +1,9 @@
 {
   "name": "better-auth",
-  "version": "1.2.8-beta.7",
+  "version": "1.2.12",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -654,10 +655,37 @@
       ]
     }
   },
+  "dependencies": {
+    "@better-auth/utils": "0.2.5",
+    "@better-fetch/fetch": "catalog:",
+    "@noble/ciphers": "^0.6.0",
+    "@noble/hashes": "^1.6.1",
+    "@simplewebauthn/browser": "^13.0.0",
+    "@simplewebauthn/server": "^13.0.0",
+    "better-call": "catalog:",
+    "defu": "^6.1.4",
+    "jose": "^6.0.11",
+    "kysely": "^0.28.2",
+    "nanostores": "^0.11.3",
+    "zod": "^3.24.1"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
     "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/bun": "latest",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.14",
@@ -674,6 +702,7 @@
     "pg": "^8.13.1",
     "prisma": "^5.22.0",
     "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "react-native": "~0.74.6",
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
@@ -682,20 +711,6 @@
     "unbuild": "catalog:",
     "vitest": "^1.6.0",
     "vue": "^3.5.13"
-  },
-  "dependencies": {
-    "@better-auth/utils": "0.2.5",
-    "@better-fetch/fetch": "catalog:",
-    "@noble/ciphers": "^0.6.0",
-    "@noble/hashes": "^1.6.1",
-    "@simplewebauthn/browser": "^13.0.0",
-    "@simplewebauthn/server": "^13.0.0",
-    "better-call": "catalog:",
-    "defu": "^6.1.4",
-    "jose": "^5.9.6",
-    "kysely": "^0.28.1",
-    "nanostores": "^0.11.3",
-    "zod": "^3.24.1"
   },
   "overrides": {
     "whatwg-url": "^14.0.0"

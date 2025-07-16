@@ -1,20 +1,20 @@
 <script lang="ts" setup>
-import { forgetPassword } from "~/lib/auth-client.js";
+import { requestPasswordReset } from "~/lib/auth-client.js";
 
 const email = ref("");
 
-const handleForgetPassword = async () => {
+const handleRequestPasswordReset = async () => {
 	if (!email.value) {
 		alert("Please enter your email address");
 		return;
 	}
-	await forgetPassword(
+	await requestPasswordReset(
 		{
 			email: email.value,
 			redirectTo: "/reset-password",
 		},
 		{
-			// onSuccess find the url with token in server console. For detail check forgetPassword section: https://www.better-auth.com/docs/authentication/email-password
+			// onSuccess find the url with token in server console. For detail check requestPasswordReset section: https://www.better-auth.com/docs/authentication/email-password
 			onSuccess() {
 				alert("Password reset link sent to your email");
 				window.location.href = "/sign-in";
@@ -43,7 +43,7 @@ const handleForgetPassword = async () => {
 						<Label for="email">Email</Label>
 						<Input id="email" type="email" placeholder="m@example.com" required v-model="email" />
 					</div>
-					<Button type="button" class="w-full" @click="handleForgetPassword">
+					<Button type="button" class="w-full" @click="handleRequestPasswordReset">
 						Reset Password
 					</Button>
 				</div>

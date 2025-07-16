@@ -8,7 +8,7 @@ export const generateMigrations: SchemaGenerator = async ({
 	const { compileMigrations } = await getMigrations(options);
 	const migrations = await compileMigrations();
 	return {
-		code: migrations,
+		code: migrations.trim() === ";" ? "" : migrations,
 		fileName:
 			file ||
 			`./better-auth_migrations/${new Date()

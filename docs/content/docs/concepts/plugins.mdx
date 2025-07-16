@@ -5,7 +5,7 @@ description: Learn how to use plugins with Better Auth.
 
 Plugins are a key part of Better Auth, they let you extend the base functionalities. You can use them to add new authentication methods, features, or customize behaviors.
 
-Better Auth offers comes with many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
+Better Auth comes with many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
 
 ## Using a Plugin
 
@@ -168,7 +168,7 @@ By default better-auth will create an `id` field for each table. You can add add
 
 The key is the column name and the value is the column definition. The column definition can have the following properties:
 
-`type`: The type of the filed. It can be `string`, `number`, `boolean`, `date`.
+`type`: The type of the field. It can be `string`, `number`, `boolean`, `date`.
 
 `required`:  if the field should be required on a new record. (default: `false`)
 
@@ -242,7 +242,7 @@ const myPlugin = ()=>{
                     matcher: (context)=>{
                         return context.headers.get("x-my-header") === "my-value"
                     },
-                    handler: createAuthMiddleware(async(ctx)=>{
+                    handler: createAuthMiddleware(async (ctx)=>{
                         //do something before the request
                         return  {
                             context: ctx // if you want to modify the context
@@ -253,11 +253,11 @@ const myPlugin = ()=>{
                 matcher: (context)=>{
                     return context.path === "/sign-up/email"
                 },
-                handler: async(ctx)=>{
+                handler: createAuthMiddleware(async (ctx)=>{
                     return ctx.json({
                         message: "Hello World"
                     }) // if you want to modify the response
-                }
+                })
             }]
         }
     } satisfies BetterAuthPlugin
@@ -510,7 +510,7 @@ See built-in plugins for examples of how to use atoms properly.
 
 ### Path methods
 
-by default, inferred paths use `GET` method if they don't require a body and `POST` if they do. You can override this by passing a `pathMethods` object. The key should be the path and the value should be the method ("POST" | "GET").
+By default, inferred paths use `GET` method if they don't require a body and `POST` if they do. You can override this by passing a `pathMethods` object. The key should be the path and the value should be the method ("POST" | "GET").
 
 ```ts title="client-plugin.ts"
 import type { BetterAuthClientPlugin } from "better-auth/client";

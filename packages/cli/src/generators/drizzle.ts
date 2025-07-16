@@ -3,8 +3,10 @@ import {
 	type BetterAuthDbSchema,
 	type FieldAttribute,
 } from "better-auth/db";
+import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
+import prettier from "prettier";
 
 export function convertToSnakeCase(str: string) {
 	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
@@ -27,7 +29,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 	const fileExist = existsSync(filePath);
 
-	let code: string = generateImport({ databaseType, tables });
+	let code: string = generateImport({ databaseType, tables, options });
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
@@ -117,7 +119,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		let id: string = "";
 
 		if (options.advanced?.database?.useNumberId) {
-			id = `int("id").autoincrement.primaryKey()`;
+			if (databaseType === "pg") {
+				id = `serial("id").primaryKey()`;
+			} else {
+				id = `int("id").autoincrement.primaryKey()`;
+			}
 		} else {
 			if (databaseType === "mysql") {
 				id = `varchar('id', { length: 36 }).primaryKey()`;
@@ -139,6 +145,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							if (attr.defaultValue) {
 								if (typeof attr.defaultValue === "function") {
 									type += `.$defaultFn(${attr.defaultValue})`;
+								} else if (typeof attr.defaultValue === "string") {
+									type += `.default("${attr.defaultValue}")`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
 								}
@@ -160,9 +168,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				});`;
 		code += `\n${schema}\n`;
 	}
-
+	const formattedCode = await prettier.format(code, {
+		parser: "typescript",
+	});
 	return {
-		code: code,
+		code: formattedCode,
 		fileName: filePath,
 		overwrite: fileExist,
 	};
@@ -171,12 +181,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 function generateImport({
 	databaseType,
 	tables,
-}: { databaseType: "sqlite" | "mysql" | "pg"; tables: BetterAuthDbSchema }) {
+	options,
+}: {
+	databaseType: "sqlite" | "mysql" | "pg";
+	tables: BetterAuthDbSchema;
+	options: BetterAuthOptions;
+}) {
 	let imports: string[] = [];
 
 	const hasBigint = Object.values(tables).some((table) =>
 		Object.values(table.fields).some((field) => field.bigint),
 	);
+
+	const useNumberId = options.advanced?.database?.useNumberId;
 
 	imports.push(`${databaseType}Table`);
 	imports.push(
@@ -189,6 +206,7 @@ function generateImport({
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
 	imports.push(databaseType === "mysql" ? "int" : "integer");
+	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
 
 	return `import { ${imports
 		.map((x) => x.trim())
