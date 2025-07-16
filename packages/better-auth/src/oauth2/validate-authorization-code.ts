@@ -52,8 +52,6 @@ export async function validateAuthorizationCode({
 	for (const [key, value] of Object.entries(additionalParams)) {
 		if (!body.has(key)) body.append(key, value);
 	}
-		body.set(key, value);
-	}
 
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
