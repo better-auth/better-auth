@@ -886,8 +886,7 @@ export const withMcpAuth = <
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
-		const wwwAuthenticateValue =
-			`Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-authorization-server`;
+		const wwwAuthenticateValue = `Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-authorization-server`;
 		if (!session) {
 			return Response.json(
 				{
