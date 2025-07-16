@@ -56,6 +56,11 @@ export const username = (options?: UsernameOptions) => {
 								description: "Remember the user session",
 							})
 							.optional(),
+						callbackURL: z
+							.string({
+								description: "The URL to redirect to after email verification",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -228,6 +233,42 @@ export const username = (options?: UsernameOptions) => {
 					});
 				},
 			),
+			isUsernameAvailable: createAuthEndpoint(
+				"/is-username-available",
+				{
+					method: "POST",
+					body: z.object({
+						username: z.string({
+							description: "The username to check",
+						}),
+					}),
+				},
+				async (ctx) => {
+					const username = ctx.body.username;
+					if (!username) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+					const user = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "username",
+								value: username.toLowerCase(),
+							},
+						],
+					});
+					if (user) {
+						return ctx.json({
+							available: false,
+						});
+					}
+					return ctx.json({
+						available: true,
+					});
+				},
+			),
 		},
 		schema: mergeSchema(schema, options?.schema),
 		hooks: {
@@ -274,7 +315,14 @@ export const username = (options?: UsernameOptions) => {
 									},
 								],
 							});
-							if (user) {
+
+							const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
+							const blockChangeUpdateUser =
+								ctx.path === "/update-user" &&
+								user &&
+								ctx.context.session &&
+								user.id !== ctx.context.session.session.userId;
+							if (blockChangeSignUp || blockChangeUpdateUser) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
