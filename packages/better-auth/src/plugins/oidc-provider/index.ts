@@ -29,27 +29,17 @@ import { base64 } from "@better-auth/utils/base64";
 export async function getClient(
 	clientId: string,
 	adapter: any,
-	modelNameOrString: { oauthClient: string } | string,
 	trustedClients: (Client & { skipConsent?: boolean })[] = [],
 ): Promise<(Client & { skipConsent?: boolean }) | null> {
-	// First check trusted clients
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
 	if (trustedClient) {
 		return trustedClient;
 	}
-
-	// Determine the model name to use
-	const modelName =
-		typeof modelNameOrString === "string"
-			? modelNameOrString
-			: modelNameOrString.oauthClient;
-
-	// Fall back to database lookup
 	const dbClient = await adapter
 		.findOne({
-			model: modelName,
+			model: "oauthApplication",
 			where: [{ field: "clientId", value: clientId }],
 		})
 		.then((res: Record<string, any> | null) => {
@@ -538,7 +528,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const client = await getClient(
 						client_id.toString(),
 						ctx.context.adapter,
-						modelName,
 						trustedClients,
 					);
 					if (!client) {
@@ -1136,7 +1125,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const client = await getClient(
 						ctx.params.id,
 						ctx.context.adapter,
-						modelName,
 						trustedClients,
 					);
 					if (!client) {
