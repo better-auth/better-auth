@@ -352,155 +352,146 @@ const createTemplateCallback =
 			context: saml.SamlLib.replaceTagsByValue(template, tagValues),
 		};
 	};
-class MockSAMLIdP {
-	private app: ExpressApp;
-	private server: ReturnType<typeof createServer> | undefined;
-	private port: number;
-	private idp: ReturnType<typeof saml.IdentityProvider>;
-	private sp: ReturnType<typeof saml.ServiceProvider>;
-	constructor(port: number) {
-		this.port = port;
-		this.app = express();
-		this.app.use(bodyParser.urlencoded({ extended: true }));
-		this.app.use(bodyParser.json());
+const createMockSAMLIdP = (port: number) => {
+	const app: ExpressApp = express();
+	let server: ReturnType<typeof createServer> | undefined;
 
-		this.idp = saml.IdentityProvider({
-			metadata: idpMetadata,
-			privateKey: idPk,
-			isAssertionEncrypted: false,
-			privateKeyPass: "jXmKf9By6ruLnUdRo90G",
-			loginResponseTemplate: {
-				context:
-					'<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" InResponseTo="{InResponseTo}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value="{StatusCode}"/></samlp:Status><saml:Assertion ID="{AssertionID}" Version="2.0" IssueInstant="{IssueInstant}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>{Issuer}</saml:Issuer><saml:Subject><saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="{SubjectConfirmationDataNotOnOrAfter}" Recipient="{SubjectRecipient}" InResponseTo="{InResponseTo}"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="{ConditionsNotBefore}" NotOnOrAfter="{ConditionsNotOnOrAfter}"><saml:AudienceRestriction><saml:Audience>{Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>{AttributeStatement}</saml:Assertion></samlp:Response>',
-				attributes: [
-					{
-						name: "firstName",
-						valueTag: "firstName",
-						nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
-						valueXsiType: "xs:string",
-					},
-					{
-						name: "lastName",
-						valueTag: "lastName",
-						nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
-						valueXsiType: "xs:string",
-					},
-					{
-						name: "email",
-						valueTag: "email",
-						nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
-						valueXsiType: "xs:string",
-					},
-				],
-			},
-		});
-		this.sp = saml.ServiceProvider({
-			metadata: spMetadata,
-		});
-		this.app.get(
-			"/api/sso/saml2/idp/post",
-			async (req: ExpressRequest, res: ExpressResponse) => {
-				const user = { emailAddress: "test@email.com", famName: "hello world" };
-				const { context, entityEndpoint } = await this.idp.createLoginResponse(
-					this.sp,
-					{} as any,
-					saml.Constants.wording.binding.post,
-					user,
-					createTemplateCallback(this.idp, this.sp, user.emailAddress),
-				);
-				res.status(200).send({ samlResponse: context, entityEndpoint });
-			},
-		);
-		this.app.get(
-			"/api/sso/saml2/idp/redirect",
-			async (req: ExpressRequest, res: ExpressResponse) => {
-				const user = { emailAddress: "test@email.com", famName: "hello world" };
-				const { context, entityEndpoint } = await this.idp.createLoginResponse(
-					this.sp,
-					{} as any,
-					saml.Constants.wording.binding.post,
-					user,
-					createTemplateCallback(this.idp, this.sp, user.emailAddress),
-				);
-				res.status(200).send({ samlResponse: context, entityEndpoint });
-			},
-		);
-		this.app.post("/api/sso/saml2/sp/acs", async (req: any, res: any) => {
-			try {
-				const parseResult = await this.sp.parseLoginResponse(
-					this.idp,
-					saml.Constants.wording.binding.post,
-					req,
-				);
-				const { extract } = parseResult;
-				const { attributes } = extract;
-				const relayState = req.body.RelayState;
-				if (relayState) {
-					return res.status(200).send({ relayState, attributes });
-				} else {
-					return res
-						.status(200)
-						.send({ extract, message: "RelayState is missing." });
-				}
-			} catch (error) {
-				console.error("Error handling SAML ACS endpoint:", error);
-				res.status(500).send({ error: "Failed to process SAML response." });
+	app.use(bodyParser.urlencoded({ extended: true }));
+	app.use(bodyParser.json());
+
+	const idp = saml.IdentityProvider({
+		metadata: idpMetadata,
+		privateKey: idPk,
+		isAssertionEncrypted: false,
+		privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+		loginResponseTemplate: {
+			context:
+				'<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" InResponseTo="{InResponseTo}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value="{StatusCode}"/></samlp:Status><saml:Assertion ID="{AssertionID}" Version="2.0" IssueInstant="{IssueInstant}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>{Issuer}</saml:Issuer><saml:Subject><saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="{SubjectConfirmationDataNotOnOrAfter}" Recipient="{SubjectRecipient}" InResponseTo="{InResponseTo}"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="{ConditionsNotBefore}" NotOnOrAfter="{ConditionsNotOnOrAfter}"><saml:AudienceRestriction><saml:Audience>{Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>{AttributeStatement}</saml:Assertion></samlp:Response>',
+			attributes: [
+				{
+					name: "firstName",
+					valueTag: "firstName",
+					nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+					valueXsiType: "xs:string",
+				},
+				{
+					name: "lastName",
+					valueTag: "lastName",
+					nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+					valueXsiType: "xs:string",
+				},
+				{
+					name: "email",
+					valueTag: "email",
+					nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+					valueXsiType: "xs:string",
+				},
+			],
+		},
+	});
+	const sp = saml.ServiceProvider({
+		metadata: spMetadata,
+	});
+	app.get(
+		"/api/sso/saml2/idp/post",
+		async (req: ExpressRequest, res: ExpressResponse) => {
+			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const { context, entityEndpoint } = await idp.createLoginResponse(
+				sp,
+				{} as any,
+				saml.Constants.wording.binding.post,
+				user,
+				createTemplateCallback(idp, sp, user.emailAddress),
+			);
+			res.status(200).send({ samlResponse: context, entityEndpoint });
+		},
+	);
+	app.get(
+		"/api/sso/saml2/idp/redirect",
+		async (req: ExpressRequest, res: ExpressResponse) => {
+			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const { context, entityEndpoint } = await idp.createLoginResponse(
+				sp,
+				{} as any,
+				saml.Constants.wording.binding.post,
+				user,
+				createTemplateCallback(idp, sp, user.emailAddress),
+			);
+			res.status(200).send({ samlResponse: context, entityEndpoint });
+		},
+	);
+	app.post("/api/sso/saml2/sp/acs", async (req: any, res: any) => {
+		try {
+			const parseResult = await sp.parseLoginResponse(
+				idp,
+				saml.Constants.wording.binding.post,
+				req,
+			);
+			const { extract } = parseResult;
+			const { attributes } = extract;
+			const relayState = req.body.RelayState;
+			if (relayState) {
+				return res.status(200).send({ relayState, attributes });
+			} else {
+				return res
+					.status(200)
+					.send({ extract, message: "RelayState is missing." });
 			}
-		});
-		this.app.post(
-			"/api/sso/saml2/callback",
-			async (req: ExpressRequest, res: ExpressResponse) => {
-				const { SAMLResponse, RelayState } = req.body;
+		} catch (error) {
+			console.error("Error handling SAML ACS endpoint:", error);
+			res.status(500).send({ error: "Failed to process SAML response." });
+		}
+	});
+	app.post(
+		"/api/sso/saml2/callback",
+		async (req: ExpressRequest, res: ExpressResponse) => {
+			const { SAMLResponse, RelayState } = req.body;
 
-				try {
-					const parseResult = await this.sp.parseLoginResponse(
-						this.idp,
-						saml.Constants.wording.binding.post,
-						{ body: { SAMLResponse } },
-					);
+			try {
+				const parseResult = await sp.parseLoginResponse(
+					idp,
+					saml.Constants.wording.binding.post,
+					{ body: { SAMLResponse } },
+				);
 
-					const { attributes, nameID } = parseResult.extract;
+				const { attributes, nameID } = parseResult.extract;
 
-					res.redirect(302, RelayState || "http://localhost:3000/dashboard");
-				} catch (error) {
-					console.error("Error processing SAML callback:", error);
-					res.status(500).send({ error: "Failed to process SAML response" });
-				}
-			},
-		);
-		this.app.get(
-			"/api/sso/saml2/idp/metadata",
-			(req: ExpressRequest, res: ExpressResponse) => {
-				res.type("application/xml");
-				res.send(idpMetadata);
-			},
-		);
-	}
-
-	start() {
-		return new Promise<void>((resolve) => {
-			this.app.use(bodyParser.urlencoded({ extended: true }));
-			this.server = this.app.listen(this.port, () => {
-				console.log(`Mock SAML IdP running on port ${this.port}`);
+				res.redirect(302, RelayState || "http://localhost:3000/dashboard");
+			} catch (error) {
+				console.error("Error processing SAML callback:", error);
+				res.status(500).send({ error: "Failed to process SAML response" });
+			}
+		},
+	);
+	app.get(
+		"/api/sso/saml2/idp/metadata",
+		(req: ExpressRequest, res: ExpressResponse) => {
+			res.type("application/xml");
+			res.send(idpMetadata);
+		},
+	);
+	const start = () =>
+		new Promise<void>((resolve) => {
+			app.use(bodyParser.urlencoded({ extended: true }));
+			server = app.listen(port, () => {
+				console.log(`Mock SAML IdP running on port ${port}`);
 				resolve();
 			});
 		});
-	}
 
-	stop() {
-		return new Promise<void>((resolve, reject) => {
-			this.app.use(bodyParser.urlencoded({ extended: true }));
-			this.server?.close((err) => {
+	const stop = () =>
+		new Promise<void>((resolve, reject) => {
+			app.use(bodyParser.urlencoded({ extended: true }));
+			server?.close((err) => {
 				if (err) reject(err);
 				else resolve();
 			});
 		});
-	}
 
-	get metadataUrl() {
-		return `http://localhost:${this.port}/idp/metadata`;
-	}
-}
+	const metadataUrl = `http://localhost:${port}/idp/metadata`;
+
+	return { start, stop, metadataUrl };
+};
 
 describe("SAML SSO", async () => {
 	const data = {
@@ -512,7 +503,7 @@ describe("SAML SSO", async () => {
 	};
 
 	const memory = memoryAdapter(data);
-	const mockIdP = new MockSAMLIdP(8081); // Different port from your main app
+	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
 
 	const ssoOptions = {
 		provisionUser: vi
