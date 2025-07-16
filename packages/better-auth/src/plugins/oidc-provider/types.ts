@@ -126,6 +126,27 @@ export interface OIDCOptions {
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
 	trustedClients?: Client[];
+	/**
+	 * Store the client secret in your database in a secure way
+	 * Note: This will not affect the client secret sent to the user, it will only affect the client secret stored in your database
+	 *
+	 * - "hashed" - The client secret is hashed using the `hash` function.
+	 * - "plain" - The client secret is stored in the database in plain text.
+	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
+	 * - { hash: (clientSecret: string) => Promise<string> } - A function that hashes the client secret.
+	 * - { encrypt: (clientSecret: string) => Promise<string>, decrypt: (clientSecret: string) => Promise<string> } - A function that encrypts and decrypts the client secret.
+	 *
+	 * @default "plain"
+	 */
+	storeClientSecret?:
+		| "hashed"
+		| "plain"
+		| "encrypted"
+		| { hash: (clientSecret: string) => Promise<string> }
+		| {
+				encrypt: (clientSecret: string) => Promise<string>;
+				decrypt: (clientSecret: string) => Promise<string>;
+		  };
 }
 
 export interface AuthorizationQuery {
