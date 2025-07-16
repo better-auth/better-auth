@@ -100,7 +100,6 @@ export async function authorize(
 	const client = await getClient(
 		ctx.query.client_id,
 		ctx.context.adapter,
-		"oauthApplication",
 		options.trustedClients || [],
 	);
 	if (!client) {
