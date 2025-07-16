@@ -39,9 +39,15 @@ You can find more information on these configuration items in the [Better Auth d
 
 <Step>
   ### Set up your environment variables Set your Client ID and Client Secret in
-  your environment variables. You can use the following variables: ```env
-  FACEIT_CLIENT_ID='your-client-id' FACEIT_CLIENT_SECRET='your-client-secret'
-  ```
+  your environment variables. You can use the following variables:
+
+{/* These are here so that formatting won't break the code block */}
+
+```env
+FACEIT_CLIENT_ID="your-client-id"
+FACEIT_CLIENT_SECRET="your-client-secret"
+```
+
 </Step>
 
   <Step>
@@ -50,7 +56,7 @@ You can find more information on these configuration items in the [Better Auth d
           To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
         ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
+        import { betterAuth } from "better-auth";
 
         export const auth = betterAuth({
             socialProviders: {
@@ -59,7 +65,7 @@ You can find more information on these configuration items in the [Better Auth d
                     clientSecret: process.env.FACEIT_CLIENT_SECRET as string, // [!code highlight]
                 }, // [!code highlight]
             },
-        })
+        });
         ```
 
   </Step>
@@ -71,9 +77,8 @@ to sign in with Faceit, you can use the `signIn.social` function provided by the
 
 - `provider`: The provider to use. It should be set to `faceit`.
 
-```ts title="auth-client.ts"  /
-import { createAuthClient } from "better-auth/client";
-const authClient = createAuthClient();
+```ts title="auth-client.ts"
+import { authClient } from "@/lib/auth-client";
 
 const signIn = async () => {
   const data = await authClient.signIn.social({
@@ -81,6 +86,5 @@ const signIn = async () => {
   });
 };
 ```
-
   </Step>
 </Steps>
