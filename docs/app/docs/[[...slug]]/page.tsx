@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
+import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -85,6 +86,7 @@ export default async function Page({
 						Tabs,
 						AutoTypeTable,
 						GenerateSecret,
+						GenerateAppleJwt,
 						AnimatePresence,
 						TypeTable,
 						Features,

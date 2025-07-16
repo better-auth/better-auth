@@ -39,7 +39,7 @@ export const getMetadata = (
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
-		grant_types_supported: ["authorization_code"],
+		grant_types_supported: ["authorization_code", "refresh_token"],
 		acr_values_supported: [
 			"urn:mace:incommon:iap:silver",
 			"urn:mace:incommon:iap:bronze",
