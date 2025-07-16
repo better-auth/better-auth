@@ -1,11 +1,11 @@
 import type { BetterAuthClientPlugin } from "../../types";
 import type { waitlist } from "./index";
 import type {
-    BulkOperationResult,
-    WaitlistAnalyticsData,
-    WaitlistEntry,
-    WaitlistPriority,
-    WaitlistStatus,
+	BulkOperationResult,
+	WaitlistAnalyticsData,
+	WaitlistEntry,
+	WaitlistPriority,
+	WaitlistStatus,
 } from "./types";
 
 interface WaitlistClientOptions {
@@ -70,7 +70,9 @@ export const waitlistClient = <O extends WaitlistClientOptions>(
 					/** Email address (optional if authenticated) */
 					email?: string;
 				}) => {
-					const query = params?.email ? `?email=${encodeURIComponent(params.email)}` : "";
+					const query = params?.email
+						? `?email=${encodeURIComponent(params.email)}`
+						: "";
 					return await $fetch<{
 						isOnWaitlist: boolean;
 						entry: WaitlistEntry | null;
@@ -93,10 +95,13 @@ export const waitlistClient = <O extends WaitlistClientOptions>(
 				}) => {
 					const searchParams = new URLSearchParams();
 					if (params?.limit) searchParams.set("limit", params.limit.toString());
-					if (params?.offset) searchParams.set("offset", params.offset.toString());
+					if (params?.offset)
+						searchParams.set("offset", params.offset.toString());
 					if (params?.status) searchParams.set("status", params.status);
-					
-					const query = searchParams.toString() ? `?${searchParams.toString()}` : "";
+
+					const query = searchParams.toString()
+						? `?${searchParams.toString()}`
+						: "";
 					return await $fetch<{
 						entries: WaitlistEntry[];
 						total: number;
@@ -164,9 +169,12 @@ export const waitlistClient = <O extends WaitlistClientOptions>(
 						if (params?.format) searchParams.set("format", params.format);
 						if (params?.status) searchParams.set("status", params.status);
 						if (params?.priority) searchParams.set("priority", params.priority);
-						if (params?.includeAnalytics) searchParams.set("includeAnalytics", "true");
-						
-						const query = searchParams.toString() ? `?${searchParams.toString()}` : "";
+						if (params?.includeAnalytics)
+							searchParams.set("includeAnalytics", "true");
+
+						const query = searchParams.toString()
+							? `?${searchParams.toString()}`
+							: "";
 						return await $fetch(`/waitlist/export${query}`, {
 							method: "GET",
 						});
