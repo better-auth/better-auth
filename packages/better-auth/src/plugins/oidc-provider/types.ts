@@ -459,9 +459,13 @@ export interface OIDCMetadata {
 	/**
 	 * Supported grant types.
 	 *
-	 * only `authorization_code` is supported.
+	 * The first element MUST be "authorization_code"; additional grant types like
+	 * "refresh_token" can follow. Guarantees a non-empty array at the type level.
 	 */
-	grant_types_supported: ["authorization_code"];
+	grant_types_supported: [
+		"authorization_code",
+		...("authorization_code" | "refresh_token")[],
+	];
 	/**
 	 * acr_values supported.
 	 *
