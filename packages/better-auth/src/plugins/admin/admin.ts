@@ -95,7 +95,6 @@ export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
 		? keyof O["roles"]
 		: "user" | "admin";
 
-
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
