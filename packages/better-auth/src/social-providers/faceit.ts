@@ -18,7 +18,6 @@ export const faceit = (options: FaceitOptions) => {
 	return {
 		id: "faceit",
 		name: "FACEIT",
-
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
