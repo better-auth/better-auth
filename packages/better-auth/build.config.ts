@@ -5,7 +5,6 @@ export default defineBuildConfig({
 		emitCJS: true,
 		esbuild: {
 			treeShaking: true,
-			minify: true,
 		},
 	},
 	declaration: true,
