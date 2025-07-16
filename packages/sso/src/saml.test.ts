@@ -13,7 +13,6 @@ import { createAuthClient } from "better-auth/client";
 import { betterFetch } from "@better-fetch/fetch";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
-import { IdentityProvider, ServiceProvider } from "samlify";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import { createServer } from "http";
@@ -357,15 +356,15 @@ class MockSAMLIdP {
 	private app: ExpressApp;
 	private server: ReturnType<typeof createServer> | undefined;
 	private port: number;
-	private idp: ReturnType<typeof IdentityProvider>;
-	private sp: ReturnType<typeof ServiceProvider>;
+	private idp: ReturnType<typeof saml.IdentityProvider>;
+	private sp: ReturnType<typeof saml.ServiceProvider>;
 	constructor(port: number) {
 		this.port = port;
 		this.app = express();
 		this.app.use(bodyParser.urlencoded({ extended: true }));
 		this.app.use(bodyParser.json());
 
-		this.idp = IdentityProvider({
+		this.idp = saml.IdentityProvider({
 			metadata: idpMetadata,
 			privateKey: idPk,
 			isAssertionEncrypted: false,
@@ -395,7 +394,7 @@ class MockSAMLIdP {
 				],
 			},
 		});
-		this.sp = ServiceProvider({
+		this.sp = saml.ServiceProvider({
 			metadata: spMetadata,
 		});
 		this.app.get(
@@ -426,32 +425,28 @@ class MockSAMLIdP {
 				res.status(200).send({ samlResponse: context, entityEndpoint });
 			},
 		);
-		// @ts-ignore
-		this.app.post(
-			"/api/sso/saml2/sp/acs",
-			async (req: ExpressRequest, res: ExpressResponse) => {
-				try {
-					const parseResult = await this.sp.parseLoginResponse(
-						this.idp,
-						saml.Constants.wording.binding.post,
-						req,
-					);
-					const { extract } = parseResult;
-					const { attributes } = extract;
-					const relayState = req.body.RelayState;
-					if (relayState) {
-						return res.status(200).send({ relayState, attributes });
-					} else {
-						return res
-							.status(200)
-							.send({ extract, message: "RelayState is missing." });
-					}
-				} catch (error) {
-					console.error("Error handling SAML ACS endpoint:", error);
-					res.status(500).send({ error: "Failed to process SAML response." });
+		this.app.post("/api/sso/saml2/sp/acs", async (req: any, res: any) => {
+			try {
+				const parseResult = await this.sp.parseLoginResponse(
+					this.idp,
+					saml.Constants.wording.binding.post,
+					req,
+				);
+				const { extract } = parseResult;
+				const { attributes } = extract;
+				const relayState = req.body.RelayState;
+				if (relayState) {
+					return res.status(200).send({ relayState, attributes });
+				} else {
+					return res
+						.status(200)
+						.send({ extract, message: "RelayState is missing." });
 				}
-			},
-		);
+			} catch (error) {
+				console.error("Error handling SAML ACS endpoint:", error);
+				res.status(500).send({ error: "Failed to process SAML response." });
+			}
+		});
 		this.app.post(
 			"/api/sso/saml2/callback",
 			async (req: ExpressRequest, res: ExpressResponse) => {
