@@ -1,5 +1,5 @@
+import type { OrganizationOptions } from "./types";
 import { defaultRoles } from "./access";
-import type { OrganizationOptions } from "./organization";
 
 type PermissionExclusive =
 	| {

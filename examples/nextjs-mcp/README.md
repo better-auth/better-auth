@@ -1,6 +1,6 @@
 # Better Auth - MCP Demo
 
-This is example repo on how to setup Better Auth for MCP Auth using Nextjs and Vercel MCP adapter.
+This is an example repo on how to setup Better Auth for MCP Auth using Nextjs and Vercel MCP adapter.
 
 
 ## Usage
@@ -12,7 +12,7 @@ First, add the plugin to your auth instance
 import { betterAuth } from "better-auth";
 import { mcp } from "better-auth/plugins";
 
-export cosnt auth = betterAuth({
+export const auth = betterAuth({
     plugins: [
         mcp({
             loginPage: "/sign-in" // path to a page where users login
@@ -46,7 +46,7 @@ import { toNextJsHandler } from "better-auth/next-js";
 export const { GET, POST } = toNextJsHandler(auth);
 ```
 
-Use `auth.api.getMCPSession` to get the session using the access token sent from the MCP client
+You can use the helper function `withMcpAuth` to get the session and handle unauthenticated calls automatically.
 
 ```ts
 import { auth } from "@/lib/auth";
@@ -54,7 +54,7 @@ import { createMcpHandler } from "@vercel/mcp-adapter";
 import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
-const handler = withMcpAuth(auth, (req, sesssion) => {
+const handler = withMcpAuth(auth, (req, session) => {
     //session => This isn’t a typical Better Auth session - instead, it returns the access token record along with the scopes and user ID.
 	return createMcpHandler(
 		(server) => {

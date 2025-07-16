@@ -263,7 +263,9 @@ describe("getSessionCookie", async () => {
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
-		const cache = getCookieCache(request);
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
 		expect(cache).not.toBeNull();
 		expect(cache).toMatchObject({
 			user: {
@@ -276,5 +278,51 @@ describe("getSessionCookie", async () => {
 				token: expect.any(String),
 			},
 		});
+	});
+
+	it("should return null if the cookie is invalid", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "wrong-secret",
+		});
+		expect(cache).toBeNull();
+	});
+
+	it("should throw an error if the secret is not provided", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		await expect(getCookieCache(request)).rejects.toThrow();
 	});
 });
