@@ -5,7 +5,13 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import { type BetterAuthPlugin, type Session, type Where } from "../../types";
+import {
+	type BetterAuthPlugin,
+	type InferOptionSchema,
+	type Session,
+	type User,
+	type Where,
+} from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -15,6 +21,7 @@ import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { schema } from "./schema";
 
 export interface UserWithRole extends User {
 	role?: string;
