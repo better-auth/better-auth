@@ -24,6 +24,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
+						image?: string;
 						callbackURL?: string;
 						rememberMe?: boolean;
 					} & AdditionalUserFieldsInput<O>,
@@ -47,6 +48,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 										password: {
 											type: "string",
 											description: "The password of the user",
+										},
+										image: {
+											type: "string",
+											description: "The profile image URL of the user",
 										},
 										callbackURL: {
 											type: "string",

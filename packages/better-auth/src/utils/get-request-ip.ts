@@ -8,9 +8,9 @@ export function getIp(
 	if (options.advanced?.ipAddress?.disableIpTracking) {
 		return null;
 	}
-	const testIP = "127.0.0.1";
+
 	if (isTest) {
-		return testIP;
+		return "127.0.0.1"; // Use a fixed IP for test environments
 	}
 
 	const headers = "headers" in req ? req.headers : req;

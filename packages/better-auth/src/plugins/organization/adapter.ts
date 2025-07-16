@@ -1,6 +1,6 @@
 import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
-import type { OrganizationOptions } from "./organization";
+import type { OrganizationOptions } from "./types";
 import type {
 	Invitation,
 	InvitationInput,
@@ -12,7 +12,7 @@ import type {
 	TeamInput,
 } from "./schema";
 import { BetterAuthError } from "../../error";
-import type { AuthContext } from "../../types";
+import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
 
 export const getOrgAdapter = (

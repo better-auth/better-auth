@@ -168,7 +168,7 @@ By default better-auth will create an `id` field for each table. You can add add
 
 The key is the column name and the value is the column definition. The column definition can have the following properties:
 
-`type`: The type of the filed. It can be `string`, `number`, `boolean`, `date`.
+`type`: The type of the field. It can be `string`, `number`, `boolean`, `date`.
 
 `required`:  if the field should be required on a new record. (default: `false`)
 
@@ -242,7 +242,7 @@ const myPlugin = ()=>{
                     matcher: (context)=>{
                         return context.headers.get("x-my-header") === "my-value"
                     },
-                    handler: createAuthMiddleware(async(ctx)=>{
+                    handler: createAuthMiddleware(async (ctx)=>{
                         //do something before the request
                         return  {
                             context: ctx // if you want to modify the context
@@ -253,11 +253,11 @@ const myPlugin = ()=>{
                 matcher: (context)=>{
                     return context.path === "/sign-up/email"
                 },
-                handler: async(ctx)=>{
+                handler: createAuthMiddleware(async (ctx)=>{
                     return ctx.json({
                         message: "Hello World"
                     }) // if you want to modify the response
-                }
+                })
             }]
         }
     } satisfies BetterAuthPlugin
