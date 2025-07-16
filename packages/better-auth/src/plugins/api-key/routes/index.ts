@@ -58,11 +58,11 @@ export function deleteAllExpiredApiKeys(
 					operator: "lt",
 					value: new Date(),
 				},
-			        {
-			          	field: "expiresAt",
-			          	operator: "ne",
-			          	value: null
-			        }
+        {
+          field: "expiresAt",
+          operator: "ne",
+          value: null
+        }
 			],
 		});
 	} catch (error) {
