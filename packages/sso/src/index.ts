@@ -15,7 +15,7 @@ import {
 } from "better-auth/oauth2";
 
 import { createAuthEndpoint } from "better-auth/plugins";
-import { z } from "zod";
+import * as z from "zod/v4";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
