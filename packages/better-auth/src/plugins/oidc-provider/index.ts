@@ -592,9 +592,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					if (!client_id || !client_secret) {
+					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "client_id and client_secret are required",
+							error_description: "client_id is required",
 							error: "invalid_client",
 						});
 					}
@@ -657,7 +657,24 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
-					if (client.clientSecret) {
+					if (client.type === "public") {
+						// For public clients (type: 'public'), validate PKCE instead of client_secret
+						if (!code_verifier) {
+							throw new APIError("BAD_REQUEST", {
+								error_description:
+									"code verifier is required for public clients",
+								error: "invalid_request",
+							});
+						}
+						// PKCE validation happens later in the flow, so we skip client_secret validation
+					} else {
+						if (!client.clientSecret || !client_secret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"client_secret is required for confidential clients",
+								error: "invalid_client",
+							});
+						}
 						const isValidSecret = await verifyStoredClientSecret(
 							ctx,
 							client.clientSecret,
