@@ -819,7 +819,7 @@ export const mcp = (options: MCPOptions) => {
 						},
 					});
 
-					const responseData: any = {
+					const responseData = {
 						client_id: clientId,
 						client_id_issued_at: Math.floor(Date.now() / 1000),
 						redirect_uris: body.redirect_uris,
@@ -840,13 +840,13 @@ export const mcp = (options: MCPOptions) => {
 						software_version: body.software_version,
 						software_statement: body.software_statement,
 						metadata: body.metadata,
+						...(clientType !== "public"
+							? {
+									client_secret: finalClientSecret,
+									client_secret_expires_at: 0, // 0 means it doesn't expire
+								}
+							: {}),
 					};
-
-					// Only include client_secret for confidential clients
-					if (clientType !== "public") {
-						responseData.client_secret = finalClientSecret;
-						responseData.client_secret_expires_at = 0; // 0 means it doesn't expire
-					}
 
 					return ctx.json(responseData, {
 						status: 201,
