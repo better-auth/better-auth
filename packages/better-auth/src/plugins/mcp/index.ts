@@ -51,7 +51,7 @@ export const getMCPProviderMetadata = (
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
-		grant_types_supported: ["authorization_code"],
+		grant_types_supported: ["authorization_code", "refresh_token"],
 		acr_values_supported: [
 			"urn:mace:incommon:iap:silver",
 			"urn:mace:incommon:iap:bronze",
@@ -61,6 +61,7 @@ export const getMCPProviderMetadata = (
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"none",
 		],
 		code_challenge_methods_supported: ["S256"],
 		claims_supported: [
@@ -384,9 +385,10 @@ export const mcp = (options: MCPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					if (!client_id || !client_secret) {
+
+					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "client_id and client_secret are required",
+							error_description: "client_id is required",
 							error: "invalid_client",
 						});
 					}
@@ -437,13 +439,34 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_client",
 						});
 					}
-					const isValidSecret =
-						client.clientSecret === client_secret.toString();
-					if (!isValidSecret) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_secret",
-							error: "invalid_client",
-						});
+					// For public clients (type: 'public'), validate PKCE instead of client_secret
+					if (client.type === "public") {
+						// Public clients must use PKCE
+						if (!code_verifier) {
+							throw new APIError("BAD_REQUEST", {
+								error_description:
+									"code verifier is required for public clients",
+								error: "invalid_request",
+							});
+						}
+						// PKCE validation happens later in the flow, so we skip client_secret validation
+					} else {
+						// For confidential clients, validate client_secret
+						if (!client_secret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"client_secret is required for confidential clients",
+								error: "invalid_client",
+							});
+						}
+						const isValidSecret =
+							client.clientSecret === client_secret.toString();
+						if (!isValidSecret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_secret",
+								error: "invalid_client",
+							});
+						}
 					}
 					const value = JSON.parse(
 						verificationValue.value,
@@ -660,7 +683,8 @@ export const mcp = (options: MCPOptions) => {
 													},
 													clientSecret: {
 														type: "string",
-														description: "Secret key for the client",
+														description:
+															"Secret key for the client. Not included for public clients.",
 													},
 													redirectURLs: {
 														type: "array",
@@ -670,13 +694,13 @@ export const mcp = (options: MCPOptions) => {
 													type: {
 														type: "string",
 														description: "Type of the client",
-														enum: ["web"],
+														enum: ["web", "public"],
 													},
 													authenticationScheme: {
 														type: "string",
 														description:
 															"Authentication scheme used by the client",
-														enum: ["client_secret"],
+														enum: ["client_secret", "none"],
 													},
 													disabled: {
 														type: "boolean",
@@ -703,7 +727,6 @@ export const mcp = (options: MCPOptions) => {
 												required: [
 													"name",
 													"clientId",
-													"clientSecret",
 													"redirectURLs",
 													"type",
 													"authenticationScheme",
@@ -772,6 +795,11 @@ export const mcp = (options: MCPOptions) => {
 						opts.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
+					// Determine client type based on auth method
+					const clientType =
+						body.token_endpoint_auth_method === "none" ? "public" : "web";
+					const finalClientSecret = clientType === "public" ? "" : clientSecret;
+
 					await ctx.context.adapter.create({
 						model: modelName.oauthClient,
 						data: {
@@ -779,9 +807,9 @@ export const mcp = (options: MCPOptions) => {
 							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
-							clientSecret: clientSecret,
+							clientSecret: finalClientSecret,
 							redirectURLs: body.redirect_uris.join(","),
-							type: "web",
+							type: clientType,
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",
 							disabled: false,
@@ -791,39 +819,42 @@ export const mcp = (options: MCPOptions) => {
 						},
 					});
 
-					return ctx.json(
-						{
-							client_id: clientId,
-							client_secret: clientSecret,
-							client_id_issued_at: Math.floor(Date.now() / 1000),
-							client_secret_expires_at: 0, // 0 means it doesn't expire
-							redirect_uris: body.redirect_uris,
-							token_endpoint_auth_method:
-								body.token_endpoint_auth_method || "client_secret_basic",
-							grant_types: body.grant_types || ["authorization_code"],
-							response_types: body.response_types || ["code"],
-							client_name: body.client_name,
-							client_uri: body.client_uri,
-							logo_uri: body.logo_uri,
-							scope: body.scope,
-							contacts: body.contacts,
-							tos_uri: body.tos_uri,
-							policy_uri: body.policy_uri,
-							jwks_uri: body.jwks_uri,
-							jwks: body.jwks,
-							software_id: body.software_id,
-							software_version: body.software_version,
-							software_statement: body.software_statement,
-							metadata: body.metadata,
+					const responseData = {
+						client_id: clientId,
+						client_id_issued_at: Math.floor(Date.now() / 1000),
+						redirect_uris: body.redirect_uris,
+						token_endpoint_auth_method:
+							body.token_endpoint_auth_method || "client_secret_basic",
+						grant_types: body.grant_types || ["authorization_code"],
+						response_types: body.response_types || ["code"],
+						client_name: body.client_name,
+						client_uri: body.client_uri,
+						logo_uri: body.logo_uri,
+						scope: body.scope,
+						contacts: body.contacts,
+						tos_uri: body.tos_uri,
+						policy_uri: body.policy_uri,
+						jwks_uri: body.jwks_uri,
+						jwks: body.jwks,
+						software_id: body.software_id,
+						software_version: body.software_version,
+						software_statement: body.software_statement,
+						metadata: body.metadata,
+						...(clientType !== "public"
+							? {
+									client_secret: finalClientSecret,
+									client_secret_expires_at: 0, // 0 means it doesn't expire
+								}
+							: {}),
+					};
+
+					return ctx.json(responseData, {
+						status: 201,
+						headers: {
+							"Cache-Control": "no-store",
+							Pragma: "no-cache",
 						},
-						{
-							status: 201,
-							headers: {
-								"Cache-Control": "no-store",
-								Pragma: "no-cache",
-							},
-						},
-					);
+					});
 				},
 			),
 			getMcpSession: createAuthEndpoint(

@@ -723,10 +723,11 @@ describe("organization", async (it) => {
 			password: userOverLimit.password,
 			name: userOverLimit.name,
 		});
-		const { res, headers: headers2 } = await signInWithUser(
+		const { headers: headers2 } = await signInWithUser(
 			userOverLimit2.email,
 			userOverLimit2.password,
 		);
+
 		await client.signUp.email(
 			{
 				email: userOverLimit2.email,
@@ -757,6 +758,92 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(getFullOrganization.data?.members.length).toBe(6);
+	});
+
+	it("should allow listing invitations for an org", async () => {
+		const invitations = await client.organization.listInvitations({
+			query: {
+				organizationId: organizationId,
+			},
+			fetchOptions: {
+				headers: headers,
+			},
+		});
+		expect(invitations.data?.length).toBe(4);
+	});
+
+	it("should allow listing invitations for a user using authClient", async () => {
+		const rng = crypto.randomUUID();
+		const user = {
+			email: `${rng}@email.com`,
+			password: rng,
+			name: rng,
+		};
+		const rng2 = crypto.randomUUID();
+		const orgAdminUser = {
+			email: `${rng2}@email.com`,
+			password: rng2,
+			name: rng2,
+		};
+		await auth.api.signUpEmail({
+			body: user,
+		});
+		await auth.api.signUpEmail({
+			body: orgAdminUser,
+		});
+		const { headers: headers2, res: session } = await signInWithUser(
+			user.email,
+			user.password,
+		);
+		const { headers: adminHeaders, res: adminSession } = await signInWithUser(
+			orgAdminUser.email,
+			orgAdminUser.password,
+		);
+		const orgRng = crypto.randomUUID();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: orgRng,
+				slug: orgRng,
+			},
+			headers: adminHeaders,
+		});
+		const invitation = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: user.email,
+			role: "member",
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(userInvitations.data?.[0].id).toBe(invitation.data?.id);
+		expect(userInvitations.data?.length).toBe(1);
+	});
+
+	it("should allow listing invitations for a user using server", async () => {
+		const orgInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		if (!orgInvitations.data?.[0].email) throw new Error("No email found");
+
+		const invitations = await auth.api.listUserInvitations({
+			query: {
+				email: orgInvitations.data?.[0].email,
+			},
+		});
+
+		expect(invitations?.length).toBe(
+			orgInvitations.data.filter(
+				(x) => x.email === orgInvitations.data?.[0].email,
+			).length,
+		);
 	});
 });
 

@@ -265,6 +265,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authentication: c.authentication,
 						});
 					},
 					async refreshAccessToken(

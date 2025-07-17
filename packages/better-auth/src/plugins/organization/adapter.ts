@@ -561,7 +561,13 @@ export const getOrgAdapter = (
 			});
 			return invitations;
 		},
-
+		listUserInvitations: async (email: string) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [{ field: "email", value: email }],
+			});
+			return invitations;
+		},
 		createInvitation: async ({
 			invitation,
 			user,
