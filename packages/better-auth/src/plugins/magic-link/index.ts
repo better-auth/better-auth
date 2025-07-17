@@ -21,6 +21,7 @@ interface MagicLinkOptions {
 			email: string;
 			url: string;
 			token: string;
+			additionalData?: Record<string, any>;
 		},
 		request?: Request,
 	) => Promise<void> | void;
@@ -74,6 +75,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 								description: "URL to redirect after magic link verification",
 							})
 							.optional(),
+						additionalData: z
+							.record(z.any(), { 
+								description: "Additional data for use in the magic link process",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -99,7 +105,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, additionalData } = ctx.body;
 
 					if (options.disableSignUp) {
 						const user =
@@ -135,6 +141,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							email,
 							url,
 							token: verificationToken,
+							additionalData
 						},
 						ctx.request,
 					);
