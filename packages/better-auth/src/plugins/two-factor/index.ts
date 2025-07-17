@@ -289,9 +289,16 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
+
+						const trustDeviceCookieAttrs = ctx.context.createAuthCookie(
+							TRUST_DEVICE_COOKIE_NAME,
+							{
+								maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+							},
+						);
 						// Check for trust device cookie
 						const trustDeviceCookie = await ctx.getSignedCookie(
-							TRUST_DEVICE_COOKIE_NAME,
+							trustDeviceCookieAttrs.name,
 							ctx.context.secret,
 						);
 
@@ -304,12 +311,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
-								const newTrustDeviceCookie = ctx.context.createAuthCookie(
-									TRUST_DEVICE_COOKIE_NAME,
-									{
-										maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
-									},
-								);
 								const newToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
@@ -318,10 +319,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 									`${data.user.id}!${data.session.token}`,
 								);
 								await ctx.setSignedCookie(
-									newTrustDeviceCookie.name,
+									trustDeviceCookieAttrs.name,
 									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
-									newTrustDeviceCookie.attributes,
+									trustDeviceCookieAttrs.attributes,
 								);
 								return;
 							}
