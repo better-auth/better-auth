@@ -82,7 +82,9 @@ export const facebook = (options: FacebookOptions) => {
 						token,
 						createRemoteJWKSet(
 							// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
-							new URL("https://limited.facebook.com/.well-known/oauth/openid/jwks/"),
+							new URL(
+								"https://limited.facebook.com/.well-known/oauth/openid/jwks/",
+							),
 						),
 						{
 							algorithms: ["RS256"],
