@@ -10,6 +10,7 @@ The **OIDC Provider Plugin** enables you to build and manage your own OpenID Con
 - **Client Registration**: Register clients to authenticate with your OIDC provider.
 - **Dynamic Client Registration**: Allow clients to register dynamically.
 - **Authorization Code Flow**: Support the Authorization Code Flow.
+- **Public Clients**: Support public clients for SPA, mobile apps, CLI tools, etc.
 - **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
 - **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
 - **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
@@ -235,8 +236,8 @@ Table Name: `oauthApplication`
     { 
       name: "clientSecret", 
       type: "string", 
-      description: "Secret key for the OAuth client",
-      isRequired: true
+      description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
+      isOptional: true
     },
     { 
       name: "name", 
