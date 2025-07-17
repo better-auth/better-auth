@@ -2,11 +2,11 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { SocialProviderListEnum } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { SocialProviderListEnum } from "../../social-providers";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -285,6 +285,7 @@ export const signInSocial = createAuthEndpoint(
 					accountId: userInfo.user.id,
 					accessToken: c.body.idToken.accessToken,
 				},
+				callbackURL: c.body.callbackURL,
 				disableSignUp:
 					(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 					provider.disableSignUp,
@@ -501,23 +502,29 @@ export const signInEmail = createAuthEndpoint(
 					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
-			const token = await createEmailVerificationToken(
-				ctx.context.secret,
-				user.user.email,
-				undefined,
-				ctx.context.options.emailVerification?.expiresIn,
-			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-			await ctx.context.options.emailVerification.sendVerificationEmail(
-				{
-					user: user.user,
-					url,
-					token,
-				},
-				ctx.request,
-			);
+
+			if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+				const token = await createEmailVerificationToken(
+					ctx.context.secret,
+					user.user.email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
+				const url = `${
+					ctx.context.baseURL
+				}/verify-email?token=${token}&callbackURL=${
+					ctx.body.callbackURL || "/"
+				}`;
+				await ctx.context.options.emailVerification.sendVerificationEmail(
+					{
+						user: user.user,
+						url,
+						token,
+					},
+					ctx.request,
+				);
+			}
+
 			throw new APIError("FORBIDDEN", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});

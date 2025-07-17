@@ -4,9 +4,10 @@ import { mergeSchema } from "../../db";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
-import type { ApiKey, ApiKeyOptions } from "./types";
-import { createApiKeyRoutes } from "./routes";
+import type { ApiKeyOptions } from "./types";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import type { User } from "../../types";
+import { validateApiKey } from "./routes/verify-api-key";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 
@@ -50,6 +51,8 @@ export const ERROR_CODES = {
 		"API Key getter returned an invalid key type. Expected string.",
 	SERVER_ONLY_PROPERTY:
 		"The property you're trying to set can only be set from the server auth instance only.",
+	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
+	NAME_REQUIRED: "API Key name is required.",
 };
 
 export const API_KEY_TABLE_NAME = "apikey";
@@ -65,6 +68,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
+		requireName: options?.requireName ?? false,
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -152,34 +156,28 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						}
 
-						if (
-							opts.customAPIKeyValidator &&
-							!opts.customAPIKeyValidator({ ctx, key })
-						) {
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
+						if (opts.customAPIKeyValidator) {
+							const isValid = await opts.customAPIKeyValidator({ ctx, key });
+							if (!isValid) {
+								throw new APIError("FORBIDDEN", {
+									message: ERROR_CODES.INVALID_API_KEY,
+								});
+							}
 						}
 
 						const hashed = opts.disableKeyHashing
 							? key
 							: await defaultKeyHasher(key);
 
-						const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-							model: API_KEY_TABLE_NAME,
-							where: [
-								{
-									field: "key",
-									value: hashed,
-								},
-							],
+						const apiKey = await validateApiKey({
+							hashedKey: hashed,
+							ctx,
+							opts,
+							schema,
 						});
 
-						if (!apiKey) {
-							throw new APIError("UNAUTHORIZED", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
-						}
+						await deleteAllExpiredApiKeys(ctx.context);
+
 						let user: User;
 						try {
 							const userResult = await ctx.context.internalAdapter.findUserById(

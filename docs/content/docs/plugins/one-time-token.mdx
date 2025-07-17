@@ -82,3 +82,37 @@ oneTimeToken({
     expiresIn: 10 // 10 minutes
 })
 ```
+* **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as paramters.
+
+* **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
+
+    * **`plain`**: The token is stored in plain text. (Default)
+    * **`hashed`**: The token is hashed using the default hasher.
+    * **`custom-hasher`**: A custom hasher function that takes a token and returns a hashed token.
+
+<Callout type="info">
+    Note: It will not affect the token that's sent, it will only affect the token stored in your database.
+</Callout>
+
+Examples:
+
+```ts title="No hashing (default)"
+oneTimeToken({
+    storeToken: "plain"
+})
+```
+```ts title="built-in hasher"
+oneTimeToken({
+    storeToken: "hashed"
+})
+```
+```ts title="custom hasher"
+oneTimeToken({
+    storeToken: {
+        type: "custom-hasher",
+        hash: async (token) => {
+            return myCustomHasher(token);
+        }
+    }
+})
+```

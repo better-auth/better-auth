@@ -93,7 +93,7 @@ serve(app);
 This will allow you to access the `user` and `session` object in all of your routes.
 
 ```ts
-app.get("/session", async (c) => {
+app.get("/session", (c) => {
 	const session = c.get("session")
 	const user = c.get("user")
 	
@@ -141,9 +141,11 @@ export const auth = createAuth({
   advanced: {
     cookies: {
       sessionToken: {
-        sameSite: "none",
-        secure: true,
-        partitioned: true // New browser standards will mandate this for foreign cookies
+        attributes: {
+          sameSite: "none",
+          secure: true,
+          partitioned: true // New browser standards will mandate this for foreign cookies
+        }
       }
     }
   }

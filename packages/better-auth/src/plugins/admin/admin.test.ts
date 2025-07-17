@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { admin, type UserWithRole } from "./admin";
+import { admin } from "./admin";
+import { type UserWithRole } from "./types";
 import { adminClient } from "./client";
 import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
@@ -164,6 +165,17 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
+		const result = await client.admin.listUsers({
+			query: {
+				filterField: "role",
+				filterOperator: "contains",
+				filterValue: "admin",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(result.data?.users.length).toBe(2);
 		expect(res.data?.user.role).toBe("user,admin");
 		await client.admin.removeUser(
 			{

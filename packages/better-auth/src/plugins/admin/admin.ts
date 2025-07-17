@@ -5,101 +5,22 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import {
-	type BetterAuthPlugin,
-	type InferOptionSchema,
-	type AuthPluginSchema,
-	type Session,
-	type User,
-	type Where,
-} from "../../types";
+import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
-import { type AccessControl, type Role } from "../access";
+import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-
-export interface UserWithRole extends User {
-	role?: string;
-	banned?: boolean | null;
-	banReason?: string | null;
-	banExpires?: Date | null;
-}
-
-export interface SessionWithImpersonatedBy extends Session {
-	impersonatedBy?: string;
-}
-
-export interface AdminOptions {
-	/**
-	 * The default role for a user
-	 *
-	 * @default "user"
-	 */
-	defaultRole?: string;
-	/**
-	 * Roles that are considered admin roles.
-	 *
-	 * Any user role that isn't in this list, even if they have the permission,
-	 * will not be considered an admin.
-	 *
-	 * @default ["admin"]
-	 */
-	adminRoles?: string | string[];
-	/**
-	 * A default ban reason
-	 *
-	 * By default, no reason is provided
-	 */
-	defaultBanReason?: string;
-	/**
-	 * Number of seconds until the ban expires
-	 *
-	 * By default, the ban never expires
-	 */
-	defaultBanExpiresIn?: number;
-	/**
-	 * Duration of the impersonation session in seconds
-	 *
-	 * By default, the impersonation session lasts 1 hour
-	 */
-	impersonationSessionDuration?: number;
-	/**
-	 * Custom schema for the admin plugin
-	 */
-	schema?: InferOptionSchema<typeof schema>;
-	/**
-	 * Configure the roles and permissions for the admin
-	 * plugin.
-	 */
-	ac?: AccessControl;
-	/**
-	 * Custom permissions for roles.
-	 */
-	roles?: {
-		[key in string]?: Role;
-	};
-	/**
-	 * List of user ids that should have admin access
-	 *
-	 * If this is set, the `adminRole` option is ignored
-	 */
-	adminUserIds?: string[];
-	/**
-	 * Message to show when a user is banned
-	 *
-	 * By default, the message is "You have been banned from this application"
-	 */
-	bannedUserMessage?: string;
-}
-
-export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
-	O extends { roles: Record<string, unknown> }
-		? keyof O["roles"]
-		: "user" | "admin";
+import {
+	type AdminOptions,
+	type UserWithRole,
+	type SessionWithImpersonatedBy,
+	type InferAdminRolesFromOption,
+} from "./types";
+import { schema } from "./schema";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -518,7 +439,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte"], {
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"], {
 								description: "The operator to use for the filter",
 							})
 							.optional(),
@@ -933,8 +854,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.context.authCookies.dontRememberToken.name,
 						ctx.context.secret,
 					);
+					const adminCookieProp = ctx.context.createAuthCookie("admin_session");
 					await ctx.setSignedCookie(
-						"admin_session",
+						adminCookieProp.name,
 						`${ctx.context.session.session.token}:${
 							dontRememberMeCookie || ""
 						}`,
@@ -983,8 +905,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: "Failed to find user",
 						});
 					}
+					const adminCookieName =
+						ctx.context.createAuthCookie("admin_session").name;
 					const adminCookie = await ctx.getSignedCookie(
-						"admin_session",
+						adminCookieName,
 						ctx.context.secret,
 					);
 
@@ -1178,6 +1102,16 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
+					const user = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: "User not found",
+						});
+					}
+
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 					return ctx.json({
 						success: true,
@@ -1367,41 +1301,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
+		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
-
-const schema = {
-	user: {
-		fields: {
-			role: {
-				type: "string",
-				required: false,
-				input: false,
-			},
-			banned: {
-				type: "boolean",
-				defaultValue: false,
-				required: false,
-				input: false,
-			},
-			banReason: {
-				type: "string",
-				required: false,
-				input: false,
-			},
-			banExpires: {
-				type: "date",
-				required: false,
-				input: false,
-			},
-		},
-	},
-	session: {
-		fields: {
-			impersonatedBy: {
-				type: "string",
-				required: false,
-			},
-		},
-	},
-} satisfies AuthPluginSchema;
