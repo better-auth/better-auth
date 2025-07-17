@@ -63,8 +63,8 @@ export const magicLink = <
 >(
 	options: MagicLinkOptions<DS>,
 ) => {
-	const additionalDataSchema =
-		options.additionalDataSchema ?? (z.record(z.any()) as unknown as DS);
+	const additionalDataSchema = (options.additionalDataSchema ??
+		z.record(z.any())) as DS;
 
 	return {
 		id: "magic-link",
