@@ -1091,7 +1091,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				method: "GET",
 			},
 			async (ctx) => {
-				const session = await getSessionFromCtx(ctx);
+				const session = await ctx.context.session;
 				if (!session) {
 					throw new APIError("UNAUTHORIZED");
 				}
