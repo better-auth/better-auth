@@ -75,6 +75,8 @@ export interface DiscordProfile extends Record<string, any> {
 
 export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
 	prompt?: "none" | "consent";
+	/** Whether to request email scope from Discord OAuth. When false, uses fallback email format */
+	includeEmail?: boolean;
 }
 
 export const discord = (options: DiscordOptions) => {
@@ -82,9 +84,15 @@ export const discord = (options: DiscordOptions) => {
 		id: "discord",
 		name: "Discord",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
+			const _scopes = options.disableDefaultScope ? [] : ["identify"];
+			
+			if (options.includeEmail !== false) {
+				_scopes.push("email");
+			}
+			
 			scopes && _scopes.push(...scopes);
 			options.scope && _scopes.push(...options.scope);
+			
 			return new URL(
 				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
 					"+",
@@ -132,6 +140,7 @@ export const discord = (options: DiscordOptions) => {
 			if (error) {
 				return null;
 			}
+			
 			if (profile.avatar === null) {
 				const defaultAvatarNumber =
 					profile.discriminator === "0"
@@ -142,13 +151,22 @@ export const discord = (options: DiscordOptions) => {
 				const format = profile.avatar.startsWith("a_") ? "gif" : "png";
 				profile.image_url = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${format}`;
 			}
+			
+			const userEmail = options.includeEmail === false 
+				? `${profile.id}@example.com` 
+				: profile.email;
+			
+			const emailVerified = options.includeEmail === false 
+				? false 
+				: profile.verified;
+			
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id,
 					name: profile.global_name || profile.username || "",
-					email: profile.email,
-					emailVerified: profile.verified,
+					email: userEmail,
+					emailVerified: emailVerified,
 					image: profile.image_url,
 					...userMap,
 				},
