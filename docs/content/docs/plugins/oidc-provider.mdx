@@ -227,12 +227,36 @@ export const auth = betterAuth({
 })
 ```
 
-### JWKS Endpoint (Not Fully Implemented)
+### JWKS Endpoint
 
-For JWKS support, you need to use the `jwt` plugin. It exposes the `/jwks` endpoint to provide the public keys.
+The OIDC Provider plugin can integrate with the JWT plugin to provide proper asymmetric key signing for ID tokens. When enabled, ID tokens will be signed using RSA/EdDSA keys and can be verified using the JWKS endpoint.
 
-<Callout type="warn">
-Currently, the token is signed with the application's secret key. The JWKS endpoint is not fully implemented yet.
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+import { jwt } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        jwt({
+            jwks: {
+                keyPairConfig: {
+                    alg: "RS256",
+                    modulusLength: 2048,
+                },
+            },
+        }),
+        oidcProvider({
+            useJWTPlugin: true, // Enable JWT plugin integration
+            loginPage: "/sign-in",
+            // ... other options
+        })
+    ]
+})
+```
+
+<Callout type="info">
+When `useJWTPlugin: false` (default), ID tokens are signed with the application secret.
 </Callout>
 
 ### Dynamic Client Registration
@@ -459,3 +483,6 @@ Table Name: `oauthConsent`
 
 
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.
+
+**useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.
+
