@@ -126,6 +126,12 @@ export interface OIDCOptions {
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
 	trustedClients?: Client[];
+	/**
+	 * Whether to use the JWT plugin to sign the ID token.
+	 *
+	 * @default false
+	 */
+	useJWTPlugin?: boolean;
 }
 
 export interface AuthorizationQuery {
@@ -501,13 +507,8 @@ export interface OIDCMetadata {
 	subject_types_supported: ["public"];
 	/**
 	 * Supported ID token signing algorithms.
-	 *
-	 * only `RS256` and `none` are supported.
-	 *
-	 * @default
-	 * ["RS256", "none"]
 	 */
-	id_token_signing_alg_values_supported: ("RS256" | "none")[];
+	id_token_signing_alg_values_supported: string[];
 	/**
 	 * Supported token endpoint authentication methods.
 	 *

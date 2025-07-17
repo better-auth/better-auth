@@ -1,5 +1,5 @@
-import { SignJWT } from "jose";
 import { z } from "zod";
+import { SignJWT } from "jose";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -9,7 +9,6 @@ import {
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import { generateRandomString } from "../../crypto";
-import { subtle } from "@better-auth/utils";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -22,6 +21,14 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
+import { getJwtToken } from "../jwt/sign";
+import type { JwtOptions } from "../jwt";
+
+const getJwtPlugin = (ctx: GenericEndpointContext) => {
+	return ctx.context.options.plugins?.find(
+		(plugin) => plugin.id === "jwt",
+	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
+};
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -60,8 +67,15 @@ export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
+	const jwtPlugin = getJwtPlugin(ctx);
+	const issuer =
+		jwtPlugin && jwtPlugin.options?.jwt && jwtPlugin.options.jwt.issuer
+			? jwtPlugin.options.jwt.issuer
+			: (ctx.context.options.baseURL as string);
 	const baseURL = ctx.context.baseURL;
+	const supportedAlgs = options?.useJWTPlugin
+		? ["RS256", "EdDSA", "none"]
+		: ["HS256", "none"];
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -78,7 +92,7 @@ export const getMetadata = (
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256", "none"],
+		id_token_signing_alg_values_supported: supportedAlgs,
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
@@ -621,17 +635,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
-						alg: "HS256",
-						key: await subtle.generateKey(
-							{
-								name: "HMAC",
-								hash: "SHA-256",
-							},
-							true,
-							["sign", "verify"],
-						),
-					};
+
 					const profile = {
 						given_name: user.name.split(" ")[0],
 						family_name: user.name.split(" ")[1],
@@ -652,7 +656,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
-					const idToken = await new SignJWT({
+					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
@@ -661,13 +665,66 @@ export const oidcProvider = (options: OIDCOptions) => {
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 						...additionalUserClaims,
-					})
-						.setProtectedHeader({ alg: secretKey.alg })
-						.setIssuedAt()
-						.setExpirationTime(
-							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
-						)
-						.sign(secretKey.key);
+					};
+					const expirationTime =
+						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+
+					let idToken: string;
+
+					// The JWT plugin is enabled, so we use the JWKS keys to sign
+					if (options.useJWTPlugin) {
+						const jwtPlugin = getJwtPlugin(ctx);
+						if (!jwtPlugin) {
+							ctx.context.logger.error(
+								"OIDC: `useJWTPlugin` is enabled but the JWT plugin is not available. Make sure you have the JWT Plugin in your plugins array or set `useJWTPlugin` to false.",
+							);
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description: "JWT plugin is not enabled",
+								error: "internal_server_error",
+							});
+						}
+						idToken = await getJwtToken(
+							{
+								...ctx,
+								context: {
+									...ctx.context,
+									session: {
+										session: {
+											id: generateRandomString(32, "a-z", "A-Z"),
+											createdAt: new Date(),
+											updatedAt: new Date(),
+											userId: user.id,
+											expiresAt: new Date(
+												Date.now() + opts.accessTokenExpiresIn * 1000,
+											),
+											token: accessToken,
+											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+										},
+										user,
+									},
+								},
+							},
+							{
+								...jwtPlugin.options,
+								jwt: {
+									...jwtPlugin.options?.jwt,
+									getSubject: () => user.id,
+									audience: client_id.toString(),
+									issuer: ctx.context.options.baseURL,
+									expirationTime,
+									definePayload: () => payload,
+								},
+							},
+						);
+
+						// If the JWT token is not enabled, create a key and use it to sign
+					} else {
+						idToken = await new SignJWT(payload)
+							.setProtectedHeader({ alg: "HS256" })
+							.setIssuedAt()
+							.setExpirationTime(expirationTime)
+							.sign(new TextEncoder().encode(client.clientSecret));
+					}
 
 					return ctx.json(
 						{
