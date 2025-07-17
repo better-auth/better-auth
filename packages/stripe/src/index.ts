@@ -114,15 +114,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * The name of the plan to subscribe
 					 */
-					plan: z.string({
-						error: "The name of the plan to upgrade to",
+					plan: z.string().meta({
+						description: "The name of the plan to upgrade to",
 					}),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
-						.boolean({
-							error: "Whether to upgrade to an annual plan",
+						.boolean()
+						.meta({
+							description: "Whether to upgrade to an annual plan",
 						})
 						.optional(),
 					/**
@@ -131,8 +132,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If not provided, the user's id will be used
 					 */
 					referenceId: z
-						.string({
-							error: "Reference id of the subscription to upgrade",
+						.string()
+						.meta({
+							description: "Reference id of the subscription to upgrade",
 						})
 						.optional(),
 					/**
@@ -141,8 +143,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * it'll throw an error.
 					 */
 					subscriptionId: z
-						.string({
-							error: "The id of the subscription to upgrade",
+						.string()
+						.meta({
+							description: "The id of the subscription to upgrade",
 						})
 						.optional(),
 					/**
@@ -154,16 +157,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If a subscription
 					 */
 					seats: z
-						.number({
-							error: "Number of seats to upgrade to (if applicable)",
+						.number()
+						.meta({
+							description: "Number of seats to upgrade to (if applicable)",
 						})
 						.optional(),
 					/**
 					 * Success URL to redirect back after successful subscription
 					 */
 					successUrl: z
-						.string({
-							error:
+						.string()
+						.meta({
+							description:
 								"Callback URL to redirect back after successful subscription",
 						})
 						.default("/"),
@@ -171,8 +176,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * Cancel URL
 					 */
 					cancelUrl: z
-						.string({
-							error:
+						.string()
+						.meta({
+							description:
 								"Callback URL to redirect back after successful subscription",
 						})
 						.default("/"),

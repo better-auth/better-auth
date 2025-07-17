@@ -399,8 +399,9 @@ export const deleteUser = createAuthEndpoint(
 			 * The token to delete the user. If the token is provided, the user will be deleted
 			 */
 			token: z
-				.string({
-					error: "The token to delete the user is required",
+				.string()
+				.meta({
+					description: "The token to delete the user is required",
 				})
 				.optional(),
 		}),
