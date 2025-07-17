@@ -39,8 +39,8 @@ export const requestPasswordReset = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z.email({
-				error:
+			email: z.email().meta({
+				description:
 					"The email address of the user to send a password reset email to",
 			}),
 			/**
@@ -50,8 +50,9 @@ export const requestPasswordReset = createAuthEndpoint(
 			 * token=VALID_TOKEN
 			 */
 			redirectTo: z
-				.string({
-					error:
+				.string()
+				.meta({
+					description:
 						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
 				})
 				.optional(),
@@ -147,8 +148,8 @@ export const forgetPassword = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z.email({
-				error:
+			email: z.string().email().meta({
+				description:
 					"The email address of the user to send a password reset email to",
 			}),
 			/**
@@ -158,8 +159,9 @@ export const forgetPassword = createAuthEndpoint(
 			 * token=VALID_TOKEN
 			 */
 			redirectTo: z
-				.string({
-					error:
+				.string()
+				.meta({
+					description:
 						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
 				})
 				.optional(),
@@ -248,8 +250,8 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			callbackURL: z.string({
-				error: "The URL to redirect the user to reset their password",
+			callbackURL: z.string().meta({
+				description: "The URL to redirect the user to reset their password",
 			}),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
@@ -313,12 +315,13 @@ export const resetPassword = createAuthEndpoint(
 			})
 			.optional(),
 		body: z.object({
-			newPassword: z.string({
-				error: "The new password to set",
+			newPassword: z.string().meta({
+				description: "The new password to set",
 			}),
 			token: z
-				.string({
-					error: "The token to reset the password",
+				.string()
+				.meta({
+					description: "The token to reset the password",
 				})
 				.optional(),
 		}),

@@ -23,8 +23,8 @@ export function deleteApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				keyId: z.string({
-					error: "The id of the Api Key",
+				keyId: z.string().meta({
+					description: "The id of the Api Key",
 				}),
 			}),
 			use: [sessionMiddleware],

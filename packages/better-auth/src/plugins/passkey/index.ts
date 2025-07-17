@@ -329,8 +329,9 @@ export const passkey = (options?: PasskeyOptions) => {
 					body: z
 						.object({
 							email: z
-								.string({
-									error: "The email address of the user",
+								.string()
+								.meta({
+									description: "The email address of the user",
 								})
 								.optional(),
 						})
@@ -493,8 +494,9 @@ export const passkey = (options?: PasskeyOptions) => {
 					body: z.object({
 						response: z.any(),
 						name: z
-							.string({
-								error: "Name of the passkey",
+							.string()
+							.meta({
+								description: "Name of the passkey",
 							})
 							.optional(),
 					}),
@@ -870,8 +872,12 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string(),
-						name: z.string(),
+						id: z.string().meta({
+							description: "The ID of the passkey to update",
+						}),
+						name: z.string().meta({
+							description: "The name of the passkey",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {

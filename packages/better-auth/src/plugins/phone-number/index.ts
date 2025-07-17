@@ -149,15 +149,16 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
-							error: "Phone number to sign in",
+						phoneNumber: z.string().meta({
+							description: "Phone number to sign in",
 						}),
-						password: z.string({
-							error: "Password to use for sign in",
+						password: z.string().meta({
+							description: "Password to use for sign in",
 						}),
 						rememberMe: z
-							.boolean({
-								error: "Remember the session",
+							.boolean()
+							.meta({
+								description: "Remember the session",
 							})
 							.optional(),
 					}),
@@ -313,8 +314,8 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
-							error: "Phone number to send OTP",
+						phoneNumber: z.string().meta({
+							description: "Phone number to send OTP",
 						}),
 					}),
 					metadata: {
@@ -387,22 +388,23 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string({
-							error: "Phone number to verify",
+						phoneNumber: z.string().meta({
+							description: "Phone number to verify",
 						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string({
-							error: "OTP code",
+						code: z.string().meta({
+							description: "OTP code",
 						}),
 						/**
 						 * Disable session creation after verification
 						 * @default false
 						 */
 						disableSession: z
-							.boolean({
-								error: "Disable session creation after verification",
+							.boolean()
+							.meta({
+								description: "Disable session creation after verification",
 							})
 							.optional(),
 						/**
@@ -411,8 +413,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 * phone number
 						 */
 						updatePhoneNumber: z
-							.boolean({
-								error:
+							.boolean()
+							.meta({
+								description:
 									"Check if there is a session and update the phone number",
 							})
 							.optional(),

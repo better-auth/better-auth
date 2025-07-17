@@ -68,12 +68,13 @@ export const sendVerificationEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z.email({
-				error: "The email to send the verification email to",
+			email: z.email().meta({
+				description: "The email to send the verification email to",
 			}),
 			callbackURL: z
-				.string({
-					error: "The URL to use for email verification callback",
+				.string()
+				.meta({
+					description: "The URL to use for email verification callback",
 				})
 				.optional(),
 		}),
@@ -189,12 +190,13 @@ export const verifyEmail = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string({
-				error: "The token to verify the email",
+			token: z.string().meta({
+				description: "The token to verify the email",
 			}),
 			callbackURL: z
-				.string({
-					error: "The URL to redirect to after email verification",
+				.string()
+				.meta({
+					description: "The URL to redirect to after email verification",
 				})
 				.optional(),
 		}),

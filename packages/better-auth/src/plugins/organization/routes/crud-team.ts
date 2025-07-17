@@ -143,8 +143,12 @@ export const removeTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string(),
-			organizationId: z.string().optional(),
+			teamId: z.string().meta({
+				description: "The ID of the team to remove",
+			}),
+			organizationId: z.string().meta({
+				description: "The ID of the organization to remove the team from",
+			}),
 		}),
 		use: [orgMiddleware],
 		metadata: {
@@ -246,8 +250,12 @@ export const updateTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string(),
-			data: teamSchema.partial(),
+			teamId: z.string().meta({
+				description: "The ID of the team to update",
+			}),
+			data: teamSchema.partial().meta({
+				description: "The data to update the team with",
+			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
@@ -363,7 +371,9 @@ export const listOrganizationTeams = createAuthEndpoint(
 		method: "GET",
 		query: z.optional(
 			z.object({
-				organizationId: z.string().optional(),
+				organizationId: z.string().meta({
+					description: "The ID of the organization to list teams from",
+				}),
 			}),
 		),
 		metadata: {

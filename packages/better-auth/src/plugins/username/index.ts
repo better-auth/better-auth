@@ -45,20 +45,22 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string({
-							error: "The username of the user",
-						}),
-						password: z.string({
-							error: "The password of the user",
-						}),
+						username: z
+							.string()
+							.meta({ description: "The username of the user" }),
+						password: z
+							.string()
+							.meta({ description: "The password of the user" }),
 						rememberMe: z
-							.boolean({
-								error: "Remember the user session",
+							.boolean()
+							.meta({
+								description: "Remember the user session",
 							})
 							.optional(),
 						callbackURL: z
-							.string({
-								error: "The URL to redirect to after email verification",
+							.string()
+							.meta({
+								description: "The URL to redirect to after email verification",
 							})
 							.optional(),
 					}),

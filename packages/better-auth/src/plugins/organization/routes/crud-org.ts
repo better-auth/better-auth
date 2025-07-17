@@ -21,31 +21,35 @@ export const createOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			name: z.string({
-				error: "The name of the organization",
+			name: z.string().meta({
+				description: "The name of the organization",
 			}),
-			slug: z.string({
-				error: "The slug of the organization",
+			slug: z.string().meta({
+				description: "The slug of the organization",
 			}),
 			userId: z.coerce
-				.string({
-					error:
+				.string()
+				.meta({
+					description:
 						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
 				})
 				.optional(),
 			logo: z
-				.string({
-					error: "The logo of the organization",
+				.string()
+				.meta({
+					description: "The logo of the organization",
 				})
 				.optional(),
 			metadata: z
-				.record(z.string(), z.any(), {
-					error: "The metadata of the organization",
+				.record(z.string(), z.any())
+				.meta({
+					description: "The metadata of the organization",
 				})
 				.optional(),
 			keepCurrentActiveOrganization: z
-				.boolean({
-					error:
+				.boolean()
+				.meta({
+					description:
 						"Whether to keep the current active organization active after creating a new one",
 				})
 				.optional(),
@@ -250,23 +254,27 @@ export const updateOrganization = createAuthEndpoint(
 			data: z
 				.object({
 					name: z
-						.string({
-							error: "The name of the organization",
+						.string()
+						.meta({
+							description: "The name of the organization",
 						})
 						.optional(),
 					slug: z
-						.string({
-							error: "The slug of the organization",
+						.string()
+						.meta({
+							description: "The slug of the organization",
 						})
 						.optional(),
 					logo: z
-						.string({
-							error: "The logo of the organization",
+						.string()
+						.meta({
+							description: "The logo of the organization",
 						})
 						.optional(),
 					metadata: z
-						.record(z.string(), z.any(), {
-							error: "The metadata of the organization",
+						.record(z.string(), z.any())
+						.meta({
+							description: "The metadata of the organization",
 						})
 						.optional(),
 				})

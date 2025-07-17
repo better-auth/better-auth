@@ -55,8 +55,8 @@ export const totp2fa = (options?: TOTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				secret: z.string({
-					error: "The secret to generate the TOTP code",
+				secret: z.string().meta({
+					description: "The secret to generate the TOTP code",
 				}),
 			}),
 			metadata: {
@@ -107,8 +107,8 @@ export const totp2fa = (options?: TOTPOptions) => {
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				password: z.string({
-					error: "User password",
+				password: z.string().meta({
+					description: "User password",
 				}),
 			}),
 			metadata: {
@@ -179,8 +179,8 @@ export const totp2fa = (options?: TOTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string({
-					error: "The otp code to verify",
+				code: z.string().meta({
+					description: "The otp code to verify",
 				}),
 				/**
 				 * if true, the device will be trusted
@@ -188,8 +188,9 @@ export const totp2fa = (options?: TOTPOptions) => {
 				 * every sign in request within this time.
 				 */
 				trustDevice: z
-					.boolean({
-						error:
+					.boolean()
+					.meta({
+						description:
 							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
 					})
 					.optional(),

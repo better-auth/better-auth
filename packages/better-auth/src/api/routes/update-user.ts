@@ -17,8 +17,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		{
 			method: "POST",
 			body: z.record(
-				z.string({
-					error: "Field name must be a string",
+				z.string().meta({
+					description: "Field name must be a string",
 				}),
 				z.any(),
 			),
@@ -130,22 +130,23 @@ export const changePassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string({
-				error: "The new password to set",
+			newPassword: z.string().meta({
+				description: "The new password to set",
 			}),
 			/**
 			 * The current password of the user
 			 */
-			currentPassword: z.string({
-				error: "The current password is required",
+			currentPassword: z.string().meta({
+				description: "The current password is required",
 			}),
 			/**
 			 * revoke all sessions that are not the
 			 * current one logged in by the user
 			 */
 			revokeOtherSessions: z
-				.boolean({
-					error: "Must be a boolean value",
+				.boolean()
+				.meta({
+					description: "Must be a boolean value",
 				})
 				.optional(),
 		}),
@@ -310,8 +311,8 @@ export const setPassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string({
-				error: "The new password to set is required",
+			newPassword: z.string().meta({
+				description: "The new password to set is required",
 			}),
 		}),
 		metadata: {
@@ -377,8 +378,10 @@ export const deleteUser = createAuthEndpoint(
 			 * this is only used on delete user callback
 			 */
 			callbackURL: z
-				.string({
-					error: "The callback URL to redirect to after the user is deleted",
+				.string()
+				.meta({
+					description:
+						"The callback URL to redirect to after the user is deleted",
 				})
 				.optional(),
 			/**
@@ -386,8 +389,10 @@ export const deleteUser = createAuthEndpoint(
 			 * will be checked.
 			 */
 			password: z
-				.string({
-					error: "The password of the user is required to delete the user",
+				.string()
+				.meta({
+					description:
+						"The password of the user is required to delete the user",
 				})
 				.optional(),
 			/**
@@ -547,12 +552,13 @@ export const deleteUserCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string({
-				error: "The token to verify the deletion request",
+			token: z.string().meta({
+				description: "The token to verify the deletion request",
 			}),
 			callbackURL: z
-				.string({
-					error: "The URL to redirect to after deletion",
+				.string()
+				.meta({
+					description: "The URL to redirect to after deletion",
 				})
 				.optional(),
 		}),
@@ -644,12 +650,14 @@ export const changeEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			newEmail: z.email({
-				error: "The new email to set must be a valid email address",
+			newEmail: z.email().meta({
+				description:
+					"The new email address to set must be a valid email address",
 			}),
 			callbackURL: z
-				.string({
-					error: "The URL to redirect to after email verification",
+				.string()
+				.meta({
+					description: "The URL to redirect to after email verification",
 				})
 				.optional(),
 		}),

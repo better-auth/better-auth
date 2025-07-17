@@ -19,33 +19,36 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			method: "POST",
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
-				email: z.string({
-					error: "The email address of the user to invite",
+				email: z.string().meta({
+					description: "The email address of the user to invite",
 				}),
 				role: z.union([
-					z.string({
-						error: "The role to assign to the user",
+					z.string().meta({
+						description: "The role to assign to the user",
 					}),
 					z.array(
-						z.string({
-							error: "The roles to assign to the user",
+						z.string().meta({
+							description: "The roles to assign to the user",
 						}),
 					),
 				]),
 				organizationId: z
-					.string({
-						error: "The organization ID to invite the user to",
+					.string()
+					.meta({
+						description: "The organization ID to invite the user to",
 					})
 					.optional(),
 				resend: z
-					.boolean({
-						error:
+					.boolean()
+					.meta({
+						description:
 							"Resend the invitation email, if the user is already invited",
 					})
 					.optional(),
 				teamId: z
-					.string({
-						error: "The team ID to invite the user to",
+					.string()
+					.meta({
+						description: "The team ID to invite the user to",
 					})
 					.optional(),
 			}),

@@ -127,15 +127,16 @@ export const removeMember = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			memberIdOrEmail: z.string({
-				error: "The ID or email of the member to remove",
+			memberIdOrEmail: z.string().meta({
+				description: "The ID or email of the member to remove",
 			}),
 			/**
 			 * If not provided, the active organization will be used
 			 */
 			organizationId: z
-				.string({
-					error:
+				.string()
+				.meta({
+					description:
 						"The ID of the organization to remove the member from. If not provided, the active organization will be used",
 				})
 				.optional(),

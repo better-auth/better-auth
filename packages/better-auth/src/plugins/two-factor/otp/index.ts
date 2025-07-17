@@ -155,8 +155,8 @@ export const otp2fa = (options?: OTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string({
-					error: "The otp code to verify",
+				code: z.string().meta({
+					description: "The otp code to verify",
 				}),
 				/**
 				 * if true, the device will be trusted

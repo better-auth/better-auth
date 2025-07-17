@@ -24,8 +24,8 @@ export function getApiKey({
 		{
 			method: "GET",
 			query: z.object({
-				id: z.string({
-					error: "The id of the Api Key",
+				id: z.string().meta({
+					description: "The id of the Api Key",
 				}),
 			}),
 			use: [sessionMiddleware],
