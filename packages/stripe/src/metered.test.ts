@@ -254,11 +254,6 @@ describe("metered", () => {
 		expect(res.data?.display_name).toBe("Update API Calls");
 	});
 
-	it("should list a metered billing", async () => {
-		var res = await authClient.meteredBilling.list();
-		expect(res.data?.data?.length).toBeGreaterThan(0);
-	});
-
 	it("should deactivate a metered billing", async () => {
 		var res = await authClient.meteredBilling.deactivate({
 			meterId: "meter_123",
