@@ -173,7 +173,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					body: z.object({
 						userId: z.coerce.string().meta({
-							description: "The user id"
+							description: "The user id",
 						}),
 						role: z.union([
 							z.string().meta({
@@ -278,7 +278,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						 * extra fields for user
 						 */
 						data: z.optional(
-							z.record(z.any() , z.any()).meta({
+							z.record(z.any(), z.any()).meta({
 								description:
 									"Extra fields for the user. Including custom additional fields.",
 							}),
