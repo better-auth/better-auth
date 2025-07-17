@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -201,8 +201,8 @@ export function verifyApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				key: z.string({
-					description: 'The key to verify. Eg: "your_api_key_here"',
+				key: z.string().meta({
+					description: "The key to verify",
 				}),
 				permissions: z
 					.record(z.string(), z.array(z.string()), {

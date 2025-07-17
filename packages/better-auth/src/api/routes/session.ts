@@ -6,7 +6,7 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import { z } from "zod";
+import * as z from "zod/v4";
 import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
@@ -32,22 +32,19 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * If cookie cache is enabled, it will disable the cache
 					 * and fetch the session from the database
 					 */
-					disableCookieCache: z
-						.optional(
-							z
-								.boolean({
-									description:
-										"Disable cookie cache and fetch session from database",
-								})
-								.or(z.string().transform((v) => v === "true")),
-						)
+					disableCookieCache: z.coerce
+						.boolean()
+						.meta({
+							description:
+								"Disable cookie cache and fetch session from database",
+						})
 						.optional(),
-					disableRefresh: z
-						.boolean({
+					disableRefresh: z.coerce
+						.boolean()
+						.meta({
 							description:
 								"Disable session refresh. Useful for checking session status, without updating the session",
 						})
-						.or(z.string().transform((v) => v === "true"))
 						.optional(),
 				}),
 			),
@@ -404,7 +401,7 @@ export const revokeSession = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			token: z.string({
+			token: z.string().meta({
 				description: "The token to revoke",
 			}),
 		}),

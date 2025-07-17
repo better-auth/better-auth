@@ -11,6 +11,7 @@ The **OIDC Provider Plugin** enables you to build and manage your own OpenID Con
 - **Dynamic Client Registration**: Allow clients to register dynamically.
 - **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
 - **Authorization Code Flow**: Support the Authorization Code Flow.
+- **Public Clients**: Support public clients for SPA, mobile apps, CLI tools, etc.
 - **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
 - **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
 - **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
@@ -313,12 +314,29 @@ export const auth = betterAuth({
 })
 ```
 
-### JWKS Endpoint (Not Fully Implemented)
+### JWKS Endpoint
 
-For JWKS support, you need to use the `jwt` plugin. It exposes the `/jwks` endpoint to provide the public keys.
+The OIDC Provider plugin can integrate with the JWT plugin to provide proper asymmetric key signing for ID tokens. When enabled, ID tokens will be signed using RSA/EdDSA keys and can be verified using the JWKS endpoint.
 
-<Callout type="warn">
-Currently, the token is signed with the application's secret key. The JWKS endpoint is not fully implemented yet.
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+import { jwt } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        jwt(), // Make sure to add the JWT plugin
+        oidcProvider({
+            useJWTPlugin: true, // Enable JWT plugin integration
+            loginPage: "/sign-in",
+            // ... other options
+        })
+    ]
+})
+```
+
+<Callout type="info">
+When `useJWTPlugin: false` (default), ID tokens are signed with the application secret.
 </Callout>
 
 ### Dynamic Client Registration
@@ -360,8 +378,8 @@ Table Name: `oauthApplication`
     { 
       name: "clientSecret", 
       type: "string", 
-      description: "Secret key for the OAuth client",
-      isRequired: true
+      description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
+      isOptional: true
     },
     { 
       name: "name", 
@@ -543,5 +561,6 @@ Table Name: `oauthConsent`
 
 **trustedClients**: `(Client & { skipConsent?: boolean })[]` - Array of trusted clients that are configured directly in the provider options. These clients bypass database lookups and can optionally skip consent screens.
 
-
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.
+
+**useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import type {
 	BetterAuthPlugin,
@@ -164,14 +164,14 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
+						phoneNumber: z.string().meta({
 							description: 'Phone number to sign in. Eg: "+1234567890"',
 						}),
-						password: z.string({
+						password: z.string().meta({
 							description: "Password to use for sign in.",
 						}),
 						rememberMe: z
-							.boolean({
+							.boolean().meta({
 								description: "Remember the session. Eg: true",
 							})
 							.optional(),
@@ -343,7 +343,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
+						phoneNumber: z.string().meta({
 							description: 'Phone number to send OTP. Eg: "+1234567890"',
 						}),
 					}),
@@ -433,13 +433,13 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string({
+						phoneNumber: z.string().meta({
 							description: 'Phone number to verify. Eg: "+1234567890"',
 						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string({
+						code: z.string().meta({
 							description: 'OTP code. Eg: "123456"',
 						}),
 						/**
@@ -447,7 +447,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 * @default false
 						 */
 						disableSession: z
-							.boolean({
+							.boolean().meta({
 								description:
 									"Disable session creation after verification. Eg: false",
 							})
@@ -458,7 +458,8 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 * phone number
 						 */
 						updatePhoneNumber: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
 									"Check if there is a session and update the phone number. Eg: true",
 							})

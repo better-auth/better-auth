@@ -1,5 +1,5 @@
 import { generateRandomString } from "../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
@@ -54,13 +54,13 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string({
-							description: "User password.",
+						password: z.string().meta({
+							description: "User password",
 						}),
 						issuer: z
-							.string({
-								description:
-									'An optional custom issuer for the TOTP URI. Defaults to app-name defined in your auth config. Eg: "my-app-name"',
+							.string()
+							.meta({
+								description: "Custom issuer for the TOTP URI",
 							})
 							.optional(),
 					}),
@@ -192,8 +192,8 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string({
-							description: "User password.",
+						password: z.string().meta({
+							description: "User password",
 						}),
 					}),
 					use: [sessionMiddleware],

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
 import {
@@ -97,38 +97,38 @@ export const sso = (options?: SSOOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						providerId: z.string({
+						providerId: z.string().meta({
 							description:
 								'The ID of the provider. This is used to identify the provider during login and callback. Eg: "example-provider"',
 						}),
-						issuer: z.string({
+						issuer: z.string().meta({
 							description:
 								'The issuer url of the provider. Eg: "https://idp.example.com"',
 						}),
-						domain: z.string({
+						domain: z.string().meta({
 							description:
 								'The domain of the provider. This is used for email matching. Eg: "example.com"',
 						}),
-						clientId: z.string({
+						clientId: z.string().meta({
 							description: 'The client ID. Eg: "1234567890"',
 						}),
-						clientSecret: z.string({
+						clientSecret: z.string().meta({
 							description: 'The client secret. Eg: "1234567890"',
 						}),
 						authorizationEndpoint: z
-							.string({
+							.string().meta({
 								description:
 									'The authorization endpoint. Eg: "https://idp.example.com/authorize"',
 							})
 							.optional(),
 						tokenEndpoint: z
-							.string({
+							.string().meta({
 								description:
 									'The token endpoint. Eg: "https://idp.example.com/token"',
 							})
 							.optional(),
 						userInfoEndpoint: z
-							.string({
+							.string().meta({
 								description:
 									'The user info endpoint. Eg: "https://idp.example.com/userinfo"',
 							})
@@ -140,20 +140,21 @@ export const sso = (options?: SSOOptions) => {
 							})
 							.optional(),
 						jwksEndpoint: z
-							.string({
+							.string().meta({
 								description:
 									'The JWKS endpoint. Eg: "https://idp.example.com/.well-known/jwks.json"',
 							})
 							.optional(),
 						discoveryEndpoint: z.string().optional(),
 						scopes: z
-							.array(z.string(), {
+							.array(z.string())
+							.meta({
 								description:
 									"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']. Eg: ['openid', 'email', 'profile']",
 							})
 							.optional(),
 						pkce: z
-							.boolean({
+							.boolean().meta({
 								description:
 									"Whether to use PKCE for the authorization flow. Eg: true",
 							})
@@ -161,41 +162,45 @@ export const sso = (options?: SSOOptions) => {
 							.optional(),
 						mapping: z
 							.object({
-								id: z.string({
+								id: z.string().meta({
 									description:
 										"The field in the user info response that contains the id. Defaults to 'sub'. Eg: \"sub\"",
 								}),
-								email: z.string({
+								email: z.string().meta({
 									description:
 										"The field in the user info response that contains the email. Defaults to 'email'. Eg: \"email\"",
 								}),
 								emailVerified: z
-									.string({
+									.string()
+									.meta({
 										description:
 											"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'. Eg: \"email_verified\"",
 									})
 									.optional(),
-								name: z.string({
+								name: z.string().meta({
 									description:
 										"The field in the user info response that contains the name. Defaults to 'name'. Eg: \"name\"",
 								}),
 								image: z
-									.string({
+									.string()
+									.meta({
 										description:
 											"The field in the user info response that contains the image. Defaults to 'picture'. Eg: \"picture\"",
 									})
 									.optional(),
-								extraFields: z.record(z.string()).optional(),
+								extraFields: z.record(z.string(), z.any()).optional(),
 							})
 							.optional(),
 						organizationId: z
-							.string({
+							.string()
+							.meta({
 								description:
 									'If organization plugin is enabled, the organization id to link the provider to. Eg: "some-org-id"',
 							})
 							.optional(),
 						overrideUserInfo: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
 									"Override user info with the provider info. Defaults to false",
 							})
@@ -448,52 +453,56 @@ export const sso = (options?: SSOOptions) => {
 					method: "POST",
 					body: z.object({
 						email: z
-							.string({
+							.string()
+							.meta({
 								description:
 									'The email address to sign in with. This is used to identify the issuer to sign in with. It\'s optional if the issuer is provided. Eg: "john@example.com"',
 							})
 							.optional(),
 						organizationSlug: z
-							.string({
+							.string().meta({
 								description:
 									'The slug of the organization to sign in with. Eg: "example-org"',
 							})
 							.optional(),
 						providerId: z
-							.string({
+							.string()
+							.meta({
 								description:
 									'The ID of the provider to sign in with. This can be provided instead of email or issuer. Eg: "example-provider"',
 							})
 							.optional(),
 						domain: z
-							.string({
+							.string().meta({
 								description: 'The domain of the provider. Eg: "example.com"',
 							})
 							.optional(),
-						callbackURL: z.string({
+						callbackURL: z.string().meta({
 							description:
 								'The URL to redirect to after login. Eg: "https://example.com/callback"',
 						}),
 						errorCallbackURL: z
-							.string({
+							.string().meta({
 								description:
 									'The URL to redirect to after login. Eg: "https://example.com/callback"',
 							})
 							.optional(),
 						newUserCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
 									'The URL to redirect to after login if the user is new. Eg: "https://example.com/new-user"',
 							})
 							.optional(),
 						scopes: z
-							.array(z.string(), {
-								description:
-									'Scopes to request from the provider. Eg: ["openid", "email", "profile", "offline_access"]',
+							.array(z.string())
+							.meta({
+								description: "Scopes to request from the provider.",
 							})
 							.optional(),
 						requestSignUp: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: true",
 							})

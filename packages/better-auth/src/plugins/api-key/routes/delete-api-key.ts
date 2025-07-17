@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -23,8 +23,8 @@ export function deleteApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				keyId: z.string({
-					description: 'The id of the Api Key to delete. Eg: "some-api-key-id"',
+				keyId: z.string().meta({
+					description: "The id of the Api Key",
 				}),
 			}),
 			use: [sessionMiddleware],

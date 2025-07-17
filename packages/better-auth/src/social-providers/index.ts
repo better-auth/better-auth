@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";

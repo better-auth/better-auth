@@ -5,7 +5,7 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	sessionMiddleware,
 	APIError,
@@ -91,12 +91,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 			}
 			const isAuthorized = ctx.body?.referenceId
-				? await options.subscription?.authorizeReference?.({
-						user: session.user,
-						session: session.session,
-						referenceId,
-						action,
-					})
+				? await options.subscription?.authorizeReference?.(
+						{
+							user: session.user,
+							session: session.session,
+							referenceId,
+							action,
+						},
+						ctx,
+					)
 				: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
@@ -129,14 +132,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * The name of the plan to subscribe
 					 */
-					plan: z.string({
+					plan: z.string().meta({
 						description: 'The name of the plan to upgrade to. Eg: "pro"',
 					}),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
-						.boolean({
+						.boolean().meta({
 							description: "Whether to upgrade to an annual plan. Eg: true",
 						})
 						.optional(),
@@ -146,7 +149,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If not provided, the user's id will be used
 					 */
 					referenceId: z
-						.string({
+						.string().meta({
 							description:
 								'Reference id of the subscription to upgrade. Eg: "123"',
 						})
@@ -157,7 +160,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * it'll throw an error.
 					 */
 					subscriptionId: z
-						.string({
+						.string().meta({
 							description:
 								'The id of the subscription to upgrade. Eg: "sub_123"',
 						})
@@ -171,7 +174,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If a subscription
 					 */
 					seats: z
-						.number({
+						.number().meta({
 							description:
 								"Number of seats to upgrade to (if applicable). Eg: 1",
 						})
@@ -180,7 +183,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * Success URL to redirect back after successful subscription
 					 */
 					successUrl: z
-						.string({
+						.string()
+						.meta({
 							description:
 								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
 						})
@@ -189,7 +193,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * Cancel URL
 					 */
 					cancelUrl: z
-						.string({
+						.string()
+						.meta({
 							description:
 								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
 						})
@@ -409,6 +414,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription,
 					},
 					ctx.request,
+					//@ts-expect-error
+					ctx,
 				);
 
 				const freeTrail = plan.freeTrial
@@ -1115,11 +1122,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										if (!customer) {
 											logger.error("#BETTER_AUTH: Failed to create  customer");
 										} else {
-											await options.onCustomerCreate?.({
-												customer,
-												stripeCustomer,
-												user,
-											});
+											await options.onCustomerCreate?.(
+												{
+													customer,
+													stripeCustomer,
+													user,
+												},
+												ctx,
+											);
 										}
 									}
 								},

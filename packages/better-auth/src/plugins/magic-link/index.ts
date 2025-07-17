@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -106,21 +106,22 @@ export const magicLink = (options: MagicLinkopts) => {
 					requireHeaders: true,
 					body: z.object({
 						email: z
-							.string({
-								description:
-									'Email address to send the magic link. Eg: "user@email.com"',
+							.string()
+							.meta({
+								description: "Email address to send the magic link",
 							})
 							.email(),
 						name: z
-							.string({
+							.string()
+							.meta({
 								description:
 									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
 							})
 							.optional(),
 						callbackURL: z
-							.string({
-								description:
-									'URL to redirect after magic link verification. Eg: "/dashboard"',
+							.string()
+							.meta({
+								description: "URL to redirect after magic link verification",
 							})
 							.optional(),
 					}),
@@ -213,11 +214,12 @@ export const magicLink = (options: MagicLinkopts) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string({
-							description: 'Verification token. Eg: "123456"',
+						token: z.string().meta({
+							description: "Verification token",
 						}),
 						callbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
 									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
 							})

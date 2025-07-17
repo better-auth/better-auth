@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getConfig } from "../utils/get-config";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
 import { logger } from "better-auth";

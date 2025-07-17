@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -25,8 +25,8 @@ export function updateApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				keyId: z.string({
-					description: 'The id of the Api Key to update. Eg: "some-api-key-id"',
+				keyId: z.string().meta({
+					description: "The id of the Api Key",
 				}),
 				userId: z.coerce
 					.string({
@@ -35,62 +35,61 @@ export function updateApiKey({
 					})
 					.optional(),
 				name: z
-					.string({
-						description: 'The name of the key. Eg: "some-api-key-name"',
+					.string()
+					.meta({
+						description: "The name of the key",
 					})
 					.optional(),
 				enabled: z
-					.boolean({
-						description:
-							"Whether the Api Key is enabled or not. server-only. Eg: true",
+					.boolean()
+					.meta({
+						description: "Whether the Api Key is enabled or not",
 					})
 					.optional(),
 				remaining: z
-					.number({
-						description:
-							"The number of remaining requests. server-only. Eg: 100",
+					.number()
+					.meta({
+						description: "The number of remaining requests",
 					})
 					.min(1)
 					.optional(),
 				refillAmount: z
-					.number({
-						description: "The refill amount. server-only. Eg: 100",
+					.number()
+					.meta({
+						description: "The refill amount",
 					})
 					.optional(),
 				refillInterval: z
-					.number({
-						description:
-							"The refill interval in milliseconds. server-only. Eg: 1000",
+					.number()
+					.meta({
+						description: "The refill interval",
 					})
 					.optional(),
-				metadata: z
-					.any({
-						description:
-							'The metadata of the Api Key. server-only. Eg: { "key": "value" }',
-					})
-					.optional(),
+				metadata: z.any().optional(),
 				expiresIn: z
-					.number({
-						description:
-							"Expiration time of the Api Key in seconds. server-only. Eg: 60 * 60 * 24 * 7",
+					.number()
+					.meta({
+						description: "Expiration time of the Api Key in seconds",
 					})
 					.min(1)
 					.optional()
 					.nullable(),
 				rateLimitEnabled: z
-					.boolean({
-						description:
-							"Whether the key has rate limiting enabled. server-only. Eg: true",
+					.boolean()
+					.meta({
+						description: "Whether the key has rate limiting enabled.",
 					})
 					.optional(),
 				rateLimitTimeWindow: z
-					.number({
+					.number()
+					.meta({
 						description:
 							"The duration in milliseconds where each request is counted. server-only. Eg: 1000",
 					})
 					.optional(),
 				rateLimitMax: z
-					.number({
+					.number()
+					.meta({
 						description:
 							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
 					})

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import {
@@ -172,13 +172,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				method: "POST",
 				body: z.object({
-					email: z.string({
-						description:
-							'Email address to send the OTP. Eg: "user@example.com"',
+					email: z.string({}).meta({
+						description: "Email address to send the OTP",
 					}),
-					type: z.enum(types, {
-						description:
-							'Type of the OTP. `sign-in`, `email-verification`, or `forgot-password`. Eg: "sign-in"',
+					type: z.enum(types).meta({
+						description: "Type of the OTP",
 					}),
 				}),
 				metadata: {
@@ -312,13 +310,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description:
-								'Email address to send the OTP. Eg: "user@example.com"',
+						email: z.string({}).meta({
+							description: "Email address to send the OTP",
 						}),
-						type: z.enum(types, {
-							description:
-								'Type of the OTP. `sign-in`, `email-verification`, or `forgot-password`. Eg: "sign-in"',
+						type: z.enum(types).meta({
+							required: true,
+							description: "Type of the OTP",
 						}),
 					}),
 					metadata: {
@@ -375,13 +372,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string({
-							description:
-								'Email address to get the OTP. Eg: "user@example.com"',
+						email: z.string({}).meta({
+							description: "Email address to get the OTP",
 						}),
-						type: z.enum(types, {
-							description:
-								'Type of the OTP. `sign-in`, `email-verification`, or `forgot-password`. Eg: "sign-in"',
+						type: z.enum(types).meta({
+							required: true,
+							description: "Type of the OTP",
 						}),
 					}),
 					metadata: {
@@ -473,11 +469,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: 'Email address to verify. Eg: "user@example.com"',
+						email: z.string({}).meta({
+							description: "Email address to verify",
 						}),
-						otp: z.string({
-							description: 'OTP to verify. Eg: "123456"',
+						otp: z.string().meta({
+							required: true,
+							description: "OTP to verify",
 						}),
 					}),
 					metadata: {
@@ -647,11 +644,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description: 'Email address to sign in. Eg: "user@example.com"',
+						email: z.string({}).meta({
+							description: "Email address to sign in",
 						}),
-						otp: z.string({
-							description: 'OTP sent to the email. Eg: "123456"',
+						otp: z.string().meta({
+							required: true,
+							description: "OTP sent to the email",
 						}),
 					}),
 					metadata: {
@@ -815,9 +813,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description:
-								'Email address to send the OTP. Eg: "user@example.com"',
+						email: z.string().meta({
+							description: "Email address to send the OTP",
 						}),
 					}),
 					metadata: {
@@ -899,15 +896,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-							description:
-								'Email address to reset the password. Eg: "user@example.com"',
+						email: z.string().meta({
+							description: "Email address to reset the password",
 						}),
-						otp: z.string({
-							description: 'OTP sent to the email. Eg: "123456"',
+						otp: z.string().meta({
+							description: "OTP sent to the email",
 						}),
-						password: z.string({
-							description: 'New password. Eg: "new-secure-password"',
+						password: z.string().meta({
+							description: "New password",
 						}),
 					}),
 					metadata: {
@@ -916,7 +912,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							responses: {
 								200: {
 									description: "Success",
-									content: {
+									contnt: {
 										"application/json": {
 											schema: {
 												type: "object",
