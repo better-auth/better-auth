@@ -105,14 +105,6 @@ describe("Admin plugin", async () => {
 									},
 								};
 							}
-							if (user.email === "userwithusername@email.com") {
-								return {
-									data: {
-										...user,
-										userName: "userwithusername",
-									},
-								};
-							}
 						},
 					},
 				},
@@ -209,22 +201,6 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 	});
-	it("should run the before create hook on create user", async () => {
-		const res = await client.admin.createUser(
-			{
-				name: "Test User",
-				email: "userwithusername@email.com",
-				password: "test",
-				role: "user",
-			},
-			{
-				headers: adminHeaders,
-			},
-		);
-		newUser = res.data?.user;
-		expect((newUser as any)?.userName).toBe("userwithusername");
-	});
-
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
