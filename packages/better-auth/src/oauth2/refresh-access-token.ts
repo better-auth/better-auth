@@ -26,13 +26,13 @@ export function createRefreshAccessTokenRequest({
 	body.set("refresh_token", refreshToken);
 	scope && body.set("scope", scope);
 	if (resource) {
-    if (typeof resource === 'string') {
-      body.append('resource', resource);
-    } else {
-      for (const val of resource) {
-        body.append('resource', val);
-      }
-    }
+		if (typeof resource === "string") {
+			body.append("resource", resource);
+		} else {
+			for (const val of resource) {
+				body.append("resource", val);
+			}
+		}
 	}
 	if (authentication === "basic") {
 		const encodedCredentials = base64Url.encode(
@@ -47,7 +47,7 @@ export function createRefreshAccessTokenRequest({
 	return {
 		body,
 		headers,
-	}
+	};
 }
 
 export async function refreshAccessToken({
@@ -63,17 +63,14 @@ export async function refreshAccessToken({
 	scope?: string;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
-	resource?: string | string[]
+	resource?: string | string[];
 }): Promise<OAuth2Tokens> {
-	const {
-		body,
-		headers,
-	} = createRefreshAccessTokenRequest({
+	const { body, headers } = createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
 		resource,
-	})
+	});
 
 	const { data, error } = await betterFetch<{
 		access_token: string;

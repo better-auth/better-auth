@@ -14,7 +14,7 @@ import {
 	generateKeyPair,
 	importJWK,
 	JWTPayload,
-	SignJWT
+	SignJWT,
 } from "jose";
 import {
 	createAuthEndpoint,
@@ -51,10 +51,11 @@ type JWKOptions =
 			alg: "ES512"; // ECDSA with P-521 curve
 			crv?: never; // Only P-521 for ES512
 	  };
+export type JWSAlgorithms = JWKOptions["alg"];
 
 export interface JwtPluginOptions {
-	jwks?: JwksOptions
-	jwt?: JwtOptions
+	jwks?: JwksOptions;
+	jwt?: JwtOptions;
 	/**
 	 * Custom schema for the admin plugin
 	 */
@@ -65,7 +66,7 @@ export interface JwtPluginOptions {
 	 *
 	 * Thus, only the /jwks endpoint is enabled.
 	 */
-	usesOidcProviderPlugin?: boolean
+	usesOidcProviderPlugin?: boolean;
 }
 
 export interface JwksOptions {
@@ -75,7 +76,7 @@ export interface JwksOptions {
 	 * Useful if jwks are not managed at /jwks or
 	 * if your jwks are signed with a certificate and placed on your CDN.
 	 */
-	remoteUrl?: string
+	remoteUrl?: string;
 	/**
 	 * Key pair configuration
 	 * @description A subset of the options available for the generateKeyPair function
@@ -105,7 +106,7 @@ export interface JwtOptions {
 	 * @requires jwks.remoteUrl
 	 * @invalidates other jwt.* options
 	 */
-	sign?: (payload: JWTPayload) => Awaitable<string>
+	sign?: (payload: JWTPayload) => Awaitable<string>;
 	/**
 	 * The issuer of the JWT
 	 */
@@ -159,11 +160,11 @@ export interface JwtOptions {
 }
 
 export const getJwtPlugin = (ctx: AuthContext) => {
-	const plugin: (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions }) | undefined = ctx.options.plugins?.find(
-		(plugin) => plugin.id === "jwt",
-	);
+	const plugin:
+		| (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions })
+		| undefined = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
 	if (!plugin) {
-		throw new BetterAuthError('jwt_config', 'jwt plugin not found')
+		throw new BetterAuthError("jwt_config", "jwt plugin not found");
 	}
 	return plugin;
 };
@@ -173,7 +174,7 @@ export async function createJwk(
 	options?: JwtPluginOptions,
 ) {
 	if (!options) {
-		options = getJwtPlugin(ctx.context).options
+		options = getJwtPlugin(ctx.context).options;
 	}
 
 	const { publicKey, privateKey } = await generateKeyPair(
@@ -206,7 +207,7 @@ export async function createJwk(
 	const adapter = getJwksAdapter(ctx.context.adapter);
 	const key = await adapter.createJwk(jwk as Jwk);
 
-	return key
+	return key;
 }
 
 /**
@@ -222,12 +223,12 @@ export async function signJwt(
 	options?: JwtPluginOptions,
 ): Promise<string> {
 	if (!options) {
-		options = getJwtPlugin(ctx.context).options
+		options = getJwtPlugin(ctx.context).options;
 	}
 
 	// Custom/remote signing function
 	if (options?.jwt?.sign && payload) {
-		return options.jwt.sign(payload)
+		return options.jwt.sign(payload);
 	}
 
 	// Local signing
@@ -238,7 +239,7 @@ export async function signJwt(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		key = await createJwk(ctx, options)
+		key = await createJwk(ctx, options);
 	}
 
 	let privateWebKey = privateKeyEncryptionEnabled
@@ -261,37 +262,33 @@ export async function signJwt(
 		.setProtectedHeader({
 			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 			kid: key.id,
-			typ: 'JWT',
+			typ: "JWT",
 		})
 		.setIssuedAt(payload.iat)
 		.setIssuer(
-			payload.iss
-			?? options?.jwt?.issuer
-			?? ctx.context.options.baseURL!
+			payload.iss ?? options?.jwt?.issuer ?? ctx.context.options.baseURL!,
 		)
 		.setAudience(
-			payload.aud
-			?? options?.jwt?.audience
-			?? ctx.context.options.baseURL!
+			payload.aud ?? options?.jwt?.audience ?? ctx.context.options.baseURL!,
 		)
-		.setExpirationTime(
-			payload.exp
-			?? options?.jwt?.expirationTime
-			?? "15m"
-		)
-	const sub = (await options?.jwt?.getSubject?.(ctx.context.session!)) ??
+		.setExpirationTime(payload.exp ?? options?.jwt?.expirationTime ?? "15m");
+	const sub =
+		(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
 		payload.sub ??
-		ctx.context.session?.user.id
-	if (sub) jwt.setSubject(sub)
+		ctx.context.session?.user.id;
+	if (sub) jwt.setSubject(sub);
 	return await jwt.sign(privateKey);
 }
 
 export const jwt = (options?: JwtPluginOptions) => {
-	const endpoints: BetterAuthPlugin['endpoints'] = {}
+	const endpoints: BetterAuthPlugin["endpoints"] = {};
 
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
-		throw new BetterAuthError("jwks_config", "jwks.remoteUrl must be set when using jwt.sign")
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwks.remoteUrl must be set when using jwt.sign",
+		);
 	}
 
 	// Alg is required to be specified when using oidc plugin and remote url (needed in openid metadata)
@@ -300,7 +297,10 @@ export const jwt = (options?: JwtPluginOptions) => {
 		options.jwks?.remoteUrl &&
 		!options.jwks?.keyPairConfig?.alg
 	) {
-		throw new BetterAuthError("jwks_config", "must specify alg when using the oidc plugin and jwks.remoteUrl")
+		throw new BetterAuthError(
+			"jwks_config",
+			"must specify alg when using the oidc plugin and jwks.remoteUrl",
+		);
 	}
 
 	// Disables endpoint if using remote url strategy
@@ -398,8 +398,8 @@ export const jwt = (options?: JwtPluginOptions) => {
 				let keySets = await adapter.getAllKeys();
 
 				if (keySets.length === 0) {
-					const key = await createJwk(ctx, options)
-					keySets.push(key)
+					const key = await createJwk(ctx, options);
+					keySets.push(key);
 				}
 
 				return ctx.json({
@@ -409,7 +409,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 					})),
 				});
 			},
-		)
+		);
 	}
 
 	if (!options?.usesOidcProviderPlugin) {
@@ -444,90 +444,80 @@ export const jwt = (options?: JwtPluginOptions) => {
 			},
 			async (ctx) => {
 				// Convert context into user payload
-				let payload: Record<string, any>
+				let payload: Record<string, any>;
 				if (options?.jwt?.definePayload) {
-					payload = await options?.jwt.definePayload(ctx.context.session!)
+					payload = await options?.jwt.definePayload(ctx.context.session!);
 				} else {
 					payload = {
 						...ctx.context.session?.user,
-						id: undefined // id becomes sub in Sign Function
-					}
+						id: undefined, // id becomes sub in Sign Function
+					};
 				}
 
 				// Convert into jwt token
-				const jwt = await signJwt(
-					ctx,
-					payload,
-					options,
-				);
+				const jwt = await signJwt(ctx, payload, options);
 				return ctx.json({
 					token: jwt,
 				});
 			},
-		)
+		);
 	}
 
 	const getSessionHook = options?.usesOidcProviderPlugin
 		? undefined
 		: {
-			matcher(context: HookEndpointContext) {
-				return context.path === "/get-session";
-			},
-			handler: createAuthMiddleware(async (ctx) => {
-				const session = ctx.context.session || ctx.context.newSession;
-				if (session && session.session) {
-					// Convert context into user payload
-					let payload: Record<string, any>
-					if (options?.jwt?.definePayload) {
-						payload = await options?.jwt.definePayload(ctx.context.session!)
-					} else {
-						payload = {
-							...ctx.context.session?.user,
-							id: undefined // id becomes sub in Sign Function
+				matcher(context: HookEndpointContext) {
+					return context.path === "/get-session";
+				},
+				handler: createAuthMiddleware(async (ctx) => {
+					const session = ctx.context.session || ctx.context.newSession;
+					if (session && session.session) {
+						// Convert context into user payload
+						let payload: Record<string, any>;
+						if (options?.jwt?.definePayload) {
+							payload = await options?.jwt.definePayload(ctx.context.session!);
+						} else {
+							payload = {
+								...ctx.context.session?.user,
+								id: undefined, // id becomes sub in Sign Function
+							};
 						}
-					}
 
-					if (!payload) return
-					const jwt = await signJwt(
-						ctx,
-						payload,
-						options,
-					)
-					const exposedHeaders =
-						ctx.context.responseHeaders?.get(
-							"access-control-expose-headers",
-						) || "";
-					const headersSet = new Set(
-						exposedHeaders
-							.split(",")
-							.map((header) => header.trim())
-							.filter(Boolean),
-					);
-					headersSet.add("set-auth-jwt");
-					ctx.setHeader("set-auth-jwt", jwt);
-					ctx.setHeader(
-						"Access-Control-Expose-Headers",
-						Array.from(headersSet).join(", "),
-					);
-				}
-			}),
-		}
+						if (!payload) return;
+						const jwt = await signJwt(ctx, payload, options);
+						const exposedHeaders =
+							ctx.context.responseHeaders?.get(
+								"access-control-expose-headers",
+							) || "";
+						const headersSet = new Set(
+							exposedHeaders
+								.split(",")
+								.map((header) => header.trim())
+								.filter(Boolean),
+						);
+						headersSet.add("set-auth-jwt");
+						ctx.setHeader("set-auth-jwt", jwt);
+						ctx.setHeader(
+							"Access-Control-Expose-Headers",
+							Array.from(headersSet).join(", "),
+						);
+					}
+				}),
+			};
 
 	return {
 		id: "jwt",
 		init: (ctx) => {
 			// Add the jwt plugin options to ctx
-			const plugin = ctx.options.plugins?.find(
-				(plugin) => plugin.id === "jwt",
-			);
+			const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
 			if (!plugin) {
-				throw Error("Plugin should have been register! Should never hit!")
+				throw Error("Plugin should have been register! Should never hit!");
 			}
-			plugin.options = options
+			plugin.options = options;
 		},
 		endpoints,
 		hooks: {
-			after: getSessionHook ? [ getSessionHook ] : undefined,
+			after: getSessionHook ? [getSessionHook] : undefined,
 		},
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;

@@ -135,10 +135,10 @@ export const schema = {
 	/**
 	 * An opaque access token sent when there is no audience
 	 * to assigned to the JWT.
-	 * 
+	 *
 	 * Access tokens are linked to a session, better-auth
 	 * authors SHALL always check for valid session!
-	 * 
+	 *
 	 * AccessTokens SHALL only be created at refresh,
 	 * destroyed at revoke, and read at introspection.
 	 * NEVER update an access token! Typically a refresh and

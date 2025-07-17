@@ -39,36 +39,36 @@ describe("jwt", async (it) => {
 
 	it("should get a token from api fetch", async () => {
 		const response = await client.$fetch<{
-			token: string,
-		}>('/token', {
+			token: string;
+		}>("/token", {
 			headers,
-		})
+		});
 		expect(response.data?.token).toBeDefined();
 	});
 
 	it("should get /jwks", async () => {
-		const response = await client.$fetch<JSONWebKeySet>('/jwks')
-		const jwks = response?.data
-		expect(jwks).toBeDefined()
-		expect(jwks?.keys.length).toBeGreaterThanOrEqual(1)
+		const response = await client.$fetch<JSONWebKeySet>("/jwks");
+		const jwks = response?.data;
+		expect(jwks).toBeDefined();
+		expect(jwks?.keys.length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("signed tokens can be validated with the JWKS", async () => {
 		const response = await client.$fetch<{
-			token: string,
-		}>('/token', {
+			token: string;
+		}>("/token", {
 			headers,
-		})
-		const token = response.data?.token ?? undefined
-		expect(token).toBeDefined()
+		});
+		const token = response.data?.token ?? undefined;
+		expect(token).toBeDefined();
 
-		const jwkResponse = await client.$fetch<JSONWebKeySet>('/jwks')
-		const jwksData = jwkResponse?.data ?? undefined
-		expect(jwksData).toBeDefined()
+		const jwkResponse = await client.$fetch<JSONWebKeySet>("/jwks");
+		const jwksData = jwkResponse?.data ?? undefined;
+		expect(jwksData).toBeDefined();
 
-		const jwks = createLocalJWKSet(jwksData!)
-		expect(() => jwtVerify(token!, jwks)).not.toThrow()
-		const decoded = await jwtVerify(token!, jwks)
+		const jwks = createLocalJWKSet(jwksData!);
+		expect(() => jwtVerify(token!, jwks)).not.toThrow();
+		const decoded = await jwtVerify(token!, jwks);
 		expect(decoded).toBeDefined();
 	});
 
@@ -82,14 +82,14 @@ describe("jwt", async (it) => {
 				},
 			},
 		});
-		expect(token).toBeDefined()
+		expect(token).toBeDefined();
 
-		const jwkResponse = await client.$fetch<JSONWebKeySet>('/jwks')
-		const jwksData = jwkResponse?.data ?? undefined
-		expect(jwksData).toBeDefined()
-		const jwks = createLocalJWKSet(jwksData!)
+		const jwkResponse = await client.$fetch<JSONWebKeySet>("/jwks");
+		const jwksData = jwkResponse?.data ?? undefined;
+		expect(jwksData).toBeDefined();
+		const jwks = createLocalJWKSet(jwksData!);
 
-		const decoded = await jwtVerify(token!, jwks)
+		const decoded = await jwtVerify(token!, jwks);
 		expect(decoded.payload.sub).toBeDefined();
 		expect(decoded.payload.sub).toBe(userSession.data?.user.id);
 	});
@@ -97,11 +97,13 @@ describe("jwt", async (it) => {
 
 describe("jwt - remote jwks", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [jwt({
-			jwks: {
-				remoteUrl: 'https://example.com',
-			}
-		})],
+		plugins: [
+			jwt({
+				jwks: {
+					remoteUrl: "https://example.com",
+				},
+			}),
+		],
 		logger: {
 			level: "error",
 		},
@@ -133,41 +135,47 @@ describe("jwt - remote jwks", async (it) => {
 
 	it("should get a token from api fetch", async () => {
 		const response = await client.$fetch<{
-			token: string,
-		}>('/token', {
+			token: string;
+		}>("/token", {
 			headers,
-		})
+		});
 		expect(response.data?.token).toBeDefined();
 	});
 
 	it("should disable /jwks", async () => {
-		const response = await client.$fetch<JSONWebKeySet>('/jwks')
+		const response = await client.$fetch<JSONWebKeySet>("/jwks");
 		expect(response.error?.status).toBe(404);
 	});
 });
 
 describe("jwt - remote signing", async (it) => {
 	it("should fail if sign is defined and remoteUrl is not", async () => {
-		expect(() => getTestInstance({
-			plugins: [jwt({
-				jwt: {
-					sign: (payload) => {
-						return '123'
-					},
+		expect(() =>
+			getTestInstance({
+				plugins: [
+					jwt({
+						jwt: {
+							sign: (payload) => {
+								return "123";
+							},
+						},
+					}),
+				],
+				logger: {
+					level: "error",
 				},
-			})],
-			logger: {
-				level: "error",
-			},
-		})).toThrow()
+			}),
+		).toThrow();
 	});
 });
 
 describe("jwt - oidc plugin", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [jwt({
-			usesOidcProviderPlugin: true,
-		})],
+		plugins: [
+			jwt({
+				usesOidcProviderPlugin: true,
+			}),
+		],
 		logger: {
 			level: "error",
 		},
@@ -199,32 +207,34 @@ describe("jwt - oidc plugin", async (it) => {
 
 	it("should disable /token", async () => {
 		const response = await client.$fetch<{
-			token: string,
-		}>('/token', {
+			token: string;
+		}>("/token", {
 			headers,
-		})
+		});
 		expect(response.error?.status).toBe(404);
 	});
 
 	it("should enable /jwks", async () => {
-		const response = await client.$fetch<JSONWebKeySet>('/jwks')
-		const jwks = response?.data
-		expect(jwks).toBeDefined()
-		expect(jwks?.keys.length).toBeGreaterThanOrEqual(1)
+		const response = await client.$fetch<JSONWebKeySet>("/jwks");
+		const jwks = response?.data;
+		expect(jwks).toBeDefined();
+		expect(jwks?.keys.length).toBeGreaterThanOrEqual(1);
 	});
 });
 
 describe("jwt - oidc plugin with remote url", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [jwt({
-			usesOidcProviderPlugin: true,
-			jwks: {
-				remoteUrl: 'https://example.com',
-				keyPairConfig: {
-					alg: 'ES256',
+		plugins: [
+			jwt({
+				usesOidcProviderPlugin: true,
+				jwks: {
+					remoteUrl: "https://example.com",
+					keyPairConfig: {
+						alg: "ES256",
+					},
 				},
-			}
-		})],
+			}),
+		],
 		logger: {
 			level: "error",
 		},
@@ -242,21 +252,25 @@ describe("jwt - oidc plugin with remote url", async (it) => {
 	});
 
 	it("should require specifying the alg used", async () => {
-		expect(() => getTestInstance({
-			plugins: [jwt({
-				usesOidcProviderPlugin: true,
-				jwks: {
-					remoteUrl: 'https://example.com',
+		expect(() =>
+			getTestInstance({
+				plugins: [
+					jwt({
+						usesOidcProviderPlugin: true,
+						jwks: {
+							remoteUrl: "https://example.com",
+						},
+					}),
+				],
+				logger: {
+					level: "error",
 				},
-			})],
-			logger: {
-				level: "error",
-			},
-		})).toThrow()
-	})
+			}),
+		).toThrow();
+	});
 
 	it("should disable /jwks", async () => {
-		const response = await client.$fetch<JSONWebKeySet>('/jwks')
+		const response = await client.$fetch<JSONWebKeySet>("/jwks");
 		expect(response.error?.status).toBe(404);
 	});
 });

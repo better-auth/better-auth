@@ -1,6 +1,7 @@
 import { Awaitable } from "vitest";
 import type { Session, User } from "../../types";
 import { AuthServerMetadata, GrantType } from "../mcp/types";
+import { JWSAlgorithms } from "../jwt";
 
 export interface OIDCOptions {
 	/**
@@ -9,17 +10,17 @@ export interface OIDCOptions {
 	schema?: {
 		oauthClient?: {
 			/** @default "oauthClient" */
-			modelName?: string
-		}
+			modelName?: string;
+		};
 		oauthAccessToken?: {
 			/** @default "oauthAccessToken" */
-			modelName?: string
-		},
+			modelName?: string;
+		};
 		oauthConsent?: {
 			/** @default "oauthConsent" */
-			modelName?: string
-		},
-	}
+			modelName?: string;
+		};
+	};
 	/**
 	 * Authorized clients
 	 */
@@ -40,7 +41,7 @@ export interface OIDCOptions {
 	m2mAccessTokenExpiresIn?: number;
 	/**
 	 * The amount of time in seconds that id token is valid for.
-	 * 
+	 *
 	 * @default 36000 (10 hours) - Recommended by the OIDC spec
 	 */
 	idTokenExpiresIn?: number;
@@ -48,7 +49,7 @@ export interface OIDCOptions {
 	 * The amount of time in seconds that the refresh token is valid for.
 	 * Typical industry standard is 30 days
 	 *
-	 * @default 2592000 (30 days) 
+	 * @default 2592000 (30 days)
 	 */
 	refreshTokenExpiresIn?: number;
 	/**
@@ -59,20 +60,20 @@ export interface OIDCOptions {
 	codeExpiresIn?: number;
 	/**
 	 * Allow dynamic client registration.
-	 * 
+	 *
 	 * @default false
 	 */
 	allowUnauthenticatedClientRegistration?: boolean;
 	/**
 	 * Allow dynamic client registration.
-	 * 
+	 *
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.
-	 * 
+	 *
 	 * @default undefined
 	 */
 	clientRegistrationDefaultScopes?: string[];
@@ -84,7 +85,7 @@ export interface OIDCOptions {
 	 * If both clientRegistrationDefaultScopes and this
 	 * are undefined, only scopes listed in the scopes option
 	 * are allowed.
-	 * 
+	 *
 	 * @default - clientRegistrationDefaultScopes
 	 */
 	clientRegistrationAllowedScopes?: string[];
@@ -92,7 +93,7 @@ export interface OIDCOptions {
 	 * List of scopes a newly registered client can have.
 	 *
 	 * Leave undefined to throw error if no scope was sent
-	 * 
+	 *
 	 * @default undefined
 	 */
 	clientCredentialGrantDefaultScopes?: string[];
@@ -100,7 +101,7 @@ export interface OIDCOptions {
 	 * The scopes that the client is allowed to request.
 	 * Must contain "openid" to be considered an OIDC server,
 	 * otherwise it is just an OAuth server.
-	 * 
+	 *
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
 	 * @default
 	 * ```ts
@@ -161,8 +162,8 @@ export interface OIDCOptions {
 	/**
 	 * List of all additional claims returned from
 	 * customIdTokenClaims and customJwtClaims.
-	 * 
-	 * Must be defined when using 
+	 *
+	 * Must be defined when using
 	 * customIdTokenClaims or customJwtClaims
 	 */
 	customClaims?: string[];
@@ -195,21 +196,21 @@ export interface OIDCOptions {
 	advertisedMetadata?: {
 		/**
 		 * Advertised scopes_supported located at /.well-known/openid-configuration
-		 * 
+		 *
 		 * All values must be found in the scope field
 		 */
 		scopes_supported: string[];
 		/**
 		 * Advertised claims_supported located at /.well-known/openid-configuration
-		 * 
+		 *
 		 * All values must be found in the customizedClaims field or
 		 * be an internally supported claim.
-		 * 
+		 *
 		 * Internally supported claims:
 		 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp"]
 		 */
 		claims_supported: string[];
-	}
+	};
 	/**
 	 * Custom session token formatter. You can
 	 * choose to perform additional functionality such as
@@ -221,7 +222,7 @@ export interface OIDCOptions {
 	 */
 	encodeRefreshToken?: (
 		token: string,
-		session?: Omit<Session, 'token'> & { token?: string },
+		session?: Omit<Session, "token"> & { token?: string },
 	) => Awaitable<string>;
 	/**
 	 * Decodes a custom session token format.
@@ -229,7 +230,7 @@ export interface OIDCOptions {
 	 * ensure that the prior version can still be decoded.
 	 *
 	 * Must be defined when using encodeRefreshToken.
-	 * 
+	 *
 	 * @returns {string | undefined} sessionId - if returned,
 	 * should be same as the one received in encodeRefreshToken.
 	 * There is an added benefit that updates to the session occur
@@ -239,7 +240,7 @@ export interface OIDCOptions {
 	 */
 	decodeRefreshToken?: (
 		token: string,
-	) => Awaitable<{ sessionId?: string, token: string }>;
+	) => Awaitable<{ sessionId?: string; token: string }>;
 }
 
 export interface AuthorizationQuery {
@@ -277,7 +278,7 @@ export interface AuthorizationQuery {
 	client_id: string;
 	/**
 	 * The prompt parameter is used to specify the type of user interaction that is required.
-	 * 
+	 *
 	 * undefined - redirects user to login only when not logged in, otherwise returns
 	 * "none" - silent authentication where an error is returned, not redirected to login
 	 * "consent" - always forces user to scope consent
@@ -361,20 +362,20 @@ export interface AuthorizationQuery {
 /**
  * Stored within the verification.value field
  * in JSON format.
- * 
+ *
  * It is stored in JSON to prevent
  * direct searches by field on the db
  */
 export interface VerificationValue {
-	clientId?: string
-	userId?: string
-	requireConsent?: boolean
-	redirectUri?: string
-	scopes?: string
-	state?: string
-	codeChallenge?: string
-	codeChallengeMethod?: 's256'
-	nonce?: string
+	clientId?: string;
+	userId?: string;
+	requireConsent?: boolean;
+	redirectUri?: string;
+	scopes?: string;
+	state?: string;
+	codeChallenge?: string;
+	codeChallengeMethod?: "s256";
+	nonce?: string;
 }
 
 export interface TokenBody {
@@ -407,10 +408,10 @@ export interface TokenBody {
 /**
  * Metadata returned by the openid-configuration endpoint:
  * /.well-known/openid-configuration
- * 
+ *
  * NOTE: Url structure is different by appending to the end
  * of the url instead of the base.
- * 
+ *
  * @see https://datatracker.ietf.org/doc/html/rfc8414#section-5
  */
 export interface OIDCMetadata extends AuthServerMetadata {
@@ -442,16 +443,18 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 *
 	 * only `public` is supported.
 	 */
-	subject_types_supported: ("public")[];
+	subject_types_supported: "public"[];
 	/**
 	 * Supported ID token signing algorithms.
 	 *
-	 * Automatically uses the same algorithm used in the JWK Plugin
+	 * Automatically uses the same algorithm used in the JWK Plugin.
+	 * Support for symmetric algorithms is strictly prohibited
+	 * to sharing key vulnerabilities!
 	 *
 	 * @default
 	 * ["EdDSA"]
 	 */
-	id_token_signing_alg_values_supported: string[];
+	id_token_signing_alg_values_supported: JWSAlgorithms[];
 	/**
 	 * Supported claims.
 	 *
@@ -473,7 +476,7 @@ export interface SchemaClient {
 	 *
 	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.2
 	 */
-  clientId: string
+	clientId: string;
 	/**
 	 * Client Secret
 	 *
@@ -481,40 +484,40 @@ export interface SchemaClient {
 	 *
 	 * size 32
 	 */
-  clientSecret?: string
+	clientSecret?: string;
 	/** Whether the client is disabled or not. */
-	disabled?: boolean
+	disabled?: boolean;
 	/**
 	 * Restricts scopes allowed for the client.
-	 * 
+	 *
 	 * If not defined, any scope can be requested.
 	 */
-  allowedScopes?: string[]
+	allowedScopes?: string[];
 	//---- Recommended client data ----//
-  userId?: string
+	userId?: string;
 	/** Created time */
-  createdAt?: Date
+	createdAt?: Date;
 	/** Last updated time */
-  updatedAt?: Date
+	updatedAt?: Date;
 	/** Expires time */
-  expiresAt?: Date
+	expiresAt?: Date;
 	//---- UI Metadata ----//
 	/** The name of the client. */
-  name?: string
+	name?: string;
 	/** Linkable uri of the client. */
-  uri?: string
+	uri?: string;
 	/** The icon of the client. */
-  icon?: string
+	icon?: string;
 	/** List of contacts for the client. */
-  contacts?: string[]
+	contacts?: string[];
 	/** Client Terms of Service Uri */
-  tos?: string
+	tos?: string;
 	/** Client Privacy Policy Uri */
-  policy?: string
+	policy?: string;
 	//---- User Software Identifiers ----//
-  softwareId?: string
-  softwareVersion?: string
-  softwareStatement?: string
+	softwareId?: string;
+	softwareVersion?: string;
+	softwareStatement?: string;
 	//---- Authentication Metadata ----//
 	/**
 	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
@@ -522,14 +525,13 @@ export interface SchemaClient {
 	 *
 	 * For example, `https://example.com/auth/callback`
 	 */
-  redirectUris?: string[]
-  tokenEndpointAuthMethod?: (
-    "none" |
-    "client_secret_basic" |
-    "client_secret_post"
-  )
-  grantTypes?: GrantType[]
-  responseTypes?: ("code" | "token")[]
+	redirectUris?: string[];
+	tokenEndpointAuthMethod?:
+		| "none"
+		| "client_secret_basic"
+		| "client_secret_post";
+	grantTypes?: GrantType[];
+	responseTypes?: ("code" | "token")[];
 	//---- RFC6749 Spec ----//
 	/**
 	 * Indicates whether the client is public or confidential.
@@ -537,27 +539,27 @@ export interface SchemaClient {
 	 * a client_secret. Clients are considered confidential by default.
 	 *
 	 * Uses `token_endpoint_auth_method` field or `type` field to determine
-	 * 
+	 *
 	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 * 
+	 *
 	 * @default undefined
 	 */
 	public?: boolean;
 	/**
 	 * The client type
-	*
-	* Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	*
-	* - web - A web application (confidential client)
-	* - native - A mobile application (public client)
-	* - user-agent-based - A user-agent-based application (public client)
-	*/
-  type?: "web" | "native" | "user-agent-based"
+	 *
+	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
+	 *
+	 * - web - A web application (confidential client)
+	 * - native - A mobile application (public client)
+	 * - user-agent-based - A user-agent-based application (public client)
+	 */
+	type?: "web" | "native" | "user-agent-based";
 	//---- All other metadata ----//
 	/**
 	 * Additional metadata about the client.
 	 */
-  metadata?: string // in JSON format
+	metadata?: string; // in JSON format
 }
 
 /**
@@ -565,41 +567,40 @@ export interface SchemaClient {
  * https://datatracker.ietf.org/doc/html/rfc7591#section-2
  */
 export interface OauthClient {
-  client_id: string
-  client_secret?: string
-  client_secret_expires_at?: number
-  scope?: string
-  //---- Recommended client data ----//
-  user_id?: string
-  client_id_issued_at?: number
-  //---- UI Metadata ----//
-  client_name?: string
-  client_uri?: string
-  logo_uri?: string
-  contacts?: string[]
-  tos_uri?: string
-  policy_uri?: string
-  //---- Jwks (only one can be used) ----//
-  jwks?: string[]
-  jwks_uri?: string
-  //---- User Software Identifiers ----//
-  software_id?: string
-  software_version?: string
-  software_statement?: string
-  //---- Authentication Metadata ----//
-  redirect_uris?: string[]
-  token_endpoint_auth_method?: (
-    "none" |
-    "client_secret_basic" |
-    "client_secret_post"
-  )
-  grant_types?: GrantType[]
-  response_types?: ("code" | "token")[]
+	client_id: string;
+	client_secret?: string;
+	client_secret_expires_at?: number;
+	scope?: string;
+	//---- Recommended client data ----//
+	user_id?: string;
+	client_id_issued_at?: number;
+	//---- UI Metadata ----//
+	client_name?: string;
+	client_uri?: string;
+	logo_uri?: string;
+	contacts?: string[];
+	tos_uri?: string;
+	policy_uri?: string;
+	//---- Jwks (only one can be used) ----//
+	jwks?: string[];
+	jwks_uri?: string;
+	//---- User Software Identifiers ----//
+	software_id?: string;
+	software_version?: string;
+	software_statement?: string;
+	//---- Authentication Metadata ----//
+	redirect_uris?: string[];
+	token_endpoint_auth_method?:
+		| "none"
+		| "client_secret_basic"
+		| "client_secret_post";
+	grant_types?: GrantType[];
+	response_types?: ("code" | "token")[];
 	//---- RFC6749 Spec ----//
 	public?: boolean;
-	type?: "web" | "native" | "user-agent-based"
+	type?: "web" | "native" | "user-agent-based";
 	//---- Not Part of RFC7591 Spec ----//
-	disabled?: boolean
-  //---- All other metadata ----//
-  [key: string]: any
+	disabled?: boolean;
+	//---- All other metadata ----//
+	[key: string]: any;
 }

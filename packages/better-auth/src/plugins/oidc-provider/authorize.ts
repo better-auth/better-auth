@@ -1,7 +1,12 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
-import type { AuthorizationQuery, SchemaClient, OIDCOptions, VerificationValue } from "./types";
+import type {
+	AuthorizationQuery,
+	SchemaClient,
+	OIDCOptions,
+	VerificationValue,
+} from "./types";
 import { generateRandomString } from "../../crypto";
 
 /**
@@ -15,9 +20,9 @@ export function formatErrorURL(
 ) {
 	const searchParams = new URLSearchParams({
 		error,
-		error_description: description
-	})
-	state && searchParams.append('state', state)
+		error_description: description,
+	});
+	state && searchParams.append("state", state);
 	return `${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
 }
 
@@ -109,7 +114,7 @@ export async function authorize(
 
 	/** Check client */
 	const client = await ctx.context.adapter
-		.findOne<Record<string,string|null>>({
+		.findOne<Record<string, string | null>>({
 			model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 			where: [
 				{
@@ -140,11 +145,7 @@ export async function authorize(
 		throw ctx.redirect(errorURL);
 	}
 	if (client.disabled) {
-		const errorURL = getErrorURL(
-			ctx,
-			"client_disabled",
-			"client is disabled"
-		);
+		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
 		throw ctx.redirect(errorURL);
 	}
 	const redirectURI = client.redirectUris?.find(
@@ -154,18 +155,21 @@ export async function authorize(
 		const errorURL = getErrorURL(
 			ctx,
 			"invalid_redirect",
-			"invalid redirect uri"
+			"invalid redirect uri",
 		);
 		throw ctx.redirect(errorURL);
 	}
 
-	const requestScope =
-		query.scope?.split(" ").filter((s) => s) ?? [];
+	const requestScope = query.scope?.split(" ").filter((s) => s) ?? [];
 	const invalidScopes = requestScope.filter((scope) => {
 		// invalid in scopes list
-		return !options.scopes?.includes(scope) ||
+		return (
+			!options.scopes?.includes(scope) ||
 			// offline access must be requested through PKCE
-			(scope === "offline_access" && (query.code_challenge_method?.toLowerCase() !== "s256" || !query.code_challenge));
+			(scope === "offline_access" &&
+				(query.code_challenge_method?.toLowerCase() !== "s256" ||
+					!query.code_challenge))
+		);
 	});
 	if (invalidScopes.length) {
 		return handleRedirect(
@@ -174,24 +178,28 @@ export async function authorize(
 				"invalid_scope",
 				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
 				query.state,
-			)
+			),
 		);
 	}
 
-	if ((!query.code_challenge || !query.code_challenge_method)) {
+	if (!query.code_challenge || !query.code_challenge_method) {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,
 				"invalid_request",
 				"pkce is required",
 				query.state,
-			)
+			),
 		);
 	}
 
 	// Check code challenges
-	const codeChallengesSupported = ["s256"]
-	if (!codeChallengesSupported.includes(query.code_challenge_method?.toLowerCase())) {
+	const codeChallengesSupported = ["s256"];
+	if (
+		!codeChallengesSupported.includes(
+			query.code_challenge_method?.toLowerCase(),
+		)
+	) {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,
@@ -223,7 +231,7 @@ export async function authorize(
 					codeChallenge: query.code_challenge,
 					codeChallengeMethod: query.code_challenge_method,
 					nonce: query.nonce,
-				} as VerificationValue)
+				} as VerificationValue),
 			},
 			ctx,
 		);
@@ -283,7 +291,7 @@ export async function authorize(
 	const params = new URLSearchParams({
 		client_id: client.clientId,
 		scope: requestScope.join(" "),
-	})
+	});
 	const consentURI = `${options.consentPage}?${params.toString()}`;
 
 	return handleRedirect(consentURI);

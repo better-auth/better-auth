@@ -12,48 +12,56 @@ import { toNodeHandler } from "../../integrations/node";
 
 describe("oidc - init", async () => {
 	it("should fail without the jwt plugin", async ({ expect }) => {
-		await expect(getTestInstance({
-			plugins: [
-				oidcProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-				}),
-			],
-		})).rejects.toThrow();
-	})
+		await expect(
+			getTestInstance({
+				plugins: [
+					oidcProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrow();
+	});
 
-	it("should fail without the jwt plugin usesOidcProviderPlugin set", async ({ expect }) => {
-		await expect(getTestInstance({
-			plugins: [
-				jwt({
-					usesOidcProviderPlugin: undefined,
-				}),
-				oidcProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-				}),
-			],
-		})).rejects.toThrow();
-	})
+	it("should fail without the jwt plugin usesOidcProviderPlugin set", async ({
+		expect,
+	}) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt({
+						usesOidcProviderPlugin: undefined,
+					}),
+					oidcProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrow();
+	});
 
 	it("should pass with correct plugins", async ({ expect }) => {
-		await expect(getTestInstance({
-			plugins: [
-				jwt({
-					usesOidcProviderPlugin: true,
-				}),
-				oidcProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-				}),
-			],
-		})).resolves.not.toThrow()
-	})
-})
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt({
+						usesOidcProviderPlugin: true,
+					}),
+					oidcProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).resolves.not.toThrow();
+	});
+});
 
 describe("oidc", async () => {
-	const authServerBaseUrl = "http://localhost:3000"
-	const rpBaseUrl = "http://localhost:5000"
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -75,9 +83,7 @@ describe("oidc", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const serverClient = createAuthClient({
-		plugins: [
-			oidcClient(),
-		],
+		plugins: [oidcClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -86,10 +92,10 @@ describe("oidc", async () => {
 	});
 
 	let server: Listener;
-	let oauthClient: OauthClient | null
+	let oauthClient: OauthClient | null;
 
-	const providerId = "test"
-  const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
@@ -99,141 +105,91 @@ describe("oidc", async () => {
 		});
 
 		// This test is performed in register.test.ts
-		const application: Partial<OauthClient>= {
-			redirect_uris: [
-				redirectUri
-			],
-		}
+		const application: Partial<OauthClient> = {
+			redirect_uris: [redirectUri],
+		};
 		const response = await serverClient.$fetch<OauthClient>(
-			'/oauth2/register', {
-			method: 'POST',
-			body: application,
-		})
+			"/oauth2/register",
+			{
+				method: "POST",
+				body: application,
+			},
+		);
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.client_secret).toBeDefined();
-		expect(response.data?.redirect_uris).toEqual(application.redirect_uris)
+		expect(response.data?.redirect_uris).toEqual(application.redirect_uris);
 
-		oauthClient = response.data
-	})
+		oauthClient = response.data;
+	});
 
 	afterAll(async () => {
 		await server.close();
 	});
 
-	async function createTestInstance(config?: Omit<GenericOAuthConfig, 'providerId' | 'clientId' | 'clientSecret'>) {
-    if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-      throw Error("beforeAll not run properly");
-    }
-    return await getTestInstance({
-      // Used to trust callbackUrl in test
-      account: {
-        accountLinking: {
-          trustedProviders: [ providerId ],
-        },
-      },
-      plugins: [
-        genericOAuth({
-          config: [
-            {
-              scopes: ["openid", "profile", "email"],
-              ...config,
-              providerId,
-              redirectURI: redirectUri,
-              authorizationUrl: config?.discoveryUrl
+	async function createTestInstance(
+		config?: Omit<
+			GenericOAuthConfig,
+			"providerId" | "clientId" | "clientSecret"
+		>,
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		return await getTestInstance({
+			// Used to trust callbackUrl in test
+			account: {
+				accountLinking: {
+					trustedProviders: [providerId],
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							scopes: ["openid", "profile", "email"],
+							...config,
+							providerId,
+							redirectURI: redirectUri,
+							authorizationUrl: config?.discoveryUrl
 								? undefined
-                : `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-              tokenUrl: config?.discoveryUrl
+								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+							tokenUrl: config?.discoveryUrl
 								? undefined
 								: `${authServerBaseUrl}/api/auth/oauth2/token`,
-              clientId: oauthClient.client_id,
-              clientSecret: oauthClient.client_secret,
-              pkce: true,
-            },
-          ],
-        }),
-      ],
-    });
-  }
-
-	it("should fail without the jwt plugin", async ({ expect }) => {
-		await expect(getTestInstance({
-			plugins: [
-				oidcProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
+							clientId: oauthClient.client_id,
+							clientSecret: oauthClient.client_secret,
+							pkce: true,
+						},
+					],
 				}),
 			],
-		})).rejects.toThrow('jwt_config');
-	})
+		});
+	}
+
+	it("should fail without the jwt plugin", async ({ expect }) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					oidcProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrow("jwt_config");
+	});
 
 	// Tests if it is oauth2 compatible
 	it("should sign in using generic oauth plugin", async ({ expect }) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error('beforeAll not run properly')
+			throw Error("beforeAll not run properly");
 		}
 
-		const { customFetchImpl: customFetchImplRP } = await createTestInstance() 
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [
-				genericOAuthClient()
-			],
-			baseURL: rpBaseUrl,
-			fetchOptions: {
-				customFetchImpl: customFetchImplRP,
-			},
-		});
-		const data = await client.signIn.oauth2(
-			{
-				providerId,
-				callbackURL: "/success",
-			},
-			{
-				throw: true,
-			},
-		);
-		expect(data.url).toContain(
-			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
-		);
-		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
-
-		let redirectUri = "";
-		await serverClient.$fetch(data.url, {
-			method: "GET",
-			onError(context) {
-				redirectUri = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(redirectUri).toContain(
-			redirectUri,
-		);
-		expect(redirectUri).toContain("code=");
-
-		let callbackURL = "";
-		await client.$fetch(redirectUri, {
-			method: "GET",
-			onError(context) {
-				callbackURL = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(callbackURL).toContain("/success");
-	})
-
-	it("should sign in using generic oauth discovery", async ({ expect }) => {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error('beforeAll not run properly')
-		}
-
-		// The RP (Relying Party) - the client 
-		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
-			discoveryUrl: `${authServerBaseUrl}/api/auth/.well-known/openid-configuration`,
-		}) 
-
-		const client = createAuthClient({
-			plugins: [
-				genericOAuthClient(),
-			],
+			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -271,21 +227,71 @@ describe("oidc", async () => {
 			},
 		});
 		expect(callbackURL).toContain("/success");
-	})
+	});
+
+	it("should sign in using generic oauth discovery", async ({ expect }) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		// The RP (Relying Party) - the client
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
+			discoveryUrl: `${authServerBaseUrl}/api/auth/.well-known/openid-configuration`,
+		});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		let redirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectUri = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(redirectUri).toContain(redirectUri);
+		expect(redirectUri).toContain("code=");
+
+		let callbackURL = "";
+		await client.$fetch(redirectUri, {
+			method: "GET",
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackURL).toContain("/success");
+	});
 
 	it("should sign in after a consent flow", async ({ expect }) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error('beforeAll not run properly')
+			throw Error("beforeAll not run properly");
 		}
 
-		const { customFetchImpl: customFetchImplRP, cookieSetter } = await createTestInstance({
-			prompt: "consent"
-		})
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				prompt: "consent",
+			});
 
 		const client = createAuthClient({
-			plugins: [
-				genericOAuthClient(),
-			],
+			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -317,7 +323,7 @@ describe("oidc", async () => {
 		});
 		expect(consentRedirectUri).toContain(`/oauth2/authorize`);
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
-		expect(consentRedirectUri).toContain(`scope=`)
+		expect(consentRedirectUri).toContain(`scope=`);
 
 		// Give consent and obtain redirect callback
 		const res = await serverClient.oauth2.consent(
@@ -329,9 +335,7 @@ describe("oidc", async () => {
 				throw: true,
 			},
 		);
-		expect(res.redirectURI).toContain(
-			redirectUri,
-		);
+		expect(res.redirectURI).toContain(redirectUri);
 		expect(res.redirectURI).toContain(`code=`);
 
 		let callbackURL = "";
@@ -345,19 +349,20 @@ describe("oidc", async () => {
 	});
 
 	// NOTE: Previous test must be successful since consent for user was given in the previous test
-	it("should sign in after a login flow (consent given in previous test)", async ({ expect }) => {
+	it("should sign in after a login flow (consent given in previous test)", async ({
+		expect,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error('beforeAll not run properly')
+			throw Error("beforeAll not run properly");
 		}
 
-		const { customFetchImpl: customFetchImplRP, cookieSetter } = await createTestInstance({
-			prompt: "login"
-		})
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				prompt: "login",
+			});
 
 		const client = createAuthClient({
-			plugins: [
-				genericOAuthClient(),
-			],
+			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -390,9 +395,11 @@ describe("oidc", async () => {
 		expect(loginRedirectURI).toContain("/login");
 		expect(loginRedirectURI).toContain(`prompt=login`);
 		expect(loginRedirectURI).toContain(`client_id=${oauthClient.client_id}`);
-		expect(loginRedirectURI).toContain(`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`);
+		expect(loginRedirectURI).toContain(
+			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
+		);
 
-		let redirectUri = ""
+		let redirectUri = "";
 		await serverClient.signIn.email(
 			{
 				email: testUser.email,
@@ -406,9 +413,7 @@ describe("oidc", async () => {
 				},
 			},
 		);
-		expect(redirectUri).toContain(
-			redirectUri,
-		);
+		expect(redirectUri).toContain(redirectUri);
 		expect(redirectUri).toContain("code=");
 
 		let callbackURL = "";

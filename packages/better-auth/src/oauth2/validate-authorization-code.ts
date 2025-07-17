@@ -38,13 +38,13 @@ export function createAuthorizationCodeRequest({
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (resource) {
-    if (typeof resource === 'string') {
-      body.append('resource', resource);
-    } else {
-      for (const val of resource) {
-        body.append('resource', val);
-      }
-    }
+		if (typeof resource === "string") {
+			body.append("resource", resource);
+		} else {
+			for (const val of resource) {
+				body.append("resource", val);
+			}
+		}
 	}
 	if (authentication === "basic") {
 		const encodedCredentials = base64Url.encode(
@@ -59,7 +59,7 @@ export function createAuthorizationCodeRequest({
 	return {
 		body,
 		headers: requestHeaders,
-	}
+	};
 }
 
 export async function validateAuthorizationCode({
@@ -72,7 +72,7 @@ export async function validateAuthorizationCode({
 	deviceId,
 	headers,
 	resource,
-	}: {
+}: {
 	code: string;
 	redirectURI: string;
 	options: ProviderOptions;
@@ -83,10 +83,7 @@ export async function validateAuthorizationCode({
 	headers?: Record<string, string>;
 	resource?: string | string[];
 }) {
-	const {
-		body,
-		headers: requestHeaders,
-	} = createAuthorizationCodeRequest({
+	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
 		code,
 		codeVerifier,
 		redirectURI,
@@ -95,7 +92,7 @@ export async function validateAuthorizationCode({
 		deviceId,
 		headers,
 		resource,
-	})
+	});
 
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",

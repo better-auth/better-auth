@@ -4,15 +4,16 @@ import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
 interface AuthenticatedRequest extends Request {
-  context: {
-    jwt: { // JWTPayload from 'jose' package
-      sub?: string;
-    };
-  };
+	context: {
+		jwt: {
+			// JWTPayload from 'jose' package
+			sub?: string;
+		};
+	};
 }
 
 export const GET = withMcpAuth(auth, (req: Request) => {
-	const sub = (req as AuthenticatedRequest).context.jwt.sub
+	const sub = (req as AuthenticatedRequest).context.jwt.sub;
 	return createMcpHandler(
 		(server) => {
 			server.tool(
@@ -21,10 +22,12 @@ export const GET = withMcpAuth(auth, (req: Request) => {
 				{ message: z.string() },
 				async ({ message }) => {
 					return {
-						content: [{
-							type: "text",
-							text: `Sub ${sub} says: ${message}`,
-						}],
+						content: [
+							{
+								type: "text",
+								text: `Sub ${sub} says: ${message}`,
+							},
+						],
 					};
 				},
 			);

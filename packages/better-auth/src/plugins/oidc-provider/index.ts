@@ -5,19 +5,10 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import type {
-	AuthContext,
-	BetterAuthPlugin,
-	Verification
-} from "../../types";
+import type { AuthContext, BetterAuthPlugin, Verification } from "../../types";
 import { generateRandomString } from "../../crypto";
 import { schema } from "./schema";
-import type {
-	OauthClient,
-	OIDCMetadata,
-	OIDCOptions,
-	VerificationValue,
-} from "./types";
+import type { OIDCOptions, VerificationValue } from "./types";
 import { authorize, formatErrorURL } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint, userNormalClaims } from "./token";
@@ -27,20 +18,24 @@ import { BetterAuthError } from "../../error";
 import { oidcMetadata } from "./metadata";
 import { getJwtPlugin } from "../jwt";
 
-export const getOidcPlugin = (ctx: AuthContext): Omit<BetterAuthPlugin, 'options'> & { options: OIDCOptions } => {
-  const plugin = ctx.options.plugins?.find(
-    (plugin): plugin is Omit<BetterAuthPlugin, 'options'> & { options: OIDCOptions } =>
-      plugin.id === 'oidc' &&
-      plugin.options != null &&
-      'loginPage' in plugin.options &&
-      'consentPage' in plugin.options
-  );
+export const getOidcPlugin = (
+	ctx: AuthContext,
+): Omit<BetterAuthPlugin, "options"> & { options: OIDCOptions } => {
+	const plugin = ctx.options.plugins?.find(
+		(
+			plugin,
+		): plugin is Omit<BetterAuthPlugin, "options"> & { options: OIDCOptions } =>
+			plugin.id === "oidc" &&
+			plugin.options != null &&
+			"loginPage" in plugin.options &&
+			"consentPage" in plugin.options,
+	);
 
-  if (!plugin) {
-    throw new BetterAuthError('oidc_config', 'oidc-provider plugin not found');
-  }
+	if (!plugin) {
+		throw new BetterAuthError("oidc_config", "oidc-provider plugin not found");
+	}
 
-  return plugin;
+	return plugin;
 };
 
 /**
@@ -52,31 +47,30 @@ export const getOidcPlugin = (ctx: AuthContext): Omit<BetterAuthPlugin, 'options
  * @returns A Better Auth plugin.
  */
 export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
-	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes
+	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
 	if (options.clientRegistrationDefaultScopes) {
 		if (!clientRegistrationAllowedScopes) {
-			clientRegistrationAllowedScopes = options.clientRegistrationDefaultScopes
+			clientRegistrationAllowedScopes = options.clientRegistrationDefaultScopes;
 		} else {
 			clientRegistrationAllowedScopes.push(
-				...options.clientRegistrationDefaultScopes
-			)
+				...options.clientRegistrationDefaultScopes,
+			);
 		}
 	}
 
 	// Validate scopes
-	const scopes = new Set((options.scopes ?? [
-		"openid",
-		"profile",
-		"email",
-		"offline_access",
-	]).filter((val) => val.length))
+	const scopes = new Set(
+		(options.scopes ?? ["openid", "profile", "email", "offline_access"]).filter(
+			(val) => val.length,
+		),
+	);
 	if (clientRegistrationAllowedScopes) {
 		for (const sc of clientRegistrationAllowedScopes) {
 			if (!scopes.has(sc)) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_scope",
 					error_description: `clientRegistrationAllowedScope ${sc} not found in scopes`,
-				})
+				});
 			}
 		}
 	}
@@ -85,23 +79,34 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_scope",
 				error_description: `advertisedMetadata.scopes_supported ${sc} not found in scopes`,
-			})
+			});
 		}
 	}
 
 	// Validate claims
 	const claims = new Set([
-		"sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp",
-		...scopes.has("email") ? ["email", "email_verified"] : [],
-		...scopes.has("profile") ? ["name", "picture", "family_name", "given_name"] : [],
-		...options?.customClaims?.filter((val) => val.length) ?? []
-	])
+		"sub",
+		"iss",
+		"aud",
+		"exp",
+		"nbf",
+		"iat",
+		"jti",
+		"sid",
+		"scope",
+		"azp",
+		...(scopes.has("email") ? ["email", "email_verified"] : []),
+		...(scopes.has("profile")
+			? ["name", "picture", "family_name", "given_name"]
+			: []),
+		...(options?.customClaims?.filter((val) => val.length) ?? []),
+	]);
 	for (const cl of options.advertisedMetadata?.claims_supported ?? []) {
 		if (!claims?.has(cl)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_scope",
 				error_description: `advertisedMetadata.claims_supported ${cl} not found in claims`,
-			})
+			});
 		}
 	}
 
@@ -109,13 +114,13 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 		schema: {
 			oauthClient: {
 				modelName: "oauthClient",
-				...(options?.schema?.oauthClient),
+				...options?.schema?.oauthClient,
 			},
 			oauthConsent: {
 				modelName: "oauthConsent",
-				...(options?.schema?.oauthConsent),
+				...options?.schema?.oauthConsent,
 			},
-			...(options?.schema),
+			...options?.schema,
 		},
 		codeExpiresIn: 600, // 10 min
 		accessTokenExpiresIn: 600, // 10 min
@@ -130,14 +135,15 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 	};
 
 	// Both encode and decode refresh tokens must be defined if one is defined
-  if (
+	if (
 		(opts.encodeRefreshToken && !opts.decodeRefreshToken) ||
 		(!opts.encodeRefreshToken && opts.decodeRefreshToken)
 	) {
-    throw new APIError("INTERNAL_SERVER_ERROR", {
-      message: 'encodeRefreshToken and decodeRefreshToken should both be defined'
-    })
-  };
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message:
+				"encodeRefreshToken and decodeRefreshToken should both be defined",
+		});
+	}
 
 	return {
 		id: "oidc",
@@ -147,14 +153,17 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 				(plugin) => plugin.id === "oidc",
 			);
 			if (!plugin) {
-				throw Error("Plugin should have been register! Should never hit!")
+				throw Error("Plugin should have been register! Should never hit!");
 			}
-			plugin.options = opts
+			plugin.options = opts;
 
 			// Check for jwt plugin registration
-			const jwtPlugin = getJwtPlugin(ctx)
+			const jwtPlugin = getJwtPlugin(ctx);
 			if (!jwtPlugin.options?.usesOidcProviderPlugin) {
-				throw new BetterAuthError('jwt_config', 'Must set usesOidcProviderPlugin to true')
+				throw new BetterAuthError(
+					"jwt_config",
+					"Must set usesOidcProviderPlugin to true",
+				);
 			}
 		},
 		hooks: {
@@ -294,17 +303,16 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 						});
 					}
 
-					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(
-							storedCode
-						).then((val) => {
-							if (!val) return null
+					const verification = await ctx.context.internalAdapter
+						.findVerificationValue(storedCode)
+						.then((val) => {
+							if (!val) return null;
 							return {
 								...val,
-								value: val?.value  ? JSON.parse(val?.value) : undefined
-							} as Omit<Verification, 'value'> & { value?: VerificationValue }
+								value: val?.value ? JSON.parse(val?.value) : undefined,
+							} as Omit<Verification, "value"> & { value?: VerificationValue };
 						});
-					const verificationValue = verification?.value
+					const verificationValue = verification?.value;
 
 					// Check verification
 					if (!verification) {
@@ -348,8 +356,8 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 						return ctx.json({
 							redirectURI: formatErrorURL(
 								verificationValue.redirectUri,
-								'access_denied',
-								'User denied access',
+								"access_denied",
+								"User denied access",
 								verificationValue.state,
 							),
 						});
@@ -381,7 +389,9 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 							updatedAt: new Date(),
 						},
 					});
-					const redirectURI = new URL(verificationValue.redirectUri ?? opts.loginPage);
+					const redirectURI = new URL(
+						verificationValue.redirectUri ?? opts.loginPage,
+					);
 					redirectURI.searchParams.set("code", code);
 					if (verificationValue.state) {
 						redirectURI.searchParams.set("state", verificationValue.state);
@@ -402,7 +412,7 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 					},
 				},
 				async (ctx) => {
-					return tokenEndpoint(ctx, opts)
+					return tokenEndpoint(ctx, opts);
 				},
 			),
 			oAuth2userInfo: createAuthEndpoint(
@@ -489,7 +499,7 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 					}
 					const token = authorization.replace("Bearer ", "");
 					const accessToken =
-						await ctx.context.internalAdapter.findSession(token)
+						await ctx.context.internalAdapter.findSession(token);
 					if (!accessToken) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid access token",
@@ -512,9 +522,10 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 					const scopes = accessToken.session.scopes?.split(" ");
 					const user = accessToken.user;
 					const baseUserClaims = userNormalClaims(user, scopes ?? []);
-					const additionalInfoUserClaims = options.getAdditionalUserInfoClaim && scopes?.length
-						? await options.getAdditionalUserInfoClaim(user, scopes)
-						: {};
+					const additionalInfoUserClaims =
+						options.getAdditionalUserInfoClaim && scopes?.length
+							? await options.getAdditionalUserInfoClaim(user, scopes)
+							: {};
 					return ctx.json({
 						...baseUserClaims,
 						...additionalInfoUserClaims,
@@ -526,10 +537,7 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 				{
 					method: "POST",
 					body: z.object({
-						client_secret_expires_at: z
-							.number()
-							.default(0)
-							.optional(),
+						client_secret_expires_at: z.number().default(0).optional(),
 						scope: z.string().optional(),
 						client_name: z.string().optional(),
 						client_uri: z.string().optional(),
@@ -540,15 +548,9 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 						software_id: z.string().optional(),
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
-						redirect_uris: z
-							.array(z.string())
-							.optional(),
+						redirect_uris: z.array(z.string()).optional(),
 						token_endpoint_auth_method: z
-							.enum([
-								"none",
-								"client_secret_basic",
-								"client_secret_post"
-							])
+							.enum(["none", "client_secret_basic", "client_secret_post"])
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
@@ -565,12 +567,7 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 							.array(z.enum(["code", "token"]))
 							.default(["code"])
 							.optional(),
-						type: z.enum([
-								"web",
-								"native",
-								"user-agent-based"
-							])
-							.optional(),
+						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -594,11 +591,13 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 													},
 													client_secret_expires_at: {
 														type: "number",
-														description: "Time the client secret will expire. If 0, the client secret will never expire.",
+														description:
+															"Time the client secret will expire. If 0, the client secret will never expire.",
 													},
 													scope: {
 														type: "string",
-														description: "Space-separated scopes allowed by the client",
+														description:
+															"Space-separated scopes allowed by the client",
 													},
 													user_id: {
 														type: "string",
@@ -626,7 +625,8 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 														items: {
 															type: "string",
 														},
-														description: "List representing ways to contact people responsible for this client, typically email addresses",
+														description:
+															"List representing ways to contact people responsible for this client, typically email addresses",
 													},
 													tos_uri: {
 														type: "string",
@@ -638,15 +638,18 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 													},
 													software_id: {
 														type: "string",
-														description: "Unique identifier assigned by the developer to help in the dynamic registration process",
+														description:
+															"Unique identifier assigned by the developer to help in the dynamic registration process",
 													},
 													software_version: {
 														type: "string",
-														description: "Version identifier for the software_id",
+														description:
+															"Version identifier for the software_id",
 													},
 													software_statement: {
 														type: "string",
-														description: "JWT containing metadata values about the client software as claims",
+														description:
+															"JWT containing metadata values about the client software as claims",
 													},
 													redirect_uris: {
 														type: "array",
@@ -672,9 +675,9 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 															"Requested authentication method for the token endpoint",
 														nullable: true,
 														enum: [
-															'authorization_code',
-															'client_credentials',
-															'refresh_token',
+															"authorization_code",
+															"client_credentials",
+															"refresh_token",
 														],
 													},
 													response_types: {
@@ -682,24 +685,18 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 														description:
 															"Requested authentication method for the token endpoint",
 														nullable: true,
-														enum: [
-															"code",
-															"token",
-														],
+														enum: ["code", "token"],
 													},
 													public: {
 														type: "boolean",
-														description: "Whether the client is public as determined by the type",
+														description:
+															"Whether the client is public as determined by the type",
 														enum: [false],
 													},
 													type: {
 														type: "string",
 														description: "Type of the client",
-														enum: [
-															"web",
-															"native",
-															"user-agent-based",
-														],
+														enum: ["web", "native", "user-agent-based"],
 													},
 													disabled: {
 														type: "boolean",
@@ -714,9 +711,7 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 													// 		"Additional metadata for the application",
 													// },
 												},
-												required: [
-													"clientId",
-												],
+												required: ["clientId"],
 											},
 										},
 									},
@@ -726,7 +721,7 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 					},
 				},
 				async (ctx) => {
-					return registerEndpoint(ctx,opts)
+					return registerEndpoint(ctx, opts);
 				},
 			),
 		},
