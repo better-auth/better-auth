@@ -125,10 +125,7 @@ export async function authorizeMCPOAuth(
 	const requestScope =
 		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
 	const invalidScopes = requestScope.filter((scope) => {
-		const isInvalid =
-			!opts.scopes.includes(scope) ||
-			(scope === "offline_access" && query.prompt !== "consent");
-		return isInvalid;
+		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
 		throw ctx.redirect(
