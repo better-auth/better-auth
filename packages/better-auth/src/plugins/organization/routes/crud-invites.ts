@@ -762,7 +762,8 @@ export const listUserInvitations = createAuthEndpoint(
 		query: z
 			.object({
 				email: z
-					.string({
+					.string()
+					.meta({
 						description:
 							"The email of the user to list invitations for. This only works for server side API calls.",
 					})
