@@ -40,7 +40,7 @@ export default async function Page({
 	const { nextPage, prevPage } = getPageLinks(page.url);
 
 	const MDX = page.data.body;
-
+	const avoidLLMHeader = ["Introduction", "Comparison"];
 	return (
 		<DocsPage
 			toc={page.data.toc}
@@ -61,13 +61,15 @@ export default async function Page({
 			}}
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
-			<div className="flex flex-row gap-2 items-center border-b pt-2 pb-6">
-				<LLMCopyButton />
-				<ViewOptions
-					markdownUrl={`${page.url}.mdx`}
-					githubUrl={`https://github.com/better-auth/better-auth/blob/dev/apps/docs/content/docs/${page.file.path}`}
-				/>
-			</div>
+			{!avoidLLMHeader.includes(page.data.title) && (
+				<div className="flex flex-row gap-2 items-center border-b pb-3">
+					<LLMCopyButton />
+					<ViewOptions
+						markdownUrl={`${page.url}.mdx`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
+					/>
+				</div>
+			)}
 			<DocsBody>
 				<MDX
 					components={{
