@@ -228,7 +228,7 @@ export const checkOrganizationSlug = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			slug: z.string({
+			slug: z.string().meta({
 				description: 'The organization slug to check. Eg: "my-org"',
 			}),
 		}),
@@ -282,7 +282,10 @@ export const updateOrganization = createAuthEndpoint(
 				})
 				.partial(),
 			organizationId: z
-				.string({ description: 'The organization ID. Eg: "org-id"' })
+				.string()
+				.meta({
+					description: 'The organization ID. Eg: "org-id"',
+				})
 				.optional(),
 		}),
 		requireHeaders: true,

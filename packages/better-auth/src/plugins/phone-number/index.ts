@@ -171,7 +171,8 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							description: "Password to use for sign in.",
 						}),
 						rememberMe: z
-							.boolean().meta({
+							.boolean()
+							.meta({
 								description: "Remember the session. Eg: true",
 							})
 							.optional(),
@@ -447,7 +448,8 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 * @default false
 						 */
 						disableSession: z
-							.boolean().meta({
+							.boolean()
+							.meta({
 								description:
 									"Disable session creation after verification. Eg: false",
 							})
@@ -761,7 +763,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
+						phoneNumber: z.string().meta({
 							description: `The phone number which is associated with the user. Eg: "+1234567890"`,
 						}),
 					}),
@@ -903,15 +905,15 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						otp: z.string({
+						otp: z.string().meta({
 							description:
 								'The one time password to reset the password. Eg: "123456"',
 						}),
-						phoneNumber: z.string({
+						phoneNumber: z.string().meta({
 							description:
 								'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
 						}),
-						newPassword: z.string({
+						newPassword: z.string().meta({
 							description: `The new password. Eg: "new-and-secure-password"`,
 						}),
 					}),

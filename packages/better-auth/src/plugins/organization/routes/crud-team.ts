@@ -15,11 +15,12 @@ export const createTeam = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				name: z.string({
+				name: z.string().meta({
 					description: 'The name of the team. Eg: "my-team"',
 				}),
 				organizationId: z
-					.string({
+					.string()
+					.meta({
 						description:
 							'The organization ID which the team will be created in. Defaults to the active organization. Eg: "organization-id"',
 					})
@@ -150,11 +151,12 @@ export const removeTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string({
+			teamId: z.string().meta({
 				description: `The team ID of the team to remove. Eg: "team-id"`,
 			}),
 			organizationId: z
-				.string({
+				.string()
+				.meta({
 					description: `The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
 				})
 				.optional(),
@@ -259,7 +261,7 @@ export const updateTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string({
+			teamId: z.string().meta({
 				description: `The ID of the team to be updated. Eg: "team-id"`,
 			}),
 			data: teamSchema.partial(),
@@ -380,7 +382,8 @@ export const listOrganizationTeams = createAuthEndpoint(
 		query: z.optional(
 			z.object({
 				organizationId: z
-					.string({
+					.string()
+					.meta({
 						description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
 					})
 					.optional(),

@@ -29,7 +29,8 @@ export function updateApiKey({
 					description: "The id of the Api Key",
 				}),
 				userId: z.coerce
-					.string({
+					.string()
+					.meta({
 						description:
 							'The id of the user which the api key belongs to. server-only. Eg: "some-user-id"',
 					})
@@ -95,7 +96,8 @@ export function updateApiKey({
 					})
 					.optional(),
 				permissions: z
-					.record(z.string(), z.array(z.string()), {
+					.record(z.string(), z.array(z.string()))
+					.meta({
 						description: "Update the permissions on the API Key. server-only.",
 					})
 					.optional()

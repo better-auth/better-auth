@@ -22,25 +22,21 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				email: z.string().meta({
 					description: "The email address of the user to invite",
 				}),
-				role: z.union([
-					z.string().meta({
-						description: "The role to assign to the user",
-					}),
-					z.array(
+				role: z
+					.union([
 						z.string().meta({
-							description: "The roles to assign to the user",
+							description: "The role to assign to the user",
 						}),
 						z.array(
-							z.string({
-								description: "The roles to assign to the user.",
+							z.string().meta({
+								description: "The roles to assign to the user",
 							}),
 						),
-					],
-					{
+					])
+					.meta({
 						description:
 							'The role(s) to assign to the user. It can be `admin`, `member`, or `guest`. Eg: "member"',
-					},
-				),
+					}),
 				organizationId: z
 					.string()
 					.meta({

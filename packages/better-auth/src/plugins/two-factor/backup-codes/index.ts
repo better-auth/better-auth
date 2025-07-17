@@ -166,7 +166,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						code: z.string({
+						code: z.string().meta({
 							description: `A backup code to verify. Eg: "123456"`,
 						}),
 						/**
@@ -390,7 +390,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string({
+						password: z.string().meta({
 							description: "The users password.",
 						}),
 					}),
@@ -483,7 +483,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				{
 					method: "GET",
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: `The user ID to view all backup codes. Eg: "user-id"`,
 						}),
 					}),

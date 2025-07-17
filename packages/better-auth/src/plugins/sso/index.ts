@@ -116,31 +116,36 @@ export const sso = (options?: SSOOptions) => {
 							description: 'The client secret. Eg: "1234567890"',
 						}),
 						authorizationEndpoint: z
-							.string().meta({
+							.string()
+							.meta({
 								description:
 									'The authorization endpoint. Eg: "https://idp.example.com/authorize"',
 							})
 							.optional(),
 						tokenEndpoint: z
-							.string().meta({
+							.string()
+							.meta({
 								description:
 									'The token endpoint. Eg: "https://idp.example.com/token"',
 							})
 							.optional(),
 						userInfoEndpoint: z
-							.string().meta({
+							.string()
+							.meta({
 								description:
 									'The user info endpoint. Eg: "https://idp.example.com/userinfo"',
 							})
 							.optional(),
 						tokenEndpointAuthentication: z
-							.enum(["client_secret_post", "client_secret_basic"], {
+							.enum(["client_secret_post", "client_secret_basic"])
+							.meta({
 								description:
 									"The authentication method for the token endpoint. Defaults to 'client_secret_post'. Eg: \"client_secret_post\"",
 							})
 							.optional(),
 						jwksEndpoint: z
-							.string().meta({
+							.string()
+							.meta({
 								description:
 									'The JWKS endpoint. Eg: "https://idp.example.com/.well-known/jwks.json"',
 							})
@@ -154,7 +159,8 @@ export const sso = (options?: SSOOptions) => {
 							})
 							.optional(),
 						pkce: z
-							.boolean().meta({
+							.boolean()
+							.meta({
 								description:
 									"Whether to use PKCE for the authorization flow. Eg: true",
 							})
@@ -460,7 +466,8 @@ export const sso = (options?: SSOOptions) => {
 							})
 							.optional(),
 						organizationSlug: z
-							.string().meta({
+							.string()
+							.meta({
 								description:
 									'The slug of the organization to sign in with. Eg: "example-org"',
 							})
@@ -473,7 +480,8 @@ export const sso = (options?: SSOOptions) => {
 							})
 							.optional(),
 						domain: z
-							.string().meta({
+							.string()
+							.meta({
 								description: 'The domain of the provider. Eg: "example.com"',
 							})
 							.optional(),
@@ -482,7 +490,8 @@ export const sso = (options?: SSOOptions) => {
 								'The URL to redirect to after login. Eg: "https://example.com/callback"',
 						}),
 						errorCallbackURL: z
-							.string().meta({
+							.string()
+							.meta({
 								description:
 									'The URL to redirect to after login. Eg: "https://example.com/callback"',
 							})

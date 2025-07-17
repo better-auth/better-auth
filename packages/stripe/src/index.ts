@@ -139,7 +139,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If annual plan should be applied.
 					 */
 					annual: z
-						.boolean().meta({
+						.boolean()
+						.meta({
 							description: "Whether to upgrade to an annual plan. Eg: true",
 						})
 						.optional(),
@@ -149,7 +150,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If not provided, the user's id will be used
 					 */
 					referenceId: z
-						.string().meta({
+						.string()
+						.meta({
 							description:
 								'Reference id of the subscription to upgrade. Eg: "123"',
 						})
@@ -160,7 +162,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * it'll throw an error.
 					 */
 					subscriptionId: z
-						.string().meta({
+						.string()
+						.meta({
 							description:
 								'The id of the subscription to upgrade. Eg: "sub_123"',
 						})
@@ -174,7 +177,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If a subscription
 					 */
 					seats: z
-						.number().meta({
+						.number()
+						.meta({
 							description:
 								"Number of seats to upgrade to (if applicable). Eg: 1",
 						})

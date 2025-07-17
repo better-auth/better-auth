@@ -205,7 +205,8 @@ export function verifyApiKey({
 					description: "The key to verify",
 				}),
 				permissions: z
-					.record(z.string(), z.array(z.string()), {
+					.record(z.string(), z.array(z.string()))
+					.meta({
 						description: "The permissions to verify.",
 					})
 					.optional(),

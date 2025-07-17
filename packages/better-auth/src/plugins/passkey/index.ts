@@ -853,7 +853,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string({
+						id: z.string().meta({
 							description:
 								'The ID of the passkey to delete. Eg: "some-passkey-id"',
 						}),

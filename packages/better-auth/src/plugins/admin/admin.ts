@@ -194,26 +194,22 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
-						role: z.union([
-							z.string().meta({
-								description: "The role to set. `admin` or `user` by default",
-							}),
-							z.array(
+						role: z
+							.union([
 								z.string().meta({
-									description: "The roles to set. `admin` or `user` by default",
+									description: "The role to set. `admin` or `user` by default",
 								}),
 								z.array(
-									z.string({
+									z.string().meta({
 										description:
 											"The roles to set. `admin` or `user` by default",
 									}),
 								),
-							],
-							{
+							])
+							.meta({
 								description:
-									"The role to set, this can be a string or an array of strings.",
-							},
-						),
+									"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
+							}),
 					}),
 					requireHeaders: true,
 					use: [adminMiddleware],
@@ -316,26 +312,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									z.string().meta({
 										description: "The roles of user",
 									}),
-									z.array(
-										z.string({
-											description: "The roles of user",
-										}),
-									),
-								],
-								{
-									description: `A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
-								},
-							)
-							.optional(),
+								),
+							])
+							.optional()
+							.meta({
+								description: `A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
+							}),
 						/**
 						 * extra fields for user
 						 */
-						data: z
-							.record(z.any(), {
-								description:
-									"Extra fields for the user. Including custom additional fields.",
-							})
-							.optional(),
+						data: z.record(z.string(), z.any()).optional().meta({
+							description:
+								"Extra fields for the user. Including custom additional fields.",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -458,11 +447,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z
-							.string({
-								description: 'The value to search for. Eg: "some name"',
-							})
-							.optional(),
+						searchValue: z.string().optional().meta({
+							description: 'The value to search for. Eg: "some name"',
+						}),
 						searchField: z
 							.enum(["email", "name"])
 							.meta({
@@ -1422,16 +1409,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					body: z
 						.object({
-							userId: z.coerce
-								.string({
-									description: `The user id. Eg: "user-id"`,
-								})
-								.optional(),
-							role: z
-								.string({
-									description: `The role to check permission for. Eg: "admin"`,
-								})
-								.optional(),
+							userId: z.coerce.string().optional().meta({
+								description: `The user id. Eg: "user-id"`,
+							}),
+							role: z.string().optional().meta({
+								description: `The role to check permission for. Eg: "admin"`,
+							}),
 						})
 						.and(
 							z.union([

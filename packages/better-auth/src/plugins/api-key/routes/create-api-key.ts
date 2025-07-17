@@ -106,7 +106,8 @@ export function createApiKey({
 					})
 					.optional(),
 				permissions: z
-					.record(z.string(), z.array(z.string()), {
+					.record(z.string(), z.array(z.string()))
+					.meta({
 						description: "Permissions of the Api Key.",
 					})
 					.optional(),

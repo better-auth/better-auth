@@ -136,12 +136,10 @@ export const otp2fa = (options?: OTPOptions) => {
 					 * for 30 days. It'll be refreshed on
 					 * every sign in request within this time.
 					 */
-					trustDevice: z
-						.boolean({
-							description:
-								"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-						})
-						.optional(),
+					trustDevice: z.boolean().optional().meta({
+						description:
+							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+					}),
 				})
 				.optional(),
 			metadata: {
@@ -223,12 +221,10 @@ export const otp2fa = (options?: OTPOptions) => {
 				 * for 30 days. It'll be refreshed on
 				 * every sign in request within this time.
 				 */
-				trustDevice: z
-					.boolean({
-						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-					})
-					.optional(),
+				trustDevice: z.boolean().optional().meta({
+					description:
+						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+				}),
 			}),
 			metadata: {
 				openapi: {
