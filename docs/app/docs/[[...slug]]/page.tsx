@@ -21,6 +21,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
+import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
+import { LLMCopyButton, ViewOptions } from "./page.client";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -60,6 +62,13 @@ export default async function Page({
 			}}
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
+			<div className="flex flex-row gap-2 items-center border-b pt-2 pb-6">
+				<LLMCopyButton />
+				<ViewOptions
+					markdownUrl={`${page.url}.mdx`}
+					githubUrl={`https://github.com/better-auth/better-auth/blob/dev/apps/docs/content/docs/${page.file.path}`}
+				/>
+			</div>
 			<DocsBody>
 				<MDX
 					components={{
