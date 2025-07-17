@@ -327,7 +327,7 @@ describe("mcp", async () => {
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			response_types_supported: ["code"],
 			response_modes_supported: ["query"],
-			grant_types_supported: ["authorization_code"],
+			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
 			id_token_signing_alg_values_supported: ["RS256", "none"],
 			token_endpoint_auth_methods_supported: [
