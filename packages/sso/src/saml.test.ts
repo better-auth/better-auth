@@ -446,7 +446,6 @@ const createMockSAMLIdP = (port: number) => {
 		"/api/sso/saml2/callback/:providerId",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
-			console.log("RelayState: ", RelayState);
 
 			try {
 				const parseResult = await sp.parseLoginResponse(
