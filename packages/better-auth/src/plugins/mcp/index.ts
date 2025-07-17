@@ -22,11 +22,19 @@ import type { GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
+import { getJwtToken } from "../jwt";
+import type { JwtOptions } from "../jwt";
 
 interface MCPOptions {
 	loginPage: string;
 	oidcConfig?: OIDCOptions;
 }
+
+const getJwtPlugin = (ctx: GenericEndpointContext) => {
+	return ctx.context.options.plugins?.find((plugin) => plugin.id === "jwt") as
+		| (Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions })
+		| undefined;
+};
 
 export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
@@ -516,17 +524,6 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
-						alg: "HS256",
-						key: await subtle.generateKey(
-							{
-								name: "HMAC",
-								hash: "SHA-256",
-							},
-							true,
-							["sign", "verify"],
-						),
-					};
 					const profile = {
 						given_name: user.name.split(" ")[0],
 						family_name: user.name.split(" ")[1],
@@ -547,22 +544,59 @@ export const mcp = (options: MCPOptions) => {
 						? opts.getAdditionalUserInfoClaim(user, requestedScopes)
 						: {};
 
-					const idToken = await new SignJWT({
-						sub: user.id,
-						aud: client_id.toString(),
-						iat: Date.now(),
-						auth_time: ctx.context.session?.session.createdAt.getTime(),
-						nonce: value.nonce,
-						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
-						...userClaims,
-						...additionalUserClaims,
-					})
-						.setProtectedHeader({ alg: secretKey.alg })
-						.setIssuedAt()
-						.setExpirationTime(
-							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
-						)
-						.sign(secretKey.key);
+					// Use the JWT plugin's infrastructure for proper signing if available
+					const jwtPlugin = getJwtPlugin(ctx);
+					let idToken: string;
+
+					if (jwtPlugin) {
+						idToken = await getJwtToken(ctx, {
+							jwt: {
+								definePayload: () => ({
+									sub: user.id,
+									aud: client_id.toString(),
+									iat: Date.now(),
+									auth_time: ctx.context.session?.session.createdAt.getTime(),
+									nonce: value.nonce,
+									acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
+									...userClaims,
+									...additionalUserClaims,
+								}),
+								issuer: ctx.context.options.baseURL as string,
+								audience: client_id.toString(),
+								expirationTime: opts.accessTokenExpiresIn,
+							},
+						});
+					} else {
+						// Fallback to HMAC signing if JWT plugin is not available
+						let secretKey = {
+							alg: "HS256",
+							key: await subtle.generateKey(
+								{
+									name: "HMAC",
+									hash: "SHA-256",
+								},
+								true,
+								["sign", "verify"],
+							),
+						};
+
+						idToken = await new SignJWT({
+							sub: user.id,
+							aud: client_id.toString(),
+							iat: Date.now(),
+							auth_time: ctx.context.session?.session.createdAt.getTime(),
+							nonce: value.nonce,
+							acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
+							...userClaims,
+							...additionalUserClaims,
+						})
+							.setProtectedHeader({ alg: secretKey.alg })
+							.setIssuedAt()
+							.setExpirationTime(
+								Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
+							)
+							.sign(secretKey.key);
+					}
 					return ctx.json(
 						{
 							access_token: accessToken,
