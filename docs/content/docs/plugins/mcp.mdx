@@ -5,7 +5,17 @@ description: MCP provider plugin for Better Auth
 
 `OAuth` `MCP`
 
-The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It handles authentication and makes it easy to issue and manage access tokens for MCP applications.
+The **MCP** plugin adds resource server functionality to your API by utilizing the same OAuth2.1 server used in the OIDC plugin.
+
+**Key Features**:
+
+- Set specific scopes and claims for each API
+- OAuth2.1 server with OIDC compatiblity (with "openid" scope)
+
+**Required Plugins**
+
+- **(OIDC)[./oidc-provider]** Sets up the OAuth2.1 server with OIDC compatibility
+- **(JWT)[./jwt]** Manages signed tokens. We do not yet cover the case without the Jwt plugin (ie opaque access tokens).
 
 ## Installation
 
@@ -17,14 +27,19 @@ The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It ha
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
-        import { mcp } from "better-auth/plugins";
+        import { mcp, oidc, jwt } from "better-auth/plugins";
 
         export const auth = betterAuth({
             plugins: [
-                mcp({
-                    loginPage: "/sign-in" // path to your login page
-                })
-            ]
+                jwt({
+                    usesOidcProviderPlugin: true,
+                }),
+                oidcProvider({
+                    loginPage: "/sign-in",
+                    consentPage: "/consent",
+                }),
+                mcp(),
+            ],
         });
         ```
         <Callout>
@@ -49,7 +64,7 @@ The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It ha
             ```
             </Tab>
         </Tabs>
-        The MCP plugin uses the same schema as the OIDC Provider plugin. See the [OIDC Provider Schema](#schema) section for details.
+        This plugin does not have a schema but the [OIDC](./oidc-provider#schema) and [JWT](./jwt#schema) plugins do.
     </Step>
 </Steps>
 
@@ -66,123 +81,110 @@ import { auth } from "../../../lib/auth";
 export const GET = oAuthDiscoveryMetadata(auth);
 ```
 
-### MCP Session Handling
+### MCP Wrapper
 
-You can use the helper function `withMcpAuth` to get the session and handle unauthenticated calls automatically.
+If you have an endpoint that can be wrapped by a request handler
+You can use the helper function `withMcpAuth` to verify the session token and handle unauthenticated calls automatically.
 
-
-```ts title="api/[transport]/route.ts"
+```ts title="api/echo/route.ts"
 import { auth } from "@/lib/auth";
 import { createMcpHandler } from "@vercel/mcp-adapter";
 import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
-const handler = withMcpAuth(auth, (req, session) => {
-    // session contains the access token record with scopes and user ID
-    return createMcpHandler(
-        (server) => {
-            server.tool(
-                "echo",
-                "Echo a message",
-                { message: z.string() },
-                async ({ message }) => {
-                    return {
-                        content: [{ type: "text", text: `Tool echo: ${message}` }],
-                    };
-                },
-            );
-        },
-        {
-            capabilities: {
-                tools: {
-                    echo: {
-                        description: "Echo a message",
-                    },
-                },
-            },
-        },
-        {
-            redisUrl: process.env.REDIS_URL,
-            basePath: "/api",
-            verboseLogs: true,
-            maxDuration: 60,
-        },
-    )(req);
-});
-
-export { handler as GET, handler as POST, handler as DELETE };
-```
-
-You can also use `auth.api.getMcpSession` to get the session using the access token sent from the MCP client:
-
-```ts title="api/[transport]/route.ts"
-import { auth } from "@/lib/auth";
-import { createMcpHandler } from "@vercel/mcp-adapter";
-import { z } from "zod";
-
-const handler = async (req: Request) => {
-     // session contains the access token record with scopes and user ID
-    const session = await auth.api.getMcpSession({
-        headers: req.headers
-    })
-    if(!session){
-        //this is important and you must return 401
-        return new Response(null, {
-            status: 401
-        })
-    }
-    return createMcpHandler(
-        (server) => {
-            server.tool(
-                "echo",
-                "Echo a message",
-                { message: z.string() },
-                async ({ message }) => {
-                    return {
-                        content: [{ type: "text", text: `Tool echo: ${message}` }],
-                    };
-                },
-            );
-        },
-        {
-            capabilities: {
-                tools: {
-                    echo: {
-                        description: "Echo a message",
-                    },
-                },
-            },
-        },
-        {
-            redisUrl: process.env.REDIS_URL,
-            basePath: "/api",
-            verboseLogs: true,
-            maxDuration: 60,
-        },
-    )(req);
+interface AuthenticatedRequest extends Request {
+  context: {
+    jwt: { // JWTPayload from 'jose' package
+      sub?: string;
+    };
+  };
 }
 
-export { handler as GET, handler as POST, handler as DELETE };
+export const GET = withMcpAuth(auth, (req: Request) => {
+	const sub = (req as AuthenticatedRequest).context.jwt.sub
+	return createMcpHandler(
+		(server) => {
+			server.tool(
+				"echo",
+				"Echo a message",
+				{ message: z.string() },
+				async ({ message }) => {
+					return {
+						content: [{
+							type: "text",
+							text: `Sub ${sub} says: ${message}`,
+						}],
+					};
+				},
+			);
+		},
+		{
+			capabilities: {
+				tools: {
+					echo: {
+						description: "Echo a message",
+					},
+				},
+			},
+		},
+		{
+			redisUrl: process.env.REDIS_URL,
+			basePath: "/api",
+			verboseLogs: true,
+			maxDuration: 60,
+		},
+	)(req);
+});
+```
+
+## Advanced
+
+### Checker Function
+
+We provide a generalized checker function as an alternative to `withMcpAuth` to check for an access token's validity.
+
+This function throws an error if not authenticated and **MUST** return the `www-authenticate` header manually. You can use the helper function `handleMcpErrors` to perform this automatically.
+
+```ts
+import { auth } from "@/lib/auth"; // Location of BetterAuth options
+import { checkMcp, handleMcpErrors } from "better-auth/plugins";
+
+// this is pseudocode to show how to properly handle errors
+export const GET = async (req: Request) => {
+	const url = new URL(req.url)
+	const accessToken = req.headers.get('Authorization')
+	try {
+		const tokens = await checkMcp({
+			auth,
+			accessToken,
+			baseUrl: `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`,
+			path: url.pathname,
+		})
+		// ...continue
+	} catch (error) {
+        handleMcpErrors(error)
+	}
+}
 ```
 
 ## Configuration
+
+The you can opt-out of OIDC for a resource by simply removing the "openid" scope from the scopes_supported section.
 
 The MCP plugin accepts the following configuration options:
 
 <TypeTable
   type={{
-    loginPage: {
-        description: "Path to the login page where users will be redirected for authentication",
-        type: "string",
-        required: true
-    },
-    oidcConfig: {
-        description: "Optional OIDC configuration options",
-        type: "object",
-        required: false
+    resourceServer: {
+        description: "default settings for a new resource server",
+        required: false,
     }
   }}
 />
+
+### Resource Server Metadata
+
+A resource server as defined by [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) specifies details pertaining to a specific endpoint on your server (aka resource server).
 
 ### OIDC Configuration
 
@@ -190,34 +192,76 @@ The plugin supports additional OIDC configuration options through the `oidcConfi
 
 <TypeTable
   type={{
-    codeExpiresIn: {
-        description: "Expiration time for authorization codes in seconds",
-        type: "number",
-        default: 600
-    },
-    accessTokenExpiresIn: {
-        description: "Expiration time for access tokens in seconds",
-        type: "number",
-        default: 3600
-    },
-    refreshTokenExpiresIn: {
-        description: "Expiration time for refresh tokens in seconds",
-        type: "number",
-        default: 604800
-    },
-    defaultScope: {
-        description: "Default scope for OAuth requests",
+    resource: {
+        description: "URL of the your endpoint",
         type: "string",
-        default: "openid"
+        required: true,
     },
-    scopes: {
-        description: "Additional scopes to support",
+    authorization_servers: {
+        description: "Authorization Servers. Requires at least one.",
         type: "string[]",
-        default: '["openid", "profile", "email", "offline_access"]'
+        required: false,
+        default: "[`${baseUrl}/.well-known/oauth-authorization-server`]"
+    },
+    jwks_uri: {
+        description: "URL of the protected resource's JSON Web Key (JWK) Set",
+        type: "string",
+        required: false,
+    },
+    scopes_supported: {
+        description: "List of scope values",
+        type: "string[]",
+        required: false,
+    },
+    bearer_methods_supported: {
+        description: "List of the supported methods of sending an OAuth 2.0 bearer token",
+        type: "string[]",
+        required: false,
+    },
+    resource_signing_alg_values_supported: {
+        description: "List of the JWS signing algorithms used",
+        type: "string[]",
+        required: false,
+    },
+    resource_name: {
+        description: "Human-readable name intended for display to the end user",
+        type: "string",
+        required: false,
+    },
+    resource_documentation: {
+        description: "URL that developers might want when using the protected resource",
+        type: "string",
+        required: false,
+    },
+    resource_policy_uri: {
+        description: "URL of the resource's usage policy requirements",
+        type: "string",
+        required: false,
+    },
+    resource_tos_uri: {
+        description: "URL of the resource's resource's terms of service",
+        type: "string",
+        required: false,
+    },
+    tls_client_certificate_bound_access_tokens: {
+        description: "Indicates protected resource support for mutual-TLS client certificate-bound access tokens",
+        type: "boolean",
+        required: false,
+    },
+    authorization_details_types_supported: {
+        description: "List of the authorization details type values supported by the resource server when the authorization_details request parameter",
+        type: "string",
+        required: false,
+    },
+    dpop_signing_alg_values_supported: {
+        description: "List of the JWS alg values supported by the resource server for validating Demonstrating Proof of Possession (DPoP) proof JWTs",
+        type: "string",
+        required: false,
+    },
+    dpop_bound_access_tokens_required: {
+        description: "Specifies whether the protected resource always requires the use of DPoP-bound access tokens",
+        type: "boolean",
+        required: false,
     }
   }}
 />
-
-## Schema
-
-The MCP plugin uses the same schema as the OIDC Provider plugin. See the [OIDC Provider Schema](#schema) section for details.

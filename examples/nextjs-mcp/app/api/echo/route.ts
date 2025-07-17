@@ -3,7 +3,16 @@ import { createMcpHandler } from "@vercel/mcp-adapter";
 import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
-const handler = withMcpAuth(auth, (req, sesssion) => {
+interface AuthenticatedRequest extends Request {
+  context: {
+    jwt: { // JWTPayload from 'jose' package
+      sub?: string;
+    };
+  };
+}
+
+export const GET = withMcpAuth(auth, (req: Request) => {
+	const sub = (req as AuthenticatedRequest).context.jwt.sub
 	return createMcpHandler(
 		(server) => {
 			server.tool(
@@ -12,7 +21,10 @@ const handler = withMcpAuth(auth, (req, sesssion) => {
 				{ message: z.string() },
 				async ({ message }) => {
 					return {
-						content: [{ type: "text", text: `Tool echo: ${message}` }],
+						content: [{
+							type: "text",
+							text: `Sub ${sub} says: ${message}`,
+						}],
 					};
 				},
 			);
@@ -34,5 +46,3 @@ const handler = withMcpAuth(auth, (req, sesssion) => {
 		},
 	)(req);
 });
-
-export { handler as GET, handler as POST, handler as DELETE };
