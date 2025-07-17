@@ -1,38 +1,28 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
+import { afterAll, describe, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { mcp } from ".";
 import { genericOAuth } from "../generic-oauth";
 import type { Client } from "../oidc-provider/types";
 import { createAuthClient } from "../../client";
 import { genericOAuthClient } from "../generic-oauth/client";
-import { listen, type Listener } from "listhen";
+import { listen } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
 
-describe("mcp", () => {
-	let authorizationServer: any;
-	let signInWithTestUser: any;
-	let customFetchImpl: any;
-	let testUser: any;
-	let headers: any;
-	let serverClient: any;
-	let server: Listener;
-	let baseURL: string;
+describe("mcp", async () => {
+	// Start server on ephemeral port first to get available port
+	const tempServer = await listen(
+		toNodeHandler(async () => new Response("temp")),
+		{
+			port: 0,
+		},
+	);
+	const port = tempServer.address?.port || 3001;
+	const baseURL = `http://localhost:${port}`;
+	await tempServer.close();
 
-	beforeAll(async () => {
-		// Start server on ephemeral port first to get available port
-		const tempServer = await listen(
-			toNodeHandler(async () => new Response("temp")),
-			{
-				port: 0,
-			},
-		);
-		const port = tempServer.address?.port || 3001;
-		await tempServer.close();
-
-		baseURL = `http://localhost:${port}`;
-
-		const testInstance = await getTestInstance({
+	const { auth, signInWithTestUser, customFetchImpl, testUser } =
+		await getTestInstance({
 			baseURL,
 			plugins: [
 				mcp({
@@ -53,27 +43,20 @@ describe("mcp", () => {
 			],
 		});
 
-		authorizationServer = testInstance.auth;
-		signInWithTestUser = testInstance.signInWithTestUser;
-		customFetchImpl = testInstance.customFetchImpl;
-		testUser = testInstance.testUser;
+	const signInResult = await signInWithTestUser();
+	const headers = signInResult.headers;
 
-		const signInResult = await signInWithTestUser();
-		headers = signInResult.headers;
-
-		serverClient = createAuthClient({
-			baseURL,
-			fetchOptions: {
-				customFetchImpl,
-				headers,
-			},
-		});
-
-		server = await listen(toNodeHandler(authorizationServer.handler), {
-			port,
-		});
+	const serverClient = createAuthClient({
+		baseURL,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
 	});
 
+	const server = await listen(toNodeHandler(auth.handler), {
+		port,
+	});
 	afterAll(async () => {
 		await server.close();
 	});
