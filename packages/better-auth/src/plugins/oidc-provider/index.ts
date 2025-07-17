@@ -8,7 +8,11 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
-import { generateRandomString } from "../../crypto";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../crypto";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -23,6 +27,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
 import type { JwtOptions } from "../jwt";
+import { defaultClientSecretHasher } from "./utils";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -135,6 +140,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
 		allowPlainCodeChallengeMethod: true,
+		storeClientSecret: "plain" as const,
 		...options,
 		scopes: [
 			"openid",
@@ -146,6 +152,78 @@ export const oidcProvider = (options: OIDCOptions) => {
 	};
 
 	const trustedClients = options.trustedClients || [];
+
+	/**
+	 * Store client secret according to the configured storage method
+	 */
+	async function storeClientSecret(
+		ctx: GenericEndpointContext,
+		clientSecret: string,
+	) {
+		if (opts.storeClientSecret === "encrypted") {
+			return await symmetricEncrypt({
+				key: ctx.context.secret,
+				data: clientSecret,
+			});
+		}
+		if (opts.storeClientSecret === "hashed") {
+			return await defaultClientSecretHasher(clientSecret);
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"hash" in opts.storeClientSecret
+		) {
+			return await opts.storeClientSecret.hash(clientSecret);
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"encrypt" in opts.storeClientSecret
+		) {
+			return await opts.storeClientSecret.encrypt(clientSecret);
+		}
+
+		return clientSecret;
+	}
+
+	/**
+	 * Verify stored client secret against provided client secret
+	 */
+	async function verifyStoredClientSecret(
+		ctx: GenericEndpointContext,
+		storedClientSecret: string,
+		clientSecret: string,
+	): Promise<boolean> {
+		if (opts.storeClientSecret === "encrypted") {
+			return (
+				(await symmetricDecrypt({
+					key: ctx.context.secret,
+					data: storedClientSecret,
+				})) === clientSecret
+			);
+		}
+		if (opts.storeClientSecret === "hashed") {
+			const hashedClientSecret = await defaultClientSecretHasher(clientSecret);
+			return hashedClientSecret === storedClientSecret;
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"hash" in opts.storeClientSecret
+		) {
+			const hashedClientSecret =
+				await opts.storeClientSecret.hash(clientSecret);
+			return hashedClientSecret === storedClientSecret;
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"decrypt" in opts.storeClientSecret
+		) {
+			const decryptedClientSecret =
+				await opts.storeClientSecret.decrypt(storedClientSecret);
+			return decryptedClientSecret === clientSecret;
+		}
+
+		return clientSecret === storedClientSecret;
+	}
 
 	return {
 		id: "oidc",
@@ -556,8 +634,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_client",
 						});
 					}
-					const isValidSecret =
-						client.clientSecret === client_secret.toString();
+					const isValidSecret = await verifyStoredClientSecret(
+						ctx,
+						client.clientSecret,
+						client_secret.toString(),
+					);
 					if (!isValidSecret) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_secret",
@@ -1083,6 +1164,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						options.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
+					const storedClientSecret = await storeClientSecret(ctx, clientSecret);
+
 					// Create the client with the existing schema
 					const client: Client = await ctx.context.adapter.create({
 						model: modelName.oauthClient,
@@ -1091,7 +1174,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
-							clientSecret: clientSecret,
+							clientSecret: storedClientSecret,
 							redirectURLs: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
