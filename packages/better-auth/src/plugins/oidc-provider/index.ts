@@ -1026,7 +1026,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 					return ctx.json(
 						{
 							client_id: clientId,
-							client_secret: clientSecret,
+							...(client.type !== "public"
+								? {
+										client_secret: clientSecret,
+										client_secret_expires_at: 0, // 0 means it doesn't expire
+									}
+								: {}),
 							client_id_issued_at: Math.floor(Date.now() / 1000),
 							client_secret_expires_at: 0, // 0 means it doesn't expire
 							redirect_uris: body.redirect_uris,
