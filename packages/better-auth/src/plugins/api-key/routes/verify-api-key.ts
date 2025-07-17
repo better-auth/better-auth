@@ -116,7 +116,7 @@ export async function validateApiKey({
 			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 		}
 
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("TOO_MANY_REQUESTS", {
 			message: ERROR_CODES.USAGE_EXCEEDED,
 			code: "USAGE_EXCEEDED" as const,
 		});
@@ -138,8 +138,7 @@ export async function validateApiKey({
 
 		if (remaining === 0) {
 			// if there are no more remaining requests, than the key is invalid
-
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("TOO_MANY_REQUESTS", {
 				message: ERROR_CODES.USAGE_EXCEEDED,
 				code: "USAGE_EXCEEDED" as const,
 			});
@@ -228,18 +227,18 @@ export function verifyApiKey({
 				});
 			}
 
-			if (
-				opts.customAPIKeyValidator &&
-				!opts.customAPIKeyValidator({ ctx, key })
-			) {
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
-				});
+			if (opts.customAPIKeyValidator) {
+				const isValid = await opts.customAPIKeyValidator({ ctx, key });
+				if (!isValid) {
+					return ctx.json({
+						valid: false,
+						error: {
+							message: ERROR_CODES.INVALID_API_KEY,
+							code: "KEY_NOT_FOUND" as const,
+						},
+						key: null,
+					});
+				}
 			}
 
 			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);

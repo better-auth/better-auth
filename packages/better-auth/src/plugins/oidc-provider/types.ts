@@ -121,6 +121,38 @@ export interface OIDCOptions {
 		user: User & Record<string, any>,
 		scopes: string[],
 	) => Record<string, any> | Promise<Record<string, any>>;
+	/**
+	 * Trusted clients that are configured directly in the provider options.
+	 * These clients bypass database lookups and can optionally skip consent screens.
+	 */
+	trustedClients?: Client[];
+	/**
+	 * Store the client secret in your database in a secure way
+	 * Note: This will not affect the client secret sent to the user, it will only affect the client secret stored in your database
+	 *
+	 * - "hashed" - The client secret is hashed using the `hash` function.
+	 * - "plain" - The client secret is stored in the database in plain text.
+	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
+	 * - { hash: (clientSecret: string) => Promise<string> } - A function that hashes the client secret.
+	 * - { encrypt: (clientSecret: string) => Promise<string>, decrypt: (clientSecret: string) => Promise<string> } - A function that encrypts and decrypts the client secret.
+	 *
+	 * @default "plain"
+	 */
+	storeClientSecret?:
+		| "hashed"
+		| "plain"
+		| "encrypted"
+		| { hash: (clientSecret: string) => Promise<string> }
+		| {
+				encrypt: (clientSecret: string) => Promise<string>;
+				decrypt: (clientSecret: string) => Promise<string>;
+		  };
+	/**
+	 * Whether to use the JWT plugin to sign the ID token.
+	 *
+	 * @default false
+	 */
+	useJWTPlugin?: boolean;
 }
 
 export interface AuthorizationQuery {
@@ -286,6 +318,11 @@ export interface Client {
 	 * Whether the client is disabled or not.
 	 */
 	disabled: boolean;
+	/**
+	 * Whether to skip the consent screen for this client.
+	 * Only applies to trusted clients.
+	 */
+	skipConsent?: boolean;
 }
 
 export interface TokenBody {
@@ -461,9 +498,13 @@ export interface OIDCMetadata {
 	/**
 	 * Supported grant types.
 	 *
-	 * only `authorization_code` is supported.
+	 * The first element MUST be "authorization_code"; additional grant types like
+	 * "refresh_token" can follow. Guarantees a non-empty array at the type level.
 	 */
-	grant_types_supported: ["authorization_code"];
+	grant_types_supported: [
+		"authorization_code",
+		...("authorization_code" | "refresh_token")[],
+	];
 	/**
 	 * acr_values supported.
 	 *
@@ -489,13 +530,8 @@ export interface OIDCMetadata {
 	subject_types_supported: ["public"];
 	/**
 	 * Supported ID token signing algorithms.
-	 *
-	 * only `RS256` and `none` are supported.
-	 *
-	 * @default
-	 * ["RS256", "none"]
 	 */
-	id_token_signing_alg_values_supported: ("RS256" | "none")[];
+	id_token_signing_alg_values_supported: string[];
 	/**
 	 * Supported token endpoint authentication methods.
 	 *

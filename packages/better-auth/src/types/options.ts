@@ -163,6 +163,13 @@ export type BetterAuthOptions = {
 		 */
 		sendOnSignUp?: boolean;
 		/**
+		 * Send a verification email automatically
+		 * on sign in when the user's email is not verified
+		 *
+		 * @default false
+		 */
+		sendOnSignIn?: boolean;
+		/**
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
@@ -498,6 +505,12 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			allowUnlinkingAll?: boolean;
+			/**
+			 * If enabled (true), this will update the user information based on the newly linked account
+			 *
+			 * @default false
+			 */
+			updateUserInfoOnLink?: boolean;
 		};
 	};
 	/**
@@ -614,7 +627,7 @@ export type BetterAuthOptions = {
 			 *
 			 * Ip address is used for rate limiting and session tracking
 			 *
-			 * @example ["x-client-ip", "x-forwarded-for"]
+			 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 			 *
 			 * @default
 			 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
