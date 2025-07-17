@@ -130,9 +130,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 							clientId: options.clientId,
 							clientSecret: options.clientSecret,
 						},
-						extraParams: {
-							scope: scopes.join(" "), // Include the scopes in request to microsoft
-						},
+						scope: scopes.join(" "), // Include the scopes in request to microsoft
 						tokenEndpoint,
 					});
 				},

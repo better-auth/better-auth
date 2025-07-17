@@ -7,10 +7,12 @@ export function createClientCredentialsTokenRequest({
   options,
   scope,
   authentication,
+  resource,
 }: {
   options: ProviderOptions
   scope?: string
   authentication?: "basic" | "post"
+  resource?: string | string[]
 }) {
   const body = new URLSearchParams();
   const headers: Record<string, any> = {
@@ -20,6 +22,15 @@ export function createClientCredentialsTokenRequest({
 
   body.set("grant_type", "client_credentials");
   scope && body.set("scope", scope)
+  if (resource) {
+    if (typeof resource === 'string') {
+      body.append('resource', resource);
+    } else {
+      for (const val of resource) {
+        body.append('resource', val);
+      }
+    }
+	}
   if (authentication === "basic") {
     const encodedCredentials = base64Url.encode(
       `${options.clientId}:${options.clientSecret}`,
@@ -41,11 +52,13 @@ export async function clientCredentialsToken({
   tokenEndpoint,
   scope,
   authentication,
+  resource,
 }: {
   options: ProviderOptions;
   tokenEndpoint: string;
   scope: string
   authentication?: "basic" | "post";
+  resource?: string | string[]
 }): Promise<OAuth2Tokens> {
   const {
     body,
@@ -54,6 +67,7 @@ export async function clientCredentialsToken({
     options,
     scope,
     authentication,
+    resource,
   })
 
   const { data, error } = await betterFetch<{

@@ -6,13 +6,15 @@ import { base64Url } from "@better-auth/utils/base64";
 export function createRefreshAccessTokenRequest({
 	refreshToken,
 	options,
+	scope,
 	authentication,
-	extraParams,
+	resource,
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
+	scope?: string;
 	authentication?: "basic" | "post";
-	extraParams?: Record<string, string>;
+	resource?: string | string[];
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -22,6 +24,16 @@ export function createRefreshAccessTokenRequest({
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
+	scope && body.set("scope", scope);
+	if (resource) {
+    if (typeof resource === 'string') {
+      body.append('resource', resource);
+    } else {
+      for (const val of resource) {
+        body.append('resource', val);
+      }
+    }
+	}
 	if (authentication === "basic") {
 		const encodedCredentials = base64Url.encode(
 			`${options.clientId}:${options.clientSecret}`,
@@ -30,12 +42,6 @@ export function createRefreshAccessTokenRequest({
 	} else {
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
-	}
-
-	if (extraParams) {
-		for (const [key, value] of Object.entries(extraParams)) {
-			body.set(key, value);
-		}
 	}
 
 	return {
@@ -47,15 +53,17 @@ export function createRefreshAccessTokenRequest({
 export async function refreshAccessToken({
 	refreshToken,
 	options,
+	scope,
 	tokenEndpoint,
 	authentication,
-	extraParams,
+	resource,
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
+	scope?: string;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
-	extraParams?: Record<string, string>;
+	resource?: string | string[]
 }): Promise<OAuth2Tokens> {
 	const {
 		body,
@@ -64,7 +72,7 @@ export async function refreshAccessToken({
 		refreshToken,
 		options,
 		authentication,
-		extraParams,
+		resource,
 	})
 
 	const { data, error } = await betterFetch<{

@@ -12,6 +12,7 @@ export function createAuthorizationCodeRequest({
 	authentication,
 	deviceId,
 	headers,
+	resource,
 }: {
 	code: string;
 	redirectURI: string;
@@ -20,6 +21,7 @@ export function createAuthorizationCodeRequest({
 	deviceId?: string;
 	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
+	resource?: string | string[];
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
@@ -28,12 +30,22 @@ export function createAuthorizationCodeRequest({
 		"user-agent": "better-auth",
 		...headers,
 	};
+
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
 	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
+	if (resource) {
+    if (typeof resource === 'string') {
+      body.append('resource', resource);
+    } else {
+      for (const val of resource) {
+        body.append('resource', val);
+      }
+    }
+	}
 	if (authentication === "basic") {
 		const encodedCredentials = base64Url.encode(
 			`${options.clientId}:${options.clientSecret}`,
@@ -59,7 +71,8 @@ export async function validateAuthorizationCode({
 	authentication,
 	deviceId,
 	headers,
-}: {
+	resource,
+	}: {
 	code: string;
 	redirectURI: string;
 	options: ProviderOptions;
@@ -68,6 +81,7 @@ export async function validateAuthorizationCode({
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
+	resource?: string | string[];
 }) {
 	const {
 		body,
@@ -80,6 +94,7 @@ export async function validateAuthorizationCode({
 		authentication,
 		deviceId,
 		headers,
+		resource,
 	})
 
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
