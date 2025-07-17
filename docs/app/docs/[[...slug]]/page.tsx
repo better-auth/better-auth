@@ -1,25 +1,27 @@
-import { Features } from "@/components/blocks/features";
-import { DividerText } from "@/components/divider-text";
-import { Endpoint } from "@/components/endpoint";
-import { ForkButton } from "@/components/fork-button";
-import { GenerateSecret } from "@/components/generate-secret";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { contents } from "@/components/sidebar-content";
-import { AnimatePresence } from "@/components/ui/fade-in";
 import { source } from "@/lib/source";
-import { absoluteUrl, cn } from "@/lib/utils";
+import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
+import { notFound } from "next/navigation";
+import { absoluteUrl } from "@/lib/utils";
+import DatabaseTable from "@/components/mdx/database-tables";
+import { cn } from "@/lib/utils";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { GenerateSecret } from "@/components/generate-secret";
+import { AnimatePresence } from "@/components/ui/fade-in";
+import { TypeTable } from "fumadocs-ui/components/type-table";
+import { Features } from "@/components/blocks/features";
+import { ForkButton } from "@/components/fork-button";
+import Link from "next/link";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { createTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { File, Files, Folder } from "fumadocs-ui/components/files";
-import { Step, Steps } from "fumadocs-ui/components/steps";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { TypeTable } from "fumadocs-ui/components/type-table";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import { DocsBody, DocsPage, DocsTitle } from "fumadocs-ui/page";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import { contents } from "@/components/sidebar-content";
+import { Endpoint } from "@/components/endpoint";
+import { DividerText } from "@/components/divider-text";
+import { LLMCopyButton, ViewOptions } from "./page.client";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -59,6 +61,13 @@ export default async function Page({
 			}}
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
+			<div className="flex flex-row gap-2 items-center border-b pt-2 pb-6">
+				<LLMCopyButton />
+				<ViewOptions
+					markdownUrl={`${page.url}.mdx`}
+					githubUrl={`https://github.com/better-auth/better-auth/blob/dev/apps/docs/content/docs/${page.file.path}`}
+				/>
+			</div>
 			<DocsBody>
 				<MDX
 					components={{
