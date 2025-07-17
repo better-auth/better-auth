@@ -28,9 +28,9 @@ interface MagicLinkopts<DS extends z.ZodType> {
 		request?: Request,
 	) => Promise<void> | void;
 	/**
-	 * Zod schema for the additionalData property of the sendMagicLink function. 
+	 * Zod schema for the additionalData property of the sendMagicLink function.
 	 * This schema is used to validate and type-safeguard the additional data passed to the sign-in endpoint.
-	 * 
+	 *
 	 * @default z.record(z.any())
 	 * @see {@link https://zod.dev/basics}
 	 */
@@ -91,7 +91,8 @@ export const magicLink = <DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodA
 		return token;
 	}
 
-	const additionalDataSchema = options.additionalDataSchema ?? (z.record(z.any(), z.any()) as unknown as DS);
+	const additionalDataSchema = 
+		options.additionalDataSchema ?? (z.record(z.any(), z.any()) as unknown as DS);
 
 	return {
 		id: "magic-link",
@@ -224,7 +225,7 @@ export const magicLink = <DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodA
 							email,
 							url: url.toString(),
 							token: verificationToken,
-							additionalData
+							additionalData,
 						},
 						ctx.request,
 					);
