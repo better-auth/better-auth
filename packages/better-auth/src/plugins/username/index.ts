@@ -240,7 +240,7 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string({
+						username: z.string().meta({
 							description: "The username to check",
 						}),
 					}),
