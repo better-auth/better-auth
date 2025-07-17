@@ -950,19 +950,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}),
 			},
 			async (ctx) => {
-				// Check for required fields
 				const { displayName, eventName, aggregationFormula, stripeCustomerId } =
 					ctx.body;
-				if (
-					!displayName ||
-					!eventName ||
-					!aggregationFormula ||
-					!stripeCustomerId
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Missing required fields",
-					});
-				}
 
 				// Check for valid aggregation formula
 				if (
@@ -1033,13 +1022,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}),
 			},
 			async (ctx) => {
-				// Check for required fields
 				const { meterId, updatedDisplayName } = ctx.body;
-				if (!meterId || !updatedDisplayName) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Missing required fields",
-					});
-				}
 
 				// Check if meter exists
 				const meter = await client.billing.meters.retrieve(meterId);
@@ -1077,13 +1060,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}),
 			},
 			async (ctx) => {
-				// Check for required fields
 				const { meterId } = ctx.body;
-				if (!meterId) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Missing Meter ID",
-					});
-				}
 
 				// Check if meter exists
 				const meter = await client.billing.meters.retrieve(meterId);
@@ -1139,13 +1116,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}),
 			},
 			async (ctx) => {
-				// Check for required fields
 				const { meterId } = ctx.body;
-				if (!meterId) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Missing Meter ID",
-					});
-				}
 
 				// Check if meter exists
 				const meter = await client.billing.meters.retrieve(meterId);
@@ -1181,13 +1152,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}),
 			},
 			async (ctx) => {
-				// Check for required fields
 				const { meterId } = ctx.body;
-				if (!meterId) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Missing Meter ID",
-					});
-				}
 
 				// Check if meter exists
 				const meter = await client.billing.meters.retrieve(meterId);
@@ -1238,13 +1203,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}),
 			},
 			async (ctx) => {
-				// Check for required fields
 				const { eventName, stripeCustomerId, value } = ctx.body;
-				if (!eventName || !stripeCustomerId || !value) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Missing required fields",
-					});
-				}
 
 				// Check if user exists
 				const user = await ctx.context.adapter.findOne<User>({
