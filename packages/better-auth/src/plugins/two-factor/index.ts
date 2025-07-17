@@ -34,6 +34,21 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/enable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.enableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.enable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-enable)
+			 */
 			enableTwoFactor: createAuthEndpoint(
 				"/two-factor/enable",
 				{
@@ -157,6 +172,21 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/disable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.disableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.disable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-disable)
+			 */
 			disableTwoFactor: createAuthEndpoint(
 				"/two-factor/disable",
 				{

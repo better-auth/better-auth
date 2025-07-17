@@ -58,10 +58,10 @@ export default function Component() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<div className="grid w-full items-center gap-4">
+					<div className="grid items-center w-full gap-4">
 						{!isOtpSent ? (
 							<Button onClick={requestOTP} className="w-full">
-								<Mail className="mr-2 h-4 w-4" /> Send OTP to Email
+								<Mail className="w-4 h-4 mr-2" /> Send OTP to Email
 							</Button>
 						) : (
 							<>
@@ -94,9 +94,9 @@ export default function Component() {
 							}`}
 						>
 							{isError ? (
-								<AlertCircle className="h-4 w-4" />
+								<AlertCircle className="w-4 h-4" />
 							) : (
-								<CheckCircle2 className="h-4 w-4" />
+								<CheckCircle2 className="w-4 h-4" />
 							)}
 							<p className="text-sm">{message}</p>
 						</div>

@@ -31,7 +31,7 @@ export const createOrganization = createAuthEndpoint(
 				.string()
 				.meta({
 					description:
-						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
+						'The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: "user-id"',
 				})
 				.optional(),
 			logo: z
@@ -50,7 +50,7 @@ export const createOrganization = createAuthEndpoint(
 				.boolean()
 				.meta({
 					description:
-						"Whether to keep the current active organization active after creating a new one",
+						"Whether to keep the current active organization active after creating a new one. Eg: true",
 				})
 				.optional(),
 		}),
@@ -228,7 +228,9 @@ export const checkOrganizationSlug = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			slug: z.string(),
+			slug: z.string().meta({
+				description: 'The organization slug to check. Eg: "my-org"',
+			}),
 		}),
 		use: [requestOnlySessionMiddleware, orgMiddleware],
 	},
@@ -279,7 +281,12 @@ export const updateOrganization = createAuthEndpoint(
 						.optional(),
 				})
 				.partial(),
-			organizationId: z.string().optional(),
+			organizationId: z
+				.string()
+				.meta({
+					description: 'The organization ID. Eg: "org-id"',
+				})
+				.optional(),
 		}),
 		requireHeaders: true,
 		use: [orgMiddleware],
@@ -552,7 +559,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 					.string()
 					.meta({
 						description:
-							"The organization id to set as active. It can be null to unset the active organization",
+							'The organization id to set as active. It can be null to unset the active organization. Eg: "org-id"',
 					})
 					.nullable()
 					.optional(),
@@ -560,7 +567,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 					.string()
 					.meta({
 						description:
-							"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
+							'The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided. Eg: "org-slug"',
 					})
 					.optional(),
 			}),

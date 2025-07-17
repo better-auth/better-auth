@@ -204,7 +204,12 @@ export function verifyApiKey({
 				key: z.string().meta({
 					description: "The key to verify",
 				}),
-				permissions: z.record(z.string(), z.array(z.string())).optional(),
+				permissions: z
+					.record(z.string(), z.array(z.string()))
+					.meta({
+						description: "The permissions to verify.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,

@@ -136,7 +136,10 @@ export const otp2fa = (options?: OTPOptions) => {
 					 * for 30 days. It'll be refreshed on
 					 * every sign in request within this time.
 					 */
-					trustDevice: z.boolean().optional(),
+					trustDevice: z.boolean().optional().meta({
+						description:
+							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+					}),
 				})
 				.optional(),
 			metadata: {
@@ -211,14 +214,17 @@ export const otp2fa = (options?: OTPOptions) => {
 			method: "POST",
 			body: z.object({
 				code: z.string().meta({
-					description: "The otp code to verify",
+					description: 'The otp code to verify. Eg: "012345"',
 				}),
 				/**
 				 * if true, the device will be trusted
 				 * for 30 days. It'll be refreshed on
 				 * every sign in request within this time.
 				 */
-				trustDevice: z.boolean().optional(),
+				trustDevice: z.boolean().optional().meta({
+					description:
+						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+				}),
 			}),
 			metadata: {
 				openapi: {
@@ -387,7 +393,37 @@ export const otp2fa = (options?: OTPOptions) => {
 	return {
 		id: "otp",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/send-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.send2FaOTP`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.sendOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-send-otp)
+			 */
 			sendTwoFactorOTP: send2FaOTP,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/verify-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyOTP`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.verifyOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-verify-otp)
+			 */
 			verifyTwoFactorOTP: verifyOTP,
 		},
 	} satisfies TwoFactorProvider;

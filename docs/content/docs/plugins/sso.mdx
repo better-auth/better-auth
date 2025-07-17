@@ -74,6 +74,8 @@ To register an OIDC provider, use the `registerSSOProvider` endpoint and provide
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
+#### Example
+
 <Tabs items={["client", "server"]}>
     <Tab value="client">
 ```ts title="register-oidc-provider.ts"
@@ -136,6 +138,7 @@ await auth.api.registerSSOProvider({
 ```
     </Tab>
 </Tabs>
+
 
 ### Register a SAML Provider
 
@@ -311,6 +314,51 @@ const res = await auth.api.signInSSO({
     }
 });
 ```
+
+#### Full method
+
+<APIMethod path="/sign-in/sso" method="POST">
+```ts
+type signInSSO = {
+    /**
+     * The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided. 
+     */
+    email?: string = "john@example.com"
+    /**
+     * The slug of the organization to sign in with. 
+     */
+    organizationSlug?: string = "example-org"
+    /**
+     * The ID of the provider to sign in with. This can be provided instead of email or issuer. 
+     */
+    providerId?: string = "example-provider"
+    /**
+     * The domain of the provider. 
+     */
+    domain?: string = "example.com"
+    /**
+     * The URL to redirect to after login. 
+     */
+    callbackURL: string = "https://example.com/callback"
+    /**
+     * The URL to redirect to after login. 
+     */
+    errorCallbackURL?: string = "https://example.com/callback"
+    /**
+     * The URL to redirect to after login if the user is new. 
+     */
+    newUserCallbackURL?: string = "https://example.com/new-user"
+    /**
+     * Scopes to request from the provider. 
+     */
+    scopes?: string[] = ["openid", "email", "profile", "offline_access"]
+    /**
+     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
+     */
+    requestSignUp?: boolean = true
+}
+```
+</APIMethod>
 
 When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 

@@ -333,6 +333,21 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 			};
 		},
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/oauth2`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInWithOAuth2`
+			 *
+			 * **client:**
+			 * `authClient.signIn.oauth2`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sign-in#api-method-sign-in-oauth2)
+			 */
 			signInWithOAuth2: createAuthEndpoint(
 				"/sign-in/oauth2",
 				{
@@ -357,7 +372,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							.string()
 							.meta({
 								description:
-									"The URL to redirect to after login if the user is new",
+									'The URL to redirect to after login if the user is new. Eg: "/welcome"',
 							})
 							.optional(),
 						disableRedirect: z
@@ -377,7 +392,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							.boolean()
 							.meta({
 								description:
-									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
 							})
 							.optional(),
 					}),
@@ -526,6 +541,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							.optional(),
 					}),
 					metadata: {
+						client: false,
 						openapi: {
 							description: "OAuth2 callback",
 							responses: {
@@ -753,6 +769,21 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					throw ctx.redirect(toRedirectTo);
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/oauth2/link`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.oAuth2LinkAccount`
+			 *
+			 * **client:**
+			 * `authClient.oauth2.link`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/generic-oauth#api-method-oauth2-link)
+			 */
 			oAuth2LinkAccount: createAuthEndpoint(
 				"/oauth2/link",
 				{

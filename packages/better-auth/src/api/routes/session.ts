@@ -286,6 +286,9 @@ export const getSessionFromCtx = async <
 	} | null;
 };
 
+/**
+ * The middleware forces the endpoint to require a valid session.
+ */
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
@@ -296,6 +299,10 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	};
 });
 
+/**
+ * This middleware allows you to call the endpoint on the client if session is valid.
+ * However, if called on the server, no session is required.
+ */
 export const requestOnlySessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
@@ -306,6 +313,13 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 	},
 );
 
+/**
+ * This middleware forces the endpoint to require a valid session,
+ * as well as making sure the session is fresh before proceeding.
+ *
+ * Session freshness check will be skipped if the session config's freshAge
+ * is set to 0
+ */
 export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {

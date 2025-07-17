@@ -48,7 +48,7 @@ export function createApiKey({
 					.string()
 					.meta({
 						description:
-							"User Id of the user that the Api Key belongs to. Useful for server-side only.",
+							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
 					})
 					.optional(),
 				prefix: z
@@ -73,7 +73,7 @@ export function createApiKey({
 					.number()
 					.meta({
 						description:
-							"Amount to refill the remaining count of the Api Key. Server Only Property",
+							"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
 					})
 					.min(1)
 					.optional(),
@@ -81,31 +81,36 @@ export function createApiKey({
 					.number()
 					.meta({
 						description:
-							"Interval to refill the Api Key in milliseconds. Server Only Property.",
+							"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
 					})
 					.optional(),
 				rateLimitTimeWindow: z
 					.number()
 					.meta({
 						description:
-							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
+							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
 					})
 					.optional(),
 				rateLimitMax: z
 					.number()
 					.meta({
 						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
 					})
 					.optional(),
 				rateLimitEnabled: z
 					.boolean()
 					.meta({
 						description:
-							"Whether the key has rate limiting enabled. Server Only Property.",
+							"Whether the key has rate limiting enabled. server-only. Eg: true",
 					})
 					.optional(),
-				permissions: z.record(z.string(), z.array(z.string())).optional(),
+				permissions: z
+					.record(z.string(), z.array(z.string()))
+					.meta({
+						description: "Permissions of the Api Key.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				openapi: {

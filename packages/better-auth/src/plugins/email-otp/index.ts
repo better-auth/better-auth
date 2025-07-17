@@ -152,6 +152,21 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		return otp === storedOtp;
 	}
 	const endpoints = {
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/email-otp/send-verification-otp`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.sendVerificationOTP`
+		 *
+		 * **client:**
+		 * `authClient.emailOtp.sendVerificationOtp`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-send-verification-otp)
+		 */
 		sendVerificationOTP: createAuthEndpoint(
 			"/email-otp/send-verification-otp",
 			{
@@ -261,6 +276,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			},
 		),
 	};
+
 	return {
 		id: "email-otp",
 		init(ctx) {
@@ -339,6 +355,18 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					return otp;
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/email-otp/get-verification-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getVerificationOTP`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-get-verification-otp)
+			 */
 			getVerificationOTP: createAuthEndpoint(
 				"/email-otp/get-verification-otp",
 				{
@@ -421,6 +449,21 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/email-otp/verify-email`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.emailOtp.verifyEmail`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-verify-email)
+			 */
 			verifyEmailOTP: createAuthEndpoint(
 				"/email-otp/verify-email",
 				{
@@ -581,6 +624,21 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/email-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.signIn.emailOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-sign-in-email-otp)
+			 */
 			signInEmailOTP: createAuthEndpoint(
 				"/sign-in/email-otp",
 				{
@@ -735,6 +793,21 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/forget-password/email-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.forgetPasswordEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.forgetPassword.emailOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-forget-password-email-otp)
+			 */
 			forgetPasswordEmailOTP: createAuthEndpoint(
 				"/forget-password/email-otp",
 				{
@@ -803,6 +876,21 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/email-otp/reset-password`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.resetPasswordEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.emailOtp.resetPassword`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-reset-password)
+			 */
 			resetPasswordEmailOTP: createAuthEndpoint(
 				"/email-otp/reset-password",
 				{

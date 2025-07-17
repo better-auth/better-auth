@@ -28,7 +28,13 @@ export function updateApiKey({
 				keyId: z.string().meta({
 					description: "The id of the Api Key",
 				}),
-				userId: z.coerce.string().optional(),
+				userId: z.coerce
+					.string()
+					.meta({
+						description:
+							'The id of the user which the api key belongs to. server-only. Eg: "some-user-id"',
+					})
+					.optional(),
 				name: z
 					.string()
 					.meta({
@@ -79,28 +85,30 @@ export function updateApiKey({
 					.number()
 					.meta({
 						description:
-							"The duration in milliseconds where each request is counted.",
+							"The duration in milliseconds where each request is counted. server-only. Eg: 1000",
 					})
 					.optional(),
 				rateLimitMax: z
 					.number()
 					.meta({
 						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
 					})
 					.optional(),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
+					.meta({
+						description: "Update the permissions on the API Key. server-only.",
+					})
 					.optional()
 					.nullable(),
 			}),
-
 			metadata: {
 				openapi: {
-					description: "Retrieve an existing API key by ID",
+					description: "Update an existing API key by ID",
 					responses: {
 						"200": {
-							description: "API key retrieved successfully",
+							description: "API key updated successfully",
 							content: {
 								"application/json": {
 									schema: {

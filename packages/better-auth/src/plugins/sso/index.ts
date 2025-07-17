@@ -77,6 +77,21 @@ export const sso = (options?: SSOOptions) => {
 	return {
 		id: "sso",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sso/register`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.createOIDCProvider`
+			 *
+			 * **client:**
+			 * `authClient.sso.register`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sso#api-method-sso-register)
+			 */
 			createOIDCProvider: createAuthEndpoint(
 				"/sso/register",
 				{
@@ -84,47 +99,55 @@ export const sso = (options?: SSOOptions) => {
 					body: z.object({
 						providerId: z.string().meta({
 							description:
-								"The ID of the provider. This is used to identify the provider during login and callback",
+								'The ID of the provider. This is used to identify the provider during login and callback. Eg: "example-provider"',
 						}),
 						issuer: z.string().meta({
 							description:
-								"The issuer url of the provider (e.g. https://idp.example.com)",
+								'The issuer url of the provider. Eg: "https://idp.example.com"',
 						}),
 						domain: z.string().meta({
 							description:
-								"The domain of the provider. This is used for email matching",
+								'The domain of the provider. This is used for email matching. Eg: "example.com"',
 						}),
 						clientId: z.string().meta({
-							description: "The client ID",
+							description: 'The client ID. Eg: "1234567890"',
 						}),
 						clientSecret: z.string().meta({
-							description: "The client secret",
+							description: 'The client secret. Eg: "1234567890"',
 						}),
 						authorizationEndpoint: z
 							.string()
 							.meta({
-								description: "The authorization endpoint",
+								description:
+									'The authorization endpoint. Eg: "https://idp.example.com/authorize"',
 							})
 							.optional(),
 						tokenEndpoint: z
 							.string()
 							.meta({
-								description: "The token endpoint",
+								description:
+									'The token endpoint. Eg: "https://idp.example.com/token"',
 							})
 							.optional(),
 						userInfoEndpoint: z
 							.string()
 							.meta({
-								description: "The user info endpoint",
+								description:
+									'The user info endpoint. Eg: "https://idp.example.com/userinfo"',
 							})
 							.optional(),
 						tokenEndpointAuthentication: z
 							.enum(["client_secret_post", "client_secret_basic"])
+							.meta({
+								description:
+									"The authentication method for the token endpoint. Defaults to 'client_secret_post'. Eg: \"client_secret_post\"",
+							})
 							.optional(),
 						jwksEndpoint: z
 							.string()
 							.meta({
-								description: "The JWKS endpoint",
+								description:
+									'The JWKS endpoint. Eg: "https://idp.example.com/.well-known/jwks.json"',
 							})
 							.optional(),
 						discoveryEndpoint: z.string().optional(),
@@ -132,13 +155,14 @@ export const sso = (options?: SSOOptions) => {
 							.array(z.string())
 							.meta({
 								description:
-									"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']",
+									"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']. Eg: ['openid', 'email', 'profile']",
 							})
 							.optional(),
 						pkce: z
 							.boolean()
 							.meta({
-								description: "Whether to use PKCE for the authorization flow",
+								description:
+									"Whether to use PKCE for the authorization flow. Eg: true",
 							})
 							.default(true)
 							.optional(),
@@ -146,28 +170,28 @@ export const sso = (options?: SSOOptions) => {
 							.object({
 								id: z.string().meta({
 									description:
-										"The field in the user info response that contains the id. Defaults to 'sub'",
+										"The field in the user info response that contains the id. Defaults to 'sub'. Eg: \"sub\"",
 								}),
 								email: z.string().meta({
 									description:
-										"The field in the user info response that contains the email. Defaults to 'email'",
+										"The field in the user info response that contains the email. Defaults to 'email'. Eg: \"email\"",
 								}),
 								emailVerified: z
 									.string()
 									.meta({
 										description:
-											"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'",
+											"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'. Eg: \"email_verified\"",
 									})
 									.optional(),
 								name: z.string().meta({
 									description:
-										"The field in the user info response that contains the name. Defaults to 'name'",
+										"The field in the user info response that contains the name. Defaults to 'name'. Eg: \"name\"",
 								}),
 								image: z
 									.string()
 									.meta({
 										description:
-											"The field in the user info response that contains the image. Defaults to 'picture'",
+											"The field in the user info response that contains the image. Defaults to 'picture'. Eg: \"picture\"",
 									})
 									.optional(),
 								extraFields: z.record(z.string(), z.any()).optional(),
@@ -177,7 +201,7 @@ export const sso = (options?: SSOOptions) => {
 							.string()
 							.meta({
 								description:
-									"If organization plugin is enabled, the organization id to link the provider to",
+									'If organization plugin is enabled, the organization id to link the provider to. Eg: "some-org-id"',
 							})
 							.optional(),
 						overrideUserInfo: z
@@ -414,6 +438,21 @@ export const sso = (options?: SSOOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/sso`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInSSO`
+			 *
+			 * **client:**
+			 * `authClient.signIn.sso`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sign-in#api-method-sign-in-sso)
+			 */
 			signInSSO: createAuthEndpoint(
 				"/sign-in/sso",
 				{
@@ -423,42 +462,45 @@ export const sso = (options?: SSOOptions) => {
 							.string()
 							.meta({
 								description:
-									"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+									'The email address to sign in with. This is used to identify the issuer to sign in with. It\'s optional if the issuer is provided. Eg: "john@example.com"',
 							})
 							.optional(),
 						organizationSlug: z
 							.string()
 							.meta({
-								description: "The slug of the organization to sign in with",
+								description:
+									'The slug of the organization to sign in with. Eg: "example-org"',
 							})
 							.optional(),
 						providerId: z
 							.string()
 							.meta({
 								description:
-									"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+									'The ID of the provider to sign in with. This can be provided instead of email or issuer. Eg: "example-provider"',
 							})
 							.optional(),
 						domain: z
 							.string()
 							.meta({
-								description: "The domain of the provider.",
+								description: 'The domain of the provider. Eg: "example.com"',
 							})
 							.optional(),
 						callbackURL: z.string().meta({
-							description: "The URL to redirect to after login",
+							description:
+								'The URL to redirect to after login. Eg: "https://example.com/callback"',
 						}),
 						errorCallbackURL: z
 							.string()
 							.meta({
-								description: "The URL to redirect to after login",
+								description:
+									'The URL to redirect to after login. Eg: "https://example.com/callback"',
 							})
 							.optional(),
 						newUserCallbackURL: z
 							.string()
 							.meta({
 								description:
-									"The URL to redirect to after login if the user is new",
+									'The URL to redirect to after login if the user is new. Eg: "https://example.com/new-user"',
 							})
 							.optional(),
 						scopes: z
@@ -471,7 +513,7 @@ export const sso = (options?: SSOOptions) => {
 							.boolean()
 							.meta({
 								description:
-									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: true",
 							})
 							.optional(),
 					}),
