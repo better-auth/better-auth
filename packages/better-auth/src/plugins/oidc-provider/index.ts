@@ -36,8 +36,6 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 };
 
 /**
-
-/**
  * Get a client by ID, checking trusted clients first, then database
  */
 export async function getClient(
