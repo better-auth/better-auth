@@ -712,8 +712,10 @@ export const listInvitations = createAuthEndpoint(
 		query: z
 			.object({
 				organizationId: z
-					.string({
-						error: "The ID of the organization to list invitations for",
+					.string()
+					.meta({
+						description:
+							"The ID of the organization to list invitations for",
 					})
 					.optional(),
 			})
