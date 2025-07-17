@@ -157,8 +157,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				method: "POST",
 				body: z.object({
-					email: z.string({
-					}).meta({
+					email: z.string({}).meta({
 						description: "Email address to send the OTP",
 					}),
 					type: z.enum(types).meta({
@@ -295,8 +294,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-						}).meta({
+						email: z.string({}).meta({
 							description: "Email address to send the OTP",
 						}),
 						type: z.enum(types).meta({
@@ -346,8 +344,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string({
-						}).meta({
+						email: z.string({}).meta({
 							description: "Email address to get the OTP",
 						}),
 						type: z.enum(types).meta({
@@ -429,8 +426,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-						}).meta({
+						email: z.string({}).meta({
 							description: "Email address to verify",
 						}),
 						otp: z.string().meta({
@@ -590,8 +586,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
-						}).meta({
+						email: z.string({}).meta({
 							description: "Email address to sign in",
 						}),
 						otp: z.string().meta({
