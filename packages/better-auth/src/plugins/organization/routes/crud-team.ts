@@ -5,13 +5,11 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import type { OrganizationOptions } from "../organization";
+import type { OrganizationOptions } from "../types";
 import { teamSchema } from "../schema";
 import { hasPermission } from "../has-permission";
 
-export const createTeam = <O extends OrganizationOptions | undefined>(
-	options?: O,
-) =>
+export const createTeam = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/create-team",
 		{

@@ -131,13 +131,16 @@ export async function getJwtToken(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		const { publicKey, privateKey } = await generateKeyPair(
-			options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-			options?.jwks?.keyPairConfig ?? {
-				crv: "Ed25519",
-				extractable: true,
-			},
-		);
+		const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
+			alg: "EdDSA",
+			crv: "Ed25519",
+		};
+		const keyPairConfig = {
+			...cfg,
+			extractable: true,
+		};
+
+		const { publicKey, privateKey } = await generateKeyPair(alg, keyPairConfig);
 
 		const publicWebKey = await exportJWK(publicKey);
 		const privateWebKey = await exportJWK(privateKey);
@@ -292,13 +295,18 @@ export const jwt = (options?: JwtOptions) => {
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
-						const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+						const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
+							alg: "EdDSA",
+							crv: "Ed25519",
+						};
+						const keyPairConfig = {
+							...cfg,
+							extractable: true,
+						};
+
 						const { publicKey, privateKey } = await generateKeyPair(
 							alg,
-							options?.jwks?.keyPairConfig ?? {
-								crv: "Ed25519",
-								extractable: true,
-							},
+							keyPairConfig,
 						);
 
 						const publicWebKey = await exportJWK(publicKey);
@@ -388,8 +396,22 @@ export const jwt = (options?: JwtOptions) => {
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
+							const exposedHeaders =
+								ctx.context.responseHeaders?.get(
+									"access-control-expose-headers",
+								) || "";
+							const headersSet = new Set(
+								exposedHeaders
+									.split(",")
+									.map((header) => header.trim())
+									.filter(Boolean),
+							);
+							headersSet.add("set-auth-jwt");
 							ctx.setHeader("set-auth-jwt", jwt);
-							ctx.setHeader("Access-Control-Expose-Headers", "set-auth-jwt");
+							ctx.setHeader(
+								"Access-Control-Expose-Headers",
+								Array.from(headersSet).join(", "),
+							);
 						}
 					}),
 				},

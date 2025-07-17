@@ -154,7 +154,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 					},
 				],
 			});
-			if (!twoFactor || !user.twoFactorEnabled) {
+			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});

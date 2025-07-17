@@ -998,6 +998,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						user.id,
 						hashedPassword,
 					);
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verification.id,
+					);
 					return ctx.json({
 						status: true,
 					});

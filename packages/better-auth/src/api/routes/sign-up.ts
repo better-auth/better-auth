@@ -24,7 +24,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
+						image?: string;
 						callbackURL?: string;
+						rememberMe?: boolean;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -47,10 +49,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 											type: "string",
 											description: "The password of the user",
 										},
+										image: {
+											type: "string",
+											description: "The profile image URL of the user",
+										},
 										callbackURL: {
 											type: "string",
 											description:
 												"The URL to use for email verification callback",
+										},
+										rememberMe: {
+											type: "boolean",
+											description:
+												"If this is false, the session will not be remembered. Default is `true`.",
 										},
 									},
 									required: ["name", "email", "password"],
@@ -139,11 +150,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			const body = ctx.body as any as User & {
 				password: string;
 				callbackURL?: string;
+				rememberMe?: boolean;
 			} & {
 				[key: string]: any;
 			};
-			const { name, email, password, image, callbackURL, ...additionalFields } =
-				body;
+			const {
+				name,
+				email,
+				password,
+				image,
+				callbackURL,
+				rememberMe,
+				...additionalFields
+			} = body;
 			const isValidEmail = z.string().email().safeParse(email);
 
 			if (!isValidEmail.success) {
@@ -275,16 +294,21 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
 				ctx,
+				rememberMe === false,
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 				});
 			}
-			await setSessionCookie(ctx, {
-				session,
-				user: createdUser,
-			});
+			await setSessionCookie(
+				ctx,
+				{
+					session,
+					user: createdUser,
+				},
+				rememberMe === false,
+			);
 			return ctx.json({
 				token: session.token,
 				user: {

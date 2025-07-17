@@ -6,7 +6,7 @@ import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
-import type { OrganizationOptions } from "../organization";
+import type { OrganizationOptions } from "../types";
 import type {
 	InferInvitation,
 	InferMember,

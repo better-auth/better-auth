@@ -634,7 +634,7 @@ type getInvitation = {
 
 ### List Invitations
 
-To list all invitations you can use the `listInvitations` function provided by the client.
+To list all invitations for a given organization you can use the `listInvitations` function provided by the client.
 
 <APIMethod path="/organization/list-invitations" method="GET">
 ```ts
@@ -646,6 +646,30 @@ type listInvitations = {
 }
 ```
 </APIMethod>
+
+### List user invitations
+
+To list all invitations for a given user you can use the `listUserInvitations` function provided by the client.
+
+```ts title="auth-client.ts"
+const invitations = await authClient.organization.listUserInvitations()
+```
+
+On the server, you can pass the user ID as a query parameter.
+
+```ts title="api.ts"
+const invitations = await auth.api.listUserInvitations({
+    query: {
+        email: "user@example.com"
+    }
+})
+```
+<Callout type="warn">
+The `email` query parameter is only available on the server to query for invitations for a specific user.
+</Callout>
+
+
+
 
 ## Members
 

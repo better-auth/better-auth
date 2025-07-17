@@ -1,10 +1,14 @@
 import { z } from "zod";
-import { createAuthEndpoint, type BetterAuthPlugin } from "..";
+import {
+	createAuthEndpoint,
+	defaultKeyHasher,
+	type BetterAuthPlugin,
+} from "..";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { GenericEndpointContext, Session, User } from "../../types";
 
-interface OneTimeTokenOptions {
+interface OneTimeTokenopts {
 	/**
 	 * Expires in minutes
 	 *
@@ -25,9 +29,39 @@ interface OneTimeTokenOptions {
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<string>;
+	/**
+	 * This option allows you to configure how the token is stored in your database.
+	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
+	 *
+	 * @default "plain"
+	 */
+	storeToken?:
+		| "plain"
+		| "hashed"
+		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
 }
 
-export const oneTimeToken = (options?: OneTimeTokenOptions) => {
+export const oneTimeToken = (options?: OneTimeTokenopts) => {
+	const opts = {
+		storeToken: "plain",
+		...options,
+	} satisfies OneTimeTokenopts;
+
+	async function storeToken(ctx: GenericEndpointContext, token: string) {
+		if (opts.storeToken === "hashed") {
+			return await defaultKeyHasher(token);
+		}
+		if (
+			typeof opts.storeToken === "object" &&
+			"type" in opts.storeToken &&
+			opts.storeToken.type === "custom-hasher"
+		) {
+			return await opts.storeToken.hash(token);
+		}
+
+		return token;
+	}
+
 	return {
 		id: "one-time-token",
 		endpoints: {
@@ -54,21 +88,22 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 				},
 				async (c) => {
 					//if request exist, it means it's a client request
-					if (options?.disableClientRequest && c.request) {
+					if (opts?.disableClientRequest && c.request) {
 						throw c.error("BAD_REQUEST", {
 							message: "Client requests are disabled",
 						});
 					}
 					const session = c.context.session;
-					const token = options?.generateToken
-						? await options.generateToken(session, c)
+					const token = opts?.generateToken
+						? await opts.generateToken(session, c)
 						: generateRandomString(32);
 					const expiresAt = new Date(
-						Date.now() + (options?.expiresIn ?? 3) * 60 * 1000,
+						Date.now() + (opts?.expiresIn ?? 3) * 60 * 1000,
 					);
+					const storedToken = await storeToken(c, token);
 					await c.context.internalAdapter.createVerificationValue({
 						value: session.session.token,
-						identifier: `one-time-token:${token}`,
+						identifier: `one-time-token:${storedToken}`,
 						expiresAt,
 					});
 					return c.json({ token });
@@ -101,9 +136,10 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 				},
 				async (c) => {
 					const { token } = c.body;
+					const storedToken = await storeToken(c, token);
 					const verificationValue =
 						await c.context.internalAdapter.findVerificationValue(
-							`one-time-token:${token}`,
+							`one-time-token:${storedToken}`,
 						);
 					if (!verificationValue) {
 						throw c.error("BAD_REQUEST", {

@@ -11,6 +11,7 @@ import type {
 import { APIError } from "better-call";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { verifyTwoFactor } from "../verify-two-factor";
+import type { GenericEndpointContext } from "../../../types";
 
 export interface BackupCodeOptions {
 	/**
@@ -25,7 +26,20 @@ export interface BackupCodeOptions {
 	 * @default 10
 	 */
 	length?: number;
+	/**
+	 * An optional custom function to generate backup codes
+	 */
 	customBackupCodesGenerate?: () => string[];
+	/**
+	 * How to store the backup codes in the database, whether encrypted or plain.
+	 */
+	storeBackupCodes?:
+		| "plain"
+		| "encrypted"
+		| {
+				encrypt: (token: string) => Promise<string>;
+				decrypt: (token: string) => Promise<string>;
+		  };
 }
 
 function generateBackupCodesFn(options?: BackupCodeOptions) {
@@ -89,6 +103,45 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 
 export const backupCode2fa = (options?: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
+
+	async function storeBackupCodes(
+		ctx: GenericEndpointContext,
+		backupCodes: string,
+	) {
+		if (options?.storeBackupCodes === "encrypted") {
+			return await symmetricEncrypt({
+				key: ctx.context.secret,
+				data: backupCodes,
+			});
+		}
+		if (
+			typeof options?.storeBackupCodes === "object" &&
+			"encrypt" in options?.storeBackupCodes
+		) {
+			return await options?.storeBackupCodes.encrypt(backupCodes);
+		}
+		return backupCodes;
+	}
+
+	async function decryptBackupCodes(
+		ctx: GenericEndpointContext,
+		backupCodes: string,
+	) {
+		if (options?.storeBackupCodes === "encrypted") {
+			return await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: backupCodes,
+			});
+		}
+		if (
+			typeof options?.storeBackupCodes === "object" &&
+			"decrypt" in options?.storeBackupCodes
+		) {
+			return await options?.storeBackupCodes.decrypt(backupCodes);
+		}
+		return backupCodes;
+	}
+
 	return {
 		id: "backup_code",
 		endpoints: {
@@ -265,9 +318,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
+					const decryptedBackupCodes = await decryptBackupCodes(
+						ctx,
+						twoFactor.backupCodes,
+					);
 					const validate = await verifyBackupCode(
 						{
-							backupCodes: twoFactor.backupCodes,
+							backupCodes: decryptedBackupCodes,
 							code: ctx.body.code,
 						},
 						ctx.context.secret,
@@ -383,10 +440,14 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						ctx.context.secret,
 						options,
 					);
+					const storedBackupCodes = await storeBackupCodes(
+						ctx,
+						backupCodes.encryptedBackupCodes,
+					);
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
-							backupCodes: backupCodes.encryptedBackupCodes,
+							backupCodes: storedBackupCodes,
 						},
 						where: [
 							{
@@ -453,9 +514,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
+					const decryptedBackupCodes = await decryptBackupCodes(
+						ctx,
+						twoFactor.backupCodes,
+					);
 					return ctx.json({
 						status: true,
-						backupCodes: backupCodes,
+						backupCodes: decryptedBackupCodes,
 					});
 				},
 			),
