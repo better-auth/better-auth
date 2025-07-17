@@ -21,7 +21,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
-import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 
 const { AutoTypeTable } = createTypeTable();
