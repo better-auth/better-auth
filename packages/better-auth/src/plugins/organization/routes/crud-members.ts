@@ -381,15 +381,19 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
-			const updatingMemberRoles = member.role.split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 
+			const updatingMemberRoles = member.role.split(",");
+			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
+
+			const isUpdatingCreator = toBeUpdatedMemberRoles.includes(creatorRole);
+			const updaterIsCreator = updatingMemberRoles.includes(creatorRole);
+
+			const isSettingCreatorRole = roleToSet.includes(creatorRole);
+
 			if (
-				(toBeUpdatedMemberRoles.includes(creatorRole) &&
-					!updatingMemberRoles.includes(creatorRole)) ||
-				(roleToSet.includes(creatorRole) &&
-					!updatingMemberRoles.includes(creatorRole))
+				(isUpdatingCreator && !updaterIsCreator) ||
+				(isSettingCreatorRole && !updaterIsCreator)
 			) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -397,13 +401,15 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const canUpdateMember = hasPermission({
+			const hasMemberUpdatePermission = hasPermission({
 				role: member.role,
 				options: ctx.context.orgOptions,
 				permissions: {
 					member: ["update"],
 				},
 			});
+
+			const canUpdateMember = hasMemberUpdatePermission || updaterIsCreator;
 
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
