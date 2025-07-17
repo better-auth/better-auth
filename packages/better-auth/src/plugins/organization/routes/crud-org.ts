@@ -354,8 +354,8 @@ export const deleteOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			organizationId: z.string({
-				error: "The organization id to delete",
+			organizationId: z.string().meta({
+				description: "The organization id to delete",
 			}),
 		}),
 		requireHeaders: true,
@@ -461,13 +461,15 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 			query: z.optional(
 				z.object({
 					organizationId: z
-						.string({
-							error: "The organization id to get",
+						.string()
+						.meta({
+							description: "The organization id to get",
 						})
 						.optional(),
 					organizationSlug: z
-						.string({
-							error: "The organization slug to get",
+						.string()
+						.meta({
+							description: "The organization slug to get",
 						})
 						.optional(),
 				}),
@@ -547,15 +549,17 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 			method: "POST",
 			body: z.object({
 				organizationId: z
-					.string({
-						error:
+					.string()
+					.meta({
+						description:
 							"The organization id to set as active. It can be null to unset the active organization",
 					})
 					.nullable()
 					.optional(),
 				organizationSlug: z
-					.string({
-						error:
+					.string()
+					.meta({
+						description:
 							"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
 					})
 					.optional(),

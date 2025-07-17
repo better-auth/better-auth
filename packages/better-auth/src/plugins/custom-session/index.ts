@@ -35,14 +35,17 @@ export const customSession = <
 							 * and fetch the session from the database
 							 */
 							disableCookieCache: z
-								.boolean({
-									error: "Disable cookie cache and fetch session from database",
+								.boolean()
+								.meta({
+									description:
+										"Disable cookie cache and fetch session from database",
 								})
 								.or(z.string().transform((v) => v === "true"))
 								.optional(),
 							disableRefresh: z
-								.boolean({
-									error:
+								.boolean()
+								.meta({
+									description:
 										"Disable session refresh. Useful for checking session status, without updating the session",
 								})
 								.optional(),

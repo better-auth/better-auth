@@ -311,8 +311,8 @@ export const acceptInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string({
-				error: "The ID of the invitation to accept",
+			invitationId: z.string().meta({
+				description: "The ID of the invitation to accept",
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -448,8 +448,8 @@ export const rejectInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string({
-				error: "The ID of the invitation to reject",
+			invitationId: z.string().meta({
+				description: "The ID of the invitation to reject",
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -514,8 +514,8 @@ export const cancelInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string({
-				error: "The ID of the invitation to cancel",
+			invitationId: z.string().meta({
+				description: "The ID of the invitation to cancel",
 			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -586,8 +586,8 @@ export const getInvitation = createAuthEndpoint(
 		use: [orgMiddleware],
 		requireHeaders: true,
 		query: z.object({
-			id: z.string({
-				error: "The ID of the invitation to get",
+			id: z.string().meta({
+				description: "The ID of the invitation to get",
 			}),
 		}),
 		metadata: {
