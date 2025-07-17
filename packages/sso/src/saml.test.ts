@@ -443,9 +443,10 @@ const createMockSAMLIdP = (port: number) => {
 		}
 	});
 	app.post(
-		"/api/sso/saml2/callback",
+		"/api/sso/saml2/callback/:providerId",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
+			console.log("RelayState: ", RelayState);
 
 			try {
 				const parseResult = await sp.parseLoginResponse(
@@ -704,7 +705,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					callbackUrl: "http://localhost:8081/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -750,21 +751,23 @@ describe("SAML SSO", async () => {
 			},
 		});
 		let redirectLocation = "";
-		await betterFetch("http://localhost:8081/api/sso/saml2/callback", {
-			method: "POST",
-			redirect: "manual",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/callback/saml-provider-1",
+			{
+				method: "POST",
+				redirect: "manual",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse.samlResponse,
+				}),
+				onError: (context) => {
+					expect(context.response.status).toBe(302);
+					redirectLocation = context.response.headers.get("location") || "";
+				},
 			},
-			body: new URLSearchParams({
-				SAMLResponse: samlResponse.samlResponse,
-				RelayState: "http://localhost:3000",
-			}),
-			onError: (context) => {
-				expect(context.response.status).toBe(302);
-				redirectLocation = context.response.headers.get("location") || "";
-			},
-		});
-		expect(redirectLocation).toBe("http://localhost:3000");
+		);
+		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
 	});
 });
