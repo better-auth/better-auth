@@ -107,8 +107,11 @@ export const schema = {
 			},
 		},
 	},
+	/**
+	 * Uses the "session" schema to maintain user sessions
+	 * and their optional refresh token.
+	 */
 	session: {
-		// Merges with "session" schema
 		fields: {
 			token: {
 				type: "string",
@@ -126,6 +129,56 @@ export const schema = {
 			scopes: {
 				type: "string",
 				required: false,
+			},
+		},
+	},
+	/**
+	 * An opaque access token sent when there is no audience
+	 * to assigned to the JWT.
+	 * 
+	 * Access tokens are linked to a session, better-auth
+	 * authors SHALL always check for valid session!
+	 * 
+	 * AccessTokens SHALL only be created at refresh,
+	 * destroyed at revoke, and read at introspection.
+	 * NEVER update an access token! Typically a refresh and
+	 * revoke (if not expired) may want to occur at the same time.
+	 */
+	oauthAccessToken: {
+		modelName: "oauthAccessToken",
+		fields: {
+			token: {
+				type: "string",
+				unique: true,
+			},
+			clientId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "oauthClient",
+					field: "clientId",
+				},
+			},
+			sessionId: {
+				type: "string",
+				required: false,
+				// Optional for client credentials grant
+				// Not unique, multiple sessions could exist
+				references: {
+					model: "session",
+					field: "id",
+				},
+			},
+			expiresAt: {
+				type: "date",
+			},
+			createdAt: {
+				type: "date",
+			},
+			// Shall be same as sessionId.scopes if using sessionId
+			scope: {
+				required: true,
+				type: "string",
 			},
 		},
 	},

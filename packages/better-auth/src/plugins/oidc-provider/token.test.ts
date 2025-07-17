@@ -14,6 +14,7 @@ import { createClientCredentialsTokenRequest } from "../../oauth2/client-credent
 describe("oidc token - authorization_code", async () => {
   const authServerBaseUrl = "http://localhost:3000"
   const rpBaseUrl = "http://localhost:5000"
+  const validAudience = "https://myapi.example.com"
   const {
     auth: authorizationServer,
     signInWithTestUser,
@@ -24,6 +25,10 @@ describe("oidc token - authorization_code", async () => {
     plugins: [
       jwt({
         usesOidcProviderPlugin: true,
+        jwt: {
+          audience: validAudience,
+          issuer: authServerBaseUrl,
+        },
       }),
       oidcProvider({
         loginPage: "/login",
@@ -133,7 +138,7 @@ describe("oidc token - authorization_code", async () => {
       id_token?: string
       refresh_token?: string
       expires_in?: number
-      expires_at?: Date
+      expires_at?: string
       token_type?: string
       scope?: string
       [key: string]: unknown
@@ -153,11 +158,12 @@ describe("oidc token - authorization_code", async () => {
       throw Error('beforeAll not run properly')
     }
 
+    const scopes = ["openid"]
     const {
       url: authUrl,
       codeVerifier,
     } = await createAuthUrl({
-      scopes: ["openid"]
+      scopes,
     })
 
     let callbackRedirectUrl = ""
@@ -175,10 +181,10 @@ describe("oidc token - authorization_code", async () => {
       code: url.searchParams.get('code')!,
       codeVerifier,
     })
-    expect(tokens.data?.access_token).toBeDefined();
+    expect(tokens.data?.access_token).toBeDefined(); // Note: Opaque
     expect(tokens.data?.id_token).toBeDefined();
     expect(tokens.data?.refresh_token).toBeUndefined();
-    expect(tokens.data?.scope).toBe("openid");
+    expect(tokens.data?.scope).toBe(scopes.join(" "));
 
     const idToken = await jwtVerify(tokens.data?.id_token!, jwks)
     expect(idToken.protectedHeader).toBeDefined();
@@ -193,11 +199,12 @@ describe("oidc token - authorization_code", async () => {
       throw Error('beforeAll not run properly')
     }
 
+    const scopes = ["openid", "profile"]
     const {
       url: authUrl,
       codeVerifier,
     } = await createAuthUrl({
-      scopes: ["openid", "profile"]
+      scopes,
     })
 
     let callbackRedirectUrl = ""
@@ -218,7 +225,7 @@ describe("oidc token - authorization_code", async () => {
     expect(tokens.data?.access_token).toBeDefined();
     expect(tokens.data?.id_token).toBeDefined();
     expect(tokens.data?.refresh_token).toBeUndefined();
-    expect(tokens.data?.scope).toBe("openid profile");
+    expect(tokens.data?.scope).toBe(scopes.join(" "));
 
     const idToken = await jwtVerify(tokens.data?.id_token!, jwks)
     expect(idToken.protectedHeader).toBeDefined();
@@ -233,11 +240,12 @@ describe("oidc token - authorization_code", async () => {
       throw Error('beforeAll not run properly')
     }
 
+    const scopes = ["openid", "email"]
     const {
       url: authUrl,
       codeVerifier,
     } = await createAuthUrl({
-      scopes: ["openid", "email"]
+      scopes,
     })
 
     let callbackRedirectUrl = ""
@@ -258,7 +266,7 @@ describe("oidc token - authorization_code", async () => {
     expect(tokens.data?.access_token).toBeDefined();
     expect(tokens.data?.id_token).toBeDefined();
     expect(tokens.data?.refresh_token).toBeUndefined();
-    expect(tokens.data?.scope).toBe("openid email");
+    expect(tokens.data?.scope).toBe(scopes.join(" "));
 
     const idToken = await jwtVerify(tokens.data?.id_token!, jwks)
     expect(idToken.protectedHeader).toBeDefined();
@@ -268,16 +276,17 @@ describe("oidc token - authorization_code", async () => {
     expect(idToken.payload.email).toBe(testUser.email);
   })
 
-  it("scope openid+offline_access should provide access_token, id_token, and refresh_token", async ({ expect }) => {
+  it("scope openid+offline_access should provide opaque access_token, id_token, and refresh_token", async ({ expect }) => {
     if (!oauthClient?.client_id || !oauthClient?.client_secret) {
       throw Error('beforeAll not run properly')
     }
 
+    const scopes = ["openid", "offline_access"]
     const {
       url: authUrl,
       codeVerifier,
     } = await createAuthUrl({
-      scopes: ["openid", "offline_access"]
+      scopes,
     })
 
     let callbackRedirectUrl = ""
@@ -298,7 +307,7 @@ describe("oidc token - authorization_code", async () => {
     expect(tokens.data?.access_token).toBeDefined();
     expect(tokens.data?.id_token).toBeDefined();
     expect(tokens.data?.refresh_token).toBeDefined();
-    expect(tokens.data?.scope).toBe("openid offline_access");
+    expect(tokens.data?.scope).toBe(scopes.join(" "));
 
     const idToken = await jwtVerify(tokens.data?.id_token!, jwks)
     expect(idToken.protectedHeader).toBeDefined();
@@ -307,11 +316,65 @@ describe("oidc token - authorization_code", async () => {
     expect(idToken.payload.name).toBeUndefined();
     expect(idToken.payload.email).toBeUndefined();
   })
+
+  it("scope openid+offline_access & specified resource should provide JWT access_token, id_token, and refresh_token", async ({ expect }) => {
+    if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+      throw Error('beforeAll not run properly')
+    }
+
+    const scopes = ["openid", "offline_access"]
+    const {
+      url: authUrl,
+      codeVerifier,
+    } = await createAuthUrl({
+      scopes,
+    })
+
+    let callbackRedirectUrl = ""
+    await client.$fetch(authUrl.toString(), {
+      onError(context) {
+        callbackRedirectUrl = context.response.headers.get("Location") || "";
+      },
+    })
+    expect(callbackRedirectUrl).toContain(redirectUri);
+    expect(callbackRedirectUrl).toContain(`code=`);
+    expect(callbackRedirectUrl).toContain(`state=123`);
+    const url = new URL(callbackRedirectUrl);
+    
+    const tokens = await validateAuthCode({
+      code: url.searchParams.get('code')!,
+      codeVerifier,
+      resource: validAudience,
+    })
+    expect(tokens.data?.access_token).toBeDefined();
+    expect(tokens.data?.id_token).toBeDefined();
+    expect(tokens.data?.refresh_token).toBeDefined();
+    expect(tokens.data?.scope).toBe(scopes.join(" "));
+
+    const idToken = await jwtVerify(tokens.data?.id_token!, jwks)
+    expect(idToken.protectedHeader).toBeDefined();
+    expect(idToken.payload).toBeDefined();
+    expect(idToken.payload.sub).toBeDefined();
+    expect(idToken.payload.name).toBeUndefined();
+    expect(idToken.payload.email).toBeUndefined();
+
+    const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
+      audience: validAudience,
+      issuer: authServerBaseUrl,
+      typ: "JWT",
+    })
+    expect(accessToken.payload.azp).toBe(oauthClient.client_id)
+    expect(accessToken.payload.sub).toBeDefined()
+    expect(accessToken.payload.iat).toBeDefined()
+    expect(accessToken.payload.exp).toBe(Date.parse(tokens.data?.expires_at!) / 1000)
+    expect(accessToken.payload.scope).toBe(scopes.join(" "))
+  })
 });
 
 describe("oidc token - refresh_token", async () => {
   const authServerBaseUrl = "http://localhost:3000"
   const rpBaseUrl = "http://localhost:5000"
+  const validAudience = "https://myapi.example.com"
   const {
     auth: authorizationServer,
     signInWithTestUser,
@@ -322,6 +385,10 @@ describe("oidc token - refresh_token", async () => {
     plugins: [
       jwt({
         usesOidcProviderPlugin: true,
+        jwt: {
+          audience: validAudience,
+          issuer: authServerBaseUrl,
+        },
       }),
       oidcProvider({
         loginPage: "/login",
@@ -431,7 +498,7 @@ describe("oidc token - refresh_token", async () => {
       id_token?: string
       refresh_token?: string
       expires_in?: number
-      expires_at?: Date
+      expires_at?: string
       token_type?: string
       scope?: string
       [key: string]: unknown
@@ -484,7 +551,7 @@ describe("oidc token - refresh_token", async () => {
     return tokens.data
   }
 
-  it("should refresh token with same scopes", async ({ expect }) => {
+  it("should refresh token with same scopes, opaque access token", async ({ expect }) => {
     if (!oauthClient?.client_id || !oauthClient?.client_secret) {
       throw Error('beforeAll not run properly')
     }
@@ -504,16 +571,14 @@ describe("oidc token - refresh_token", async () => {
         clientSecret: oauthClient.client_secret,
         redirectURI: redirectUri,
       },
-      extraParams: {
-        scope: scopes.join(" ")
-      }
+      scope: scopes.join(" ")
     })
     const newTokens = await client.$fetch<{
       access_token?: string
       id_token?: string
       refresh_token?: string
       expires_in?: number
-      expires_at?: Date
+      expires_at?: string
       token_type?: string
       scope?: string
       [key: string]: unknown
@@ -533,7 +598,66 @@ describe("oidc token - refresh_token", async () => {
     expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token)
   })
 
-  it("should refresh token with lesser scopes", async ({ expect }) => {
+  it("should refresh token with same scopes, JWT access token", async ({ expect }) => {
+    if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+      throw Error('beforeAll not run properly')
+    }
+
+    const scopes = ["openid", "profile", "offline_access"]
+    const tokens = await authorizeForRefreshToken(scopes)
+    expect(tokens?.refresh_token).toBeDefined()
+
+    // Refresh tokens
+    const {
+      body,
+      headers,
+    } = createRefreshAccessTokenRequest({
+      refreshToken: tokens?.refresh_token!,
+      options: {
+        clientId: oauthClient.client_id,
+        clientSecret: oauthClient.client_secret,
+        redirectURI: redirectUri,
+      },
+      scope: scopes.join(" "),
+      resource: validAudience,
+    })
+    const newTokens = await client.$fetch<{
+      access_token?: string
+      id_token?: string
+      refresh_token?: string
+      expires_in?: number
+      expires_at?: string
+      token_type?: string
+      scope?: string
+      [key: string]: unknown
+    }>(
+      '/oauth2/token', {
+        method: "POST",
+        body: body,
+        headers: headers,
+      }
+    );
+    expect(newTokens.data?.access_token).toBeDefined();
+    expect(newTokens.data?.id_token).toBeDefined();
+    expect(newTokens.data?.refresh_token).toBeDefined();
+    expect(newTokens.data?.scope).toBe(scopes.join(" "));
+
+    // Always expect a new refresh token
+    expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token)
+
+    const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
+      audience: validAudience,
+      issuer: authServerBaseUrl,
+      typ: "JWT",
+    })
+    expect(accessToken.payload.azp).toBe(oauthClient.client_id)
+    expect(accessToken.payload.sub).toBeDefined()
+    expect(accessToken.payload.iat).toBeDefined()
+    expect(accessToken.payload.exp).toBe(Date.parse(newTokens.data?.expires_at!) / 1000)
+    expect(accessToken.payload.scope).toBe(scopes.join(" "))
+  })
+
+  it("should refresh token with lesser scopes, opaque access token", async ({ expect }) => {
     if (!oauthClient?.client_id || !oauthClient?.client_secret) {
       throw Error('beforeAll not run properly')
     }
@@ -554,16 +678,14 @@ describe("oidc token - refresh_token", async () => {
         clientSecret: oauthClient.client_secret,
         redirectURI: redirectUri,
       },
-      extraParams: {
-        scope: newScopes.join(" ")
-      }
+      scope: newScopes.join(" ")
     })
     const newTokens = await client.$fetch<{
       access_token?: string
       id_token?: string
       refresh_token?: string
       expires_in?: number
-      expires_at?: Date
+      expires_at?: string
       token_type?: string
       scope?: string
       [key: string]: unknown
@@ -581,6 +703,66 @@ describe("oidc token - refresh_token", async () => {
 
     // Always expect a new refresh token
     expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token)
+  })
+
+  it("should refresh token with lesser scopes, JWT access token", async ({ expect }) => {
+    if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+      throw Error('beforeAll not run properly')
+    }
+
+    const scopes = ["openid", "profile", "offline_access"]
+    const newScopes = ["openid", "offline_access"]
+    const tokens = await authorizeForRefreshToken(scopes)
+    expect(tokens?.refresh_token).toBeDefined()
+
+    // Refresh tokens
+    const {
+      body,
+      headers,
+    } = createRefreshAccessTokenRequest({
+      refreshToken: tokens?.refresh_token!,
+      options: {
+        clientId: oauthClient.client_id,
+        clientSecret: oauthClient.client_secret,
+        redirectURI: redirectUri,
+      },
+      scope: newScopes.join(" "),
+      resource: validAudience,
+    })
+    const newTokens = await client.$fetch<{
+      access_token?: string
+      id_token?: string
+      refresh_token?: string
+      expires_in?: number
+      expires_at?: string
+      token_type?: string
+      scope?: string
+      [key: string]: unknown
+    }>(
+      '/oauth2/token', {
+        method: "POST",
+        body: body,
+        headers: headers,
+      }
+    );
+    expect(newTokens.data?.access_token).toBeDefined();
+    expect(newTokens.data?.id_token).toBeDefined();
+    expect(newTokens.data?.refresh_token).toBeDefined();
+    expect(newTokens.data?.scope).toBe(newScopes.join(" "));
+
+    // Always expect a new refresh token
+    expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token)
+
+    const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
+      audience: validAudience,
+      issuer: authServerBaseUrl,
+      typ: "JWT",
+    })
+    expect(accessToken.payload.azp).toBe(oauthClient.client_id)
+    expect(accessToken.payload.sub).toBeDefined()
+    expect(accessToken.payload.iat).toBeDefined()
+    expect(accessToken.payload.exp).toBe(Date.parse(newTokens.data?.expires_at!) / 1000)
+    expect(accessToken.payload.scope).toBe(newScopes.join(" "))
   })
 
   it("should not refresh token when removing offline_scope", async ({ expect }) => {
@@ -604,16 +786,14 @@ describe("oidc token - refresh_token", async () => {
         clientSecret: oauthClient.client_secret,
         redirectURI: redirectUri,
       },
-      extraParams: {
-        scope: newScopes.join(" ")
-      }
+      scope: newScopes.join(" ")
     })
     const newTokens = await client.$fetch<{
       access_token?: string
       id_token?: string
       refresh_token?: string
       expires_in?: number
-      expires_at?: Date
+      expires_at?: string
       token_type?: string
       scope?: string
       [key: string]: unknown
@@ -654,16 +834,14 @@ describe("oidc token - refresh_token", async () => {
         clientSecret: oauthClient.client_secret,
         redirectURI: redirectUri,
       },
-      extraParams: {
-        scope: newScopes.join(" ")
-      }
+      scope: newScopes.join(" ")
     })
     const newTokens = await client.$fetch<{
       access_token?: string
       id_token?: string
       refresh_token?: string
       expires_in?: number
-      expires_at?: Date
+      expires_at?: string
       token_type?: string
       scope?: string
       [key: string]: unknown
@@ -681,6 +859,7 @@ describe("oidc token - refresh_token", async () => {
 describe("oidc token - client_credentials", async () => {
   const authServerBaseUrl = "http://localhost:3000"
   const rpBaseUrl = "http://localhost:5000"
+  const validAudience = "https://myapi.example.com"
   const {
     signInWithTestUser,
     customFetchImpl,
@@ -690,7 +869,8 @@ describe("oidc token - client_credentials", async () => {
       jwt({
         usesOidcProviderPlugin: true,
         jwt: {
-          audience: "https://myapi.example.com",
+          audience: validAudience,
+          issuer: authServerBaseUrl,
         },
       }),
       oidcProvider({
@@ -755,7 +935,7 @@ describe("oidc token - client_credentials", async () => {
     jwks = createLocalJWKSet(jwksResult.data)
   })
 
-  it("should obtain a credential token", async ({ expect }) => {
+  it("should obtain an opaque access token", async ({ expect }) => {
     if (!oauthClient?.client_id || !oauthClient?.client_secret) {
       throw Error('beforeAll not run properly')
     }
@@ -794,13 +974,6 @@ describe("oidc token - client_credentials", async () => {
     expect(tokens.data?.scope).toBe(scopes.join(" "));
     expect(tokens.data?.expires_in).toBe(3600);
     expect(tokens.data?.expires_at).toBeDefined();
-
-    const accessToken = await jwtVerify(tokens.data?.access_token!, jwks)
-    expect(accessToken.payload.iss).toBeDefined()
-    expect(accessToken.payload.sub).toBeUndefined() // unset since not a user!
-    expect(accessToken.payload.iat).toBeDefined()
-    expect(accessToken.payload.exp).toBe(Date.parse(tokens.data?.expires_at!) / 1000)
-    expect(accessToken.payload.scope).toBe(scopes.join(" "))
   });
 
   it("should fail without requested scope and clientCredentialGrantDefaultScopes not set", async ({ expect }) => {
@@ -835,5 +1008,58 @@ describe("oidc token - client_credentials", async () => {
       }
     );
     expect(tokens.error?.status).toBeDefined();
+  })
+
+  it("should obtain a JWT access token", async ({ expect }) => {
+    if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+      throw Error('beforeAll not run properly')
+    }
+
+    const scopes = ["read:posts"]
+    const {
+      body,
+      headers,
+    } = createClientCredentialsTokenRequest({
+      scope: scopes.join(" "),
+      options: {
+        clientId: oauthClient.client_id,
+        clientSecret: oauthClient.client_secret,
+        redirectURI: redirectUri,
+      },
+      resource: validAudience,
+    })
+    const tokens = await client.$fetch<{
+      access_token?: string
+      id_token?: string
+      refresh_token?: string
+      expires_in?: number
+      expires_at?: string
+      token_type?: string
+      scope?: string
+      [key: string]: unknown
+    }>(
+      '/oauth2/token', {
+        method: "POST",
+        body: body,
+        headers: headers,
+      }
+    );
+    expect(tokens.data?.access_token).toBeDefined();
+    expect(tokens.data?.id_token).toBeUndefined();
+    expect(tokens.data?.refresh_token).toBeUndefined();
+    expect(tokens.data?.scope).toBe(scopes.join(" "));
+    expect(tokens.data?.expires_in).toBe(3600);
+    expect(tokens.data?.expires_at).toBeDefined();
+
+    const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
+      audience: validAudience,
+      issuer: authServerBaseUrl,
+      typ: "JWT",
+    })
+    expect(accessToken.payload.azp).toBe(oauthClient.client_id)
+    expect(accessToken.payload.sub).toBeUndefined() // unset since not a user!
+    expect(accessToken.payload.iat).toBeDefined()
+    expect(accessToken.payload.exp).toBe(Date.parse(tokens.data?.expires_at!) / 1000)
+    expect(accessToken.payload.scope).toBe(scopes.join(" "))
   })
 });

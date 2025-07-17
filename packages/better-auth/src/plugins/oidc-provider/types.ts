@@ -11,10 +11,14 @@ export interface OIDCOptions {
 			/** @default "oauthClient" */
 			modelName?: string
 		}
+		oauthAccessToken?: {
+			/** @default "oauthAccessToken" */
+			modelName?: string
+		},
 		oauthConsent?: {
 			/** @default "oauthConsent" */
 			modelName?: string
-		}
+		},
 	}
 	/**
 	 * Authorized clients

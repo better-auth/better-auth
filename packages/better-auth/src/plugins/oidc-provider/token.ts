@@ -7,6 +7,7 @@ import { generateRandomString } from "../../crypto";
 import { signJwt } from "../jwt"
 import { getJwtPlugin } from "..";
 import { GrantType } from "../mcp/types";
+import { JWTPayload } from "jose";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -53,9 +54,10 @@ async function signUserJwt(
   ctx: GenericEndpointContext,
   opts: OIDCOptions,
   user: User,
-  client: SchemaClient,
+  clientId: string,
+  audience: string | string[],
   scopes: string[],
-  session?: Omit<Session, 'token'> & { token?: string },
+  sessionId: string,
   overrides?: {
     iat?: number
     exp?: number
@@ -72,42 +74,17 @@ async function signUserJwt(
   // Add userinfo endpoint to tokens with openid scope
   const jwtPluginOptions = getJwtPlugin(ctx.context).options
 
-  // Check requested audience if sent as the resource parameter
-  const resourceRequested: string | undefined = ctx.body.resource
-  if (resourceRequested &&
-    !(resourceRequested === jwtPluginOptions?.jwt?.audience ||
-      resourceRequested === ctx.context.options.baseURL ||
-      resourceRequested === `${ctx.context.baseURL}/oauth2/userinfo`
-    )
-  ) {
-    throw new APIError("BAD_REQUEST", {
-      error_description: "requested resource invalid",
-      error: "invalid_request",
-    });
-  }
-
-  let _aud = resourceRequested ??
-    jwtPluginOptions?.jwt?.audience ??
-    ctx.context.options.baseURL
-  if (scopes?.includes('openid')) {
-    const userInfoAud = `${ctx.context.baseURL}/oauth2/userinfo`
-    if (_aud?.length) {
-      _aud += ',' + userInfoAud
-    } else {
-      _aud = userInfoAud
-    }
-  }
-  const aud = _aud?.split(',').filter((v) => v.length)
-
   // Sign token
   return signJwt(
     ctx, {
       ...customClaims,
       sub: user.id.toString(),
-      aud: aud?.length === 1 ? aud.at(0) : aud,
-      azp: client?.clientId,
+      aud: typeof audience === 'string'
+        ? audience
+        : audience?.length === 1 ? audience.at(0) : audience,
+      azp: clientId,
       scope: scopes.join(" "),
-      sid: session?.id.toString(),
+      sid: sessionId,
       iss:
         jwtPluginOptions?.jwt?.issuer ??
         ctx.context.baseURL,
@@ -225,6 +202,31 @@ async function decodeRefreshToken(
     : { token }
 }
 
+async function createOpaqueAccessToken(
+  ctx: GenericEndpointContext,
+  opts: OIDCOptions,
+  clientId: string,
+  scopes: string[],
+  payload: JWTPayload,
+) {
+  const now = Date.now()
+  const iat = payload.iat ?? Math.floor(now / 1000)
+  const exp = payload.iat ?? (iat + (opts.accessTokenExpiresIn ?? 600))
+  const token = generateRandomString(32, "A-Z", "a-z")
+  await ctx.context.adapter.create({
+    model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+    data: {
+      token,
+      clientId,
+      sessionId: payload.sid,
+      scope: scopes.join(" "),
+      createdAt: new Date(now),
+      expiresAt: new Date(exp * 1000),
+    },
+  })
+  return token
+}
+
 async function createUserTokens(
   ctx: GenericEndpointContext,
   opts: OIDCOptions,
@@ -292,19 +294,53 @@ async function createUserTokens(
     delete session.token
   }
 
-  // Sign jwt and refresh tokens in parallel
-  const [jwtPromise, refreshPromise, idTokenPromise] = await Promise.allSettled([
-    signUserJwt(
-      ctx,
-      opts,
-      user,
-      client,
-      scopes,
-      session, {
-        iat,
-        exp,
+  const jwtPluginOptions = getJwtPlugin(ctx.context).options
+  // Check requested audience if sent as the resource parameter
+  let _aud: string | string[] | undefined = ctx.body.resource
+  const audience = typeof _aud === 'string' ? [_aud] : _aud
+  if (scopes.includes('openid')) {
+    audience?.push(`${ctx.context.baseURL}/oauth2/userinfo`)
+  }
+  if (audience) {
+    const validAudiences = [
+      jwtPluginOptions?.jwt?.audience,
+      scopes?.includes('openid') ? `${ctx.context.baseURL}/oauth2/userinfo` : undefined,
+    ].filter((v) => v?.length)
+    for (const aud of audience) {
+      if (!validAudiences.includes(aud)) {
+        throw new APIError("BAD_REQUEST", {
+          error_description: "requested resource invalid",
+          error: "invalid_request",
+        });
       }
-    ),
+    }
+  }
+
+  // Sign jwt and refresh tokens in parallel
+  const [accessToken, sessionRefresh, idToken] = await Promise.allSettled([
+    audience ?
+      signUserJwt(
+        ctx,
+        opts,
+        user,
+        client.clientId,
+        audience,
+        scopes,
+        session.id, {
+          iat,
+          exp,
+        },
+      )
+      : createOpaqueAccessToken(
+        ctx,
+        opts,
+        client.clientId,
+        scopes, {
+          iat,
+          exp,
+          sid: session.id,
+        }
+      ),
     refreshToken
       ? encodeRefreshToken(
           opts,
@@ -322,14 +358,11 @@ async function createUserTokens(
           nonce,
         )
       : undefined,
-  ])
-  const signedJwt = jwtPromise.status === 'fulfilled' ? jwtPromise.value : undefined
-  const sessionRefresh = refreshPromise.status === 'fulfilled' ? refreshPromise.value : undefined
-  const idToken = idTokenPromise.status === 'fulfilled' ? idTokenPromise.value : undefined
+  ]).then((val) => val.map((v) => v.status === 'fulfilled' ? v.value : undefined))
 
   return ctx.json(
     {
-      access_token: signedJwt,
+      access_token: accessToken,
       expires_in: opts.accessTokenExpiresIn,
       expires_at: accessTokenExpiresAt,
       token_type: "Bearer",
@@ -711,25 +744,33 @@ async function handleClientCredentialsGrant(
   const expiresIn = opts.m2mAccessTokenExpiresIn ?? 3600 // 1 hour
   const exp = iat + expiresIn
 
-  const signedJwt = await signJwt(
-    ctx, {
-      aud:
-        resource ??
-        jwtPluginOptions?.jwt?.audience ??
-        ctx.context.options.baseURL,
-      scope: scope,
-      iss:
-        jwtPluginOptions?.jwt?.issuer ??
-        ctx.context.baseURL,
-      iat,
-      exp,
-    },
-    jwtPluginOptions,
-  )
+  const accessToken = resource
+    ? await signJwt(
+        ctx, {
+          aud: resource,
+          azp: client_id,
+          scope: requestedScopes.join(" "),
+          iss:
+            jwtPluginOptions?.jwt?.issuer ??
+            ctx.context.baseURL,
+          iat,
+          exp,
+        },
+        jwtPluginOptions,
+      )
+    : await createOpaqueAccessToken(
+        ctx,
+        opts,
+        client_id,
+        requestedScopes, {
+          iat,
+          exp,
+        }
+      )
 
   return ctx.json(
     {
-      access_token: signedJwt,
+      access_token: accessToken,
       expires_in: expiresIn,
       expires_at: new Date(exp * 1000),
       token_type: "Bearer",
