@@ -401,15 +401,14 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const hasMemberUpdatePermission = hasPermission({
+			const canUpdateMember = hasPermission({
 				role: member.role,
 				options: ctx.context.orgOptions,
 				permissions: {
 					member: ["update"],
 				},
+				allowCreatorAllPermissions: true,
 			});
-
-			const canUpdateMember = hasMemberUpdatePermission || updaterIsCreator;
 
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
