@@ -16,24 +16,24 @@ const processor = remark()
 	.use(remarkInstall)
 	.use(remarkStringify);
 
-export async function getLLMText(page: any) {
-	const category = [page.slugs[0]];
+export async function getLLMText(docPage: any) {
+	const category = [docPage.slugs[0]];
 
 	// Read the raw file content
-	const rawContent = await readFile(page.data._file.absolutePath, "utf-8");
+	const rawContent = await readFile(docPage.data._file.absolutePath, "utf-8");
 
 	const processed = await processor.process({
-		path: page.data._file.absolutePath,
+		path: docPage.data._file.absolutePath,
 		value: rawContent,
 	});
 
-	return `# ${category}: ${page.data.title}
-URL: ${page.url}
+	return `# ${category}: ${docPage.data.title}
+URL: ${docPage.url}
 Source: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/${
-		page.file.path
+		docPage.file.path
 	}
 
-${page.data.description}
+${docPage.data.description}
         
 ${processed.toString()}
 `;

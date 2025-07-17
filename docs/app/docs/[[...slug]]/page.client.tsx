@@ -1,12 +1,18 @@
 "use client";
 import { useState } from "react";
-import { Check, Copy, ChevronDown, ExternalLinkIcon, MessageCircleIcon } from "lucide-react";
+import {
+	Check,
+	Copy,
+	ChevronDown,
+	ExternalLink,
+	MessageCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
 } from "fumadocs-ui/components/ui/popover";
 import { cva } from "class-variance-authority";
 
@@ -56,7 +62,7 @@ export function LLMCopyButton() {
 			} else {
 				await navigator.clipboard.write([
 					new ClipboardItem({
-						'text/plain': fetch(url).then(async (res) => {
+						"text/plain": fetch(url).then(async (res) => {
 							const content = await res.text();
 							cache.set(url, content);
 
@@ -75,9 +81,9 @@ export function LLMCopyButton() {
 			disabled={isLoading}
 			className={cn(
 				buttonVariants({
-					variant: 'secondary',
-					size: 'sm',
-					className: 'gap-2 [&_svg]:size-3.5 [&_svg]:text-fd-muted-foreground',
+					variant: "secondary",
+					size: "sm",
+					className: "gap-2 [&_svg]:size-3.5 [&_svg]:text-fd-muted-foreground",
 				}),
 			)}
 			onClick={onClick}
@@ -89,18 +95,18 @@ export function LLMCopyButton() {
 }
 
 const optionVariants = cva(
-	'text-sm p-2 rounded-lg inline-flex items-center gap-2 hover:text-fd-accent-foreground hover:bg-fd-accent [&_svg]:size-4',
+	"text-sm p-2 rounded-lg inline-flex items-center gap-2 hover:text-fd-accent-foreground hover:bg-fd-accent [&_svg]:size-4",
 );
 
 export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
-	const markdownUrl = new URL(props.markdownUrl, 'https://better-auth.com');
+	const markdownUrl = new URL(props.markdownUrl, "https://better-auth.com");
 	const q = `Read ${markdownUrl}, I want to ask questions about it.`;
 
 	const claude = `https://claude.ai/new?${new URLSearchParams({
 		q,
 	})}`;
 	const gpt = `https://chatgpt.com/?${new URLSearchParams({
-		hints: 'search',
+		hints: "search",
 		q,
 	})}`;
 	const t3 = `https://t3.chat/new?${new URLSearchParams({
@@ -112,9 +118,9 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 			<PopoverTrigger
 				className={cn(
 					buttonVariants({
-						variant: 'secondary',
-						size: 'sm',
-						className: 'gap-2',
+						variant: "secondary",
+						size: "sm",
+						className: "gap-2",
 					}),
 				)}
 			>
@@ -124,7 +130,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 			<PopoverContent className="flex flex-col overflow-auto">
 				{[
 					{
-						title: 'Open in GitHub',
+						title: "Open in GitHub",
 						href: props.githubUrl,
 						icon: (
 							<svg fill="currentColor" role="img" viewBox="0 0 24 24">
@@ -134,7 +140,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						),
 					},
 					{
-						title: 'Open in ChatGPT',
+						title: "Open in ChatGPT",
 						href: gpt,
 						icon: (
 							<svg
@@ -149,7 +155,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						),
 					},
 					{
-						title: 'Open in Claude',
+						title: "Open in Claude",
 						href: claude,
 						icon: (
 							<svg
@@ -164,9 +170,9 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						),
 					},
 					{
-						title: 'Open in T3 Chat',
+						title: "Open in T3 Chat",
 						href: t3,
-						icon: <MessageCircleIcon />,
+						icon: <MessageCircle />,
 					},
 				].map((item) => (
 					<a
@@ -178,7 +184,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 					>
 						{item.icon}
 						{item.title}
-						<ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
+						<ExternalLink className="text-fd-muted-foreground size-3.5 ms-auto" />
 					</a>
 				))}
 			</PopoverContent>
