@@ -13,6 +13,7 @@ export async function validateAuthorizationCode({
 	authentication,
 	deviceId,
 	headers,
+	additionalParams = {},
 }: {
 	code: string;
 	redirectURI: string;
@@ -22,6 +23,7 @@ export async function validateAuthorizationCode({
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
+	additionalParams?: Record<string, string>;
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
@@ -46,6 +48,11 @@ export async function validateAuthorizationCode({
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
 	}
+
+	for (const [key, value] of Object.entries(additionalParams)) {
+		if (!body.has(key)) body.append(key, value);
+	}
+
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
