@@ -1091,6 +1091,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				method: "GET",
 			},
 			async (ctx) => {
+				const session = ctx.context.session;
+				if (!session) {
+					throw new APIError("UNAUTHORIZED");
+				}
 				const retrieveMeter = await client.billing.meters
 					.list()
 					.catch(async (e) => {
