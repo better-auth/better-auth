@@ -121,6 +121,17 @@ export interface OIDCOptions {
 		user: User & Record<string, any>,
 		scopes: string[],
 	) => Record<string, any> | Promise<Record<string, any>>;
+	/**
+	 * Trusted clients that are configured directly in the provider options.
+	 * These clients bypass database lookups and can optionally skip consent screens.
+	 */
+	trustedClients?: Client[];
+	/**
+	 * Whether to use the JWT plugin to sign the ID token.
+	 *
+	 * @default false
+	 */
+	useJWTPlugin?: boolean;
 }
 
 export interface AuthorizationQuery {
@@ -284,6 +295,11 @@ export interface Client {
 	 * Whether the client is disabled or not.
 	 */
 	disabled: boolean;
+	/**
+	 * Whether to skip the consent screen for this client.
+	 * Only applies to trusted clients.
+	 */
+	skipConsent?: boolean;
 }
 
 export interface TokenBody {
@@ -459,9 +475,13 @@ export interface OIDCMetadata {
 	/**
 	 * Supported grant types.
 	 *
-	 * only `authorization_code` is supported.
+	 * The first element MUST be "authorization_code"; additional grant types like
+	 * "refresh_token" can follow. Guarantees a non-empty array at the type level.
 	 */
-	grant_types_supported: ["authorization_code"];
+	grant_types_supported: [
+		"authorization_code",
+		...("authorization_code" | "refresh_token")[],
+	];
 	/**
 	 * acr_values supported.
 	 *
@@ -487,13 +507,8 @@ export interface OIDCMetadata {
 	subject_types_supported: ["public"];
 	/**
 	 * Supported ID token signing algorithms.
-	 *
-	 * only `RS256` and `none` are supported.
-	 *
-	 * @default
-	 * ["RS256", "none"]
 	 */
-	id_token_signing_alg_values_supported: ("RS256" | "none")[];
+	id_token_signing_alg_values_supported: string[];
 	/**
 	 * Supported token endpoint authentication methods.
 	 *

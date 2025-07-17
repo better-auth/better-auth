@@ -9,7 +9,6 @@ import {
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import { generateRandomString } from "../../crypto";
-import { subtle } from "@better-auth/utils";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -31,6 +30,39 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
 };
 
+/**
+ * Get a client by ID, checking trusted clients first, then database
+ */
+export async function getClient(
+	clientId: string,
+	adapter: any,
+	trustedClients: (Client & { skipConsent?: boolean })[] = [],
+): Promise<(Client & { skipConsent?: boolean }) | null> {
+	const trustedClient = trustedClients.find(
+		(client) => client.clientId === clientId,
+	);
+	if (trustedClient) {
+		return trustedClient;
+	}
+	const dbClient = await adapter
+		.findOne({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: clientId }],
+		})
+		.then((res: Record<string, any> | null) => {
+			if (!res) {
+				return null;
+			}
+			return {
+				...res,
+				redirectURLs: (res.redirectURLs ?? "").split(","),
+				metadata: res.metadata ? JSON.parse(res.metadata) : {},
+			} as Client;
+		});
+
+	return dbClient;
+}
+
 export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
@@ -41,6 +73,9 @@ export const getMetadata = (
 			? jwtPlugin.options.jwt.issuer
 			: (ctx.context.options.baseURL as string);
 	const baseURL = ctx.context.baseURL;
+	const supportedAlgs = options?.useJWTPlugin
+		? ["RS256", "EdDSA", "none"]
+		: ["HS256", "none"];
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -51,13 +86,13 @@ export const getMetadata = (
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
-		grant_types_supported: ["authorization_code"],
+		grant_types_supported: ["authorization_code", "refresh_token"],
 		acr_values_supported: [
 			"urn:mace:incommon:iap:silver",
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256", "none"],
+		id_token_signing_alg_values_supported: supportedAlgs,
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
@@ -109,6 +144,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 			...(options?.scopes || []),
 		],
 	};
+
+	const trustedClients = options.trustedClients || [];
 
 	return {
 		id: "oidc",
@@ -502,21 +539,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await ctx.context.adapter
-						.findOne<Record<string, any>>({
-							model: modelName.oauthClient,
-							where: [{ field: "clientId", value: client_id.toString() }],
-						})
-						.then((res) => {
-							if (!res) {
-								return null;
-							}
-							return {
-								...res,
-								redirectURLs: res.redirectURLs.split(","),
-								metadata: res.metadata ? JSON.parse(res.metadata) : {},
-							} as Client;
-						});
+					const client = await getClient(
+						client_id.toString(),
+						ctx.context.adapter,
+						trustedClients,
+					);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -645,8 +672,17 @@ export const oidcProvider = (options: OIDCOptions) => {
 					let idToken: string;
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
-					const jwtPlugin = getJwtPlugin(ctx);
-					if (jwtPlugin) {
+					if (options.useJWTPlugin) {
+						const jwtPlugin = getJwtPlugin(ctx);
+						if (!jwtPlugin) {
+							ctx.context.logger.error(
+								"OIDC: `useJWTPlugin` is enabled but the JWT plugin is not available. Make sure you have the JWT Plugin in your plugins array or set `useJWTPlugin` to false.",
+							);
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description: "JWT plugin is not enabled",
+								error: "internal_server_error",
+							});
+						}
 						idToken = await getJwtToken(
 							ctx,
 							{
@@ -659,23 +695,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 						// If the JWT token is not enabled, create a key and use it to sign
 					} else {
-						let secretKey = {
-							alg: "HS256",
-							key: await subtle.generateKey(
-								{
-									name: "HMAC",
-									hash: "SHA-256",
-								},
-								true,
-								["sign", "verify"],
-							),
-						};
-
 						idToken = await new SignJWT(payload)
-							.setProtectedHeader({ alg: secretKey.alg })
+							.setProtectedHeader({ alg: "HS256" })
 							.setIssuedAt()
 							.setExpirationTime(expirationTime)
-							.sign(secretKey.key);
+							.sign(new TextEncoder().encode(client.clientSecret));
 					}
 
 					return ctx.json(
@@ -1131,11 +1155,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const client = await ctx.context.adapter.findOne<Record<string, any>>(
-						{
-							model: modelName.oauthClient,
-							where: [{ field: "clientId", value: ctx.params.id }],
-						},
+					const client = await getClient(
+						ctx.params.id,
+						ctx.context.adapter,
+						trustedClients,
 					);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {

@@ -233,6 +233,42 @@ export const username = (options?: UsernameOptions) => {
 					});
 				},
 			),
+			isUsernameAvailable: createAuthEndpoint(
+				"/is-username-available",
+				{
+					method: "POST",
+					body: z.object({
+						username: z.string({
+							description: "The username to check",
+						}),
+					}),
+				},
+				async (ctx) => {
+					const username = ctx.body.username;
+					if (!username) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+					const user = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "username",
+								value: username.toLowerCase(),
+							},
+						],
+					});
+					if (user) {
+						return ctx.json({
+							available: false,
+						});
+					}
+					return ctx.json({
+						available: true,
+					});
+				},
+			),
 		},
 		schema: mergeSchema(schema, options?.schema),
 		hooks: {
