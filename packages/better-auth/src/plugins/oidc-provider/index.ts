@@ -31,6 +31,39 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
 };
 
+/**
+ * Get a client by ID, checking trusted clients first, then database
+ */
+export async function getClient(
+	clientId: string,
+	adapter: any,
+	trustedClients: (Client & { skipConsent?: boolean })[] = [],
+): Promise<(Client & { skipConsent?: boolean }) | null> {
+	const trustedClient = trustedClients.find(
+		(client) => client.clientId === clientId,
+	);
+	if (trustedClient) {
+		return trustedClient;
+	}
+	const dbClient = await adapter
+		.findOne({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: clientId }],
+		})
+		.then((res: Record<string, any> | null) => {
+			if (!res) {
+				return null;
+			}
+			return {
+				...res,
+				redirectURLs: (res.redirectURLs ?? "").split(","),
+				metadata: res.metadata ? JSON.parse(res.metadata) : {},
+			} as Client;
+		});
+
+	return dbClient;
+}
+
 export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
@@ -109,6 +142,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 			...(options?.scopes || []),
 		],
 	};
+
+	const trustedClients = options.trustedClients || [];
 
 	return {
 		id: "oidc",
@@ -502,21 +537,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await ctx.context.adapter
-						.findOne<Record<string, any>>({
-							model: modelName.oauthClient,
-							where: [{ field: "clientId", value: client_id.toString() }],
-						})
-						.then((res) => {
-							if (!res) {
-								return null;
-							}
-							return {
-								...res,
-								redirectURLs: res.redirectURLs.split(","),
-								metadata: res.metadata ? JSON.parse(res.metadata) : {},
-							} as Client;
-						});
+					const client = await getClient(
+						client_id.toString(),
+						ctx.context.adapter,
+						trustedClients,
+					);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -1131,11 +1156,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const client = await ctx.context.adapter.findOne<Record<string, any>>(
-						{
-							model: modelName.oauthClient,
-							where: [{ field: "clientId", value: ctx.params.id }],
-						},
+					const client = await getClient(
+						ctx.params.id,
+						ctx.context.adapter,
+						trustedClients,
 					);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {
