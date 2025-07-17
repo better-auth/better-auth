@@ -111,9 +111,13 @@ export async function authorize(
 	if (!query.response_type) {
 		ctx.context.logger.warn(
 			"[OIDC Authorize] response_type missing. Redirecting to error.",
-		throw ctx.redirect(
-			getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
+		const errorURL = getErrorURL(
+			ctx,
+			"invalid_request",
+			"response_type is required",
+		);
+		throw ctx.redirect(errorURL);
 	}
 
 	const client = await getClient(
@@ -165,7 +169,8 @@ export async function authorize(
 	if (query.response_type !== "code") {
 		const errorURL = getErrorURL(
 			ctx,
-			"unsupported_response_type"
+			"unsupported_response_type",
+			"unsupported response type",
 		);
 		throw ctx.redirect(errorURL);
 	}
