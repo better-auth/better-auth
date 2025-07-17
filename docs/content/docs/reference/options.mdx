@@ -571,17 +571,23 @@ Request lifecycle hooks.
 
 ```ts
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
 export const auth = betterAuth({
 	hooks: {
-		before: async (request, ctx) => {
+		before: createAuthMiddleware(async (ctx) => {
 			// Execute before processing the request
-		},
-		after: async (request, response, ctx) => {
+			console.log("Request path:", ctx.path);
+		}),
+		after: createAuthMiddleware(async (ctx) => {
 			// Execute after processing the request
-		}
+			console.log("Response:", ctx.context.returned);
+		})
 	},
 })
 ```
+
+For more details and examples, see the [Hooks documentation](/docs/concepts/hooks).
 
 ## `disabledPaths`
 
