@@ -1,11 +1,12 @@
 import { APIError } from "../../api";
 import type { GenericEndpointContext, Session, User, Verification } from "../../types";
-import type { SchemaClient, GrantType, OIDCOptions, VerificationValue } from "./types";
+import type { SchemaClient, OIDCOptions, VerificationValue } from "./types";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
 import { signJwt } from "../jwt"
-import { getJwtPlugin } from ".";
+import { getJwtPlugin } from "..";
+import { GrantType } from "../mcp/types";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -71,8 +72,23 @@ async function signUserJwt(
   // Add userinfo endpoint to tokens with openid scope
   const jwtPluginOptions = getJwtPlugin(ctx.context).options
 
-  let _aud = jwtPluginOptions?.jwt?.audience
-    ?? ctx.context.options.baseURL
+  // Check requested audience if sent as the resource parameter
+  const resourceRequested: string | undefined = ctx.body.resource
+  if (resourceRequested &&
+    !(resourceRequested === jwtPluginOptions?.jwt?.audience ||
+      resourceRequested === ctx.context.options.baseURL ||
+      resourceRequested === `${ctx.context.baseURL}/oauth2/userinfo`
+    )
+  ) {
+    throw new APIError("BAD_REQUEST", {
+      error_description: "requested resource invalid",
+      error: "invalid_request",
+    });
+  }
+
+  let _aud = resourceRequested ??
+    jwtPluginOptions?.jwt?.audience ??
+    ctx.context.options.baseURL
   if (scopes?.includes('openid')) {
     const userInfoAud = `${ctx.context.baseURL}/oauth2/userinfo`
     if (_aud?.length) {
@@ -617,10 +633,12 @@ async function handleClientCredentialsGrant(
     client_id,
     client_secret,
     scope,
+    resource,
   }: {
     client_id?: string
     client_secret?: string
     scope?: string
+    resource?: string
   } = body;
   const authorization =
     ctx.request?.headers.get("authorization") || null;
@@ -649,6 +667,18 @@ async function handleClientCredentialsGrant(
     throw new APIError("BAD_REQUEST", {
       error_description: "Missing required scope",
       error: "invalid_scope",
+    });
+  }
+
+  // Check if requested resource (aka audience is the same)
+  const jwtPluginOptions = getJwtPlugin(ctx.context).options
+  if (resource && 
+    !(resource === jwtPluginOptions?.jwt?.audience ||
+      resource === ctx.context.options.baseURL)
+  ) {
+    throw new APIError("BAD_REQUEST", {
+      error_description: "requested resource invalid",
+      error: "invalid_request",
     });
   }
 
@@ -681,10 +711,10 @@ async function handleClientCredentialsGrant(
   const expiresIn = opts.m2mAccessTokenExpiresIn ?? 3600 // 1 hour
   const exp = iat + expiresIn
 
-  const jwtPluginOptions = getJwtPlugin(ctx.context).options
   const signedJwt = await signJwt(
     ctx, {
       aud:
+        resource ??
         jwtPluginOptions?.jwt?.audience ??
         ctx.context.options.baseURL,
       scope: scope,

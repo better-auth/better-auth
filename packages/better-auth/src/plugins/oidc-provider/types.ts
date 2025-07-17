@@ -1,19 +1,6 @@
 import { Awaitable } from "vitest";
-import type { Session, User, Verification } from "../../types";
-import { MakeRequired } from "../../types/helper";
-
-/**
- * Supported grant types of the token endpoint
- */
-export type GrantType =
-	| 'authorization_code'
-	// | "implicit" // NEVER SUPPORT - depreciated in oAuth2.1
-	// | "password" // NEVER SUPPORT - depreciated in oAuth2.1
-	| 'client_credentials'
-	| 'refresh_token'
-	// | "urn:ietf:params:oauth:grant-type:device_code" // specified in oAuth2.1 but yet implemented
-	// | "urn:ietf:params:oauth:grant-type:jwt-bearer" | // unspecified in oAuth2.1
-	// | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
+import type { Session, User } from "../../types";
+import { AuthServerMetadata, GrantType } from "../mcp/types";
 
 export interface OIDCOptions {
 	/**
@@ -416,68 +403,19 @@ export interface TokenBody {
 /**
  * Metadata returned by the openid-configuration endpoint:
  * /.well-known/openid-configuration
+ * 
+ * NOTE: Url structure is different by appending to the end
+ * of the url instead of the base.
+ * 
+ * @see https://datatracker.ietf.org/doc/html/rfc8414#section-5
  */
-export interface OIDCMetadata {
-	/**
-	 * The issuer identifier, this is the URL of the provider and can be used to verify
-	 * the `iss` claim in the ID token.
-	 * 
-	 * default: the value set for the issuer in the jwt plugin,
-	 * otherwise the base URL of the auth server (e.g. `https://example.com`)
-	 */
-	issuer: string;
-	/**
-	 * The URL of the authorization endpoint.
-	 *
-	 * @default `/oauth2/authorize`
-	 */
-	authorization_endpoint: string;
-	/**
-	 * The URL of the token endpoint.
-	 *
-	 * @default `/oauth2/token`
-	 */
-	token_endpoint: string;
+export interface OIDCMetadata extends AuthServerMetadata {
 	/**
 	 * The URL of the userinfo endpoint.
 	 *
 	 * @default `/oauth2/userinfo`
 	 */
 	userinfo_endpoint: string;
-	/**
-	 * The URL of the jwks_uri endpoint.
-	 *
-	 * For JWKS to work, you must install the `jwt` plugin.
-	 *
-	 * This value is automatically set to `/jwks` if the `jwt` plugin is installed.
-	 *
-	 * @default `/jwks`
-	 */
-	jwks_uri: string;
-	/**
-	 * The URL of the dynamic client registration endpoint.
-	 *
-	 * @default `/oauth2/register`
-	 */
-	registration_endpoint: string;
-	/**
-	 * Supported scopes.
-	 */
-	scopes_supported: string[];
-	/**
-	 * Supported response types. (for /authorize endpoint)
-	 */
-	response_types_supported: ("code")[];
-	/**
-	 * Supported response modes.
-	 *
-	 * `query`: the authorization code is returned in the query string
-	 */
-	response_modes_supported: ("query")[];
-	/**
-	 * Supported grant types.
-	 */
-	grant_types_supported: GrantType[];
 	/**
 	 * acr_values supported.
 	 *
@@ -511,30 +449,12 @@ export interface OIDCMetadata {
 	 */
 	id_token_signing_alg_values_supported: string[];
 	/**
-	 * Supported token endpoint authentication methods.
-	 *
-	 * only `client_secret_basic` and `client_secret_post` are supported.
-	 *
-	 * @default
-	 * ["client_secret_basic", "client_secret_post"]
-	 */
-	token_endpoint_auth_methods_supported: (
-		"client_secret_basic" |
-		"client_secret_post"
-	)[];
-	/**
 	 * Supported claims.
 	 *
 	 * @default
 	 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "email", "email_verified", "name", "family_name", "given_name", "sid", "scope", "azp"]
 	 */
 	claims_supported: string[];
-	/**
-	 * Supported code challenge methods.
-	 *
-	 * @default ["s256"]
-	 */
-	code_challenge_methods_supported: ("s256")[];
 }
 
 /**

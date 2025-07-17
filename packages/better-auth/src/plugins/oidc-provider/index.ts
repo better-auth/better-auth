@@ -12,31 +12,35 @@ import type {
 } from "../../types";
 import { generateRandomString } from "../../crypto";
 import { schema } from "./schema";
-import {
-	type OauthClient,
-	type OIDCMetadata,
-	type OIDCOptions,
-	type VerificationValue,
+import type {
+	OauthClient,
+	OIDCMetadata,
+	OIDCOptions,
+	VerificationValue,
 } from "./types";
 import { authorize, formatErrorURL } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint, userNormalClaims } from "./token";
 import { mergeSchema } from "../../db";
 import { registerEndpoint } from "./register";
-import { JwtPluginOptions } from "../jwt";
 import { BetterAuthError } from "../../error";
+import { oidcMetadata } from "./metadata";
+import { getJwtPlugin } from "../jwt";
 
-export const getJwtPlugin = (ctx: AuthContext) => {
-	const plugin: (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions }) | undefined = ctx.options.plugins?.find(
-		(plugin) => plugin.id === "jwt",
-	);
-	if (!plugin) {
-		throw new BetterAuthError('jwt_config', 'Jwt plugin is required for OIDC plugin')
-	}
-	if (!plugin.options?.usesOidcProviderPlugin) {
-		throw new BetterAuthError('jwt_config', 'Must set usesOidcProviderPlugin to true')
-	}
-	return plugin;
+export const getOidcPlugin = (ctx: AuthContext): Omit<BetterAuthPlugin, 'options'> & { options: OIDCOptions } => {
+  const plugin = ctx.options.plugins?.find(
+    (plugin): plugin is Omit<BetterAuthPlugin, 'options'> & { options: OIDCOptions } =>
+      plugin.id === 'oidc' &&
+      plugin.options != null &&
+      'loginPage' in plugin.options &&
+      'consentPage' in plugin.options
+  );
+
+  if (!plugin) {
+    throw new BetterAuthError('oidc_config', 'oidc-provider plugin not found');
+  }
+
+  return plugin;
 };
 
 /**
@@ -148,7 +152,10 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 			plugin.options = opts
 
 			// Check for jwt plugin registration
-			getJwtPlugin(ctx)
+			const jwtPlugin = getJwtPlugin(ctx)
+			if (!jwtPlugin.options?.usesOidcProviderPlugin) {
+				throw new BetterAuthError('jwt_config', 'Must set usesOidcProviderPlugin to true')
+			}
 		},
 		hooks: {
 			after: [
@@ -206,47 +213,7 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 					},
 				},
 				async (ctx) => {
-					const baseURL = ctx.context.baseURL;
-					const jwtPlugin = getJwtPlugin(ctx.context);
-					const metadata: OIDCMetadata = {
-						scopes_supported: opts?.scopes ?? [],
-						claims_supported: opts?.claims ?? [],
-						...options?.advertisedMetadata,
-						issuer:
-							jwtPlugin.options?.jwt?.issuer ??
-							baseURL,
-						authorization_endpoint: `${baseURL}/oauth2/authorize`,
-						token_endpoint: `${baseURL}/oauth2/token`,
-						userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
-						jwks_uri: jwtPlugin?.options?.jwks?.remoteUrl
-							? jwtPlugin?.options.jwks.remoteUrl
-							: `${baseURL}/jwks`,
-						registration_endpoint: `${baseURL}/oauth2/register`,
-						response_types_supported: [
-							"code",
-						],
-						response_modes_supported: ["query"],
-						grant_types_supported: [
-							"authorization_code",
-							"refresh_token",
-							"client_credentials",
-						],
-						subject_types_supported: ["public"],
-						id_token_signing_alg_values_supported:
-							jwtPlugin.options?.jwks?.keyPairConfig?.alg
-								? [jwtPlugin.options?.jwks?.keyPairConfig?.alg]
-								: ['EdDSA'],
-						token_endpoint_auth_methods_supported: [
-							"client_secret_basic",
-							"client_secret_post",
-						],
-						code_challenge_methods_supported: [
-							's256'
-						],
-						acr_values_supported: [
-							"urn:mace:incommon:iap:bronze",
-						],
-					};
+					const metadata = oidcMetadata(ctx, opts);
 					return ctx.json(metadata);
 				},
 			),
