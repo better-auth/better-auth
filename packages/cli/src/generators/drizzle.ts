@@ -56,16 +56,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						return `integer('${name}')`;
 					}
 				}
+				if (field.references.field) {
+					if (databaseType === "mysql") {
+						return `varchar('${name}', { length: 36 })`;
+					}
+				}
 				return `text('${name}')`;
 			}
-
 			const type = field.type as
 				| "string"
 				| "number"
 				| "boolean"
 				| "date"
 				| `${"string" | "number"}[]`;
-
 			const typeMap: Record<
 				typeof type,
 				Record<typeof databaseType, string>
