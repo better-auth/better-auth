@@ -9,7 +9,7 @@ import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
 import type { GenericEndpointContext } from "../../types";
 
-interface MagicLinkopts {
+interface MagicLinkopts<DS extends z.ZodType> {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -23,10 +23,19 @@ interface MagicLinkopts {
 			email: string;
 			url: string;
 			token: string;
-			additionalData?: Record<string, any>;
+			additionalData?: z.infer<DS>;
 		},
 		request?: Request,
 	) => Promise<void> | void;
+	/**
+	 * Zod schema for the additionalData property of the sendMagicLink function. 
+	 * This schema is used to validate and type-safeguard the additional data passed to the sign-in endpoint.
+	 * 
+	 * @default z.record(z.any())
+	 * @see {@link https://zod.dev/basics}
+	 */
+	additionalDataSchema?: DS;
+
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -62,11 +71,11 @@ interface MagicLinkopts {
 		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
 }
 
-export const magicLink = (options: MagicLinkopts) => {
+export const magicLink = <DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodAny>>(options: MagicLinkopts) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies MagicLinkopts;
+	} satisfies MagicLinkopts<DS>;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -81,6 +90,8 @@ export const magicLink = (options: MagicLinkopts) => {
 		}
 		return token;
 	}
+
+	const additionalDataSchema = options.additionalDataSchema ?? (z.record(z.any(), z.any()) as unknown as DS);
 
 	return {
 		id: "magic-link",
@@ -136,12 +147,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							.string()
 							.meta({
 								description: "URL to redirect after error.",
-						additionalData: z
-							.record(z.any(), z.any())
-							.meta({
-								description: "Additional data for use in the magic link process",
-							})
-							.optional(),
+						additionalData: additionalDataSchema.optional(),
 					}),
 					metadata: {
 						openapi: {
