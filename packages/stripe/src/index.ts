@@ -207,7 +207,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * Return URL
 					 */
 					returnUrl: z
-						.string({
+						.string().meta({
 							description:
 								'Return URL to redirect back after successful subscription. Eg: "https://example.com/success"',
 						})
@@ -216,7 +216,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * Disable Redirect
 					 */
 					disableRedirect: z
-						.boolean({
+						.boolean().meta({
 							description:
 								"Disable redirect after successful subscription. Eg: true",
 						})
@@ -601,18 +601,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				method: "POST",
 				body: z.object({
 					referenceId: z
-						.string({
+						.string().meta({
 							description:
 								"Reference id of the subscription to cancel. Eg: '123'",
 						})
 						.optional(),
 					subscriptionId: z
-						.string({
+						.string().meta({
 							description:
 								"The id of the subscription to cancel. Eg: 'sub_123'",
 						})
 						.optional(),
-					returnUrl: z.string({
+					returnUrl: z.string().meta({
 						description:
 							"Return URL to redirect back after successful subscription. Eg: 'https://example.com/success'",
 					}),
@@ -743,13 +743,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				method: "POST",
 				body: z.object({
 					referenceId: z
-						.string({
+						.string().meta({
 							description:
 								"Reference id of the subscription to restore. Eg: '123'",
 						})
 						.optional(),
 					subscriptionId: z
-						.string({
+						.string().meta({
 							description:
 								"The id of the subscription to restore. Eg: 'sub_123'",
 						})
@@ -875,7 +875,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				query: z.optional(
 					z.object({
 						referenceId: z
-							.string({
+							.string().meta({
 								description:
 									"Reference id of the subscription to list. Eg: '123'",
 							})
