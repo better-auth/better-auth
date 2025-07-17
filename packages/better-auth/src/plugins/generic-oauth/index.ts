@@ -331,38 +331,45 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						providerId: z.string({
-							error: "The provider ID for the OAuth provider",
+						providerId: z.string().meta({
+							description: "The provider ID for the OAuth provider",
 						}),
 						callbackURL: z
-							.string({
-								error: "The URL to redirect to after sign in",
+							.string()
+							.meta({
+								description: "The URL to redirect to after sign in",
 							})
 							.optional(),
 						errorCallbackURL: z
-							.string({
-								error: "The URL to redirect to if an error occurs",
+							.string()
+							.meta({
+								description: "The URL to redirect to if an error occurs",
 							})
 							.optional(),
 						newUserCallbackURL: z
-							.string({
-								error: "The URL to redirect to after login if the user is new",
+							.string()
+							.meta({
+								description:
+									"The URL to redirect to after login if the user is new",
 							})
 							.optional(),
 						disableRedirect: z
-							.boolean({
-								error: "Disable redirect",
+							.boolean()
+							.meta({
+								description: "Disable redirect",
 							})
 							.optional(),
 						scopes: z
-							.array(z.string(), {
-								error:
+							.array(z.string())
+							.meta({
+								description:
 									"Scopes to be passed to the provider authorization request.",
 							})
 							.optional(),
 						requestSignUp: z
-							.boolean({
-								error:
+							.boolean()
+							.meta({
+								description:
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 							})
 							.optional(),
@@ -487,23 +494,27 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					method: "GET",
 					query: z.object({
 						code: z
-							.string({
-								error: "The OAuth2 code",
+							.string()
+							.meta({
+								description: "The OAuth2 code",
 							})
 							.optional(),
 						error: z
-							.string({
-								error: "The error message, if any",
+							.string()
+							.meta({
+								description: "The error message, if any",
 							})
 							.optional(),
 						error_description: z
-							.string({
-								error: "The error description, if any",
+							.string()
+							.meta({
+								description: "The error description, if any",
 							})
 							.optional(),
 						state: z
-							.string({
-								error: "The state parameter from the OAuth2 request",
+							.string()
+							.meta({
+								description: "The state parameter from the OAuth2 request",
 							})
 							.optional(),
 					}),
@@ -750,16 +761,19 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						 * linking a social account compared to the initial authentication.
 						 */
 						scopes: z
-							.array(z.string(), {
-								error: "Additional scopes to request when linking the account",
+							.array(z.string())
+							.meta({
+								description:
+									"Additional scopes to request when linking the account",
 							})
 							.optional(),
 						/**
 						 * The URL to redirect to if there is an error during the link process.
 						 */
 						errorCallbackURL: z
-							.string({
-								error:
+							.string()
+							.meta({
+								description:
 									"The URL to redirect to if there is an error during the link process",
 							})
 							.optional(),
