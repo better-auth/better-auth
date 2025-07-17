@@ -20,7 +20,7 @@ Magic link or email link is a way to authenticate users without a password. When
     export const auth = betterAuth({
         plugins: [
             magicLink({
-                sendMagicLink: async ({ email, token, url }, request) => {
+                sendMagicLink: async ({ email, token, url, additionalData }, request) => {
                     // send email to user
                 }
             })
@@ -122,6 +122,38 @@ type magicLinkVerify = {
 ```
 </APIMethod>
 
+### Additional properties
+
+If you want to pass any arbitrary data to your `sendMagicLink` function, you can specify the `additionalData` field in the request body of the `signIn.magicLink` function.
+
+```ts title="magic-link.ts"
+const { data, error } = await authClient.signIn.magicLink({
+  email: "user@email.com",
+  additionalData: {
+    message: "Hello from better-auth!",
+  },
+});
+```
+
+The record is now available to use in the `sendMagicLink` function.
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
+ 
+export const auth = betterAuth({
+    plugins: [
+        magicLink({
+            sendMagicLink: async ({ email, token, url, additionalData }, request) => {
+                const message = additionalData["message"];
+                
+                // send email to user
+            }
+        })
+    ]
+})
+```
+
 ## Configuration Options
 
 **sendMagicLink**: The `sendMagicLink` function is called when a user requests a magic link. It takes an object with the following properties:
@@ -129,6 +161,7 @@ type magicLinkVerify = {
 - `email`: The email address of the user.
 - `url`: The URL to be sent to the user. This URL contains the token.
 - `token`: The token if you want to send the token with custom URL.
+- `additionalData`: Optional record with properties provided in the request body.
 
 and a `request` object as the second parameter.
 
