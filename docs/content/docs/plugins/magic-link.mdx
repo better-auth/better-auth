@@ -157,9 +157,10 @@ export const auth = betterAuth({
 For type-safety and runtime schema validation, you can supply a [Zod schema](https://zod.dev/) to the plugin through options.
 
 ```ts title="server.ts"
-import { betterAuth, z } from "better-auth";
+import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
- 
+import z from "zod"; // [!code highlight]
+
 export const auth = betterAuth({
     plugins: [
         magicLink({
