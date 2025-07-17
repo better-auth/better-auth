@@ -2,7 +2,6 @@ import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
-import { faceit } from "./faceit";
 import { github } from "./github";
 import { google } from "./google";
 import { huggingface } from "./huggingface";
@@ -24,7 +23,6 @@ export const socialProviders = {
 	apple,
 	discord,
 	facebook,
-	faceit,
 	github,
 	microsoft,
 	google,
@@ -81,6 +79,5 @@ export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
-export * from "./faceit";
 
 export type SocialProviderList = typeof socialProviderList;

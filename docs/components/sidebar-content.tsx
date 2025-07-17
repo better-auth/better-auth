@@ -480,25 +480,6 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Faceit",
-				href: "/docs/authentication/faceit",
-				isNew: true,
-				icon: () => (
-					<svg
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 20 20"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							d="M20 0.209706C20 0.107218 19.9157 0 19.9157 0C19.8344 0 19.8344 -9.31323e-09 19.7495 0.10643C18.0832 3.3624 16.3358 6.62309 14.6702 9.98549H0.173785C0.00759844 9.98549 -0.0767445 10.3016 0.0925661 10.4041C6.08966 13.2454 14.8363 17.553 19.6683 19.971C19.8344 20.0774 20 19.8645 20 19.7613V0.209706Z"
-							fill="#888888"
-						/>
-					</svg>
-				),
-			},
-			{
 				title: "GitHub",
 				href: "/docs/authentication/github",
 				icon: () => (
