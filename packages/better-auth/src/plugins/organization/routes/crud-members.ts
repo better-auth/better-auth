@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -127,14 +127,15 @@ export const removeMember = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			memberIdOrEmail: z.string({
+			memberIdOrEmail: z.string().meta({
 				description: "The ID or email of the member to remove",
 			}),
 			/**
 			 * If not provided, the active organization will be used
 			 */
 			organizationId: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"The ID of the organization to remove the member from. If not provided, the active organization will be used",
 				})

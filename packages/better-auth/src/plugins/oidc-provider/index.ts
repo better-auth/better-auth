@@ -426,7 +426,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.record(z.any()),
+					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
 					},
@@ -1011,8 +1011,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						tos_uri: z.string().optional(),
 						policy_uri: z.string().optional(),
 						jwks_uri: z.string().optional(),
-						jwks: z.record(z.any()).optional(),
-						metadata: z.record(z.any()).optional(),
+						jwks: z.record(z.any(), z.any()).optional(),
+						metadata: z.record(z.any(), z.any()).optional(),
 						software_id: z.string().optional(),
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),

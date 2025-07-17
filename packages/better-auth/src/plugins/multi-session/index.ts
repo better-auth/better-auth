@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -83,7 +83,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string({
+						sessionToken: z.string().meta({
 							description: "The session token to set as active",
 						}),
 					}),
@@ -146,7 +146,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string({
+						sessionToken: z.string().meta({
 							description: "The session token to revoke",
 						}),
 					}),

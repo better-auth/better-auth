@@ -1,5 +1,5 @@
 import { generateRandomString } from "../../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
@@ -156,7 +156,8 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						 * Disable setting the session cookie
 						 */
 						disableSession: z
-							.boolean({
+							.boolean()
+							.meta({
 								description: "If true, the session cookie will not be set.",
 							})
 							.optional(),
@@ -166,7 +167,8 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						 * every sign in request within this time.
 						 */
 						trustDevice: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
 									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
 							})

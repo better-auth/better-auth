@@ -1,4 +1,4 @@
-import type { ZodSchema } from "zod";
+import type { ZodSchema } from "zod/v4";
 import type { BetterAuthOptions } from "../types";
 import type { LiteralString } from "../types/helper";
 

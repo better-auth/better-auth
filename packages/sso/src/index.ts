@@ -13,6 +13,7 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth/oauth2";
+
 import { createAuthEndpoint } from "better-auth/plugins";
 import { z } from "zod";
 import * as saml from "samlify";
@@ -1328,10 +1329,10 @@ export const sso = (options?: SSOOptions) => {
 					let session: Session =
 						await ctx.context.internalAdapter.createSession(user.id, ctx);
 					await setSessionCookie(ctx, { session, user });
-					return ctx.json({
-						redirect: true,
-						url: RelayState || `${parsedSamlConfig.issuer}/dashboard`,
-					});
+					console.log("RelayState: ", RelayState);
+					throw ctx.redirect(
+						RelayState || `${parsedSamlConfig.issuer}/dashboard`,
+					);
 				},
 			),
 		},

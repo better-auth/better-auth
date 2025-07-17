@@ -9,7 +9,7 @@ export default defineBuildConfig({
 	},
 	declaration: true,
 	outDir: "dist",
-	clean: false,
+	clean: true,
 	failOnWarn: false,
 	externals: [
 		"prisma",
