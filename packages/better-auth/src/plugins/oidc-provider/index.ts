@@ -635,17 +635,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_client",
 						});
 					}
-					const isValidSecret = await verifyStoredClientSecret(
-						ctx,
-						client.clientSecret,
-						client_secret.toString(),
-					);
-					if (!isValidSecret) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_secret",
-							error: "invalid_client",
-						});
-					}
+
 					const value = JSON.parse(
 						verificationValue.value,
 					) as CodeVerificationValue;
@@ -667,7 +657,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
-
+					if (client.clientSecret) {
+						const isValidSecret = await verifyStoredClientSecret(
+							ctx,
+							client.clientSecret,
+							client_secret.toString(),
+						);
+						if (!isValidSecret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_secret",
+								error: "invalid_client",
+							});
+						}
+					}
 					const challenge =
 						value.codeChallengeMethod === "plain"
 							? code_verifier
