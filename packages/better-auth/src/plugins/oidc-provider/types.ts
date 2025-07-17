@@ -147,6 +147,12 @@ export interface OIDCOptions {
 				encrypt: (clientSecret: string) => Promise<string>;
 				decrypt: (clientSecret: string) => Promise<string>;
 		  };
+	/**
+	 * Whether to use the JWT plugin to sign the ID token.
+	 *
+	 * @default false
+	 */
+	useJWTPlugin?: boolean;
 }
 
 export interface AuthorizationQuery {
@@ -522,13 +528,8 @@ export interface OIDCMetadata {
 	subject_types_supported: ["public"];
 	/**
 	 * Supported ID token signing algorithms.
-	 *
-	 * only `RS256` and `none` are supported.
-	 *
-	 * @default
-	 * ["RS256", "none"]
 	 */
-	id_token_signing_alg_values_supported: ("RS256" | "none")[];
+	id_token_signing_alg_values_supported: string[];
 	/**
 	 * Supported token endpoint authentication methods.
 	 *

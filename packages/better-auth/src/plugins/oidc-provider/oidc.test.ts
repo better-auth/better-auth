@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	test,
+} from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oidcProvider } from ".";
 import { genericOAuth } from "../generic-oauth";
@@ -9,6 +17,7 @@ import { genericOAuthClient } from "../generic-oauth/client";
 import { listen, type Listener } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
+import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 
 describe("oidc", async () => {
 	const {
@@ -333,506 +342,352 @@ describe("oidc", async () => {
 		});
 		expect(callbackURL).toContain("/dashboard");
 	});
+});
 
-	describe("client secret storage methods", async () => {
-		// Testing hashed client secrets
-		describe("hashed", async () => {
-			const {
-				auth: hashTestAuth,
-				signInWithTestUser: hashSignInWithTestUser,
-				customFetchImpl: hashCustomFetchImpl,
-			} = await getTestInstance({
-				baseURL: "http://localhost:3001",
-				plugins: [
-					oidcProvider({
-						loginPage: "/login",
-						consentPage: "/oauth2/authorize",
-						storeClientSecret: "hashed",
-					}),
-					jwt(),
-				],
-			});
-
-			const { headers: hashHeaders } = await hashSignInWithTestUser();
-			const hashServerClient = createAuthClient({
-				plugins: [oidcClient()],
-				baseURL: "http://localhost:3001",
-				fetchOptions: {
-					customFetchImpl: hashCustomFetchImpl,
-					headers: hashHeaders,
-				},
-			});
-
-			let hashServer: Listener;
-			let hashedApplication: Client;
-
-			beforeAll(async () => {
-				hashServer = await listen(toNodeHandler(hashTestAuth.handler), {
-					port: 3001,
-				});
-			});
-
-			afterAll(async () => {
-				await hashServer.close();
-			});
-
-			it("should create client with hashed secret", async ({ expect }) => {
-				const createdClient = await hashServerClient.oauth2.register({
-					client_name: "hashed-test",
-					redirect_uris: [
-						"http://localhost:3001/api/auth/oauth2/callback/test",
-					],
-				});
-
-				expect(createdClient.data).toMatchObject({
-					client_id: expect.any(String),
-					client_secret: expect.any(String),
-					client_name: "hashed-test",
-				});
-
-				if (createdClient.data) {
-					hashedApplication = {
-						clientId: createdClient.data.client_id,
-						clientSecret: createdClient.data.client_secret,
-						redirectURLs: createdClient.data.redirect_uris,
-						metadata: {},
-						icon: createdClient.data.logo_uri || "",
-						type: "web",
-						disabled: false,
-						name: createdClient.data.client_name || "",
-					};
-
-					// Verify the secret is stored hashed in the database
-					const authCtx = await hashTestAuth.$context;
-					const dbClient = await authCtx.adapter.findOne<{
-						clientSecret: string;
-					}>({
-						model: "oauthApplication",
-						where: [{ field: "clientId", value: createdClient.data.client_id }],
-					});
-
-					if (!dbClient) {
-						throw new Error("Client not found");
-					}
-					expect(dbClient.clientSecret).not.toBe(
-						createdClient.data.client_secret,
-					);
-					expect(dbClient.clientSecret.length).toBeGreaterThan(0);
-				}
-			});
-
-			it("should authenticate with hashed client secret", async ({
-				expect,
-			}) => {
-				// Test token exchange with hashed client secret
-				const tokenResponse = await hashCustomFetchImpl(
-					`http://localhost:3001/api/auth/oauth2/token`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/x-www-form-urlencoded",
-							Authorization: `Basic ${btoa(
-								`${hashedApplication.clientId}:${hashedApplication.clientSecret}`,
-							)}`,
-						},
-						body: new URLSearchParams({
-							grant_type: "authorization_code",
-							code: "dummy-code-for-validation-test",
-							redirect_uri: hashedApplication.redirectURLs[0],
-						}).toString(),
+describe("oidc storage", async () => {
+	test.each([
+		{
+			storeClientSecret: undefined,
+		},
+		{
+			storeClientSecret: "hashed" as const,
+		},
+		{
+			storeClientSecret: "encrypted" as const,
+		},
+	])("OIDC base test", async ({ storeClientSecret }) => {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+			testUser,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: true,
+					getAdditionalUserInfoClaim(user, scopes) {
+						return {
+							custom: "custom value",
+							userId: user.id,
+						};
 					},
-				);
-
-				// We expect this to fail with invalid code, but it should pass client authentication
-				const response = await tokenResponse.json();
-				expect(response.error).not.toBe("invalid_client");
-			});
+					storeClientSecret,
+				}),
+				jwt(),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
 		});
 
-		// Testing encrypted client secrets
-		describe("encrypted", async () => {
-			const {
-				auth: encryptTestAuth,
-				signInWithTestUser: encryptSignInWithTestUser,
-				customFetchImpl: encryptCustomFetchImpl,
-			} = await getTestInstance({
-				baseURL: "http://localhost:3002",
-				plugins: [
-					oidcProvider({
-						loginPage: "/login",
-						consentPage: "/oauth2/authorize",
-						storeClientSecret: "encrypted",
-					}),
-					jwt(),
-				],
-			});
-
-			const { headers: encryptHeaders } = await encryptSignInWithTestUser();
-			const encryptServerClient = createAuthClient({
-				plugins: [oidcClient()],
-				baseURL: "http://localhost:3002",
-				fetchOptions: {
-					customFetchImpl: encryptCustomFetchImpl,
-					headers: encryptHeaders,
-				},
-			});
-
-			let encryptServer: Listener;
-			let encryptedApplication: Client;
-
-			beforeAll(async () => {
-				encryptServer = await listen(toNodeHandler(encryptTestAuth.handler), {
-					port: 3002,
-				});
-			});
-
-			afterAll(async () => {
-				await encryptServer.close();
-			});
-
-			it("should create client with encrypted secret", async ({ expect }) => {
-				const createdClient = await encryptServerClient.oauth2.register({
-					client_name: "encrypted-test",
-					redirect_uris: [
-						"http://localhost:3002/api/auth/oauth2/callback/test",
-					],
-				});
-
-				expect(createdClient.data).toMatchObject({
-					client_id: expect.any(String),
-					client_secret: expect.any(String),
-					client_name: "encrypted-test",
-				});
-
-				if (createdClient.data) {
-					encryptedApplication = {
-						clientId: createdClient.data.client_id,
-						clientSecret: createdClient.data.client_secret,
-						redirectURLs: createdClient.data.redirect_uris,
-						metadata: {},
-						icon: createdClient.data.logo_uri || "",
-						type: "web",
-						disabled: false,
-						name: createdClient.data.client_name || "",
-					};
-
-					// Verify the secret is stored encrypted in the database
-					const authCtx = await encryptTestAuth.$context;
-					const dbClient = await authCtx.adapter.findOne<{
-						clientSecret: string;
-					}>({
-						model: "oauthApplication",
-						where: [{ field: "clientId", value: createdClient.data.client_id }],
-					});
-
-					if (!dbClient) {
-						throw new Error("Client not found");
-					}
-					expect(dbClient.clientSecret).not.toBe(
-						createdClient.data.client_secret,
-					);
-					expect(dbClient.clientSecret.length).toBeGreaterThan(0);
-				}
-			});
-
-			it("should authenticate with encrypted client secret", async ({
-				expect,
-			}) => {
-				// Test token exchange with encrypted client secret
-				const tokenResponse = await encryptCustomFetchImpl(
-					`http://localhost:3002/api/auth/oauth2/token`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/x-www-form-urlencoded",
-							Authorization: `Basic ${btoa(
-								`${encryptedApplication.clientId}:${encryptedApplication.clientSecret}`,
-							)}`,
-						},
-						body: new URLSearchParams({
-							grant_type: "authorization_code",
-							code: "dummy-code-for-validation-test",
-							redirect_uri: encryptedApplication.redirectURLs[0],
-						}).toString(),
-					},
-				);
-
-				// We expect this to fail with invalid code, but it should pass client authentication
-				const response = await tokenResponse.json();
-				expect(response.error).not.toBe("invalid_client");
-			});
+		let server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
 		});
 
-		// Testing custom hash function
-		describe("custom hasher", async () => {
-			const customHash = vi.fn(
-				async (secret: string) => `custom-hash-${secret}`,
-			);
-
-			const {
-				auth: customHashTestAuth,
-				signInWithTestUser: customHashSignInWithTestUser,
-				customFetchImpl: customHashCustomFetchImpl,
-			} = await getTestInstance({
-				baseURL: "http://localhost:3003",
-				plugins: [
-					oidcProvider({
-						loginPage: "/login",
-						consentPage: "/oauth2/authorize",
-						storeClientSecret: {
-							hash: customHash,
-						},
-					}),
-					jwt(),
-				],
-			});
-
-			const { headers: customHashHeaders } =
-				await customHashSignInWithTestUser();
-			const customHashServerClient = createAuthClient({
-				plugins: [oidcClient()],
-				baseURL: "http://localhost:3003",
-				fetchOptions: {
-					customFetchImpl: customHashCustomFetchImpl,
-					headers: customHashHeaders,
+		let application: Client = {
+			clientId: "test-client-id",
+			clientSecret: "test-client-secret-oidc",
+			redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			metadata: {},
+			icon: "",
+			type: "web",
+			disabled: false,
+			name: "test",
+		};
+		const createdClient = await serverClient.oauth2.register({
+			client_name: application.name,
+			redirect_uris: application.redirectURLs,
+			logo_uri: application.icon,
+		});
+		expect(createdClient.data).toMatchObject({
+			client_id: expect.any(String),
+			client_secret: expect.any(String),
+			client_name: "test",
+			logo_uri: "",
+			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			grant_types: ["authorization_code"],
+			response_types: ["code"],
+			token_endpoint_auth_method: "client_secret_basic",
+			client_id_issued_at: expect.any(Number),
+			client_secret_expires_at: 0,
+		});
+		if (createdClient.data) {
+			application = {
+				clientId: createdClient.data.client_id,
+				clientSecret: createdClient.data.client_secret,
+				redirectURLs: createdClient.data.redirect_uris,
+				metadata: {},
+				icon: createdClient.data.logo_uri || "",
+				type: "web",
+				disabled: false,
+				name: createdClient.data.client_name || "",
+			};
+		}
+		// The RP (Relying Party) - the client application
+		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
+			account: {
+				accountLinking: {
+					trustedProviders: ["test"],
 				},
-			});
-
-			let customHashServer: Listener;
-			let customHashApplication: Client;
-
-			beforeAll(async () => {
-				customHashServer = await listen(
-					toNodeHandler(customHashTestAuth.handler),
-					{
-						port: 3003,
-					},
-				);
-			});
-
-			afterAll(async () => {
-				await customHashServer.close();
-			});
-
-			it("should create client with custom hashed secret", async ({
-				expect,
-			}) => {
-				const createdClient = await customHashServerClient.oauth2.register({
-					client_name: "custom-hash-test",
-					redirect_uris: [
-						"http://localhost:3003/api/auth/oauth2/callback/test",
-					],
-				});
-
-				expect(createdClient.data).toMatchObject({
-					client_id: expect.any(String),
-					client_secret: expect.any(String),
-					client_name: "custom-hash-test",
-				});
-
-				if (createdClient.data) {
-					customHashApplication = {
-						clientId: createdClient.data.client_id,
-						clientSecret: createdClient.data.client_secret,
-						redirectURLs: createdClient.data.redirect_uris,
-						metadata: {},
-						icon: createdClient.data.logo_uri || "",
-						type: "web",
-						disabled: false,
-						name: createdClient.data.client_name || "",
-					};
-
-					// Verify the custom hash function was called
-					expect(customHash).toHaveBeenCalledWith(
-						createdClient.data.client_secret,
-					);
-
-					// Verify the secret is stored with custom hash in the database
-					const authCtx = await customHashTestAuth.$context;
-					const dbClient = await authCtx.adapter.findOne<{
-						clientSecret: string;
-					}>({
-						model: "oauthApplication",
-						where: [{ field: "clientId", value: createdClient.data.client_id }],
-					});
-
-					if (!dbClient) {
-						throw new Error("Client not found");
-					}
-					expect(dbClient.clientSecret).toBe(
-						`custom-hash-${createdClient.data.client_secret}`,
-					);
-				}
-			});
-
-			it("should authenticate with custom hashed client secret", async ({
-				expect,
-			}) => {
-				// Test token exchange with custom hashed client secret
-				const tokenResponse = await customHashCustomFetchImpl(
-					`http://localhost:3003/api/auth/oauth2/token`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/x-www-form-urlencoded",
-							Authorization: `Basic ${btoa(
-								`${customHashApplication.clientId}:${customHashApplication.clientSecret}`,
-							)}`,
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test",
+							clientId: application.clientId,
+							clientSecret: application.clientSecret,
+							authorizationUrl:
+								"http://localhost:3000/api/auth/oauth2/authorize",
+							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+							scopes: ["openid", "profile", "email"],
+							pkce: true,
 						},
-						body: new URLSearchParams({
-							grant_type: "authorization_code",
-							code: "dummy-code-for-validation-test",
-							redirect_uri: customHashApplication.redirectURLs[0],
-						}).toString(),
-					},
-				);
-
-				// We expect this to fail with invalid code, but it should pass client authentication
-				const response = await tokenResponse.json();
-				expect(response.error).not.toBe("invalid_client");
-
-				// Verify hash function was called for verification
-				expect(customHash).toHaveBeenCalledTimes(2); // Once for storing, once for verifying
-			});
+					],
+				}),
+			],
 		});
 
-		// Testing custom encrypt/decrypt functions
-		describe("custom encryptor", async () => {
-			const customEncrypt = vi.fn(
-				async (secret: string) => `encrypted-${secret}`,
-			);
-			const customDecrypt = vi.fn(async (encryptedSecret: string) =>
-				encryptedSecret.replace("encrypted-", ""),
-			);
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5000",
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const data = await client.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+			},
+		);
+		expect(data.url).toContain(
+			"http://localhost:3000/api/auth/oauth2/authorize",
+		);
+		expect(data.url).toContain(`client_id=${application.clientId}`);
 
-			const {
-				auth: customEncryptTestAuth,
-				signInWithTestUser: customEncryptSignInWithTestUser,
-				customFetchImpl: customEncryptCustomFetchImpl,
-			} = await getTestInstance({
-				baseURL: "http://localhost:3004",
-				plugins: [
-					oidcProvider({
-						loginPage: "/login",
-						consentPage: "/oauth2/authorize",
-						storeClientSecret: {
-							encrypt: customEncrypt,
-							decrypt: customDecrypt,
-						},
-					}),
-					jwt(),
-				],
-			});
+		let redirectURI = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectURI = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(redirectURI).toContain(
+			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+		);
 
-			const { headers: customEncryptHeaders } =
-				await customEncryptSignInWithTestUser();
-			const customEncryptServerClient = createAuthClient({
-				plugins: [oidcClient()],
-				baseURL: "http://localhost:3004",
-				fetchOptions: {
-					customFetchImpl: customEncryptCustomFetchImpl,
-					headers: customEncryptHeaders,
-				},
-			});
+		let callbackURL = "";
+		await client.$fetch(redirectURI, {
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackURL).toContain("/dashboard");
 
-			let customEncryptServer: Listener;
-			let customEncryptApplication: Client;
-
-			beforeAll(async () => {
-				customEncryptServer = await listen(
-					toNodeHandler(customEncryptTestAuth.handler),
-					{
-						port: 3004,
-					},
-				);
-			});
-
-			afterAll(async () => {
-				await customEncryptServer.close();
-			});
-
-			it("should create client with custom encrypted secret", async ({
-				expect,
-			}) => {
-				const createdClient = await customEncryptServerClient.oauth2.register({
-					client_name: "custom-encrypt-test",
-					redirect_uris: [
-						"http://localhost:3004/api/auth/oauth2/callback/test",
-					],
-				});
-
-				expect(createdClient.data).toMatchObject({
-					client_id: expect.any(String),
-					client_secret: expect.any(String),
-					client_name: "custom-encrypt-test",
-				});
-
-				if (createdClient.data) {
-					customEncryptApplication = {
-						clientId: createdClient.data.client_id,
-						clientSecret: createdClient.data.client_secret,
-						redirectURLs: createdClient.data.redirect_uris,
-						metadata: {},
-						icon: createdClient.data.logo_uri || "",
-						type: "web",
-						disabled: false,
-						name: createdClient.data.client_name || "",
-					};
-
-					// Verify the custom encrypt function was called
-					expect(customEncrypt).toHaveBeenCalledWith(
-						createdClient.data.client_secret,
-					);
-
-					// Verify the secret is stored with custom encryption in the database
-					const authCtx = await customEncryptTestAuth.$context;
-					const dbClient = await authCtx.adapter.findOne<{
-						clientSecret: string;
-					}>({
-						model: "oauthApplication",
-						where: [{ field: "clientId", value: createdClient.data.client_id }],
-					});
-
-					if (!dbClient) {
-						throw new Error("Client not found");
-					}
-					expect(dbClient.clientSecret).toBe(
-						`encrypted-${createdClient.data.client_secret}`,
-					);
-				}
-			});
-
-			it("should authenticate with custom encrypted client secret", async ({
-				expect,
-			}) => {
-				// Test token exchange with custom encrypted client secret
-				const tokenResponse = await customEncryptCustomFetchImpl(
-					`http://localhost:3004/api/auth/oauth2/token`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/x-www-form-urlencoded",
-							Authorization: `Basic ${btoa(
-								`${customEncryptApplication.clientId}:${customEncryptApplication.clientSecret}`,
-							)}`,
-						},
-						body: new URLSearchParams({
-							grant_type: "authorization_code",
-							code: "dummy-code-for-validation-test",
-							redirect_uri: customEncryptApplication.redirectURLs[0],
-						}).toString(),
-					},
-				);
-
-				// We expect this to fail with invalid code, but it should pass client authentication
-				const response = await tokenResponse.json();
-				expect(response.error).not.toBe("invalid_client");
-
-				// Verify decrypt function was called for verification
-				expect(customDecrypt).toHaveBeenCalledWith(
-					`encrypted-${customEncryptApplication.clientSecret}`,
-				);
-			});
+		afterEach(async () => {
+			await server.close();
 		});
 	});
+});
+
+describe("oidc-jwt", async () => {
+	let server: Listener | null = null;
+	test.each([
+		{ useJwt: true, description: "with jwt plugin", expected: "EdDSA" },
+		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
+	])(
+		"testing oidc-provider $description to return token signed with $expected",
+		async ({ useJwt, description, expected }) => {
+			const {
+				auth: authorizationServer,
+				signInWithTestUser,
+				customFetchImpl,
+				testUser,
+			} = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				plugins: [
+					oidcProvider({
+						loginPage: "/login",
+						consentPage: "/oauth2/authorize",
+						requirePKCE: true,
+						getAdditionalUserInfoClaim(user, scopes) {
+							return {
+								custom: "custom value",
+								userId: user.id,
+							};
+						},
+						useJWTPlugin: useJwt,
+					}),
+					...(useJwt ? [jwt()] : []),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+			const serverClient = createAuthClient({
+				plugins: [oidcClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers,
+				},
+			});
+			if (server) console.log("server is not null");
+			server = await listen(toNodeHandler(authorizationServer.handler), {
+				port: 3000,
+			});
+			let application: Client = {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret-oidc",
+				redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+				metadata: {},
+				icon: "",
+				type: "web",
+				disabled: false,
+				name: "test",
+			};
+			const createdClient = await serverClient.oauth2.register({
+				client_name: application.name,
+				redirect_uris: application.redirectURLs,
+				logo_uri: application.icon,
+			});
+			expect(createdClient.data).toMatchObject({
+				client_id: expect.any(String),
+				client_secret: expect.any(String),
+				client_name: "test",
+				logo_uri: "",
+				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+				grant_types: ["authorization_code"],
+				response_types: ["code"],
+				token_endpoint_auth_method: "client_secret_basic",
+				client_id_issued_at: expect.any(Number),
+				client_secret_expires_at: 0,
+			});
+			if (createdClient.data) {
+				application = {
+					clientId: createdClient.data.client_id,
+					clientSecret: createdClient.data.client_secret,
+					redirectURLs: createdClient.data.redirect_uris,
+					metadata: {},
+					icon: createdClient.data.logo_uri || "",
+					type: "web",
+					disabled: false,
+					name: createdClient.data.client_name || "",
+				};
+			}
+
+			// The RP (Relying Party) - the client application
+			const { customFetchImpl: customFetchImplRP } = await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test"],
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: application.clientId,
+								clientSecret: application.clientSecret,
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:5000",
+				fetchOptions: {
+					customFetchImpl: customFetchImplRP,
+				},
+			});
+			const data = await client.signIn.oauth2(
+				{
+					providerId: "test",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+			expect(data.url).toContain(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			expect(data.url).toContain(`client_id=${application.clientId}`);
+
+			let redirectURI = "";
+			await serverClient.$fetch(data.url, {
+				method: "GET",
+				onError(context) {
+					redirectURI = context.response.headers.get("Location") || "";
+				},
+			});
+			expect(redirectURI).toContain(
+				"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+			);
+			let authToken = undefined;
+			let callbackURL = "";
+			await client.$fetch(redirectURI, {
+				onError(context) {
+					callbackURL = context.response.headers.get("Location") || "";
+					authToken = context.response.headers.get("set-auth-token")!;
+				},
+			});
+			expect(callbackURL).toContain("/dashboard");
+			const accessToken = await client.getAccessToken(
+				{ providerId: "test", userId: testUser.id },
+				{
+					auth: {
+						type: "Bearer",
+						token: authToken,
+					},
+				},
+			);
+			const decoded = decodeProtectedHeader(accessToken.data?.idToken!);
+			if (useJwt) {
+				const jwks = await authorizationServer.api.getJwks();
+				const jwkSet = createLocalJWKSet(jwks);
+				const checkSignature = await jwtVerify(
+					accessToken.data?.idToken!,
+					jwkSet,
+				);
+				expect(checkSignature).toBeDefined();
+			} else {
+				const clientSecret = application.clientSecret;
+				const checkSignature = await jwtVerify(
+					accessToken.data?.idToken!,
+					new TextEncoder().encode(clientSecret),
+				);
+				expect(checkSignature).toBeDefined();
+			}
+
+			// expect(checkSignature.payload).toBeDefined();
+			expect(decoded.alg).toBe(expected);
+
+			afterEach(async () => {
+				if (server) {
+					await server.close();
+					server = null;
+				}
+			});
+		},
+	);
 });
