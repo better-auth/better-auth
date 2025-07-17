@@ -201,7 +201,6 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 	});
-
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
