@@ -152,34 +152,35 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		return otp === storedOtp;
 	}
 	const endpoints = {
-					/**
-			 * ### Endpoint
-			 *
-			 * POST `/email-otp/send-verification-otp`
-			 *
-			 * ### API Methods
-			 *
-			 * **server:**
-			 * `auth.api.sendVerificationOTP`
-			 *
-			 * **client:**
-			 * `authClient.emailOtp.sendVerificationOtp`
-			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-send-verification-otp)
-			 */
-			sendVerificationOTP: createAuthEndpoint(
-				"/email-otp/send-verification-otp",
-				{
-					method: "POST",
-					body: z.object({
-						email: z.string({
-							description:
-								'Email address to send the OTP. Eg: "user@example.com"',
-						}),
-						type: z.enum(types, {
-							description:
-								'Type of the OTP. `sign-in`, `email-verification`, or `forgot-password`. Eg: "sign-in"',
-						}),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/email-otp/send-verification-otp`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.sendVerificationOTP`
+		 *
+		 * **client:**
+		 * `authClient.emailOtp.sendVerificationOtp`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-send-verification-otp)
+		 */
+		sendVerificationOTP: createAuthEndpoint(
+			"/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				body: z.object({
+					email: z.string({
+						description:
+							'Email address to send the OTP. Eg: "user@example.com"',
+					}),
+					type: z.enum(types, {
+						description:
+							'Type of the OTP. `sign-in`, `email-verification`, or `forgot-password`. Eg: "sign-in"',
+					}),
+				}),
 				metadata: {
 					openapi: {
 						description: "Send verification OTP",
@@ -277,6 +278,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			},
 		),
 	};
+
 	return {
 		id: "email-otp",
 		init(ctx) {

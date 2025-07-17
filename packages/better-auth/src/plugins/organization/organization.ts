@@ -363,6 +363,7 @@ export const organization = <O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
 		 */
 		leaveOrganization: leaveOrganization,
+		listUserInvitations,
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
