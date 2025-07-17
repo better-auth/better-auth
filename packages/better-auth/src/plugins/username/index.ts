@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -45,15 +45,22 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string({
-							description: "The username of the user",
-						}),
-						password: z.string({
-							description: "The password of the user",
-						}),
+						username: z
+							.string()
+							.meta({ description: "The username of the user" }),
+						password: z
+							.string()
+							.meta({ description: "The password of the user" }),
 						rememberMe: z
-							.boolean({
+							.boolean()
+							.meta({
 								description: "Remember the user session",
+							})
+							.optional(),
+						callbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to after email verification",
 							})
 							.optional(),
 					}),
@@ -233,7 +240,7 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string({
+						username: z.string().meta({
 							description: "The username to check",
 						}),
 					}),

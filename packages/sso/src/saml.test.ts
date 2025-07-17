@@ -352,6 +352,7 @@ const createTemplateCallback =
 			context: saml.SamlLib.replaceTagsByValue(template, tagValues),
 		};
 	};
+
 const createMockSAMLIdP = (port: number) => {
 	const app: ExpressApp = express();
 	let server: ReturnType<typeof createServer> | undefined;
@@ -446,7 +447,6 @@ const createMockSAMLIdP = (port: number) => {
 		"/api/sso/saml2/callback/:providerId",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
-
 			try {
 				const parseResult = await sp.parseLoginResponse(
 					idp,

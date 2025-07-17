@@ -2,7 +2,7 @@ import type { GenericEndpointContext, Session, User } from "../../types";
 import { createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import type { Role } from "../access";
-import type { OrganizationOptions } from "./organization";
+import type { OrganizationOptions } from "./types";
 import type { defaultRoles } from "./access/statement";
 
 export const orgMiddleware = createAuthMiddleware(async (ctx) => {

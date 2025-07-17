@@ -1,11 +1,12 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { type InferOrganizationRolesFromOption } from "../schema";
 import { APIError } from "better-call";
-import { parseRoles, type OrganizationOptions } from "../organization";
+import { parseRoles } from "../organization";
+import { type OrganizationOptions } from "../types";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 
@@ -18,32 +19,35 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			method: "POST",
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
-				email: z.string({
+				email: z.string().meta({
 					description: "The email address of the user to invite",
 				}),
 				role: z.union([
-					z.string({
+					z.string().meta({
 						description: "The role to assign to the user",
 					}),
 					z.array(
-						z.string({
+						z.string().meta({
 							description: "The roles to assign to the user",
 						}),
 					),
 				]),
 				organizationId: z
-					.string({
+					.string()
+					.meta({
 						description: "The organization ID to invite the user to",
 					})
 					.optional(),
 				resend: z
-					.boolean({
+					.boolean()
+					.meta({
 						description:
 							"Resend the invitation email, if the user is already invited",
 					})
 					.optional(),
 				teamId: z
-					.string({
+					.string()
+					.meta({
 						description: "The team ID to invite the user to",
 					})
 					.optional(),
@@ -307,7 +311,7 @@ export const acceptInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string({
+			invitationId: z.string().meta({
 				description: "The ID of the invitation to accept",
 			}),
 		}),
@@ -444,7 +448,7 @@ export const rejectInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string({
+			invitationId: z.string().meta({
 				description: "The ID of the invitation to reject",
 			}),
 		}),
@@ -510,7 +514,7 @@ export const cancelInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string({
+			invitationId: z.string().meta({
 				description: "The ID of the invitation to cancel",
 			}),
 		}),
@@ -582,7 +586,7 @@ export const getInvitation = createAuthEndpoint(
 		use: [orgMiddleware],
 		requireHeaders: true,
 		query: z.object({
-			id: z.string({
+			id: z.string().meta({
 				description: "The ID of the invitation to get",
 			}),
 		}),
@@ -708,7 +712,8 @@ export const listInvitations = createAuthEndpoint(
 		query: z
 			.object({
 				organizationId: z
-					.string({
+					.string()
+					.meta({
 						description: "The ID of the organization to list invitations for",
 					})
 					.optional(),
@@ -742,6 +747,48 @@ export const listInvitations = createAuthEndpoint(
 		const invitations = await adapter.listInvitations({
 			organizationId: orgId,
 		});
+		return ctx.json(invitations);
+	},
+);
+
+/**
+ * List all invitations recieved for a user
+ */
+export const listUserInvitations = createAuthEndpoint(
+	"/organization/list-user-invitations",
+	{
+		method: "GET",
+		use: [orgMiddleware],
+		query: z
+			.object({
+				email: z
+					.string()
+					.meta({
+						description:
+							"The email of the user to list invitations for. This only works for server side API calls.",
+					})
+					.optional(),
+			})
+			.optional(),
+	},
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+
+		if (ctx.request && ctx.query?.email) {
+			throw new APIError("BAD_REQUEST", {
+				message: "User email cannot be passed for client side API calls.",
+			});
+		}
+
+		const userEmail = session?.user.email || ctx.query?.email;
+		if (!userEmail) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Missing session headers, or email query parameter.",
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+		const invitations = await adapter.listUserInvitations(userEmail);
 		return ctx.json(invitations);
 	},
 );

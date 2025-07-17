@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type {
@@ -210,7 +210,7 @@ export const otp2fa = (options?: OTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string({
+				code: z.string().meta({
 					description: "The otp code to verify",
 				}),
 				/**

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";
@@ -8,6 +8,7 @@ import { google } from "./google";
 import { kick } from "./kick";
 import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
+import { slack } from "./slack";
 import { notion } from "./notion";
 import { spotify } from "./spotify";
 import { twitch } from "./twitch";
@@ -29,6 +30,7 @@ export const socialProviders = {
 	microsoft,
 	google,
 	huggingface,
+	slack,
 	spotify,
 	twitch,
 	twitter,
@@ -87,5 +89,6 @@ export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
+export * from "./slack";
 
 export type SocialProviderList = typeof socialProviderList;

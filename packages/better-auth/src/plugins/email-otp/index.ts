@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import {
@@ -157,10 +157,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				method: "POST",
 				body: z.object({
-					email: z.string({
+					email: z.string({}).meta({
 						description: "Email address to send the OTP",
 					}),
-					type: z.enum(types, {
+					type: z.enum(types).meta({
 						description: "Type of the OTP",
 					}),
 				}),
@@ -294,10 +294,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to send the OTP",
 						}),
-						type: z.enum(types, {
+						type: z.enum(types).meta({
+							required: true,
 							description: "Type of the OTP",
 						}),
 					}),
@@ -343,10 +344,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to get the OTP",
 						}),
-						type: z.enum(types),
+						type: z.enum(types).meta({
+							required: true,
+							description: "Type of the OTP",
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -422,10 +426,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to verify",
 						}),
-						otp: z.string({
+						otp: z.string().meta({
+							required: true,
 							description: "OTP to verify",
 						}),
 					}),
@@ -581,10 +586,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to sign in",
 						}),
-						otp: z.string({
+						otp: z.string().meta({
+							required: true,
 							description: "OTP sent to the email",
 						}),
 					}),
@@ -734,7 +740,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string().meta({
 							description: "Email address to send the OTP",
 						}),
 					}),
@@ -802,13 +808,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string().meta({
 							description: "Email address to reset the password",
 						}),
-						otp: z.string({
+						otp: z.string().meta({
 							description: "OTP sent to the email",
 						}),
-						password: z.string({
+						password: z.string().meta({
 							description: "New password",
 						}),
 					}),
@@ -818,7 +824,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							responses: {
 								200: {
 									description: "Success",
-									content: {
+									contnt: {
 										"application/json": {
 											schema: {
 												type: "object",

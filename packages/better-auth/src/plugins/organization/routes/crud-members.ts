@@ -1,14 +1,15 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { InferOrganizationRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
-import { parseRoles, type OrganizationOptions } from "../organization";
+import { parseRoles } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "../../../error/codes";
 import { hasPermission } from "../has-permission";
+import type { OrganizationOptions } from "../types";
 
 export const addMember = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
@@ -126,14 +127,15 @@ export const removeMember = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			memberIdOrEmail: z.string({
+			memberIdOrEmail: z.string().meta({
 				description: "The ID or email of the member to remove",
 			}),
 			/**
 			 * If not provided, the active organization will be used
 			 */
 			organizationId: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"The ID of the organization to remove the member from. If not provided, the active organization will be used",
 				})

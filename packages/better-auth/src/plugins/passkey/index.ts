@@ -12,7 +12,7 @@ import type {
 } from "@simplewebauthn/server";
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
@@ -329,7 +329,8 @@ export const passkey = (options?: PasskeyOptions) => {
 					body: z
 						.object({
 							email: z
-								.string({
+								.string()
+								.meta({
 									description: "The email address of the user",
 								})
 								.optional(),
@@ -491,11 +492,10 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.any({
-							description: "The response from the authenticator",
-						}),
+						response: z.any(),
 						name: z
-							.string({
+							.string()
+							.meta({
 								description: "Name of the passkey",
 							})
 							.optional(),
@@ -622,7 +622,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.record(z.any()),
+						response: z.record(z.any(), z.any()),
 					}),
 					metadata: {
 						openapi: {
@@ -872,8 +872,12 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string(),
-						name: z.string(),
+						id: z.string().meta({
+							description: "The ID of the passkey to update",
+						}),
+						name: z.string().meta({
+							description: "The name of the passkey",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
