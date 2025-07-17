@@ -101,6 +101,7 @@ export const getMetadata = (
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"none",
 		],
 		code_challenge_methods_supported: ["S256"],
 		claims_supported: [
@@ -634,17 +635,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_client",
 						});
 					}
-					const isValidSecret = await verifyStoredClientSecret(
-						ctx,
-						client.clientSecret,
-						client_secret.toString(),
-					);
-					if (!isValidSecret) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_secret",
-							error: "invalid_client",
-						});
-					}
+
 					const value = JSON.parse(
 						verificationValue.value,
 					) as CodeVerificationValue;
@@ -666,7 +657,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
-
+					if (client.clientSecret) {
+						const isValidSecret = await verifyStoredClientSecret(
+							ctx,
+							client.clientSecret,
+							client_secret.toString(),
+						);
+						if (!isValidSecret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_secret",
+								error: "invalid_client",
+							});
+						}
+					}
 					const challenge =
 						value.codeChallengeMethod === "plain"
 							? code_verifier
@@ -1190,7 +1193,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 					return ctx.json(
 						{
 							client_id: clientId,
-							client_secret: clientSecret,
+							...(client.type !== "public"
+								? {
+										client_secret: clientSecret,
+										client_secret_expires_at: 0, // 0 means it doesn't expire
+									}
+								: {}),
 							client_id_issued_at: Math.floor(Date.now() / 1000),
 							client_secret_expires_at: 0, // 0 means it doesn't expire
 							redirect_uris: body.redirect_uris,
