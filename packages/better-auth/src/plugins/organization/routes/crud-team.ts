@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -143,12 +143,8 @@ export const removeTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string().meta({
-				description: "The ID of the team to remove",
-			}),
-			organizationId: z.string().meta({
-				description: "The ID of the organization to remove the team from",
-			}),
+			teamId: z.string(),
+			organizationId: z.string().optional(),
 		}),
 		use: [orgMiddleware],
 		metadata: {
@@ -250,12 +246,8 @@ export const updateTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string().meta({
-				description: "The ID of the team to update",
-			}),
-			data: teamSchema.partial().meta({
-				description: "The data to update the team with",
-			}),
+			teamId: z.string(),
+			data: teamSchema.partial(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
@@ -371,9 +363,7 @@ export const listOrganizationTeams = createAuthEndpoint(
 		method: "GET",
 		query: z.optional(
 			z.object({
-				organizationId: z.string().meta({
-					description: "The ID of the organization to list teams from",
-				}),
+				organizationId: z.string().optional(),
 			}),
 		),
 		metadata: {
