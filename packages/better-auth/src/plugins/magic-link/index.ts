@@ -23,6 +23,7 @@ interface MagicLinkopts {
 			email: string;
 			url: string;
 			token: string;
+			additionalData?: Record<string, any>;
 		},
 		request?: Request,
 	) => Promise<void> | void;
@@ -135,6 +136,10 @@ export const magicLink = (options: MagicLinkopts) => {
 							.string()
 							.meta({
 								description: "URL to redirect after error.",
+						additionalData: z
+							.record(z.any(), z.any())
+							.meta({
+								description: "Additional data for use in the magic link process",
 							})
 							.optional(),
 					}),
@@ -162,7 +167,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, additionalData } = ctx.body;
 
 					if (opts.disableSignUp) {
 						const user =
@@ -213,6 +218,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							email,
 							url: url.toString(),
 							token: verificationToken,
+							additionalData
 						},
 						ctx.request,
 					);
