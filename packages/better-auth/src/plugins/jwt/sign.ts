@@ -1,10 +1,4 @@
-import {
-	importJWK,
-	exportJWK,
-	generateKeyPair,
-	SignJWT,
-	type JWTPayload,
-} from "jose";
+import { importJWK, exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
@@ -14,13 +8,6 @@ import { getJwksAdapter } from "./adapter";
 
 export async function getJwtToken(
 	ctx: GenericEndpointContext,
-	tknOpts: {
-		payload: JWTPayload;
-		issuedAt: boolean;
-		expirationTime: number | string | Date;
-		audience?: string | string[];
-		subject?: string;
-	},
 	options?: JwtOptions,
 ) {
 	const adapter = getJwksAdapter(ctx.context.adapter);
@@ -74,25 +61,23 @@ export async function getJwtToken(
 		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 	);
 
-	let jwt = new SignJWT(tknOpts.payload)
+	const payload = !options?.jwt?.definePayload
+		? ctx.context.session!.user
+		: await options?.jwt.definePayload(ctx.context.session!);
+
+	const jwt = await new SignJWT(payload)
 		.setProtectedHeader({
 			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 			kid: key.id,
 		})
-		.setExpirationTime(tknOpts.expirationTime)
-		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!);
-
-	if (tknOpts.issuedAt) {
-		jwt = jwt.setIssuedAt();
-	}
-
-	if (tknOpts.audience) {
-		jwt = jwt.setAudience(tknOpts.audience);
-	}
-
-	if (tknOpts.subject) {
-		jwt = jwt.setSubject(tknOpts.subject);
-	}
-
-	return await jwt.sign(privateKey);
+		.setIssuedAt()
+		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
+		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
+		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
+		.setSubject(
+			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
+				ctx.context.session!.user.id,
+		)
+		.sign(privateKey);
+	return jwt;
 }

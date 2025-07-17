@@ -1,13 +1,12 @@
 import type {
 	BetterAuthPlugin,
-	GenericEndpointContext,
 	InferOptionSchema,
 	Session,
 	User,
 } from "../../types";
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { getJwtToken as genericGetJwtToken } from "./sign";
+import { getJwtToken } from "./sign";
 import { exportJWK, generateKeyPair } from "jose";
 import {
 	createAuthEndpoint,
@@ -118,29 +117,6 @@ export interface JwtOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
-}
-
-export async function getJwtToken(
-	ctx: GenericEndpointContext,
-	options?: JwtOptions,
-) {
-	const payload = !options?.jwt?.definePayload
-		? ctx.context.session!.user
-		: await options?.jwt.definePayload(ctx.context.session!);
-
-	return await genericGetJwtToken(
-		ctx,
-		{
-			payload,
-			issuedAt: true,
-			expirationTime: options?.jwt?.expirationTime ?? "15m",
-			audience: options?.jwt?.audience ?? ctx.context.options.baseURL!,
-			subject:
-				(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
-				ctx.context.session!.user.id,
-		},
-		options,
-	);
 }
 
 export const jwt = (options?: JwtOptions) => {

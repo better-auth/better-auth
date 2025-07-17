@@ -684,13 +684,37 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 						idToken = await getJwtToken(
-							ctx,
 							{
-								payload,
-								issuedAt: true,
-								expirationTime,
+								...ctx,
+								context: {
+									...ctx.context,
+									session: {
+										session: {
+											id: generateRandomString(32, "a-z", "A-Z"),
+											createdAt: new Date(),
+											updatedAt: new Date(),
+											userId: user.id,
+											expiresAt: new Date(
+												Date.now() + opts.accessTokenExpiresIn * 1000,
+											),
+											token: accessToken,
+											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+										},
+										user,
+									},
+								},
 							},
-							jwtPlugin.options,
+							{
+								...jwtPlugin.options,
+								jwt: {
+									...jwtPlugin.options?.jwt,
+									getSubject: () => user.id,
+									audience: client_id.toString(),
+									issuer: ctx.context.options.baseURL,
+									expirationTime,
+									definePayload: () => payload,
+								},
+							},
 						);
 
 						// If the JWT token is not enabled, create a key and use it to sign
