@@ -714,8 +714,7 @@ export const listInvitations = createAuthEndpoint(
 				organizationId: z
 					.string()
 					.meta({
-						description:
-							"The ID of the organization to list invitations for",
+						description: "The ID of the organization to list invitations for",
 					})
 					.optional(),
 			})
