@@ -307,7 +307,108 @@ describe("SSO disable implicit sign in", async () => {
 			userId: expect.any(String),
 		});
 	});
+	it("should not allow creating a provider if limit is set to 0", async () => {
+		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+			plugins: [sso({ providersLimit: 0 })],
+		});
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "localhost.com",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+					providerId: "test",
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { message: "SSO provider registration is disabled" },
+		});
+	});
+	it("should not allow creating a provider if limit is reached", async () => {
+		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+			plugins: [sso({ providersLimit: 1 })],
+		});
+		const { headers } = await signInWithTestUser();
 
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+				providerId: "test-1",
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "localhost.com",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+					providerId: "test-2",
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: {
+				message: "You have reached the maximum number of SSO providers",
+			},
+		});
+	});
+
+	it("should not allow creating a provider if limit from function is reached", async () => {
+		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+			plugins: [sso({ providersLimit: async () => 1 })],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+				providerId: "test-1",
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "localhost.com",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+					providerId: "test-2",
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: {
+				message: "You have reached the maximum number of SSO providers",
+			},
+		});
+	});
 	it("should not create user with SSO provider when sign ups are disabled", async () => {
 		const res = await auth.api.signInSSO({
 			body: {
