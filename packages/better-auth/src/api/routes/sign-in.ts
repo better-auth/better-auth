@@ -7,6 +7,7 @@ import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
+import { parseUserOutput } from "../../db/schema";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -169,37 +170,7 @@ export const signInSocial = createAuthEndpoint(
 												nullable: true,
 											},
 											user: {
-												type: "object",
-												properties: {
-													id: { type: "string" },
-													email: { type: "string" },
-													name: {
-														type: "string",
-														nullable: true,
-													},
-													image: {
-														type: "string",
-														nullable: true,
-													},
-													emailVerified: {
-														type: "boolean",
-													},
-													createdAt: {
-														type: "string",
-														format: "date-time",
-													},
-													updatedAt: {
-														type: "string",
-														format: "date-time",
-													},
-												},
-												required: [
-													"id",
-													"email",
-													"emailVerified",
-													"createdAt",
-													"updatedAt",
-												],
+												$ref: "#/components/schemas/User",
 											},
 										},
 									},
@@ -300,15 +271,7 @@ export const signInSocial = createAuthEndpoint(
 				redirect: false,
 				token: data.data!.session.token,
 				url: undefined,
-				user: {
-					id: data.data!.user.id,
-					email: data.data!.user.email,
-					name: data.data!.user.name,
-					image: data.data!.user.image,
-					emailVerified: data.data!.user.emailVerified,
-					createdAt: data.data!.user.createdAt,
-					updatedAt: data.data!.user.updatedAt,
-				},
+				user: parseUserOutput(c.context.options, data.data!.user),
 			});
 		}
 
@@ -394,37 +357,7 @@ export const signInEmail = createAuthEndpoint(
 											nullable: true,
 										},
 										user: {
-											type: "object",
-											properties: {
-												id: { type: "string" },
-												email: { type: "string" },
-												name: {
-													type: "string",
-													nullable: true,
-												},
-												image: {
-													type: "string",
-													nullable: true,
-												},
-												emailVerified: {
-													type: "boolean",
-												},
-												createdAt: {
-													type: "string",
-													format: "date-time",
-												},
-												updatedAt: {
-													type: "string",
-													format: "date-time",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											$ref: "#/components/schemas/User",
 										},
 									},
 									required: ["redirect", "token", "user"],
@@ -549,15 +482,7 @@ export const signInEmail = createAuthEndpoint(
 			redirect: !!ctx.body.callbackURL,
 			token: session.token,
 			url: ctx.body.callbackURL,
-			user: {
-				id: user.user.id,
-				email: user.user.email,
-				name: user.user.name,
-				image: user.user.image,
-				emailVerified: user.user.emailVerified,
-				createdAt: user.user.createdAt,
-				updatedAt: user.user.updatedAt,
-			},
+			user: parseUserOutput(ctx.context.options, user.user),
 		});
 	},
 );

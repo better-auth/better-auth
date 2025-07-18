@@ -7,7 +7,7 @@ import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { schema } from "./schema";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 export * from "./error-codes";
 export type UsernameOptions = {
@@ -220,16 +220,7 @@ export const username = (options?: UsernameOptions) => {
 					);
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: user.id,
-							email: user.email,
-							emailVerified: user.emailVerified,
-							username: user.username,
-							name: user.name,
-							image: user.image,
-							createdAt: user.createdAt,
-							updatedAt: user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, user),
 					});
 				},
 			),

@@ -8,7 +8,7 @@ import type {
 	BetterAuthOptions,
 	User,
 } from "../../types";
-import { parseUserInput } from "../../db/schema";
+import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 
@@ -83,50 +83,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												description: "Authentication token for the session",
 											},
 											user: {
-												type: "object",
-												properties: {
-													id: {
-														type: "string",
-														description: "The unique identifier of the user",
-													},
-													email: {
-														type: "string",
-														format: "email",
-														description: "The email address of the user",
-													},
-													name: {
-														type: "string",
-														description: "The name of the user",
-													},
-													image: {
-														type: "string",
-														format: "uri",
-														nullable: true,
-														description: "The profile image URL of the user",
-													},
-													emailVerified: {
-														type: "boolean",
-														description: "Whether the email has been verified",
-													},
-													createdAt: {
-														type: "string",
-														format: "date-time",
-														description: "When the user was created",
-													},
-													updatedAt: {
-														type: "string",
-														format: "date-time",
-														description: "When the user was last updated",
-													},
-												},
-												required: [
-													"id",
-													"email",
-													"name",
-													"emailVerified",
-													"createdAt",
-													"updatedAt",
-												],
+												$ref: "#/components/schemas/User",
 											},
 										},
 										required: ["user"], // token is optional
@@ -279,15 +236,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			) {
 				return ctx.json({
 					token: null,
-					user: {
-						id: createdUser.id,
-						email: createdUser.email,
-						name: createdUser.name,
-						image: createdUser.image,
-						emailVerified: createdUser.emailVerified,
-						createdAt: createdUser.createdAt,
-						updatedAt: createdUser.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, createdUser),
 				});
 			}
 
@@ -311,15 +260,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			);
 			return ctx.json({
 				token: session.token,
-				user: {
-					id: createdUser.id,
-					email: createdUser.email,
-					name: createdUser.name,
-					image: createdUser.image,
-					emailVerified: createdUser.emailVerified,
-					createdAt: createdUser.createdAt,
-					updatedAt: createdUser.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, createdUser),
 			});
 		},
 	);
