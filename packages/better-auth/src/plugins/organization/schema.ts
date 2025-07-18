@@ -37,6 +37,7 @@ export const invitationSchema = z.object({
 	teamId: z.string().optional(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
 });
 export const teamSchema = z.object({
 	id: z.string().default(generateId),
@@ -111,6 +112,7 @@ export type InferInvitation<O extends OrganizationOptions> =
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				createdAt: Date;
 				teamId?: string;
 			}
 		: {
@@ -121,4 +123,5 @@ export type InferInvitation<O extends OrganizationOptions> =
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				createdAt: Date;
 			};
