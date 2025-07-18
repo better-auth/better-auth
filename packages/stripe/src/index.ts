@@ -948,6 +948,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							"Map a meter event to a customer by passing a customer ID in the event's payload.",
 					}),
 				}),
+				use: [sessionMiddleware],
 			},
 			async (ctx) => {
 				const { displayName, eventName, aggregationFormula, stripeCustomerId } =
@@ -1020,6 +1021,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						description: "The meter's new name. Not visible to the customer.",
 					}),
 				}),
+				use: [sessionMiddleware],
 			},
 			async (ctx) => {
 				const { meterId, updatedDisplayName } = ctx.body;
@@ -1058,6 +1060,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						description: "Unique identifier for the meter.",
 					}),
 				}),
+				use: [sessionMiddleware],
 			},
 			async (ctx) => {
 				const { meterId } = ctx.body;
@@ -1115,6 +1118,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						description: "Unique identifier for the meter.",
 					}),
 				}),
+				use: [sessionMiddleware],
 			},
 			async (ctx) => {
 				const { meterId } = ctx.body;
@@ -1151,6 +1155,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						description: "Unique identifier for the meter.",
 					}),
 				}),
+				use: [sessionMiddleware],
 			},
 			async (ctx) => {
 				const { meterId } = ctx.body;
@@ -1202,6 +1207,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						description: "The value of the meter event to record usage for.",
 					}),
 				}),
+				use: [sessionMiddleware],
 			},
 			async (ctx) => {
 				const { eventName, stripeCustomerId, value } = ctx.body;

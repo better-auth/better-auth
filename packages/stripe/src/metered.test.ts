@@ -8,6 +8,7 @@ import type { StripeOptions } from "./types";
 import { createAuthClient } from "better-auth/client";
 import { bearer } from "better-auth/plugins";
 import { stripeClient } from "./client";
+import { setCookieToHeader } from "better-auth/cookies";
 
 describe("metered", () => {
 	const mockStripe = {
@@ -204,10 +205,16 @@ describe("metered", () => {
 		name: "Test User",
 	};
 
+	const headers = new Headers();
+
 	it("should create a customer on sign up", async () => {
 		const ctx = await auth.$context;
 		const userRes = await authClient.signUp.email(testUser, {
 			throw: true,
+		});
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
 		});
 		const res = await ctx.adapter.findOne<User>({
 			model: "user",
@@ -230,6 +237,9 @@ describe("metered", () => {
 			eventName: "api_calls",
 			aggregationFormula: AggregationFormula.COUNT,
 			stripeCustomerId: "cus_mock123",
+			fetchOptions: {
+				headers,
+			},
 		});
 		expect(res.data?.id).toBe("meter_123");
 		expect(res.data?.display_name).toBe("API Calls");
@@ -241,6 +251,9 @@ describe("metered", () => {
 		var res = await authClient.meteredBilling.update({
 			meterId: "meter_123",
 			updatedDisplayName: "Update API Calls",
+			fetchOptions: {
+				headers,
+			},
 		});
 		expect(res.data?.id).toBe("meter_123");
 		expect(res.data?.display_name).toBe("Update API Calls");
@@ -249,6 +262,9 @@ describe("metered", () => {
 	it("should retrieve a metered billing", async () => {
 		var res = await authClient.meteredBilling.retrieve({
 			meterId: "meter_123",
+			fetchOptions: {
+				headers,
+			},
 		});
 		expect(res.data?.id).toBe("meter_123");
 		expect(res.data?.display_name).toBe("Update API Calls");
@@ -257,6 +273,9 @@ describe("metered", () => {
 	it("should deactivate a metered billing", async () => {
 		var res = await authClient.meteredBilling.deactivate({
 			meterId: "meter_123",
+			fetchOptions: {
+				headers,
+			},
 		});
 		expect(res.data?.id).toBe("meter_123");
 		expect(res.data?.status).toBe("active");
@@ -268,6 +287,9 @@ describe("metered", () => {
 	it("should reactivate a metered billing", async () => {
 		var res = await authClient.meteredBilling.reactivate({
 			meterId: "meter_123",
+			fetchOptions: {
+				headers,
+			},
 		});
 		expect(res.data?.id).toBe("meter_123");
 		expect(res.data?.status).toBe("active");
@@ -279,6 +301,9 @@ describe("metered", () => {
 			value: "1",
 			eventName: "api_calls",
 			stripeCustomerId: "cus_mock123",
+			fetchOptions: {
+				headers,
+			},
 		});
 
 		expect(res).toBeDefined();
