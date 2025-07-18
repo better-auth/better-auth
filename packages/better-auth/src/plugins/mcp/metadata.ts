@@ -18,6 +18,7 @@ export function authServerMetadata(
 			? jwtPluginOptions.jwks.remoteUrl
 			: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
+		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
 		grant_types_supported: [

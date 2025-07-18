@@ -464,6 +464,34 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	claims_supported: string[];
 }
 
+export interface OAuthAccessToken {
+	/**
+	 * The opaque access token.
+	 */
+	token: string;
+	/**
+	 * The client ID of the client that requested the access token.
+	 */
+	clientId: string;
+	/**
+	 * The session ID the access token is associated with.
+	 *
+	 * Not available in client credentials grant
+	 * where no user session is involved.
+	 */
+	sessionId?: string;
+	/** The expiration date of the access token. */
+	expiresAt: Date;
+	/** The creation date of the access token. */
+	createdAt: Date;
+	/**
+	 * Scope granted for the access token.
+	 *
+	 * Shall match the sessionId.scopes if sessionId is provided.
+	 */
+	scope: string;
+}
+
 /**
  * Client registered values as stored on the database
  */

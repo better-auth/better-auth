@@ -71,7 +71,7 @@ async function signUserJwt(
 	const now = Date.now();
 	const iat = overrides?.iat ?? Math.floor(now / 1000);
 	const expiresIn = opts.accessTokenExpiresIn ?? 600; // 10 min recommended by OIDC spec
-	const exp = overrides?.exp ?? (iat + expiresIn);
+	const exp = overrides?.exp ?? iat + expiresIn;
 	const customClaims = opts.customJwtClaims
 		? await opts.customJwtClaims(user, scopes)
 		: {};
@@ -215,7 +215,7 @@ async function createOpaqueAccessToken(
 	const now = Date.now();
 	const iat = payload.iat ?? Math.floor(now / 1000);
 	const expiresIn = opts.accessTokenExpiresIn ?? 600; // 10 min recommended by OIDC spec
-	const exp = payload?.exp ?? (iat + expiresIn);
+	const exp = payload?.exp ?? iat + expiresIn;
 	const token = generateRandomString(32, "A-Z", "a-z");
 	await ctx.context.adapter.create({
 		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
