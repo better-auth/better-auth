@@ -64,11 +64,17 @@ describe("stripe", async () => {
 					priceId: process.env.STRIPE_PRICE_ID_1!,
 					name: "starter",
 					lookupKey: "lookup_key_123",
+					limits: {
+						usageLimit: 100,
+					},
 				},
 				{
 					priceId: process.env.STRIPE_PRICE_ID_2!,
 					name: "premium",
 					lookupKey: "lookup_key_234",
+					limits: {
+						usageLimit: 200,
+					},
 				},
 			],
 			usageBased: true,
@@ -932,7 +938,7 @@ describe("stripe", async () => {
 		});
 
 		await authClient.subscription.usage.track({
-			usage: 10,
+			usage: 100,
 			plan: "starter",
 			fetchOptions: {
 				headers,
@@ -946,6 +952,6 @@ describe("stripe", async () => {
 				headers,
 			},
 		});
-		expect(totalUsage.data?.totalUsage).toBe(32);
+		expect(totalUsage.data?.totalUsage).toBe(22);
 	});
 });

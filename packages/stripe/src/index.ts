@@ -26,7 +26,12 @@ import type {
 	Subscription,
 	Usage,
 } from "./types";
-import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
+import {
+	getPlanByName,
+	getPlanByPriceId,
+	getPlans,
+	getTotalUsage,
+} from "./utils";
 import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
@@ -40,6 +45,7 @@ const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
+	USAGE_LIMIT_REACHED: "Usage limit reached",
 } as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
@@ -108,9 +114,31 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 	/**
 	 * THIS MIDDLEWARE CHECK IF THE USER HAS REACHED USAGE LIMIT
-	 * - for the trackUsage end point
+	 * - for the trackUsage endpoint
 	 */
-	const enforceUsageLimit = () => createAuthMiddleware(async (ctx) => {});
+	const enforceUsageLimit = createAuthMiddleware(async (ctx) => {
+		const session = ctx.context.session;
+		if (!session) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		const referenceId =
+			ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
+
+		// Check plan limit
+		const totalUsage = await getTotalUsage(ctx, referenceId, ctx.body?.plan);
+		const planByName = await getPlanByName(options, ctx.body?.plan);
+		if (!planByName) {
+			throw new APIError("BAD_REQUEST", {
+				message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+			});
+		}
+
+		if (totalUsage + ctx.body.usage > planByName?.limits!.usageLimit) {
+			throw new APIError("BAD_REQUEST", {
+				message: STRIPE_ERROR_CODES.USAGE_LIMIT_REACHED,
+			});
+		}
+	});
 
 	const subscriptionEndpoints = {
 		upgradeSubscription: createAuthEndpoint(
@@ -1063,20 +1091,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const { user } = ctx.context.session;
 				const refId = referenceId || user.id;
 
-				const usage = await ctx.context.adapter.findMany({
-					model: "usage",
-					where: [
-						{ field: "referenceId", value: refId },
-						{ field: "plan", value: plan },
-					],
-				});
+				const totalUsage = await getTotalUsage(ctx, refId, plan);
 
-				// add all the usage
-				const totalUsage = (usage as Usage[]).reduce(
-					(acc, u) => acc + u.usage,
-					0,
-				);
-				return ctx.json({ totalUsage });
+				// Check plan limit
+				const planByName = await getPlanByName(options, plan);
+				if (!planByName) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+					});
+				}
+
+				return ctx.json({ totalUsage, limit: planByName.limits?.usage });
 			},
 		),
 		/**
