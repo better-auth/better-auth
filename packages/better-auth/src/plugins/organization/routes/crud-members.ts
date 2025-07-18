@@ -37,17 +37,16 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 		teamId: z
 			.string()
 			.meta({
-				description:
-					'An optional team ID to add the member to. Eg: "team-id"',
+				description: 'An optional team ID to add the member to. Eg: "team-id"',
 			})
 			.optional(),
-	})
+	});
 	return createAuthEndpoint(
 		"/organization/add-member",
 		{
 			method: "POST",
 			body: z.object({
-				...baseSchema.shape,	
+				...baseSchema.shape,
 				...additionalFieldsSchema.shape,
 			}),
 			use: [orgMiddleware],
@@ -62,7 +61,8 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						organizationId?: string;
 					} & (O extends { teams: { enabled: true } }
 						? { teamId?: string }
-						: {}) & InferAdditionalFieldsFromPluginOptions<"member", O>,
+						: {}) &
+						InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
 			},
 		},
@@ -85,7 +85,8 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 
-			const teamId = "teamId" in ctx.body ? ctx.body.teamId as string : undefined;
+			const teamId =
+				"teamId" in ctx.body ? (ctx.body.teamId as string) : undefined;
 			if (teamId && !ctx.context.orgOptions.teams?.enabled) {
 				ctx.context.logger.error("Teams are not enabled");
 				throw new APIError("BAD_REQUEST", {
@@ -139,9 +140,13 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 
+			const {
+				role: _,
+				userId: __,
+				organizationId: ___,
+				...additionalFields
+			} = ctx.body;
 
-			const {role: _, userId: __, organizationId: ___, ...additionalFields} = ctx.body
-			
 			const createdMember = await adapter.createMember({
 				organizationId: orgId,
 				userId: user.id,

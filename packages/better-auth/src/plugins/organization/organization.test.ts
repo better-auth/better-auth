@@ -1413,7 +1413,7 @@ describe("Additional Fields", async () => {
 		updatedAt?: Date | undefined;
 		teamRequiredField: string;
 		teamOptionalField?: string | undefined;
-	} |null= null
+	} | null = null;
 	it("create team", async () => {
 		team = await auth.api.createTeam({
 			body: {
@@ -1448,7 +1448,9 @@ describe("Additional Fields", async () => {
 		if (!updatedTeam) throw new Error("Updated team is null");
 		expect(updatedTeam?.teamOptionalField).toBe("hey3");
 		expect(updatedTeam?.teamRequiredField).toBe("hey4");
-		expectTypeOf<typeof updatedTeam.teamRequiredField>().toEqualTypeOf<string>();
+		expectTypeOf<
+			typeof updatedTeam.teamRequiredField
+		>().toEqualTypeOf<string>();
 		expectTypeOf<typeof updatedTeam.teamOptionalField>().toEqualTypeOf<
 			string | undefined
 		>();

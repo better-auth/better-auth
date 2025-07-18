@@ -6,11 +6,9 @@ import type {
 	InferMember,
 	InferOrganization,
 	InferTeam,
-	Invitation,
 	InvitationInput,
 	Member,
 	MemberInput,
-	Organization,
 	OrganizationInput,
 	Team,
 	TeamInput,
@@ -19,8 +17,6 @@ import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
-import type { PrettifyDeep } from "../../types/helper";
-import type { Prettify } from "better-call";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,

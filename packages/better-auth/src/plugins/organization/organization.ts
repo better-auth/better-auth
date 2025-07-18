@@ -44,16 +44,12 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
-	Organization,
 	Team,
 } from "./schema";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
-import type { Prettify, PrettifyDeep } from "../../types/helper";
-import { betterAuth } from "../../auth";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;

@@ -12,7 +12,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
-import type { Prettify, PrettifyDeep } from "../../../types/helper";
+import type { PrettifyDeep } from "../../../types/helper";
 
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({

@@ -1,7 +1,6 @@
 import * as z from "zod/v4";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
-import type { PrettifyDeep } from "../../types/helper";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Prettify } from "better-call";
 
