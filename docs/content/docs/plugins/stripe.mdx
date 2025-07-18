@@ -295,6 +295,33 @@ This will reactivate a subscription that was previously set to cancel at the end
 
 > **Note:** This only works for subscriptions that are still active but marked to cancel at the end of the period. It cannot restore subscriptions that have already ended.
 
+#### Creating Billing Portal Sessions
+
+To create a Stripe billing portal session where customers can manage their subscriptions, update payment methods, and view billing history:
+
+```ts title="client.ts"
+const { data } = await client.subscription.billingPortal({
+    returnUrl: "/dashboard", // optional, defaults to "/"
+    referenceId: "org_123" // optional, defaults to userId
+});
+
+if (data?.url) {
+    // Redirect user to the billing portal
+    window.location.href = data.url;
+}
+```
+
+This will create a Stripe billing portal session and return a URL that you can redirect users to. The billing portal allows customers to:
+
+- Update payment methods
+- View billing history and invoices
+- Cancel or modify subscriptions
+- Update billing addresses
+
+The plugin will automatically find the customer ID from either the user's `stripeCustomerId` field or from their active subscription records.
+
+> **Note:** The user must have an existing Stripe customer ID (either directly on their user record or through a subscription) to create a billing portal session.
+
 ### Reference System
 
 By default, subscriptions are associated with the user ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
