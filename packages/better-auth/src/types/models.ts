@@ -24,6 +24,37 @@ export type Models =
 	| "passkey"
 	| "two-factor";
 
+// Base user type (core user fields)
+export type BaseUser = {
+	id: string;
+	email: string;
+	emailVerified: boolean;
+	name: string;
+	image?: string;
+	createdAt: Date;
+	updatedAt: Date;
+};
+
+// Helper type to infer additional fields from FieldAttribute
+type InferAdditionalFields<O extends BetterAuthOptions, T extends string> = 
+	O[T extends "user" ? "user" : T extends "session" ? "session" : never] extends {
+		additionalFields: infer AF;
+	}
+		? AF extends Record<string, any>
+			? {
+					[K in keyof AF]: AF[K] extends { type: "string" }
+						? string
+						: AF[K] extends { type: "number" }
+						? number
+						: AF[K] extends { type: "boolean" }
+						? boolean
+						: AF[K] extends { type: "date" }
+						? Date
+						: unknown;
+			  }
+			: {}
+		: {};
+
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user", "input"> &
 		InferFieldsFromOptions<Options, "user", "input">;
@@ -40,13 +71,26 @@ export type AdditionalSessionFieldsOutput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "session"> &
 		InferFieldsFromOptions<Options, "session">;
 
+// Updated InferUser type that supports custom schemas
 export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 	StripEmptyObjects<
-		User &
+		BaseUser &
 			(O extends BetterAuthOptions
-				? AdditionalUserFieldsOutput<O>
+				? O["user"] extends {
+						schema: infer S;
+					}
+					? S extends z.ZodObject<infer T>
+						? z.infer<S> // Use the custom schema inference
+						: BaseUser & InferAdditionalFields<O, "user"> // Fallback to additionalFields
+					: BaseUser & InferAdditionalFields<O, "user"> // Default behavior
 				: O extends Auth
-					? AdditionalUserFieldsOutput<O["options"]>
+					? O["options"]["user"] extends {
+							schema: infer S;
+						}
+						? S extends z.ZodObject<infer T>
+							? z.infer<S> // Use the custom schema inference
+							: BaseUser & InferAdditionalFields<O["options"], "user"> // Fallback to additionalFields
+						: BaseUser & InferAdditionalFields<O["options"], "user"> // Default behavior
 					: {})
 	>
 >;

@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "postinstall": "fumadocs-mdx"
+    "postinstall": "npx fumadocs-mdx"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
