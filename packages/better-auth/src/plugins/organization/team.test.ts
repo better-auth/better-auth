@@ -142,6 +142,24 @@ describe("team", async (it) => {
 		});
 	});
 
+	it("should add team to the member's list of teams", async () => {
+		const newHeaders = new Headers();
+		await client.signIn.email(invitedUser, {
+			onSuccess: cookieSetter(newHeaders),
+		});
+
+		const res = await client.organization.listUserTeams(
+			{},
+			{
+				headers: newHeaders,
+			},
+		);
+
+		expect(res.error).toBeNull();
+		expect(res.data).not.toBeNull();
+		expect(res.data).toHaveLength(1);
+	});
+
 	it("should get full organization", async () => {
 		const organization = await client.organization.getFullOrganization({
 			fetchOptions: {
