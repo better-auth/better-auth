@@ -1004,7 +1004,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					productID: z.string({
+					productId: z.string({
 						description: "The product's ID",
 					}),
 					name: z.string({
@@ -1041,7 +1041,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 			async (ctx) => {
 				const {
-					productID,
+					productId,
 					name,
 					active,
 					description,
@@ -1050,7 +1050,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					metadata,
 				} = ctx.body;
 				const product = await client.products
-					.update(productID, {
+					.update(productId, {
 						name: name,
 						active: active,
 						description: description,
@@ -1072,16 +1072,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					productID: z.string({
+					productId: z.string({
 						description: "The product's ID",
 					}),
 				}),
 				use: [sessionMiddleware],
 			},
 			async (ctx) => {
-				const { productID } = ctx.body;
+				const { productId } = ctx.body;
 				const product = await client.products
-					.del(productID)
+					.del(productId)
 					.catch(async (e) => {
 						throw ctx.error("BAD_REQUEST", {
 							message: e.message,
@@ -1096,16 +1096,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					productID: z.string({
+					productId: z.string({
 						description: "The product's ID",
 					}),
 				}),
 				use: [sessionMiddleware],
 			},
 			async (ctx) => {
-				const { productID } = ctx.body;
+				const { productId } = ctx.body;
 				const product = await client.products
-					.retrieve(productID)
+					.retrieve(productId)
 					.catch(async (e) => {
 						throw ctx.error("BAD_REQUEST", {
 							message: e.message,

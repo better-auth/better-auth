@@ -351,7 +351,7 @@ describe("metered", () => {
 
 	it("should update a product", async () => {
 		var res = await authClient.products.update({
-			productID: "prod_NWjs8kKbJWmuuc",
+			productId: "prod_NWjs8kKbJWmuuc",
 			name: "Gold Plan 2",
 			fetchOptions: {
 				headers,
@@ -362,7 +362,7 @@ describe("metered", () => {
 
 	it("should delete a product", async () => {
 		var res = await authClient.products.delete({
-			productID: "prod_NWjs8kKbJWmuuc",
+			productId: "prod_NWjs8kKbJWmuuc",
 			fetchOptions: {
 				headers,
 			},
@@ -373,7 +373,7 @@ describe("metered", () => {
 
 	it("should retrieve a product", async () => {
 		var res = await authClient.products.retrieve({
-			productID: "prod_NWjs8kKbJWmuuc",
+			productId: "prod_NWjs8kKbJWmuuc",
 			fetchOptions: {
 				headers,
 			},
