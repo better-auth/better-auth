@@ -4,7 +4,7 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import { z } from "zod";
+import { z, ZodOptional, ZodObject, ZodType } from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
@@ -70,7 +70,7 @@ export interface Path {
 }
 
 const paths: Record<string, Path> = {};
-function getTypeFromZodType(zodType: z.ZodTypeAny) {
+function getTypeFromZodType(zodType: ZodSchema) {
 	switch (zodType.constructor.name) {
 		case "ZodString":
 			return "string";
@@ -112,9 +112,9 @@ function getParameters(options: EndpointOptions) {
 		parameters.push(...options.metadata.openapi.parameters);
 		return parameters;
 	}
-	if (options.query instanceof z.ZodObject) {
+	if (options.query instanceof ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
-			if (value instanceof z.ZodType) {
+			if (value instanceof ZodType) {
 				parameters.push({
 					name: key,
 					in: "query",
@@ -140,8 +140,8 @@ function getRequestBody(options: EndpointOptions): any {
 	}
 	if (!options.body) return undefined;
 	if (
-		options.body instanceof z.ZodObject ||
-		options.body instanceof z.ZodOptional
+		options.body instanceof ZodObject ||
+		options.body instanceof ZodOptional
 	) {
 		// @ts-ignore
 		const shape = options.body.shape;
@@ -161,7 +161,7 @@ function getRequestBody(options: EndpointOptions): any {
 		});
 		return {
 			required:
-				options.body instanceof z.ZodOptional
+				options.body instanceof ZodOptional
 					? false
 					: options.body
 						? true
