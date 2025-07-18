@@ -10,6 +10,7 @@ import fs from "fs/promises";
 import chalk from "chalk";
 import { getAdapter } from "better-auth/db";
 import { getGenerator } from "../generators";
+import { getDrizzleConfigSchema } from "../utils/get-config";
 
 export async function generateAction(opts: any) {
 	const options = z
@@ -42,11 +43,28 @@ export async function generateAction(opts: any) {
 		process.exit(1);
 	});
 
+	let outputPath: string | undefined = undefined;
+	if (adapter.id === "drizzle" && !options.output) {
+		const drizzleSchemaOutput = await getDrizzleConfigSchema(cwd);
+		if (drizzleSchemaOutput) {
+			let schemaPath: string;
+			if (typeof drizzleSchemaOutput === "string") {
+				schemaPath = drizzleSchemaOutput;
+			} else if (Array.isArray(drizzleSchemaOutput)) {
+				schemaPath = drizzleSchemaOutput[0]!;
+			} else {
+				schemaPath = drizzleSchemaOutput;
+			}
+			const schemaDir = path.dirname(schemaPath);
+			outputPath = path.join(schemaDir, "auth-schema.ts");
+		}
+	}
+
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
 	const schema = await getGenerator({
 		adapter,
-		file: options.output,
+		file: (options.output || outputPath) as string | undefined,
 		options: config,
 	});
 
@@ -55,7 +73,10 @@ export async function generateAction(opts: any) {
 		logger.info("Your schema is already up to date.");
 		process.exit(0);
 	}
-	if (schema.append || schema.overwrite) {
+	if (
+		("append" in schema && schema.append) ||
+		("overwrite" in schema && schema.overwrite)
+	) {
 		let confirm = options.y;
 		if (!confirm) {
 			const response = await prompts({
