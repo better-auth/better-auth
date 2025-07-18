@@ -70,7 +70,7 @@ export interface Path {
 }
 
 const paths: Record<string, Path> = {};
-function getTypeFromZodType(zodType: ZodSchema) {
+function getTypeFromZodType(zodType: ZodType) {
 	switch (zodType.constructor.name) {
 		case "ZodString":
 			return "string";
