@@ -1,12 +1,11 @@
 import * as z from "zod/v4";
 import { setSessionCookie } from "../../cookies";
-import type { OAuth2Tokens } from "../../oauth2";
+import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
 import { safeJSONParse } from "../../utils/json";
-import { symmetricEncrypt } from "../../crypto";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -143,22 +142,8 @@ export const callbackOAuth = createAuthEndpoint(
 				}
 				const updateData = Object.fromEntries(
 					Object.entries({
-						accessToken:
-							tokens.accessToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: tokens.accessToken,
-									})
-								: tokens.accessToken,
-						refreshToken:
-							tokens.refreshToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: tokens.refreshToken,
-									})
-								: tokens.refreshToken,
+						accessToken: await setTokenUtil(tokens.accessToken, c.context),
+						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
 						idToken: tokens.idToken,
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
@@ -176,22 +161,8 @@ export const callbackOAuth = createAuthEndpoint(
 						providerId: provider.id,
 						accountId: userInfo.id,
 						...tokens,
-						accessToken:
-							tokens.accessToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: tokens.accessToken,
-									})
-								: tokens.accessToken,
-						refreshToken:
-							tokens.refreshToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: tokens.refreshToken,
-									})
-								: tokens.refreshToken,
+						accessToken: await setTokenUtil(tokens.accessToken, c.context),
+						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
 						scope: tokens.scopes?.join(","),
 					},
 					c,
