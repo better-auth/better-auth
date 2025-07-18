@@ -2,7 +2,7 @@ import type { GenericEndpointContext, Session, User } from "../../types";
 import { createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import type { Role } from "../access";
-import type { OrganizationOptions } from "./organization";
+import type { OrganizationOptions } from "./types";
 import type { defaultRoles } from "./access/statement";
 
 export const orgMiddleware = createAuthMiddleware(async (ctx) => {
@@ -20,6 +20,10 @@ export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 	};
 });
 
+/**
+ * The middleware forces the endpoint to require a valid session by utilizing the `sessionMiddleware`.
+ * It also appends additional types to the session type regarding organizations.
+ */
 export const orgSessionMiddleware = createAuthMiddleware(
 	{
 		use: [sessionMiddleware],

@@ -8,6 +8,15 @@ export interface ApiKeyOptions {
 	 */
 	apiKeyHeaders?: string | string[];
 	/**
+	 * Disable hashing of the API key.
+	 *
+	 * ⚠️ Security Warning: It's strongly recommended to not disable hashing.
+	 * Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+	 *
+	 * @default false
+	 */
+	disableKeyHashing?: boolean;
+	/**
 	 * The function to get the API key from the context
 	 */
 	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;
@@ -17,7 +26,7 @@ export interface ApiKeyOptions {
 	customAPIKeyValidator?: (options: {
 		ctx: GenericEndpointContext;
 		key: string;
-	}) => boolean;
+	}) => boolean | Promise<boolean>;
 	/**
 	 * custom key generation function
 	 */
@@ -38,7 +47,7 @@ export interface ApiKeyOptions {
 	 */
 	startingCharactersConfig?: {
 		/**
-		 * Wether to store the starting characters in the database. If false, we will set `start` to `null`.
+		 * Whether to store the starting characters in the database. If false, we will set `start` to `null`.
 		 *
 		 * @default true
 		 */
@@ -69,6 +78,12 @@ export interface ApiKeyOptions {
 	 * @default 32
 	 */
 	maximumPrefixLength?: number;
+	/**
+	 * Whether to require a name for the API key.
+	 *
+	 * @default false
+	 */
+	requireName?: boolean;
 	/**
 	 * The minimum length of the prefix.
 	 *
@@ -106,7 +121,7 @@ export interface ApiKeyOptions {
 		 */
 		defaultExpiresIn?: number | null;
 		/**
-		 * Wether to disable the expires time passed from the client.
+		 * Whether to disable the expires time passed from the client.
 		 *
 		 * If `true`, the expires time will be based on the default values.
 		 *

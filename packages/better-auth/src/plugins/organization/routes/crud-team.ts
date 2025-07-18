@@ -1,24 +1,30 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import type { OrganizationOptions } from "../organization";
+import type { OrganizationOptions } from "../types";
 import { teamSchema } from "../schema";
 import { hasPermission } from "../has-permission";
 
-export const createTeam = <O extends OrganizationOptions | undefined>(
-	options?: O,
-) =>
+export const createTeam = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/create-team",
 		{
 			method: "POST",
 			body: z.object({
-				organizationId: z.string().optional(),
-				name: z.string(),
+				name: z.string().meta({
+					description: 'The name of the team. Eg: "my-team"',
+				}),
+				organizationId: z
+					.string()
+					.meta({
+						description:
+							'The organization ID which the team will be created in. Defaults to the active organization. Eg: "organization-id"',
+					})
+					.optional(),
 			}),
 			use: [orgMiddleware],
 			metadata: {
@@ -145,8 +151,15 @@ export const removeTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string(),
-			organizationId: z.string().optional(),
+			teamId: z.string().meta({
+				description: `The team ID of the team to remove. Eg: "team-id"`,
+			}),
+			organizationId: z
+				.string()
+				.meta({
+					description: `The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
+				})
+				.optional(),
 		}),
 		use: [orgMiddleware],
 		metadata: {
@@ -201,7 +214,7 @@ export const removeTeam = createAuthEndpoint(
 			if (!member || member.teamId === ctx.body.teamId) {
 				throw new APIError("FORBIDDEN", {
 					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM,
 				});
 			}
 
@@ -248,9 +261,12 @@ export const updateTeam = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			teamId: z.string(),
+			teamId: z.string().meta({
+				description: `The ID of the team to be updated. Eg: "team-id"`,
+			}),
 			data: teamSchema.partial(),
 		}),
+		requireHeaders: true,
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
@@ -365,9 +381,15 @@ export const listOrganizationTeams = createAuthEndpoint(
 		method: "GET",
 		query: z.optional(
 			z.object({
-				organizationId: z.string().optional(),
+				organizationId: z
+					.string()
+					.meta({
+						description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
+					})
+					.optional(),
 			}),
 		),
+		requireHeaders: true,
 		metadata: {
 			openapi: {
 				description: "List all teams in an organization",

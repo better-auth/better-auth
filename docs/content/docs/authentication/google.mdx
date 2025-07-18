@@ -55,7 +55,7 @@ To sign in with Google using the ID Token, you can use the `signIn.social` funct
 This is useful when you have the ID Token from Google on the client-side and want to use it to sign in on the server.
 
 <Callout>
- If id token is provided no redirection will happen, and the user will be signed in directly.
+ If ID token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>
 
 ```ts title="auth-client.ts"
@@ -85,3 +85,49 @@ socialProviders: {
     },
 }
 ```
+
+### Requesting Additional Google Scopes
+
+If your application needs additional Google scopes after the user has already signed up (e.g., for Google Drive, Gmail, or other Google services), you can request them using the `linkSocial` method with the same Google provider.
+
+```ts title="auth-client.ts"
+const requestGoogleDriveAccess = async () => {
+    await authClient.linkSocial({
+        provider: "google",
+        scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+};
+
+// Example usage in a React component
+return <button onClick={requestGoogleDriveAccess}>Add Google Drive Permissions</button>;
+```
+
+This will trigger a new OAuth flow that requests the additional scopes. After completion, your account will have the new scope in the database, and the access token will give you access to the requested Google APIs.
+
+<Callout>
+Ensure you're using Better Auth version 1.2.7 or later to avoid "Social account already linked" errors when requesting additional scopes from the same provider.
+</Callout>
+
+
+### Always get refresh token
+
+Google only issues a refresh token the first time a user consents to your app.
+If the user has already authorized your app, subsequent OAuth flows will only return an access token, not a refresh token.
+
+To always get a refresh token, you can set the `accessType` to `offline`, and `prompt` to `select_account+consent` in the provider options.
+
+```ts
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        accessType: "offline", // [!code highlight]
+        prompt: "select_account+consent", // [!code highlight]
+    },
+}
+```
+
+<Callout>
+    **Revoking Access:** If you want to get a new refresh token for a user who has already authorized your app,
+    you must have them revoke your app's access in their Google account settings, then re-authorize.
+</Callout>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
@@ -145,9 +145,10 @@ export default function Hero() {
 									</div>
 								</GradientBG>
 							</div>
+
 							{
 								<>
-									<div className="mt-8 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
+									<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
 										<Link
 											href="/docs"
 											className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
@@ -206,131 +207,161 @@ function CodePreview() {
 			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
 				<motion.div
 					animate={{ height: height > 0 ? height : undefined }}
-					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-stone-950/10 dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
+					className="relative overflow-hidden rounded-xl"
 				>
-					<div ref={ref}>
-						<div className="absolute -top-px left-0 right-0 h-px" />
-						<div className="absolute -bottom-px left-11 right-20 h-px" />
-						<div className="pl-4 pt-4">
-							<TrafficLightsIcon className="stroke-slate-500/30 h-2.5 w-auto" />
+					{/* Dynamic background based on theme */}
+					<div
+						className="absolute inset-0 rounded-xl"
+						style={{
+							background:
+								theme.resolvedTheme === "light"
+									? "linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.6) 100%)"
+									: "linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.8) 100%)",
+						}}
+					/>
 
-							<div className="mt-4 flex space-x-2 text-xs">
-								{tabs.map((tab) => (
-									<button
-										key={tab.name}
-										onClick={() => setCurrentTab(tab.name)}
-										className={clsx(
-											"relative isolate flex h-6 cursor-pointer items-center justify-center rounded-full px-2.5",
-											currentTab === tab.name
-												? "text-stone-300"
-												: "text-slate-500",
-										)}
-									>
-										{tab.name}
-										{tab.name === currentTab && (
-											<motion.div
-												layoutId="tab-code-preview"
-												className="bg-stone-800 absolute inset-0 -z-10 rounded-full"
-											/>
-										)}
-									</button>
-								))}
-							</div>
+					{/* Glass layers - responsive to theme */}
+					<div className="absolute inset-0 rounded-xl backdrop-blur-3xl bg-gradient-to-br dark:from-black/40 dark:via-black/20 dark:to-black/60 light:from-white/30 light:via-white/10 light:to-white/40" />
+					<div className="absolute inset-0 rounded-xl bg-gradient-to-tl dark:from-slate-800/20 dark:via-transparent dark:to-slate-700/15 light:from-blue-500/10 light:via-transparent light:to-purple-500/10" />
+					<div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent dark:via-black/10 light:via-white/15 to-transparent" />
 
-							<div className="mt-6 flex flex-col items-start px-1 text-sm">
-								<div className="absolute top-2 right-4">
-									<Button
-										variant="outline"
-										size="icon"
-										className="absolute w-5 border-none bg-transparent h-5 top-2 right-0"
-										onClick={() => copyToClipboard(code)}
-									>
-										{copyState ? (
-											<Check className="h-3 w-3" />
-										) : (
-											<Copy className="h-3 w-3" />
-										)}
-										<span className="sr-only">Copy code</span>
-									</Button>
-								</div>
-								<motion.div
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									transition={{ duration: 0.5 }}
-									key={currentTab}
-									className="relative flex items-start px-1 text-sm"
-								>
-									<div
-										aria-hidden="true"
-										className="border-slate-300/5 text-slate-600 select-none border-r pr-4 font-mono"
-									>
-										{Array.from({
-											length: code.split("\n").length,
-										}).map((_, index) => (
-											<Fragment key={index}>
-												{(index + 1).toString().padStart(2, "0")}
-												<br />
-											</Fragment>
-										))}
-									</div>
-									<Highlight
-										key={theme.resolvedTheme}
-										code={code}
-										language={"javascript"}
-										theme={{
-											...codeTheme,
-											plain: {
-												backgroundColor: "transparent",
-											},
-										}}
-									>
-										{({
-											className,
-											style,
-											tokens,
-											getLineProps,
-											getTokenProps,
-										}) => (
-											<pre
-												className={clsx(className, "flex overflow-x-auto pb-6")}
-												style={style}
-											>
-												<code className="px-4">
-													{tokens.map((line, lineIndex) => (
-														<div key={lineIndex} {...getLineProps({ line })}>
-															{line.map((token, tokenIndex) => (
-																<span
-																	key={tokenIndex}
-																	{...getTokenProps({ token })}
-																/>
-															))}
-														</div>
-													))}
-												</code>
-											</pre>
-										)}
-									</Highlight>
-								</motion.div>
-								<motion.div layout className="self-end">
-									<Link
-										href="https://demo.better-auth.com"
-										target="_blank"
-										className="shadow-md  border shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="1em"
-											height="1em"
-											viewBox="0 0 24 24"
+					{/* Border and shadow effects - theme aware */}
+					<div className="absolute inset-0 rounded-xl border shadow-2xl dark:border-white/5 dark:shadow-black/50 light:border-black/10 light:shadow-black/20" />
+					<div className="absolute inset-0 rounded-xl border dark:border-white/[0.02] light:border-black/[0.05]" />
+
+					{/* Inner glow - theme specific */}
+					<div className="absolute inset-0 rounded-xl shadow-inner dark:shadow-black/20 light:shadow-white/30" />
+
+					{/* Liquid glass reflection effect - adaptive */}
+					<div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b rounded-t-xl backdrop-blur-sm dark:from-white/[0.03] light:from-black/[0.06] to-transparent" />
+					<div className="absolute top-0 left-1/4 right-1/4 h-1/6 bg-gradient-to-b rounded-t-xl blur-sm dark:from-white/[0.05] light:from-black/[0.08] to-transparent" />
+					<div className="relative z-10 bg-gradient-to-br from-black/98 via-stone-950/95 to-black/98 dark:from-black/98 dark:via-stone-950/95 dark:to-black/98 light:from-white/98 light:via-stone-50/95 light:to-white/98 backdrop-blur-xl rounded-xl border border-white/[0.02] dark:border-white/[0.02] light:border-black/[0.08]">
+						<div ref={ref}>
+							<div className="absolute -top-px left-0 right-0 h-px bg-gradient-to-r from-transparent dark:via-white/[0.05] light:via-black/[0.15] to-transparent" />
+							<div className="absolute -bottom-px left-11 right-20 h-px bg-gradient-to-r from-transparent dark:via-white/[0.03] light:via-black/[0.10] to-transparent" />
+							<div className="pl-4 pt-4">
+								<TrafficLightsIcon className="stroke-stone-500/30 h-2.5 w-auto" />
+
+								<div className="mt-4 flex space-x-2 text-xs">
+									{tabs.map((tab) => (
+										<button
+											key={tab.name}
+											onClick={() => setCurrentTab(tab.name)}
+											className={clsx(
+												"relative isolate flex h-6 cursor-pointer items-center justify-center rounded-full px-2.5 transition-all duration-200",
+												currentTab === tab.name
+													? "dark:text-gray-100 light:text-gray-900"
+													: "dark:text-slate-400 dark:hover:text-slate-300 light:text-slate-600 light:hover:text-slate-700",
+											)}
 										>
-											<path
-												fill="currentColor"
-												d="M10 20H8V4h2v2h2v3h2v2h2v2h-2v2h-2v3h-2z"
-											></path>
-										</svg>
-										<p className="text-sm">Demo</p>
-									</Link>
-								</motion.div>
+											{tab.name}
+											{tab.name === currentTab && (
+												<motion.div
+													layoutId="tab-code-preview"
+													className="absolute inset-0 -z-10 rounded-full backdrop-blur-sm border bg-gradient-to-r dark:from-black/60 dark:to-slate-900/80 dark:border-white/[0.05] light:from-white/60 light:to-slate-100/80 light:border-black/[0.15]"
+												/>
+											)}
+										</button>
+									))}
+								</div>
+
+								<div className="mt-6 flex flex-col items-start px-1 text-sm">
+									<div className="absolute top-2 right-4">
+										<Button
+											variant="outline"
+											size="icon"
+											className="absolute w-5 border-none backdrop-blur-sm h-5 top-2 right-0 transition-all duration-200 dark:bg-black/20 dark:hover:bg-black/40 dark:border-white/[0.05] light:bg-white/20 light:hover:bg-white/40 light:border-black/[0.15]"
+											onClick={() => copyToClipboard(code)}
+										>
+											{copyState ? (
+												<Check className="h-3 w-3 dark:text-gray-300 light:text-gray-700" />
+											) : (
+												<Copy className="h-3 w-3 dark:text-gray-300 light:text-gray-700" />
+											)}
+											<span className="sr-only">Copy code</span>
+										</Button>
+									</div>
+									<motion.div
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										transition={{ duration: 0.5 }}
+										key={currentTab}
+										className="relative flex items-start px-1 text-sm"
+									>
+										<div
+											aria-hidden="true"
+											className="select-none border-r pr-4 font-mono dark:border-slate-300/5 dark:text-slate-600 light:border-slate-700/20 light:text-slate-500"
+										>
+											{Array.from({
+												length: code.split("\n").length,
+											}).map((_, index) => (
+												<div key={index}>
+													{(index + 1).toString().padStart(2, "0")}
+												</div>
+											))}
+										</div>
+										<Highlight
+											key={theme.resolvedTheme}
+											code={code}
+											language={"javascript"}
+											theme={{
+												...codeTheme,
+												plain: {
+													backgroundColor: "transparent",
+												},
+											}}
+										>
+											{({
+												className,
+												style,
+												tokens,
+												getLineProps,
+												getTokenProps,
+											}) => (
+												<pre
+													className={clsx(
+														className,
+														"flex overflow-x-auto pb-6",
+													)}
+													style={style}
+												>
+													<code className="px-4">
+														{tokens.map((line, lineIndex) => (
+															<div key={lineIndex} {...getLineProps({ line })}>
+																{line.map((token, tokenIndex) => (
+																	<span
+																		key={tokenIndex}
+																		{...getTokenProps({ token })}
+																	/>
+																))}
+															</div>
+														))}
+													</code>
+												</pre>
+											)}
+										</Highlight>
+									</motion.div>
+									<motion.div layout className="self-end">
+										<Link
+											href="https://demo.better-auth.com"
+											target="_blank"
+											className="shadow-lg border backdrop-blur-sm mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-90 rounded-md dark:border-white/[0.05] dark:bg-black/20 dark:hover:bg-black/40 light:border-black/[0.15] light:bg-white/20 light:hover:bg-white/40"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="1em"
+												height="1em"
+												viewBox="0 0 24 24"
+											>
+												<path
+													fill="currentColor"
+													d="M10 20H8V4h2v2h2v3h2v2h2v2h-2v2h-2v3h-2z"
+												></path>
+											</svg>
+											<p className="text-sm">Demo</p>
+										</Link>
+									</motion.div>
+								</div>
 							</div>
 						</div>
 					</div>

@@ -55,7 +55,7 @@ describe("updateUser", async () => {
 			},
 		});
 		expect(updated.data?.status).toBe(true);
-		expect(session.user.name).toBe("newName");
+		expect(session?.user.name).toBe("newName");
 	});
 
 	it("should unset image", async () => {
@@ -71,7 +71,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.image).toBeNull();
+		expect(session?.user.image).toBeNull();
 	});
 
 	it("should update user email", async () => {
@@ -88,8 +88,8 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.email).toBe(newEmail);
-		expect(session.user.emailVerified).toBe(false);
+		expect(session?.user.email).toBe(newEmail);
+		expect(session?.user.emailVerified).toBe(false);
 	});
 
 	it("should verify email", async () => {
@@ -107,7 +107,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.emailVerified).toBe(true);
+		expect(session?.user.emailVerified).toBe(true);
 	});
 
 	it("should send email verification before update", async () => {
@@ -264,15 +264,63 @@ describe("updateUser", async () => {
 		// @ts-ignore
 		expect(session?.user.newField).toBe("new");
 	});
+
+	it("should propagate updates across sessions when secondaryStorage is enabled", async () => {
+		const store = new Map<string, string>();
+		const { client: authClient, signInWithTestUser: signIn } =
+			await getTestInstance({
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+		const { headers: headers1 } = await signIn();
+		const { headers: headers2 } = await signIn();
+
+		await authClient.updateUser({
+			name: "updatedName",
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+
+		const secondSession = await authClient.getSession({
+			fetchOptions: {
+				headers: headers2,
+				throw: true,
+			},
+		});
+		expect(secondSession?.user.name).toBe("updatedName");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: {
+				headers: headers1,
+				throw: true,
+			},
+		});
+
+		expect(firstSession?.user.name).toBe("updatedName");
+	});
 });
 
 describe("delete user", async () => {
-	it("should delete the user", async () => {
+	it("should delete the user with a fresh session", async () => {
 		const { auth, client, signInWithTestUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
 				},
+			},
+			session: {
+				freshAge: 1000,
 			},
 		});
 		const { headers } = await signInWithTestUser();
@@ -292,9 +340,9 @@ describe("delete user", async () => {
 		expect(session.data).toBeNull();
 	});
 
-	it("should delete with verification flow", async () => {
+	it("should delete with verification flow and password", async () => {
 		let token = "";
-		const { client, signInWithTestUser } = await getTestInstance({
+		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -306,6 +354,7 @@ describe("delete user", async () => {
 		});
 		const { headers } = await signInWithTestUser();
 		const res = await client.deleteUser({
+			password: testUser.password,
 			fetchOptions: {
 				headers,
 			},
