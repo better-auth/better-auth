@@ -14,7 +14,6 @@ import {
 } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
-import { symmetricEncrypt } from "../../crypto";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -666,20 +665,8 @@ export const refreshToken = createAuthEndpoint(
 				account.refreshToken as string,
 			);
 			await ctx.context.internalAdapter.updateAccount(account.id, {
-				accessToken:
-					tokens.accessToken && ctx.context.options.account?.encryptOAuthTokens
-						? await symmetricEncrypt({
-								key: ctx.context.secret,
-								data: tokens.accessToken,
-							})
-						: tokens.accessToken,
-				refreshToken:
-					tokens.refreshToken && ctx.context.options.account?.encryptOAuthTokens
-						? await symmetricEncrypt({
-								key: ctx.context.secret,
-								data: tokens.refreshToken,
-							})
-						: tokens.refreshToken,
+				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+				refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
