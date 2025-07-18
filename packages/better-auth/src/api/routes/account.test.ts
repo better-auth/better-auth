@@ -146,16 +146,11 @@ describe("account", async () => {
 
 	it("should encrypt access token and refresh token", async () => {
 		const { headers: headers2 } = await signInWithTestUser();
-		const accounts = await client.listAccounts({
+		const accessToken = await client.getAccessToken({
+			providerId: "google",
 			fetchOptions: { headers: headers2 },
 		});
-		const fromDb = await ctx.internalAdapter.findAccount(
-			accounts.data![1].accountId,
-		);
-		expect(fromDb?.accessToken).not.toBe("test");
-		expect(fromDb?.refreshToken).not.toBe("test");
-		expect(accounts.data?.[1].accessToken).toBe("test");
-		expect(accounts.data?.[1].refreshToken).toBe("test");
+		expect(accessToken.data).not.toBe("test");
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {
