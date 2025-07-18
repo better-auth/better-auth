@@ -1,6 +1,12 @@
 import type { User, Session, AuthContext } from "../../types";
 import type { AccessControl, Role } from "../access";
-import type { Invitation, Member, Organization, Team } from "./schema";
+import type {
+	Invitation,
+	Member,
+	Organization,
+	Team,
+	TeamMember,
+} from "./schema";
 
 export interface OrganizationOptions {
 	/**
@@ -241,6 +247,13 @@ export interface OrganizationOptions {
 			modelName?: string;
 			fields?: {
 				[key in keyof Omit<Team, "id">]?: string;
+			};
+		};
+
+		teamMember?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<TeamMember, "id">]?: string;
 			};
 		};
 	};

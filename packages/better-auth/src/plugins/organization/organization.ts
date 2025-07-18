@@ -38,6 +38,8 @@ import {
 	listOrganizationTeams,
 	removeTeam,
 	updateTeam,
+	setActiveTeam,
+	listUserTeams,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
@@ -98,6 +100,8 @@ export const organization = <O extends OrganizationOptions>(
 		listOrganizationTeams,
 		removeTeam,
 		updateTeam,
+		setActiveTeam,
+		listUserTeams,
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -138,6 +142,34 @@ export const organization = <O extends OrganizationOptions>(
 							type: "date",
 							required: false,
 							fieldName: options?.schema?.team?.fields?.updatedAt,
+						},
+					},
+				},
+				teamMember: {
+					modelName: options?.schema?.teamMember?.modelName,
+					fields: {
+						teamId: {
+							type: "string",
+							required: true,
+							references: {
+								model: "team",
+								field: "id",
+							},
+							fieldName: options?.schema?.teamMember?.fields?.teamId,
+						},
+						userId: {
+							type: "string",
+							required: true,
+							references: {
+								model: "user",
+								field: "id",
+							},
+							fieldName: options?.schema?.teamMember?.fields?.userId,
+						},
+						createdAt: {
+							type: "string",
+							required: false,
+							fieldName: options?.schema?.teamMember?.fields?.createdAt,
 						},
 					},
 				},
