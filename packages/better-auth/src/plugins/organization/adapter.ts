@@ -10,6 +10,7 @@ import type {
 	OrganizationInput,
 	Team,
 	TeamInput,
+	TeamMember,
 } from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
@@ -549,6 +550,54 @@ export const getOrgAdapter = (
 
 			return invitation;
 		},
+
+		setActiveTeam: async (sessionToken: string, teamId: string | null) => {
+			const session = await context.internalAdapter.updateSession(
+				sessionToken,
+				{
+					activeTeamId: teamId,
+				},
+			);
+			return session as Session;
+		},
+
+		listTeamMembers: async (data: {
+			teamId: string;
+		}) => {
+			const members = await adapter.findMany<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+				],
+			});
+
+			return members;
+		},
+
+		findTeamMember: async (data: {
+			teamId: string;
+			userId: string;
+		}) => {
+			const member = await adapter.findOne<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+
+			return member;
+		},
+
 		findInvitationsByTeamId: async (teamId: string) => {
 			const invitations = await adapter.findMany<Invitation>({
 				model: "invitation",

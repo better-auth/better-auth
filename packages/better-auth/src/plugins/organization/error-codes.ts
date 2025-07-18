@@ -55,4 +55,5 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to delete this team",
 	INVITATION_LIMIT_REACHED: "Invitation limit reached",
 	TEAM_MEMBER_LIMIT_REACHED: "Team member limit reached",
+	USER_IS_NOT_A_MEMBER_OF_THE_TEAM: "User is not a member of the team",
 } as const;

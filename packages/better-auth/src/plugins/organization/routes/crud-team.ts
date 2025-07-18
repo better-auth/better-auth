@@ -8,6 +8,7 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import type { OrganizationOptions } from "../types";
 import { teamSchema } from "../schema";
 import { hasPermission } from "../has-permission";
+import { setSessionCookie } from "../../../cookies";
 
 export const createTeam = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
@@ -449,3 +450,106 @@ export const listOrganizationTeams = createAuthEndpoint(
 		return ctx.json(teams);
 	},
 );
+
+export const setActiveTeam = () => {
+	return createAuthEndpoint(
+		"/organization/set-active-team",
+		{
+			method: "POST",
+			body: z.object({
+				teamId: z
+					.string({
+						description:
+							"The team id to set as active. It can be null to unset the active team",
+					})
+					.nullable()
+					.optional(),
+			}),
+			use: [orgSessionMiddleware, orgMiddleware],
+			metadata: {
+				openapi: {
+					description: "Set the active team",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										description: "The team",
+										$ref: "#/components/schemas/Team",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const session = ctx.context.session;
+
+			if (ctx.body.teamId === null) {
+				const sessionTeamId = session.session.activeTeamId;
+				if (!sessionTeamId) {
+					return ctx.json(null);
+				}
+				const updatedSession = await adapter.setActiveTeam(
+					session.session.token,
+					null,
+				);
+
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
+
+				return ctx.json(null);
+			}
+
+			let teamId: string;
+
+			if (!ctx.body.teamId) {
+				const sessionTeamId = session.session.activeTeamId;
+				if (!sessionTeamId) {
+					return ctx.json(null);
+				} else {
+					teamId = sessionTeamId;
+				}
+			} else {
+				teamId = ctx.body.teamId;
+			}
+
+			const team = await adapter.findTeamById({ teamId });
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			const member = await adapter.findTeamMember({
+				teamId,
+				userId: session.user.id,
+			});
+
+			if (!member) {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				});
+			}
+
+			const updatedSession = await adapter.setActiveTeam(
+				session.session.token,
+				team.id,
+			);
+			await setSessionCookie(ctx, {
+				session: updatedSession,
+				user: session.user,
+			});
+
+			return ctx.json(team);
+		},
+	);
+};

@@ -13,6 +13,7 @@ export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 		getSession: (context: GenericEndpointContext) => Promise<{
 			session: Session & {
+				activeTeamId?: string;
 				activeOrganizationId?: string;
 			};
 			user: User;
@@ -27,6 +28,7 @@ export const orgSessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = ctx.context.session as {
 			session: Session & {
+				activeTeamId?: string;
 				activeOrganizationId?: string;
 			};
 			user: User;
