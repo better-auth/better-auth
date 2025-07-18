@@ -1,5 +1,4 @@
 import { APIError, createEmailVerificationToken } from "../api";
-import { symmetricEncrypt } from "../crypto";
 import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
@@ -93,22 +92,8 @@ export async function handleOAuthUserInfo(
 				const updateData = Object.fromEntries(
 					Object.entries({
 						idToken: account.idToken,
-						accessToken:
-							account.accessToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: account.accessToken,
-									})
-								: account.accessToken,
-						refreshToken:
-							account.refreshToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: account.refreshToken,
-									})
-								: account.refreshToken,
+						accessToken: await setTokenUtil(account.accessToken, c.context),
+						refreshToken: await setTokenUtil(account.refreshToken, c.context),
 						accessTokenExpiresAt: account.accessTokenExpiresAt,
 						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 						scope: account.scope,
