@@ -73,7 +73,7 @@ export const usage = {
 				required: true,
 				defaultValue: () => new Date(),
 			},
-			currentlyActive: {
+			disabled: {
 				type: "boolean",
 				required: true,
 				defaultValue: true,

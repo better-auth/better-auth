@@ -433,6 +433,179 @@ You can configure trial periods for your plans:
 }
 ```
 
+## Usage-Based Billing
+
+The Stripe plugin supports **usage-based billing**, allowing you to set and enforce limits (e.g., API calls, messages, storage) on a per-plan basis.
+
+---
+
+### Setup
+
+1. Enable usage-based billing by setting `usageBased: true` inside your Stripe plugin configuration:
+
+```ts title="auth.ts"
+stripe({
+  stripeClient,
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+  createCustomerOnSignUp: true,
+  subscription: {
+    enabled: true,
+    usageBased: true,
+    plans: [
+      {
+        name: "starter",
+        priceId: "price_abc",
+        limits: {
+          usageLimit: 100 // total usage allowed for this plan
+        }
+      },
+      {
+        name: "premium",
+        priceId: "price_xyz",
+        limits: {
+          usageLimit: 1000
+        }
+      }
+    ]
+  }
+})
+```
+
+2. Track usage in your application by calling the tracking endpoint whenever usage occurs (e.g., new message, upload, etc.).
+
+---
+
+### Setting Limits
+
+Define `limits.usageLimit` on each plan. This represents the **maximum allowed usage** per billing period.
+
+Example:
+```ts title="auth.ts"
+limits: {
+  usageLimit: 500 // e.g., max 500 API calls
+}
+```
+
+---
+
+### Endpoints
+
+#### 1. `POST /subscription/usage/track`
+
+Track usage. Automatically creates or updates the usage record for the current day.
+
+**Request**
+```json
+{
+  "plan": "starter",
+  "usage": 5,
+  "referenceId": "org_123" // optional
+}
+```
+
+**Success Response**
+```json
+{
+  "data": {
+    "plan": "starter",
+    "usage": 15,
+    "referenceId": "org_123",
+    ...
+  },
+  "totalUsage": {
+    "totalUsage": 25,
+    "percentageUsage": 25
+  }
+}
+```
+
+**Errors**
+- `USAGE_LIMIT_REACHED`: Usage limit for the plan exceeded.
+- `SUBSCRIPTION_PLAN_NOT_FOUND`: Plan does not exist or not configured.
+- `SUBSCRIPTION_NOT_FOUND`: No matching subscription found.
+
+**Advice**
+- Always include `plan` in the request.
+- Use this on critical usage events only to avoid overcounting.
+
+---
+
+#### 2. `POST /subscription/usage/get`
+
+Get total usage for a given user/organization and plan.
+
+**Request**
+```json
+{
+  "plan": "starter",
+  "referenceId": "org_123"
+}
+```
+
+**Success Response**
+```json
+{
+  "totalUsage": {
+    "totalUsage": 25,
+    "percentageUsage": 25
+  },
+  "limit": 100
+}
+```
+
+**Advice**
+- Use the `percentageUsage` to warn your users of their usage:
+
+---
+
+#### 3. `POST /subscription/usage/reset`
+
+Marks current usage entries as inactive (e.g., for manual resets or plan change).
+
+**Request**
+```json
+{
+  "plan": "starter",
+  "referenceId": "org_123"
+}
+```
+
+**Success Response**
+```json
+{ "success": true }
+```
+
+---
+
+### Enforce Usage Limit: `enforceUsageLimit`
+
+The `enforceUsageLimit` middleware inside the stripe plugin is used to block actions when usage exceeds the limit:
+
+If the user exceeds their plan’s limit, a `BAD_REQUEST` is thrown:
+```json
+{
+  "code": "USAGE_LIMIT_REACHED",
+  "message": "Usage limit reached"
+}
+```
+
+**Advice**
+- Usages past the limit aren't accepted by the end point.
+- You can focus on building your product than controling usage. 
+
+---
+
+### Total Usage Calculation
+
+Total usage includes:
+- Sum of all active usage entries for the given plan and reference ID.
+- The percentage can be calculated by:
+  ```ts
+  const usagePercent = (totalUsage / limit) * 100;
+  ```
+
+---
+
 ## Schema
 
 The Stripe plugin adds the following tables to your database:
@@ -530,6 +703,52 @@ Table Name: `subscription`
       type: "Date", 
       description: "End date of the trial period",
       isOptional: true
+    }
+  ]}
+/>
+
+### Usage
+
+Table Name: `usage`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for the usage entry",
+      isPrimaryKey: true
+    },
+    {
+      name: "plan",
+      type: "string",
+      description: "The plan name associated with the usage"
+    },
+    {
+      name: "referenceId",
+      type: "string",
+      description: "The ID of the user or organization this usage is tied to"
+    },
+    {
+      name: "usage",
+      type: "number",
+      description: "The amount of usage recorded"
+    },
+    {
+      name: "startDate",
+      type: "Date",
+      description: "The date when this usage period started"
+    },
+    {
+      name: "latestUsageDate",
+      type: "Date",
+      description: "The most recent date when usage was recorded"
+    },
+    {
+      name: "disabled",
+      type: "boolean",
+      description: "Whether this usage record is currently active",
+      defaultValue: false
     }
   ]}
 />

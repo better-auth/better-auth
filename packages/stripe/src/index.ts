@@ -12,7 +12,6 @@ import {
 	originCheck,
 	getSessionFromCtx,
 } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -281,19 +280,26 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					try {
-						const stripeCustomer = await client.customers.create(
-							{
+						// Try to find existing Stripe customer by email
+						const existingCustomers = await client.customers.list({
+							email: user.email,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingCustomers.data[0];
+
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create({
 								email: user.email,
 								name: user.name,
 								metadata: {
 									...ctx.body.metadata,
 									userId: user.id,
 								},
-							},
-							{
-								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
-							},
-						);
+							});
+						}
+
+						// Update local DB with Stripe customer ID
 						await ctx.context.adapter.update({
 							model: "user",
 							update: {
@@ -306,6 +312,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						});
+
 						customerId = stripeCustomer.id;
 					} catch (e: any) {
 						ctx.context.logger.error(e);
@@ -1061,7 +1068,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					);
 				});
 
-				if (latest && latest.currentlyActive === true) {
+				if (latest && latest.disabled === false) {
 					// Same day: increment usage and update latestUsageDate
 					const res = await ctx.context.adapter.update({
 						model: "usage",
@@ -1082,7 +1089,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							usage,
 							startDate: today,
 							latestUsageDate: today,
-							currentlyActive: true,
+							disabled: false,
 						},
 					});
 					return ctx.json({ data: res, totalUsage: totalUsage });
@@ -1146,7 +1153,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						{ field: "plan", value: plan },
 					],
 					update: {
-						currentlyActive: false,
+						disabled: true,
 					},
 				});
 

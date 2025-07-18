@@ -1059,4 +1059,27 @@ describe("stripe", async () => {
 		});
 		expect(totalUsage2.data?.totalUsage.totalUsage).toBe(0);
 	});
+
+	it("should only call Stripe customers.create once for signup and upgrade", async () => {
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
+	});
 });

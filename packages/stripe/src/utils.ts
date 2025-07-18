@@ -37,7 +37,7 @@ export async function getTotalUsage(
 		where: [
 			{ field: "referenceId", value: refId },
 			{ field: "plan", value: plan },
-			{ field: "currentlyActive", value: true },
+			{ field: "disabled", value: false },
 		],
 	});
 
