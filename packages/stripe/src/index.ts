@@ -5,7 +5,7 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
-import { z } from "zod";
+import { late, z } from "zod";
 import {
 	sessionMiddleware,
 	APIError,
@@ -24,6 +24,7 @@ import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
+	Usage,
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
 import { getSchema } from "./schema";
@@ -104,6 +105,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 			}
 		});
+
+	/**
+	 * THIS MIDDLEWARE CHECK IF THE USER HAS REACHED USAGE LIMIT
+	 * - for the trackUsage end point
+	 */
+	const enforceUsageLimit = () => createAuthMiddleware(async (ctx) => {});
 
 	const subscriptionEndpoints = {
 		upgradeSubscription: createAuthEndpoint(
@@ -952,6 +959,131 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 	} as const;
+
+	const usageTracking = {
+		/**
+		 * This creates a new Usage record or increments the existing one
+		 */
+		trackUsage: createAuthEndpoint(
+			"/subscription/usage/track",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					referenceId: z.string().optional(),
+					usage: z.number(),
+				}),
+				use: [sessionMiddleware, enforceUsageLimit],
+			},
+			async (ctx) => {
+				const { plan, usage, referenceId } = ctx.body;
+				const { user } = ctx.context.session;
+				const refId = referenceId || user.id;
+
+				const subscription = await ctx.context.adapter.findOne({
+					model: "subscription",
+					where: [{ field: "plan", value: plan }],
+				});
+
+				if (!subscription) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+
+				// Compare with today
+				const today = new Date();
+				const todayDate = new Date(
+					today.getFullYear(),
+					today.getMonth(),
+					today.getDate(),
+				);
+
+				// Get all usage
+				const existing = await ctx.context.adapter.findMany({
+					model: "usage",
+					where: [
+						{ field: "referenceId", value: refId },
+						{ field: "plan", value: plan },
+					],
+				});
+
+				// Get the last usage data from today
+				const latest = (existing as Usage[]).find((u) => {
+					const latestDate = new Date(u.latestUsageDate);
+					return (
+						latestDate.getFullYear() === todayDate.getFullYear() &&
+						latestDate.getMonth() === todayDate.getMonth() &&
+						latestDate.getDate() === todayDate.getDate()
+					);
+				});
+
+				if (latest) {
+					// Same day: increment usage and update latestUsageDate
+					await ctx.context.adapter.update({
+						model: "usage",
+						where: [{ field: "referenceId", value: refId }],
+						update: {
+							usage: latest.usage + usage,
+							latestUsageDate: today,
+						},
+					});
+				} else {
+					// New day: create new usage entry
+					await ctx.context.adapter.create({
+						model: "usage",
+						data: {
+							referenceId: refId,
+							plan,
+							usage,
+							startDate: today,
+							latestUsageDate: today,
+						},
+					});
+				}
+
+				return ctx.json({ success: true });
+			},
+		),
+		/**
+		 * This returns the total usage for a plan of a user
+		 */
+		getUsage: createAuthEndpoint(
+			"/subscription/usage/get",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					referenceId: z.string(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { plan, referenceId } = ctx.body;
+				const { user } = ctx.context.session;
+				const refId = referenceId || user.id;
+
+				const usage = await ctx.context.adapter.findMany({
+					model: "usage",
+					where: [
+						{ field: "referenceId", value: refId },
+						{ field: "plan", value: plan },
+					],
+				});
+
+				// add all the usage
+				const totalUsage = (usage as Usage[]).reduce(
+					(acc, u) => acc + u.usage,
+					0,
+				);
+				return ctx.json({ totalUsage });
+			},
+		),
+		/**
+		 * Add More ...
+		 */
+	} as const;
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -1018,6 +1150,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.json({ success: true });
 				},
 			),
+			...usageTracking,
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {

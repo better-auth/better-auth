@@ -50,6 +50,7 @@ describe("stripe", async () => {
 		account: [],
 		customer: [],
 		subscription: [],
+		usage: [],
 	};
 	const memory = memoryAdapter(data);
 	const stripeOptions = {
@@ -70,6 +71,7 @@ describe("stripe", async () => {
 					lookupKey: "lookup_key_234",
 				},
 			],
+			usageBased: true,
 		},
 	} satisfies StripeOptions;
 	const auth = betterAuth({
@@ -110,6 +112,7 @@ describe("stripe", async () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
+		data.usage = [];
 
 		vi.clearAllMocks();
 	});
@@ -816,5 +819,133 @@ describe("stripe", async () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	/**
+	 * 	Usage based subscription tests
+	 */
+
+	it("should increment daily usage", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(data["usage"][0]["usage"]).toBe(10);
+
+		await authClient.subscription.usage.track({
+			usage: 12,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(data["usage"][0]["usage"]).toBe(22);
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(data["usage"][0]["usage"]).toBe(32);
+	});
+
+	it("should get total usage", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 12,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totalUsage = await authClient.subscription.usage.get({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(totalUsage.data?.totalUsage).toBe(32);
 	});
 });
