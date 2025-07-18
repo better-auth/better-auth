@@ -56,4 +56,7 @@ export const ORGANIZATION_ERROR_CODES = {
 	INVITATION_LIMIT_REACHED: "Invitation limit reached",
 	TEAM_MEMBER_LIMIT_REACHED: "Team member limit reached",
 	USER_IS_NOT_A_MEMBER_OF_THE_TEAM: "User is not a member of the team",
+	YOU_CAN_NOT_ACCESS_THE_MEMBERS_OF_THIS_TEAM:
+		"You are not allowed to list the members of this team",
+	YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM: "You do not have an active team",
 } as const;

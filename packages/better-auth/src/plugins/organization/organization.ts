@@ -40,6 +40,7 @@ import {
 	updateTeam,
 	setActiveTeam,
 	listUserTeams,
+	listTeamMembers
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
@@ -102,6 +103,7 @@ export const organization = <O extends OrganizationOptions>(
 		updateTeam,
 		setActiveTeam,
 		listUserTeams,
+		listTeamMembers
 	};
 	if (teamSupport) {
 		endpoints = {
