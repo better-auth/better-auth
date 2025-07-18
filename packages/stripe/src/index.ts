@@ -923,6 +923,316 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 	} as const;
+
+	const productsEndpoints = {
+		createProduct: createAuthEndpoint(
+			"/products/create",
+			{
+				method: "POST",
+				body: z.object({
+					name: z.string({
+						description:
+							"The product's name, meant to be displayable to the customer.",
+					}),
+					active: z
+						.boolean({
+							description:
+								"Whether the product is currently available for purchase. Defaults to true.",
+						})
+						.default(true)
+						.optional(),
+					description: z
+						.string({
+							description:
+								"The product's description, meant to be displayable to the customer. Use this field to optionally store a long form explanation of the product being sold for your own rendering purposes.",
+						})
+						.optional(),
+					taxCode: z
+						.string({
+							description: "A tax code ID.",
+						})
+						.optional(),
+					defaultPrice: z.object({
+						currency: z.string({
+							description: "The currency of the price.",
+						}),
+						unitAmount: z.number({
+							description: "The unit amount of the price.",
+						}),
+					}),
+					shippable: z
+						.boolean({
+							description:
+								"Whether this product is shipped (i.e., physical goods).",
+						})
+						.optional(),
+					metaData: z.record(z.string(), z.any()).optional(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const {
+					name,
+					active,
+					description,
+					taxCode,
+					defaultPrice,
+					shippable,
+					metaData,
+				} = ctx.body;
+				const product = await client.products
+					.create({
+						name: name,
+						active: active,
+						description: description,
+						tax_code: taxCode,
+						default_price_data: defaultPrice,
+						shippable: shippable,
+						metadata: metaData,
+					})
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({ product });
+			},
+		),
+		updateProduct: createAuthEndpoint(
+			"/products/update",
+			{
+				method: "POST",
+				body: z.object({
+					productID: z.string({
+						description: "The product's ID",
+					}),
+					name: z.string({
+						description:
+							"The product's name, meant to be displayable to the customer.",
+					}),
+					active: z
+						.boolean({
+							description:
+								"Whether the product is currently available for purchase. Defaults to true.",
+						})
+						.default(true)
+						.optional(),
+					description: z
+						.string({
+							description:
+								"The product's description, meant to be displayable to the customer. Use this field to optionally store a long form explanation of the product being sold for your own rendering purposes.",
+						})
+						.optional(),
+					taxCode: z
+						.string({
+							description: "A tax code ID.",
+						})
+						.optional(),
+					shippable: z
+						.boolean({
+							description:
+								"Whether this product is shipped (i.e., physical goods).",
+						})
+						.optional(),
+					metadata: z.record(z.string(), z.any()).optional(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const {
+					productID,
+					name,
+					active,
+					description,
+					taxCode,
+					shippable,
+					metadata,
+				} = ctx.body;
+				const product = await client.products
+					.update(productID, {
+						name: name,
+						active: active,
+						description: description,
+						tax_code: taxCode,
+						shippable: shippable,
+						metadata: metadata,
+					})
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({ product });
+			},
+		),
+		deleteProduct: createAuthEndpoint(
+			"/products/delete",
+			{
+				method: "POST",
+				body: z.object({
+					productID: z.string({
+						description: "The product's ID",
+					}),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { productID } = ctx.body;
+				const product = await client.products
+					.del(productID)
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({ product });
+			},
+		),
+		retrieveProduct: createAuthEndpoint(
+			"/products/retrieve",
+			{
+				method: "POST",
+				body: z.object({
+					productID: z.string({
+						description: "The product's ID",
+					}),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { productID } = ctx.body;
+				const product = await client.products
+					.retrieve(productID)
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({ product });
+			},
+		),
+		listAllProduct: createAuthEndpoint(
+			"/products/list",
+			{
+				method: "POST",
+				body: z.object({
+					active: z
+						.boolean({
+							description:
+								"Only return products that are active or inactive (e.g., pass false to list all inactive products).",
+						})
+						.default(true),
+					limit: z
+						.number({
+							description:
+								"A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 10.",
+						})
+						.default(10)
+						.optional(),
+					startingAfter: z
+						.string({
+							description:
+								"A cursor for use in pagination. starting_after is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with obj_foo, your subsequent call can include starting_after=obj_foo in order to fetch the next page of the list.",
+						})
+						.optional(),
+					endingBefore: z
+						.string({
+							description:
+								"A cursor for use in pagination. ending_before is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with obj_bar, your subsequent call can include ending_before=obj_bar in order to fetch the previous page of the list.",
+						})
+						.optional(),
+					ids: z.array(z.string()).optional(),
+					shippable: z
+						.boolean({
+							description:
+								"Only return products that can be shipped (i.e., physical, not digital products).",
+						})
+						.optional(),
+					url: z
+						.string({
+							description: "Only return products with the given url.",
+						})
+						.optional(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const {
+					active,
+					limit,
+					startingAfter,
+					endingBefore,
+					ids,
+					shippable,
+					url,
+				} = ctx.body;
+				const product = await client.products
+					.list({
+						active,
+						limit,
+						starting_after: startingAfter,
+						ending_before: endingBefore,
+						ids,
+						shippable,
+						url,
+					})
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({ product });
+			},
+		),
+		searchProduct: createAuthEndpoint(
+			"/products/search",
+			{
+				method: "POST",
+				body: z.object({
+					searchQuery: z.string({
+						description:
+							"The search query string. See `search query language` and the list of supported query fields for products.",
+					}),
+					limit: z
+						.number({
+							description:
+								"A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 10.",
+						})
+						.default(10)
+						.optional(),
+					page: z
+						.string({
+							description:
+								"A cursor for pagination across multiple pages of results. Don't include this parameter on the first call. Use the next_page value returned in a previous response to request subsequent results.",
+						})
+						.optional(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { searchQuery, limit, page } = ctx.body;
+				const product = await client.products
+					.search({
+						query: searchQuery,
+						limit,
+						page,
+					})
+					.catch(async (e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+				return ctx.json({ product });
+			},
+		),
+	} as const;
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -989,6 +1299,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.json({ success: true });
 				},
 			),
+			...productsEndpoints,
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {
