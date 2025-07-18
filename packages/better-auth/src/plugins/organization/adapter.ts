@@ -678,7 +678,7 @@ export const getOrgAdapter = (
 				email: string;
 				role: string;
 				organizationId: string;
-				teamId?: string;
+				teamIds: string[];
 			};
 			user: User;
 		}) => {
@@ -687,6 +687,7 @@ export const getOrgAdapter = (
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
+
 			const invite = await adapter.create<
 				Omit<InvitationInput, "id">,
 				Invitation
@@ -696,7 +697,10 @@ export const getOrgAdapter = (
 					status: "pending",
 					expiresAt,
 					inviterId: user.id,
-					...invitation,
+					email: invitation.email,
+					role: invitation.role,
+					organizationId: invitation.organizationId,
+					teamId: invitation.teamIds.join(","),
 				},
 			});
 

@@ -137,7 +137,6 @@ describe("team", async (it) => {
 
 		expect(invitation.data?.member).toMatchObject({
 			role: "member",
-			teamId,
 			userId: signUpRes.data?.user.id,
 		});
 	});

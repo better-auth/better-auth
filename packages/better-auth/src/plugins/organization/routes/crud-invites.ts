@@ -44,11 +44,20 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 							"Resend the invitation email, if the user is already invited",
 					})
 					.optional(),
-				teamId: z
-					.string({
-						description: "The team ID to invite the user to",
-					})
-					.optional(),
+				teamId: z.union([
+					z
+						.string({
+							description: "The team ID to invite the user to",
+						})
+						.optional(),
+					z
+						.array(
+							z.string({
+								description: "The team ID to invite the user to",
+							}),
+						)
+						.optional(),
+				]),
 			}),
 			metadata: {
 				$Infer: {
@@ -80,7 +89,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 								 * The team the user is
 								 * being invited to.
 								 */
-								teamId?: string;
+								teamId?: string | string[];
 							}
 						: {}),
 				},
@@ -246,42 +255,54 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				"teamId" in ctx.body &&
 				ctx.body.teamId
 			) {
-				const team = await adapter.findTeamById({
-					teamId: ctx.body.teamId,
-					organizationId: organizationId,
-					includeTeamMembers: true,
-				});
-				if (!team) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				const teamIds =
+					typeof ctx.body.teamId === "string"
+						? [ctx.body.teamId]
+						: ctx.body.teamId;
+
+				for (const teamId of teamIds) {
+					const team = await adapter.findTeamById({
+						teamId,
+						organizationId: organizationId,
+						includeTeamMembers: true,
 					});
-				}
-				const maximumMembersPerTeam =
-					typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-					"function"
-						? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-								teamId: ctx.body.teamId,
-								session: session,
-								organizationId: organizationId,
-							})
-						: ctx.context.orgOptions.teams.maximumMembersPerTeam;
-				if (team.members.length >= maximumMembersPerTeam) {
-					throw new APIError("FORBIDDEN", {
-						message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-					});
+
+					if (!team) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+						});
+					}
+
+					const maximumMembersPerTeam =
+						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+						"function"
+							? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+									teamId,
+									session: session,
+									organizationId: organizationId,
+								})
+							: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+					if (team.members.length >= maximumMembersPerTeam) {
+						throw new APIError("FORBIDDEN", {
+							message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+						});
+					}
 				}
 			}
+
+			const teamIds =
+				"teamId" in ctx.body
+					? typeof ctx.body.teamId === "string"
+						? [ctx.body.teamId]
+						: ctx.body.teamId ?? []
+					: [];
 
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					role: roles,
 					email: ctx.body.email.toLowerCase(),
 					organizationId: organizationId,
-					...("teamId" in ctx.body
-						? {
-								teamId: ctx.body.teamId,
-							}
-						: {}),
+					teamIds,
 				},
 				user: session.user,
 			});
@@ -420,20 +441,28 @@ export const acceptInvitation = createAuthEndpoint(
 		});
 
 		if (acceptedI.teamId) {
-			const teamMember = await adapter.findOrCreateTeamMember({
-				teamId: acceptedI.teamId,
-				userId: session.user.id,
-			});
+			const teamIds = acceptedI.teamId.split(",");
+			const onlyOne = teamIds.length === 1;
 
-			const updatedSession = await adapter.setActiveTeam(
-				session.session.token,
-				teamMember.teamId,
-			);
+			for (const teamId of teamIds) {
+				await adapter.findOrCreateTeamMember({
+					teamId: teamId,
+					userId: session.user.id,
+				});
+			}
 
-			await setSessionCookie(ctx, {
-				session: updatedSession,
-				user: session.user,
-			});
+			if (onlyOne) {
+				const teamId = teamIds[0];
+				const updatedSession = await adapter.setActiveTeam(
+					session.session.token,
+					teamId,
+				);
+
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
+			}
 		}
 
 		await adapter.setActiveOrganization(
@@ -452,10 +481,7 @@ export const acceptInvitation = createAuthEndpoint(
 
 		return ctx.json({
 			invitation: acceptedI,
-			member: {
-				...member,
-				...(acceptedI.teamId ? { teamId: acceptedI.teamId } : {}),
-			},
+			member,
 		});
 	},
 );
