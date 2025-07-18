@@ -43,6 +43,7 @@ import {
 import type {
 	InferInvitation,
 	InferMember,
+	InferOrganization,
 	Organization,
 	Team,
 } from "./schema";
@@ -50,6 +51,9 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import type { OrganizationOptions } from "./types";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
+import type { Prettify, PrettifyDeep } from "../../types/helper";
+import { betterAuth } from "../../auth";
 
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -89,7 +93,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create)
 		 */
-		createOrganization: createOrganization,
+		createOrganization: createOrganization(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -105,7 +109,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update)
 		 */
-		updateOrganization: updateOrganization,
+		updateOrganization: updateOrganization(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -121,7 +125,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
 		 */
-		deleteOrganization: deleteOrganization,
+		deleteOrganization: deleteOrganization(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -137,7 +141,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
 		 */
-		setActiveOrganization: setActiveOrganization<O>(),
+		setActiveOrganization: setActiveOrganization(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -153,7 +157,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
 		 */
-		getFullOrganization: getFullOrganization<O>(),
+		getFullOrganization: getFullOrganization(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -169,7 +173,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list)
 		 */
-		listOrganizations: listOrganizations,
+		listOrganizations: listOrganizations(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -201,7 +205,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-cancel-invitation)
 		 */
-		cancelInvitation: cancelInvitation,
+		cancelInvitation: cancelInvitation(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -217,7 +221,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-accept-invitation)
 		 */
-		acceptInvitation: acceptInvitation,
+		acceptInvitation: acceptInvitation(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -233,7 +237,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-invitation)
 		 */
-		getInvitation: getInvitation,
+		getInvitation: getInvitation(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -249,7 +253,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-reject-invitation)
 		 */
-		rejectInvitation: rejectInvitation,
+		rejectInvitation: rejectInvitation(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -265,7 +269,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-invitations)
 		 */
-		listInvitations: listInvitations,
+		listInvitations: listInvitations(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -281,7 +285,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member)
 		 */
-		getActiveMember: getActiveMember,
+		getActiveMember: getActiveMember(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -297,7 +301,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-check-slug)
 		 */
-		checkOrganizationSlug: checkOrganizationSlug,
+		checkOrganizationSlug: checkOrganizationSlug(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -314,7 +318,7 @@ export const organization = <O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
 		 */
 
-		addMember: addMember<O>(),
+		addMember: addMember<O>(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -330,7 +334,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-member)
 		 */
-		removeMember: removeMember,
+		removeMember: removeMember(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -362,8 +366,8 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
 		 */
-		leaveOrganization: leaveOrganization,
-		listUserInvitations,
+		leaveOrganization: leaveOrganization(options as O),
+		listUserInvitations: listUserInvitations(options as O),
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
@@ -398,7 +402,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-teams)
 		 */
-		listOrganizationTeams: listOrganizationTeams,
+		listOrganizationTeams: listOrganizationTeams(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -414,7 +418,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-team)
 		 */
-		removeTeam: removeTeam,
+		removeTeam: removeTeam(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -430,7 +434,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-team)
 		 */
-		updateTeam: updateTeam,
+		updateTeam: updateTeam(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -472,6 +476,7 @@ export const organization = <O extends OrganizationOptions>(
 							required: false,
 							fieldName: options?.schema?.team?.fields?.updatedAt,
 						},
+						...(options?.schema?.team?.additionalFields || {}),
 					},
 				},
 			} satisfies AuthPluginSchema)
@@ -517,6 +522,7 @@ export const organization = <O extends OrganizationOptions>(
 	return {
 		id: "organization",
 		endpoints: {
+			// ...endpoints,
 			...(api as O["teams"] extends { enabled: true }
 				? typeof teamEndpoints & typeof endpoints
 				: typeof endpoints),
@@ -604,7 +610,7 @@ export const organization = <O extends OrganizationOptions>(
 							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 						});
 					}
-					const adapter = getOrgAdapter(ctx.context);
+					const adapter = getOrgAdapter<O>(ctx.context, options);
 					const member = await adapter.findMemberByOrgId({
 						userId: ctx.context.session.user.id,
 						organizationId: activeOrganizationId,
@@ -667,6 +673,7 @@ export const organization = <O extends OrganizationOptions>(
 						required: false,
 						fieldName: options?.schema?.organization?.fields?.metadata,
 					},
+					...(options?.schema?.organization?.additionalFields || {}),
 				},
 			},
 			member: {
@@ -712,6 +719,7 @@ export const organization = <O extends OrganizationOptions>(
 						required: true,
 						fieldName: options?.schema?.member?.fields?.createdAt,
 					},
+					...(options?.schema?.member?.additionalFields || {}),
 				},
 			},
 			invitation: {
@@ -769,12 +777,13 @@ export const organization = <O extends OrganizationOptions>(
 						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
 					},
+					...(options?.schema?.invitation?.additionalFields || {}),
 				},
 			},
 			...(teamSupport ? teamSchema : {}),
 		},
 		$Infer: {
-			Organization: {} as Organization,
+			Organization: {} as InferOrganization<O>,
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
 			Team: teamSupport ? ({} as Team) : ({} as any),

@@ -5,7 +5,11 @@ import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
 import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { APIError } from "better-call";
+import { APIError, type Prettify } from "better-call";
+import { memoryAdapter } from "../../adapters/memory-adapter";
+import type { OrganizationOptions } from "./types";
+import type { PrettifyDeep } from "../../types/helper";
+import type { InvitationStatus } from "./schema";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -63,7 +67,7 @@ describe("organization", async (it) => {
 		expect(organization.data?.name).toBeDefined();
 		expect(organization.data?.metadata).toBeDefined();
 		expect(organization.data?.members.length).toBe(1);
-		expect(organization.data?.members[0].role).toBe("owner");
+		expect(organization.data?.members[0]?.role).toBe("owner");
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -111,7 +115,7 @@ describe("organization", async (it) => {
 
 		expect(organization?.name).toBe("test2");
 		expect(organization?.members.length).toBe(1);
-		expect(organization?.members[0].role).toBe("owner");
+		expect(organization?.members[0]?.role).toBe("owner");
 	});
 
 	it("should allow listing organizations", async () => {
@@ -1127,5 +1131,320 @@ describe("types", async (it) => {
 			ReturnType<typeof auth.api.getFullOrganization>
 		>;
 		expectTypeOf<FullOrganization>().toEqualTypeOf<ActiveOrganization>();
+	});
+});
+
+describe("Additional Fields", async () => {
+	const db = {
+		users: [],
+		sessions: [],
+		account: [],
+		organization: [],
+		invitation: [] as {
+			id: string;
+			invitationRequiredField: string;
+			invitationOptionalField?: string;
+		}[],
+		member: [] as {
+			id: string;
+			memberRequiredField: string;
+			memberOptionalField?: string;
+		}[],
+		team: [] as {
+			id: string;
+			teamRequiredField: string;
+			teamOptionalField?: string;
+		}[],
+	};
+
+	const orgOptions = {
+		teams: {
+			enabled: true,
+		},
+		schema: {
+			organization: {
+				additionalFields: {
+					someRequiredField: {
+						type: "string",
+						required: true,
+					},
+					someOptionalField: {
+						type: "string",
+						required: false,
+					},
+					someHiddenField: {
+						type: "string",
+						input: false,
+					},
+				},
+			},
+			member: {
+				additionalFields: {
+					memberRequiredField: {
+						type: "string",
+						required: true,
+					},
+					memberOptionalField: {
+						type: "string",
+					},
+				},
+			},
+			team: {
+				additionalFields: {
+					teamRequiredField: {
+						type: "string",
+						required: true,
+					},
+					teamOptionalField: {
+						type: "string",
+					},
+				},
+			},
+			invitation: {
+				additionalFields: {
+					invitationRequiredField: {
+						type: "string",
+						required: true,
+					},
+					invitationOptionalField: {
+						type: "string",
+					},
+				},
+			},
+		},
+		invitationLimit: 3,
+	} satisfies OrganizationOptions;
+
+	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance({
+			database: memoryAdapter(db, {
+				debugLogs: false,
+			}),
+			user: {
+				modelName: "users",
+			},
+			plugins: [organization(orgOptions)],
+			logger: {
+				level: "error",
+			},
+		});
+
+	const { headers, user } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	type ExpectedResult = PrettifyDeep<{
+		id: string;
+		name: string;
+		slug: string;
+		createdAt: Date;
+		logo?: string | null | undefined;
+		metadata: any;
+		someRequiredField: string;
+		someOptionalField?: string | undefined;
+		someHiddenField?: string | undefined;
+		members: (
+			| ({
+					id: string;
+					organizationId: string;
+					userId: string;
+					role: string;
+					createdAt: Date;
+					teamId?: string | undefined;
+			  } & {
+					memberRequiredField: string;
+			  } & {
+					memberOptionalField?: string | undefined;
+			  })
+			| undefined
+		)[];
+	}> | null;
+	let org: NonNullable<ExpectedResult>;
+	it("create organization", async () => {
+		try {
+			const orgRes = await auth.api.createOrganization({
+				body: {
+					name: "test",
+					slug: "test",
+					someRequiredField: "hey",
+					someOptionalField: "hey",
+				},
+				headers,
+			});
+
+			type Result = PrettifyDeep<typeof orgRes>;
+			expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
+			expect(orgRes).not.toBeNull();
+			if (!orgRes) throw new Error("Organization is null");
+			org = orgRes;
+			expect(org.someRequiredField).toBeDefined();
+			expect(org.someRequiredField).toBe("hey");
+			expect(org.someOptionalField).toBe("hey");
+			expect(org.someHiddenField).toBeUndefined();
+			//@ts-expect-error
+			expect(db.organization[0]?.someRequiredField).toBe("hey");
+		} catch (error) {
+			throw error;
+		}
+	});
+
+	it("update organization", async () => {
+		const updatedOrg = await auth.api.updateOrganization({
+			body: {
+				data: {
+					someRequiredField: "hey2",
+				},
+				organizationId: org.id,
+			},
+			headers,
+		});
+		type Result = PrettifyDeep<typeof updatedOrg>;
+		expect(updatedOrg?.someRequiredField).toBe("hey2");
+		//@ts-expect-error
+		expect(db.organization[0]?.someRequiredField).toBe("hey2");
+		expectTypeOf<Result>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			slug: string;
+			createdAt: Date;
+			logo?: string | null | undefined;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
+			metadata: any;
+		} | null>();
+	});
+
+	it("add member", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "new-member@email.com",
+				password: "password",
+				name: "new member",
+			},
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.id,
+				userId: newUser.user.id,
+				role: "member",
+				memberRequiredField: "hey",
+				memberOptionalField: "hey2",
+			},
+		});
+		if (!member) throw new Error("Member is null");
+		expect(member?.memberRequiredField).toBe("hey");
+		expectTypeOf<typeof member.memberRequiredField>().toEqualTypeOf<string>();
+		expect(member?.memberOptionalField).toBe("hey2");
+		expectTypeOf<typeof member.memberOptionalField>().toEqualTypeOf<
+			string | undefined
+		>();
+		const row = db.member.find((x) => x.id === member?.id)!;
+		expect(row).toBeDefined();
+		expect(row.memberRequiredField).toBe("hey");
+		expect(row.memberOptionalField).toBe("hey2");
+	});
+
+	it("create invitation", async () => {
+		const invitation = await auth.api.createInvitation({
+			body: {
+				email: "test10@test.com",
+				role: "member",
+				invitationRequiredField: "hey",
+				invitationOptionalField: "hey2",
+				organizationId: org.id,
+			},
+			headers,
+		});
+
+		expect(invitation?.invitationRequiredField).toBe("hey");
+		expectTypeOf<
+			typeof invitation.invitationRequiredField
+		>().toEqualTypeOf<string>();
+		expect(invitation?.invitationOptionalField).toBe("hey2");
+		expectTypeOf<typeof invitation.invitationOptionalField>().toEqualTypeOf<
+			string | undefined
+		>();
+		const row = db.invitation.find((x) => x.id === invitation?.id)!;
+		expect(row).toBeDefined();
+		expect(row.invitationRequiredField).toBe("hey");
+		expect(row.invitationOptionalField).toBe("hey2");
+	});
+
+	it("list invitations", async () => {
+		const invitations = await auth.api.listInvitations({
+			query: {
+				organizationId: org.id,
+			},
+			headers,
+		});
+
+		expect(invitations?.length).toBe(1);
+		const invitation = invitations[0]!;
+		type ResultInvitation = Prettify<typeof invitation>;
+		expectTypeOf<ResultInvitation>().toEqualTypeOf<{
+			id: string;
+			organizationId: string;
+			email: string;
+			role: "member" | "admin" | "owner";
+			status: InvitationStatus;
+			expiresAt: Date;
+			inviterId: string;
+			invitationRequiredField: string;
+			invitationOptionalField?: string | undefined;
+			teamId?: string | undefined;
+		}>();
+		expect(invitation.invitationRequiredField).toBe("hey");
+		expect(invitation.invitationOptionalField).toBe("hey2");
+	});
+
+	it("create team", async () => {
+		const team = await auth.api.createTeam({
+			body: {
+				name: "test",
+				teamRequiredField: "hey",
+				teamOptionalField: "hey2",
+				organizationId: org.id,
+			},
+			headers,
+		});
+
+		expect(team.teamRequiredField).toBe("hey");
+		expect(team.teamOptionalField).toBe("hey2");
+		const row = db.team.find((x) => x.id === team.id)!;
+		expect(row).toBeDefined();
+		expect(row.teamRequiredField).toBe("hey");
+		expect(row.teamOptionalField).toBe("hey2");
+	});
+
+	it("update team", async () => {
+		const updatedTeam = await auth.api.updateTeam({
+			body: {
+				teamId: org.id,
+				data: {
+					teamOptionalField: "hey3",
+					teamRequiredField: "hey4",
+				},
+			},
+			headers,
+		});
+		if (!updatedTeam) throw new Error("Updated team is null");
+		expect(updatedTeam?.teamOptionalField).toBe("hey3");
+		expect(updatedTeam?.teamRequiredField).toBe("hey4");
+		expectTypeOf<typeof updatedTeam.teamRequiredField>().toEqualTypeOf<string>();
+		expectTypeOf<typeof updatedTeam.teamOptionalField>().toEqualTypeOf<
+			string | undefined
+		>();
+		const row = db.team.find((x) => x.id === updatedTeam?.id)!;
+		expect(row).toBeDefined();
+		expect(row.teamOptionalField).toBe("hey3");
+		expect(row.teamRequiredField).toBe("hey4");
 	});
 });

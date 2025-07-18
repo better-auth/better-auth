@@ -1,6 +1,9 @@
 import * as z from "zod/v4";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
+import type { PrettifyDeep } from "../../types/helper";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
+import type { Prettify } from "better-call";
 
 export const role = z.string();
 export const invitationStatus = z
@@ -105,8 +108,20 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 			};
 		};
 
+export type InferOrganization<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	Organization &
+		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide>
+>;
+
+export type InferTeam<O extends OrganizationOptions> = Prettify<
+	Team & InferAdditionalFieldsFromPluginOptions<"team", O>
+>;
+
 export type InferInvitation<O extends OrganizationOptions> =
-	O["teams"] extends {
+	(O["teams"] extends {
 		enabled: true;
 	}
 		? {
@@ -127,4 +142,5 @@ export type InferInvitation<O extends OrganizationOptions> =
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
-			};
+			}) &
+		InferAdditionalFieldsFromPluginOptions<"invitation", O, false>;
