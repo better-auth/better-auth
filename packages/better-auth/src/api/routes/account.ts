@@ -1,7 +1,12 @@
 import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
-import { generateState, type OAuth2Tokens } from "../../oauth2";
+import {
+	generateState,
+	getAccessTokenUtil,
+	setTokenUtil,
+	type OAuth2Tokens,
+} from "../../oauth2";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -9,7 +14,7 @@ import {
 } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { SocialProviderListEnum } from "../../social-providers";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { symmetricEncrypt } from "../../crypto";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -76,38 +81,14 @@ export const listUserAccounts = createAuthEndpoint(
 			session.user.id,
 		);
 		return c.json(
-			await Promise.all(
-				accounts.map(async (a) => ({
-					id: a.id,
-					provider: a.providerId,
-					createdAt: a.createdAt,
-					updatedAt: a.updatedAt || null,
-					accountId: a.accountId,
-					accessToken:
-						a.accessToken && c.context.options.account?.encryptOAuthTokens
-							? await symmetricDecrypt({
-									key: c.context.secret,
-									data: a.accessToken,
-								}).catch((e) => {
-									c.context.logger.error("Failed to decrypt access token", e);
-									return a.accessToken;
-								})
-							: a.accessToken,
-					refreshToken:
-						a.refreshToken && c.context.options.account?.encryptOAuthTokens
-							? await symmetricDecrypt({
-									key: c.context.secret,
-									data: a.refreshToken,
-								}).catch((e) => {
-									c.context.logger.error("Failed to decrypt refresh token", e);
-									return a.refreshToken;
-								})
-							: a.refreshToken,
-					accessTokenExpiresAt: a.accessTokenExpiresAt,
-					refreshTokenExpiresAt: a.refreshTokenExpiresAt,
-					scopes: a.scope?.split(",") || [],
-				})),
-			),
+			accounts.map((a) => ({
+				id: a.id,
+				provider: a.providerId,
+				createdAt: a.createdAt,
+				updatedAt: a.updatedAt,
+				accountId: a.accountId,
+				scopes: a.scope?.split(",") || [],
+			})),
 		);
 	},
 );
@@ -548,15 +529,18 @@ export const getAccessToken = createAuthEndpoint(
 					account.refreshToken as string,
 				);
 				await ctx.context.internalAdapter.updateAccount(account.id, {
-					accessToken: newTokens.accessToken,
+					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
 					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
-					refreshToken: newTokens.refreshToken,
+					refreshToken: await setTokenUtil(newTokens.refreshToken, ctx.context),
 					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
 				});
 			}
 
 			const tokens = {
-				accessToken: newTokens?.accessToken ?? account.accessToken ?? undefined,
+				accessToken: await getAccessTokenUtil(
+					newTokens?.accessToken ?? account.accessToken ?? "",
+					ctx.context,
+				),
 				accessTokenExpiresAt:
 					newTokens?.accessTokenExpiresAt ??
 					account.accessTokenExpiresAt ??
