@@ -106,15 +106,12 @@ const auth = betterAuth({
 Key features:
 - Extended Organization Fields:
   - Type-safe additional fields
-  - Built-in field validation
-  - Optional and required fields
-
 ---
 
 ## ✨ Core Enhancements
 
 ### Type System & Validation
-- Migrated to Zod V4 for better type safety
+- Migrated to Zod v4 for better type safety & performance
 - Enhanced validation patterns across the codebase
 - Improved error handling with better type inference and standard schema.
 
@@ -159,7 +156,6 @@ Key features:
 - Added proper limits and checks for SSO plugin
 - Added JWKS support for OIDC plugin
 - Improved error handling in SSO plugin
-- Better MCP server integration
 - Enhanced provider discovery
 
 ### Stripe Integration
@@ -176,11 +172,8 @@ Key features:
 
 ### Developer Experience
 - Fixed Prisma schema generator issues
-- Improved error messages and validation feedback
+- Improved error messages and validation feedback(zodv4 prettify error)
 - Enhanced debugging capabilities
-- Better type inference in IDE
-- Improved plugin configuration experience
-
 ---
 
 ## 📚 Documentation Updates
