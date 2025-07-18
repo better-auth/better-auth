@@ -1507,6 +1507,16 @@ the `createOrganization` endpoint will include this field in its request and res
   and provides a convenient way to attach arbitrary data to a row.
 </Callout>
 
+To infer additional fields on the client, you must pass the `auth` instance to the `organizationClient` function.
+
+```ts title="auth-client.ts"
+createAuthClient({
+  plugins: [organizationClient<typeof auth>()]
+})
+```
+
+
+
 ## Options
 
 **allowUserToCreateOrganization**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create an organization. By default, it's `true`. You can set it to `false` to restrict users from creating organizations.

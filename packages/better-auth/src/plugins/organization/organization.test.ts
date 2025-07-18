@@ -1231,7 +1231,7 @@ describe("Additional Fields", async () => {
 
 	const { headers, user } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [organizationClient()],
+		plugins: [organizationClient<typeof auth>()],
 		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
