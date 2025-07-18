@@ -14,8 +14,6 @@ import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
-import type { OrganizationOptions } from "./types";
-import type { BetterAuthOptions } from "../../types";
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;
