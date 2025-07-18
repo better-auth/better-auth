@@ -63,8 +63,16 @@ export const usage = {
 			plan: { type: "string", required: true },
 			referenceId: { type: "string", required: true },
 			usage: { type: "number", required: true, defaultValue: 0 },
-			startDate: { type: "date", required: true, defaultValue: () => new Date() },
-			latestUsageDate: { type: "date", required: true, defaultValue: () => new Date() },
+			startDate: {
+				type: "date",
+				required: true,
+				defaultValue: () => new Date(),
+			},
+			latestUsageDate: {
+				type: "date",
+				required: true,
+				defaultValue: () => new Date(),
+			},
 		},
 	},
 } satisfies AuthPluginSchema;
