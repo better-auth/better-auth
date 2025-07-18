@@ -190,3 +190,27 @@ const auth = betterAuth({
     ]
 })
 ```
+
+### Username Normalization
+
+A function that normalizes the username, or `false` if you want to disable normalization.
+
+By default, usernames are case-insensitive, so "TestUser" and "testuser", for example, are considered the same username. The `username` field will contain the normalized (lower case) username, while `displayUsername` will contain the original `username`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            usernameNormalization: (username) => {
+                return username.toLowerCase()
+                    .replaceAll("0", "o")
+                    .replaceAll("3", "e")
+                    .replaceAll("4", "a");
+            }
+        })
+    ]
+})
+```
