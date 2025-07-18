@@ -1405,8 +1405,17 @@ describe("Additional Fields", async () => {
 		expect(invitation.invitationOptionalField).toBe("hey2");
 	});
 
+	let team: {
+		id: string;
+		name: string;
+		organizationId: string;
+		createdAt: Date;
+		updatedAt?: Date | undefined;
+		teamRequiredField: string;
+		teamOptionalField?: string | undefined;
+	} |null= null
 	it("create team", async () => {
-		const team = await auth.api.createTeam({
+		team = await auth.api.createTeam({
 			body: {
 				name: "test",
 				teamRequiredField: "hey",
@@ -1418,16 +1427,17 @@ describe("Additional Fields", async () => {
 
 		expect(team.teamRequiredField).toBe("hey");
 		expect(team.teamOptionalField).toBe("hey2");
-		const row = db.team.find((x) => x.id === team.id)!;
+		const row = db.team.find((x) => x.id === team?.id)!;
 		expect(row).toBeDefined();
 		expect(row.teamRequiredField).toBe("hey");
 		expect(row.teamOptionalField).toBe("hey2");
 	});
 
 	it("update team", async () => {
+		if (!team) throw new Error("Team is null");
 		const updatedTeam = await auth.api.updateTeam({
 			body: {
-				teamId: org.id,
+				teamId: team.id,
 				data: {
 					teamOptionalField: "hey3",
 					teamRequiredField: "hey4",
