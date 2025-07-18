@@ -1053,7 +1053,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					);
 				});
 
-				var res: any;
+				var res: Usage | null;
 
 				if (latest && latest.currentlyActive === true) {
 					// Same day: increment usage and update latestUsageDate
