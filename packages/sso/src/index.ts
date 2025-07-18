@@ -855,7 +855,9 @@ export const sso = (options?: SSOOptions) => {
 							});
 						}
 						return ctx.json({
-							url: loginRequest.context,
+							url: `${loginRequest.context}&RelayState=${encodeURIComponent(
+								body.callbackURL,
+							)}`,
 							redirect: true,
 						});
 					}
@@ -1353,9 +1355,10 @@ export const sso = (options?: SSOOptions) => {
 					let session: Session =
 						await ctx.context.internalAdapter.createSession(user.id, ctx);
 					await setSessionCookie(ctx, { session, user });
-					console.log("RelayState: ", RelayState);
 					throw ctx.redirect(
-						RelayState || `${parsedSamlConfig.issuer}/dashboard`,
+						RelayState ||
+							`${parsedSamlConfig.callbackUrl}` ||
+							`${parsedSamlConfig.issuer}`,
 					);
 				},
 			),

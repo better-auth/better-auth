@@ -13,7 +13,6 @@ import { createAuthClient } from "better-auth/client";
 import { betterFetch } from "@better-fetch/fetch";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
-import { IdentityProvider, ServiceProvider } from "samlify";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import { createServer } from "http";
@@ -353,13 +352,15 @@ const createTemplateCallback =
 			context: saml.SamlLib.replaceTagsByValue(template, tagValues),
 		};
 	};
-function createMockSAMLIdP(port: number) {
+
+const createMockSAMLIdP = (port: number) => {
 	const app: ExpressApp = express();
 	let server: ReturnType<typeof createServer> | undefined;
+
 	app.use(bodyParser.urlencoded({ extended: true }));
 	app.use(bodyParser.json());
 
-	const idp = IdentityProvider({
+	const idp = saml.IdentityProvider({
 		metadata: idpMetadata,
 		privateKey: idPk,
 		isAssertionEncrypted: false,
@@ -389,7 +390,7 @@ function createMockSAMLIdP(port: number) {
 			],
 		},
 	});
-	const sp = ServiceProvider({
+	const sp = saml.ServiceProvider({
 		metadata: spMetadata,
 	});
 	app.get(
@@ -420,37 +421,32 @@ function createMockSAMLIdP(port: number) {
 			res.status(200).send({ samlResponse: context, entityEndpoint });
 		},
 	);
-	// @ts-ignore
-	app.post(
-		"/api/sso/saml2/sp/acs",
-		async (req: ExpressRequest, res: ExpressResponse) => {
-			try {
-				const parseResult = await sp.parseLoginResponse(
-					idp,
-					saml.Constants.wording.binding.post,
-					req,
-				);
-				const { extract } = parseResult;
-				const { attributes } = extract;
-				const relayState = req.body.RelayState;
-				if (relayState) {
-					return res.status(200).send({ relayState, attributes });
-				} else {
-					return res
-						.status(200)
-						.send({ extract, message: "RelayState is missing." });
-				}
-			} catch (error) {
-				console.error("Error handling SAML ACS endpoint:", error);
-				res.status(500).send({ error: "Failed to process SAML response." });
+	app.post("/api/sso/saml2/sp/acs", async (req: any, res: any) => {
+		try {
+			const parseResult = await sp.parseLoginResponse(
+				idp,
+				saml.Constants.wording.binding.post,
+				req,
+			);
+			const { extract } = parseResult;
+			const { attributes } = extract;
+			const relayState = req.body.RelayState;
+			if (relayState) {
+				return res.status(200).send({ relayState, attributes });
+			} else {
+				return res
+					.status(200)
+					.send({ extract, message: "RelayState is missing." });
 			}
-		},
-	);
+		} catch (error) {
+			console.error("Error handling SAML ACS endpoint:", error);
+			res.status(500).send({ error: "Failed to process SAML response." });
+		}
+	});
 	app.post(
-		"/api/sso/saml2/callback",
+		"/api/sso/saml2/callback/:providerId",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
-
 			try {
 				const parseResult = await sp.parseLoginResponse(
 					idp,
@@ -474,29 +470,28 @@ function createMockSAMLIdP(port: number) {
 			res.send(idpMetadata);
 		},
 	);
+	const start = () =>
+		new Promise<void>((resolve) => {
+			app.use(bodyParser.urlencoded({ extended: true }));
+			server = app.listen(port, () => {
+				console.log(`Mock SAML IdP running on port ${port}`);
+				resolve();
+			});
+		});
 
-	return {
-		start: () => {
-			return new Promise<void>((resolve) => {
-				server = app.listen(port, () => {
-					console.log(`Mock SAML IdP running on port ${port}`);
-					resolve();
-				});
+	const stop = () =>
+		new Promise<void>((resolve, reject) => {
+			app.use(bodyParser.urlencoded({ extended: true }));
+			server?.close((err) => {
+				if (err) reject(err);
+				else resolve();
 			});
-		},
-		stop: () => {
-			return new Promise<void>((resolve, reject) => {
-				server?.close((err) => {
-					if (err) reject(err);
-					else resolve();
-				});
-			});
-		},
-		get metadataUrl() {
-			return `http://localhost:${port}/idp/metadata`;
-		},
-	};
-}
+		});
+
+	const metadataUrl = `http://localhost:${port}/idp/metadata`;
+
+	return { start, stop, metadataUrl };
+};
 
 describe("SAML SSO", async () => {
 	const data = {
@@ -709,7 +704,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					callbackUrl: "http://localhost:8081/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -748,7 +743,6 @@ describe("SAML SSO", async () => {
 			url: expect.stringContaining("http://localhost:8081"),
 			redirect: true,
 		});
-
 		let samlResponse: any;
 		await betterFetch(signInResponse?.url as string, {
 			onSuccess: async (context) => {
@@ -756,21 +750,23 @@ describe("SAML SSO", async () => {
 			},
 		});
 		let redirectLocation = "";
-		await betterFetch("http://localhost:8081/api/sso/saml2/callback", {
-			method: "POST",
-			redirect: "manual",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/callback/saml-provider-1",
+			{
+				method: "POST",
+				redirect: "manual",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse.samlResponse,
+				}),
+				onError: (context) => {
+					expect(context.response.status).toBe(302);
+					redirectLocation = context.response.headers.get("location") || "";
+				},
 			},
-			body: new URLSearchParams({
-				SAMLResponse: samlResponse.samlResponse,
-				RelayState: "http://localhost:3000/dashboard",
-			}),
-			onError: (context) => {
-				expect(context.response.status).toBe(302);
-				redirectLocation = context.response.headers.get("location") || "";
-			},
-		});
+		);
 		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
 	});
 });
