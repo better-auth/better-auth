@@ -16,7 +16,7 @@ export const getSchema = (normalizer: (username: string) => string) => {
 					required: false,
 					transform: {
 						input(value) {
-							return normalizer(value as string);
+							return value == null ? value : normalizer(value as string);
 						},
 					},
 				},
