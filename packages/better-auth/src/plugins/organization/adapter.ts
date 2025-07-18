@@ -11,6 +11,7 @@ import type {
 	Team,
 	TeamInput,
 	TeamMember,
+	TeamMemberInput,
 } from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
@@ -577,6 +578,17 @@ export const getOrgAdapter = (
 			return members;
 		},
 
+		createTeamMember: async (data: Omit<TeamMemberInput, "id">) => {
+			const member = await adapter.create<Omit<TeamMember, "id">, TeamMember>({
+				model: "teamMember",
+				data: {
+					...data,
+					createdAt: new Date(),
+				},
+			});
+			return member;
+		},
+
 		findTeamMember: async (data: {
 			teamId: string;
 			userId: string;
@@ -596,6 +608,36 @@ export const getOrgAdapter = (
 			});
 
 			return member;
+		},
+
+		findOrCreateTeamMember: async (data: {
+			teamId: string;
+			userId: string;
+		}) => {
+			const member = await adapter.findOne<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+
+			if (member) return member;
+
+			return await adapter.create<Omit<TeamMember, "id">, TeamMember>({
+				model: "teamMember",
+				data: {
+					teamId: data.teamId,
+					userId: data.userId,
+					createdAt: new Date(),
+				},
+			});
 		},
 
 		findInvitationsByTeamId: async (teamId: string) => {

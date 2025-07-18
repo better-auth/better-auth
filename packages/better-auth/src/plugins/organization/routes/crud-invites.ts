@@ -9,6 +9,7 @@ import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
+import { setSessionCookie } from "../../../cookies";
 
 export const createInvitation = <O extends OrganizationOptions | undefined>(
 	option: O,
@@ -422,6 +423,23 @@ export const acceptInvitation = createAuthEndpoint(
 					}
 				: {}),
 		});
+
+		if (acceptedI.teamId) {
+			const teamMember = await adapter.findOrCreateTeamMember({
+				teamId: acceptedI.teamId,
+				userId: session.user.id,
+			});
+
+			const updatedSession = await adapter.setActiveTeam(
+				session.session.token,
+				teamMember.teamId,
+			);
+			await setSessionCookie(ctx, {
+				session: updatedSession,
+				user: session.user,
+			});
+		}
+
 		await adapter.setActiveOrganization(
 			session.session.token,
 			invitation.organizationId,
