@@ -56,7 +56,7 @@ export default defineBuildConfig({
 		"@babel/parser",
 		"punycode",
 		"@sveltejs/kit",
-		"svelte/compiler", 
+		"svelte/compiler",
 		"@sveltejs/vite-plugin-svelte",
 		"csstype",
 	],

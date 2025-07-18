@@ -28,7 +28,7 @@ export const svelteKitHandler = async ({
 	if (building) {
 		return resolve(event);
 	}
-	
+
 	const { request, url } = event;
 	if (isAuthPath(url.toString(), auth.options)) {
 		return auth.handler(request);
