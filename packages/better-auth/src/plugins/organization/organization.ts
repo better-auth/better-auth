@@ -332,11 +332,15 @@ export const organization = <O extends OrganizationOptions>(
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
 					},
-					activeTeamId: {
-						type: "string",
-						required: false,
-						fieldName: options?.schema?.session?.fields?.activeTeamId,
-					},
+					...(teamSupport
+						? {
+								activeTeamId: {
+									type: "string",
+									required: false,
+									fieldName: options?.schema?.session?.fields?.activeTeamId,
+								},
+							}
+						: {}),
 				},
 			},
 			organization: {
