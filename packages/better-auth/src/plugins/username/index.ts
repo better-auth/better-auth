@@ -6,12 +6,12 @@ import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { schema } from "./schema";
+import { getSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 export * from "./error-codes";
 export type UsernameOptions = {
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<UsernameSchema>;
 	/**
 	 * The minimum length of the username
 	 *
@@ -245,7 +245,7 @@ export const username = (options?: UsernameOptions) => {
 				},
 			),
 		},
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(getSchema(normalizer), options?.schema),
 		hooks: {
 			before: [
 				{
