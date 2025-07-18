@@ -73,6 +73,11 @@ export const usage = {
 				required: true,
 				defaultValue: () => new Date(),
 			},
+			currentlyActive: {
+				type: "boolean",
+				required: true,
+				defaultValue: true,
+			},
 		},
 	},
 } satisfies AuthPluginSchema;

@@ -114,7 +114,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 	/**
 	 * THIS MIDDLEWARE CHECK IF THE USER HAS REACHED USAGE LIMIT
-	 * - for the trackUsage endpoint
 	 */
 	const enforceUsageLimit = createAuthMiddleware(async (ctx) => {
 		const session = ctx.context.session;
@@ -125,7 +124,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
 		// Check plan limit
-		const totalUsage = await getTotalUsage(ctx, referenceId, ctx.body?.plan);
+		const totalUsage = await getTotalUsage(
+			ctx,
+			referenceId,
+			ctx.body?.plan,
+			options,
+		);
 		const planByName = await getPlanByName(options, ctx.body?.plan);
 		if (!planByName) {
 			throw new APIError("BAD_REQUEST", {
@@ -133,7 +137,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			});
 		}
 
-		if (totalUsage + ctx.body.usage > planByName?.limits!.usageLimit) {
+		if (
+			totalUsage.totalUsage + ctx.body.usage >
+			planByName?.limits!.usageLimit
+		) {
 			throw new APIError("BAD_REQUEST", {
 				message: STRIPE_ERROR_CODES.USAGE_LIMIT_REACHED,
 			});
@@ -1046,9 +1053,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					);
 				});
 
-				if (latest) {
+				var res: any;
+
+				if (latest && latest.currentlyActive === true) {
 					// Same day: increment usage and update latestUsageDate
-					await ctx.context.adapter.update({
+					res = await ctx.context.adapter.update({
 						model: "usage",
 						where: [{ field: "referenceId", value: refId }],
 						update: {
@@ -1058,7 +1067,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				} else {
 					// New day: create new usage entry
-					await ctx.context.adapter.create({
+					res = await ctx.context.adapter.create({
 						model: "usage",
 						data: {
 							referenceId: refId,
@@ -1066,11 +1075,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							usage,
 							startDate: today,
 							latestUsageDate: today,
+							currentlyActive: true,
 						},
 					});
 				}
 
-				return ctx.json({ success: true });
+				//
+				// Check plan limit
+				const totalUsage = await getTotalUsage(
+					ctx,
+					refId,
+					ctx.body?.plan,
+					options,
+				);
+
+				return ctx.json({ data: res, totalUsage: totalUsage });
 			},
 		),
 		/**
@@ -1091,7 +1110,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const { user } = ctx.context.session;
 				const refId = referenceId || user.id;
 
-				const totalUsage = await getTotalUsage(ctx, refId, plan);
+				const totalUsage = await getTotalUsage(ctx, refId, plan, options);
 
 				// Check plan limit
 				const planByName = await getPlanByName(options, plan);
@@ -1105,8 +1124,38 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 		/**
-		 * Add More ...
+		 * Reset Usage
 		 */
+		resetUsage: createAuthEndpoint(
+			"/subscription/usage/reset",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					referenceId: z.string(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { plan, referenceId } = ctx.body;
+				const { user } = ctx.context.session;
+
+				const refId = referenceId || user.id;
+
+				await ctx.context.adapter.updateMany({
+					model: "usage",
+					where: [
+						{ field: "referenceId", value: refId },
+						{ field: "plan", value: plan },
+					],
+					update: {
+						currentlyActive: false,
+					},
+				});
+
+				return ctx.json({ success: true });
+			},
+		),
 	} as const;
 
 	return {

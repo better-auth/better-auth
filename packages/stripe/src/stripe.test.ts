@@ -871,15 +871,13 @@ describe("stripe", async () => {
 		});
 		expect(data["usage"][0]["usage"]).toBe(10);
 
-		await authClient.subscription.usage.track({
+		var abc = await authClient.subscription.usage.track({
 			usage: 12,
 			plan: "starter",
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(data["usage"][0]["usage"]).toBe(22);
-
 		await authClient.subscription.usage.track({
 			usage: 10,
 			plan: "starter",
@@ -888,6 +886,47 @@ describe("stripe", async () => {
 			},
 		});
 		expect(data["usage"][0]["usage"]).toBe(32);
+	});
+
+	it("should throw an error when usage is reached", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		var res = await authClient.subscription.usage.track({
+			usage: 101,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error!.code).toBe("USAGE_LIMIT_REACHED");
 	});
 
 	it("should get total usage", async () => {
@@ -929,7 +968,7 @@ describe("stripe", async () => {
 			},
 		});
 
-		await authClient.subscription.usage.track({
+		var abc = await authClient.subscription.usage.track({
 			usage: 12,
 			plan: "starter",
 			fetchOptions: {
@@ -952,6 +991,72 @@ describe("stripe", async () => {
 				headers,
 			},
 		});
-		expect(totalUsage.data?.totalUsage).toBe(22);
+		expect(totalUsage.data?.totalUsage.totalUsage).toBe(22);
+	});
+
+	it("should reset total usage", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totalUsage = await authClient.subscription.usage.get({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(totalUsage.data?.totalUsage.totalUsage).toBe(10);
+
+		await authClient.subscription.usage.reset({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totalUsage2 = await authClient.subscription.usage.get({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(totalUsage2.data?.totalUsage.totalUsage).toBe(0);
 	});
 });

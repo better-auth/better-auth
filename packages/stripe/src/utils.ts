@@ -29,6 +29,7 @@ export async function getTotalUsage(
 	ctx: GenericEndpointContext,
 	refId: string,
 	plan: string,
+	options: StripeOptions,
 ) {
 	// Get all the usage
 	const usage = await ctx.context.adapter.findMany({
@@ -36,11 +37,18 @@ export async function getTotalUsage(
 		where: [
 			{ field: "referenceId", value: refId },
 			{ field: "plan", value: plan },
+			{ field: "currentlyActive", value: true },
 		],
 	});
 
 	// add all the usage
 	const totalUsage = (usage as Usage[]).reduce((acc, u) => acc + u.usage, 0);
 
-	return totalUsage;
+	const currentPlan = await getPlanByName(options, plan);
+
+	// calculate percentage usage
+	const percentageUsage =
+		(totalUsage / (currentPlan?.limits?.usageLimit || 0)) * 100;
+
+	return { totalUsage: totalUsage, percentageUsage: percentageUsage };
 }

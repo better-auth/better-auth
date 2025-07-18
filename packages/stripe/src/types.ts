@@ -331,6 +331,7 @@ export type Usage = {
 	usage: number;
 	startDate: Date;
 	latestUsageDate: Date;
+	currentlyActive: Boolean;
 };
 
 export interface Customer {
