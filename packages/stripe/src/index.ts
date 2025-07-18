@@ -1057,21 +1057,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								 * - Calls the `onCustomerEmailUpdateError` callback if provided, passing the user, email, and error.
 								 */
 								async after(user, ctx) {
-									const requireEmailVerification =
-										ctx?.context.options?.emailAndPassword
-											?.requireEmailVerification;
-
-									const isEmailVerified = user?.emailVerified;
-
-									if (requireEmailVerification && !isEmailVerified) {
-										await options.onCustomerEmailUpdateError?.({
-											user,
-											email: user.email,
-											error: new Error("Email not verified"),
-										});
-										return;
-									}
-
 									await handleEmailUpdate(ctx, user);
 								},
 							},
@@ -1093,36 +1078,22 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				},
 			) {
 				try {
-					const stripeCustomer = await ctx?.context.adapter.findOne<Customer>({
-						model: "user",
-						where: [
-							{
-								field: "id",
-								value: user.id,
-							},
-						],
-					});
-					if (stripeCustomer?.stripeCustomerId && user.email) {
-						await client.customers.update(stripeCustomer.stripeCustomerId, {
+					const stripeCustomerId = ctx?.context.session?.user.stripeCustomerId;
+					if (stripeCustomerId && user.email) {
+						await client.customers.update(stripeCustomerId, {
 							email: user.email,
 						});
 						await options.onCustomerEmailUpdate?.({
 							user,
 							oldEmail: ctx?.context.session?.user.email!,
 							newEmail: user.email,
-							stripeCustomerId: stripeCustomer.stripeCustomerId,
+							stripeCustomerId,
 						});
 					}
 				} catch (error: any) {
 					ctx?.context.logger.error(
 						`Failed to update Stripe customer email for user ${user.id}: ${error.message}`,
 					);
-
-					await options.onCustomerEmailUpdateError?.({
-						user,
-						email: user.email,
-						error,
-					});
 				}
 			}
 		},

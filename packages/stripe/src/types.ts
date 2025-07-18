@@ -218,7 +218,6 @@ export interface StripeOptions {
 		newEmail: string;
 		stripeCustomerId: string;
 	}) => Promise<void> | void;
-
 	/**
 	 * A callback to run after a customer has failed to update
 	 * @param params - Parameters containing user, email, stripe customer id and error
@@ -227,14 +226,6 @@ export interface StripeOptions {
 	 * @param params.error - Error object
 	 * @description This is useful when you want to log the error or notify the user
 	 * @returns {Promise<void> | void}
-	 */
-	onCustomerEmailUpdateError?: (params: {
-		user: User;
-		email: string;
-		error: any;
-	}) => Promise<void> | void;
-
-	/**
 	 * Subscriptions
 	 */
 	subscription?: {
