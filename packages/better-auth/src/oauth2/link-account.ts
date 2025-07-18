@@ -4,6 +4,7 @@ import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
 import { isDevelopment } from "../utils/env";
+import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
@@ -71,22 +72,8 @@ export async function handleOAuthUserInfo(
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 						userId: dbUser.user.id,
-						accessToken:
-							account.accessToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: account.accessToken,
-									})
-								: account.accessToken,
-						refreshToken:
-							account.refreshToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: account.refreshToken,
-									})
-								: account.refreshToken,
+						accessToken: await setTokenUtil(account.accessToken, c.context),
+						refreshToken: await setTokenUtil(account.refreshToken, c.context),
 						idToken: account.idToken,
 						accessTokenExpiresAt: account.accessTokenExpiresAt,
 						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
@@ -166,22 +153,8 @@ export async function handleOAuthUserInfo(
 						email: userInfo.email.toLowerCase(),
 					},
 					{
-						accessToken:
-							account.accessToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: account.accessToken,
-									})
-								: account.accessToken,
-						refreshToken:
-							account.refreshToken &&
-							c.context.options.account?.encryptOAuthTokens
-								? await symmetricEncrypt({
-										key: c.context.secret,
-										data: account.refreshToken,
-									})
-								: account.refreshToken,
+						accessToken: await setTokenUtil(account.accessToken, c.context),
+						refreshToken: await setTokenUtil(account.refreshToken, c.context),
 						idToken: account.idToken,
 						accessTokenExpiresAt: account.accessTokenExpiresAt,
 						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
