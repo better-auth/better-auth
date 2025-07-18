@@ -412,16 +412,11 @@ export const acceptInvitation = createAuthEndpoint(
 			}
 		}
 
-		const member = await adapter.createMember({
+		let member = await adapter.createMember({
 			organizationId: invitation.organizationId,
 			userId: session.user.id,
 			role: invitation.role,
 			createdAt: new Date(),
-			...("teamId" in acceptedI
-				? {
-						teamId: acceptedI.teamId,
-					}
-				: {}),
 		});
 
 		if (acceptedI.teamId) {
@@ -434,6 +429,7 @@ export const acceptInvitation = createAuthEndpoint(
 				session.session.token,
 				teamMember.teamId,
 			);
+
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,
@@ -444,6 +440,7 @@ export const acceptInvitation = createAuthEndpoint(
 			session.session.token,
 			invitation.organizationId,
 		);
+
 		if (!acceptedI) {
 			return ctx.json(null, {
 				status: 400,
@@ -452,9 +449,13 @@ export const acceptInvitation = createAuthEndpoint(
 				},
 			});
 		}
+
 		return ctx.json({
 			invitation: acceptedI,
-			member,
+			member: {
+				...member,
+				...(acceptedI.teamId ? { teamId: acceptedI.teamId } : {}),
+			},
 		});
 	},
 );

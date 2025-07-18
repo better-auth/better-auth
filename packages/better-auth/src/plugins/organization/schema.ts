@@ -25,7 +25,6 @@ export const memberSchema = z.object({
 	userId: z.coerce.string(),
 	role,
 	createdAt: z.date().default(() => new Date()),
-	teamId: z.string().optional(),
 });
 
 export const invitationSchema = z.object({

@@ -177,6 +177,17 @@ describe("team", async (it) => {
 			},
 		);
 
+		const activeTeamHeaders = new Headers();
+		await client.organization.setActiveTeam(
+			{
+				teamId,
+			},
+			{
+				headers: activeOrgHeaders,
+				onSuccess: cookieSetter(activeTeamHeaders),
+			},
+		);
+
 		const res = await client.organization.listTeamMembers(
 			{
 				query: {
@@ -184,7 +195,7 @@ describe("team", async (it) => {
 				},
 			},
 			{
-				headers: activeOrgHeaders,
+				headers: activeTeamHeaders,
 			},
 		);
 

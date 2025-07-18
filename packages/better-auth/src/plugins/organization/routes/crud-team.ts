@@ -454,7 +454,7 @@ export const listOrganizationTeams = createAuthEndpoint(
 export const setActiveTeam = createAuthEndpoint(
 	"/organization/set-active-team",
 	{
-		method: "GET",
+		method: "POST",
 		body: z.object({
 			teamId: z
 				.string({
@@ -666,20 +666,22 @@ export const listTeamMembers = createAuthEndpoint(
 			});
 		}
 
-		if (!member.teamId) {
+		if (!session.session.activeTeamId) {
 			throw new APIError("FORBIDDEN", {
 				message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
 			});
 		}
 
-		if (member.teamId !== ctx.query?.teamId) {
+		if (session.session.activeTeamId !== ctx.query?.teamId) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_CAN_NOT_ACCESS_THE_MEMBERS_OF_THIS_TEAM,
 			});
 		}
 
-		const members = await adapter.listTeamMembers({ teamId: member.teamId });
+		const members = await adapter.listTeamMembers({
+			teamId: session.session.activeTeamId,
+		});
 		return ctx.json(members);
 	},
 );

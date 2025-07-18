@@ -13,6 +13,7 @@ import type {
 	Member,
 	Organization,
 	Team,
+	TeamMember,
 } from "../schema";
 import { hasPermission } from "../has-permission";
 
@@ -164,6 +165,7 @@ export const createOrganization = createAuthEndpoint(
 			},
 		});
 		let member: Member | undefined;
+		let teamMember: TeamMember | undefined;
 		if (
 			options?.teams?.enabled &&
 			options.teams.defaultTeam?.enabled !== false
@@ -180,10 +182,14 @@ export const createOrganization = createAuthEndpoint(
 				}));
 
 			member = await adapter.createMember({
-				teamId: defaultTeam.id,
 				userId: user.id,
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
+			});
+
+			teamMember = await adapter.createTeamMember({
+				teamId: defaultTeam.id,
+				userId: user.id,
 			});
 		} else {
 			member = await adapter.createMember({
@@ -208,6 +214,17 @@ export const createOrganization = createAuthEndpoint(
 			await adapter.setActiveOrganization(
 				ctx.context.session.session.token,
 				organization.id,
+			);
+		}
+
+		if (
+			teamMember &&
+			ctx.context.session &&
+			!ctx.body.keepCurrentActiveOrganization
+		) {
+			await adapter.setActiveTeam(
+				ctx.context.session.session.token,
+				teamMember.teamId,
 			);
 		}
 

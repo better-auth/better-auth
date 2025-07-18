@@ -115,8 +115,14 @@ export const addMember = <O extends OrganizationOptions>() =>
 				userId: user.id,
 				role: parseRoles(ctx.body.role as string | string[]),
 				createdAt: new Date(),
-				...(teamId ? { teamId: teamId } : {}),
 			});
+
+			if (teamId) {
+				await adapter.createTeamMember({
+					userId: user.id,
+					teamId,
+				});
+			}
 
 			return ctx.json(createdMember);
 		},

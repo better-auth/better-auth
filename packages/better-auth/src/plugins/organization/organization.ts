@@ -403,16 +403,6 @@ export const organization = <O extends OrganizationOptions>(
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
-					...(teamSupport
-						? {
-								teamId: {
-									type: "string",
-									required: false,
-									sortable: true,
-									fieldName: options?.schema?.member?.fields?.teamId,
-								},
-							}
-						: {}),
 					createdAt: {
 						type: "date",
 						required: true,
