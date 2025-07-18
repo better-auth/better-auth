@@ -19,7 +19,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) =>
 				organizationId: z.string().optional(),
 				name: z.string(),
 			}),
-			use: [orgMiddleware],
+			use: [orgMiddleware()],
 			metadata: {
 				openapi: {
 					description: "Create a new team within an organization",
@@ -147,7 +147,7 @@ export const removeTeam = createAuthEndpoint(
 			teamId: z.string(),
 			organizationId: z.string().optional(),
 		}),
-		use: [orgMiddleware],
+		use: [orgMiddleware()],
 		metadata: {
 			openapi: {
 				description: "Remove a team from an organization",
@@ -250,7 +250,7 @@ export const updateTeam = createAuthEndpoint(
 			teamId: z.string(),
 			data: teamSchema.partial(),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 		metadata: {
 			openapi: {
 				description: "Update an existing team in an organization",
@@ -420,7 +420,7 @@ export const listOrganizationTeams = createAuthEndpoint(
 				},
 			},
 		},
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -464,7 +464,7 @@ export const setActiveTeam = createAuthEndpoint(
 				.nullable()
 				.optional(),
 		}),
-		use: [orgSessionMiddleware, orgMiddleware],
+		use: [orgSessionMiddleware(), orgMiddleware()],
 		metadata: {
 			openapi: {
 				description: "Set the active team",
@@ -579,7 +579,7 @@ export const listUserTeams = createAuthEndpoint(
 				},
 			},
 		},
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -643,7 +643,7 @@ export const listTeamMembers = createAuthEndpoint(
 				},
 			},
 		},
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -651,14 +651,13 @@ export const listTeamMembers = createAuthEndpoint(
 
 		if (!session.session.activeOrganizationId) {
 			throw new APIError("BAD_REQUEST", {
-				message:
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 			});
 		}
 
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
-			organizationId: session.session.activeOrganizationId
+			organizationId: session.session.activeOrganizationId,
 		});
 		if (!member) {
 			throw new APIError("BAD_REQUEST", {

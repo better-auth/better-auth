@@ -52,6 +52,7 @@ describe("general types", async (it) => {
 			token: string;
 			ipAddress?: string | undefined | null;
 			userAgent?: string | undefined | null;
+			activeTeamId?: string | undefined | null;
 			activeOrganizationId?: string | undefined | null;
 		}>();
 	});

@@ -18,7 +18,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 		"/organization/invite-member",
 		{
 			method: "POST",
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware(), orgSessionMiddleware()],
 			body: z.object({
 				email: z.string({
 					description: "The email address of the user to invite",
@@ -313,7 +313,7 @@ export const acceptInvitation = createAuthEndpoint(
 				description: "The ID of the invitation to accept",
 			}),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 		metadata: {
 			openapi: {
 				description: "Accept an invitation to an organization",
@@ -467,7 +467,7 @@ export const rejectInvitation = createAuthEndpoint(
 				description: "The ID of the invitation to reject",
 			}),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 		metadata: {
 			openapi: {
 				description: "Reject an invitation to an organization",
@@ -533,7 +533,7 @@ export const cancelInvitation = createAuthEndpoint(
 				description: "The ID of the invitation to cancel",
 			}),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 		openapi: {
 			description: "Cancel an invitation to an organization",
 			responses: {
@@ -598,7 +598,7 @@ export const getInvitation = createAuthEndpoint(
 	"/organization/get-invitation",
 	{
 		method: "GET",
-		use: [orgMiddleware],
+		use: [orgMiddleware()],
 		requireHeaders: true,
 		query: z.object({
 			id: z.string({
@@ -723,7 +723,7 @@ export const listInvitations = createAuthEndpoint(
 	"/organization/list-invitations",
 	{
 		method: "GET",
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware(), orgSessionMiddleware()],
 		query: z
 			.object({
 				organizationId: z
