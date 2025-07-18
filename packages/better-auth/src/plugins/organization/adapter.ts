@@ -578,6 +578,22 @@ export const getOrgAdapter = (
 			return members;
 		},
 
+		listTeamsByUser: async (data: {
+			userId: string;
+		}) => {
+			const members = await adapter.findMany<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+
+			return members;
+		},
+
 		createTeamMember: async (data: Omit<TeamMemberInput, "id">) => {
 			const member = await adapter.create<Omit<TeamMember, "id">, TeamMember>({
 				model: "teamMember",

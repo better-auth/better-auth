@@ -553,3 +553,46 @@ export const setActiveTeam = () => {
 		},
 	);
 };
+
+export const listUserTeams = createAuthEndpoint(
+	"/organization/list-user-teams",
+	{
+		method: "GET",
+		query: z.optional(
+			z.object({
+				organizationId: z.string().optional(),
+			}),
+		),
+		metadata: {
+			openapi: {
+				description: "List all teams that the current user is a part of.",
+				responses: {
+					"200": {
+						description: "Teams retrieved successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: {
+										type: "object",
+										description: "The team",
+										$ref: "#/components/schemas/Team",
+									},
+									description: "Array of team objects within the organization",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		use: [orgMiddleware, orgSessionMiddleware],
+	},
+	async (ctx) => {
+		const session = ctx.context.session;
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const members = await adapter.listTeamsByUser({ userId: session.user.id });
+
+		return ctx.json(members);
+	},
+);
