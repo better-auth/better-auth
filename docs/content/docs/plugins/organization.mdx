@@ -1474,6 +1474,14 @@ const auth = betterAuth({
           modelName: "organizations",  //map the organization table to organizations
           fields: {
             name: "title" //map the name field to title
+          },
+          additionalFields: {
+            // Add a new field to the organization table
+            myCustomField: {
+              type: "string",
+              input: true,
+              required: false
+            }
           }
         }
       }
@@ -1481,6 +1489,23 @@ const auth = betterAuth({
   ]
 })
 ```
+
+#### Additional Fields
+
+As of Better Auth v1.3 we support adding additional fields to the `organization`, `invitation`, `member` and `team` tables.
+
+Take a look at this [example](#customizing-the-schema) to see how to add additional fields to the schema.
+
+Upon adding additional fields, depending on which model it's for, will introduce new properties to the relevant endpoints.
+For example, if you add a new field to the `organization` table,
+the `createOrganization` endpoint will have a new properties to pass for the new field if required.
+
+<Callout>
+  What about the `metadata` field?
+
+  The `metadata` field is still supported for backward compatibility,
+  and provides a convenient way to attach arbitrary data to a row.
+</Callout>
 
 ## Options
 
