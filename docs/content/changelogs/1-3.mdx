@@ -1,0 +1,175 @@
+---
+title: 1.3 Release
+description: SSO with SAML, Zod v4, Organization Improvements, and more.
+date: 2025-07-18
+---
+
+## Better Auth 1.3 – SSO with SAML, Organization Improvements, Zod V4, and more
+
+To upgrade, run:
+
+```package-install
+npm install better-auth@1.3
+```
+
+---
+
+### **Single Sign-On (SSO) Plugin**
+
+Comprehensive SSO support with both OIDC and SAML providers.
+
+```ts title="auth.ts"
+import { sso } from "better-auth/plugins/sso";
+
+const auth = betterAuth({
+  plugins: [
+    sso({
+      // Configure your SSO providers
+    }),
+  ],
+});
+```
+
+Key features:
+- SAML 2.0 Support
+- OpenID Connect (OIDC) Integration
+- Automatic Provider Discovery
+- Custom Provider Configuration
+- Configurable Limit for SSO Provider
+
+Read the [SSO Plugin docs](/docs/plugins/sso) for more information.
+
+### **Zod V4 Migration**
+
+Upgraded to Zod V4 for enhanced type safety and improved validation capabilities.
+
+Key improvements:
+- Better TypeScript inference
+- Improved validation and parsing performance
+
+### **Organization Improvements**
+
+Enhanced organization management with new features and capabilities.
+
+```ts title="auth.ts"
+import { organization } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [
+    organization({
+      additionalFields: {
+        website: {
+          type: "string",
+          required: false,
+        },
+      },
+    }),
+  ],
+});
+
+Key features:
+- Extended Organization Fields:
+  - Type-safe additional fields
+  - Built-in field validation
+  - Optional and required fields
+
+---
+
+## ✨ Core Enhancements
+
+### Type System & Validation
+- Migrated to Zod V4 for better type safety
+- Enhanced validation patterns across the codebase
+- Improved error handling with better type inference and standard schema.
+
+### Authentication Flow
+- Added callback support for successful email verification
+- Option to disable auto-sending verification on SignIn
+- Improved cookie handling and session management
+- Enhanced context handling in database hooks
+- Better error messages and validation feedback
+
+### Database & Adapters
+- Use database for email change verification tokens
+- Updated MongoDB adapter to use CreateAdapter pattern
+- Fixed Prisma schema generator mismatch
+- Improved Drizzle CLI output formatting
+- Better context handling in database hooks
+
+### Organization & Teams
+- Create and assign default organizations
+- Enhanced organization role management
+- Type-safe additional fields support
+- Improved admin plugin type safety
+- Multiple team support 
+
+### Billing & Subscriptions
+- Stabilized Stripe integration
+- Enhanced subscription management
+- Improved webhook reliability
+- Better payment failure handling
+- Proper subscription cleanup
+- Enhanced customer portal integration
+
+---
+
+## 🛠 Bug Fixes & Stability Improvements
+
+### Authentication & Sessions
+- Fixed memory leak in SvelteKit + Sentry integration
+- Fixed global success callback not being triggered
+- Added support for cookie cache in Custom Sessions
+- Fixed cookie setting issues with phone number updates
+- Improved cookie handling for email verification
+
+### SSO & Identity
+- Added proper limits and checks for SSO plugin
+- Added JWKS support for OIDC plugin
+- Improved error handling in SSO plugin
+- Better MCP server integration
+- Enhanced provider discovery
+
+### Stripe Integration
+- Fixed subscription synchronization issues
+- Resolved webhook handling reliability
+- Improved error handling for failed payments
+- Fixed customer portal integration issues
+- Resolved team seat management bugs
+- Added proper cleanup for cancelled subscriptions
+
+### Organization Management
+- Fixed organization type definitions
+- Resolved default organization assignment issues
+- Fixed role management edge cases
+- Improved organization deletion cleanup
+- Better handling of organization invites
+
+### Developer Experience
+- Fixed Prisma schema generator issues
+- Improved error messages and validation feedback
+- Enhanced debugging capabilities
+- Better type inference in IDE
+- Improved plugin configuration experience
+
+---
+
+## 📚 Documentation Updates
+
+### New Guides
+- Added comprehensive examples tab
+- Enhanced plugin configuration examples
+- Added type-safe field extension examples
+- Improved organization customization guides
+- Enhanced API reference documentation
+- Improved contribution guide
+- Added documentation for database hooks context
+- Enhanced SSO configuration examples
+- Updated Stripe integration guides
+
+---
+
+```package-install
+npm install better-auth@1.3.0
+```
+
+**Upgrade now and take advantage of these powerful new features!** 🚀
