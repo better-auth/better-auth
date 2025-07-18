@@ -1,7 +1,12 @@
 import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
-import { generateState, type OAuth2Tokens } from "../../oauth2";
+import {
+	generateState,
+	getAccessTokenUtil,
+	setTokenUtil,
+	type OAuth2Tokens,
+} from "../../oauth2";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -86,6 +91,7 @@ export const listUserAccounts = createAuthEndpoint(
 		);
 	},
 );
+
 export const linkSocialAccount = createAuthEndpoint(
 	"/link-social",
 	{
@@ -522,15 +528,18 @@ export const getAccessToken = createAuthEndpoint(
 					account.refreshToken as string,
 				);
 				await ctx.context.internalAdapter.updateAccount(account.id, {
-					accessToken: newTokens.accessToken,
+					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
 					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
-					refreshToken: newTokens.refreshToken,
+					refreshToken: await setTokenUtil(newTokens.refreshToken, ctx.context),
 					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
 				});
 			}
 
 			const tokens = {
-				accessToken: newTokens?.accessToken ?? account.accessToken ?? undefined,
+				accessToken: await getAccessTokenUtil(
+					newTokens?.accessToken ?? account.accessToken ?? "",
+					ctx.context,
+				),
 				accessTokenExpiresAt:
 					newTokens?.accessTokenExpiresAt ??
 					account.accessTokenExpiresAt ??
@@ -626,11 +635,6 @@ export const refreshToken = createAuthEndpoint(
 				message: `Either userId or session is required`,
 			});
 		}
-		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} is not supported.`,
-			});
-		}
 		const accounts =
 			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
 		const account = accounts.find((acc) =>
@@ -661,9 +665,9 @@ export const refreshToken = createAuthEndpoint(
 				account.refreshToken as string,
 			);
 			await ctx.context.internalAdapter.updateAccount(account.id, {
-				accessToken: tokens.accessToken,
+				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+				refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshToken: tokens.refreshToken,
 				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
 			return ctx.json(tokens);

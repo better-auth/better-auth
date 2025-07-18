@@ -316,6 +316,7 @@ export const auth = betterAuth({
 		fields: {
 			userId: "user_id"
 		},
+		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"],
@@ -327,6 +328,10 @@ export const auth = betterAuth({
 
 - `modelName`: The model name for the account
 - `fields`: Map fields to different column names
+
+### `encryptOAuthTokens`
+
+Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 ### `updateAccountOnSignIn`
 

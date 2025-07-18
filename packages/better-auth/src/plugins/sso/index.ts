@@ -5,6 +5,7 @@ import {
 	createAuthorizationURL,
 	generateState,
 	parseState,
+	setTokenUtil,
 	validateAuthorizationCode,
 	validateToken,
 	type OAuth2Tokens,
@@ -916,8 +917,14 @@ export const sso = (options?: SSOOptions) => {
 						},
 						account: {
 							idToken: tokenResponse.idToken,
-							accessToken: tokenResponse.accessToken,
-							refreshToken: tokenResponse.refreshToken,
+							accessToken: await setTokenUtil(
+								tokenResponse.accessToken,
+								ctx.context,
+							),
+							refreshToken: await setTokenUtil(
+								tokenResponse.refreshToken,
+								ctx.context,
+							),
 							accountId: userInfo.id,
 							providerId: provider.providerId,
 							accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
