@@ -19,6 +19,7 @@ export function authServerMetadata(
 			: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
+		revocation_endpoint: `${baseURL}/oauth2/revoke`,
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
 		grant_types_supported: [

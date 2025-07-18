@@ -72,6 +72,7 @@ exports[`init > should match config 1`] = `
     "createVerificationValue": [Function],
     "deleteAccount": [Function],
     "deleteAccounts": [Function],
+    "deleteSessionById": [Function],
     "deleteSession": [Function],
     "deleteSessions": [Function],
     "deleteUser": [Function],

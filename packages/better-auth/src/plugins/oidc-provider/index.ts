@@ -18,6 +18,7 @@ import { BetterAuthError } from "../../error";
 import { oidcMetadata } from "./metadata";
 import { getJwtPlugin } from "../jwt";
 import { introspectEndpoint } from "./introspect";
+import { revokeEndpoint } from "./revoke";
 
 export const getOidcPlugin = (
 	ctx: AuthContext,
@@ -434,6 +435,26 @@ export const oidcProvider = (options: OIDCOptions): BetterAuthPlugin => {
 				},
 				async (ctx) => {
 					return introspectEndpoint(ctx, opts);
+				},
+			),
+			oAuth2revoke: createAuthEndpoint(
+				"/oauth2/revoke",
+				{
+					method: "POST",
+					body: z.object({
+						client_id: z.string().optional(),
+						client_secret: z.string().optional(),
+						token: z.string(),
+						token_type_hint: z
+							.enum(["access_token", "refresh_token"])
+							.optional(),
+					}),
+					metadata: {
+						isAction: false,
+					},
+				},
+				async (ctx) => {
+					return revokeEndpoint(ctx, opts);
 				},
 			),
 			oAuth2userInfo: createAuthEndpoint(

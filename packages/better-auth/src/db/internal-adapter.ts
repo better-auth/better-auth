@@ -518,6 +518,27 @@ export const createInternalAdapter = (
 			);
 			return updatedSession;
 		},
+		deleteSessionById: async (id: string) => {
+			if (secondaryStorage) {
+				await secondaryStorage.delete(id);
+
+				if (
+					!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase
+				) {
+					return;
+				}
+			}
+			await adapter.delete<Session>({
+				model: "session",
+				where: [
+					{
+						field: "id",
+						value: id,
+					},
+				],
+			});
+		},
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(token);
