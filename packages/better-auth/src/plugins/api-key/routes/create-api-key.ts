@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { getDate } from "../../../utils/date";
@@ -30,9 +30,13 @@ export function createApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				name: z.string({ description: "Name of the Api Key" }).optional(),
+				name: z
+					.string()
+					.meta({ description: "Name of the Api Key" })
+					.optional(),
 				expiresIn: z
-					.number({
+					.number()
+					.meta({
 						description: "Expiration time of the Api Key in seconds",
 					})
 					.min(1)
@@ -41,59 +45,72 @@ export function createApiKey({
 					.default(null),
 
 				userId: z.coerce
-					.string({
+					.string()
+					.meta({
 						description:
-							"User Id of the user that the Api Key belongs to. Useful for server-side only.",
+							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
 					})
 					.optional(),
 				prefix: z
-					.string({ description: "Prefix of the Api Key" })
+					.string()
+					.meta({ description: "Prefix of the Api Key" })
 					.regex(/^[a-zA-Z0-9_-]+$/, {
 						message:
 							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
 					})
 					.optional(),
 				remaining: z
-					.number({
+					.number()
+					.meta({
 						description: "Remaining number of requests. Server side only",
 					})
 					.min(0)
 					.optional()
 					.nullable()
 					.default(null),
-				metadata: z.any({ description: "Metadata of the Api Key" }).optional(),
+				metadata: z.any().optional(),
 				refillAmount: z
-					.number({
+					.number()
+					.meta({
 						description:
-							"Amount to refill the remaining count of the Api Key. Server Only Property",
+							"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
 					})
 					.min(1)
 					.optional(),
 				refillInterval: z
-					.number({
+					.number()
+					.meta({
 						description:
-							"Interval to refill the Api Key in milliseconds. Server Only Property.",
+							"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
 					})
 					.optional(),
 				rateLimitTimeWindow: z
-					.number({
+					.number()
+					.meta({
 						description:
-							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
+							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
 					})
 					.optional(),
 				rateLimitMax: z
-					.number({
+					.number()
+					.meta({
 						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
 					})
 					.optional(),
 				rateLimitEnabled: z
-					.boolean({
+					.boolean()
+					.meta({
 						description:
-							"Whether the key has rate limiting enabled. Server Only Property.",
+							"Whether the key has rate limiting enabled. server-only. Eg: true",
 					})
 					.optional(),
-				permissions: z.record(z.string(), z.array(z.string())).optional(),
+				permissions: z
+					.record(z.string(), z.array(z.string()))
+					.meta({
+						description: "Permissions of the Api Key.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				openapi: {
@@ -347,6 +364,10 @@ export function createApiKey({
 						message: ERROR_CODES.INVALID_NAME_LENGTH,
 					});
 				}
+			} else if (opts.requireName) {
+				throw new APIError("BAD_REQUEST", {
+					message: ERROR_CODES.NAME_REQUIRED,
+				});
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "postinstall": "fumadocs-mdx"
+    "postinstall": "fumadocs-mdx",
+    "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -50,6 +51,7 @@
     "fumadocs-ui": "15.0.15",
     "input-otp": "^1.4.1",
     "jotai": "^2.12.1",
+    "jsrsasign": "^11.1.0",
     "lucide-react": "^0.477.0",
     "motion": "^12.4.10",
     "next": "15.2.3",
@@ -71,6 +73,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.9",
+    "@types/jsrsasign": "^10.5.15",
     "@types/mdx": "^2.0.13",
     "@types/node": "22.13.8",
     "@types/react": "^19.0.10",

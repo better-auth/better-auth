@@ -1,5 +1,5 @@
 import { generateRandomString } from "../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
@@ -34,16 +34,32 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/enable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.enableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.enable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-enable)
+			 */
 			enableTwoFactor: createAuthEndpoint(
 				"/two-factor/enable",
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string({
+						password: z.string().meta({
 							description: "User password",
 						}),
 						issuer: z
-							.string({
+							.string()
+							.meta({
 								description: "Custom issuer for the TOTP URI",
 							})
 							.optional(),
@@ -156,12 +172,27 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/disable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.disableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.disable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-disable)
+			 */
 			disableTwoFactor: createAuthEndpoint(
 				"/two-factor/disable",
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string({
+						password: z.string().meta({
 							description: "User password",
 						}),
 					}),
@@ -296,7 +327,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
-						const maxAge = options?.otpOptions?.period || 60 * 5; // 5 minutes
+						const maxAge = (options?.otpOptions?.period ?? 3) * 60; // 3 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{

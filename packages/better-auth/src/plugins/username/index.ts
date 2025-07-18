@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -55,15 +55,22 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string({
-							description: "The username of the user",
-						}),
-						password: z.string({
-							description: "The password of the user",
-						}),
+						username: z
+							.string()
+							.meta({ description: "The username of the user" }),
+						password: z
+							.string()
+							.meta({ description: "The password of the user" }),
 						rememberMe: z
-							.boolean({
+							.boolean()
+							.meta({
 								description: "Remember the user session",
+							})
+							.optional(),
+						callbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to after email verification",
 							})
 							.optional(),
 					}),
@@ -150,7 +157,9 @@ export const username = (options?: UsernameOptions) => {
 						// Hash password to prevent timing attacks from revealing valid usernames
 						// By hashing passwords for invalid usernames, we ensure consistent response times
 						await ctx.context.password.hash(ctx.body.password);
-						ctx.context.logger.error("User not found", { username });
+						ctx.context.logger.error("User not found", {
+							username: ctx.body.username,
+						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -186,7 +195,9 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
-						ctx.context.logger.error("Password not found", { username });
+						ctx.context.logger.error("Password not found", {
+							username: ctx.body.username,
+						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -231,6 +242,42 @@ export const username = (options?: UsernameOptions) => {
 							createdAt: user.createdAt,
 							updatedAt: user.updatedAt,
 						},
+					});
+				},
+			),
+			isUsernameAvailable: createAuthEndpoint(
+				"/is-username-available",
+				{
+					method: "POST",
+					body: z.object({
+						username: z.string().meta({
+							description: "The username to check",
+						}),
+					}),
+				},
+				async (ctx) => {
+					const username = ctx.body.username;
+					if (!username) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+					const user = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "username",
+								value: username.toLowerCase(),
+							},
+						],
+					});
+					if (user) {
+						return ctx.json({
+							available: false,
+						});
+					}
+					return ctx.json({
+						available: true,
 					});
 				},
 			),
@@ -280,7 +327,14 @@ export const username = (options?: UsernameOptions) => {
 									},
 								],
 							});
-							if (user) {
+
+							const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
+							const blockChangeUpdateUser =
+								ctx.path === "/update-user" &&
+								user &&
+								ctx.context.session &&
+								user.id !== ctx.context.session.session.userId;
+							if (blockChangeSignUp || blockChangeUpdateUser) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});

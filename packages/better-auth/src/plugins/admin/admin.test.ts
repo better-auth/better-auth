@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { admin, type UserWithRole } from "./admin";
+import { admin } from "./admin";
+import { type UserWithRole } from "./types";
 import { adminClient } from "./client";
 import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
@@ -200,7 +201,6 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 	});
-
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {

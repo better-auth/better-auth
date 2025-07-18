@@ -1,10 +1,9 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
@@ -69,13 +68,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z
-				.string({
-					description: "The email to send the verification email to",
-				})
-				.email(),
+			email: z.email().meta({
+				description: "The email to send the verification email to",
+			}),
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to use for email verification callback",
 				})
 				.optional(),
@@ -192,11 +190,12 @@ export const verifyEmail = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string({
+			token: z.string().meta({
 				description: "The token to verify the email",
 			}),
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to redirect to after email verification",
 				})
 				.optional(),

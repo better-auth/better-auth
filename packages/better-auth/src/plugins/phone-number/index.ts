@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import type {
 	BetterAuthPlugin,
@@ -144,20 +144,36 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 	return {
 		id: "phone-number",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/phone-number`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInPhoneNumber`
+			 *
+			 * **client:**
+			 * `authClient.signIn.phoneNumber`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/phone-number#api-method-sign-in-phone-number)
+			 */
 			signInPhoneNumber: createAuthEndpoint(
 				"/sign-in/phone-number",
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
-							description: "Phone number to sign in",
+						phoneNumber: z.string().meta({
+							description: 'Phone number to sign in. Eg: "+1234567890"',
 						}),
-						password: z.string({
-							description: "Password to use for sign in",
+						password: z.string().meta({
+							description: "Password to use for sign in.",
 						}),
 						rememberMe: z
-							.boolean({
-								description: "Remember the session",
+							.boolean()
+							.meta({
+								description: "Remember the session. Eg: true",
 							})
 							.optional(),
 					}),
@@ -308,13 +324,28 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/phone-number/send-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.sendPhoneNumberOTP`
+			 *
+			 * **client:**
+			 * `authClient.phoneNumber.sendOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/phone-number#api-method-phone-number-send-otp)
+			 */
 			sendPhoneNumberOTP: createAuthEndpoint(
 				"/phone-number/send-otp",
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
-							description: "Phone number to send OTP",
+						phoneNumber: z.string().meta({
+							description: 'Phone number to send OTP. Eg: "+1234567890"',
 						}),
 					}),
 					metadata: {
@@ -379,6 +410,22 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					return ctx.json({ message: "code sent" });
 				},
 			),
+
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/phone-number/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyPhoneNumber`
+			 *
+			 * **client:**
+			 * `authClient.phoneNumber.verify`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/phone-number#api-method-phone-number-verify)
+			 */
 			verifyPhoneNumber: createAuthEndpoint(
 				"/phone-number/verify",
 				{
@@ -387,22 +434,24 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string({
-							description: "Phone number to verify",
+						phoneNumber: z.string().meta({
+							description: 'Phone number to verify. Eg: "+1234567890"',
 						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string({
-							description: "OTP code",
+						code: z.string().meta({
+							description: 'OTP code. Eg: "123456"',
 						}),
 						/**
 						 * Disable session creation after verification
 						 * @default false
 						 */
 						disableSession: z
-							.boolean({
-								description: "Disable session creation after verification",
+							.boolean()
+							.meta({
+								description:
+									"Disable session creation after verification. Eg: false",
 							})
 							.optional(),
 						/**
@@ -411,9 +460,10 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 * phone number
 						 */
 						updatePhoneNumber: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
-									"Check if there is a session and update the phone number",
+									"Check if there is a session and update the phone number. Eg: true",
 							})
 							.optional(),
 					}),
@@ -713,7 +763,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string(),
+						phoneNumber: z.string().meta({
+							description: `The phone number which is associated with the user. Eg: "+1234567890"`,
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -853,9 +905,17 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						otp: z.string(),
-						phoneNumber: z.string(),
-						newPassword: z.string(),
+						otp: z.string().meta({
+							description:
+								'The one time password to reset the password. Eg: "123456"',
+						}),
+						phoneNumber: z.string().meta({
+							description:
+								'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
+						}),
+						newPassword: z.string().meta({
+							description: `The new password. Eg: "new-and-secure-password"`,
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -940,6 +1000,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					await ctx.context.internalAdapter.updatePassword(
 						user.id,
 						hashedPassword,
+					);
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verification.id,
 					);
 					return ctx.json({
 						status: true,

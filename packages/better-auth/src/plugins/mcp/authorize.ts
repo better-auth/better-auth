@@ -125,10 +125,7 @@ export async function authorizeMCPOAuth(
 	const requestScope =
 		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
 	const invalidScopes = requestScope.filter((scope) => {
-		const isInvalid =
-			!opts.scopes.includes(scope) ||
-			(scope === "offline_access" && query.prompt !== "consent");
-		return isInvalid;
+		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
 		throw ctx.redirect(
@@ -194,7 +191,7 @@ export async function authorizeMCPOAuth(
 					 * This means the code now needs to be treated as a
 					 * consent request.
 					 *
-					 * once the user consents, teh code will be updated
+					 * once the user consents, the code will be updated
 					 * with the actual code. This is to prevent the
 					 * client from using the code before the user
 					 * consents.
