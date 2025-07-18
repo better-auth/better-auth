@@ -71,20 +71,20 @@ export interface Path {
 
 const paths: Record<string, Path> = {};
 function getTypeFromZodType(zodType: z.ZodTypeAny) {
-    switch (zodType.constructor.name) {
-        case "ZodString":
-            return "string";
-        case "ZodNumber":
-            return "number";
-        case "ZodBoolean":
-            return "boolean";
-        case "ZodObject":
-            return "object";
-        case "ZodArray":
-            return "array";
-        default:
-            return "string";
-    }
+	switch (zodType.constructor.name) {
+		case "ZodString":
+			return "string";
+		case "ZodNumber":
+			return "number";
+		case "ZodBoolean":
+			return "boolean";
+		case "ZodObject":
+			return "object";
+		case "ZodArray":
+			return "array";
+		default:
+			return "string";
+	}
 }
 
 function getFieldSchema(field: FieldAttribute) {
@@ -93,9 +93,10 @@ function getFieldSchema(field: FieldAttribute) {
 	};
 
 	if (field.defaultValue) {
-		schema.default = typeof field.defaultValue === "function" 
-			? "Generated at runtime"
-			: field.defaultValue;
+		schema.default =
+			typeof field.defaultValue === "function"
+				? "Generated at runtime"
+				: field.defaultValue;
 	}
 
 	if (field.input === false) {
@@ -302,7 +303,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		const fields = value.fields;
 		const required: string[] = [];
 		const properties: Record<string, any> = {
-			id: { type: "string" }
+			id: { type: "string" },
 		};
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
 			if (!fieldValue) return;
@@ -316,7 +317,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		acc[modelName] = {
 			type: "object",
 			properties,
-			...(required.length > 0 ? { required } : {})
+			...(required.length > 0 ? { required } : {}),
 		};
 		return acc;
 	}, {});

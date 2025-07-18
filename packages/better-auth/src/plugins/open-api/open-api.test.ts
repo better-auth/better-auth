@@ -10,14 +10,14 @@ describe("open-api", async (it) => {
 				role: {
 					type: "string",
 					required: true,
-					defaultValue: "user"
+					defaultValue: "user",
 				},
 				preferences: {
 					type: "string",
-					required: false
-				}
-			}
-		}
+					required: false,
+				},
+			},
+		},
 	});
 
 	it("should generate OpenAPI schema", async () => {
@@ -42,14 +42,14 @@ describe("open-api", async (it) => {
 			string,
 			Record<string, any>
 		>;
-		
+
 		expect(schemas["User"].properties.role).toEqual({
 			type: "string",
 			default: "user",
 		});
 
 		expect(schemas["User"].properties.preferences).toEqual({
-			type: "string"
+			type: "string",
 		});
 		expect(schemas["User"].required).toContain("role");
 		expect(schemas["User"].required).not.toContain("preferences");
