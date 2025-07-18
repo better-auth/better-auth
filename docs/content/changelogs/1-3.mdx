@@ -16,7 +16,7 @@ npm install better-auth@1.3
 
 ### **Single Sign-On (SSO) Plugin**
 
-Comprehensive SSO support with both OIDC and SAML providers.
+Comprehensive SSO support with SAML 2.0 integration.
 
 ```ts title="auth.ts"
 import { sso } from "better-auth/plugins/sso";
@@ -24,7 +24,40 @@ import { sso } from "better-auth/plugins/sso";
 const auth = betterAuth({
   plugins: [
     sso({
-      // Configure your SSO providers
+      // Configure SAML provider
+      samlConfig: {
+        entryPoint: "https://idp.example.com/sso",
+        cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+        callbackUrl: "https://yourapp.com/api/auth/sso/saml2/callback/saml-provider",
+        audience: "https://yourapp.com",
+        wantAssertionsSigned: true,
+        signatureAlgorithm: "sha256",
+        digestAlgorithm: "sha256",
+        // Identity Provider metadata
+        idpMetadata: {
+          metadata: "<!-- IdP Metadata XML -->",
+          privateKey: "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
+          isAssertionEncrypted: true,
+        },
+        // Service Provider metadata
+        spMetadata: {
+          metadata: "<!-- SP Metadata XML -->",
+          binding: "post",
+          privateKey: "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
+        }
+      },
+      // Map SAML attributes to user fields
+      mapping: {
+        id: "nameID",
+        email: "email",
+        name: "displayName",
+        firstName: "givenName",
+        lastName: "surname",
+        extraFields: {
+          department: "department",
+          role: "role"
+        }
+      },
     }),
   ],
 });
@@ -35,6 +68,10 @@ Key features:
 - Automatic Provider Discovery
 - Custom Provider Configuration
 - Configurable Limit for SSO Provider
+- Flexible Attribute Mapping
+- Encrypted Assertions Support
+- Automatic SP Metadata Generation
+- Custom Role Provisioning
 
 Read the [SSO Plugin docs](/docs/plugins/sso) for more information.
 
