@@ -37,6 +37,10 @@ export const invitationSchema = z.object({
 	teamId: z.string().optional(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
+	metadata: z
+		.record(z.string())
+		.or(z.string().transform((v) => JSON.parse(v)))
+		.optional(),
 });
 export const teamSchema = z.object({
 	id: z.string().default(generateId),

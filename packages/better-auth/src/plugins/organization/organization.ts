@@ -436,6 +436,11 @@ export const organization = <O extends OrganizationOptions>(
 						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
 					},
+					metadata: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.invitation?.fields?.metadata,
+					},
 				},
 			},
 			...(teamSupport ? teamSchema : {}),
