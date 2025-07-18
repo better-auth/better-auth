@@ -649,7 +649,17 @@ export const listTeamMembers = createAuthEndpoint(
 		const session = ctx.context.session;
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
-		const member = await adapter.findMemberById(session.user.id);
+		if (!session.session.activeOrganizationId) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+			});
+		}
+
+		const member = await adapter.findMemberByOrgId({
+			userId: session.user.id,
+			organizationId: session.session.activeOrganizationId
+		});
 		if (!member) {
 			throw new APIError("BAD_REQUEST", {
 				message:

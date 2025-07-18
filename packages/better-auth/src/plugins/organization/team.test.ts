@@ -160,6 +160,36 @@ describe("team", async (it) => {
 		expect(res.data).toHaveLength(1);
 	});
 
+	it("should be able to list team members in the current active team", async () => {
+		const signInHeaders = new Headers();
+		await client.signIn.email(invitedUser, {
+			onSuccess: cookieSetter(signInHeaders),
+		});
+
+		const activeOrgHeaders = new Headers();
+		await client.organization.setActive({
+			organizationId
+		}, {
+			headers: signInHeaders,
+			onSuccess: cookieSetter(activeOrgHeaders),
+		});
+
+		const res = await client.organization.listTeamMembers(
+			{
+				query: {
+					teamId
+				},
+			},
+			{
+				headers: activeOrgHeaders,
+			},
+		);
+
+		expect(res.error).toBeNull();
+		expect(res.data).not.toBeNull();
+		expect(res.data).toHaveLength(1);
+	});
+
 	it("should get full organization", async () => {
 		const organization = await client.organization.getFullOrganization({
 			fetchOptions: {
