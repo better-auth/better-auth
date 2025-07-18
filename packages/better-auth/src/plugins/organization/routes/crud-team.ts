@@ -19,7 +19,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) =>
 				organizationId: z.string().optional(),
 				name: z.string(),
 			}),
-			use: [orgMiddleware()],
+			use: [orgMiddleware],
 			metadata: {
 				openapi: {
 					description: "Create a new team within an organization",
@@ -147,7 +147,7 @@ export const removeTeam = createAuthEndpoint(
 			teamId: z.string(),
 			organizationId: z.string().optional(),
 		}),
-		use: [orgMiddleware()],
+		use: [orgMiddleware],
 		metadata: {
 			openapi: {
 				description: "Remove a team from an organization",
@@ -176,7 +176,7 @@ export const removeTeam = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
+		const session = await ctx.context.getSession(ctx);
 		const organizationId =
 			ctx.body.organizationId || session?.session.activeOrganizationId;
 		if (!organizationId) {
@@ -197,7 +197,7 @@ export const removeTeam = createAuthEndpoint(
 				organizationId,
 			});
 
-			if (!member || member.teamId === ctx.body.teamId) {
+			if (!member || session.session?.activeTeamId === ctx.body.teamId) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM,
@@ -250,7 +250,7 @@ export const updateTeam = createAuthEndpoint(
 			teamId: z.string(),
 			data: teamSchema.partial(),
 		}),
-		use: [orgMiddleware(), orgSessionMiddleware()],
+		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Update an existing team in an organization",
@@ -420,7 +420,7 @@ export const listOrganizationTeams = createAuthEndpoint(
 				},
 			},
 		},
-		use: [orgMiddleware(), orgSessionMiddleware()],
+		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -464,7 +464,7 @@ export const setActiveTeam = createAuthEndpoint(
 				.nullable()
 				.optional(),
 		}),
-		use: [orgSessionMiddleware(), orgMiddleware()],
+		use: [orgSessionMiddleware, orgMiddleware],
 		metadata: {
 			openapi: {
 				description: "Set the active team",
@@ -579,7 +579,7 @@ export const listUserTeams = createAuthEndpoint(
 				},
 			},
 		},
-		use: [orgMiddleware(), orgSessionMiddleware()],
+		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -643,7 +643,7 @@ export const listTeamMembers = createAuthEndpoint(
 				},
 			},
 		},
-		use: [orgMiddleware(), orgSessionMiddleware()],
+		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;

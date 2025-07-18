@@ -50,7 +50,7 @@ export const createOrganization = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [orgMiddleware()],
+		use: [orgMiddleware],
 		metadata: {
 			openapi: {
 				description: "Create an organization",
@@ -226,7 +226,7 @@ export const checkOrganizationSlug = createAuthEndpoint(
 		body: z.object({
 			slug: z.string(),
 		}),
-		use: [requestOnlySessionMiddleware, orgMiddleware()],
+		use: [requestOnlySessionMiddleware, orgMiddleware],
 	},
 	async (ctx) => {
 		const orgAdapter = getOrgAdapter(ctx.context);
@@ -274,7 +274,7 @@ export const updateOrganization = createAuthEndpoint(
 			organizationId: z.string().optional(),
 		}),
 		requireHeaders: true,
-		use: [orgMiddleware()],
+		use: [orgMiddleware],
 		metadata: {
 			openapi: {
 				description: "Update an organization",
@@ -351,7 +351,7 @@ export const deleteOrganization = createAuthEndpoint(
 			}),
 		}),
 		requireHeaders: true,
-		use: [orgMiddleware()],
+		use: [orgMiddleware],
 		metadata: {
 			openapi: {
 				description: "Delete an organization",
@@ -465,7 +465,7 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 				}),
 			),
 			requireHeaders: true,
-			use: [orgMiddleware(), orgSessionMiddleware()],
+			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
 					description: "Get the full organization",
@@ -552,7 +552,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 					})
 					.optional(),
 			}),
-			use: [orgSessionMiddleware(), orgMiddleware()],
+			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
 					description: "Set the active organization",
@@ -645,7 +645,7 @@ export const listOrganizations = createAuthEndpoint(
 	"/organization/list",
 	{
 		method: "GET",
-		use: [orgMiddleware(), orgSessionMiddleware()],
+		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "List all organizations",

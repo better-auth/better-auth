@@ -238,7 +238,7 @@ export const organization = <O extends OrganizationOptions>(
 								}),
 							]),
 						),
-					use: [orgSessionMiddleware()],
+					use: [orgSessionMiddleware],
 					metadata: {
 						$Infer: {
 							body: {} as PermissionExclusive & {

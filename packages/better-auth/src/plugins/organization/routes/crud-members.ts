@@ -21,7 +21,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 				role: z.union([z.string(), z.array(z.string())]),
 				organizationId: z.string().optional(),
 			}),
-			use: [orgMiddleware()],
+			use: [orgMiddleware],
 			metadata: {
 				SERVER_ONLY: true,
 				$Infer: {
@@ -140,7 +140,7 @@ export const removeMember = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [orgMiddleware(), orgSessionMiddleware()],
+		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Remove a member from an organization",
@@ -284,7 +284,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				memberId: z.string(),
 				organizationId: z.string().optional(),
 			}),
-			use: [orgMiddleware(), orgSessionMiddleware()],
+			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				$Infer: {
 					body: {} as {
@@ -428,7 +428,7 @@ export const getActiveMember = createAuthEndpoint(
 	"/organization/get-active-member",
 	{
 		method: "GET",
-		use: [orgMiddleware(), orgSessionMiddleware()],
+		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Get the member details of the active organization",
@@ -497,7 +497,7 @@ export const leaveOrganization = createAuthEndpoint(
 		body: z.object({
 			organizationId: z.string(),
 		}),
-		use: [sessionMiddleware, orgMiddleware()],
+		use: [sessionMiddleware, orgMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
