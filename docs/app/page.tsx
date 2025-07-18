@@ -34,22 +34,24 @@ export default async function HomePage() {
 						<div className="flex flex-col md:flex-row items-center justify-center h-12">
 							<span className="font-medium flex gap-2 text-sm text-zinc-700 dark:text-zinc-300">
 								<span className=" text-zinc-900 dark:text-white/90 hover:text-zinc-950 text-xs md:text-sm dark:hover:text-zinc-100 transition-colors">
-									Announcing Our{" "}
-									<span className="font-semibold">$5M seed round</span>
+									Introducing{" "}
+									<span className="font-semibold">
+										Better Auth Infrastructure
+									</span>
 								</span>
 								<span className=" text-zinc-400 hidden md:block">|</span>
 								<Link
-									href="/blog/seed-round"
+									href="https://better-auth.build"
 									className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hidden dark:hover:text-blue-300 transition-colors md:block"
 								>
-									Read more →
+									Join the waitlist →
 								</Link>
 							</span>
 							<Link
-								href="/blog/seed-round"
+								href="https://better-auth.build"
 								className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 text-xs dark:hover:text-blue-300 transition-colors md:hidden"
 							>
-								Read more →
+								Join the waitlist →
 							</Link>
 						</div>
 					</div>

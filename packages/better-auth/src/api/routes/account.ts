@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { generateState, type OAuth2Tokens } from "../../oauth2";
@@ -96,7 +96,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			 * Callback URL to redirect to after the user has signed in.
 			 */
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to redirect to after the user has signed in",
 				})
 				.optional(),
@@ -126,7 +127,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			 * linking a social account compared to the initial authentication.
 			 */
 			scopes: z
-				.array(z.string(), {
+				.array(z.string())
+				.meta({
 					description: "Additional scopes to request from the provider",
 				})
 				.optional(),
@@ -134,7 +136,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			 * The URL to redirect to if there is an error during the link process.
 			 */
 			errorCallbackURL: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"The URL to redirect to if there is an error during the link process",
 				})
@@ -256,6 +259,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			if (hasBeenLinked) {
 				return c.json({
 					redirect: false,
+					url: "", // this is for type inference
 					status: true,
 				});
 			}
@@ -316,6 +320,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 			return c.json({
 				redirect: false,
+				url: "", // this is for type inference
 				status: true,
 			});
 		}
@@ -406,16 +411,18 @@ export const getAccessToken = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			providerId: z.string({
+			providerId: z.string().meta({
 				description: "The provider ID for the OAuth provider",
 			}),
 			accountId: z
-				.string({
+				.string()
+				.meta({
 					description: "The account ID associated with the refresh token",
 				})
 				.optional(),
 			userId: z
-				.string({
+				.string()
+				.meta({
 					description: "The user ID associated with the account",
 				})
 				.optional(),
@@ -547,16 +554,18 @@ export const refreshToken = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			providerId: z.string({
+			providerId: z.string().meta({
 				description: "The provider ID for the OAuth provider",
 			}),
 			accountId: z
-				.string({
+				.string()
+				.meta({
 					description: "The account ID associated with the refresh token",
 				})
 				.optional(),
 			userId: z
-				.string({
+				.string()
+				.meta({
 					description: "The user ID associated with the account",
 				})
 				.optional(),
@@ -720,7 +729,7 @@ export const accountInfo = createAuthEndpoint(
 			},
 		},
 		body: z.object({
-			accountId: z.string({
+			accountId: z.string().meta({
 				description:
 					"The provider given account id for which to get the account info",
 			}),

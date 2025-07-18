@@ -1,4 +1,9 @@
-import type { InferOptionSchema, Session, User } from "better-auth";
+import type {
+	GenericEndpointContext,
+	InferOptionSchema,
+	Session,
+	User,
+} from "better-auth";
 import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
 
@@ -70,7 +75,7 @@ export type StripePlan = {
 			data: {
 				subscription: Subscription;
 			},
-			request?: Request,
+			ctx: GenericEndpointContext,
 		) => Promise<void>;
 		/**
 		 * A function that will be called when the trial
@@ -80,7 +85,7 @@ export type StripePlan = {
 		 */
 		onTrialExpired?: (
 			subscription: Subscription,
-			request?: Request,
+			ctx: GenericEndpointContext,
 		) => Promise<void>;
 	};
 };
@@ -186,7 +191,7 @@ export interface StripeOptions {
 			stripeCustomer: Stripe.Customer;
 			user: User;
 		},
-		request?: Request,
+		ctx: GenericEndpointContext,
 	) => Promise<void>;
 	/**
 	 * A custom function to get the customer create
@@ -199,7 +204,7 @@ export interface StripeOptions {
 			user: User;
 			session: Session;
 		},
-		request?: Request,
+		ctx: GenericEndpointContext,
 	) => Promise<{}>;
 
 	/**
@@ -257,7 +262,7 @@ export interface StripeOptions {
 				subscription: Subscription;
 				plan: StripePlan;
 			},
-			request?: Request,
+			ctx: GenericEndpointContext,
 		) => Promise<void>;
 		/**
 		 * A callback to run after a user is about to cancel their subscription
@@ -282,7 +287,7 @@ export interface StripeOptions {
 		 * and belongs to the user
 		 *
 		 * @param data - data containing user, session and referenceId
-		 * @param request - Request Object
+		 * @param ctx - the context object
 		 * @returns
 		 */
 		authorizeReference?: (
@@ -296,7 +301,7 @@ export interface StripeOptions {
 					| "cancel-subscription"
 					| "restore-subscription";
 			},
-			request?: Request,
+			ctx: GenericEndpointContext,
 		) => Promise<boolean>;
 		/**
 		 * A callback to run after a user has deleted their subscription
@@ -311,7 +316,7 @@ export interface StripeOptions {
 		 * parameters for session create params
 		 *
 		 * @param data - data containing user, session and plan
-		 * @param request - Request Object
+		 * @param ctx - the context object
 		 */
 		getCheckoutSessionParams?: (
 			data: {
@@ -320,7 +325,7 @@ export interface StripeOptions {
 				plan: StripePlan;
 				subscription: Subscription;
 			},
-			request?: Request,
+			ctx: GenericEndpointContext,
 		) =>
 			| Promise<{
 					params?: Stripe.Checkout.SessionCreateParams;

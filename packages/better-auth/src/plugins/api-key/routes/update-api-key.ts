@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -25,77 +25,90 @@ export function updateApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				keyId: z.string({
+				keyId: z.string().meta({
 					description: "The id of the Api Key",
 				}),
-				userId: z.coerce.string().optional(),
+				userId: z.coerce
+					.string()
+					.meta({
+						description:
+							'The id of the user which the api key belongs to. server-only. Eg: "some-user-id"',
+					})
+					.optional(),
 				name: z
-					.string({
+					.string()
+					.meta({
 						description: "The name of the key",
 					})
 					.optional(),
 				enabled: z
-					.boolean({
+					.boolean()
+					.meta({
 						description: "Whether the Api Key is enabled or not",
 					})
 					.optional(),
 				remaining: z
-					.number({
+					.number()
+					.meta({
 						description: "The number of remaining requests",
 					})
 					.min(1)
 					.optional(),
 				refillAmount: z
-					.number({
+					.number()
+					.meta({
 						description: "The refill amount",
 					})
 					.optional(),
 				refillInterval: z
-					.number({
+					.number()
+					.meta({
 						description: "The refill interval",
 					})
 					.optional(),
-				metadata: z
-					.any({
-						description: "The metadata of the Api Key",
-					})
-					.optional(),
+				metadata: z.any().optional(),
 				expiresIn: z
-					.number({
+					.number()
+					.meta({
 						description: "Expiration time of the Api Key in seconds",
 					})
 					.min(1)
 					.optional()
 					.nullable(),
 				rateLimitEnabled: z
-					.boolean({
+					.boolean()
+					.meta({
 						description: "Whether the key has rate limiting enabled.",
 					})
 					.optional(),
 				rateLimitTimeWindow: z
-					.number({
+					.number()
+					.meta({
 						description:
-							"The duration in milliseconds where each request is counted.",
+							"The duration in milliseconds where each request is counted. server-only. Eg: 1000",
 					})
 					.optional(),
 				rateLimitMax: z
-					.number({
+					.number()
+					.meta({
 						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
 					})
 					.optional(),
 				permissions: z
 					.record(z.string(), z.array(z.string()))
+					.meta({
+						description: "Update the permissions on the API Key. server-only.",
+					})
 					.optional()
 					.nullable(),
 			}),
-
 			metadata: {
 				openapi: {
-					description: "Retrieve an existing API key by ID",
+					description: "Update an existing API key by ID",
 					responses: {
 						"200": {
-							description: "API key retrieved successfully",
+							description: "API key updated successfully",
 							content: {
 								"application/json": {
 									schema: {
@@ -388,10 +401,6 @@ export function updateApiKey({
 						{
 							field: "id",
 							value: apiKey.id,
-						},
-						{
-							field: "userId",
-							value: user.id,
 						},
 					],
 					update: {

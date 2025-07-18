@@ -9,7 +9,7 @@ export default defineBuildConfig({
 	},
 	declaration: true,
 	outDir: "dist",
-	clean: false,
+	clean: true,
 	failOnWarn: false,
 	externals: [
 		"prisma",
@@ -110,5 +110,6 @@ export default defineBuildConfig({
 		"./src/plugins/username/index.ts",
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
+		"./src/test-utils/index.ts",
 	],
 });

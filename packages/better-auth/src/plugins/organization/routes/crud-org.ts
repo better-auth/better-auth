@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -6,7 +6,7 @@ import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
-import type { OrganizationOptions } from "../organization";
+import type { OrganizationOptions } from "../types";
 import type {
 	InferInvitation,
 	InferMember,
@@ -21,32 +21,36 @@ export const createOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			name: z.string({
+			name: z.string().meta({
 				description: "The name of the organization",
 			}),
-			slug: z.string({
+			slug: z.string().meta({
 				description: "The slug of the organization",
 			}),
 			userId: z.coerce
-				.string({
+				.string()
+				.meta({
 					description:
-						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
+						'The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: "user-id"',
 				})
 				.optional(),
 			logo: z
-				.string({
+				.string()
+				.meta({
 					description: "The logo of the organization",
 				})
 				.optional(),
 			metadata: z
-				.record(z.string(), z.any(), {
+				.record(z.string(), z.any())
+				.meta({
 					description: "The metadata of the organization",
 				})
 				.optional(),
 			keepCurrentActiveOrganization: z
-				.boolean({
+				.boolean()
+				.meta({
 					description:
-						"Whether to keep the current active organization active after creating a new one",
+						"Whether to keep the current active organization active after creating a new one. Eg: true",
 				})
 				.optional(),
 		}),
@@ -224,7 +228,9 @@ export const checkOrganizationSlug = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			slug: z.string(),
+			slug: z.string().meta({
+				description: 'The organization slug to check. Eg: "my-org"',
+			}),
 		}),
 		use: [requestOnlySessionMiddleware, orgMiddleware],
 	},
@@ -250,28 +256,37 @@ export const updateOrganization = createAuthEndpoint(
 			data: z
 				.object({
 					name: z
-						.string({
+						.string()
+						.meta({
 							description: "The name of the organization",
 						})
 						.optional(),
 					slug: z
-						.string({
+						.string()
+						.meta({
 							description: "The slug of the organization",
 						})
 						.optional(),
 					logo: z
-						.string({
+						.string()
+						.meta({
 							description: "The logo of the organization",
 						})
 						.optional(),
 					metadata: z
-						.record(z.string(), z.any(), {
+						.record(z.string(), z.any())
+						.meta({
 							description: "The metadata of the organization",
 						})
 						.optional(),
 				})
 				.partial(),
-			organizationId: z.string().optional(),
+			organizationId: z
+				.string()
+				.meta({
+					description: 'The organization ID. Eg: "org-id"',
+				})
+				.optional(),
 		}),
 		requireHeaders: true,
 		use: [orgMiddleware],
@@ -346,7 +361,7 @@ export const deleteOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			organizationId: z.string({
+			organizationId: z.string().meta({
 				description: "The organization id to delete",
 			}),
 		}),
@@ -453,12 +468,14 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 			query: z.optional(
 				z.object({
 					organizationId: z
-						.string({
+						.string()
+						.meta({
 							description: "The organization id to get",
 						})
 						.optional(),
 					organizationSlug: z
-						.string({
+						.string()
+						.meta({
 							description: "The organization slug to get",
 						})
 						.optional(),
@@ -539,16 +556,18 @@ export const setActiveOrganization = <O extends OrganizationOptions>() => {
 			method: "POST",
 			body: z.object({
 				organizationId: z
-					.string({
+					.string()
+					.meta({
 						description:
-							"The organization id to set as active. It can be null to unset the active organization",
+							'The organization id to set as active. It can be null to unset the active organization. Eg: "org-id"',
 					})
 					.nullable()
 					.optional(),
 				organizationSlug: z
-					.string({
+					.string()
+					.meta({
 						description:
-							"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
+							'The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided. Eg: "org-slug"',
 					})
 					.optional(),
 			}),
