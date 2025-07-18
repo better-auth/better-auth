@@ -519,10 +519,16 @@ export type BetterAuthOptions = {
 			updateUserInfoOnLink?: boolean;
 		};
 		/**
-		 * Encrypt OAuth token
+		 * Encrypt OAuth tokens
 		 *
-		 * By default the OAuth tokens are stored in plain text. If you want to encrypt the tokens, set this to true.
+		 * By default, OAuth tokens (access tokens, refresh tokens, ID tokens) are stored in plain text in the database.
+		 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
+		 * on external services.
 		 *
+		 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+		 * - Database breaches and unauthorized access to raw token data
+		 * - Internal threats from database administrators or compromised credentials
+		 * - Token exposure in database backups and logs
 		 * @default false
 		 */
 		encryptOAuthTokens?: boolean;
