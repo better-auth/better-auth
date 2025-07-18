@@ -1034,6 +1034,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					today.getDate(),
 				);
 
+				// Check plan limit
+				const totalUsage = await getTotalUsage(
+					ctx,
+					refId,
+					ctx.body?.plan,
+					options,
+				);
+
 				// Get all usage
 				const existing = await ctx.context.adapter.findMany({
 					model: "usage",
@@ -1053,11 +1061,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					);
 				});
 
-				var res: Usage | null;
-
 				if (latest && latest.currentlyActive === true) {
 					// Same day: increment usage and update latestUsageDate
-					res = await ctx.context.adapter.update({
+					const res = await ctx.context.adapter.update({
 						model: "usage",
 						where: [{ field: "referenceId", value: refId }],
 						update: {
@@ -1065,9 +1071,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							latestUsageDate: today,
 						},
 					});
+					return ctx.json({ data: res, totalUsage: totalUsage });
 				} else {
 					// New day: create new usage entry
-					res = await ctx.context.adapter.create({
+					const res = await ctx.context.adapter.create({
 						model: "usage",
 						data: {
 							referenceId: refId,
@@ -1078,18 +1085,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							currentlyActive: true,
 						},
 					});
+					return ctx.json({ data: res, totalUsage: totalUsage });
 				}
-
-				//
-				// Check plan limit
-				const totalUsage = await getTotalUsage(
-					ctx,
-					refId,
-					ctx.body?.plan,
-					options,
-				);
-
-				return ctx.json({ data: res, totalUsage: totalUsage });
 			},
 		),
 		/**
