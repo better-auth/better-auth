@@ -5,7 +5,7 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
-import { late, z } from "zod";
+import { z } from "zod";
 import {
 	sessionMiddleware,
 	APIError,
