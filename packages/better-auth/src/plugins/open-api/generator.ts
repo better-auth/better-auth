@@ -92,7 +92,7 @@ function getFieldSchema(field: FieldAttribute) {
 		type: field.type === "date" ? "string" : field.type,
 	};
 
-	if (field.defaultValue) {
+	if (field.defaultValue !== undefined) {
 		schema.default =
 			typeof field.defaultValue === "function"
 				? "Generated at runtime"
