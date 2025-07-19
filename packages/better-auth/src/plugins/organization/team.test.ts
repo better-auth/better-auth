@@ -503,4 +503,39 @@ describe("mulit team support", async (it) => {
 
 		expect(teams).toHaveLength(3);
 	});
+
+	let activeTeamCookie: string | null = null;
+
+	it("should allow you to set one of the teams as active", async () => {
+		expect(team1Id).toBeDefined();
+		expect(organizationId).toBeDefined();
+
+		if (!team1Id || !organizationId) throw Error("can not run test");
+
+		const team = await auth.api.setActiveTeam({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+			body: {
+				teamId: team1Id,
+			},
+			returnHeaders: true,
+		});
+
+		expect(team.response?.id).toBe(team1Id);
+		expect(team.response?.organizationId).toBe(organizationId);
+
+		activeTeamCookie = team.headers.getSetCookie()[0];
+	});
+
+	it("should allow you to list team members of the current active team", async () => {
+		expect(activeTeamCookie).toBeDefined();
+
+		if (!activeTeamCookie) throw Error("can not run test");
+
+		const members = await auth.api.listTeamMembers({
+			headers: { cookie: activeTeamCookie },
+		});
+
+		expect(members).toHaveLength(1);
+		expect(members.at(0)?.teamId).toBe(team1Id);
+	});
 });
