@@ -514,6 +514,16 @@
         "types": "./dist/plugins/username/index.d.cts",
         "default": "./dist/plugins/username/index.cjs"
       }
+    },
+    "./plugins/waitlist": {
+      "import": {
+        "types": "./dist/plugins/waitlist/index.d.ts",
+        "default": "./dist/plugins/waitlist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/waitlist/index.d.cts",
+        "default": "./dist/plugins/waitlist/index.cjs"
+      }
     }
   },
   "typesVersions": {
