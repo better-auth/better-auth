@@ -1151,6 +1151,80 @@ type removeTeam = {
 ```
 </APIMethod>
 
+#### Set Active Team
+Sets the given team as the current active team. If `teamId` is `null` the current active team is unset.
+
+<APIMethod path="/organization/set-active-team" method="POST">
+```ts
+type setActiveTeam = {
+    /**
+     * The team ID of the team to set as the current active team.
+     */
+    teamId?: string = "team-id"
+}
+```
+</APIMethod>
+
+#### List User Teams
+List all teams that the current user is a part of.
+
+<APIMethod path="/organization/list-user-teams" method="GET">
+```ts
+type listUserTeams = {
+}
+```
+</APIMethod>
+
+#### List Team Members
+List the members of the given team.
+
+<APIMethod path="/organization/list-team-members" method="POST">
+```ts
+type listTeamMembers = {
+    /**
+     * The team whose members we should return. If this is not provided the members of the current active team get returned.
+     */
+    teamId?: string = "team-id"
+}
+```
+</APIMethod>
+
+#### Add Team Member
+Add a member to a team.
+
+<APIMethod path="/organization/add-team-member" method="POST">
+```ts
+type addTeamMember = {
+    /**
+     * The team the user should be a member of.
+     */
+    teamId: string = "team-id"
+    /**
+     * The user Id which represents the user to be added as a member.
+     */
+    userId: string = "user-id"
+}
+```
+</APIMethod>
+
+#### Remove Team Member
+Remove a member from a team.
+
+<APIMethod path="/organization/remove-team-member" method="POST">
+```ts
+type removeTeamMember = {
+    /**
+     * The team the user should be removed from.
+     */
+    teamId: string = "team-id"
+    /**
+     * The user which should be removed from the team.
+     */
+    userId: string = "user-id"
+}
+```
+</APIMethod>
+
 ### Team Permissions
 
 Teams follow the organization's permission system. To manage teams, users need the following permissions:
@@ -1212,7 +1286,9 @@ The invited member will be added to the specified team upon accepting the invita
 
 ### Database Schema
 
-When teams are enabled, a new `team` table is added with the following structure:
+When teams are enabled, new `team` and `teamMember` tables are added to the database.
+
+Table Name: `team`
 
 <DatabaseTable
   fields={[
@@ -1241,8 +1317,39 @@ When teams are enabled, a new `team` table is added with the following structure
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the team was last updated"
-    }
+      isOptional: true,
+      description: "Timestamp of when the team was created"
+    },
+  ]}
+/>
+
+Table Name: `teamMember`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each team member",
+      isPrimaryKey: true
+    },
+    {
+      name: "teamId",
+      type: "string",
+      description: "Unique identifier for each team",
+      isForeignKey: true
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the team member was created"
+    },
   ]}
 />
 
@@ -1385,7 +1492,7 @@ Table Name: `invitation`
 
 Table Name: `session`
 
-You need to add one more field to the session table to store the active organization ID.
+You need to add two more fields to the session table to store the active organization ID and the active team ID.
 
 <DatabaseTable
   fields={[
@@ -1393,6 +1500,12 @@ You need to add one more field to the session table to store the active organiza
       name: "activeOrganizationId",
       type: "string",
       description: "The ID of the active organization",
+      isOptional: true
+    },
+    {
+      name: "activeTeamId",
+      type: "string",
+      description: "The ID of the active team",
       isOptional: true
     },
   ]}
@@ -1435,20 +1548,37 @@ Table Name: `team`
   ]}
   />
 
-  Table Name: `member`
+Table Name: `teamMember`
 
 <DatabaseTable
   fields={[
     {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each team member",
+      isPrimaryKey: true
+    },
+    {
       name: "teamId",
       type: "string",
-      description: "The ID of the team",
-      isOptional: true
+      description: "Unique identifier for each team",
+      isForeignKey: true
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the team member was created"
     },
   ]}
   />
 
-  Table Name: `invitation`
+Table Name: `invitation`
 
 <DatabaseTable
   fields={[
