@@ -1,3 +1,4 @@
+import { logger } from "../../utils";
 import {
 	createAdapter,
 	type AdapterDebugLogs,
@@ -30,8 +31,16 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				return props.data;
 			},
 		},
-		adapter: ({ getFieldName, options }) => {
-			function convertWhereClause(where: CleanedWhere[], table: any[]) {
+		adapter: ({ getFieldName, options, debugLog }) => {
+			function convertWhereClause(where: CleanedWhere[], model: string) {
+				const table = db[model];
+				if (!table) {
+					logger.error(
+						`[MemoryAdapter] Model ${model} not found in the DB`,
+						Object.keys(db),
+					);
+					throw new Error(`Model ${model} not found`);
+				}
 				return table.filter((record) => {
 					return where.every((clause) => {
 						let { field, value, operator } = clause;
@@ -60,19 +69,21 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 						// @ts-ignore
 						data.id = db[model].length + 1;
 					}
+					if (!db[model]) {
+						db[model] = [];
+					}
 					db[model].push(data);
 					return data;
 				},
 				findOne: async ({ model, where }) => {
-					const table = db[model];
-					const res = convertWhereClause(where, table);
+					const res = convertWhereClause(where, model);
 					const record = res[0] || null;
 					return record;
 				},
 				findMany: async ({ model, where, sortBy, limit, offset }) => {
 					let table = db[model];
 					if (where) {
-						table = convertWhereClause(where, table);
+						table = convertWhereClause(where, model);
 					}
 					if (sortBy) {
 						table = table.sort((a, b) => {
@@ -96,8 +107,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					return db[model].length;
 				},
 				update: async ({ model, where, update }) => {
-					const table = db[model];
-					const res = convertWhereClause(where, table);
+					const res = convertWhereClause(where, model);
 					res.forEach((record) => {
 						Object.assign(record, update);
 					});
@@ -105,12 +115,12 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				},
 				delete: async ({ model, where }) => {
 					const table = db[model];
-					const res = convertWhereClause(where, table);
+					const res = convertWhereClause(where, model);
 					db[model] = table.filter((record) => !res.includes(record));
 				},
 				deleteMany: async ({ model, where }) => {
 					const table = db[model];
-					const res = convertWhereClause(where, table);
+					const res = convertWhereClause(where, model);
 					let count = 0;
 					db[model] = table.filter((record) => {
 						if (res.includes(record)) {
@@ -122,8 +132,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					return count;
 				},
 				updateMany({ model, where, update }) {
-					const table = db[model];
-					const res = convertWhereClause(where, table);
+					const res = convertWhereClause(where, model);
 					res.forEach((record) => {
 						Object.assign(record, update);
 					});
