@@ -15,6 +15,7 @@ import { useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
 import type { BetterAuthPlugin } from "..";
+import type { OrganizationOptions } from "./types";
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;
@@ -76,14 +77,22 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				invitations: InferInvitation<CO>[];
 			} & Organization;
 
-	type Schema = CO["$inferAuth"] extends Object
-		? CO["$inferAuth"]["options"]["plugins"][number] extends {
-				id: "organization";
-				options: infer O;
-			}
-			? O extends { schema?: infer S }
-				? S
-				: undefined
+	type FindById<
+		T extends readonly BetterAuthPlugin[],
+		TargetId extends string,
+	> = Extract<T[number], { id: TargetId }>;
+
+	type Auth = CO["$inferAuth"] extends { options: any }
+		? CO["$inferAuth"]
+		: { options: { plugins: [] } };
+
+	type OrganizationPlugin = FindById<
+		Auth["options"]["plugins"],
+		"organization"
+	>;
+	type Schema = OrganizationPlugin extends { options: { schema: infer S } }
+		? S extends OrganizationOptions["schema"]
+			? S
 			: undefined
 		: undefined;
 
