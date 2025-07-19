@@ -39,18 +39,12 @@ import {
 	listOrganizationTeams,
 	removeTeam,
 	updateTeam,
-	setActiveTeam,
-	listUserTeams,
-	listTeamMembers,
-	addTeamMember,
-	removeTeamMember,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
 	Team,
-	TeamMember,
 } from "./schema";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
@@ -437,86 +431,6 @@ export const organization = <O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-team)
 		 */
 		updateTeam: updateTeam(options as O),
-		/**
-		 * ### Endpoint
-		 *
-		 * POST `/organization/set-active-team`
-		 *
-		 * ### API Methods
-		 *
-		 * **server:**
-		 * `auth.api.setActiveTeam`
-		 *
-		 * **client:**
-		 * `authClient.organization.setActiveTeam`
-		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
-		 */
-		setActiveTeam: setActiveTeam(options as O),
-		/**
-		 * ### Endpoint
-		 *
-		 * POST `/organization/list-user-teams`
-		 *
-		 * ### API Methods
-		 *
-		 * **server:**
-		 * `auth.api.listUserTeams`
-		 *
-		 * **client:**
-		 * `authClient.organization.listUserTeams`
-		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
-		 */
-		listUserTeams: listUserTeams(options as O),
-		/**
-		 * ### Endpoint
-		 *
-		 * POST `/organization/list-team-members`
-		 *
-		 * ### API Methods
-		 *
-		 * **server:**
-		 * `auth.api.listTeamMembers`
-		 *
-		 * **client:**
-		 * `authClient.organization.listTeamMembers`
-		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
-		 */
-		listTeamMembers: listTeamMembers(options as O),
-		/**
-		 * ### Endpoint
-		 *
-		 * POST `/organization/add-team-member`
-		 *
-		 * ### API Methods
-		 *
-		 * **server:**
-		 * `auth.api.addTeamMember`
-		 *
-		 * **client:**
-		 * `authClient.organization.addTeamMember`
-		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-team-member)
-		 */
-		addTeamMember: addTeamMember(options as O),
-		/**
-		 * ### Endpoint
-		 *
-		 * POST `/organization/remove-team-member`
-		 *
-		 * ### API Methods
-		 *
-		 * **server:**
-		 * `auth.api.removeTeamMember`
-		 *
-		 * **client:**
-		 * `authClient.organization.removeTeamMember`
-		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
-		 */
-		removeTeamMember: removeTeamMember(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -559,30 +473,6 @@ export const organization = <O extends OrganizationOptions>(
 							fieldName: options?.schema?.team?.fields?.updatedAt,
 						},
 						...(options?.schema?.team?.additionalFields || {}),
-					},
-				},
-				teamMember: {
-					modelName: options?.schema?.teamMember?.modelName,
-					fields: {
-						teamId: {
-							type: "string",
-							required: true,
-							fieldName: options?.schema?.teamMember?.fields?.teamId,
-						},
-						userId: {
-							type: "string",
-							required: true,
-							references: {
-								model: "user",
-								field: "id",
-							},
-							fieldName: options?.schema?.teamMember?.fields?.userId,
-						},
-						createdAt: {
-							type: "date",
-							required: false,
-							fieldName: options?.schema?.teamMember?.fields?.createdAt,
-						},
 					},
 				},
 			} satisfies AuthPluginSchema)
@@ -747,15 +637,6 @@ export const organization = <O extends OrganizationOptions>(
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
 					},
-					...(teamSupport
-						? {
-								activeTeamId: {
-									type: "string",
-									required: false,
-									fieldName: options?.schema?.session?.fields?.activeTeamId,
-								},
-							}
-						: {}),
 				},
 			},
 			organization: {
@@ -819,6 +700,16 @@ export const organization = <O extends OrganizationOptions>(
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
+					...(teamSupport
+						? {
+								teamId: {
+									type: "string",
+									required: false,
+									sortable: true,
+									fieldName: options?.schema?.member?.fields?.teamId,
+								},
+							}
+						: {}),
 					createdAt: {
 						type: "date",
 						required: true,
@@ -892,7 +783,6 @@ export const organization = <O extends OrganizationOptions>(
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
 			Team: teamSupport ? ({} as Team) : ({} as any),
-			TeamMember: teamSupport ? ({} as TeamMember) : ({} as any),
 			ActiveOrganization: {} as Awaited<
 				ReturnType<ReturnType<typeof getFullOrganization<O>>>
 			>,

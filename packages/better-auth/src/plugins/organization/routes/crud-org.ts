@@ -13,7 +13,6 @@ import type {
 	InferOrganization,
 	Member,
 	Team,
-	TeamMember,
 } from "../schema";
 import { hasPermission } from "../has-permission";
 import {
@@ -167,7 +166,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 						data: Record<string, any>;
 				  }
 				| undefined = undefined;
-
 			if (options.organizationCreation?.beforeCreate) {
 				const response = await options.organizationCreation.beforeCreate(
 					{
@@ -191,12 +189,9 @@ export const createOrganization = <O extends OrganizationOptions>(
 					...(hookResponse?.data || {}),
 				},
 			});
-
 			let member:
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
-			let teamMember: TeamMember | null = null;
-
 			if (
 				options?.teams?.enabled &&
 				options.teams.defaultTeam?.enabled !== false
@@ -213,14 +208,11 @@ export const createOrganization = <O extends OrganizationOptions>(
 					}));
 
 				member = await adapter.createMember({
+					teamId: defaultTeam.id,
 					userId: user.id,
 					organizationId: organization.id,
 					role: ctx.context.orgOptions.creatorRole || "owner",
-				});
-
-				teamMember = await adapter.findOrCreateTeamMember({
-					teamId: defaultTeam.id,
-					userId: user.id,
+					createdAt: new Date(),
 				});
 			} else {
 				member = await adapter.createMember({
@@ -245,17 +237,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveOrganization(
 					ctx.context.session.session.token,
 					organization.id,
-				);
-			}
-
-			if (
-				teamMember &&
-				ctx.context.session &&
-				!ctx.body.keepCurrentActiveOrganization
-			) {
-				await adapter.setActiveTeam(
-					ctx.context.session.session.token,
-					teamMember.teamId,
 				);
 			}
 

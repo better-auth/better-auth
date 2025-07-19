@@ -27,6 +27,7 @@ export const memberSchema = z.object({
 	userId: z.coerce.string(),
 	role,
 	createdAt: z.date().default(() => new Date()),
+	teamId: z.string().optional(),
 });
 
 export const invitationSchema = z.object({
@@ -48,21 +49,12 @@ export const teamSchema = z.object({
 	updatedAt: z.date().optional(),
 });
 
-export const teamMemberSchema = z.object({
-	id: z.string().default(generateId),
-	teamId: z.string(),
-	userId: z.string(),
-	createdAt: z.date().default(() => new Date()),
-});
-
 export type Organization = z.infer<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
-export type TeamMember = z.infer<typeof teamMemberSchema>;
 export type Team = z.infer<typeof teamSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
 export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
-export type TeamMemberInput = z.input<typeof teamMemberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
 
