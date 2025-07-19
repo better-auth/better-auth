@@ -1,8 +1,8 @@
-import { importJWK, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { importJWK, SignJWT } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { JwtOptions } from ".";
+import { generateExportedKeyPair, type JwtOptions } from ".";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
 
@@ -17,16 +17,8 @@ export async function getJwtToken(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		const { publicKey, privateKey } = await generateKeyPair(
-			options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-			options?.jwks?.keyPairConfig ?? {
-				crv: "Ed25519",
-				extractable: true,
-			},
-		);
-
-		const publicWebKey = await exportJWK(publicKey);
-		const privateWebKey = await exportJWK(privateKey);
+		const { publicWebKey, privateWebKey } =
+			await generateExportedKeyPair(options);
 		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 
 		let jwk: Partial<Jwk> = {

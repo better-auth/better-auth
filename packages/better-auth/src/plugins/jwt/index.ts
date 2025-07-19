@@ -7,7 +7,7 @@ import type {
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { getJwtToken } from "./sign";
-import { exportJWK, generateKeyPair } from "jose";
+import { exportJWK, generateKeyPair, type JWK } from "jose";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -119,6 +119,26 @@ export interface JwtOptions {
 	schema?: InferOptionSchema<typeof schema>;
 }
 
+export async function generateExportedKeyPair(
+	options?: JwtOptions,
+): Promise<{ publicWebKey: JWK; privateWebKey: JWK }> {
+	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
+		alg: "EdDSA",
+		crv: "Ed25519",
+	};
+	const keyPairConfig = {
+		...cfg,
+		extractable: true,
+	};
+
+	const { publicKey, privateKey } = await generateKeyPair(alg, keyPairConfig);
+
+	const publicWebKey = await exportJWK(publicKey);
+	const privateWebKey = await exportJWK(privateKey);
+
+	return { publicWebKey, privateWebKey };
+}
+
 export const jwt = (options?: JwtOptions) => {
 	return {
 		id: "jwt",
@@ -221,8 +241,8 @@ export const jwt = (options?: JwtOptions) => {
 							crv: "Ed25519",
 						};
 						const keyPairConfig = {
-							extractable: true,
 							...cfg,
+							extractable: true,
 						};
 
 						const { publicKey, privateKey } = await generateKeyPair(

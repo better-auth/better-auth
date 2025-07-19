@@ -2,7 +2,7 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
-import { jwt } from "./index";
+import { generateExportedKeyPair, jwt, type JwtOptions } from "./index";
 import { importJWK, jwtVerify } from "jose";
 
 type JWKOptions =
@@ -228,18 +228,17 @@ describe("jwt", async (it) => {
 	for (const algorithm of algorithmsToTest) {
 		const expectedOutcome = algorithm.expectedOutcome;
 		for (let disablePrivateKeyEncryption of [false, true]) {
+			const jwtOptions: JwtOptions = {
+				jwks: {
+					keyPairConfig: {
+						...algorithm.keyPairConfig,
+					},
+					disablePrivateKeyEncryption: disablePrivateKeyEncryption,
+				},
+			};
 			try {
 				const { auth, signInWithTestUser } = await getTestInstance({
-					plugins: [
-						jwt({
-							jwks: {
-								keyPairConfig: {
-									...algorithm.keyPairConfig,
-								},
-								disablePrivateKeyEncryption: disablePrivateKeyEncryption,
-							},
-						}),
-					],
+					plugins: [jwt(jwtOptions)],
 					logger: {
 						level: "error",
 					},
@@ -267,6 +266,17 @@ describe("jwt", async (it) => {
 						expect(jwks.keys.at(0)?.y).toHaveLength(expectedOutcome.length);
 					if (jwks.keys.at(0)?.n)
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
+				});
+
+				it(`${alg} algorithm${enc}: Endpoint "/token" can extract valid keys`, async () => {
+					const { publicWebKey, privateWebKey } =
+						await generateExportedKeyPair(jwtOptions);
+					for (const key of [publicWebKey, privateWebKey]) {
+						expect(key.kty).toBe(expectedOutcome.ec);
+						if (key.x) expect(key.x).toHaveLength(expectedOutcome.length);
+						if (key.y) expect(key.y).toHaveLength(expectedOutcome.length);
+						if (key.n) expect(key.n).toHaveLength(expectedOutcome.length);
+					}
 				});
 
 				const client = createAuthClient({
