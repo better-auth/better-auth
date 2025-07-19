@@ -25,14 +25,14 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
-import { getJwtToken } from "../jwt/sign";
-import type { JwtOptions } from "../jwt";
+import { signJwt } from "../jwt/sign";
+import type { JwtPluginOptions } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
 		(plugin) => plugin.id === "jwt",
-	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
+	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions };
 };
 
 /**
@@ -784,7 +784,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "internal_server_error",
 							});
 						}
-						idToken = await getJwtToken(
+						idToken = await signJwt(
 							{
 								...ctx,
 								context: {
@@ -805,6 +805,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 									},
 								},
 							},
+							payload,
 							{
 								...jwtPlugin.options,
 								jwt: {
@@ -813,7 +814,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 									audience: client_id.toString(),
 									issuer: ctx.context.options.baseURL,
 									expirationTime,
-									definePayload: () => payload,
 								},
 							},
 						);

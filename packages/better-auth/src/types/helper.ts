@@ -9,6 +9,7 @@ export type Primitive =
 export type LiteralString = "" | (string & Record<never, never>);
 export type LiteralNumber = 0 | (number & Record<never, never>);
 
+export type Awaitable<T> = Promise<T> | T;
 export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 
 export type Prettify<T> = Omit<T, never>;
