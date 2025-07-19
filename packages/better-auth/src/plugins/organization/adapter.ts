@@ -599,7 +599,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return members;
 		},
-
+		countMembers: async (data: {
+			organizationId: string;
+		}) => {
+			const count = await adapter.count({
+				model: "member",
+				where: [{ field: "organizationId", value: data.organizationId }],
+			});
+			return count;
+		},
 		listTeamsByUser: async (data: {
 			userId: string;
 		}) => {

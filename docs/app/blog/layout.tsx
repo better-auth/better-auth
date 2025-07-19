@@ -11,7 +11,17 @@ interface BlogLayoutProps {
 
 export default function BlogLayout({ children }: BlogLayoutProps) {
 	return (
-		<div className="relative flex min-h-screen flex-col">
+		<div
+			className="relative flex min-h-screen flex-col"
+			style={{
+				scrollbarWidth: "none",
+				scrollbarColor: "transparent transparent",
+				//@ts-expect-error
+				"&::-webkit-scrollbar": {
+					display: "none",
+				},
+			}}
+		>
 			<main className="flex-1">{children}</main>
 		</div>
 	);
