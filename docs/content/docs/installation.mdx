@@ -27,10 +27,12 @@ Create a `.env` file in the root of your project and add the following environme
 1. **Secret Key**
 
 Random value used by the library for encryption and generating hashes. **You can generate one using the button below** or you can use something like openssl.
+
 ```txt title=".env"
 BETTER_AUTH_SECRET=
 ```
-<GenerateSecret/>
+
+<GenerateSecret />
 
 2. **Set Base URL**
 
@@ -44,9 +46,10 @@ BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
 ### Create A Better Auth Instance
 
 Create a file named `auth.ts` in one of these locations:
-   - Project root
-   - `lib/` folder
-   - `utils/` folder
+
+- Project root
+- `lib/` folder
+- `utils/` folder
 
 You can also nest any of these folders under `src/`, `app/` or `server/` folder. (e.g. `src/lib/auth.ts`, `app/lib/auth.ts`).
 
@@ -56,15 +59,17 @@ And in this file, import Better Auth and create your auth instance. Make sure to
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    //...
-})
+  //...
+});
 ```
+
 </Step>
 
 <Step>
 ### Configure Database
 
-Better Auth requires a database to store user data. You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, with Kysely handling queries and migrations for these databases.
+Better Auth requires a database to store user data.
+You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and more!
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
@@ -85,7 +90,7 @@ Better Auth requires a database to store user data. You can easily configure Bet
     export const auth = betterAuth({
         database: new Pool({
             // connection options
-        })
+        }),
     })
     ```
     </Tab>
@@ -97,38 +102,30 @@ Better Auth requires a database to store user data. You can easily configure Bet
     export const auth = betterAuth({
         database: createPool({
             // connection options
-        })
+        }),
     })
     ```
     </Tab>
+
 </Tabs>
 
-You can also provide any Kysely dialect or a Kysely instance to the `database` option.
+Alternatively, if you prefer to use an ORM, you can use one of the built-in adapters.
 
-**Example with LibsqlDialect:**
+<Tabs items={["drizzle", "prisma", "mongodb"]}>
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { LibsqlDialect } from "@libsql/kysely-libsql";
+    <Tab value="drizzle">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { drizzleAdapter } from "better-auth/adapters/drizzle";
+    import { db } from "@/db"; // your drizzle instance
 
-const dialect = new LibsqlDialect({
-    url: process.env.TURSO_DATABASE_URL || "",
-    authToken: process.env.TURSO_AUTH_TOKEN || "",
-})
-
-export const auth = betterAuth({
-  database: {
-    dialect,
-    type: "sqlite"
-  }
-});
-```
-
-**Adapters**
-
-If you prefer to use an ORM or if your database is not supported by Kysely, you can use one of the built-in adapters.
-
-<Tabs items={["prisma", "drizzle", "mongodb"]}>
+    export const auth = betterAuth({
+        database: drizzleAdapter(db, {
+            provider: "pg", // or "mysql", "sqlite"
+        }),
+    });
+    ```
+    </Tab>
     <Tab value="prisma">
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
@@ -145,20 +142,6 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
     ```
     </Tab>
 
-    <Tab value="drizzle">
-    ```ts title="auth.ts"
-    import { betterAuth } from "better-auth";
-    import { drizzleAdapter } from "better-auth/adapters/drizzle";
-    import { db } from "@/db"; // your drizzle instance
-
-    export const auth = betterAuth({
-        database: drizzleAdapter(db, {
-            provider: "pg", // or "mysql", "sqlite"
-        })
-    });
-    ```
-    </Tab>
-
     <Tab value="mongodb">
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -166,11 +149,19 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
     import { client } from "@/db"; // your mongodb client
 
     export const auth = betterAuth({
-        database: mongodbAdapter(client)
+        database: mongodbAdapter(client),
     });
     ```
     </Tab>
+
 </Tabs>
+
+<Callout>
+  If your database is not listed above, check out our other supported
+  [databases](/docs/adapters/other-relational-databases) for more information,
+  or use one of the supported ORMs.
+</Callout>
+
 </Step>
 
 <Step>
@@ -198,27 +189,32 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
     <Callout>
      If you instead want to create the schema manually, you can find the core schema required in the [database section](/docs/concepts/database#core-schema).
     </Callout>
+
 </Step>
 
 <Step>
 
 ### Authentication Methods
+
 Configure the authentication methods you want to use. Better Auth comes with built-in support for email/password, and social sign-on providers.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    //...other options
-    emailAndPassword: {  // [!code highlight]
-        enabled: true // [!code highlight]
-    },// [!code highlight]
-    socialProviders: { // [!code highlight]
-        github: { // [!code highlight]
-           clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
-           clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
-        }, // [!code highlight]
+  //...other options
+  emailAndPassword: {
+    // [!code highlight]
+    enabled: true, // [!code highlight]
+  }, // [!code highlight]
+  socialProviders: {
+    // [!code highlight]
+    github: {
+      // [!code highlight]
+      clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
+      clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
     }, // [!code highlight]
+  }, // [!code highlight]
 });
 ```
 
@@ -234,7 +230,8 @@ To handle API requests, you need to set up a route handler on your server.
 Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path).
 
 <Callout>
-Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
+  Better Auth supports any backend framework with standard Request and Response
+  objects and offers helper functions for popular frameworks.
 </Callout>
 
 <Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo"]} defaultValue="react">
@@ -394,20 +391,23 @@ Better Auth supports any backend framework with standard Request and Response ob
     export { handler as GET, handler as POST };
     ```
     </Tab>
+
 </Tabs>
 </Step>
 
 <Step>
 ### Create Client Instance
 
-The client-side library helps you interact with the auth server. Better Auth comes with a client for all the popular web frameworks, including  vanilla JavaScript.
+The client-side library helps you interact with the auth server. Better Auth comes with a client for all the popular web frameworks, including vanilla JavaScript.
 
 1. Import `createAuthClient` from the package for your framework (e.g., "better-auth/react" for React).
 2. Call the function to create your client.
 3. Pass the base URL of your auth server. (If the auth server is running on the same domain as your client, you can skip this step.)
 
 <Callout type="info">
-If you're using a different base path other than `/api/auth` make sure to pass the whole URL including the path. (e.g. `http://localhost:3000/custom-path/auth`)
+  If you're using a different base path other than `/api/auth` make sure to pass
+  the whole URL including the path. (e.g.
+  `http://localhost:3000/custom-path/auth`)
 </Callout>
 
 <Tabs items={["react", "vue", "svelte", "solid",

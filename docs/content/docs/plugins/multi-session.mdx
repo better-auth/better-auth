@@ -49,35 +49,54 @@ Whenever a user logs in, the plugin will add additional cookie to the browser. T
 
 To list all active sessions for the current user, you can call the `listDeviceSessions` method.
 
+<APIMethod
+  path="/multi-session/list-device-sessions"
+  method="GET"
+  requireSession
+>
 ```ts
-await authClient.multiSession.listDeviceSessions()
+type listDeviceSessions = {
+}
 ```
-
-on the server you can call `listDeviceSessions` method.
-
-```ts
-await auth.api.listDeviceSessions()
-```
+</APIMethod>
 
 ### Set active session
 
 To set the active session, you can call the `setActive` method.
 
+<APIMethod
+  path="/multi-session/set-active"
+  method="POST"
+  requireSession
+>
 ```ts
-await authClient.multiSession.setActive({
-    sessionToken: "session-token"
-})
+type setActiveSession = {
+    /**
+     * The session token to set as active. 
+     */
+    sessionToken: string = "some-session-token"
+}
 ```
+</APIMethod>
 
 ### Revoke a session
 
 To revoke a session, you can call the `revoke` method.
 
+<APIMethod
+  path="/multi-session/revoke"
+  method="POST"
+  requireSession
+>
 ```ts
-await authClient.multiSession.revoke({
-    sessionToken: "session-token"
-})
+type revokeDeviceSession = {
+    /**
+     * The session token to revoke. 
+     */
+    sessionToken: string = "some-session-token"
+}
 ```
+</APIMethod>
 
 ### Signout and Revoke all sessions
 

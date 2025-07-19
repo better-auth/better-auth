@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -6,8 +6,10 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../../api";
+import { defaultKeyHasher } from "./utils";
+import type { GenericEndpointContext } from "../../types";
 
-interface MagicLinkOptions {
+interface MagicLinkopts {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -46,12 +48,57 @@ interface MagicLinkOptions {
 	 * Custom function to generate a token
 	 */
 	generateToken?: (email: string) => Promise<string> | string;
+
+	/**
+	 * This option allows you to configure how the token is stored in your database.
+	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
+	 *
+	 * @default "plain"
+	 */
+	storeToken?:
+		| "plain"
+		| "hashed"
+		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
 }
 
-export const magicLink = (options: MagicLinkOptions) => {
+export const magicLink = (options: MagicLinkopts) => {
+	const opts = {
+		storeToken: "plain",
+		...options,
+	} satisfies MagicLinkopts;
+
+	async function storeToken(ctx: GenericEndpointContext, token: string) {
+		if (opts.storeToken === "hashed") {
+			return await defaultKeyHasher(token);
+		}
+		if (
+			typeof opts.storeToken === "object" &&
+			"type" in opts.storeToken &&
+			opts.storeToken.type === "custom-hasher"
+		) {
+			return await opts.storeToken.hash(token);
+		}
+		return token;
+	}
+
 	return {
 		id: "magic-link",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/magic-link`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInMagicLink`
+			 *
+			 * **client:**
+			 * `authClient.signIn.magicLink`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sign-in#api-method-sign-in-magic-link)
+			 */
 			signInMagicLink: createAuthEndpoint(
 				"/sign-in/magic-link",
 				{
@@ -59,18 +106,21 @@ export const magicLink = (options: MagicLinkOptions) => {
 					requireHeaders: true,
 					body: z.object({
 						email: z
-							.string({
+							.string()
+							.meta({
 								description: "Email address to send the magic link",
 							})
 							.email(),
 						name: z
-							.string({
+							.string()
+							.meta({
 								description:
-									"User display name. Only used if the user is registering for the first time.",
+									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
 							})
 							.optional(),
 						callbackURL: z
-							.string({
+							.string()
+							.meta({
 								description: "URL to redirect after magic link verification",
 							})
 							.optional(),
@@ -112,7 +162,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 				async (ctx) => {
 					const { email } = ctx.body;
 
-					if (options.disableSignUp) {
+					if (opts.disableSignUp) {
 						const user =
 							await ctx.context.internalAdapter.findUserByEmail(email);
 
@@ -123,15 +173,16 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}
 					}
 
-					const verificationToken = options?.generateToken
-						? await options.generateToken(email)
+					const verificationToken = opts?.generateToken
+						? await opts.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
+					const storedToken = await storeToken(ctx, verificationToken);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
-							identifier: verificationToken,
+							identifier: storedToken,
 							value: JSON.stringify({ email, name: ctx.body.name }),
 							expiresAt: new Date(
-								Date.now() + (options.expiresIn || 60 * 5) * 1000,
+								Date.now() + (opts.expiresIn || 60 * 5) * 1000,
 							),
 						},
 						ctx,
@@ -165,18 +216,34 @@ export const magicLink = (options: MagicLinkOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/magic-link/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.magicLinkVerify`
+			 *
+			 * **client:**
+			 * `authClient.magicLink.verify`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/magic-link#api-method-magic-link-verify)
+			 */
 			magicLinkVerify: createAuthEndpoint(
 				"/magic-link/verify",
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string({
+						token: z.string().meta({
 							description: "Verification token",
 						}),
 						callbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
-									"URL to redirect after magic link verification, if not provided will return session",
+									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
 							})
 							.optional(),
 						errorCallbackURL: z
@@ -258,9 +325,16 @@ export const magicLink = (options: MagicLinkOptions) => {
 							: callbackURL,
 						ctx.context.baseURL,
 					).toString();
-
+          const toRedirectTo = callbackURL?.startsWith("http")
+						? callbackURL
+						: callbackURL
+							? `${ctx.context.options.baseURL}${callbackURL}`
+							: ctx.context.options.baseURL;
+					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
-						await ctx.context.internalAdapter.findVerificationValue(token);
+						await ctx.context.internalAdapter.findVerificationValue(
+							storedToken,
+						);
 					if (!tokenValue) {
 						throw ctx.redirect(`${errorCallbackURL}?error=INVALID_TOKEN`);
 					}
@@ -283,7 +357,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						.then((res) => res?.user);
 
 					if (!user) {
-						if (!options.disableSignUp) {
+						if (!opts.disableSignUp) {
 							const newUser = await ctx.context.internalAdapter.createUser(
 								{
 									email: email,
@@ -360,8 +434,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 						path.startsWith("/magic-link/verify")
 					);
 				},
-				window: options.rateLimit?.window || 60,
-				max: options.rateLimit?.max || 5,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 5,
 			},
 		],
 	} satisfies BetterAuthPlugin;

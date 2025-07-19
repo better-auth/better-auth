@@ -1,18 +1,46 @@
 import { SignInButton, SignInFallback } from "@/components/sign-in-btn";
 import { Suspense } from "react";
 
+const features = [
+	{
+		name: "Email & Password",
+		link: "https://www.better-auth.com/docs/authentication/email-password",
+	},
+	{
+		name: "Organization | Teams",
+		link: "https://www.better-auth.com/docs/plugins/organization",
+	},
+	{
+		name: "Passkeys",
+		link: "https://www.better-auth.com/docs/plugins/passkey",
+	},
+	{
+		name: "Multi Factor",
+		link: "https://www.better-auth.com/docs/plugins/2fa",
+	},
+	{
+		name: "Password Reset",
+		link: "https://www.better-auth.com/docs/authentication/email-password#request-password-reset",
+	},
+	{
+		name: "Email Verification",
+		link: "https://www.better-auth.com/docs/authentication/email-password#email-verification",
+	},
+	{
+		name: "Roles & Permissions",
+		link: "https://www.better-auth.com/docs/plugins/organization#roles",
+	},
+	{
+		name: "Rate Limiting",
+		link: "https://www.better-auth.com/docs/reference/security#rate-limiting",
+	},
+	{
+		name: "Session Management",
+		link: "https://www.better-auth.com/docs/concepts/session-management",
+	},
+];
+
 export default async function Home() {
-	const features = [
-		"Email & Password",
-		"Organization | Teams",
-		"Passkeys",
-		"Multi Factor",
-		"Password Reset",
-		"Email Verification",
-		"Roles & Permissions",
-		"Rate Limiting",
-		"Session Management",
-	];
 	return (
 		<div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
 			<main className="flex flex-col gap-4 row-start-2 items-center justify-center">
@@ -44,12 +72,13 @@ export default async function Home() {
 						</div>
 						<div className="flex gap-2 justify-center flex-wrap">
 							{features.map((feature) => (
-								<span
+								<a
 									className="border-b pb-1 text-muted-foreground text-xs cursor-pointer hover:text-foreground duration-150 ease-in-out transition-all hover:border-foreground flex items-center gap-1"
-									key={feature}
+									key={feature.name}
+									href={feature.link}
 								>
-									{feature}.
-								</span>
+									{feature.name}
+								</a>
 							))}
 						</div>
 					</div>

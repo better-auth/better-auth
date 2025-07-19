@@ -73,75 +73,74 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key#api
 
 ### Create an API key
 
-<Endpoint path="/api-key/create" method="POST" />
-
-<Tabs items={['Client', 'Server']}>
-    <Tab value="Client">
-      ```ts
-      const { data: apiKey, error } = await authClient.apiKey.create({
-          name: "My API Key",
-          expiresIn: 60 * 60 * 24 * 7, // 7 days
-          prefix: "my_app",
-          metadata: {
-              tier: "premium",
-          },
-      });
-      ```
-    </Tab>
-    <Tab value="Server">
-    on the server, you can create an API key for a user by passing the `userId` property in the body. And allows you to add any properties you want to the API key.
-
-    ```ts
-      const apiKey = await auth.api.createApiKey({
-          body: {
-            name: "My API Key",
-            expiresIn: 60 * 60 * 24 * 365, // 1 year
-            prefix: "my_app",
-            remaining: 100,
-            refillAmount: 100,
-            refillInterval: 60 * 60 * 24 * 7, // 7 days
-            metadata: {
-                tier: "premium",
-            },
-            rateLimitTimeWindow: 1000 * 60 * 60 * 24, // everyday
-            rateLimitMax: 100, // every day, they can use up to 100 requests
-            rateLimitEnabled: true,
-            userId: user.id, // the user ID to create the API key for
-          },
-      });
-      ```
-    </Tab>
-
-</Tabs>
-
-All API keys are assigned to a user. If you're creating an API key on the server, without access to headers, you must pass the `userId` property. This is the ID of the user that the API key is associated with.
-
-#### Properties
-
-All properties are optional. However if you pass a `refillAmount`, you must also pass a `refillInterval`, and vice versa.
-
-- `name`?: The name of the API key.
-- `expiresIn`?: The expiration time of the API key in seconds. If not provided, the API key will never expire.
-- `prefix`?: The prefix of the API key. This is used to identify the API key in the database.
-- `metadata`?: The metadata of the API key. This is used to store additional information about the API key.
-
-<DividerText>Server Only Properties</DividerText>
-
-- `remaining`?: The remaining number of requests for the API key. If `null`, then there is no cap to key usage.
-- `refillAmount`?: The amount to refill the `remaining` count of the API key.
-- `refillInterval`?: The interval to refill the API key in milliseconds.
-- `rateLimitTimeWindow`?: The duration in milliseconds where each request is counted. Once the `rateLimitMax` is reached, the request will be rejected until the `timeWindow` has passed, at which point the time window will be reset.
-- `rateLimitMax`?: The maximum number of requests allowed within the `rateLimitTimeWindow`.
-- `rateLimitEnabled`?: Whether rate limiting is enabled for the API key.
-- `permissions`?: Permissions for the API key, structured as a record mapping resource types to arrays of allowed actions.
-
+<APIMethod
+  path="/api-key/create"
+  method="POST"
+  serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property. This is the ID of the user that the API key is associated with."
+  clientOnlyNote="You can adjust more specific API key configurations by using the server method instead."
+>
 ```ts
-const example = {
-  projects: ["read", "read-write"],
-};
+type createApiKey = {
+    /**
+     * Name of the Api Key. 
+     */
+    name?: string = 'project-api-key'
+    /**
+     * Expiration time of the Api Key in seconds. 
+     */
+    expiresIn?: number = 60 * 60 * 24 * 7
+    /**
+     * User Id of the user that the Api Key belongs to. server-only. 
+     * @serverOnly
+     */
+    userId?: string = "user-id"
+    /**
+     * Prefix of the Api Key. 
+     */
+    prefix?: string = 'project-api-key'
+    /**
+     * Remaining number of requests. server-only. 
+     * @serverOnly
+     */
+    remaining?: number = 100
+    /**
+     * Metadata of the Api Key. 
+     */
+    metadata?: any | null = { someKey: 'someValue' }
+    /**
+     * Amount to refill the remaining count of the Api Key. server-only. 
+     * @serverOnly
+     */
+    refillAmount?: number = 100
+    /**
+     * Interval to refill the Api Key in milliseconds. server-only. 
+     * @serverOnly
+     */
+    refillInterval?: number = 1000
+    /**
+     * The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
+     * @serverOnly
+     */
+    rateLimitTimeWindow?: number = 1000
+    /**
+     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
+     * @serverOnly
+     */
+    rateLimitMax?: number = 100
+    /**
+     * Whether the key has rate limiting enabled. server-only. 
+     * @serverOnly
+     */
+    rateLimitEnabled?: boolean = true
+    /**
+     * Permissions of the Api Key. 
+     */
+    permissions?: Record<string, string[]>
+}
 ```
+</APIMethod>
 
-- `userId`?: The ID of the user associated with the API key. When creating an API Key, you must pass the headers of the user who will own the key. However if you do not have the headers, you can pass this field, which will allow you to bypass the need for headers.
+<Callout>API keys are assigned to a user.</Callout>
 
 #### Result
 
@@ -152,30 +151,29 @@ Otherwise if it throws, it will throw an `APIError`.
 
 ### Verify an API key
 
-<Endpoint path="/api-key/verify" method="POST" isServerOnly />
-
+<APIMethod
+  path="/api-key/verify"
+  method="POST"
+  isServerOnly
+>
 ```ts
-const { valid, error, key } = await auth.api.verifyApiKey({
-  body: {
-    key: "your_api_key_here",
-  },
-});
+const permissions = { // Permissions to check are optional.
+  projects: ["read", "read-write"],
+}
 
-//with permissions check
-const { valid, error, key } = await auth.api.verifyApiKey({
-  body: {
-    key: "your_api_key_here",
-    permissions: {
-      projects: ["read", "read-write"],
-    },
-  },
-});
+type verifyApiKey = {
+    /**
+     * The key to verify. 
+     */
+    key: string = "your_api_key_here"
+    /**
+     * The permissions to verify. Optional.
+     */
+    permissions?: Record<string, string[]>
+}
 ```
+</APIMethod>
 
-#### Properties
-
-- `key`: The API Key to validate
-- `permissions`?: The permissions to check against the API key.
 
 #### Result
 
@@ -191,19 +189,20 @@ type Result = {
 
 ### Get an API key
 
-<Endpoint method="GET" path="/api-key/get" isServerOnly />
-
+<APIMethod
+  path="/api-key/get"
+  method="GET"
+  requireSession
+>
 ```ts
-const key = await auth.api.getApiKey({
-  body: {
-    keyId: "your_api_key_id_here",
-  },
-});
+type getApiKey = {
+    /**
+     * The id of the Api Key. 
+     */
+    id: string = "some-api-key-id"
+}
 ```
-
-#### Properties
-
-- `keyId`: The API key ID to get information on.
+</APIMethod>
 
 #### Result
 
@@ -218,56 +217,75 @@ type Result = Omit<ApiKey, "key">;
 
 ### Update an API key
 
-<Endpoint method="POST" path="/api-key/update" isServerOnly />
-
-<Tabs items={['Client', 'Server']}>
-    <Tab value="Client">
-      ```ts
-      const { data: apiKey, error } = await authClient.apiKey.update({
-        keyId: "your_api_key_id_here",
-        name: "New API Key Name",
-        enabled: false,
-      });
-      ```
-    </Tab>
-    <Tab value="Server">
-    You can update an API key on the server by passing the `keyId` and any other properties you want to update.
-      ```ts
-      const apiKey = await auth.api.updateApiKey({
-        body: {
-          keyId: "your_api_key_id_here",
-          name: "New API Key Name",
-          userId: "userId",
-          enabled: false,
-          remaining: 100,
-          refillAmount: null,
-          refillInterval: null,
-          metadata: null,
-          expiresIn: 60 * 60 * 24 * 7,
-          rateLimitEnabled: false,
-          rateLimitTimeWindow: 1000 * 60 * 60 * 24,
-          rateLimitMax: 100,
-        },
-      });
-      ```
-    </Tab>
-</Tabs>
-
-#### Properties
-
-<DividerText>Client</DividerText>- `keyId`: The API key ID to update on. -
-`name`?: Update the key name.
-
-<DividerText>Server Only</DividerText>- `userId`?: Update the user ID who owns
-this key. - `name`?: Update the key name. - `enabled`?: Update whether the API
-key is enabled or not. - `remaining`?: Update the remaining count. -
-`refillAmount`?: Update the amount to refill the `remaining` count every
-interval. - `refillInterval`?: Update the interval to refill the `remaining`
-count. - `metadata`?: Update the metadata of the API key. - `expiresIn`?: Update
-the expiration time of the API key. In seconds. - `rateLimitEnabled`?: Update
-whether the rate-limiter is enabled or not. - `rateLimitTimeWindow`?: Update the
-time window for the rate-limiter. - `rateLimitMax`?: Update the maximum number
-of requests they can make during the rate-limit-time-window.
+<APIMethod path="/api-key/update" method="POST">
+```ts
+type updateApiKey = {
+    /**
+     * The id of the Api Key to update. 
+     */
+    keyId: string = "some-api-key-id"
+    /**
+     * The id of the user which the api key belongs to. server-only. 
+     * @serverOnly
+     */
+    userId?: string = "some-user-id"
+    /**
+     * The name of the key. 
+     */
+    name?: string = "some-api-key-name"
+    /**
+     * Whether the Api Key is enabled or not. server-only. 
+     * @serverOnly
+     */
+    enabled?: boolean = true
+    /**
+     * The number of remaining requests. server-only. 
+     * @serverOnly
+     */
+    remaining?: number = 100
+    /**
+     * The refill amount. server-only. 
+     * @serverOnly
+     */
+    refillAmount?: number = 100
+    /**
+     * The refill interval in milliseconds. server-only. 
+     * @serverOnly
+     */
+    refillInterval?: number = 1000
+    /**
+     * The metadata of the Api Key. server-only. 
+     * @serverOnly
+     */
+    metadata?: any | null = { "key": "value" }
+    /**
+     * Expiration time of the Api Key in seconds. server-only. 
+     * @serverOnly
+     */
+    expiresIn?: number = 60 * 60 * 24 * 7
+    /**
+     * Whether the key has rate limiting enabled. server-only. 
+     * @serverOnly
+     */
+    rateLimitEnabled?: boolean = true
+    /**
+     * The duration in milliseconds where each request is counted. server-only. 
+     * @serverOnly
+     */
+    rateLimitTimeWindow?: number = 1000
+    /**
+     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. 
+     * @serverOnly
+     */
+    rateLimitMax?: number = 100
+    /**
+     * Update the permissions on the API Key. server-only. 
+     * @serverOnly
+     */
+    permissions?: Record<string, string[]>
+}
+```
+</APIMethod>
 
 #### Result
 
@@ -278,30 +296,21 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
 
 ### Delete an API Key
 
-<Endpoint method="POST" path="/api-key/delete" />
-<Tabs items={['Client', 'Server']}>
-    <Tab value="Client">
-      ```ts
-      const { data: result, error } = await authClient.apiKey.delete({
-        keyId: "your_api_key_id_here",
-      });
-      ```
-    </Tab>
-    <Tab value="Server">
-      ```ts
-      const apiKey = await auth.api.deleteApiKey({
-        body: {
-          keyId: "your_api_key_id_here",
-          userId: "userId", 
-        },
-      });
-      ```
-    </Tab>
-</Tabs>
-
-#### Properties
-
-- `keyId`: The API key ID to delete.
+<APIMethod
+  path="/api-key/delete"
+  method="POST"
+  requireSession
+  note="This endpoint is attempting to delete the API key from the perspective of the user. It will check if the user's ID matches the key owner to be able to delete it. If you want to delete a key without these checks, we recommend you use an ORM to directly mutate your DB instead."
+>
+```ts
+type deleteApiKey = {
+    /**
+     * The id of the Api Key to delete. 
+     */
+    keyId: string = "some-api-key-id"
+}
+```
+</APIMethod>
 
 #### Result
 
@@ -318,22 +327,16 @@ type Result = {
 
 ### List API keys
 
-<Endpoint method="GET" path="/api-key/list" />
-
-<Tabs items={['Client', 'Server']}>
-    <Tab value="Client">
-      ```ts
-      const { data: apiKeys, error } = await authClient.apiKey.list();
-      ```
-    </Tab>
-    <Tab value="Server">
-      ```ts
-      const apiKeys = await auth.api.listApiKeys({
-        headers: user_headers,
-      });
-      ```
-    </Tab>
-</Tabs>
+<APIMethod
+  path="/api-key/list"
+  method="GET"
+  requireSession
+>
+```ts
+type listApiKeys = {
+}
+```
+</APIMethod>
 
 #### Result
 
@@ -350,12 +353,16 @@ type Result = ApiKey[];
 
 This function will delete all API keys that have an expired expiration date.
 
-<Endpoint
-  method="DELETE"
+<APIMethod
   path="/api-key/delete-all-expired-api-keys"
+  method="POST"
   isServerOnly
-/>
-```ts await auth.api.deleteAllExpiredApiKeys(); ```
+>
+```ts
+type deleteAllExpiredApiKeys = {
+}
+```
+</APIMethod>
 
 <Callout>
   We automatically delete expired API keys every time any apiKey plugin
@@ -368,6 +375,19 @@ This function will delete all API keys that have an expired expiration date.
 ## Sessions from API keys
 
 Any time an endpoint in Better Auth is called that has a valid API key in the headers, we will automatically create a mock session to represent the user.
+
+<Tabs items={['Server']}>
+    <Tab value="Server">
+      ```ts
+      const session = await auth.api.getSession({
+            headers: new Headers({
+                  'x-api-key': apiKey,
+            }),
+      });
+      ```
+    </Tab>
+</Tabs>
+
 
 The default header key is `x-api-key`, but this can be changed by setting the `apiKeyHeaders` option in the plugin options.
 
@@ -489,12 +509,9 @@ export const auth = betterAuth({
         );
         return apiKey;
       },
-      customAPIKeyValidator: ({ ctx, key }) => {
-        if (key.endsWith("_super_secret_api_key")) {
-          return true;
-        } else {
-          return false;
-        }
+      customAPIKeyValidator: async ({ ctx, key }) => {
+        const res = await keyService.verify(key)
+        return res.valid
       },
     }),
   ],
@@ -511,11 +528,12 @@ export const auth = betterAuth({
       customKeyGenerator: () => {
         return crypto.randomUUID();
       },
-      defaultKeyLength: 36 // Or whatever the length is
-    })
-  ]
+      defaultKeyLength: 36, // Or whatever the length is
+    }),
+  ],
 });
 ```
+
 </Callout>
 
 If an API key is validated from your `customAPIKeyValidator`, we still must match that against the database's key.
@@ -572,7 +590,7 @@ The header name to check for API key. Default is `x-api-key`.
 
 A custom function to get the API key from the context.
 
-`customAPIKeyValidator` <span className="opacity-70">`(options: { ctx: GenericEndpointContext; key: string; }) => boolean`</span>
+`customAPIKeyValidator` <span className="opacity-70">`(options: { ctx: GenericEndpointContext; key: string; }) => boolean | Promise<boolean>`</span>
 
 A custom function to validate the API key.
 
@@ -588,7 +606,7 @@ Customize the starting characters configuration.
   <Accordion title="startingCharactersConfig Options">
     `shouldStore` <span className="opacity-70">`boolean`</span>
 
-    Whether to store the starting characters in the database.
+    Wether to store the starting characters in the database.
     If false, we will set `start` to `null`.
     Default is `true`.
 
@@ -619,6 +637,10 @@ The maximum length of the prefix.
 
 The minimum length of the prefix.
 
+`requireName` <span className="opacity-70">`boolean`</span>
+
+Whether to require a name for the API key. Default is `false`.
+
 `maximumNameLength` <span className="opacity-70">`number`</span>
 
 The maximum length of the name.
@@ -645,7 +667,7 @@ Customize the key expiration.
 
     `disableCustomExpiresTime` <span className="opacity-70">`boolean`</span>
 
-    Whether to disable the expires time passed from the client.
+    Wether to disable the expires time passed from the client.
     If `true`, the expires time will be based on the default values.
     Default is `false`.
 

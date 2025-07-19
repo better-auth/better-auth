@@ -1,10 +1,8 @@
-import { Server } from "lucide-react";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "./ui/tooltip";
+"use client";
+import { Check, Copy } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "./ui/button";
+import { useState } from "react";
 
 function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
 	return (
@@ -18,31 +16,43 @@ export function Endpoint({
 	path,
 	method,
 	isServerOnly,
+	className,
 }: {
 	path: string;
 	method: "POST" | "GET" | "DELETE" | "PUT";
 	isServerOnly?: boolean;
+	className?: string;
 }) {
+	const [copying, setCopying] = useState(false);
 	return (
-		<div className="relative flex items-center w-full gap-2 p-2 border rounded-md border-muted bg-fd-secondary/50">
+		<div
+			className={cn(
+				"relative flex items-center w-full gap-2 p-2 border-t border-x border-border bg-fd-secondary/50 group",
+				className,
+			)}
+		>
 			<Method method={method} />
 			<span className="font-mono text-sm text-muted-foreground">{path}</span>
-			{isServerOnly && (
-				<div className="absolute right-2">
-					<TooltipProvider delayDuration={1}>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<div className="flex items-center justify-center transition-colors duration-150 ease-in-out size-6 text-muted-foreground/50 hover:text-muted-foreground">
-									<Server className="size-4" />
-								</div>
-							</TooltipTrigger>
-							<TooltipContent className="border bg-fd-popover text-fd-popover-foreground border-fd-border">
-								Server Only Endpoint
-							</TooltipContent>
-						</Tooltip>
-					</TooltipProvider>
-				</div>
-			)}
+			<div className="absolute right-2" slot="copy">
+				<Button
+					variant="ghost"
+					size="icon"
+					className="transition-all duration-150 ease-in-out opacity-0 cursor-pointer scale-80 group-hover:opacity-100"
+					onClick={() => {
+						setCopying(true);
+						navigator.clipboard.writeText(path);
+						setTimeout(() => {
+							setCopying(false);
+						}, 1000);
+					}}
+				>
+					{copying ? (
+						<Check className="duration-150 ease-in-out size-4 zoom-in" />
+					) : (
+						<Copy className="size-4" />
+					)}
+				</Button>
+			</div>
 		</div>
 	);
 }
