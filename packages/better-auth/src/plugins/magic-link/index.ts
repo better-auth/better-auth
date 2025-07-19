@@ -125,13 +125,15 @@ export const magicLink = (options: MagicLinkopts) => {
 							})
 							.optional(),
 						newUserCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
 									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
 							})
 							.optional(),
 						errorCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description: "URL to redirect after error.",
 							})
 							.optional(),
@@ -247,12 +249,14 @@ export const magicLink = (options: MagicLinkopts) => {
 							})
 							.optional(),
 						errorCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description: "URL to redirect after error.",
 							})
 							.optional(),
 						newUserCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
 									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
 							})
