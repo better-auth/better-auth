@@ -64,6 +64,7 @@ describe("account", async () => {
 			accountLinking: {
 				allowDifferentEmails: true,
 			},
+			encryptOAuthTokens: true,
 		},
 	});
 
@@ -136,12 +137,20 @@ describe("account", async () => {
 				expect(location).toContain("/callback");
 			},
 		});
-
 		const { headers: headers2 } = await signInWithTestUser();
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers2 },
 		});
 		expect(accounts.data?.length).toBe(2);
+	});
+
+	it("should encrypt access token and refresh token", async () => {
+		const { headers: headers2 } = await signInWithTestUser();
+		const accessToken = await client.getAccessToken({
+			providerId: "google",
+			fetchOptions: { headers: headers2 },
+		});
+		expect(accessToken.data).not.toBe("test");
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {

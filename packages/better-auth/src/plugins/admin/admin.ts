@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -60,6 +60,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				permission?: never;
 		  };
 
+	/**
+	 * Ensures a valid session, if not will throw.
+	 * Will also provide additional types on the user to include role types.
+	 */
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
@@ -167,25 +171,47 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			],
 		},
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/set-role`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.setRole`
+			 *
+			 * **client:**
+			 * `authClient.admin.setRole`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-set-role)
+			 */
 			setRole: createAuthEndpoint(
 				"/admin/set-role",
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
-						role: z.union([
-							z.string({
-								description: "The role to set. `admin` or `user` by default",
-							}),
-							z.array(
-								z.string({
-									description: "The roles to set. `admin` or `user` by default",
+						role: z
+							.union([
+								z.string().meta({
+									description: "The role to set. `admin` or `user` by default",
 								}),
-							),
-						]),
+								z.array(
+									z.string().meta({
+										description:
+											"The roles to set. `admin` or `user` by default",
+									}),
+								),
+							])
+							.meta({
+								description:
+									"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
+							}),
 					}),
+					requireHeaders: true,
 					use: [adminMiddleware],
 					metadata: {
 						openapi: {
@@ -248,41 +274,57 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/create-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.createUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.createUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-create-user)
+			 */
 			createUser: createAuthEndpoint(
 				"/admin/create-user",
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string().meta({
 							description: "The email of the user",
 						}),
-						password: z.string({
+						password: z.string().meta({
 							description: "The password of the user",
 						}),
-						name: z.string({
+						name: z.string().meta({
 							description: "The name of the user",
 						}),
 						role: z
 							.union([
-								z.string({
+								z.string().meta({
 									description: "The role of the user",
 								}),
 								z.array(
-									z.string({
+									z.string().meta({
 										description: "The roles of user",
 									}),
 								),
 							])
-							.optional(),
+							.optional()
+							.meta({
+								description: `A string or array of strings representing the roles to apply to the new user. Eg: \"user\"`,
+							}),
 						/**
 						 * extra fields for user
 						 */
-						data: z.optional(
-							z.record(z.any(), {
-								description:
-									"Extra fields for the user. Including custom additional fields.",
-							}),
-						),
+						data: z.record(z.string(), z.any()).optional().meta({
+							description:
+								"Extra fields for the user. Including custom additional fields.",
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -384,65 +426,140 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			adminUpdateUser: createAuthEndpoint(
+				"/admin/update-user",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
+						data: z.record(z.any(), z.any()).meta({
+							description: "The user data to update",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "updateUser",
+							summary: "Update a user",
+							description: "Update a user's details",
+							responses: {
+								200: {
+									description: "User updated",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const canUpdateUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["update"],
+						},
+					});
+					if (!canUpdateUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS,
+							code: "YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS",
+						});
+					}
+
+					if (Object.keys(ctx.body.data).length === 0) {
+						throw new APIError("BAD_REQUEST", {
+							message: ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE,
+						});
+					}
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						ctx.body.userId,
+						ctx.body.data,
+						ctx,
+					);
+
+					return ctx.json(updatedUser as UserWithRole);
+				},
+			),
 			listUsers: createAuthEndpoint(
 				"/admin/list-users",
 				{
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z
-							.string({
-								description: "The value to search for",
-							})
-							.optional(),
+						searchValue: z.string().optional().meta({
+							description: 'The value to search for. Eg: "some name"',
+						}),
 						searchField: z
-							.enum(["email", "name"], {
+							.enum(["email", "name"])
+							.meta({
 								description:
-									"The field to search in, defaults to email. Can be `email` or `name`",
+									'The field to search in, defaults to email. Can be `email` or `name`. Eg: "name"',
 							})
 							.optional(),
 						searchOperator: z
-							.enum(["contains", "starts_with", "ends_with"], {
+							.enum(["contains", "starts_with", "ends_with"])
+							.meta({
 								description:
-									"The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`",
+									'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
 							})
 							.optional(),
 						limit: z
-							.string({
+							.string()
+							.meta({
 								description: "The number of users to return",
 							})
 							.or(z.number())
 							.optional(),
 						offset: z
-							.string({
+							.string()
+							.meta({
 								description: "The offset to start from",
 							})
 							.or(z.number())
 							.optional(),
 						sortBy: z
-							.string({
+							.string()
+							.meta({
 								description: "The field to sort by",
 							})
 							.optional(),
 						sortDirection: z
-							.enum(["asc", "desc"], {
+							.enum(["asc", "desc"])
+							.meta({
 								description: "The direction to sort by",
 							})
 							.optional(),
 						filterField: z
-							.string({
+							.string()
+							.meta({
 								description: "The field to filter by",
 							})
 							.optional(),
 						filterValue: z
-							.string({
+							.string()
+							.meta({
 								description: "The value to filter by",
 							})
 							.or(z.number())
 							.or(z.boolean())
 							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"], {
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+							.meta({
 								description: "The operator to use for the filter",
 							})
 							.optional(),
@@ -548,13 +665,28 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					}
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/list-user-sessions`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.listUserSessions`
+			 *
+			 * **client:**
+			 * `authClient.admin.listUserSessions`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-list-user-sessions)
+			 */
 			listUserSessions: createAuthEndpoint(
 				"/admin/list-user-sessions",
 				{
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
 					}),
@@ -611,12 +743,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					};
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/unban-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.unbanUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.unbanUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-unban-user)
+			 */
 			unbanUser: createAuthEndpoint(
 				"/admin/unban-user",
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
 					}),
@@ -676,19 +823,35 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/ban-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.banUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.banUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-ban-user)
+			 */
 			banUser: createAuthEndpoint(
 				"/admin/ban-user",
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
 						/**
 						 * Reason for the ban
 						 */
 						banReason: z
-							.string({
+							.string()
+							.meta({
 								description: "The reason for the ban",
 							})
 							.optional(),
@@ -696,7 +859,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						 * Number of seconds until the ban expires
 						 */
 						banExpiresIn: z
-							.number({
+							.number()
+							.meta({
 								description: "The number of seconds until the ban expires",
 							})
 							.optional(),
@@ -770,12 +934,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/impersonate-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.impersonateUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.impersonateUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-impersonate-user)
+			 */
 			impersonateUser: createAuthEndpoint(
 				"/admin/impersonate-user",
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
 					}),
@@ -880,10 +1059,26 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/stop-impersonating`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.stopImpersonating`
+			 *
+			 * **client:**
+			 * `authClient.admin.stopImpersonating`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-stop-impersonating)
+			 */
 			stopImpersonating: createAuthEndpoint(
 				"/admin/stop-impersonating",
 				{
 					method: "POST",
+					requireHeaders: true,
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx<
@@ -936,12 +1131,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					return ctx.json(adminSession);
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/revoke-user-session`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.revokeUserSession`
+			 *
+			 * **client:**
+			 * `authClient.admin.revokeUserSession`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-revoke-user-session)
+			 */
 			revokeUserSession: createAuthEndpoint(
 				"/admin/revoke-user-session",
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string({
+						sessionToken: z.string().meta({
 							description: "The session token",
 						}),
 					}),
@@ -996,12 +1206,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/revoke-user-sessions`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.revokeUserSessions`
+			 *
+			 * **client:**
+			 * `authClient.admin.revokeUserSessions`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-revoke-user-sessions)
+			 */
 			revokeUserSessions: createAuthEndpoint(
 				"/admin/revoke-user-sessions",
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
 					}),
@@ -1054,12 +1279,27 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/remove-user`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.removeUser`
+			 *
+			 * **client:**
+			 * `authClient.admin.removeUser`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-remove-user)
+			 */
 			removeUser: createAuthEndpoint(
 				"/admin/remove-user",
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
 					}),
@@ -1121,15 +1361,30 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/set-user-password`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.setUserPassword`
+			 *
+			 * **client:**
+			 * `authClient.admin.setUserPassword`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-set-user-password)
+			 */
 			setUserPassword: createAuthEndpoint(
 				"/admin/set-user-password",
 				{
 					method: "POST",
 					body: z.object({
-						newPassword: z.string({
+						newPassword: z.string().meta({
 							description: "The new password",
 						}),
-						userId: z.coerce.string({
+						userId: z.coerce.string().meta({
 							description: "The user id",
 						}),
 					}),
@@ -1186,14 +1441,33 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/admin/has-permission`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.userHasPermission`
+			 *
+			 * **client:**
+			 * `authClient.admin.hasPermission`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-has-permission)
+			 */
 			userHasPermission: createAuthEndpoint(
 				"/admin/has-permission",
 				{
 					method: "POST",
 					body: z
 						.object({
-							userId: z.coerce.string().optional(),
-							role: z.string().optional(),
+							userId: z.coerce.string().optional().meta({
+								description: `The user id. Eg: "user-id"`,
+							}),
+							role: z.string().optional().meta({
+								description: `The role to check permission for. Eg: "admin"`,
+							}),
 						})
 						.and(
 							z.union([
