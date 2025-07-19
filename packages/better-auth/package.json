@@ -666,18 +666,18 @@
     }
   },
   "dependencies": {
-    "@better-auth/utils": "0.2.6",
+    "@better-auth/utils": "0.2.5",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^0.6.0",
-    "@noble/hashes": "^1.6.1",
+    "@noble/hashes": "^1.8.0",
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0",
     "better-call": "catalog:",
     "defu": "^6.1.4",
-    "jose": "^6.0.11",
-    "kysely": "^0.28.2",
+    "jose": "^5.9.6",
+    "kysely": "^0.28.1",
     "nanostores": "^0.11.3",
-    "zod": "4.0.0"
+    "zod": "^4.0.5"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -721,20 +721,6 @@
     "unbuild": "catalog:",
     "vitest": "^1.6.0",
     "vue": "^3.5.13"
-  },
-  "dependencies": {
-    "@better-auth/utils": "0.2.5",
-    "@better-fetch/fetch": "catalog:",
-    "@noble/ciphers": "^0.6.0",
-    "@noble/hashes": "^1.8.0",
-    "@simplewebauthn/browser": "^13.0.0",
-    "@simplewebauthn/server": "^13.0.0",
-    "better-call": "catalog:",
-    "defu": "^6.1.4",
-    "jose": "^5.9.6",
-    "kysely": "^0.28.1",
-    "nanostores": "^0.11.3",
-    "zod": "^3.24.1"
   },
   "overrides": {
     "whatwg-url": "^14.0.0"
