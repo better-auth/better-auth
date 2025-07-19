@@ -191,6 +191,17 @@ export const auth = betterAuth({
 });
 ```
 
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { organizationClient } from "better-auth/client/plugins";
+import { auth } from "./auth";
+
+export const authClient = createAuthClient({
+  // pass your auth instance to infer additional fields
+  plugins: [organizationClient<typeof auth>()], // [!code highlight]
+});
+```
+
 ---
 
 ### **Additional Organization Fields**

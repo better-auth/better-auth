@@ -14,6 +14,7 @@ import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
+import type { BetterAuthPlugin } from "..";
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;
@@ -26,7 +27,7 @@ interface OrganizationClientOptions {
 }
 
 export const organizationClient = <
-	Auth extends { options: { plugins: { id: string; options: any }[] } },
+	Auth extends { options: { plugins: BetterAuthPlugin[] } },
 	CO extends OrganizationClientOptions = OrganizationClientOptions,
 >(
 	options?: CO,
