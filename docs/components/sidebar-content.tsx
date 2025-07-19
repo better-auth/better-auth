@@ -749,7 +749,6 @@ export const contents: Content[] = [
 			{
 				title: "Roblox",
 				href: "/docs/authentication/roblox",
-				isNew: true,
 				icon: () => (
 					<svg
 						version="1.1"
@@ -810,7 +809,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 			{
 				title: "Zoom",
-				isNew: true,
 				href: "/docs/authentication/zoom",
 				icon: (props?: SVGProps<any>) => (
 					<svg
@@ -1479,7 +1477,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Have I Been Pwned",
 				href: "/docs/plugins/have-i-been-pwned",
-				isNew: true,
 				icon: () => <p className="text-xs">';--</p>,
 			},
 			{
@@ -1524,7 +1521,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "One-Time Token",
 				href: "/docs/plugins/one-time-token",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1675,7 +1671,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Dub",
 				href: "/docs/plugins/dub",
-				isNew: true,
 				icon: () => (
 					<svg
 						width="1.2em"
