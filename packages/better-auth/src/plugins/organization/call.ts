@@ -5,7 +5,7 @@ import type { Role } from "../access";
 import type { OrganizationOptions } from "./types";
 import type { defaultRoles } from "./access/statement";
 
-export const orgMiddleware = createAuthMiddleware(async (ctx) => {
+export const orgMiddleware = createAuthMiddleware(async () => {
 	return {} as {
 		orgOptions: OrganizationOptions;
 		roles: typeof defaultRoles & {
@@ -13,6 +13,7 @@ export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 		getSession: (context: GenericEndpointContext) => Promise<{
 			session: Session & {
+				activeTeamId?: string;
 				activeOrganizationId?: string;
 			};
 			user: User;
@@ -31,6 +32,7 @@ export const orgSessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = ctx.context.session as {
 			session: Session & {
+				activeTeamId?: string;
 				activeOrganizationId?: string;
 			};
 			user: User;
