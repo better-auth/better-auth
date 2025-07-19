@@ -12,6 +12,7 @@ import type { PrettifyDeep } from "../../types/helper";
 import type { InvitationStatus } from "./schema";
 import { admin } from "../admin";
 import { ownerAc } from "./access";
+import { nextCookies } from "../../integrations/next-js";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -1398,7 +1399,7 @@ describe("Additional Fields", async () => {
 			user: {
 				modelName: "users",
 			},
-			plugins: [organization(orgOptions)],
+			plugins: [organization(orgOptions), nextCookies()],
 			logger: {
 				level: "error",
 			},
@@ -1420,10 +1421,26 @@ describe("Additional Fields", async () => {
 		},
 	});
 
-	it("Expect team endpoints to still be defined", async () => {
+	it("Expect team endpoints to still be defined on authClient", async () => {
 		const teams = client.organization.createTeam;
 		expect(teams).toBeDefined();
 		expectTypeOf<typeof teams>().not.toEqualTypeOf<undefined>();
+	});
+
+	it("Should infer the organization schema", async () => {
+		const org = client.organization.create;
+		type Params = Parameters<typeof org>[0];
+		expect(org).toBeDefined();
+		expectTypeOf<Omit<Params, "fetchOptions">>().toEqualTypeOf<{
+			name: string;
+			slug: string;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
+			metadata?: Record<string, any> | undefined;
+			userId?: string | undefined;
+			logo?: string | undefined;
+			keepCurrentActiveOrganization?: boolean | undefined;
+		}>();
 	});
 
 	type ExpectedResult = PrettifyDeep<{
@@ -1630,6 +1647,7 @@ describe("Additional Fields", async () => {
 			},
 			headers,
 		});
+
 		if (!updatedTeam) throw new Error("Updated team is null");
 		expect(updatedTeam?.teamOptionalField).toBe("hey3");
 		expect(updatedTeam?.teamRequiredField).toBe("hey4");
