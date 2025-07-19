@@ -312,6 +312,10 @@ export interface StripeOptions {
 		organization?: {
 			enabled: boolean;
 		};
+		/**
+		 * Is the subscriptiono Usage Based
+		 */
+		usageBased?: boolean;
 	};
 	onEvent?: (event: Stripe.Event) => Promise<void>;
 	/**
@@ -319,6 +323,16 @@ export interface StripeOptions {
 	 */
 	schema?: InferOptionSchema<typeof subscriptions & typeof user>;
 }
+
+export type Usage = {
+	id: string;
+	plan: string;
+	referenceId: string;
+	usage: number;
+	startDate: Date;
+	latestUsageDate: Date;
+	disabled: Boolean;
+};
 
 export interface Customer {
 	id: string;

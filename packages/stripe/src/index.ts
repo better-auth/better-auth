@@ -12,7 +12,6 @@ import {
 	originCheck,
 	getSessionFromCtx,
 } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -24,8 +23,14 @@ import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
+	Usage,
 } from "./types";
-import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
+import {
+	getPlanByName,
+	getPlanByPriceId,
+	getPlans,
+	getTotalUsage,
+} from "./utils";
 import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
@@ -39,6 +44,7 @@ const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
+	USAGE_LIMIT_REACHED: "Usage limit reached",
 } as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
@@ -104,6 +110,41 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 			}
 		});
+
+	/**
+	 * THIS MIDDLEWARE CHECK IF THE USER HAS REACHED USAGE LIMIT
+	 */
+	const enforceUsageLimit = createAuthMiddleware(async (ctx) => {
+		const session = ctx.context.session;
+		if (!session) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		const referenceId =
+			ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
+
+		// Check plan limit
+		const totalUsage = await getTotalUsage(
+			ctx,
+			referenceId,
+			ctx.body?.plan,
+			options,
+		);
+		const planByName = await getPlanByName(options, ctx.body?.plan);
+		if (!planByName) {
+			throw new APIError("BAD_REQUEST", {
+				message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+			});
+		}
+
+		if (
+			totalUsage.totalUsage + ctx.body.usage >
+			planByName?.limits!.usageLimit
+		) {
+			throw new APIError("BAD_REQUEST", {
+				message: STRIPE_ERROR_CODES.USAGE_LIMIT_REACHED,
+			});
+		}
+	});
 
 	const subscriptionEndpoints = {
 		upgradeSubscription: createAuthEndpoint(
@@ -239,19 +280,26 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					try {
-						const stripeCustomer = await client.customers.create(
-							{
+						// Try to find existing Stripe customer by email
+						const existingCustomers = await client.customers.list({
+							email: user.email,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingCustomers.data[0];
+
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create({
 								email: user.email,
 								name: user.name,
 								metadata: {
 									...ctx.body.metadata,
 									userId: user.id,
 								},
-							},
-							{
-								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
-							},
-						);
+							});
+						}
+
+						// Update local DB with Stripe customer ID
 						await ctx.context.adapter.update({
 							model: "user",
 							update: {
@@ -264,6 +312,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						});
+
 						customerId = stripeCustomer.id;
 					} catch (e: any) {
 						ctx.context.logger.error(e);
@@ -952,6 +1001,167 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 	} as const;
+
+	const usageTracking = {
+		/**
+		 * This creates a new Usage record or increments the existing one
+		 */
+		trackUsage: createAuthEndpoint(
+			"/subscription/usage/track",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					referenceId: z.string().optional(),
+					usage: z.number(),
+				}),
+				use: [sessionMiddleware, enforceUsageLimit],
+			},
+			async (ctx) => {
+				const { plan, usage, referenceId } = ctx.body;
+				const { user } = ctx.context.session;
+				const refId = referenceId || user.id;
+
+				const subscription = await ctx.context.adapter.findOne({
+					model: "subscription",
+					where: [{ field: "plan", value: plan }],
+				});
+
+				if (!subscription) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+
+				// Compare with today
+				const today = new Date();
+				const todayDate = new Date(
+					today.getFullYear(),
+					today.getMonth(),
+					today.getDate(),
+				);
+
+				// Check plan limit
+				const totalUsage = await getTotalUsage(
+					ctx,
+					refId,
+					ctx.body?.plan,
+					options,
+				);
+
+				// Get all usage
+				const existing = await ctx.context.adapter.findMany({
+					model: "usage",
+					where: [
+						{ field: "referenceId", value: refId },
+						{ field: "plan", value: plan },
+					],
+				});
+
+				// Get the last usage data from today
+				const latest = (existing as Usage[]).find((u) => {
+					const latestDate = new Date(u.latestUsageDate);
+					return (
+						latestDate.getFullYear() === todayDate.getFullYear() &&
+						latestDate.getMonth() === todayDate.getMonth() &&
+						latestDate.getDate() === todayDate.getDate()
+					);
+				});
+
+				if (latest && latest.disabled === false) {
+					// Same day: increment usage and update latestUsageDate
+					const res = await ctx.context.adapter.update({
+						model: "usage",
+						where: [{ field: "referenceId", value: refId }],
+						update: {
+							usage: latest.usage + usage,
+							latestUsageDate: today,
+						},
+					});
+					return ctx.json({ data: res, totalUsage: totalUsage });
+				} else {
+					// New day: create new usage entry
+					const res = await ctx.context.adapter.create({
+						model: "usage",
+						data: {
+							referenceId: refId,
+							plan,
+							usage,
+							startDate: today,
+							latestUsageDate: today,
+							disabled: false,
+						},
+					});
+					return ctx.json({ data: res, totalUsage: totalUsage });
+				}
+			},
+		),
+		/**
+		 * This returns the total usage for a plan of a user
+		 */
+		getUsage: createAuthEndpoint(
+			"/subscription/usage/get",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					referenceId: z.string(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { plan, referenceId } = ctx.body;
+				const { user } = ctx.context.session;
+				const refId = referenceId || user.id;
+
+				const totalUsage = await getTotalUsage(ctx, refId, plan, options);
+
+				// Check plan limit
+				const planByName = await getPlanByName(options, plan);
+				if (!planByName) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+					});
+				}
+
+				return ctx.json({ totalUsage, limit: planByName.limits?.usage });
+			},
+		),
+		/**
+		 * Reset Usage
+		 */
+		resetUsage: createAuthEndpoint(
+			"/subscription/usage/reset",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					referenceId: z.string(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { plan, referenceId } = ctx.body;
+				const { user } = ctx.context.session;
+
+				const refId = referenceId || user.id;
+
+				await ctx.context.adapter.updateMany({
+					model: "usage",
+					where: [
+						{ field: "referenceId", value: refId },
+						{ field: "plan", value: plan },
+					],
+					update: {
+						disabled: true,
+					},
+				});
+
+				return ctx.json({ success: true });
+			},
+		),
+	} as const;
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -1018,6 +1228,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.json({ success: true });
 				},
 			),
+			...usageTracking,
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {

@@ -50,6 +50,7 @@ describe("stripe", async () => {
 		account: [],
 		customer: [],
 		subscription: [],
+		usage: [],
 	};
 	const memory = memoryAdapter(data);
 	const stripeOptions = {
@@ -63,13 +64,20 @@ describe("stripe", async () => {
 					priceId: process.env.STRIPE_PRICE_ID_1!,
 					name: "starter",
 					lookupKey: "lookup_key_123",
+					limits: {
+						usageLimit: 100,
+					},
 				},
 				{
 					priceId: process.env.STRIPE_PRICE_ID_2!,
 					name: "premium",
 					lookupKey: "lookup_key_234",
+					limits: {
+						usageLimit: 200,
+					},
 				},
 			],
+			usageBased: true,
 		},
 	} satisfies StripeOptions;
 	const auth = betterAuth({
@@ -110,6 +118,7 @@ describe("stripe", async () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
+		data.usage = [];
 
 		vi.clearAllMocks();
 	});
@@ -816,5 +825,261 @@ describe("stripe", async () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	/**
+	 * 	Usage based subscription tests
+	 */
+
+	it("should increment daily usage", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(data["usage"][0]["usage"]).toBe(10);
+
+		var abc = await authClient.subscription.usage.track({
+			usage: 12,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(data["usage"][0]["usage"]).toBe(32);
+	});
+
+	it("should throw an error when usage is reached", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		var res = await authClient.subscription.usage.track({
+			usage: 101,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error!.code).toBe("USAGE_LIMIT_REACHED");
+	});
+
+	it("should get total usage", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		var abc = await authClient.subscription.usage.track({
+			usage: 12,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 100,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totalUsage = await authClient.subscription.usage.get({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(totalUsage.data?.totalUsage.totalUsage).toBe(22);
+	});
+
+	it("should reset total usage", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await authClient.subscription.usage.track({
+			usage: 10,
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totalUsage = await authClient.subscription.usage.get({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(totalUsage.data?.totalUsage.totalUsage).toBe(10);
+
+		await authClient.subscription.usage.reset({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const totalUsage2 = await authClient.subscription.usage.get({
+			plan: "starter",
+			referenceId: userRes.user.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(totalUsage2.data?.totalUsage.totalUsage).toBe(0);
+	});
+
+	it("should only call Stripe customers.create once for signup and upgrade", async () => {
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
 	});
 });
