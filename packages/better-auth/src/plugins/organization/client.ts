@@ -12,7 +12,6 @@ import { type AccessControl, type Role } from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
-import { BetterAuthError } from "../../error";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
 
@@ -26,17 +25,40 @@ interface OrganizationClientOptions {
 	};
 }
 
-export const organizationClient = <O extends OrganizationClientOptions>(
-	options?: O,
+export const organizationClient = <
+	Auth extends { options: { plugins: { id: string; options: any }[] } },
+	CO extends OrganizationClientOptions = OrganizationClientOptions,
+>(
+	options?: CO,
 ) => {
 	const $listOrg = atom<boolean>(false);
 	const $activeOrgSignal = atom<boolean>(false);
 	const $activeMemberSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
+	type Statements = CO["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? Statements[key][number]
+				: never
+		>;
+	};
+	type PermissionExclusive =
+		| {
+				/**
+				 * @deprecated Use `permissions` instead
+				 */
+				permission: PermissionType;
+				permissions?: never;
+		  }
+		| {
+				permissions: PermissionType;
+				permission?: never;
+		  };
+
 	const roles = {
 		admin: adminAc,
 		member: memberAc,
@@ -44,67 +66,71 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		...options?.roles,
 	};
 
-	type OrganizationReturn = O["teams"] extends { enabled: true }
+	type OrganizationReturn = CO["teams"] extends { enabled: true }
 		? {
-				members: InferMember<O>[];
-				invitations: InferInvitation<O>[];
+				members: InferMember<CO>[];
+				invitations: InferInvitation<CO>[];
 				teams: Team[];
 			} & Organization
 		: {
-				members: InferMember<O>[];
-				invitations: InferInvitation<O>[];
+				members: InferMember<CO>[];
+				invitations: InferInvitation<CO>[];
 			} & Organization;
+
+	type Schema = Auth["options"]["plugins"][number] extends {
+		id: "organization";
+		options: infer O;
+	}
+		? O extends { schema?: infer S }
+			? O["schema"]
+			: undefined
+		: undefined;
+
 	return {
 		id: "organization",
 		$InferServerPlugin: {} as ReturnType<
 			typeof organization<{
-				ac: O["ac"] extends AccessControl
-					? O["ac"]
+				ac: CO["ac"] extends AccessControl
+					? CO["ac"]
 					: AccessControl<DefaultStatements>;
-				roles: O["roles"] extends Record<string, Role>
-					? O["roles"]
+				roles: CO["roles"] extends Record<string, Role>
+					? CO["roles"]
 					: {
 							admin: Role;
 							member: Role;
 							owner: Role;
 						};
 				teams: {
-					enabled: O["teams"] extends { enabled: true } ? true : false;
+					enabled: CO["teams"] extends { enabled: true } ? true : false;
 				};
+				schema: Schema;
 			}>
 		>,
 		getActions: ($fetch) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
-				Invitation: {} as InferInvitation<O>,
-				Member: {} as InferMember<O>,
+				Invitation: {} as InferInvitation<CO>,
+				Member: {} as InferMember<CO>,
 				Team: {} as Team,
 			},
 			organization: {
 				checkRolePermission: <
-					R extends O extends { roles: any }
-						? keyof O["roles"]
+					R extends CO extends { roles: any }
+						? keyof CO["roles"]
 						: "admin" | "member" | "owner",
-				>(data: {
-					role: R;
-					permission: {
-						//@ts-expect-error fix this later
-						[key in keyof Statements]?: Statements[key][number][];
-					};
-				}) => {
-					if (Object.keys(data.permission).length > 1) {
-						throw new BetterAuthError(
-							"you can only check one resource permission at a time.",
-						);
-					}
+				>(
+					data: PermissionExclusive & {
+						role: R;
+					},
+				) => {
 					const isAuthorized = hasPermission({
 						role: data.role as string,
 						options: {
 							ac: options?.ac,
 							roles: roles,
 						},
-						permission: data.permission as any,
+						permissions: (data.permissions ?? data.permission) as any,
 					});
 					return isAuthorized;
 				},

@@ -156,9 +156,9 @@ describe("phone auth flow", async () => {
 				throw: true,
 			},
 		});
-		expect(session.user.phoneNumberVerified).toBe(true);
-		expect(session.user.email).toBe("temp-+251911121314");
-		expect(session.session.token).toBeDefined();
+		expect(session?.user.phoneNumberVerified).toBe(true);
+		expect(session?.user.email).toBe("temp-+251911121314");
+		expect(session?.session.token).toBeDefined();
 	});
 
 	let headers = new Headers();
@@ -296,12 +296,17 @@ describe("verify phone-number", async (it) => {
 
 describe("reset password flow attempts", async (it) => {
 	let otp = "";
+	let resetOtp = "";
 
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
 				async sendOTP({ code }) {
+					console.log("sendOTP", code);
 					otp = code;
+				},
+				sendPasswordResetOTP(data, request) {
+					resetOtp = data.code;
 				},
 				signUpOnVerification: {
 					getTempEmail(phoneNumber) {
@@ -333,7 +338,7 @@ describe("reset password flow attempts", async (it) => {
 			code: otp,
 		});
 
-		await client.phoneNumber.forgetPassword({
+		await client.phoneNumber.requestPasswordReset({
 			phoneNumber: testPhoneNumber,
 		});
 
@@ -357,16 +362,78 @@ describe("reset password flow attempts", async (it) => {
 	});
 
 	it("should successfully reset password with correct code", async () => {
-		await client.phoneNumber.sendOtp({
+		await client.phoneNumber.requestPasswordReset({
 			phoneNumber: testPhoneNumber,
 		});
 
-		const res = await client.phoneNumber.verify({
+		const resetPasswordRes = await client.phoneNumber.resetPassword({
 			phoneNumber: testPhoneNumber,
-			code: otp,
+			otp: resetOtp,
+			newPassword: "password",
 		});
 
-		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expect(resetPasswordRes.error).toBe(null);
+		expect(resetPasswordRes.data?.status).toBe(true);
+	});
+
+	it("shouldn't allow to re-use the same OTP code", async () => {
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: testPhoneNumber,
+			otp: resetOtp,
+			newPassword: "password",
+		});
+		expect(res.error?.status).toBe(400);
+	});
+});
+
+describe("phone number verification requirement", async () => {
+	let otp = "";
+	const { customFetchImpl } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				requireVerification: true,
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const testPhoneNumber = "+251911121314";
+	const testPassword = "password123";
+	const testEmail = "test2@test.com";
+
+	it("should not allow sign in with unverified phone number and trigger OTP send", async () => {
+		await client.signUp.email({
+			email: testEmail,
+			password: testPassword,
+			name: "test",
+			phoneNumber: testPhoneNumber,
+		});
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber: testPhoneNumber,
+			password: testPassword,
+		});
+		expect(signInRes.error?.status).toBe(401);
+		expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
+		expect(otp).toHaveLength(6);
 	});
 });

@@ -3,9 +3,9 @@ title: Passkey
 description: Passkey
 ---
 
-Passkeys are a secure, passwordless authentication method using cryptographic key pairs, supported by WebAuthn and FIDO2 standards in web browsers. They replace passwords with unique key pairs: a private key stored on the user’s device and a public key shared with the website. Users can log in using biometrics, PINs, or security keys, providing strong, phishing-resistant authentication without traditional passwords.
+Passkeys are a secure, passwordless authentication method using cryptographic key pairs, supported by WebAuthn and FIDO2 standards in web browsers. They replace passwords with unique key pairs: a private key stored on the user's device and a public key shared with the website. Users can log in using biometrics, PINs, or security keys, providing strong, phishing-resistant authentication without traditional passwords.
 
-The passkey plugin implementation is powered by [simple-web-authn](https://simplewebauthn.dev/) behind the scenes.
+The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplewebauthn.dev/) behind the scenes.
 
 ## Installation
 
@@ -20,7 +20,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
         `rpName`: Human-readable title for your website
 
-        `origin`: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do **NOT** include any trailing /
+        `origin`: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do **NOT** include any trailing /
 
         `authenticatorSelection`: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
             - `authenticatorAttachment`: Specifies the type of authenticator
@@ -72,16 +72,16 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
     <Step>
         ### Add the client plugin
 
-         ```ts title="auth-client.ts"
-            import { createAuthClient } from "better-auth/client"
-            import { passkeyClient } from "better-auth/client/plugins"
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { passkeyClient } from "better-auth/client/plugins"
 
-            const authClient =  createAuthClient({
-                plugins: [ // [!code highlight]
-                    passkeyClient() // [!code highlight]
-                ] // [!code highlight]
-            })
-            ```
+        export const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                passkeyClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
     </Step>
 
 </Steps>
@@ -92,55 +92,97 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
 To add or register a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
 
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client";
-import { passkeyClient } from "better-auth/client/plugins";
-
-const authClient = createAuthClient({
-  plugins: [
-    // [!code highlight]
-    passkeyClient(), // [!code highlight]
-  ], // [!code highlight]
-});
-
-// Default behavior allows both platform and cross-platform passkeys
-const { data, error } = await authClient.passkey.addPasskey();
+<APIMethod path="/passkey/add-passkey" method="POST" isClientOnly>
+```ts
+type addPasskey = {
+    /**
+     * You can also specify the type of authenticator you want to register. Default behavior allows both platform and cross-platform passkeys
+    */
+    authenticatorAttachment?: "platform" | "cross-platform" = "cross-platform"
+}
 ```
+</APIMethod>
 
-This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
 
-You can also specify the type of authenticator you want to register. The authenticatorAttachment can be either `platform` or `cross-platform`.
+### Sign in with a passkey
 
-```ts title="auth-client.ts"
-// Register a cross-platform passkey showing only a QR code
-// for the user to scan as well as the option to plug in a security key
-const { data, error } = await authClient.passkey.addPasskey({
-  authenticatorAttachment: 'cross-platform'
-});
+To sign in with a passkey you can use the `signIn.passkey` method. This will prompt the user to sign in with their passkey.
+
+
+<APIMethod path="/sign-in/passkey" method="POST" isClientOnly>
+```ts
+type signInPasskey = {
+    /**
+     * The email of the user to sign in.
+     */
+    email: string = "example@gmail.com"
+    /**
+     * Browser autofill, a.k.a. Conditional UI. Read more: https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui
+    */
+    autoFill?: boolean = true
+    /**
+     * The URL to redirect to after the user has signed in.
+    */
+    callbackURL?: string = "/dashboard"
+}
 ```
+</APIMethod>
 
-### Signin with a passkey
+### List passkeys
 
-To signin with a passkey you can use the passkeySignIn method. This will prompt the user to sign in with their passkey.
+You can list all of the passkeys for the authenticated user by calling `passkey.listUserPasskeys`:
 
-Signin method accepts:
-
-`autoFill`: Browser autofill, a.k.a. Conditional UI. [read more](https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui)
-
-`callbackURL`: The URL to redirect to after the user has signed in. (optional)
-
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client";
-import { passkeyClient } from "better-auth/client/plugins";
-
-const authClient = createAuthClient({
-  plugins: [
-    // [!code highlight]
-    passkeyClient(), // [!code highlight]
-  ], // [!code highlight]
-});
-const data = await authClient.signIn.passkey();
+<APIMethod
+  path="/passkey/list-user-passkeys"
+  method="GET"
+  requireSession
+  resultVariable="passkeys"
+>
+```ts
+type listPasskeys = {
+}
 ```
+</APIMethod>
+
+### Deleting passkeys
+
+You can delete a passkey by calling `passkey.delete` and providing the passkey ID.
+
+<APIMethod
+  path="/passkey/delete-passkey"
+  method="POST"
+  requireSession
+>
+```ts
+type deletePasskey = {
+    /**
+     * The ID of the passkey to delete. 
+     */
+    id: string = "some-passkey-id"
+}
+```
+</APIMethod>
+
+### Updating passkey names
+
+<APIMethod
+  path="/passkey/update-passkey"
+  method="POST"
+  requireSession
+>
+```ts
+type updatePasskey = {
+    /**
+     * The ID of the passkey which you want to update.
+     */
+    id: string = "id of passkey"
+    /**
+     * The new name which the passkey will be updated to. 
+     */
+    name: string = "my-new-passkey-name"
+}
+```
+</APIMethod>
 
 ### Conditional UI
 
@@ -225,7 +267,7 @@ Table Name: `passkey`
         { 
             name: "userId", 
             type: "string", 
-            description: "The id of the user",
+            description: "The ID of the user",
             isForeignKey: true
         },
         {
@@ -258,6 +300,12 @@ Table Name: `passkey`
             type: "Date", 
             description: "The time when the passkey was created",
         },
+        {
+                name: "aaguid",
+                type: "string",
+                description: "Authenticator's Attestation GUID indicating the type of the authenticator",
+                isOptional: true
+        },
     ]}
     />
 
@@ -267,6 +315,8 @@ Table Name: `passkey`
 
 **rpName**: Human-readable title for your website.
 
-**origin**: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do NOT include any trailing /.
+**origin**: The URL at which registrations and authentications should occur. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
 
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. When unspecified, both platform and cross-platform authenticators are allowed with `preferred` settings for `residentKey` and `userVerification`.
+
+**aaguid**: (optional) Authenticator Attestation GUID. This is a unique identifier for the passkey provider (device or authenticator type) and can be used to identify the type of passkey device used during registration or authentication.

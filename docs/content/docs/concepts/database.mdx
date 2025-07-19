@@ -164,7 +164,7 @@ Table Name: `session`
     {
       name: "userId",
       type: "string",
-      description: "The id of the user",
+      description: "The ID of the user",
       isForeignKey: true,
     },
     {
@@ -218,19 +218,19 @@ Table Name: `account`
     {
       name: "userId",
       type: "string",
-      description: "The id of the user",
+      description: "The ID of the user",
       isForeignKey: true,
     },
     {
       name: "accountId",
       type: "string",
       description:
-        "The id of the account as provided by the SSO or equal to userId for credential accounts",
+        "The ID of the account as provided by the SSO or equal to userId for credential accounts",
     },
     {
       name: "providerId",
       type: "string",
-      description: "The id of the provider",
+      description: "The ID of the provider",
     },
     {
       name: "accessToken",
@@ -265,7 +265,7 @@ Table Name: `account`
     {
       name: "idToken",
       type: "string",
-      description: "The id token returned from the provider",
+      description: "The ID token returned from the provider",
       isOptional: true,
     },
     {
@@ -434,7 +434,7 @@ res.user.lang; // > "fr"
 
 <Callout>
   See the
-  [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client)
+  [TypeScript](/docs/concepts/typescript#inferring-additional-fields-on-client)
   documentation for more information on how to infer additional fields on the
   client side.
 </Callout>
@@ -474,9 +474,9 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` object in your auth config.
+Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced.database.generateId` option in your auth config.
 
-You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
+You can also disable ID generation by setting the `advanced.database.generateId` option to `false`. This will assume your database will generate the ID automatically.
 
 **Example: Automatic Database IDs**
 
@@ -489,7 +489,9 @@ export const auth = betterAuth({
     db: db,
   },
   advanced: {
-    generateId: false,
+    database: {
+      generateId: false,
+    },
   },
 });
 ```
@@ -503,7 +505,7 @@ There are two types of hooks you can define:
 #### 1. Before Hook
 
 - **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
-- **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the orginal payload.
+- **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
 
 #### 2. After Hook
 
@@ -568,6 +570,30 @@ export const auth = betterAuth({
 });
 ```
 
+#### Using the Context Object
+
+The context object (`ctx`), passed as the second argument to the hook, contains useful information. For `update` hooks, this includes the current `session`, which you can use to access the logged-in user's details.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  databaseHooks: {
+    user: {
+      update: {
+        before: async (data, ctx) => {
+          // You can access the session from the context object.
+          if (ctx.context.session) {
+            console.log("User update initiated by:", ctx.context.session.userId);
+          }
+          return { data };
+        },
+      },
+    },
+  },
+});
+```
+
 Much like standard hooks, database hooks also provide a `ctx` object that offers a variety of useful properties. Learn more in the [Hooks Documentation](/docs/concepts/hooks#ctx).
 
 ## Plugins Schema
@@ -583,4 +609,4 @@ To add new tables and columns to your database, you have two options:
 `CLI`: Use the migrate or generate command. These commands will scan your database and guide you through adding any missing tables or columns.
 `Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
 
-Both methods ensure your database schema stays up-to-date with your plugins' requirements.
+Both methods ensure your database schema stays up to date with your plugins' requirements.

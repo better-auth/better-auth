@@ -1,12 +1,12 @@
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { SocialProviderListEnum } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { SocialProviderListEnum } from "../../social-providers";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -18,7 +18,8 @@ export const signInSocial = createAuthEndpoint(
 			 * has signed in.
 			 */
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"Callback URL to redirect to after the user has signed in",
 				})
@@ -36,7 +37,8 @@ export const signInSocial = createAuthEndpoint(
 			 * the current url.
 			 */
 			errorCallbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "Callback URL to redirect to if an error happens",
 				})
 				.optional(),
@@ -51,7 +53,8 @@ export const signInSocial = createAuthEndpoint(
 			 * yourself like in a popup or a different tab.
 			 */
 			disableRedirect: z
-				.boolean({
+				.boolean()
+				.meta({
 					description:
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
@@ -72,14 +75,15 @@ export const signInSocial = createAuthEndpoint(
 					/**
 					 * ID token from the provider
 					 */
-					token: z.string({
+					token: z.string().meta({
 						description: "ID token from the provider",
 					}),
 					/**
 					 * The nonce used to generate the token
 					 */
 					nonce: z
-						.string({
+						.string()
+						.meta({
 							description: "Nonce used to generate the token",
 						})
 						.optional(),
@@ -87,7 +91,8 @@ export const signInSocial = createAuthEndpoint(
 					 * Access token from the provider
 					 */
 					accessToken: z
-						.string({
+						.string()
+						.meta({
 							description: "Access token from the provider",
 						})
 						.optional(),
@@ -95,7 +100,8 @@ export const signInSocial = createAuthEndpoint(
 					 * Refresh token from the provider
 					 */
 					refreshToken: z
-						.string({
+						.string()
+						.meta({
 							description: "Refresh token from the provider",
 						})
 						.optional(),
@@ -103,18 +109,16 @@ export const signInSocial = createAuthEndpoint(
 					 * Expiry date of the token
 					 */
 					expiresAt: z
-						.number({
+						.number()
+						.meta({
 							description: "Expiry date of the token",
 						})
 						.optional(),
 				}),
-				{
-					description:
-						"ID token from the provider to sign in the user with id token",
-				},
 			),
 			scopes: z
-				.array(z.string(), {
+				.array(z.string())
+				.meta({
 					description:
 						"Array of scopes to request from the provider. This will override the default scopes passed.",
 				})
@@ -127,7 +131,8 @@ export const signInSocial = createAuthEndpoint(
 			 * true
 			 */
 			requestSignUp: z
-				.boolean({
+				.boolean()
+				.meta({
 					description:
 						"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 				})
@@ -136,7 +141,8 @@ export const signInSocial = createAuthEndpoint(
 			 * The login hint to use for the authorization code request
 			 */
 			loginHint: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"The login hint to use for the authorization code request",
 				})
@@ -202,8 +208,8 @@ export const signInSocial = createAuthEndpoint(
 												],
 											},
 										},
-										required: ["redirect", "token", "user"],
 									},
+									required: ["redirect", "token", "user"],
 								},
 							},
 						},
@@ -263,14 +269,7 @@ export const signInSocial = createAuthEndpoint(
 					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 				});
 			}
-			const mapProfileToUser = await provider.options?.mapProfileToUser?.(
-				userInfo.user,
-			);
-			const userData = {
-				...userInfo.user,
-				...mapProfileToUser,
-			};
-			if (!userData.email) {
+			if (!userInfo.user.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
 				});
@@ -280,18 +279,19 @@ export const signInSocial = createAuthEndpoint(
 			}
 			const data = await handleOAuthUserInfo(c, {
 				userInfo: {
-					...userData,
-					email: userData.email,
-					id: userData.id,
-					name: userData.name || "",
-					image: userData.image,
-					emailVerified: userData.emailVerified || false,
+					...userInfo.user,
+					email: userInfo.user.email,
+					id: userInfo.user.id,
+					name: userInfo.user.name || "",
+					image: userInfo.user.image,
+					emailVerified: userInfo.user.emailVerified || false,
 				},
 				account: {
 					providerId: provider.id,
 					accountId: userInfo.user.id,
 					accessToken: c.body.idToken.accessToken,
 				},
+				callbackURL: c.body.callbackURL,
 				disableSignUp:
 					(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 					provider.disableSignUp,
@@ -342,13 +342,13 @@ export const signInEmail = createAuthEndpoint(
 			/**
 			 * Email of the user
 			 */
-			email: z.string({
+			email: z.string().meta({
 				description: "Email of the user",
 			}),
 			/**
 			 * Password of the user
 			 */
-			password: z.string({
+			password: z.string().meta({
 				description: "Password of the user",
 			}),
 			/**
@@ -356,7 +356,8 @@ export const signInEmail = createAuthEndpoint(
 			 * verification and for possible redirects
 			 */
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"Callback URL to use as a redirect for email verification",
 				})
@@ -366,7 +367,8 @@ export const signInEmail = createAuthEndpoint(
 			 * @default true
 			 */
 			rememberMe: z
-				.boolean({
+				.boolean()
+				.meta({
 					description:
 						"If this is false, the session will not be remembered. Default is `true`.",
 				})
@@ -463,6 +465,8 @@ export const signInEmail = createAuthEndpoint(
 		});
 
 		if (!user) {
+			// Hash password to prevent timing attacks from revealing valid email addresses
+			// By hashing passwords for invalid emails, we ensure consistent response times
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
@@ -506,23 +510,29 @@ export const signInEmail = createAuthEndpoint(
 					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
-			const token = await createEmailVerificationToken(
-				ctx.context.secret,
-				user.user.email,
-				undefined,
-				ctx.context.options.emailVerification?.expiresIn,
-			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-			await ctx.context.options.emailVerification.sendVerificationEmail(
-				{
-					user: user.user,
-					url,
-					token,
-				},
-				ctx.request,
-			);
+
+			if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+				const token = await createEmailVerificationToken(
+					ctx.context.secret,
+					user.user.email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
+				const url = `${
+					ctx.context.baseURL
+				}/verify-email?token=${token}&callbackURL=${
+					ctx.body.callbackURL || "/"
+				}`;
+				await ctx.context.options.emailVerification.sendVerificationEmail(
+					{
+						user: user.user,
+						url,
+						token,
+					},
+					ctx.request,
+				);
+			}
+
 			throw new APIError("FORBIDDEN", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
@@ -530,7 +540,7 @@ export const signInEmail = createAuthEndpoint(
 
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
-			ctx.headers,
+			ctx,
 			ctx.body.rememberMe === false,
 		);
 

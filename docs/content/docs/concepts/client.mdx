@@ -28,7 +28,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
             ```ts  title="lib/auth-client.ts" 
             import { createAuthClient } from "better-auth/client"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
             ```
     </Tab>
@@ -36,7 +36,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
             ```ts  title="lib/auth-client.ts"  
             import { createAuthClient } from "better-auth/react"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
             ```
     </Tab>
@@ -44,7 +44,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
             ```ts  title="lib/auth-client.ts" 
             import { createAuthClient } from "better-auth/vue"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
             ```
     </Tab>
@@ -52,7 +52,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
             ```ts  title="lib/auth-client.ts" 
             import { createAuthClient } from "better-auth/svelte"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
             ```
     </Tab>
@@ -60,7 +60,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
             ```ts title="lib/auth-client.ts" 
             import { createAuthClient } from "better-auth/solid"
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
             ```
     </Tab>
@@ -121,7 +121,7 @@ On top of normal methods, the client provides hooks to easily access different r
                 <button v-if="!session.data" @click="() => authClient.signIn.social({
                     provider: 'github'
                 })">
-                    Continue with github
+                    Continue with GitHub
                 </button>
                 <div>
                     <pre>{{ session.data }}</pre>
@@ -169,7 +169,7 @@ On top of normal methods, the client provides hooks to easily access different r
                         });
                     }}
                     >
-                    Continue with github
+                    Continue with GitHub
                     </button>
                 {/if}
                 </div>
@@ -305,7 +305,7 @@ const authClient = createAuthClient();
 
 type ErrorTypes = Partial<
 	Record<
-		keyof typeof client.$ERROR_CODES,
+		keyof typeof authClient.$ERROR_CODES,
 		{
 			en: string;
 			es: string;
@@ -334,7 +334,7 @@ const { error } = await authClient.signUp.email({
 	name: "User",
 });
 if(error?.code){
-    alert(getErrorMessage(error.code), "en");
+    alert(getErrorMessage(error.code, "en"));
 }
 ```
 

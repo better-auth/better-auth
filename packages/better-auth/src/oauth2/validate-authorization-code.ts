@@ -1,8 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
-import { jwtVerify } from "jose";
-import { base64Url } from "@better-auth/utils/base64";
+import { base64 } from "@better-auth/utils/base64";
 
 export async function validateAuthorizationCode({
 	code,
@@ -12,6 +12,8 @@ export async function validateAuthorizationCode({
 	tokenEndpoint,
 	authentication,
 	deviceId,
+	headers,
+	additionalParams = {},
 }: {
 	code: string;
 	redirectURI: string;
@@ -20,12 +22,15 @@ export async function validateAuthorizationCode({
 	deviceId?: string;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
+	headers?: Record<string, string>;
+	additionalParams?: Record<string, string>;
 }) {
 	const body = new URLSearchParams();
-	const headers: Record<string, any> = {
+	const requestHeaders: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 		"user-agent": "better-auth",
+		...headers,
 	};
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
@@ -33,19 +38,25 @@ export async function validateAuthorizationCode({
 	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
+	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
+	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		const encodedCredentials = base64Url.encode(
+		requestHeaders["authorization"] = base64.encode(
 			`${options.clientId}:${options.clientSecret}`,
 		);
-		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
 	}
+
+	for (const [key, value] of Object.entries(additionalParams)) {
+		if (!body.has(key)) body.append(key, value);
+	}
+
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
-		headers,
+		headers: requestHeaders,
 	});
 
 	if (error) {

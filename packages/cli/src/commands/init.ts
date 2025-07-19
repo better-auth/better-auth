@@ -2,7 +2,7 @@ import { parse } from "dotenv";
 import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
 import fs from "fs/promises";
@@ -28,7 +28,7 @@ import { generateAuthConfig } from "../generators/auth-config";
 import { getTsconfigInfo } from "../utils/get-tsconfig-info";
 
 /**
- * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
+ * Should only use any database that is core DBs, and supports the Better Auth CLI generate functionality.
  */
 const supportedDatabases = [
 	// Built-in kysely
@@ -352,6 +352,7 @@ const optionsSchema = z.object({
 	"skip-db": z.boolean().optional(),
 	"skip-plugins": z.boolean().optional(),
 	"package-manager": z.string().optional(),
+	tsconfig: z.string().optional(),
 });
 
 const outroText = `🥳 All Done, Happy Hacking!`;
@@ -402,7 +403,12 @@ export async function initAction(opts: any) {
 	// ===== tsconfig.json =====
 	let tsconfigInfo: Record<string, any>;
 	try {
-		tsconfigInfo = await getTsconfigInfo(cwd);
+		const tsconfigPath =
+			options.tsconfig !== undefined
+				? path.resolve(cwd, options.tsconfig)
+				: path.join(cwd, "tsconfig.json");
+
+		tsconfigInfo = await getTsconfigInfo(cwd, tsconfigPath);
 	} catch (error) {
 		log.error(`❌ Couldn't read your tsconfig.json file. (dir: ${cwd})`);
 		console.error(error);
@@ -549,7 +555,7 @@ export async function initAction(opts: any) {
 			}
 		}
 	} else {
-		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up-to-date`)}!`);
+		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up to date`)}!`);
 	}
 
 	// ===== appName =====
@@ -1027,6 +1033,7 @@ export const init = new Command("init")
 		"--config <config>",
 		"The path to the auth configuration file. defaults to the first `auth.ts` file found.",
 	)
+	.option("--tsconfig <tsconfig>", "The path to the tsconfig file.")
 	.option("--skip-db", "Skip the database setup.")
 	.option("--skip-plugins", "Skip the plugins setup.")
 	.option(
@@ -1108,7 +1115,7 @@ async function updateEnvs({
 	 */
 	files: string[];
 	/**
-	 * Weather to comment the all of the envs or not
+	 * Whether to comment the all of the envs or not
 	 */
 	isCommented: boolean;
 }) {

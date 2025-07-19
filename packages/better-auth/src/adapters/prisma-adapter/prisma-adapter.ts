@@ -1,6 +1,6 @@
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 import { BetterAuthError } from "../../error";
 import type { Where } from "../../types";
+import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface PrismaConfig {
 	/**
@@ -68,6 +68,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						return "startsWith";
 					case "ends_with":
 						return "endsWith";
+					case "ne":
+						return "not";
 					default:
 						return operator;
 				}
@@ -102,9 +104,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 				});
 				const orClause = or.map((w) => {
 					return {
-						[getFieldName({ model, field: w.field })]: {
-							[w.operator || "eq"]: w.value,
-						},
+						[getFieldName({ model, field: w.field })]:
+							w.operator === "eq" || !w.operator
+								? w.value
+								: {
+										[operatorToPrismaOperator(w.operator)]: w.value,
+									},
 					};
 				});
 

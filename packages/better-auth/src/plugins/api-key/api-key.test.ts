@@ -23,7 +23,6 @@ describe("api-key", async () => {
 			clientOptions: {
 				plugins: [apiKeyClient()],
 			},
-			// testWith: "postgres",
 		},
 	);
 	const { headers, user } = await signInWithTestUser();
@@ -120,6 +119,96 @@ describe("api-key", async () => {
 		expect(apiKey.requestCount).toEqual(0);
 		expect(apiKey.remaining).toBeNull();
 		expect(apiKey.lastRequest).toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
+	});
+
+	it("should have the real value from rateLimitEnabled", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: false,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(false);
+	});
+
+	it("should have true if the rate limit is undefined", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				rateLimitEnabled: undefined,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.rateLimitEnabled).toBe(true);
+	});
+
+	it("should require name in API keys if configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						requireName: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		let err: any;
+		try {
+			const apiKeyResult = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+		} catch (error) {
+			err = error;
+		}
+		expect(err).toBeDefined();
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
+	});
+
+	it("should respect rateLimit configuration from plugin options", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						rateLimit: {
+							enabled: false,
+							timeWindow: 1000,
+							maxRequests: 10,
+						},
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		const apiKeyResult = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		expect(apiKeyResult).not.toBeNull();
+		expect(apiKeyResult.rateLimitEnabled).toBe(false);
+		expect(apiKeyResult.rateLimitTimeWindow).toBe(1000);
+		expect(apiKeyResult.rateLimitMax).toBe(10);
 	});
 
 	it("should create the API key with the given name", async () => {
@@ -252,6 +341,65 @@ describe("api-key", async () => {
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.expiresAt).toBeDefined();
 		expect(apiKey.expiresAt?.getTime()).toBeGreaterThanOrEqual(expectedResult);
+	});
+
+	it("should support disabling key hashing", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						disableKeyHashing: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const apiKey2 = await auth.api.createApiKey({
+			body: {},
+			headers,
+		});
+		const res = await (await auth.$context).adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: apiKey2.id,
+				},
+			],
+		});
+		expect(res?.key).toEqual(apiKey2.key);
+	});
+
+	it("should be able to verify with key hashing disabled", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						disableKeyHashing: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const apiKey2 = await auth.api.createApiKey({
+			body: {},
+			headers,
+		});
+
+		const result = await auth.api.verifyApiKey({ body: { key: apiKey2.key } });
+		expect(result.valid).toEqual(true);
 	});
 
 	it("should fail to create a key with a custom expiresIn value when customExpiresTime is disabled", async () => {
@@ -519,7 +667,7 @@ describe("api-key", async () => {
 		expect(apiKey.metadata.test).toEqual(metadata.test);
 	});
 
-	it("create api key with with metadata when metadata is disabled (should fail)", async () => {
+	it("create API key with with metadata when metadata is disabled (should fail)", async () => {
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
@@ -674,10 +822,9 @@ describe("api-key", async () => {
 	// VERIFY API KEY
 	// =========================================================================
 
-	it("verify api key without key and userId", async () => {
+	it("verify API key without key and userId", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
-				userId: user.id,
 				key: firstApiKey.key,
 			},
 		});
@@ -685,11 +832,10 @@ describe("api-key", async () => {
 		expect(apiKey.valid).toBe(true);
 	});
 
-	it("verify api key with invalid key (should fail)", async () => {
+	it("verify API key with invalid key (should fail)", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
 				key: "invalid",
-				userId: user.id,
 			},
 		});
 		expect(apiKey.valid).toBe(false);
@@ -722,7 +868,7 @@ describe("api-key", async () => {
 
 	const { headers: rateLimitUserHeaders } = await rateLimitTestUser();
 
-	it("should fail to verify api key 20 times in a row due to rate-limit", async () => {
+	it("should fail to verify API key 20 times in a row due to rate-limit", async () => {
 		const { data: apiKey2 } = await rateLimitClient.apiKey.create(
 			{},
 			{ headers: rateLimitUserHeaders },
@@ -733,7 +879,6 @@ describe("api-key", async () => {
 			const response = await rateLimitAuth.api.verifyApiKey({
 				body: {
 					key: apiKey2.key,
-					userId: user.id,
 				},
 				headers: rateLimitUserHeaders,
 			});
@@ -745,7 +890,7 @@ describe("api-key", async () => {
 		}
 	});
 
-	it("should allow us to verify api key after rate-limit window has passed", async () => {
+	it("should allow us to verify API key after rate-limit window has passed", async () => {
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000);
 		const response = await rateLimitAuth.api.verifyApiKey({
@@ -758,7 +903,7 @@ describe("api-key", async () => {
 		expect(response?.valid).toBe(true);
 	});
 
-	it("should check if verifying an api key's remaining count does go down", async () => {
+	it("should check if verifying an API key's remaining count does go down", async () => {
 		const remaining = 10;
 		const { data: apiKey } = await client.apiKey.create(
 			{
@@ -785,7 +930,7 @@ describe("api-key", async () => {
 		expect(afterVerificationTwice?.key?.remaining).toEqual(remaining - 2);
 	});
 
-	it("should fail if the api key has no remaining", async () => {
+	it("should fail if the API key has no remaining", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
 				remaining: 1,
@@ -809,7 +954,7 @@ describe("api-key", async () => {
 		expect(afterVerification.error?.code).toBe("USAGE_EXCEEDED");
 	});
 
-	it("should fail if the api key is expired", async () => {
+	it("should fail if the API key is expired", async () => {
 		vi.useRealTimers();
 		const { headers } = await signInWithTestUser();
 		const apiKey2 = await client.apiKey.create(
@@ -834,7 +979,7 @@ describe("api-key", async () => {
 	// UPDATE API KEY
 	// =========================================================================
 
-	it("should fail to update api key name without headers or userId", async () => {
+	it("should fail to update API key name without headers or userId", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -850,7 +995,7 @@ describe("api-key", async () => {
 		expect(error).toBeInstanceOf(APIError);
 	});
 
-	it("should update api key name with headers", async () => {
+	it("should update API key name with headers", async () => {
 		const newName = "Hello World";
 		const apiKey = await auth.api.updateApiKey({
 			body: {
@@ -864,7 +1009,7 @@ describe("api-key", async () => {
 		expect(apiKey.name).toEqual(newName);
 	});
 
-	it("should fail to update api key name with a length larger than the allowed maximum", async () => {
+	it("should fail to update API key name with a length larger than the allowed maximum", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -884,7 +1029,7 @@ describe("api-key", async () => {
 		expect(error).not.toBeNull();
 	});
 
-	it("should fail to update api key name with a length smaller than the allowed minimum", async () => {
+	it("should fail to update API key name with a length smaller than the allowed minimum", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -904,7 +1049,7 @@ describe("api-key", async () => {
 		expect(error).not.toBeNull();
 	});
 
-	it("should fail to update api key with no values to update", async () => {
+	it("should fail to update API key with no values to update", async () => {
 		let error: APIError | null = null;
 		await auth.api
 			.updateApiKey({
@@ -923,7 +1068,7 @@ describe("api-key", async () => {
 		expect(error).not.toBeNull();
 	});
 
-	it("should update api key expiresIn value", async () => {
+	it("should update API key expiresIn value", async () => {
 		const expiresIn = 60 * 60 * 24 * 7; // 7 days
 		const expectedResult = new Date().getTime() + expiresIn;
 		const apiKey = await auth.api.updateApiKey({
@@ -1160,7 +1305,7 @@ describe("api-key", async () => {
 		expect(apiKey.refillAmount).toEqual(refillAmount);
 	});
 
-	it("should update api key enable value", async () => {
+	it("should update API key enable value", async () => {
 		const newValue = false;
 		const apiKey = await auth.api.updateApiKey({
 			body: {
@@ -1215,7 +1360,7 @@ describe("api-key", async () => {
 		expect(apiKey.metadata).toEqual(metadata);
 	});
 
-	it("update api key's returned metadata should be an object", async () => {
+	it("update API key's returned metadata should be an object", async () => {
 		const metadata = {
 			test: "test-12345",
 		};
@@ -1328,8 +1473,26 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should get session from an API key", async () => {
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey()],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { headers: userHeaders } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+		if (!apiKey2) return;
 		const headers = new Headers();
-		headers.set("x-api-key", firstApiKey.key);
+		headers.set("x-api-key", apiKey2.key);
 
 		const session = await auth.api.getSession({
 			headers: headers,
@@ -1338,7 +1501,7 @@ describe("api-key", async () => {
 		expect(session?.session).toBeDefined();
 	});
 
-	it("should get session from an API key with custom api key getter", async () => {
+	it("should get session from an API key with custom API key getter", async () => {
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
@@ -1371,7 +1534,7 @@ describe("api-key", async () => {
 		expect(session?.session).toBeDefined();
 	});
 
-	it("should fail to get session from an API key with invalid api key", async () => {
+	it("should fail to get session from an API key with invalid API key", async () => {
 		const headers = new Headers();
 		headers.set("x-api-key", "invalid");
 
@@ -1391,6 +1554,137 @@ describe("api-key", async () => {
 
 		expect(result.error?.status).toEqual("FORBIDDEN");
 		expect(result.error?.body?.message).toEqual(ERROR_CODES.INVALID_API_KEY);
+	});
+
+	it("should fail to get session from an API key if the key is disabled", async () => {
+		const { headers: userHeaders } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+
+		if (!apiKey2) throw new Error("API key not found");
+
+		await client.apiKey.update(
+			{
+				keyId: apiKey2.id,
+				enabled: false,
+			},
+			{ headers: userHeaders },
+		);
+
+		let result: { data: any; error: any | null } = {
+			data: null,
+			error: null,
+		};
+
+		const headers = new Headers();
+		headers.set("x-api-key", apiKey2.key);
+
+		try {
+			const session = await auth.api.getSession({
+				headers,
+			});
+
+			result.data = session;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body?.message).toEqual(ERROR_CODES.KEY_DISABLED);
+	});
+
+	it("should fail to get session from an API key if the key is expired", async () => {
+		const { headers: userHeaders } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+
+		if (!apiKey2) throw new Error("API key not found");
+
+		await client.apiKey.update(
+			{
+				keyId: apiKey2.id,
+				expiresIn: 1 * 60 * 60 * 24, //1 day
+			},
+			{ headers: userHeaders, throw: true, disableValidation: true },
+		);
+
+		vi.useFakeTimers();
+		// we advance to more than 1 day
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 60 * 24 + 1);
+
+		const headers = new Headers();
+		headers.set("x-api-key", apiKey2.key);
+
+		let result: { data: any; error: any | null } = {
+			data: null,
+			error: null,
+		};
+
+		try {
+			const session = await auth.api.getSession({
+				headers,
+			});
+			result.data = session;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body?.message).toEqual(ERROR_CODES.KEY_EXPIRED);
+		vi.useRealTimers();
+	});
+
+	it("should fail to get the session if the key has no remaining requests", async () => {
+		const createdApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		if (!createdApiKey) throw new Error("API key not found");
+
+		await auth.api.updateApiKey({
+			body: {
+				keyId: createdApiKey.id,
+				remaining: 1,
+				userId: user.id,
+			},
+		});
+
+		const headers = new Headers();
+		headers.set("x-api-key", createdApiKey.key);
+
+		let result: { data: any; error: any | null } = {
+			data: null,
+			error: null,
+		};
+
+		// Login once. This should work
+		const session = await auth.api.getSession({
+			headers,
+		});
+
+		expect(session).not.toBeNull();
+
+		try {
+			// Login again. This should fail
+			const session = await auth.api.getSession({
+				headers,
+			});
+			result.data = session;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.error?.status).toEqual("TOO_MANY_REQUESTS");
+		expect(result.error?.body?.message).toEqual(ERROR_CODES.USAGE_EXCEEDED);
+		expect(result.error?.body?.code).toEqual("USAGE_EXCEEDED");
 	});
 
 	it("should still work if the key headers was an array", async () => {
@@ -1607,7 +1901,6 @@ describe("api-key", async () => {
 			const result = await auth.api.verifyApiKey({
 				body: {
 					key: apiKey.key,
-					metadata: metadata,
 				},
 				headers,
 			});

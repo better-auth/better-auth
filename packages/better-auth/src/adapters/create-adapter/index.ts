@@ -92,15 +92,17 @@ export const createAdapter =
 			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
-			if (field === "id") {
-				return field;
+			if (field === "id" || field === "_id") {
+				return "id";
 			}
 			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
 
 			let f = schema[model]?.fields[field];
 			if (!f) {
-				//@ts-expect-error - The model name can be a custom modelName, not one of the default ones.
-				f = Object.values(schema).find((f) => f.modelName === model)!;
+				//@ts-expect-error
+				f = Object.values(schema[model]?.fields).find(
+					(f) => f.fieldName === field,
+				);
 			}
 			if (!f) {
 				debugLog(`Field ${field} not found in model ${model}`);
@@ -157,11 +159,20 @@ export const createAdapter =
 		 * then we should return the model name ending with an `s`.
 		 */
 		const getModelName = (model: string) => {
-			return schema[model].modelName !== model
-				? schema[model].modelName
-				: config.usePlural
-					? `${model}s`
-					: model;
+			const defaultModelKey = getDefaultModelName(model);
+			const usePlural = config && config.usePlural;
+			const useCustomModelName =
+				schema &&
+				schema[defaultModelKey] &&
+				schema[defaultModelKey].modelName !== model;
+
+			if (useCustomModelName) {
+				return usePlural
+					? `${schema[defaultModelKey].modelName}s`
+					: schema[defaultModelKey].modelName;
+			}
+
+			return usePlural ? `${model}s` : model;
 		};
 		/**
 		 * Get the field name which is expected to be saved in the database based on the user's schema.
@@ -237,9 +248,14 @@ export const createAdapter =
 			}
 		};
 
-		const idField = ({ customModelName }: { customModelName?: string }) => {
+		const idField = ({
+			customModelName,
+			forceAllowId,
+		}: { customModelName?: string; forceAllowId?: boolean }) => {
 			const shouldGenerateId =
-				!config.disableIdGeneration && !options.advanced?.database?.useNumberId;
+				!config.disableIdGeneration &&
+				!options.advanced?.database?.useNumberId &&
+				!forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
 			return {
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
@@ -250,7 +266,7 @@ export const createAdapter =
 								if (config.disableIdGeneration) return undefined;
 								const useNumberId = options.advanced?.database?.useNumberId;
 								let generateId = options.advanced?.database?.generateId;
-								if (options.advanced?.generateId) {
+								if (options.advanced?.generateId !== undefined) {
 									logger.warn(
 										"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
 									);
@@ -302,6 +318,7 @@ export const createAdapter =
 			data: Record<string, any>,
 			unsafe_model: string,
 			action: "create" | "update",
+			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model].fields;
@@ -310,7 +327,10 @@ export const createAdapter =
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
-				fields.id = idField({ customModelName: unsafe_model });
+				fields.id = idField({
+					customModelName: unsafe_model,
+					forceAllowId: forceAllowId && "id" in data,
+				});
 			}
 			for (const field in fields) {
 				const value = data[field];
@@ -466,6 +486,8 @@ export const createAdapter =
 			? undefined
 			: CleanedWhere[] => {
 			if (!where) return undefined as any;
+			const newMappedKeys = config.mapKeysTransformInput ?? {};
+
 			return where.map((w) => {
 				const {
 					field: unsafe_field,
@@ -484,11 +506,13 @@ export const createAdapter =
 					field: unsafe_field,
 					model,
 				});
+				const fieldName: string =
+					newMappedKeys[defaultFieldName] ||
+					getFieldName({
+						field: defaultFieldName,
+						model: defaultModelName,
+					});
 
-				const fieldName = getFieldName({
-					field: defaultFieldName,
-					model: defaultModelName,
-				});
 				const fieldAttr = getFieldAttributes({
 					field: defaultFieldName,
 					model: defaultModelName,
@@ -527,18 +551,20 @@ export const createAdapter =
 				data: unsafeData,
 				model: unsafeModel,
 				select,
+				forceAllowId = false,
 			}: {
 				model: string;
 				data: T;
 				select?: string[];
+				forceAllowId?: boolean;
 			}): Promise<R> => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 
-				if ("id" in unsafeData) {
+				if ("id" in unsafeData && !forceAllowId) {
 					logger.warn(
-						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you. The id will be ignored.`,
+						`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
 					);
 					const err = new Error();
 					const stack = err.stack
@@ -560,6 +586,7 @@ export const createAdapter =
 					unsafeData,
 					unsafeModel,
 					"create",
+					forceAllowId,
 				)) as T;
 				debugLog(
 					{ method: "create" },

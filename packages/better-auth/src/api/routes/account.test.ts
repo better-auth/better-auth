@@ -1,4 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+	type MockInstance,
+} from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import type { GoogleProfile } from "../../social-providers";
@@ -56,10 +64,25 @@ describe("account", async () => {
 			accountLinking: {
 				allowDifferentEmails: true,
 			},
+			encryptOAuthTokens: true,
 		},
 	});
 
 	const ctx = await auth.$context;
+
+	let googleVerifyIdTokenMock: MockInstance;
+	let googleGetUserInfoMock: MockInstance;
+	beforeAll(() => {
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		expect(googleProvider).toBeTruthy();
+
+		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
+		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
+	});
+	afterEach(() => {
+		googleVerifyIdTokenMock.mockClear();
+		googleGetUserInfoMock.mockClear();
+	});
 
 	const { headers } = await signInWithTestUser();
 
@@ -96,7 +119,9 @@ describe("account", async () => {
 			redirect: true,
 		});
 		const state =
-			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+				: "";
 		email = "test@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
@@ -112,12 +137,47 @@ describe("account", async () => {
 				expect(location).toContain("/callback");
 			},
 		});
-
 		const { headers: headers2 } = await signInWithTestUser();
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers2 },
 		});
 		expect(accounts.data?.length).toBe(2);
+	});
+
+	it("should encrypt access token and refresh token", async () => {
+		const { headers: headers2 } = await signInWithTestUser();
+		const accessToken = await client.getAccessToken({
+			providerId: "google",
+			fetchOptions: { headers: headers2 },
+		});
+		expect(accessToken.data).not.toBe("test");
+	});
+
+	it("should pass custom scopes to authorization URL", async () => {
+		const { headers: headers2 } = await signInWithTestUser();
+		const customScope = "https://www.googleapis.com/auth/drive.readonly";
+		const linkAccountRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				scopes: [customScope],
+			},
+			{
+				headers: headers2,
+			},
+		);
+
+		expect(linkAccountRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const url =
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url)
+				: new URL("");
+		const scopesParam = url.searchParams.get("scope");
+		expect(scopesParam).toContain(customScope);
 	});
 
 	it("should link second account from the same provider", async () => {
@@ -145,7 +205,9 @@ describe("account", async () => {
 			redirect: true,
 		});
 		const state =
-			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+				: "";
 		email = "test2@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
@@ -166,8 +228,55 @@ describe("account", async () => {
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers3 },
 		});
+		expect(accounts.data?.length).toBe(2);
+	});
+
+	it("should link third account with idToken", async () => {
+		googleVerifyIdTokenMock.mockResolvedValueOnce(true);
+		const user = {
+			id: "0987654321",
+			name: "test2",
+			email: "test2@gmail.com",
+			sub: "test2",
+			emailVerified: true,
+		};
+		const userInfo = {
+			user,
+			data: user,
+		};
+		googleGetUserInfoMock.mockResolvedValueOnce(userInfo);
+
+		const { headers: headers2 } = await signInWithTestUser();
+		const linkAccountRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				idToken: { token: "test" },
+			},
+			{
+				headers: headers2,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					headers.set(
+						"cookie",
+						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+					);
+				},
+			},
+		);
+
+		expect(googleVerifyIdTokenMock).toHaveBeenCalledOnce();
+		expect(googleGetUserInfoMock).toHaveBeenCalledOnce();
+
+		const { headers: headers3 } = await signInWithTestUser();
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: headers3 },
+		});
 		expect(accounts.data?.length).toBe(3);
 	});
+
 	it("should unlink account", async () => {
 		const { headers } = await signInWithTestUser();
 		const previousAccounts = await client.listAccounts({

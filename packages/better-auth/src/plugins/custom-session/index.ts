@@ -1,8 +1,9 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, getSession } from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	GenericEndpointContext,
 	InferSession,
 	InferUser,
 } from "../../types";
@@ -11,10 +12,13 @@ export const customSession = <
 	Returns extends Record<string, any>,
 	O extends BetterAuthOptions = BetterAuthOptions,
 >(
-	fn: (session: {
-		user: InferUser<O>;
-		session: InferSession<O>;
-	}) => Promise<Returns>,
+	fn: (
+		session: {
+			user: InferUser<O>;
+			session: InferSession<O>;
+		},
+		ctx: GenericEndpointContext,
+	) => Promise<Returns>,
 	options?: O,
 ) => {
 	return {
@@ -31,14 +35,16 @@ export const customSession = <
 							 * and fetch the session from the database
 							 */
 							disableCookieCache: z
-								.boolean({
+								.boolean()
+								.meta({
 									description:
 										"Disable cookie cache and fetch session from database",
 								})
 								.or(z.string().transform((v) => v === "true"))
 								.optional(),
 							disableRefresh: z
-								.boolean({
+								.boolean()
+								.meta({
 									description:
 										"Disable session refresh. Useful for checking session status, without updating the session",
 								})
@@ -81,7 +87,7 @@ export const customSession = <
 					if (!session?.response) {
 						return ctx.json(null);
 					}
-					const fnResult = await fn(session.response as any);
+					const fnResult = await fn(session.response as any, ctx);
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});

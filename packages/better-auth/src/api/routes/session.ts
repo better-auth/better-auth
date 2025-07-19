@@ -6,7 +6,7 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import { z } from "zod";
+import * as z from "zod/v4";
 import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
@@ -32,22 +32,19 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * If cookie cache is enabled, it will disable the cache
 					 * and fetch the session from the database
 					 */
-					disableCookieCache: z
-						.optional(
-							z
-								.boolean({
-									description:
-										"Disable cookie cache and fetch session from database",
-								})
-								.or(z.string().transform((v) => v === "true")),
-						)
+					disableCookieCache: z.coerce
+						.boolean()
+						.meta({
+							description:
+								"Disable cookie cache and fetch session from database",
+						})
 						.optional(),
-					disableRefresh: z
-						.boolean({
+					disableRefresh: z.coerce
+						.boolean()
+						.meta({
 							description:
 								"Disable session refresh. Useful for checking session status, without updating the session",
 						})
-						.or(z.string().transform((v) => v === "true"))
 						.optional(),
 				}),
 			),
@@ -117,6 +114,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						ctx.setCookie(dataCookie, "", {
 							maxAge: 0,
 						});
+						return ctx.json(null);
 					}
 				}
 
@@ -194,12 +192,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					updateAge * 1000;
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
-				if (shouldBeUpdated) {
+				if (
+					shouldBeUpdated &&
+					(!ctx.query?.disableRefresh ||
+						!ctx.context.options.session?.disableSessionRefresh)
+				) {
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
 							session.session.token,
 							{
 								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
+								updatedAt: new Date(),
 							},
 						);
 					if (!updatedSession) {
@@ -283,6 +286,9 @@ export const getSessionFromCtx = async <
 	} | null;
 };
 
+/**
+ * The middleware forces the endpoint to require a valid session.
+ */
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
@@ -293,6 +299,10 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	};
 });
 
+/**
+ * This middleware allows you to call the endpoint on the client if session is valid.
+ * However, if called on the server, no session is required.
+ */
 export const requestOnlySessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
@@ -303,6 +313,13 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 	},
 );
 
+/**
+ * This middleware forces the endpoint to require a valid session,
+ * as well as making sure the session is fresh before proceeding.
+ *
+ * Session freshness check will be skipped if the session config's freshAge
+ * is set to 0
+ */
 export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
@@ -384,7 +401,7 @@ export const revokeSession = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			token: z.string({
+			token: z.string().meta({
 				description: "The token to revoke",
 			}),
 		}),

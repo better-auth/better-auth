@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import type {
 	BetterAuthPlugin,
@@ -13,6 +13,7 @@ import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import type { User } from "../../types";
+import { ERROR_CODES } from "./phone-number-error";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -47,6 +48,18 @@ export interface PhoneNumberOptions {
 	 * @param request - the request object
 	 * @returns
 	 */
+	sendPasswordResetOTP?: (
+		data: { phoneNumber: string; code: string },
+		request?: Request,
+	) => Promise<void> | void;
+	/**
+	 * a callback to send otp on user requesting to reset their password
+	 *
+	 * @param data - contains phone number and code
+	 * @param request - the request object
+	 * @returns
+	 * @deprecated Use sendPasswordResetOTP instead. This function will be removed in the next major version.
+	 */
 	sendForgetPasswordOTP?: (
 		data: { phoneNumber: string; code: string },
 		request?: Request,
@@ -62,6 +75,12 @@ export interface PhoneNumberOptions {
 	 * by default any string is accepted
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean | Promise<boolean>;
+	/**
+	 * Require a phone number verification before signing in
+	 *
+	 * @default false
+	 */
+	requireVerification?: boolean;
 	/**
 	 * Callback when phone number is verified
 	 */
@@ -122,32 +141,39 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		createdAt: "createdAt",
 	};
 
-	const ERROR_CODES = {
-		INVALID_PHONE_NUMBER: "Invalid phone number",
-		PHONE_NUMBER_EXIST: "Phone number already exist",
-		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
-		UNEXPECTED_ERROR: "Unexpected error",
-		OTP_NOT_FOUND: "OTP not found",
-		OTP_EXPIRED: "OTP expired",
-		INVALID_OTP: "Invalid OTP",
-	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/phone-number`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInPhoneNumber`
+			 *
+			 * **client:**
+			 * `authClient.signIn.phoneNumber`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/phone-number#api-method-sign-in-phone-number)
+			 */
 			signInPhoneNumber: createAuthEndpoint(
 				"/sign-in/phone-number",
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
-							description: "Phone number to sign in",
+						phoneNumber: z.string().meta({
+							description: 'Phone number to sign in. Eg: "+1234567890"',
 						}),
-						password: z.string({
-							description: "Password to use for sign in",
+						password: z.string().meta({
+							description: "Password to use for sign in.",
 						}),
 						rememberMe: z
-							.boolean({
-								description: "Remember the session",
+							.boolean()
+							.meta({
+								description: "Remember the session. Eg: true",
 							})
 							.optional(),
 					}),
@@ -209,6 +235,29 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
+					if (opts.requireVerification) {
+						if (!user.phoneNumberVerified) {
+							const otp = generateOTP(opts.otpLength);
+							await ctx.context.internalAdapter.createVerificationValue(
+								{
+									value: otp,
+									identifier: phoneNumber,
+									expiresAt: getDate(opts.expiresIn, "sec"),
+								},
+								ctx,
+							);
+							await opts.sendOTP?.(
+								{
+									phoneNumber,
+									code: otp,
+								},
+								ctx.request,
+							);
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+							});
+						}
+					}
 					const accounts =
 						await ctx.context.internalAdapter.findAccountByUserId(user.id);
 					const credentialAccount = accounts.find(
@@ -241,7 +290,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx.headers,
+						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -275,13 +324,28 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/phone-number/send-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.sendPhoneNumberOTP`
+			 *
+			 * **client:**
+			 * `authClient.phoneNumber.sendOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/phone-number#api-method-phone-number-send-otp)
+			 */
 			sendPhoneNumberOTP: createAuthEndpoint(
 				"/phone-number/send-otp",
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string({
-							description: "Phone number to send OTP",
+						phoneNumber: z.string().meta({
+							description: 'Phone number to send OTP. Eg: "+1234567890"',
 						}),
 					}),
 					metadata: {
@@ -328,11 +392,14 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: `${code}:0`,
-						identifier: ctx.body.phoneNumber,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: ctx.body.phoneNumber,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
 					await options.sendOTP(
 						{
 							phoneNumber: ctx.body.phoneNumber,
@@ -343,6 +410,22 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					return ctx.json({ message: "code sent" });
 				},
 			),
+
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/phone-number/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyPhoneNumber`
+			 *
+			 * **client:**
+			 * `authClient.phoneNumber.verify`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/phone-number#api-method-phone-number-verify)
+			 */
 			verifyPhoneNumber: createAuthEndpoint(
 				"/phone-number/verify",
 				{
@@ -351,22 +434,24 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string({
-							description: "Phone number to verify",
+						phoneNumber: z.string().meta({
+							description: 'Phone number to verify. Eg: "+1234567890"',
 						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string({
-							description: "OTP code",
+						code: z.string().meta({
+							description: 'OTP code. Eg: "123456"',
 						}),
 						/**
 						 * Disable session creation after verification
 						 * @default false
 						 */
 						disableSession: z
-							.boolean({
-								description: "Disable session creation after verification",
+							.boolean()
+							.meta({
+								description:
+									"Disable session creation after verification. Eg: false",
 							})
 							.optional(),
 						/**
@@ -375,9 +460,10 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						 * phone number
 						 */
 						updatePhoneNumber: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
-									"Check if there is a session and update the phone number",
+									"Check if there is a session and update the phone number. Eg: true",
 							})
 							.optional(),
 					}),
@@ -624,7 +710,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx.request,
+							ctx,
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -669,8 +755,83 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 				},
 			),
+			/**
+			 * @deprecated Use requestPasswordResetPhoneNumber instead. This endpoint will be removed in the next major version.
+			 */
 			forgetPasswordPhoneNumber: createAuthEndpoint(
 				"/phone-number/forget-password",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string().meta({
+							description: `The phone number which is associated with the user. Eg: "+1234567890"`,
+						}),
+					}),
+					metadata: {
+						openapi: {
+							description: "Request OTP for password reset via phone number",
+							responses: {
+								"200": {
+									description: "OTP sent successfully for password reset",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the OTP was sent successfully",
+														enum: [true],
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
+						model: "user",
+						where: [
+							{
+								value: ctx.body.phoneNumber,
+								field: opts.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "phone number isn't registered",
+						});
+					}
+					const code = generateOTP(opts.otpLength);
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
+					await options?.sendForgetPasswordOTP?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx.request,
+					);
+					return ctx.json({
+						status: true,
+					});
+				},
+			),
+			requestPasswordResetPhoneNumber: createAuthEndpoint(
+				"/phone-number/request-password-reset",
 				{
 					method: "POST",
 					body: z.object({
@@ -719,12 +880,15 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						});
 					}
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: `${code}:0`,
-						identifier: `${ctx.body.phoneNumber}-forget-password`,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
-					await options?.sendForgetPasswordOTP?.(
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: `${code}:0`,
+							identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						},
+						ctx,
+					);
+					await options?.sendPasswordResetOTP?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,
 							code,
@@ -741,9 +905,17 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						otp: z.string(),
-						phoneNumber: z.string(),
-						newPassword: z.string(),
+						otp: z.string().meta({
+							description:
+								'The one time password to reset the password. Eg: "123456"',
+						}),
+						phoneNumber: z.string().meta({
+							description:
+								'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
+						}),
+						newPassword: z.string().meta({
+							description: `The new password. Eg: "new-and-secure-password"`,
+						}),
 					}),
 					metadata: {
 						openapi: {
@@ -775,7 +947,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 				async (ctx) => {
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
-							`${ctx.body.phoneNumber}-forget-password`,
+							`${ctx.body.phoneNumber}-request-password-reset`,
 						);
 					if (!verification) {
 						throw new APIError("BAD_REQUEST", {
@@ -828,6 +1000,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					await ctx.context.internalAdapter.updatePassword(
 						user.id,
 						hashedPassword,
+					);
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verification.id,
 					);
 					return ctx.json({
 						status: true,

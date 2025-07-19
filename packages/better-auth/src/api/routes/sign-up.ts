@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
@@ -24,6 +24,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
+						image?: string;
+						callbackURL?: string;
+						rememberMe?: boolean;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -46,10 +49,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 											type: "string",
 											description: "The password of the user",
 										},
+										image: {
+											type: "string",
+											description: "The profile image URL of the user",
+										},
 										callbackURL: {
 											type: "string",
 											description:
 												"The URL to use for email verification callback",
+										},
+										rememberMe: {
+											type: "boolean",
+											description:
+												"If this is false, the session will not be remembered. Default is `true`.",
 										},
 									},
 									required: ["name", "email", "password"],
@@ -138,12 +150,20 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			const body = ctx.body as any as User & {
 				password: string;
 				callbackURL?: string;
+				rememberMe?: boolean;
 			} & {
 				[key: string]: any;
 			};
-			const { name, email, password, image, callbackURL, ...additionalFields } =
-				body;
-			const isValidEmail = z.string().email().safeParse(email);
+			const {
+				name,
+				email,
+				password,
+				image,
+				callbackURL,
+				rememberMe,
+				...additionalFields
+			} = body;
+			const isValidEmail = z.email().safeParse(email);
 
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {
@@ -178,6 +198,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options,
 				additionalFields as any,
 			);
+			/**
+			 * Hash the password
+			 *
+			 * This is done prior to creating the user
+			 * to ensure that any plugin that
+			 * may break the hashing should break
+			 * before the user is created.
+			 */
+			const hash = await ctx.context.password.hash(password);
 			let createdUser: User;
 			try {
 				createdUser = await ctx.context.internalAdapter.createUser(
@@ -199,6 +228,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				if (isDevelopment) {
 					ctx.context.logger.error("Failed to create user", e);
 				}
+				if (e instanceof APIError) {
+					throw e;
+				}
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					details: e,
@@ -209,10 +241,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 				});
 			}
-			/**
-			 * Link the account to the user
-			 */
-			const hash = await ctx.context.password.hash(password);
 			await ctx.context.internalAdapter.linkAccount(
 				{
 					userId: createdUser.id,
@@ -265,17 +293,22 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
-				ctx.request,
+				ctx,
+				rememberMe === false,
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 				});
 			}
-			await setSessionCookie(ctx, {
-				session,
-				user: createdUser,
-			});
+			await setSessionCookie(
+				ctx,
+				{
+					session,
+					user: createdUser,
+				},
+				rememberMe === false,
+			);
 			return ctx.json({
 				token: session.token,
 				user: {

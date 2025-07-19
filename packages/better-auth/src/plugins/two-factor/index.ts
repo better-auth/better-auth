@@ -1,5 +1,5 @@
 import { generateRandomString } from "../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
@@ -34,14 +34,35 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/enable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.enableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.enable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-enable)
+			 */
 			enableTwoFactor: createAuthEndpoint(
 				"/two-factor/enable",
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string({
+						password: z.string().meta({
 							description: "User password",
 						}),
+						issuer: z
+							.string()
+							.meta({
+								description: "Custom issuer for the TOTP URI",
+							})
+							.optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -79,7 +100,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password } = ctx.body;
+					const { password, issuer } = ctx.body;
 					const isPasswordValid = await validatePassword(ctx, {
 						password,
 						userId: user.id,
@@ -108,7 +129,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							ctx.request,
+							ctx,
 							false,
 							ctx.context.session.session,
 						);
@@ -147,16 +168,31 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
-					}).url(options?.issuer || ctx.context.appName, user.email);
+					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/disable`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.disableTwoFactor`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.disable`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-disable)
+			 */
 			disableTwoFactor: createAuthEndpoint(
 				"/two-factor/disable",
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string({
+						password: z.string().meta({
 							description: "User password",
 						}),
 					}),
@@ -216,7 +252,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						ctx.request,
+						ctx,
 						false,
 						ctx.context.session.session,
 					);
@@ -291,21 +327,25 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
+						const maxAge = (options?.otpOptions?.period ?? 3) * 60; // 3 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
-								maxAge: 60 * 10, // 10 minutes
+								maxAge,
 							},
 						);
-						/**
-						 * We set the user id and the session
-						 * id as a hash. Later will fetch for
-						 * sessions with the user id compare
-						 * the hash and set that as session.
-						 */
+						const identifier = `2fa-${generateRandomString(20)}`;
+						await ctx.context.internalAdapter.createVerificationValue(
+							{
+								value: data.user.id,
+								identifier,
+								expiresAt: new Date(Date.now() + maxAge * 1000),
+							},
+							ctx,
+						);
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
-							data.user.id,
+							identifier,
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);

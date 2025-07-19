@@ -23,11 +23,7 @@ describe("adapter test", async () => {
 		await clearDb();
 	});
 
-	const adapter = mongodbAdapter(db, {
-		debugLogs: {
-			isRunningAdapterTests: true,
-		},
-	});
+	const adapter = mongodbAdapter(db);
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			return adapter({

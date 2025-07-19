@@ -1,13 +1,24 @@
 {
   "name": "better-auth",
-  "version": "1.2.6-beta.9",
+  "version": "1.3.0-beta.10",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/better-auth"
   },
+  "keywords": [
+    "auth",
+    "oauth",
+    "oidc",
+    "2fa",
+    "social",
+    "security",
+    "typescript",
+    "nextjs"
+  ],
   "scripts": {
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
@@ -19,7 +30,7 @@
     "prisma:normal:push": "prisma db push --schema src/adapters/prisma-adapter/test/normal-tests/schema.prisma",
     "prisma:number-id:push": "prisma db push --schema src/adapters/prisma-adapter/test/number-id-tests/schema.prisma",
     "bump": "bumpp",
-    "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
+    "typecheck": "pnpm prisma:normal:push && pnpm prisma:number-id:push && tsc --noEmit"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -122,6 +133,16 @@
       "require": {
         "types": "./dist/client/solid/index.d.cts",
         "default": "./dist/client/solid/index.cjs"
+      }
+    },
+    "./test": {
+      "import": {
+        "types": "./dist/test-utils/index.d.ts",
+        "default": "./dist/test-utils/index.mjs"
+      },
+      "require": {
+        "types": "./dist/test-utils/index.d.cts",
+        "default": "./dist/test-utils/index.cjs"
       }
     },
     "./api": {
@@ -374,6 +395,16 @@
         "default": "./dist/plugins/jwt/index.cjs"
       }
     },
+    "./plugins/haveibeenpwned": {
+      "import": {
+        "types": "./dist/plugins/haveibeenpwned/index.d.ts",
+        "default": "./dist/plugins/haveibeenpwned/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/haveibeenpwned/index.d.cts",
+        "default": "./dist/plugins/haveibeenpwned/index.cjs"
+      }
+    },
     "./plugins/sso": {
       "import": {
         "types": "./dist/plugins/sso/index.d.ts",
@@ -442,6 +473,16 @@
       "require": {
         "types": "./dist/plugins/organization/access/index.d.cts",
         "default": "./dist/plugins/organization/access/index.cjs"
+      }
+    },
+    "./plugins/one-time-token": {
+      "import": {
+        "types": "./dist/plugins/one-time-token/index.d.ts",
+        "default": "./dist/plugins/one-time-token/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/one-time-token/index.d.cts",
+        "default": "./dist/plugins/one-time-token/index.cjs"
       }
     },
     "./plugins/passkey": {
@@ -544,6 +585,9 @@
       "react-start": [
         "./dist/integrations/react-start.d.ts"
       ],
+      "adapters": [
+        "./dist/adapters/index.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"
       ],
@@ -580,8 +624,14 @@
       "plugins/generic-oauth": [
         "./dist/plugins/generic-oauth/index.d.ts"
       ],
+      "plugins/haveibeenpwned": [
+        "./dist/plugins/haveibeenpwned/index.d.ts"
+      ],
       "plugins/oauth-proxy": [
         "./dist/plugins/oauth-proxy/index.d.ts"
+      ],
+      "plugins/one-time-token": [
+        "./dist/plugins/one-time-token/index.d.ts"
       ],
       "plugins/sso": [
         "./dist/plugins/sso/index.d.ts"
@@ -615,14 +665,42 @@
       ]
     }
   },
+  "dependencies": {
+    "@better-auth/utils": "0.2.5",
+    "@better-fetch/fetch": "catalog:",
+    "@noble/ciphers": "^0.6.0",
+    "@noble/hashes": "^1.8.0",
+    "@simplewebauthn/browser": "^13.0.0",
+    "@simplewebauthn/server": "^13.0.0",
+    "better-call": "catalog:",
+    "defu": "^6.1.4",
+    "jose": "^5.9.6",
+    "kysely": "^0.28.1",
+    "nanostores": "^0.11.3",
+    "zod": "^4.0.5"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
     "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/keccak": "^3.0.5",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.14",
     "better-sqlite3": "^11.6.0",
+    "concurrently": "^9.1.2",
     "drizzle-orm": "^0.38.2",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
@@ -634,6 +712,7 @@
     "pg": "^8.13.1",
     "prisma": "^5.22.0",
     "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "react-native": "~0.74.6",
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
@@ -642,20 +721,6 @@
     "unbuild": "catalog:",
     "vitest": "^1.6.0",
     "vue": "^3.5.13"
-  },
-  "dependencies": {
-    "@better-auth/utils": "0.2.4",
-    "@better-fetch/fetch": "catalog:",
-    "@noble/ciphers": "^0.6.0",
-    "@noble/hashes": "^1.6.1",
-    "@simplewebauthn/browser": "^13.0.0",
-    "@simplewebauthn/server": "^13.0.0",
-    "better-call": "catalog:",
-    "defu": "^6.1.4",
-    "jose": "^5.9.6",
-    "kysely": "^0.27.6",
-    "nanostores": "^0.11.3",
-    "zod": "^3.24.1"
   },
   "overrides": {
     "whatwg-url": "^14.0.0"

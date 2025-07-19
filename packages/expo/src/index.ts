@@ -1,9 +1,9 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin } from "better-auth/types";
 import { createAuthMiddleware } from "better-auth/api";
 
 export interface ExpoOptions {
 	/**
-	 * Override origin header for expo api routes
+	 * Override origin header for expo API routes
 	 */
 	overrideOrigin?: boolean;
 }
@@ -13,9 +13,8 @@ export const expo = (options?: ExpoOptions) => {
 		id: "expo",
 		init: (ctx) => {
 			const trustedOrigins =
-				process.env.NODE_ENV === "development"
-					? [...(ctx.trustedOrigins || []), "exp://"]
-					: ctx.trustedOrigins;
+				process.env.NODE_ENV === "development" ? ["exp://"] : [];
+
 			return {
 				options: {
 					trustedOrigins,
@@ -52,6 +51,10 @@ export const expo = (options?: ExpoOptions) => {
 						const headers = ctx.context.responseHeaders;
 						const location = headers?.get("location");
 						if (!location) {
+							return;
+						}
+						const isProxyURL = location.includes("/oauth-proxy-callback");
+						if (isProxyURL) {
 							return;
 						}
 						const trustedOrigins = ctx.context.trustedOrigins.filter(

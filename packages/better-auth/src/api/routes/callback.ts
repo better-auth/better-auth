@@ -1,10 +1,11 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { setSessionCookie } from "../../cookies";
-import type { OAuth2Tokens } from "../../oauth2";
+import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
+import { safeJSONParse } from "../../utils/json";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -12,6 +13,7 @@ const schema = z.object({
 	device_id: z.string().optional(),
 	error_description: z.string().optional(),
 	state: z.string().optional(),
+	user: z.string().optional(),
 });
 
 export const callbackOAuth = createAuthEndpoint(
@@ -100,19 +102,15 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError("invalid_code");
 		}
 		const userInfo = await provider
-			.getUserInfo(tokens)
+			.getUserInfo({
+				...tokens,
+				user: c.body?.user ? safeJSONParse<any>(c.body.user) : undefined,
+			})
 			.then((res) => res?.user);
 
 		if (!userInfo) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError("unable_to_get_user_info");
-		}
-
-		if (!userInfo.email) {
-			c.context.logger.error(
-				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
-			);
-			return redirectOnError("email_not_found");
 		}
 
 		if (!callbackURL) {
@@ -121,6 +119,19 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (link) {
+			const trustedProviders =
+				c.context.options.account?.accountLinking?.trustedProviders;
+			const isTrustedProvider = trustedProviders?.includes(
+				provider.id as "apple",
+			);
+			if (
+				(!isTrustedProvider && !userInfo.emailVerified) ||
+				c.context.options.account?.accountLinking?.enabled === false
+			) {
+				c.context.logger.error("Unable to link account - untrusted provider");
+				return redirectOnError("unable_to_link_account");
+			}
+
 			const existingAccount = await c.context.internalAdapter.findAccount(
 				userInfo.id,
 			);
@@ -129,23 +140,37 @@ export const callbackOAuth = createAuthEndpoint(
 				if (existingAccount.userId.toString() !== link.userId.toString()) {
 					return redirectOnError("account_already_linked_to_different_user");
 				}
+				const updateData = Object.fromEntries(
+					Object.entries({
+						accessToken: await setTokenUtil(tokens.accessToken, c.context),
+						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
+						idToken: tokens.idToken,
+						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+						scope: tokens.scopes?.join(","),
+					}).filter(([_, value]) => value !== undefined),
+				);
+				await c.context.internalAdapter.updateAccount(
+					existingAccount.id,
+					updateData,
+				);
+			} else {
+				const newAccount = await c.context.internalAdapter.createAccount(
+					{
+						userId: link.userId,
+						providerId: provider.id,
+						accountId: userInfo.id,
+						...tokens,
+						accessToken: await setTokenUtil(tokens.accessToken, c.context),
+						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
+						scope: tokens.scopes?.join(","),
+					},
+					c,
+				);
+				if (!newAccount) {
+					return redirectOnError("unable_to_link_account");
+				}
 			}
-
-			const newAccount = await c.context.internalAdapter.createAccount(
-				{
-					userId: link.userId,
-					providerId: provider.id,
-					accountId: userInfo.id,
-					...tokens,
-					scope: tokens.scopes?.join(","),
-				},
-				c,
-			);
-
-			if (!newAccount) {
-				return redirectOnError("unable_to_link_account");
-			}
-
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
@@ -154,6 +179,13 @@ export const callbackOAuth = createAuthEndpoint(
 				toRedirectTo = callbackURL;
 			}
 			throw c.redirect(toRedirectTo);
+		}
+
+		if (!userInfo.email) {
+			c.context.logger.error(
+				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
+			);
+			return redirectOnError("email_not_found");
 		}
 
 		const result = await handleOAuthUserInfo(c, {
@@ -172,6 +204,7 @@ export const callbackOAuth = createAuthEndpoint(
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
 				provider.options?.disableSignUp,
+			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

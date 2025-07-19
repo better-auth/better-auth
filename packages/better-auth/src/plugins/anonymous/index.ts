@@ -10,10 +10,12 @@ import type {
 	AuthPluginSchema,
 	Session,
 	User,
+	AuthContext,
 } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
+import type { EndpointContext } from "better-call";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -43,6 +45,20 @@ export interface AnonymousOptions {
 	 * Disable deleting the anonymous user after linking
 	 */
 	disableDeleteAnonymousUser?: boolean;
+	/**
+	 * A hook to generate a name for the anonymous user.
+	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
+	 * @returns The name for the anonymous user.
+	 */
+	generateName?: (
+		ctx: EndpointContext<
+			"/sign-in/anonymous",
+			{
+				method: "POST";
+			},
+			AuthContext
+		>,
+	) => Promise<string> | string;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */
@@ -105,12 +121,13 @@ export const anonymous = (options?: AnonymousOptions) => {
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
+					const name = (await options?.generateName?.(ctx)) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{
 							email,
 							emailVerified: false,
 							isAnonymous: true,
-							name: "Anonymous",
+							name,
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
@@ -123,7 +140,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
-						ctx.request,
+						ctx,
 					);
 					if (!session) {
 						return ctx.json(null, {
@@ -161,7 +178,9 @@ export const anonymous = (options?: AnonymousOptions) => {
 							ctx.path.startsWith("/callback") ||
 							ctx.path.startsWith("/oauth2/callback") ||
 							ctx.path.startsWith("/magic-link/verify") ||
-							ctx.path.startsWith("/email-otp/verify-email")
+							ctx.path.startsWith("/email-otp/verify-email") ||
+							ctx.path.startsWith("/one-tap/callback") ||
+							ctx.path.startsWith("/passkey/verify-authentication")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {

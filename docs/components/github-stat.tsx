@@ -11,7 +11,7 @@ export function GithubStat({ stars }: { stars: string | null }) {
 	return (
 		<a
 			href="https://github.com/better-auth/better-auth"
-			className="flex mt-4 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground rounded-none h-10 p-5 ml-auto z-50 overflow-hidden items-center text-sm font-medium focus-visible:outline-none  disabled:pointer-events-none disabled:opacity-50 bg-transprent dark:text-white text-black px-4 py-2 max-w-[14.8rem] whitespace-pre md:flex group relative w-full justify-center gap-2 transition-all duration-300 ease-out  hover:ring-black"
+			className="flex mt-4 border border-input shadow-sm hover:bg-accent hover:text-accent-foreground rounded-none h-10 p-5 ml-auto z-50 overflow-hidden items-center text-sm font-medium focus-visible:outline-none  disabled:pointer-events-none disabled:opacity-50 bg-transparent dark:text-white text-black px-4 py-2 max-w-[14.8rem] whitespace-pre md:flex group relative w-full justify-center gap-2 transition-all duration-300 ease-out  hover:ring-black"
 		>
 			<span className="absolute right-0 -mt-12 h-32 w-8 translate-x-12 rotate-12 dark:bg-white/60 bg-black/60 opacity-10 transition-all duration-1000 ease-out group-hover:-translate-x-40"></span>
 			<div className="flex items-center ml-2">

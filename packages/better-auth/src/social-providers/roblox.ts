@@ -7,15 +7,15 @@ export interface RobloxProfile extends Record<string, any> {
 	sub: string;
 	/** the user's username */
 	preferred_username: string;
-	/** the user's display name, will return the same value as the preffered_username if not set */
+	/** the user's display name, will return the same value as the preferred_username if not set */
 	nickname: string;
-	/** the user's display name, again, will return the same value as the preffered_username if not set */
+	/** the user's display name, again, will return the same value as the preferred_username if not set */
 	name: string;
 	/** the account creation date as a unix timestamp in seconds */
 	created_at: number;
-	/** the user's profile url */
+	/** the user's profile URL */
 	profile: string;
-	/** the user's avatar url */
+	/** the user's avatar URL */
 	picture: string;
 }
 
@@ -55,7 +55,6 @@ export const roblox = (options: RobloxOptions) => {
 				authentication: "post",
 			});
 		},
-
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
