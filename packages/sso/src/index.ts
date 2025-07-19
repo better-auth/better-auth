@@ -1312,12 +1312,15 @@ export const sso = (options?: SSOOptions) => {
 								extract.attributes[value as string],
 							]),
 						),
-						id: attributes[mapping.id || "nameID"],
-						email: attributes[mapping.email || "nameID" || "email"],
+						id: attributes[mapping.id] || attributes["nameID"],
+						email:
+							attributes[mapping.email] ||
+							attributes["nameID"] ||
+							attributes["email"],
 						name:
 							[
-								attributes[mapping.firstName || "givenName"],
-								attributes[mapping.lastName || "surname"],
+								attributes[mapping.firstName] || attributes["givenName"],
+								attributes[mapping.lastName] || attributes["surname"],
 							]
 								.filter(Boolean)
 								.join(" ") || parsedResponse.extract.attributes?.displayName,

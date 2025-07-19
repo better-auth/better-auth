@@ -1486,8 +1486,8 @@ importers:
         specifier: ^0.11.3
         version: 0.11.4
       zod:
-        specifier: ^3.24.1
-        version: 3.25.42
+        specifier: ^4.0.5
+        version: 4.0.5
     devDependencies:
       '@prisma/client':
         specifier: ^5.22.0
@@ -20042,6 +20042,9 @@ packages:
 
   zod@4.0.0:
     resolution: {integrity: sha512-9diLdTPc/L7w/5jI4C3gHYNiGHDV9IZYxo1e5LSD8cabi65WVTWWb+g2BGPEpUUCOxR4D+6O5B0AzyMdUAXwrw==}
+
+  zod@4.0.5:
+    resolution: {integrity: sha512-/5UuuRPStvHXu7RS+gmvRf4NXrNxpSllGwDnCBcJZtQsKrviYXm54yDGV2KYNLT5kq0lHGcl7lqWJLgSaG+tgA==}
 
   zustand@3.7.2:
     resolution: {integrity: sha512-PIJDIZKtokhof+9+60cpockVOq05sJzHCriyvaLBmEJixseQ1a5Kdov6fWZfWOu5SK9c+FhH1jU0tntLxRJYMA==}
@@ -45455,6 +45458,8 @@ snapshots:
   zod@3.25.42: {}
 
   zod@4.0.0: {}
+
+  zod@4.0.5: {}
 
   zustand@3.7.2(react@19.1.0):
     optionalDependencies:
