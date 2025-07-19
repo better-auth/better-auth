@@ -132,6 +132,7 @@ export const auth = betterAuth({
 
 - `sendVerificationEmail`: Function to send verification email
 - `sendOnSignUp`: Send verification email automatically after sign up (default: `false`)
+- `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
 - `autoSignInAfterVerification`: Auto sign in the user after they verify their email
 - `expiresIn`: Number of seconds the verification token is valid for (default: `3600` seconds)
 
@@ -315,6 +316,7 @@ export const auth = betterAuth({
 		fields: {
 			userId: "user_id"
 		},
+		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"],
@@ -326,6 +328,10 @@ export const auth = betterAuth({
 
 - `modelName`: The model name for the account
 - `fields`: Map fields to different column names
+
+### `encryptOAuthTokens`
+
+Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 ### `updateAccountOnSignIn`
 

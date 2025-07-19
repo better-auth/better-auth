@@ -1,3 +1,4 @@
+import type { FieldAttribute } from "../../db";
 import type { User, Session, AuthContext } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type { Invitation, Member, Organization, Team } from "./schema";
@@ -147,7 +148,7 @@ export interface OrganizationOptions {
 	/**
 	 * Cancel pending invitations on re-invite.
 	 *
-	 * @default true
+	 * @default false
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean;
 	/**
@@ -223,11 +224,17 @@ export interface OrganizationOptions {
 			fields?: {
 				[key in keyof Omit<Organization, "id">]?: string;
 			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
+			};
 		};
 		member?: {
 			modelName?: string;
 			fields?: {
 				[key in keyof Omit<Member, "id">]?: string;
+			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
 			};
 		};
 		invitation?: {
@@ -235,12 +242,18 @@ export interface OrganizationOptions {
 			fields?: {
 				[key in keyof Omit<Invitation, "id">]?: string;
 			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
+			};
 		};
 
 		team?: {
 			modelName?: string;
 			fields?: {
 				[key in keyof Omit<Team, "id">]?: string;
+			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
 			};
 		};
 	};
@@ -287,17 +300,17 @@ export interface OrganizationOptions {
 		disabled?: boolean;
 		beforeCreate?: (
 			data: {
-				organization: Omit<Organization, "id">;
+				organization: Omit<Organization, "id"> & Record<string, any>;
 				user: User;
 			},
 			request?: Request,
 		) => Promise<void | {
-			data: Omit<Organization, "id">;
+			data: Record<string, any>;
 		}>;
 		afterCreate?: (
 			data: {
-				organization: Organization;
-				member: Member;
+				organization: Organization & Record<string, any>;
+				member: Member & Record<string, any>;
 				user: User;
 			},
 			request?: Request,
