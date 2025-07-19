@@ -481,7 +481,7 @@ export const organization = <O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
 		 */
-		listTeamMembers: listTeamMembers(options as O)
+		listTeamMembers: listTeamMembers(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {
