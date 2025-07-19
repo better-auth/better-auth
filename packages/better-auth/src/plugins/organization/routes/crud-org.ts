@@ -156,116 +156,117 @@ export const createOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-    const {
-      keepCurrentActiveOrganization: _,
-      userId: __,
-      ...orgData
-    } = ctx.body;
-      
-    let hookResponse:
-      | {
-          data: Record<string, any>;
-        }
-      | undefined = undefined;
+			const {
+				keepCurrentActiveOrganization: _,
+				userId: __,
+				...orgData
+			} = ctx.body;
 
-    if (options.organizationCreation?.beforeCreate) {
-      const response = await options.organizationCreation.beforeCreate(
-        {
-          organization: {
-            ...orgData,
-            createdAt: new Date(),
-          },
-          user,
-        },
-        ctx.request,
-      );
-      if (response && typeof response === "object" && "data" in response) {
-        hookResponse = response;
-      }
-    }
-  
-    const organization = await adapter.createOrganization({
-      organization: {
-        ...orgData,
-        createdAt: new Date(),
-        ...(hookResponse?.data || {}),
-      },
-    });
-  
-    let member:
-      | (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
-      | undefined;
-		let teamMember: TeamMember | undefined;
+			let hookResponse:
+				| {
+						data: Record<string, any>;
+				  }
+				| undefined = undefined;
 
-		if (
-			options?.teams?.enabled &&
-			options.teams.defaultTeam?.enabled !== false
-		) {
-    const defaultTeam =
-      (await options.teams.defaultTeam?.customCreateDefaultTeam?.(
-        organization,
-        ctx.request,
-      )) ||
-      (await adapter.createTeam({
-        organizationId: organization.id,
-        name: `${organization.name}`,
-        createdAt: new Date(),
-      }));
+			if (options.organizationCreation?.beforeCreate) {
+				const response = await options.organizationCreation.beforeCreate(
+					{
+						organization: {
+							...orgData,
+							createdAt: new Date(),
+						},
+						user,
+					},
+					ctx.request,
+				);
+				if (response && typeof response === "object" && "data" in response) {
+					hookResponse = response;
+				}
+			}
 
-			member = await adapter.createMember({
-				userId: user.id,
-				organizationId: organization.id,
-				role: ctx.context.orgOptions.creatorRole || "owner",
+			const organization = await adapter.createOrganization({
+				organization: {
+					...orgData,
+					createdAt: new Date(),
+					...(hookResponse?.data || {}),
+				},
 			});
 
-			teamMember = await adapter.createTeamMember({
-				teamId: defaultTeam.id,
-				userId: user.id,
+			let member:
+				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
+				| undefined;
+			let teamMember: TeamMember | undefined;
+
+			if (
+				options?.teams?.enabled &&
+				options.teams.defaultTeam?.enabled !== false
+			) {
+				const defaultTeam =
+					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
+						organization,
+						ctx.request,
+					)) ||
+					(await adapter.createTeam({
+						organizationId: organization.id,
+						name: `${organization.name}`,
+						createdAt: new Date(),
+					}));
+
+				member = await adapter.createMember({
+					userId: user.id,
+					organizationId: organization.id,
+					role: ctx.context.orgOptions.creatorRole || "owner",
+				});
+
+				teamMember = await adapter.createTeamMember({
+					teamId: defaultTeam.id,
+					userId: user.id,
+				});
+			} else {
+				member = await adapter.createMember({
+					userId: user.id,
+					organizationId: organization.id,
+					role: ctx.context.orgOptions.creatorRole || "owner",
+				});
+			}
+
+			if (options.organizationCreation?.afterCreate) {
+				await options.organizationCreation.afterCreate(
+					{
+						organization,
+						user,
+						member,
+					},
+					ctx.request,
+				);
+			}
+
+			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
+				await adapter.setActiveOrganization(
+					ctx.context.session.session.token,
+					organization.id,
+				);
+			}
+
+			if (
+				teamMember &&
+				ctx.context.session &&
+				!ctx.body.keepCurrentActiveOrganization
+			) {
+				await adapter.setActiveTeam(
+					ctx.context.session.session.token,
+					teamMember.teamId,
+				);
+			}
+
+			return ctx.json({
+				...organization,
+				metadata: ctx.body.metadata,
+				members: [member],
 			});
-		} else {
-			member = await adapter.createMember({
-				userId: user.id,
-				organizationId: organization.id,
-				role: ctx.context.orgOptions.creatorRole || "owner",
-			});
-    }
-
-    if (options.organizationCreation?.afterCreate) {
-      await options.organizationCreation.afterCreate(
-        {
-          organization,
-          user,
-          member,
-        },
-        ctx.request,
-      );
-    }
-
-    if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
-      await adapter.setActiveOrganization(
-        ctx.context.session.session.token,
-        organization.id,
-      );
-    }
-
-		if (
-			teamMember &&
-			ctx.context.session &&
-			!ctx.body.keepCurrentActiveOrganization
-		) {
-			await adapter.setActiveTeam(
-				ctx.context.session.session.token,
-				teamMember.teamId,
-			);
-		}
-
-		return ctx.json({
-			...organization,
-			metadata: ctx.body.metadata,
-			members: [member],
-		});
-	},
-);
+		},
+	);
+};
 
 export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	options: O,

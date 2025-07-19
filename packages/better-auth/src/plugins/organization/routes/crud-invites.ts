@@ -52,20 +52,21 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					"Resend the invitation email, if the user is already invited. Eg: true",
 			})
 			.optional(),
-    teamId: z.union([
-      z
-        .string({
-          description: "The team ID to invite the user to",
-        })
-        .optional(),
-      z
-        .array(
-          z.string({
-            description: "The team ID to invite the user to",
-          }),
-        )
-        .optional(),
-    ]),
+		teamId: z.union([
+			z
+				.string()
+				.meta({
+					description: "The team ID to invite the user to",
+				})
+				.optional(),
+			z
+				.array(
+					z.string().meta({
+						description: "The team ID to invite the user to",
+					}),
+				)
+				.optional(),
+		]),
 	});
 
 	return createAuthEndpoint(
@@ -276,8 +277,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			) {
 				const teamIds =
 					typeof ctx.body.teamId === "string"
-						? [ctx.body.teamId]
-						: ctx.body.teamId;
+						? [ctx.body.teamId as string]
+						: (ctx.body.teamId as string[]);
 
 				for (const teamId of teamIds) {
 					const team = await adapter.findTeamById({
@@ -309,11 +310,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				}
 			}
 
-			const teamIds =
+			const teamIds: string[] =
 				"teamId" in ctx.body
 					? typeof ctx.body.teamId === "string"
-						? [ctx.body.teamId]
-						: ctx.body.teamId ?? []
+						? [ctx.body.teamId as string]
+						: (ctx.body.teamId as string[]) ?? []
 					: [];
 
 			const {
@@ -557,60 +558,72 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 				});
 			}
-		}
 
-		let member = await adapter.createMember({
-			organizationId: invitation.organizationId,
-			userId: session.user.id,
-			role: invitation.role,
-			createdAt: new Date(),
-		});
-
-		if (acceptedI.teamId) {
-			const teamIds = acceptedI.teamId.split(",");
-			const onlyOne = teamIds.length === 1;
-
-			for (const teamId of teamIds) {
-				await adapter.findOrCreateTeamMember({
-					teamId: teamId,
-					userId: session.user.id,
-				});
-			}
-
-			if (onlyOne) {
-				const teamId = teamIds[0];
-				const updatedSession = await adapter.setActiveTeam(
-					session.session.token,
-					teamId,
-				);
-
-				await setSessionCookie(ctx, {
-					session: updatedSession,
-					user: session.user,
-				});
-			}
-		}
-
-		await adapter.setActiveOrganization(
-			session.session.token,
-			invitation.organizationId,
-		);
-
-		if (!acceptedI) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
-				},
+			const acceptedI = await adapter.updateInvitation({
+				invitationId: ctx.body.invitationId,
+				status: "accepted",
 			});
-		}
+			if (!acceptedI) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
+				});
+			}
 
-		return ctx.json({
-			invitation: acceptedI,
-			member,
-		});
-	},
-);
+			const member = await adapter.createMember({
+				organizationId: invitation.organizationId,
+				userId: session.user.id,
+				role: invitation.role as string,
+				createdAt: new Date(),
+			});
+
+			if ("teamId" in acceptedI) {
+				const teamIds =
+					typeof acceptedI.teamId === "string"
+						? [acceptedI.teamId as string]
+						: (acceptedI.teamId as string[]);
+				const onlyOne = teamIds.length === 1;
+
+				for (const teamId of teamIds) {
+					await adapter.findOrCreateTeamMember({
+						teamId: teamId,
+						userId: session.user.id,
+					});
+				}
+
+				if (onlyOne) {
+					const teamId = teamIds[0];
+					const updatedSession = await adapter.setActiveTeam(
+						session.session.token,
+						teamId,
+					);
+
+					await setSessionCookie(ctx, {
+						session: updatedSession,
+						user: session.user,
+					});
+				}
+			}
+
+			await adapter.setActiveOrganization(
+				session.session.token,
+				invitation.organizationId,
+			);
+
+			if (!acceptedI) {
+				return ctx.json(null, {
+					status: 400,
+					body: {
+						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+					},
+				});
+			}
+
+			return ctx.json({
+				invitation: acceptedI,
+				member,
+			});
+		},
+	);
 
 export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
