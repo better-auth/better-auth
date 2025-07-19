@@ -221,8 +221,8 @@ export const jwt = (options?: JwtOptions) => {
 							crv: "Ed25519",
 						};
 						const keyPairConfig = {
-							...cfg,
 							extractable: true,
+							...cfg,
 						};
 
 						const { publicKey, privateKey } = await generateKeyPair(
