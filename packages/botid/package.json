@@ -1,0 +1,52 @@
+{
+    "name": "@better-auth/botid",
+    "author": "Bereket Engida",
+    "version": "1.0.0",
+    "main": "dist/index.cjs",
+    "license": "MIT",
+    "keywords": [
+        "vercel",
+        "auth",
+        "bot",
+        "bot-detection",
+        "is-human",
+        "botid",
+        "better-auth"
+    ],
+    "module": "dist/index.mjs",
+    "description": "Vercel BotID for Better Auth",
+    "scripts": {
+        "test": "vitest",
+        "build": "unbuild",
+        "typecheck": "tsc --noEmit",
+        "dev": "unbuild --watch"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "typesVersions": {
+        "*": {
+            "*": [
+                "./dist/index.d.ts"
+            ],
+            "client": [
+                "./dist/client.d.ts"
+            ]
+        }
+    },
+    "dependencies": {
+        "better-auth": "workspace:^",
+        "zod": "^3.24.1"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "^7.6.12",
+        "better-call": "catalog:",
+        "better-sqlite3": "^11.6.0",
+        "botid": "^1.4.0",
+        "vitest": "^1.6.0"
+    }
+}
