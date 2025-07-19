@@ -426,21 +426,74 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
-			/**
-			 * ### Endpoint
-			 *
-			 * GET `/admin/list-users`
-			 *
-			 * ### API Methods
-			 *
-			 * **server:**
-			 * `auth.api.listUsers`
-			 *
-			 * **client:**
-			 * `authClient.admin.listUsers`
-			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-list-users)
-			 */
+			adminUpdateUser: createAuthEndpoint(
+				"/admin/update-user",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.coerce.string().meta({
+							description: "The user id",
+						}),
+						data: z.record(z.any(), z.any()).meta({
+							description: "The user data to update",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "updateUser",
+							summary: "Update a user",
+							description: "Update a user's details",
+							responses: {
+								200: {
+									description: "User updated",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const canUpdateUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["update"],
+						},
+					});
+					if (!canUpdateUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS,
+							code: "YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS",
+						});
+					}
+
+					if (Object.keys(ctx.body.data).length === 0) {
+						throw new APIError("BAD_REQUEST", {
+							message: ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE,
+						});
+					}
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						ctx.body.userId,
+						ctx.body.data,
+						ctx,
+					);
+
+					return ctx.json(updatedUser as UserWithRole);
+				},
+			),
 			listUsers: createAuthEndpoint(
 				"/admin/list-users",
 				{
