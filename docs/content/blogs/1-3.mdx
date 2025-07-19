@@ -198,7 +198,7 @@ import { auth } from "./auth";
 
 export const authClient = createAuthClient({
   // pass your auth instance to infer additional fields
-  plugins: [organizationClient<typeof auth>()], // [!code highlight]
+  plugins: [organizationClient({ $inferAuth: {} as typeof auth })], // [!code highlight]
 });
 ```
 
