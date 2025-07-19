@@ -10,188 +10,29 @@ To upgrade, run:
 npm install better-auth@1.3
 ```
 
----
+### **SSO Plugin**
 
-### **SAML SSO Plugin**
+SSO plugin is now moved to a separate package. It support OIDC and SAML 2.0. Finally!
 
-Comprehensive SSO support with SAML 2.0 integration.
+[Read the SSO docs](/docs/plugins/sso) for more information.
 
 ```ts title="auth.ts"
-import { sso } from "better-auth/plugins/sso";
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
 
-const auth = betterAuth({
+export const auth = betterAuth({
   plugins: [
     sso({
-      // Configure SAML provider
-      samlConfig: {
-        entryPoint: "https://idp.example.com/sso",
-        cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-        callbackUrl: "https://yourapp.com/api/auth/sso/saml2/callback/saml-provider",
-        audience: "https://yourapp.com",
-        wantAssertionsSigned: true,
-        signatureAlgorithm: "sha256",
-        digestAlgorithm: "sha256",
-        // Identity Provider metadata
-        idpMetadata: {
-          metadata: "<!-- IdP Metadata XML -->",
-          privateKey: "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
-          isAssertionEncrypted: true,
-        },
-        // Service Provider metadata
-        spMetadata: {
-          metadata: "<!-- SP Metadata XML -->",
-          binding: "post",
-          privateKey: "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
-        }
+      oidc: {
+        clientId: process.env.OIDC_CLIENT_ID!,
+        clientSecret: process.env.OIDC_CLIENT_SECRET!,
       },
-      // Map SAML attributes to user fields
-      mapping: {
-        id: "nameID",
-        email: "email",
-        name: "displayName",
-        firstName: "givenName",
-        lastName: "surname",
-        extraFields: {
-          department: "department",
-          role: "role"
-        }
+      saml: {
+        entryPoint: "https://example.com/saml",
+        issuer: "better-auth-example",
+        certificate: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
       },
     }),
   ],
 });
 ```
-
-Key features:
-- SAML 2.0 Support
-- Automatic Provider Discovery
-- Custom Provider Configuration
-- Configurable Limit for SSO Provider
-- Flexible Attribute Mapping
-- Encrypted Assertions Support
-- Automatic SP Metadata Generation
-- Custom Role Provisioning
-
-Read the [SSO Plugin docs](/docs/plugins/sso) for more information.
-
---- 
-
-### **Zod v4 Migration**
-Upgraded to Zod v4 for enhanced type safety and improved validation capabilities.
-
-Key improvements:
-- Better TypeScript inference
-- Improved validation and parsing performance
-
-### **Organization Improvements**
-
-Enhanced organization with new features and capabilities.
-
-```ts title="auth.ts"
-import { organization } from "better-auth/plugins";
-
-const auth = betterAuth({
-  plugins: [
-    organization({
-      additionalFields: {
-        website: {
-          type: "string",
-          required: false,
-        },
-      },
-    }),
-  ],
-});
-```
-Key features:
-- Extended Organization Fields:
-  - Type-safe additional fields
----
-
-## ✨ Core Enhancements
-
-### Type System & Validation
-- Migrated to Zod v4 for better type safety & performance
-- Enhanced validation patterns across the codebase
-- Improved error handling with better type inference and standard schema.
-
-### Authentication Flow
-- Added callback support for successful email verification
-- Option to disable auto-sending verification on SignIn
-- Improved cookie handling and session management
-- Enhanced context handling in database hooks
-- Better error messages and validation feedback
-
-### Database & Adapters
-- Use database for email change verification tokens
-- Updated MongoDB adapter to use CreateAdapter pattern
-- Fixed Prisma schema generator mismatch
-- Improved Drizzle CLI output formatting
-- Better context handling in database hooks
-
-### Organization & Teams
-- Type-safe additional fields support
-- Multiple team support 
-
-### Billing & Subscriptions
-- Stabilized Stripe integration
-- Enhanced subscription management
-- Improved webhook reliability
-- Better payment failure handling
-- Proper subscription cleanup
-- Enhanced customer portal integration
-
----
-
-## 🛠 Bug Fixes & Stability Improvements
-
-### Authentication & Sessions
-- Fixed memory leak in SvelteKit + Sentry integration
-- Fixed global success callback not being triggered
-- Added support for cookie cache in Custom Sessions
-- Fixed cookie setting issues with phone number updates
-- Improved cookie handling for email verification
-
-### SSO 
-- Added proper limits and checks for SSO plugin
-- Added JWKS support for OIDC plugin
-- Improved error handling in SSO plugin
-- Enhanced provider discovery
-
-### Stripe Integration
-- Fixed subscription synchronization issues
-- Resolved webhook handling reliability
-- Improved error handling for failed payments
-- Fixed customer portal integration issues
-- Resolved team seat management bugs
-- Added proper cleanup for cancelled subscriptions
-
-### Organization 
-- Refactor organization type definitions
-- Improved organization deletion cleanup
-
-### Developer Experience
-- Fixed Prisma schema generator issues
-- Improved error messages and validation feedback(zodv4 prettify error)
-- Enhanced debugging capabilities
----
-
-## 📚 Documentation Updates
-
-### New Guides
-- Added comprehensive examples tab
-- Enhanced plugin configuration examples
-- Added type-safe field extension examples
-- Improved organization customization guides
-- Enhanced API reference documentation
-- Improved contribution guide
-- Added documentation for database hooks context
-- Enhanced SSO configuration examples
-- Updated Stripe integration guides
-
----
-
-```package-install
-npm install better-auth@1.3.0
-```
-
-**Upgrade now and take advantage of these powerful new features!** 🚀
