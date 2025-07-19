@@ -237,49 +237,49 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				let customerId =
 					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
 
-					if (!customerId) {
-						try {
-							// Try to find existing Stripe customer by email
-							const existingCustomers = await client.customers.list({
+				if (!customerId) {
+					try {
+						// Try to find existing Stripe customer by email
+						const existingCustomers = await client.customers.list({
+							email: user.email,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingCustomers.data[0];
+
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create({
 								email: user.email,
-								limit: 1,
-							});
-	
-							let stripeCustomer = existingCustomers.data[0];
-	
-							if (!stripeCustomer) {
-								stripeCustomer = await client.customers.create({
-									email: user.email,
-									name: user.name,
-									metadata: {
-										...ctx.body.metadata,
-										userId: user.id,
-									},
-								});
-							}
-	
-							// Update local DB with Stripe customer ID
-							await ctx.context.adapter.update({
-								model: "user",
-								update: {
-									stripeCustomerId: stripeCustomer.id,
+								name: user.name,
+								metadata: {
+									...ctx.body.metadata,
+									userId: user.id,
 								},
-								where: [
-									{
-										field: "id",
-										value: user.id,
-									},
-								],
-							});
-	
-							customerId = stripeCustomer.id;
-						} catch (e: any) {
-							ctx.context.logger.error(e);
-							throw new APIError("BAD_REQUEST", {
-								message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
 							});
 						}
+
+						// Update local DB with Stripe customer ID
+						await ctx.context.adapter.update({
+							model: "user",
+							update: {
+								stripeCustomerId: stripeCustomer.id,
+							},
+							where: [
+								{
+									field: "id",
+									value: user.id,
+								},
+							],
+						});
+
+						customerId = stripeCustomer.id;
+					} catch (e: any) {
+						ctx.context.logger.error(e);
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+						});
 					}
+				}
 
 				const activeSubscription = customerId
 					? await client.subscriptions
