@@ -1,28 +1,63 @@
-import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
+import type { BetterAuthPlugin } from "./plugins";
+import type {
+	FieldAttribute,
+	InferFieldsFromPlugins,
+	InferFieldsOutput,
+} from "../db";
+import type {
+	LiteralString,
+	LiteralUnion,
+	OmitId,
+	PrettifyDeep,
+	PrettifyOmitId,
+	StripEmptyObjects,
+} from "./helper";
 import type {
 	Account,
-	GenericEndpointContext,
+	Models,
+	RateLimit,
 	Session,
 	User,
 	Verification,
-} from "../types";
-import type { BetterAuthPlugin } from "./plugins";
-import type { SocialProviderList, SocialProviders } from "../social-providers";
+} from "./models";
+import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
-import type { FieldAttribute } from "../db";
-import type { Models, RateLimit } from "./models";
-import type { AuthContext } from ".";
-import type { CookieOptions } from "better-call";
+import type { KyselyDatabaseType } from "../adapters/kysely-adapter";
 import type { Database } from "better-sqlite3";
-import type { Logger } from "../utils";
+import type { SocialProviderList, SocialProviders } from "../social-providers";
+import type { AuthContext, GenericEndpointContext } from ".";
+import type { CookieOptions } from "better-call";
 import type { AuthMiddleware } from "../plugins";
-import type { LiteralUnion, OmitId } from "./helper";
+import type { Logger } from "../utils";
 import type { AdapterDebugLogs } from "../adapters";
 //@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
 
-export type BetterAuthOptions = {
+export type BetterAuthOptions<
+	// Plugin inference
+	Plugins extends BetterAuthPlugin[] = BetterAuthPlugin[],
+	// User model inference
+	UserModelName extends LiteralString = LiteralString,
+	UserFields extends Partial<
+		Record<keyof OmitId<User>, LiteralString>
+	> = Partial<Record<keyof OmitId<User>, LiteralString>>,
+	UserAdditionalFields extends {
+		[key: string]: FieldAttribute;
+	} = {},
+	// Session model inference
+	SessionModelName extends LiteralString = LiteralString,
+	SessionFields extends Partial<
+		Record<keyof OmitId<Session>, LiteralString>
+	> = Partial<Record<keyof OmitId<Session>, LiteralString>>,
+	SessionAdditionalFields extends {
+		[key: string]: FieldAttribute;
+	} = {},
+	// Account model inference
+	AccountModelName extends LiteralString = LiteralString,
+	AccountFields extends Partial<
+		Record<keyof OmitId<Account>, LiteralString>
+	> = Partial<Record<keyof OmitId<Account>, LiteralString>>,
+> = {
 	/**
 	 * The name of the application
 	 *
@@ -284,7 +319,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: BetterAuthPlugin[];
+	plugins?: Plugins;
 	/**
 	 * User configuration
 	 */
@@ -292,7 +327,7 @@ export type BetterAuthOptions = {
 		/**
 		 * The model name for the user. Defaults to "user".
 		 */
-		modelName?: string;
+		modelName?: UserModelName;
 		/**
 		 * Map fields
 		 *
@@ -303,13 +338,11 @@ export type BetterAuthOptions = {
 		 * }
 		 * ```
 		 */
-		fields?: Partial<Record<keyof OmitId<User>, string>>;
+		fields?: UserFields;
 		/**
-		 * Additional fields for the session
+		 * Additional fields for the user model
 		 */
-		additionalFields?: {
-			[key: string]: FieldAttribute;
-		};
+		additionalFields?: UserAdditionalFields;
 		/**
 		 * Changing email configuration
 		 */
@@ -383,7 +416,7 @@ export type BetterAuthOptions = {
 		 *
 		 * @default "session"
 		 */
-		modelName?: string;
+		modelName?: SessionModelName;
 		/**
 		 * Map fields
 		 *
@@ -393,7 +426,7 @@ export type BetterAuthOptions = {
 		 *  userId: "user_id"
 		 * }
 		 */
-		fields?: Partial<Record<keyof OmitId<Session>, string>>;
+		fields?: SessionFields;
 		/**
 		 * Expiration time for the session token. The value
 		 * should be in seconds.
@@ -417,9 +450,7 @@ export type BetterAuthOptions = {
 		/**
 		 * Additional fields for the session
 		 */
-		additionalFields?: {
-			[key: string]: FieldAttribute;
-		};
+		additionalFields?: SessionAdditionalFields;
 		/**
 		 * By default if secondary storage is provided
 		 * the session is stored in the secondary storage.
@@ -473,8 +504,8 @@ export type BetterAuthOptions = {
 		freshAge?: number;
 	};
 	account?: {
-		modelName?: string;
-		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		modelName?: AccountModelName;
+		fields?: AccountFields;
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 		 * will be updated on sign in with the latest data from the provider.
@@ -753,6 +784,9 @@ export type BetterAuthOptions = {
 			  }) => string)
 			| false;
 	};
+	/**
+	 * Logger
+	 */
 	logger?: Logger;
 	/**
 	 * allows you to define custom hooks that can be
@@ -771,19 +805,45 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: User,
+					user: PrettifyOmitId<
+						InferDatabaseModel<
+							"user",
+							User,
+							Plugins,
+							UserFields,
+							UserAdditionalFields
+						>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<User> & Record<string, any>;
+							data: Partial<
+								InferDatabaseModel<
+									"user",
+									User,
+									Plugins,
+									UserFields,
+									UserAdditionalFields
+								>
+							> &
+								Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a user is created.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: InferDatabaseModel<
+						"user",
+						User,
+						Plugins,
+						UserFields,
+						UserAdditionalFields
+					>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 			update?: {
 				/**
@@ -792,19 +852,45 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: Partial<User>,
+					user: Partial<
+						InferDatabaseModel<
+							"user",
+							User,
+							Plugins,
+							UserFields,
+							UserAdditionalFields
+						>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<User & Record<string, any>>;
+							data: Partial<
+								InferDatabaseModel<
+									"user",
+									User,
+									Plugins,
+									UserFields,
+									UserAdditionalFields
+								> &
+									Record<string, any>
+							>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a user is updated.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: InferDatabaseModel<
+						"user",
+						User,
+						Plugins,
+						UserFields,
+						UserAdditionalFields
+					>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 		};
 		/**
@@ -818,7 +904,15 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Session,
+					session: PrettifyOmitId<
+						InferDatabaseModel<
+							"session",
+							Session,
+							Plugins,
+							SessionFields,
+							SessionAdditionalFields
+						>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -831,7 +925,13 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a session is created.
 				 */
 				after?: (
-					session: Session,
+					session: InferDatabaseModel<
+						"session",
+						Session,
+						Plugins,
+						SessionFields,
+						SessionAdditionalFields
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -845,7 +945,15 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Partial<Session>,
+					session: Partial<
+						InferDatabaseModel<
+							"session",
+							Session,
+							Plugins,
+							SessionFields,
+							SessionAdditionalFields
+						>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -858,7 +966,13 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a session is updated.
 				 */
 				after?: (
-					session: Session,
+					session: InferDatabaseModel<
+						"session",
+						Session,
+						Plugins,
+						SessionFields,
+						SessionAdditionalFields
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -874,20 +988,37 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					account: Account,
+					account: PrettifyOmitId<
+						InferDatabaseModel<"account", Account, Plugins, AccountFields, {}>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Account> & Record<string, any>;
+							data: Partial<
+								InferDatabaseModel<
+									"account",
+									Account,
+									Plugins,
+									AccountFields,
+									{}
+								>
+							> &
+								Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a account is created.
 				 */
 				after?: (
-					account: Account,
+					account: InferDatabaseModel<
+						"account",
+						Account,
+						Plugins,
+						AccountFields,
+						{}
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -901,20 +1032,37 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					account: Partial<Account>,
+					account: Partial<
+						InferDatabaseModel<"account", Account, Plugins, AccountFields, {}>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Account & Record<string, any>>;
+							data: Partial<
+								InferDatabaseModel<
+									"account",
+									Account,
+									Plugins,
+									AccountFields,
+									{}
+								> &
+									Record<string, any>
+							>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a account is updated.
 				 */
 				after?: (
-					account: Account,
+					account: InferDatabaseModel<
+						"account",
+						Account,
+						Plugins,
+						AccountFields,
+						{}
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -930,20 +1078,37 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Verification,
+					verification: PrettifyOmitId<
+						InferDatabaseModel<"verification", Verification, Plugins, {}, {}>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Verification> & Record<string, any>;
+							data: Partial<
+								InferDatabaseModel<
+									"verification",
+									Verification,
+									Plugins,
+									{},
+									{}
+								>
+							> &
+								Record<string, any>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a verification is created.
 				 */
 				after?: (
-					verification: Verification,
+					verification: InferDatabaseModel<
+						"verification",
+						Verification,
+						Plugins,
+						{},
+						{}
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -954,20 +1119,37 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Partial<Verification>,
+					verification: Partial<
+						InferDatabaseModel<"verification", Verification, Plugins, {}, {}>
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
 					| void
 					| {
-							data: Partial<Verification & Record<string, any>>;
+							data: Partial<
+								InferDatabaseModel<
+									"verification",
+									Verification,
+									Plugins,
+									{},
+									{}
+								> &
+									Record<string, any>
+							>;
 					  }
 				>;
 				/**
 				 * Hook that is called after a verification is updated.
 				 */
 				after?: (
-					verification: Verification,
+					verification: InferDatabaseModel<
+						"verification",
+						Verification,
+						Plugins,
+						{},
+						{}
+					>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -1019,4 +1201,39 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+};
+
+export type InferDatabaseModel<
+	ModelName extends LiteralString,
+	BaseModel extends Record<string, any> & { id: unknown },
+	Plugins extends BetterAuthPlugin[],
+	ModelFields extends Partial<Record<keyof OmitId<BaseModel>, LiteralString>>,
+	ModelAdditionalFields extends {
+		[key: string]: FieldAttribute;
+	},
+> = PrettifyDeep<
+	ReplaceKeysPartial<
+		StripEmptyObjects<
+			BaseModel &
+				InferFieldsFromPlugins<Plugins, ModelName> &
+				(IsOpenRecord<ModelAdditionalFields> extends false
+					? InferFieldsOutput<ModelAdditionalFields>
+					: {})
+		>,
+		//@ts-ignore
+		ModelFields
+	>
+>;
+
+type IsOpenRecord<T> = string extends keyof T ? true : false;
+
+type ReplaceKeysPartial<
+	T extends Record<string, any>,
+	Replacements extends Partial<Record<keyof T, string>>,
+> = {
+	[K in keyof T as K extends keyof Replacements
+		? Replacements[K] extends string // Ensure Replacements[K] is not undefined
+			? Replacements[K]
+			: K
+		: K]: T[K];
 };
