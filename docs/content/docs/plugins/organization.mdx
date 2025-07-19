@@ -1435,20 +1435,37 @@ Table Name: `team`
   ]}
   />
 
-  Table Name: `member`
+Table Name: `teamMember`
 
 <DatabaseTable
   fields={[
     {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each team member",
+      isPrimaryKey: true
+    },
+    {
       name: "teamId",
       type: "string",
-      description: "The ID of the team",
-      isOptional: true
+      description: "Unique identifier for each team",
+      isForeignKey: true
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the team member was created"
     },
   ]}
   />
 
-  Table Name: `invitation`
+Table Name: `invitation`
 
 <DatabaseTable
   fields={[

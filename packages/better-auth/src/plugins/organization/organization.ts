@@ -50,6 +50,7 @@ import type {
 	InferMember,
 	InferOrganization,
 	Team,
+	TeamMember,
 } from "./schema";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
@@ -891,6 +892,7 @@ export const organization = <O extends OrganizationOptions>(
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
 			Team: teamSupport ? ({} as Team) : ({} as any),
+			TeamMember: teamSupport ? ({} as TeamMember) : ({} as any),
 			ActiveOrganization: {} as Awaited<
 				ReturnType<ReturnType<typeof getFullOrganization<O>>>
 			>,
