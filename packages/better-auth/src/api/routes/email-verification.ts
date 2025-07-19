@@ -397,17 +397,25 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
-		await ctx.context.options.emailVerification?.onEmailVerification?.(
-			user.user,
-			ctx.request,
-		);
-		await ctx.context.internalAdapter.updateUserByEmail(
+		if (ctx.context.options.emailVerification?.onEmailVerification) {
+			await ctx.context.options.emailVerification.onEmailVerification(
+				user.user,
+				ctx.request,
+			);
+		}
+		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 			parsed.email,
 			{
 				emailVerified: true,
 			},
 			ctx,
 		);
+		if (ctx.context.options.emailVerification?.afterEmailVerification) {
+			await ctx.context.options.emailVerification.afterEmailVerification(
+				updatedUser,
+				ctx.request,
+			);
+		}
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
 			if (!currentSession || currentSession.user.email !== parsed.email) {
