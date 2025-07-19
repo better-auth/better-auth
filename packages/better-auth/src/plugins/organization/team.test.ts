@@ -566,7 +566,8 @@ describe("mulit team support", async (it) => {
 		expect(team3Members.at(0)?.teamId).toBe(team3Id);
 	});
 
-	it("show add directly add a member to a team", async () => {
+	let team4Id: string | null = null;
+	it("should add directly add a member to a team", async () => {
 		expect(organizationId).toBeDefined();
 		if (!organizationId) throw Error("can not run test");
 
@@ -594,5 +595,26 @@ describe("mulit team support", async (it) => {
 		});
 
 		expect(teams).toHaveLength(4);
+
+		team4Id = team.id;
+	});
+
+	it("should remove a member from a team", async () => {
+		expect(team4Id).toBeDefined();
+		if (!team4Id) throw Error("can not run test");
+
+		await auth.api.removeTeamMember({
+			headers: admin.headers,
+			body: {
+				userId: invitedUser.response.user.id,
+				teamId: team4Id,
+			},
+		});
+
+		const teams = await auth.api.listUserTeams({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+		});
+
+		expect(teams).toHaveLength(3);
 	});
 });
