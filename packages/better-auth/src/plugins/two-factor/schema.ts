@@ -31,6 +31,7 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+				shouldIndex: true,
 			},
 		},
 	},
