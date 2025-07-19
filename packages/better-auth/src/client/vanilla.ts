@@ -16,7 +16,6 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { BASE_ERROR_CODES } from "../error/codes";
-import type { InferRoutes } from "./path-to-object";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
@@ -90,18 +89,5 @@ export function createAuthClient<Option extends ClientOptions>(
 			$ERROR_CODES: PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
-		} & InferRoutes<
-			Option["$InferAuth"] extends {
-				plugins: infer Plugins;
-			}
-				? Plugins extends Array<infer Plugin>
-					? Plugin extends {
-							endpoints: infer Endpoints;
-						}
-						? Endpoints
-						: {}
-					: {}
-				: {},
-			Option
-		>;
+		};
 }

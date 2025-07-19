@@ -8,7 +8,10 @@ import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
 import prettier from "prettier";
 
-export function convertToSnakeCase(str: string) {
+export function convertToSnakeCase(str: string, camelCase?: boolean) {
+	if (camelCase) {
+		return str;
+	}
 	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
@@ -43,29 +46,31 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 				);
 			}
-			name = convertToSnakeCase(name);
-
+			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
 				if (options.advanced?.database?.useNumberId) {
 					if (databaseType === "pg") {
-						return `serial('${name}').primaryKey()`;
+						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
-						return `int('${name}').autoIncrement().primaryKey()`;
+						return `int('${name}')`;
 					} else {
 						// using sqlite
-						return `integer({ mode: 'number' }).primaryKey({ autoIncrement: true })`;
+						return `integer('${name}')`;
+					}
+				}
+				if (field.references.field) {
+					if (databaseType === "mysql") {
+						return `varchar('${name}', { length: 36 })`;
 					}
 				}
 				return `text('${name}')`;
 			}
-
 			const type = field.type as
 				| "string"
 				| "number"
 				| "boolean"
 				| "date"
 				| `${"string" | "number"}[]`;
-
 			const typeMap: Record<
 				typeof type,
 				Record<typeof databaseType, string>
@@ -136,6 +141,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
 			modelName,
+			adapter.options?.camelCase,
 		)}", {
 					id: ${id},
 					${Object.keys(fields)

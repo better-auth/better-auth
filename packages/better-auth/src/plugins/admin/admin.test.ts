@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { admin, type UserWithRole } from "./admin";
+import { admin } from "./admin";
+import { type UserWithRole } from "./types";
 import { adminClient } from "./client";
 import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
@@ -126,11 +127,14 @@ describe("Admin plugin", async () => {
 	const { headers: adminHeaders } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
 	const testNonAdminUser = {
+		id: "123",
 		email: "user@test.com",
 		password: "password",
 		name: "Test User",
 	};
-	await client.signUp.email(testNonAdminUser);
+	const { data: testNonAdminUserRes } =
+		await client.signUp.email(testNonAdminUser);
+	testNonAdminUser.id = testNonAdminUserRes?.user.id || "";
 	const { headers: userHeaders } = await signInWithUser(
 		testNonAdminUser.email,
 		testNonAdminUser.password,
@@ -200,7 +204,6 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 	});
-
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
@@ -730,6 +733,38 @@ describe("Admin plugin", async () => {
 			name: "Test User",
 			role: "user",
 		});
+	});
+
+	it("should allow admin to update user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					name: "Updated Name",
+					customField: "custom value",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.name).toBe("Updated Name");
+	});
+
+	it("should not allow non-admin to update user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					name: "Unauthorized Update",
+				},
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 	});
 });
 
