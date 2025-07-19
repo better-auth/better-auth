@@ -432,15 +432,19 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
-			const updatingMemberRoles = member.role.split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 
+			const updatingMemberRoles = member.role.split(",");
+			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
+
+			const isUpdatingCreator = toBeUpdatedMemberRoles.includes(creatorRole);
+			const updaterIsCreator = updatingMemberRoles.includes(creatorRole);
+
+			const isSettingCreatorRole = roleToSet.includes(creatorRole);
+
 			if (
-				(toBeUpdatedMemberRoles.includes(creatorRole) &&
-					!updatingMemberRoles.includes(creatorRole)) ||
-				(roleToSet.includes(creatorRole) &&
-					!updatingMemberRoles.includes(creatorRole))
+				(isUpdatingCreator && !updaterIsCreator) ||
+				(isSettingCreatorRole && !updaterIsCreator)
 			) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -454,6 +458,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				permissions: {
 					member: ["update"],
 				},
+				allowCreatorAllPermissions: true,
 			});
 
 			if (!canUpdateMember) {

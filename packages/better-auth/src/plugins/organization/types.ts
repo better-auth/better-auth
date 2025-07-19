@@ -148,7 +148,7 @@ export interface OrganizationOptions {
 	/**
 	 * Cancel pending invitations on re-invite.
 	 *
-	 * @default true
+	 * @default false
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean;
 	/**

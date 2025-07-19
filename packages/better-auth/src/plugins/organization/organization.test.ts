@@ -10,6 +10,8 @@ import { memoryAdapter } from "../../adapters/memory-adapter";
 import type { OrganizationOptions } from "./types";
 import type { PrettifyDeep } from "../../types/helper";
 import type { InvitationStatus } from "./schema";
+import { admin } from "../admin";
+import { ownerAc } from "./access";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -1116,6 +1118,176 @@ describe("cancel pending invitations on re-invite", async () => {
 			listInvitations.data?.filter((invite) => invite.status === "pending")
 				.length,
 		).toBe(1);
+	});
+});
+
+describe("owner can update roles", async () => {
+	const statement = {
+		custom: ["custom"],
+	} as const;
+
+	const ac = createAccessControl(statement);
+
+	const custom = ac.newRole({
+		custom: ["custom"],
+	});
+
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [
+			admin(),
+			organization({
+				ac,
+				roles: {
+					custom,
+					owner: ownerAc,
+				},
+			}),
+		],
+	});
+
+	const adminEmail = "admin@email.com";
+	const adminPassword = "adminpassword";
+
+	await auth.api.createUser({
+		body: {
+			email: adminEmail,
+			password: adminPassword,
+			name: "Admin",
+			role: "admin",
+		},
+	});
+
+	const { headers } = await auth.api.signInEmail({
+		returnHeaders: true,
+		body: {
+			email: adminEmail,
+			password: adminPassword,
+		},
+	});
+
+	const adminCookie = headers.getSetCookie()[0];
+
+	const org = await auth.api.createOrganization({
+		headers: { cookie: adminCookie },
+		body: {
+			name: "Org",
+			slug: "org",
+		},
+	});
+
+	if (!org) {
+		throw new Error("couldn't create an organization");
+	}
+
+	const ownerId = org.members.at(0)?.id;
+	if (!ownerId) {
+		throw new Error("couldn't get the owner id");
+	}
+
+	it("allows setting custom role to a user", async () => {
+		const userEmail = "user@email.com";
+		const userPassword = "userpassword";
+
+		const { user } = await auth.api.createUser({
+			headers: { cookie: adminCookie },
+			body: {
+				name: "user",
+				email: userEmail,
+				password: userPassword,
+			},
+		});
+
+		const addMemberRes = await auth.api.addMember({
+			headers: { cookie: adminCookie },
+			body: {
+				organizationId: org.id,
+				userId: user.id,
+				role: [],
+			},
+		});
+
+		if (!addMemberRes) {
+			throw new Error("couldn't add user as a member to a repo");
+		}
+
+		await auth.api.updateMemberRole({
+			headers: { cookie: adminCookie },
+			body: {
+				organizationId: org.id,
+				memberId: addMemberRes.id,
+				role: ["custom"],
+			},
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			returnHeaders: true,
+			body: {
+				email: userEmail,
+				password: userPassword,
+			},
+		});
+
+		const userCookie = signInRes.headers.getSetCookie()[0];
+
+		const permissionRes = await auth.api.hasPermission({
+			headers: { cookie: userCookie },
+			body: {
+				organizationId: org.id,
+				permissions: {
+					custom: ["custom"],
+				},
+			},
+		});
+
+		expect(permissionRes.success).toBe(true);
+		expect(permissionRes.error).toBeNull();
+	});
+
+	it("allows org owner to set a custom role for themselves", async () => {
+		await auth.api.updateMemberRole({
+			headers: { cookie: adminCookie },
+			body: {
+				organizationId: org.id,
+				memberId: ownerId,
+				role: ["owner", "custom"],
+			},
+		});
+
+		const permissionRes = await auth.api.hasPermission({
+			headers: { cookie: adminCookie },
+			body: {
+				organizationId: org.id,
+				permissions: {
+					custom: ["custom"],
+				},
+			},
+		});
+
+		expect(permissionRes.success).toBe(true);
+		expect(permissionRes.error).toBeNull();
+	});
+
+	// TODO: We might not want to allow this.
+	it("allows an org owner to remove their own creator role", async () => {
+		await auth.api.updateMemberRole({
+			headers: { cookie: adminCookie },
+			body: {
+				organizationId: org.id,
+				memberId: ownerId,
+				role: [],
+			},
+		});
+
+		const member = await auth.api.getActiveMember({
+			headers: { cookie: adminCookie },
+		});
+
+		console.log({ member });
+
+		expect(member?.role).toBe("");
 	});
 });
 

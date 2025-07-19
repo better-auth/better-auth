@@ -601,7 +601,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						const defaultErrorURL =
 							ctx.context.options.onAPIError?.errorURL ||
 							`${ctx.context.baseURL}/error`;
-						throw ctx.redirect(`${errorURL || defaultErrorURL}?error=${error}`);
+						let url = errorURL || defaultErrorURL;
+						if (url.includes("?")) {
+							url = `${url}&error=${error}`;
+						} else {
+							url = `${url}?error=${error}`;
+						}
+						throw ctx.redirect(url);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;
