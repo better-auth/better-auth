@@ -32,7 +32,226 @@ export const auth = betterAuth({
         issuer: "better-auth-example",
         certificate: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
       },
+      // provider limit
+      providersLimit: async (user) => {
+        const plan = await getUserPlan(user);
+        return plan.name === "pro" ? 10 : 1;
+      },
     }),
   ],
 });
 ```
+
+### Stable OIDC and MCP plugin
+
+OIDC and MCP plugin are now stable and ready for production. Both plugins use mostly does the same thing, but the MCP plugin is pre-configured to work with MCP clients. MCP is a platform for managing your users and organizations.
+
+New features:
+
+* Refresh token support in discovery and token endpoints.
+* Support JWKs and PKCE for public clients.
+* Trusted clients
+* Encrypt and hash client secrets
+
+[Read the OIDC docs](/docs/plugins/oidc) for more information.
+
+[Read the MCP docs](/docs/plugins/mcp) for more information.
+
+```ts title="auth.ts"
+import { mcp } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    mcp({
+      loginPage: "/login",
+    }),
+  ],
+});
+```
+
+### SIWE Plugin – Support for Sign-In with Ethereum
+
+[Read the SIWE docs](/docs/plugins/siwe) for more information.
+
+```ts title="auth.ts"
+import { siwe } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    siwe(),
+  ],
+});
+```
+
+### Notion, Slack, Linear and Faceit Providers
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socailProviders: {
+    notion: {
+      // ...
+    },
+    slack: {
+      // ...
+    },
+    linear: {
+      // ...
+    },
+    faceit: {
+      // ...
+    },
+  }
+});
+```
+
+### Sveltekit Cookie Helper Plugin 
+
+Helper utilities for working with cookies in SvelteKit Server actions.
+
+<Callout type="warn">
+  Breaking: building and getRequestEvent() now need to be passed in as props.
+</Callout>
+
+```ts title="auth.ts"
+import { BetterAuth } from "better-auth";
+import { sveltekitCookies } from "better-auth/svelte-kit";
+import { getRequestEvent } from "$app/server";
+
+export const auth = betterAuth({
+  // ... your config
+  plugins: [sveltekitCookies(getRequestEvent)],
+});
+```
+
+### `SendOnSignIn` option
+
+```ts title="auth.ts"
+
+export const auth = betterAuth({
+  emailVerification: {
+    sendOnSignIn: true, // send email verification on sign in if user is not verified
+  }
+});
+```
+
+### Multi Team Support
+
+Organization plugin now supports a member to be a member of multiple teams
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      // ...
+    }),
+  ],
+});
+```
+
+- `MaximumMembersPerTeam`
+- `listUserInvitations`
+- `AdditionalFields` support for org, member, invitation, team. 
+
+### Generic OAuth
+Added support for additional token URL params for `genericOAuth` plugin. Token encryption options added for OAuth tokens
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // ... your config
+  plugins: [
+    genericOAuth({
+      // ...
+    }),
+  ],
+});
+```
+
+### API Key
+
+- `requireName` for key creation.
+- `verifyKey` now supports async functions.
+
+### Username
+
+- Username availability check
+- Support for custom normalization
+
+### More Features
+
+- Migrated to Zod 4 for improved type-safety and performance
+- CLI can now use custom adapter’s createSchema. 
+- Added `inferAuth` utility to infer types from client without needing plugins
+- Improved documentation to display auth & authClient examples
+
+- `rememberMe` is now support in `signUp` method.
+- `afterEmailVerification` hook
+- `freshAge` and custom `errorURL` is now propelry honored.
+-  Extended OAuth2 tokens to include `refresh_token_expires_in`
+
+### 🐜 Bug Fixes
+
+Plugin Fixes
+  
+* Expo: Fixed type path import. [PR]
+* SSO: SAML redirection & typecheck issues resolved. [PR]
+* Dropbox: Added token access type support. [PR]
+* Stripe:
+    * Prevented duplicate customers. [PR]
+    * Allowed upgrading incomplete subscriptions. [PR]
+* Admin:
+    * Fixed missing ctx in hooks. [PR]
+    * Error thrown for invalid user ID on /remove-user. [PR]
+
+OAuth & Providers
+
+* Fixed duplicate OAuth registration. [PR]
+* Better handling of Google/Microsoft scopes. [PR]
+* Fixed malformed error URLs in generic OAuth. [PR]
+* Facebook: Correct detection for limited token JWT. [PR]
+* Twitter: Improved email verification logic. [PR]
+
+Core Authentication
+
+* Exclude current user from username uniqueness check. [PR]
+* Support for callback URL in signInUsername. [PR]
+* Allow linking accounts without email. [PR]
+* Missing null type in /get-session response fixed. [PR]
+* Global onSuccess hook now works. [PR]
+* JWT: Added support for alternate algorithms in JWKS. [PR]
+* origin-check: Wildcard trusted origins now supported. [PR]
+
+CLI, DB, and Adapter Fixes
+
+* CLI: Drizzle schema formatting. [PR]
+* MongoAdapter: Now works with create-adapter. [PR]
+* Schema generation respects useNumberId. [PR]
+* Postgres: varchar normalization and type comparison added. [PR]
+* Drizzle CLI: Uses serial as PK if useNumberId is enabled. [PR]
+
+Email/OTP Fixes
+
+* OTPs now encrypted. [PR]
+* Fix for onEmailVerification not called. [PR]
+* Proper error thrown when sign-up disabled. [PR]
+* phone-number: Reset clears verification values. [PR]
+
+Two-Factor Auth
+
+* OTP period default fix. [PR]
+* URI generation doesn’t require enabling 2FA. [PR]
+* Fixed OTP URI separator mismatch. [PR]
+
+Miscellaneous
+
+* Deleted organization if member not found. [PR]
+* Correct error codes for API key rate limits. [PR]
+* Fixed additional fields not showing in OpenAPI. [PR]
+* Fixed foreign key constraint generation for MySQL. [PR]
+* Various enhancements to account linking logic. [ account linking ]
+* OIDC offline_access no longer requires prompt=consent. [PR]
+* Fixed malformed base64 encoding for token validation. [PR]
+
