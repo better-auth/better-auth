@@ -350,3 +350,161 @@ describe("team", async (it) => {
 		expect(res2.error?.code).toEqual("TEAM_MEMBER_LIMIT_REACHED");
 	});
 });
+
+describe("mulit team support", async (it) => {
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
+		{
+			plugins: [
+				organization({
+					async sendInvitationEmail() {},
+					teams: {
+						enabled: true,
+						defaultTeam: {
+							enabled: true,
+						},
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			testWith: "sqlite",
+		},
+	);
+
+	const admin = await signInWithTestUser();
+
+	const invitedUser = await auth.api.signUpEmail({
+		body: {
+			name: "Invited User",
+			email: "invited@email.com",
+			password: "password",
+		},
+		returnHeaders: true,
+	});
+
+	let organizationId: string | null = null;
+
+	let team1Id: string | null = null;
+	let team2Id: string | null = null;
+	let team3Id: string | null = null;
+
+	let invitationId: string | null = null;
+
+	it("should create an organization to test multi team support", async () => {
+		const organization = await auth.api.createOrganization({
+			headers: admin.headers,
+			body: {
+				name: "Test Organization",
+				slug: "test-org",
+				metadata: {
+					test: "organization-metadata",
+				},
+			},
+		});
+
+		expect(organization?.id).toBeDefined();
+		expect(organization?.name).toBe("Test Organization");
+
+		organizationId = organization?.id as string;
+	});
+
+	it("should create 3 teams", async () => {
+		expect(organizationId).toBeDefined();
+		if (!organizationId) throw Error("can not run test");
+
+		const team1 = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Team One",
+				organizationId,
+			},
+		});
+
+		expect(team1.id).toBeDefined();
+		expect(team1.organizationId).toBe(organizationId);
+
+		team1Id = team1.id;
+
+		const team2 = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Team Two",
+				organizationId,
+			},
+		});
+
+		expect(team2.id).toBeDefined();
+		expect(team2.organizationId).toBe(organizationId);
+
+		team2Id = team2.id;
+
+		const team3 = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Team Three",
+				organizationId,
+			},
+		});
+
+		expect(team3.id).toBeDefined();
+		expect(team3.organizationId).toBe(organizationId);
+
+		team3Id = team3.id;
+	});
+
+	it("should invite user to all 3 teams", async () => {
+		expect(organizationId).toBeDefined();
+		expect(team1Id).toBeDefined();
+		expect(team2Id).toBeDefined();
+		expect(team3Id).toBeDefined();
+
+		if (!organizationId || !team1Id || !team2Id || !team3Id)
+			throw Error("can not run test");
+
+		const invitation = await auth.api.createInvitation({
+			headers: admin.headers,
+			body: {
+				email: invitedUser.response.user.email,
+				role: "member",
+				organizationId,
+				teamId: [team1Id, team2Id, team3Id],
+			},
+		});
+
+		expect(invitation.id).toBeDefined();
+		expect(invitation.teamId).toBe([team1Id, team2Id, team3Id].join(","));
+
+		invitationId = invitation.id;
+	});
+
+	it("should accept invite and join all 3 teams", async () => {
+		expect(invitationId).toBeDefined();
+
+		if (!invitationId) throw Error("can not run test");
+
+		const accept = await auth.api.acceptInvitation({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+			body: {
+				invitationId,
+			},
+		});
+
+		expect(accept?.member).toBeDefined();
+		expect(accept?.invitation).toBeDefined();
+	});
+
+	it("should have jonied all 3 teams", async () => {
+		expect(invitationId).toBeDefined();
+
+		if (!invitationId) throw Error("can not run test");
+
+		const teams = await auth.api.listUserTeams({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+		});
+
+		expect(teams).toHaveLength(3);
+	});
+});
