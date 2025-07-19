@@ -5,6 +5,7 @@ import type {
 	OpenAPISchemaType,
 } from "better-call";
 import {
+	z,
 	ZodArray,
 	ZodBoolean,
 	ZodNumber,
@@ -332,6 +333,8 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			...models,
 		},
 	};
+
+	const paths: Record<string, Path> = {};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (ctx.options.disabledPaths?.includes(value.path)) return;
