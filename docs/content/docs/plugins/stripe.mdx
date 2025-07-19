@@ -3,7 +3,7 @@ title: Stripe
 description: Stripe plugin for Better Auth to manage subscriptions and payments.
 ---
 
-The Stripe plugin integrates Stripe's payment and subscription functionality with Better Auth. Since payment and authentication are often tightly coupled, this plugin simplifies the integration of stripe into your application, handling customer creation, subscription management, and webhook processing.
+The Stripe plugin integrates Stripe's payment and subscription functionality with Better Auth. Since payment and authentication are often tightly coupled, this plugin simplifies the integration of Stripe into your application, handling customer creation, subscription management, and webhook processing.
 
 <Callout type="warn">
 This plugin is currently in beta. We're actively collecting feedback and exploring additional features. If you have feature requests or suggestions, please join our [Discord community](https://discord.gg/better-auth) to discuss them.
@@ -670,7 +670,7 @@ getCheckoutSessionParams: async ({ user, session, plan, subscription }, request)
 
 ### Tax Collection
 
-To enable tax collection:
+To collect tax IDs from the customer, set `tax_id_collection` to true:
 
 ```ts title="auth.ts"
 subscription: {
@@ -679,6 +679,25 @@ subscription: {
         return {
             params: {
                 tax_id_collection: {
+                    enabled: true
+                }
+            }
+        };
+    }
+}
+```
+
+### Automatic Tax Calculation
+
+To enable automatic tax calculation using the customer’s location, set `automatic_tax` to true. Enabling this parameter causes Checkout to collect any billing address information necessary for tax calculation. You need to have tax registration setup and configured in the Stripe dashboard first for this to work.
+
+```ts title="auth.ts"
+subscription: {
+    // ... other options
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+        return {
+            params: {
+                automatic_tax: {
                     enabled: true
                 }
             }

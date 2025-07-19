@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.2.10",
+  "version": "1.2.12",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
   "repository": {
@@ -8,6 +8,7 @@
     "url": "https://github.com/better-auth/better-auth",
     "directory": "packages/cli"
   },
+  "homepage": "https://www.better-auth.com/docs/concepts/cli",
   "main": "./dist/index.mjs",
   "scripts": {
     "build": "unbuild",
@@ -20,6 +21,13 @@
       "./dist/index.mjs"
     ]
   },
+  "license": "MIT",
+  "keywords": [
+    "auth",
+    "cli",
+    "typescript",
+    "better-auth"
+  ],
   "exports": "./dist/index.mjs",
   "bin": "./dist/index.mjs",
   "devDependencies": {

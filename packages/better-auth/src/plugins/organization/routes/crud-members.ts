@@ -4,11 +4,12 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { InferOrganizationRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
-import { parseRoles, type OrganizationOptions } from "../organization";
+import { parseRoles } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "../../../error/codes";
 import { hasPermission } from "../has-permission";
+import type { OrganizationOptions } from "../types";
 
 export const addMember = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
@@ -380,15 +381,19 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
-			const updatingMemberRoles = member.role.split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 
+			const updatingMemberRoles = member.role.split(",");
+			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
+
+			const isUpdatingCreator = toBeUpdatedMemberRoles.includes(creatorRole);
+			const updaterIsCreator = updatingMemberRoles.includes(creatorRole);
+
+			const isSettingCreatorRole = roleToSet.includes(creatorRole);
+
 			if (
-				(toBeUpdatedMemberRoles.includes(creatorRole) &&
-					!updatingMemberRoles.includes(creatorRole)) ||
-				(roleToSet.includes(creatorRole) &&
-					!updatingMemberRoles.includes(creatorRole))
+				(isUpdatingCreator && !updaterIsCreator) ||
+				(isSettingCreatorRole && !updaterIsCreator)
 			) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -402,6 +407,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				permissions: {
 					member: ["update"],
 				},
+				allowCreatorAllPermissions: true,
 			});
 
 			if (!canUpdateMember) {
@@ -430,7 +436,7 @@ export const getActiveMember = createAuthEndpoint(
 		use: [orgMiddleware, orgSessionMiddleware],
 		metadata: {
 			openapi: {
-				description: "Get the active member in the organization",
+				description: "Get the member details of the active organization",
 				responses: {
 					"200": {
 						description: "Success",

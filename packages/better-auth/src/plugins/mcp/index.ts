@@ -18,10 +18,13 @@ import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
 import { subtle } from "@better-auth/utils";
 import { SignJWT } from "jose";
-import type { GenericEndpointContext } from "../../types";
+import type { BetterAuthOptions, GenericEndpointContext } from "../../types";
 import { parseSetCookieHeader } from "../../cookies";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
+import { getBaseURL } from "../../utils/url";
+import { isProduction } from "../../utils/env";
+import { logger } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
@@ -51,7 +54,7 @@ export const getMCPProviderMetadata = (
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
-		grant_types_supported: ["authorization_code"],
+		grant_types_supported: ["authorization_code", "refresh_token"],
 		acr_values_supported: [
 			"urn:mace:incommon:iap:silver",
 			"urn:mace:incommon:iap:bronze",
@@ -866,6 +869,7 @@ export const withMcpAuth = <
 		api: {
 			getMcpSession: (...args: any) => Promise<OAuthAccessToken | null>;
 		};
+		options: BetterAuthOptions;
 	},
 >(
 	auth: Auth,
@@ -875,11 +879,14 @@ export const withMcpAuth = <
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
+		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
+		if (!baseURL && !isProduction) {
+			logger.warn("Unable to get the baseURL, please check your config!");
+		}
 		const session = await auth.api.getMcpSession({
 			headers: req.headers,
 		});
-		const wwwAuthenticateValue =
-			"Bearer resource_metadata=http://localhost:3000/api/auth/.well-known/oauth-authorization-server";
+		const wwwAuthenticateValue = `Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-authorization-server`;
 		if (!session) {
 			return Response.json(
 				{

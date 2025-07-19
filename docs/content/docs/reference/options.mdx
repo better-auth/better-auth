@@ -451,6 +451,57 @@ export const auth = betterAuth({
 - `cookiePrefix`: Prefix for cookies
 - `generateId`: Function to generate a unique ID for a model
 
+## `logger`
+
+Logger configuration for Better Auth.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	logger: {
+		disabled: false,
+		level: "error",
+		log: (level, message, ...args) => {
+			// Custom logging implementation
+			console.log(`[${level}] ${message}`, ...args);
+		}
+	}
+})
+```
+
+The logger configuration allows you to customize how Better Auth handles logging. It supports the following options:
+
+- `disabled`: Disable all logging when set to `true` (default: `false`)
+- `level`: Set the minimum log level to display. Available levels are:
+  - `"info"`: Show all logs
+  - `"warn"`: Show warnings and errors
+  - `"error"`: Show only errors
+  - `"debug"`: Show all logs including debug information
+- `log`: Custom logging function that receives:
+  - `level`: The log level (`"info"`, `"warn"`, `"error"`, or `"debug"`)
+  - `message`: The log message
+  - `...args`: Additional arguments passed to the logger
+
+Example with custom logging:
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	logger: {
+		level: "info",
+		log: (level, message, ...args) => {
+			// Send logs to a custom logging service
+			myLoggingService.log({
+				level,
+				message,
+				metadata: args,
+				timestamp: new Date().toISOString()
+			});
+		}
+	}
+})
+```
+
 ## `databaseHooks`
 
 Database lifecycle hooks for core operations.
@@ -520,17 +571,23 @@ Request lifecycle hooks.
 
 ```ts
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
 export const auth = betterAuth({
 	hooks: {
-		before: async (request, ctx) => {
+		before: createAuthMiddleware(async (ctx) => {
 			// Execute before processing the request
-		},
-		after: async (request, response, ctx) => {
+			console.log("Request path:", ctx.path);
+		}),
+		after: createAuthMiddleware(async (ctx) => {
 			// Execute after processing the request
-		}
+			console.log("Response:", ctx.context.returned);
+		})
 	},
 })
 ```
+
+For more details and examples, see the [Hooks documentation](/docs/concepts/hooks).
 
 ## `disabledPaths`
 

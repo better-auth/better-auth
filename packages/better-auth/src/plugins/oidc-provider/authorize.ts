@@ -153,10 +153,7 @@ export async function authorize(
 	const requestScope =
 		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
 	const invalidScopes = requestScope.filter((scope) => {
-		const isInvalid =
-			!opts.scopes.includes(scope) ||
-			(scope === "offline_access" && query.prompt !== "consent");
-		return isInvalid;
+		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
 		return handleRedirect(

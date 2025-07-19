@@ -56,6 +56,11 @@ export const username = (options?: UsernameOptions) => {
 								description: "Remember the user session",
 							})
 							.optional(),
+						callbackURL: z
+							.string({
+								description: "The URL to redirect to after email verification",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -140,7 +145,9 @@ export const username = (options?: UsernameOptions) => {
 						// Hash password to prevent timing attacks from revealing valid usernames
 						// By hashing passwords for invalid usernames, we ensure consistent response times
 						await ctx.context.password.hash(ctx.body.password);
-						ctx.context.logger.error("User not found", { username });
+						ctx.context.logger.error("User not found", {
+							username: ctx.body.username,
+						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -176,7 +183,9 @@ export const username = (options?: UsernameOptions) => {
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
-						ctx.context.logger.error("Password not found", { username });
+						ctx.context.logger.error("Password not found", {
+							username: ctx.body.username,
+						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -270,7 +279,14 @@ export const username = (options?: UsernameOptions) => {
 									},
 								],
 							});
-							if (user) {
+
+							const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
+							const blockChangeUpdateUser =
+								ctx.path === "/update-user" &&
+								user &&
+								ctx.context.session &&
+								user.id !== ctx.context.session.session.userId;
+							if (blockChangeSignUp || blockChangeUpdateUser) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});

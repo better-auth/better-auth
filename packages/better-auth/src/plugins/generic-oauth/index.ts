@@ -113,6 +113,12 @@ export interface GenericOAuthConfig {
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	authorizationUrlParams?: Record<string, string>;
+
+	/**
+	 * Additional search-params to add to the tokenUrl.
+	 * Warning: Search-params added here overwrite any default params.
+	 */
+	tokenUrlParams?: Record<string, string>;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -265,6 +271,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authentication: c.authentication,
 						});
 					},
 					async refreshAccessToken(
@@ -568,7 +575,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						const defaultErrorURL =
 							ctx.context.options.onAPIError?.errorURL ||
 							`${ctx.context.baseURL}/error`;
-						throw ctx.redirect(`${errorURL || defaultErrorURL}?error=${error}`);
+						let url = errorURL || defaultErrorURL;
+						if (url.includes("?")) {
+							url = `${url}&error=${error}`;
+						} else {
+							url = `${url}?error=${error}`;
+						}
+						throw ctx.redirect(url);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;
@@ -604,6 +617,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: provider.authentication,
+							additionalParams: provider.tokenUrlParams,
 						});
 					} catch (e) {
 						ctx.context.logger.error(

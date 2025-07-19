@@ -369,6 +369,19 @@ This function will delete all API keys that have an expired expiration date.
 
 Any time an endpoint in Better Auth is called that has a valid API key in the headers, we will automatically create a mock session to represent the user.
 
+<Tabs items={['Server']}>
+    <Tab value="Server">
+      ```ts
+      const session = await auth.api.getSession({
+            headers: new Headers({
+                  'x-api-key': apiKey,
+            }),
+      });
+      ```
+    </Tab>
+</Tabs>
+
+
 The default header key is `x-api-key`, but this can be changed by setting the `apiKeyHeaders` option in the plugin options.
 
 ```ts
@@ -618,6 +631,10 @@ The maximum length of the prefix.
 `minimumPrefixLength` <span className="opacity-70">`number`</span>
 
 The minimum length of the prefix.
+
+`requireName` <span className="opacity-70">`boolean`</span>
+
+Whether to require a name for the API key. Default is `false`.
 
 `maximumNameLength` <span className="opacity-70">`number`</span>
 

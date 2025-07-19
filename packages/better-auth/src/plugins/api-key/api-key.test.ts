@@ -146,6 +146,37 @@ describe("api-key", async () => {
 		expect(apiKey.rateLimitEnabled).toBe(true);
 	});
 
+	it("should require name in API keys if configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						requireName: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		let err: any;
+		try {
+			const apiKeyResult = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+		} catch (error) {
+			err = error;
+		}
+		expect(err).toBeDefined();
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
+	});
+
 	it("should respect rateLimit configuration from plugin options", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance(
 			{
@@ -1651,7 +1682,7 @@ describe("api-key", async () => {
 			result.error = error;
 		}
 
-		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.status).toEqual("TOO_MANY_REQUESTS");
 		expect(result.error?.body?.message).toEqual(ERROR_CODES.USAGE_EXCEEDED);
 		expect(result.error?.body?.code).toEqual("USAGE_EXCEEDED");
 	});
