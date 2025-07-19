@@ -186,44 +186,7 @@ describe("jwt", async (it) => {
 				alg: "RS256",
 			},
 		},
-		// We cannot sign using key exchange protocol, need to establish a key first (only allowed usage for these keys is `deriveBits`)
-		/*
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-256",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 43,
-				crv: "P-256",
-				alg: "ECDH-ES",
-			},
-		},
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-384",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 64,
-				crv: "P-384",
-				alg: "ECDH-ES",
-			},
-		},
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-521",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 88,
-				crv: "P-521",
-				alg: "ECDH-ES",
-			},
-		},*/
+		// We cannot sign using key exchange protocol ("ECDH-ES algorithm"), need to establish a key first (only allowed usage for these keys is `deriveBits`)
 	];
 
 	for (const algorithm of algorithmsToTest) {
