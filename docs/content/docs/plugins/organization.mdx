@@ -1212,7 +1212,9 @@ The invited member will be added to the specified team upon accepting the invita
 
 ### Database Schema
 
-When teams are enabled, a new `team` table is added with the following structure:
+When teams are enabled, new `team` and `teamMember` tables are added to the database.
+
+Table Name: `team`
 
 <DatabaseTable
   fields={[
@@ -1241,8 +1243,39 @@ When teams are enabled, a new `team` table is added with the following structure
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the team was last updated"
-    }
+      isOptional: true,
+      description: "Timestamp of when the team was created"
+    },
+  ]}
+/>
+
+Table Name: `teamMember`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each team member",
+      isPrimaryKey: true
+    },
+    {
+      name: "teamId",
+      type: "string",
+      description: "Unique identifier for each team",
+      isForeignKey: true
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the team member was created"
+    },
   ]}
 />
 
