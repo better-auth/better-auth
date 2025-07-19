@@ -61,4 +61,6 @@ export const ORGANIZATION_ERROR_CODES = {
 	YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM: "You do not have an active team",
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER:
 		"You are not allowed to create a new member",
+	YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER:
+		"You are not allowed to remove a team member",
 } as const;

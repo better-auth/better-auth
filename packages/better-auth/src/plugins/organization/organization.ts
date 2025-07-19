@@ -42,7 +42,8 @@ import {
 	setActiveTeam,
 	listUserTeams,
 	listTeamMembers,
-	addMemberToTeam,
+	addTeamMember,
+	removeTeamMember,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
@@ -486,19 +487,35 @@ export const organization = <O extends OrganizationOptions>(
 		/**
 		 * ### Endpoint
 		 *
-		 * POST `/organization/add-member-to-team`
+		 * POST `/organization/add-team-member`
 		 *
 		 * ### API Methods
 		 *
 		 * **server:**
-		 * `auth.api.addMemberToTeam `
+		 * `auth.api.addTeamMember`
 		 *
 		 * **client:**
-		 * `authClient.organization.addMemberToTeam`
+		 * `authClient.organization.addTeamMember`
 		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-member-to-team)
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-team-member)
 		 */
-		addMemberToTeam: addMemberToTeam(options as O),
+		addTeamMember: addTeamMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/remove-team-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.removeTeamMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.removeTeamMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
+		 */
+		removeTeamMember: removeTeamMember(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {

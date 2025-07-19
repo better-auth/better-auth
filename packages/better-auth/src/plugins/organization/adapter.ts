@@ -678,6 +678,25 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 		},
 
+		removeTeamMember: async (data: {
+			teamId: string;
+			userId: string;
+		}) => {
+			await adapter.delete({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+		},
+
 		findInvitationsByTeamId: async (teamId: string) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",

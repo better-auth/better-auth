@@ -578,7 +578,7 @@ describe("mulit team support", async (it) => {
 			},
 		});
 
-		const teamMember = await auth.api.addMemberToTeam({
+		const teamMember = await auth.api.addTeamMember({
 			headers: admin.headers,
 			body: {
 				userId: invitedUser.response.user.id,

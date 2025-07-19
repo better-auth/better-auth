@@ -789,14 +789,14 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
-export const addMemberToTeam = <O extends OrganizationOptions>(options: O) =>
+export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
-		"/organization/add-member-to-team",
+		"/organization/add-team-member",
 		{
 			method: "POST",
 			body: z.object({
 				teamId: z.string().meta({
-					description: "The team the user should be a member.",
+					description: "The team the user should be a member of.",
 				}),
 
 				userId: z.coerce.string().meta({
@@ -901,5 +901,105 @@ export const addMemberToTeam = <O extends OrganizationOptions>(options: O) =>
 			});
 
 			return ctx.json(teamMember);
+		},
+	);
+
+export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/remove-team-member",
+		{
+			method: "POST",
+			body: z.object({
+				teamId: z.string().meta({
+					description: "The team the user should be removed from.",
+				}),
+
+				userId: z.coerce.string().meta({
+					description: "The user which should be removed from the team.",
+				}),
+			}),
+			metadata: {
+				openapi: {
+					description: "Remove a member from a team",
+					responses: {
+						"200": {
+							description: "Team member removed successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											message: {
+												type: "string",
+												description:
+													"Confirmation message indicating successful removal",
+												enum: ["Team member removed successfully."],
+											},
+										},
+										required: ["message"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			use: [orgMiddleware, orgSessionMiddleware],
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+			if (!session.session.activeOrganizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+
+			const currentMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!currentMember) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+
+			const canDeleteMember = hasPermission({
+				role: currentMember.role,
+				options: ctx.context.orgOptions,
+				permissions: {
+					member: ["delete"],
+				},
+			});
+
+			if (!canDeleteMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER,
+				});
+			}
+
+			const toBeAddedMember = await adapter.findMemberByOrgId({
+				userId: ctx.body.userId,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!toBeAddedMember) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+
+			await adapter.removeTeamMember({
+				teamId: ctx.body.teamId,
+				userId: ctx.body.userId,
+			});
+
+			return ctx.json({ message: "Team member removed successfully." });
 		},
 	);
