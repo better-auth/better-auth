@@ -13,7 +13,7 @@
     "@vercel/mcp-adapter": "^0.4.1",
     "better-auth": "workspace:^",
     "better-sqlite3": "^11.6.0",
-    "next": "15.3.2",
+    "next": "15.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^3.24.4"
