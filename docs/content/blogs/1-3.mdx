@@ -44,7 +44,8 @@ export const auth = betterAuth({
       saml: {
         entryPoint: "https://example.com/saml",
         issuer: "better-auth-example",
-        certificate: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+        certificate:
+          "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
       },
       providersLimit: async (user) => {
         const plan = await getUserPlan(user);
@@ -59,14 +60,14 @@ export const auth = betterAuth({
 
 ### **OIDC & MCP Plugins – Now Stable**
 
-Both OIDC and MCP plugins are production‑ready.
+Both OIDC and MCP plugins are production-ready.
 
 ✅ Features:
 
-* Refresh token support in discovery & token endpoints
-* JWKs and PKCE for public clients
-* Trusted clients
-* Encrypted & hashed client secrets
+- Refresh token support in discovery & token endpoints
+- JWKs and PKCE for public clients
+- Trusted clients
+- Encrypted & hashed client secrets
 
 👉 [Read OIDC docs](/docs/plugins/oidc-provider)
 👉 [Read MCP docs](/docs/plugins/mcp)
@@ -91,7 +92,6 @@ The Stripe plugin is now stable and usage based pricing is coming very soon.
 
 👉 [Read Stripe docs](/docs/plugins/stripe)
 
-
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { stripe } from "@better-auth/stripe";
@@ -107,7 +107,7 @@ export const auth = betterAuth({
 
 ### **SIWE Plugin**
 
-Native support for **Sign‑In with Ethereum**.
+Native support for **Sign-In with Ethereum**.
 
 👉 [Read SIWE docs](/docs/plugins/siwe)
 
@@ -115,9 +115,7 @@ Native support for **Sign‑In with Ethereum**.
 import { siwe } from "better-auth/plugins";
 
 export const auth = betterAuth({
-  plugins: [
-    siwe(),
-  ],
+  plugins: [siwe()],
 });
 ```
 
@@ -125,17 +123,25 @@ export const auth = betterAuth({
 
 ### **New Social Providers**
 
-We’ve added providers for **Notion, Slack, Linear, and Faceit**.
+We've added providers for **[Notion](https://notion.com), [Slack](https://slack.com), [Linear](https://linear.app), and [Faceit](https://faceit.com)**.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
   socialProviders: {
-    notion: { /* ... */ },
-    slack: { /* ... */ },
-    linear: { /* ... */ },
-    faceit: { /* ... */ },
+    notion: {
+      /* ... */
+    },
+    slack: {
+      /* ... */
+    },
+    linear: {
+      /* ... */
+    },
+    faceit: {
+      /* ... */
+    },
   },
 });
 ```
@@ -147,7 +153,8 @@ export const auth = betterAuth({
 Utilities for handling cookies in SvelteKit server actions.
 
 <Callout type="warn">
-  Breaking change: `building` and `getRequestEvent()` must now be passed in as props.
+  Breaking change: `building` and `getRequestEvent()` must now be passed in as
+  props.
 </Callout>
 
 ```ts title="auth.ts"
@@ -162,24 +169,28 @@ export const auth = betterAuth({
 
 ---
 
-### **Email Verification on Sign‑In**
+### **Email Verification on Sign-In**
+
+Setting `sendOnSignIn` to true will send a verification email on sign-in if the user isn't verified.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
   emailVerification: {
-    sendOnSignIn: true, // sends a verification email on sign‑in if the user isn’t verified
+    sendOnSignIn: true, // set to true to send verification email on sign-in
   },
 });
 ```
 
 ---
 
-### **Multi‑Team Support**
+### **Multi-Team Support**
 
 The organization plugin now supports members belonging to multiple teams.
 
-**Breaking change:**
-`teamId` has been removed from the `member` table. A new `teamMembers` table is required.
+<Callout type="warn">
+  Breaking change: `teamId` has been removed from the `member` table. A new
+  `teamMembers` table is required.
+</Callout>
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -213,9 +224,21 @@ export const auth = betterAuth({
   plugins: [
     organization({
       schema: {
-        organization: { additionalFields: { /* ... */ } },
-        member: { additionalFields: { /* ... */ } },
-        invitation: { additionalFields: { /* ... */ } },
+        organization: {
+          additionalFields: {
+            /* ... */
+          },
+        },
+        member: {
+          additionalFields: {
+            /* ... */
+          },
+        },
+        invitation: {
+          additionalFields: {
+            /* ... */
+          },
+        },
       },
     }),
   ],
@@ -224,15 +247,15 @@ export const auth = betterAuth({
 
 Other new options:
 
-* `maximumMembersPerTeam` – set team member limits
-* `listUserInvitations` – list all invitations for a user
+- `maximumMembersPerTeam` – set team member limits
+- `listUserInvitations` – list all invitations for a user
 
 ---
 
 ### **Generic OAuth Improvements**
 
-* Added support for extra token URL params
-* OAuth token encryption options
+- Added support for extra token URL params
+- OAuth token encryption options
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -248,28 +271,28 @@ export const auth = betterAuth({
 
 ### **API Keys**
 
-* `requireName` option for key creation
-* `verifyKey` now supports async functions
+- `requireName` option for key creation
+- `verifyKey` now supports async functions
 
 ---
 
 ### **Username**
 
-* Availability checks
-* Custom normalization
+- Availability checks
+- Custom normalization
 
 ---
 
 ### ✨ More Features
 
-* Migrated to **Zod 4** for better type safety and performance
-* CLI supports custom adapter `createSchema`
-* `inferAuth` utility to infer types from the client
-* Improved docs with `auth` and `authClient` examples
-* `rememberMe` support in `signUp`
-* `afterEmailVerification` hook
-* `freshAge` and custom `errorURL` respected properly
-* OAuth2 tokens now include `refresh_token_expires_in`
+- Migrated to **Zod 4** for better type safety and performance
+- CLI supports custom adapter `createSchema`
+- `inferAuth` utility to infer types from the client
+- Improved docs with `auth` and `authClient` examples
+- `rememberMe` support in `signUp`
+- `afterEmailVerification` hook
+- `freshAge` and custom `errorURL` respected properly
+- OAuth2 tokens now include `refresh_token_expires_in`
 
 ---
 
@@ -277,66 +300,67 @@ export const auth = betterAuth({
 
 #### Plugins
 
-* Expo: Fixed type path import
-* SSO: Fixed SAML redirection & type checks
-* Dropbox: Token access type support
-* Stripe:
+- Expo: Fixed type path import
+- SSO: Fixed SAML redirection & type checks
+- Dropbox: Token access type support
+- Stripe:
 
-  * Prevent duplicate customers
-  * Allow upgrading incomplete subscriptions
-* Admin:
+  - Prevent duplicate customers
+  - Allow upgrading incomplete subscriptions
 
-  * Fixed missing `ctx` in hooks
-  * Proper error when removing invalid user IDs
+- Admin:
+
+  - Fixed missing `ctx` in hooks
+  - Proper error when removing invalid user IDs
 
 #### OAuth & Providers
 
-* Fixed duplicate OAuth registration
-* Improved Google/Microsoft scope handling
-* Fixed malformed error URLs in generic OAuth
-* Facebook: Better detection for limited token JWT
-* Twitter: Improved email verification logic
+- Fixed duplicate OAuth registration
+- Improved Google/Microsoft scope handling
+- Fixed malformed error URLs in generic OAuth
+- Facebook: Better detection for limited token JWT
+- Twitter: Improved email verification logic
 
 #### Core Authentication
 
-* Exclude current user from username uniqueness check
-* Support `callbackURL` in `signInUsername`
-* Allow account linking without email
-* Fixed missing `null` type in `/get-session` response
-* Global `onSuccess` hook now works
-* JWT: Alternate algorithms supported in JWKS
-* `origin-check`: Wildcard trusted origins supported
+- Exclude current user from username uniqueness check
+- Support `callbackURL` in `signInUsername`
+- Allow account linking without email
+- Fixed missing `null` type in `/get-session` response
+- Global `onSuccess` hook now works
+- JWT: Alternate algorithms supported in JWKS
+- `origin-check`: Wildcard trusted origins supported
 
 #### CLI, DB, and Adapters
 
-* CLI: Improved Drizzle schema formatting
-* MongoAdapter: Works with `create-adapter`
-* Schema generation respects `useNumberId`
-* Postgres: Better varchar normalization and type comparison
-* Drizzle CLI: Uses `serial` as PK if `useNumberId` is enabled
+- CLI: Improved Drizzle schema formatting
+- MongoAdapter: Works with `create-adapter`
+- Schema generation respects `useNumberId`
+- Postgres: Better varchar normalization and type comparison
+- Drizzle CLI: Uses `serial` as PK if `useNumberId` is enabled
 
 #### Email & OTP
 
-* OTPs now encrypted
-* Fixed `onEmailVerification` not firing
-* Proper error when sign‑up is disabled
-* Phone number: Reset clears verification values
+- OTPs now encrypted
+- Fixed `onEmailVerification` not firing
+- Proper error when sign-up is disabled
+- Phone number: Reset clears verification values
 
 #### Two-Factor Auth
 
-* Default OTP period fix
-* URI generation doesn’t require enabling 2FA
-* Fixed OTP URI separator mismatch
+- Default OTP period fix
+- URI generation doesn't require enabling 2FA
+- Fixed OTP URI separator mismatch
 
 #### Miscellaneous
 
-* Delete organization if member not found
-* Correct error codes for API key rate limits
-* Additional fields now show in OpenAPI
-* Fixed FK constraint generation for MySQL
-* Various improvements to account linking
-* OIDC `offline_access` no longer requires `prompt=consent`
-* Fixed malformed base64 encoding for token validation
+- Delete organization if member not found
+- Correct error codes for API key rate limits
+- Additional fields now show in OpenAPI
+- Fixed FK constraint generation for MySQL
+- Various improvements to account linking
+- OIDC `offline_access` no longer requires `prompt=consent`
+- Fixed malformed base64 encoding for token validation
 
 ---
 
