@@ -1,13 +1,7 @@
 import type { FieldAttribute } from "../../db";
 import type { User, Session, AuthContext } from "../../types";
 import type { AccessControl, Role } from "../access";
-import type {
-	Invitation,
-	Member,
-	Organization,
-	Team,
-	TeamMember,
-} from "./schema";
+import type { Invitation, Member, Organization, Team } from "./schema";
 
 export interface OrganizationOptions {
 	/**
@@ -223,7 +217,6 @@ export interface OrganizationOptions {
 		session?: {
 			fields?: {
 				activeOrganizationId?: string;
-				activeTeamId?: string;
 			};
 		};
 		organization?: {
@@ -261,13 +254,6 @@ export interface OrganizationOptions {
 			};
 			additionalFields?: {
 				[key in string]: FieldAttribute;
-			};
-		};
-
-		teamMember?: {
-			modelName?: string;
-			fields?: {
-				[key in keyof Omit<TeamMember, "id">]?: string;
 			};
 		};
 	};
