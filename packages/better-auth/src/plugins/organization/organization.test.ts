@@ -1406,13 +1406,24 @@ describe("Additional Fields", async () => {
 
 	const { headers, user } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [organizationClient<typeof auth>()],
+		plugins: [
+			organizationClient({
+				$inferAuth: {} as typeof auth,
+				teams: { enabled: true },
+			}),
+		],
 		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
 				return auth.handler(new Request(url, init));
 			},
 		},
+	});
+
+	it("Expect team endpoints to still be defined", async () => {
+		const teams = client.organization.createTeam;
+		expect(teams).toBeDefined();
+		expectTypeOf<typeof teams>().not.toEqualTypeOf<undefined>();
 	});
 
 	type ExpectedResult = PrettifyDeep<{
