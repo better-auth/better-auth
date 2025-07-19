@@ -5,23 +5,22 @@ import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
 
 describe("team", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
-		await getTestInstance({
-			user: {
-				modelName: "users",
-			},
-			plugins: [
-				organization({
-					async sendInvitationEmail(data, request) {},
-					teams: {
-						enabled: true,
-					},
-				}),
-			],
-			logger: {
-				level: "error",
-			},
-		});
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+		user: {
+			modelName: "users",
+		},
+		plugins: [
+			organization({
+				async sendInvitationEmail() {},
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
+		logger: {
+			level: "error",
+		},
+	});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -49,6 +48,11 @@ describe("team", async (it) => {
 		password: "password",
 		name: "Invited User",
 	};
+
+	const signUpHeaders = new Headers();
+	const signUpRes = await client.signUp.email(invitedUser, {
+		onSuccess: cookieSetter(signUpHeaders),
+	});
 
 	it("should create an organization and a team", async () => {
 		const createOrganizationResponse = await client.organization.create({
@@ -119,27 +123,56 @@ describe("team", async (it) => {
 			teamId,
 		});
 
-		const newHeaders = new Headers();
-		const signUpRes = await client.signUp.email(invitedUser, {
-			onSuccess: cookieSetter(newHeaders),
-		});
-
-		expect(signUpRes.data?.user).toBeDefined();
-
 		const invitation = await client.organization.acceptInvitation(
 			{
 				invitationId: res.data?.id as string,
 			},
 			{
-				headers: newHeaders,
+				headers: signUpHeaders,
 			},
 		);
 
 		expect(invitation.data?.member).toMatchObject({
 			role: "member",
-			teamId,
 			userId: signUpRes.data?.user.id,
 		});
+	});
+
+	it("should add team to the member's list of teams", async () => {
+		const listUserTeamsRes = await client.organization.listUserTeams(
+			{},
+			{
+				headers: signUpHeaders,
+			},
+		);
+
+		expect(listUserTeamsRes.error).toBeNull();
+		expect(listUserTeamsRes.data).not.toBeNull();
+		expect(listUserTeamsRes.data).toHaveLength(1);
+	});
+
+	it("should be able to list team members in the current active team", async () => {
+		const activeTeamHeaders = new Headers();
+		await client.organization.setActiveTeam(
+			{
+				teamId,
+			},
+			{
+				headers: signUpHeaders,
+				onSuccess: cookieSetter(activeTeamHeaders),
+			},
+		);
+
+		const res = await client.organization.listTeamMembers(
+			{},
+			{
+				headers: activeTeamHeaders,
+			},
+		);
+
+		expect(res.error).toBeNull();
+		expect(res.data).not.toBeNull();
+		expect(res.data).toHaveLength(1);
 	});
 
 	it("should get full organization", async () => {
@@ -311,5 +344,277 @@ describe("team", async (it) => {
 		);
 		expect(res2.data).toBeNull();
 		expect(res2.error?.code).toEqual("TEAM_MEMBER_LIMIT_REACHED");
+	});
+});
+
+describe("mulit team support", async (it) => {
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
+		{
+			plugins: [
+				organization({
+					async sendInvitationEmail() {},
+					teams: {
+						enabled: true,
+						defaultTeam: {
+							enabled: true,
+						},
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			testWith: "sqlite",
+		},
+	);
+
+	const admin = await signInWithTestUser();
+
+	const invitedUser = await auth.api.signUpEmail({
+		body: {
+			name: "Invited User",
+			email: "invited@email.com",
+			password: "password",
+		},
+		returnHeaders: true,
+	});
+
+	let organizationId: string | null = null;
+
+	let team1Id: string | null = null;
+	let team2Id: string | null = null;
+	let team3Id: string | null = null;
+
+	let invitationId: string | null = null;
+
+	it("should create an organization to test multi team support", async () => {
+		const organization = await auth.api.createOrganization({
+			headers: admin.headers,
+			body: {
+				name: "Test Organization",
+				slug: "test-org",
+				metadata: {
+					test: "organization-metadata",
+				},
+			},
+		});
+
+		expect(organization?.id).toBeDefined();
+		expect(organization?.name).toBe("Test Organization");
+
+		organizationId = organization?.id as string;
+	});
+
+	it("should create 3 teams", async () => {
+		expect(organizationId).toBeDefined();
+		if (!organizationId) throw Error("can not run test");
+
+		const team1 = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Team One",
+				organizationId,
+			},
+		});
+
+		expect(team1.id).toBeDefined();
+		expect(team1.organizationId).toBe(organizationId);
+
+		team1Id = team1.id;
+
+		const team2 = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Team Two",
+				organizationId,
+			},
+		});
+
+		expect(team2.id).toBeDefined();
+		expect(team2.organizationId).toBe(organizationId);
+
+		team2Id = team2.id;
+
+		const team3 = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Team Three",
+				organizationId,
+			},
+		});
+
+		expect(team3.id).toBeDefined();
+		expect(team3.organizationId).toBe(organizationId);
+
+		team3Id = team3.id;
+	});
+
+	it("should invite user to all 3 teams", async () => {
+		expect(organizationId).toBeDefined();
+		expect(team1Id).toBeDefined();
+		expect(team2Id).toBeDefined();
+		expect(team3Id).toBeDefined();
+
+		if (!organizationId || !team1Id || !team2Id || !team3Id)
+			throw Error("can not run test");
+
+		const invitation = await auth.api.createInvitation({
+			headers: admin.headers,
+			body: {
+				email: invitedUser.response.user.email,
+				role: "member",
+				organizationId,
+				teamId: [team1Id, team2Id, team3Id],
+			},
+		});
+
+		expect(invitation.id).toBeDefined();
+		expect(invitation.teamId).toBe([team1Id, team2Id, team3Id].join(","));
+
+		invitationId = invitation.id;
+	});
+
+	it("should accept invite and join all 3 teams", async () => {
+		expect(invitationId).toBeDefined();
+
+		if (!invitationId) throw Error("can not run test");
+
+		const accept = await auth.api.acceptInvitation({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+			body: {
+				invitationId,
+			},
+		});
+
+		expect(accept?.member).toBeDefined();
+		expect(accept?.invitation).toBeDefined();
+	});
+
+	it("should have jonied all 3 teams", async () => {
+		expect(invitationId).toBeDefined();
+
+		if (!invitationId) throw Error("can not run test");
+
+		const teams = await auth.api.listUserTeams({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+		});
+
+		expect(teams).toHaveLength(3);
+	});
+
+	let activeTeamCookie: string | null = null;
+
+	it("should allow you to set one of the teams as active", async () => {
+		expect(team1Id).toBeDefined();
+		expect(organizationId).toBeDefined();
+
+		if (!team1Id || !organizationId) throw Error("can not run test");
+
+		const team = await auth.api.setActiveTeam({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+			body: {
+				teamId: team1Id,
+			},
+			returnHeaders: true,
+		});
+
+		expect(team.response?.id).toBe(team1Id);
+		expect(team.response?.organizationId).toBe(organizationId);
+
+		activeTeamCookie = team.headers.getSetCookie()[0];
+	});
+
+	it("should allow you to list team members of the current active team", async () => {
+		expect(activeTeamCookie).toBeDefined();
+
+		if (!activeTeamCookie) throw Error("can not run test");
+
+		const members = await auth.api.listTeamMembers({
+			headers: { cookie: activeTeamCookie },
+		});
+
+		expect(members).toHaveLength(1);
+		expect(members.at(0)?.teamId).toBe(team1Id);
+	});
+
+	it("should allow user to list team members of any team the user is in", async () => {
+		expect(team2Id).toBeDefined();
+		expect(team3Id).toBeDefined();
+
+		if (!team2Id || !team3Id) throw Error("can not run test");
+
+		const team2Members = await auth.api.listTeamMembers({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+			query: {
+				teamId: team2Id,
+			},
+		});
+
+		expect(team2Members).toHaveLength(1);
+		expect(team2Members.at(0)?.teamId).toBe(team2Id);
+
+		const team3Members = await auth.api.listTeamMembers({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+			query: {
+				teamId: team3Id,
+			},
+		});
+
+		expect(team3Members).toHaveLength(1);
+		expect(team3Members.at(0)?.teamId).toBe(team3Id);
+	});
+
+	let team4Id: string | null = null;
+	it("should directly add a member to a team", async () => {
+		expect(organizationId).toBeDefined();
+		if (!organizationId) throw Error("can not run test");
+
+		const team = await auth.api.createTeam({
+			headers: admin.headers,
+			body: {
+				name: "Team Four",
+				organizationId,
+			},
+		});
+
+		const teamMember = await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				userId: invitedUser.response.user.id,
+				teamId: team.id,
+			},
+		});
+
+		expect(teamMember.teamId).toBe(team.id);
+		expect(teamMember.userId).toBe(invitedUser.response.user.id);
+
+		const teams = await auth.api.listUserTeams({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+		});
+
+		expect(teams).toHaveLength(4);
+
+		team4Id = team.id;
+	});
+
+	it("should remove a member from a team", async () => {
+		expect(team4Id).toBeDefined();
+		if (!team4Id) throw Error("can not run test");
+
+		await auth.api.removeTeamMember({
+			headers: admin.headers,
+			body: {
+				userId: invitedUser.response.user.id,
+				teamId: team4Id,
+			},
+		});
+
+		const teams = await auth.api.listUserTeams({
+			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
+		});
+
+		expect(teams).toHaveLength(3);
 	});
 });
