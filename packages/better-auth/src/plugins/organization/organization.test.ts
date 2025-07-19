@@ -853,6 +853,459 @@ describe("organization", async (it) => {
 	});
 });
 
+describe("acceptingInvitation hooks", async (it) => {
+	const db = {
+		users: [],
+		sessions: [],
+		account: [],
+		organization: [],
+		invitation: [] as {
+			id: string;
+			role: string;
+			invitationRequiredField: string;
+			invitationOptionalField?: string;
+		}[],
+		member: [] as {
+			id: string;
+			memberRequiredField: string;
+			memberOptionalField?: string;
+		}[],
+		team: [] as {
+			id: string;
+			teamRequiredField: string;
+			teamOptionalField?: string;
+		}[],
+	};
+
+	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance({
+			database: memoryAdapter(db, {
+				debugLogs: false,
+			}),
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					membershipLimit: 10,
+					async sendInvitationEmail(data, request) {},
+					acceptingInvitation: {
+						async beforeAccept(data, request) {
+							if (data.invitation.role === "admin") {
+								const invitation = db.invitation.find(
+									(x) => x.id === data.invitation.id,
+								);
+
+								if (invitation) {
+									invitation.role = "member";
+								}
+							}
+						},
+						async afterAccept(data, request) {},
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	let organizationId: string;
+	let invitationId: string;
+
+	it("should create organization and invitation for testing hooks", async () => {
+		const organization = await client.organization.create({
+			name: "test-hooks",
+			slug: "test-hooks",
+			metadata: {
+				test: "test",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		organizationId = organization.data?.id as string;
+		expect(organization.data?.name).toBe("test-hooks");
+
+		const newUser = {
+			email: "hook-test@test.com",
+			password: "test123456",
+			name: "hook test user",
+		};
+
+		const invite = await client.organization.inviteMember({
+			organizationId: organizationId,
+			email: newUser.email,
+			role: "admin",
+			fetchOptions: {
+				headers,
+			},
+		});
+		invitationId = invite.data?.id as string;
+		expect(invite.data?.email).toBe(newUser.email);
+		expect(invite.data?.role).toBe("admin");
+	});
+
+	it("should call beforeAccept hook and modify invitation data", async () => {
+		const newUser = {
+			email: "hook-test@test.com",
+			password: "test123456",
+			name: "hook test user",
+		};
+
+		await client.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+
+		const { headers: userHeaders } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
+
+		const invitation = await client.organization.acceptInvitation({
+			invitationId: invitationId,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(invitation.data?.invitation.status).toBe("accepted");
+
+		expect(db.invitation.find((x) => x.id === invitationId)?.role).toBe(
+			"member",
+		);
+	});
+
+	it("should call afterAccept hook with accepted invitation status", async () => {
+		const newUser = {
+			email: "after-hook-test@test.com",
+			password: "test123456",
+			name: "after hook test user",
+		};
+
+		const invite = await client.organization.inviteMember({
+			organizationId: organizationId,
+			email: newUser.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await client.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+
+		const { headers: userHeaders } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
+
+		const invitation = await client.organization.acceptInvitation({
+			invitationId: invite.data?.id as string,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(invitation.data?.invitation.status).toBe("accepted");
+		expect(invitation.data?.member).toBeDefined();
+	});
+
+	it("should demonstrate afterAccept hook receives accepted invitation status", async () => {
+		const newUser = {
+			email: "status-check@test.com",
+			password: "test123456",
+			name: "status check user",
+		};
+
+		const invite = await client.organization.inviteMember({
+			organizationId: organizationId,
+			email: newUser.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await client.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+
+		const { headers: userHeaders } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
+
+		const invitation = await client.organization.acceptInvitation({
+			invitationId: invite.data?.id as string,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(invitation.data?.invitation.status).toBe("accepted");
+	});
+
+	it("should handle beforeAccept hook throwing an error", async () => {
+		const { auth: authWithErrorHook, signInWithTestUser: signInWithTestUser2 } =
+			await getTestInstance({
+				user: {
+					modelName: "users",
+				},
+				plugins: [
+					organization({
+						membershipLimit: 10,
+						async sendInvitationEmail(data: any, request: any) {},
+						acceptingInvitation: {
+							async beforeAccept(data: any, request: any) {
+								throw new Error("beforeAccept hook error");
+							},
+							async afterAccept(data: any, request: any) {},
+						},
+					}),
+				],
+				logger: {
+					level: "error",
+				},
+			});
+
+		const { headers: headers2 } = await signInWithTestUser2();
+		const client2 = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url: string | Request | URL, init?: any) => {
+					return authWithErrorHook.handler(new Request(url as string, init));
+				},
+			},
+		});
+
+		const errorOrg = await client2.organization.create({
+			name: "test-error-hooks",
+			slug: "test-error-hooks",
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+
+		const newUser = {
+			email: "error-test@test.com",
+			password: "test123456",
+			name: "error test user",
+		};
+
+		const invite = await client2.organization.inviteMember({
+			organizationId: errorOrg.data?.id as string,
+			email: newUser.email,
+			role: "member",
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+
+		await client2.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+
+		const { headers: userHeaders } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
+
+		const invitation = await client2.organization.acceptInvitation({
+			invitationId: invite.data?.id as string,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(invitation.error).toBeDefined();
+		expect(invitation.error?.status).toBeGreaterThanOrEqual(400);
+	});
+
+	it("should handle afterAccept hook throwing an error", async () => {
+		const {
+			auth: authWithAfterErrorHook,
+			signInWithTestUser: signInWithTestUser3,
+		} = await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					membershipLimit: 10,
+					async sendInvitationEmail(data: any, request: any) {},
+					acceptingInvitation: {
+						async beforeAccept(data: any, request: any) {},
+						async afterAccept(data: any, request: any) {
+							throw new Error("afterAccept hook error");
+						},
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const { headers: headers3 } = await signInWithTestUser3();
+		const client3 = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url: string | Request | URL, init?: any) => {
+					return authWithAfterErrorHook.handler(
+						new Request(url as string, init),
+					);
+				},
+			},
+		});
+
+		const afterErrorOrg = await client3.organization.create({
+			name: "test-after-error-hooks",
+			slug: "test-after-error-hooks",
+			fetchOptions: {
+				headers: headers3,
+			},
+		});
+
+		const newUser = {
+			email: "after-error-test@test.com",
+			password: "test123456",
+			name: "after error test user",
+		};
+
+		const invite = await client3.organization.inviteMember({
+			organizationId: afterErrorOrg.data?.id as string,
+			email: newUser.email,
+			role: "member",
+			fetchOptions: {
+				headers: headers3,
+			},
+		});
+
+		await client3.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+
+		const { headers: userHeaders } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
+
+		const invitation = await client3.organization.acceptInvitation({
+			invitationId: invite.data?.id as string,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(invitation.error).toBeDefined();
+		expect(invitation.error?.status).toBeGreaterThanOrEqual(400);
+	});
+
+	it("should work without hooks configured", async () => {
+		const { auth: authWithoutHooks, signInWithTestUser: signInWithTestUser4 } =
+			await getTestInstance({
+				user: {
+					modelName: "users",
+				},
+				plugins: [
+					organization({
+						membershipLimit: 10,
+						async sendInvitationEmail(data: any, request: any) {},
+					}),
+				],
+				logger: {
+					level: "error",
+				},
+			});
+
+		const { headers: headers4 } = await signInWithTestUser4();
+		const client4 = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url: string | Request | URL, init?: any) => {
+					return authWithoutHooks.handler(new Request(url as string, init));
+				},
+			},
+		});
+
+		const noHooksOrg = await client4.organization.create({
+			name: "test-no-hooks",
+			slug: "test-no-hooks",
+			fetchOptions: {
+				headers: headers4,
+			},
+		});
+
+		const newUser = {
+			email: "no-hooks-test@test.com",
+			password: "test123456",
+			name: "no hooks test user",
+		};
+
+		const invite = await client4.organization.inviteMember({
+			organizationId: noHooksOrg.data?.id as string,
+			email: newUser.email,
+			role: "admin",
+			fetchOptions: {
+				headers: headers4,
+			},
+		});
+
+		await client4.signUp.email({
+			email: newUser.email,
+			password: newUser.password,
+			name: newUser.name,
+		});
+
+		const { headers: userHeaders } = await signInWithUser(
+			newUser.email,
+			newUser.password,
+		);
+
+		const invitation = await client4.organization.acceptInvitation({
+			invitationId: invite.data?.id as string,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		if (invitation.error) {
+			expect(invitation.error?.status).toBe(401);
+			return;
+		}
+
+		expect(invitation.data?.invitation.status).toBe("accepted");
+		expect(invitation.data?.member).toBeDefined();
+		expect(invitation.data?.member?.role).toBe("admin");
+	});
+});
+
 describe("access control", async (it) => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],

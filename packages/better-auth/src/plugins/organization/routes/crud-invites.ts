@@ -387,6 +387,17 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -404,6 +415,21 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				});
 			}
+
+			if (options.acceptingInvitation?.beforeAccept) {
+				await options.acceptingInvitation.beforeAccept(
+					{
+						organization,
+						user: session.user,
+						invitation: {
+							...invitation,
+							role: invitation.role as string,
+						},
+					},
+					ctx.request,
+				);
+			}
+
 			const acceptedI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
@@ -460,6 +486,22 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						}
 					: {}),
 			});
+
+			if (options.acceptingInvitation?.afterAccept) {
+				await options.acceptingInvitation.afterAccept(
+					{
+						organization,
+						user: session.user,
+						member,
+						invitation: {
+							...acceptedI,
+							role: acceptedI.role as string,
+						},
+					},
+					ctx.request,
+				);
+			}
+
 			await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,

@@ -1,5 +1,5 @@
 import type { FieldAttribute } from "../../db";
-import type { User, Session, AuthContext } from "../../types";
+import type { AuthContext, Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type { Invitation, Member, Organization, Team } from "./schema";
 
@@ -322,4 +322,28 @@ export interface OrganizationOptions {
 	 * @default false
 	 */
 	autoCreateOrganizationOnSignUp?: boolean;
+	/**
+	 * Configure how accepting an invitation is handled
+	 */
+	acceptingInvitation?: {
+		beforeAccept?: (
+			data: {
+				organization: Omit<Organization, "id"> & Record<string, any>;
+				user: User;
+				invitation: Invitation;
+			},
+			request?: Request,
+		) => Promise<void | {
+			data: Record<string, any>;
+		}>;
+		afterAccept?: (
+			data: {
+				organization: Organization & Record<string, any>;
+				member: Member & Record<string, any>;
+				user: User;
+				invitation: Invitation;
+			},
+			request?: Request,
+		) => Promise<void>;
+	};
 }
