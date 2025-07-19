@@ -211,7 +211,6 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				},
 			},
 		},
-	},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
 			const organizationId =
@@ -528,34 +527,35 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 		},
 	);
 
-export const setActiveTeam = <O extends OrganizationOptions>(
-	options: O,
-) => createAuthEndpoint(
-	"/organization/set-active-team",
-	{
-		method: "POST",
-		body: z.object({
-			teamId: z
-				.string({
-					description:
-						"The team id to set as active. It can be null to unset the active team",
-				})
-				.nullable()
-				.optional(),
-		}),
-		use: [orgSessionMiddleware, orgMiddleware],
-		metadata: {
-			openapi: {
-				description: "Set the active team",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									description: "The team",
-									$ref: "#/components/schemas/Team",
+export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/set-active-team",
+		{
+			method: "POST",
+			body: z.object({
+				teamId: z
+					.string()
+					.meta({
+						description:
+							"The team id to set as active. It can be null to unset the active team",
+					})
+					.nullable()
+					.optional(),
+			}),
+			use: [orgSessionMiddleware, orgMiddleware],
+			metadata: {
+				openapi: {
+					description: "Set the active team",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										description: "The team",
+										$ref: "#/components/schemas/Team",
+									},
 								},
 							},
 						},
@@ -563,208 +563,208 @@ export const setActiveTeam = <O extends OrganizationOptions>(
 				},
 			},
 		},
-	},
-	async (ctx) => {
-		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const session = ctx.context.session;
+		async (ctx) => {
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const session = ctx.context.session;
 
-		if (ctx.body.teamId === null) {
-			const sessionTeamId = session.session.activeTeamId;
-			if (!sessionTeamId) {
+			if (ctx.body.teamId === null) {
+				const sessionTeamId = session.session.activeTeamId;
+				if (!sessionTeamId) {
+					return ctx.json(null);
+				}
+				const updatedSession = await adapter.setActiveTeam(
+					session.session.token,
+					null,
+				);
+
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
+
 				return ctx.json(null);
 			}
+
+			let teamId: string;
+
+			if (!ctx.body.teamId) {
+				const sessionTeamId = session.session.activeTeamId;
+				if (!sessionTeamId) {
+					return ctx.json(null);
+				} else {
+					teamId = sessionTeamId;
+				}
+			} else {
+				teamId = ctx.body.teamId;
+			}
+
+			const team = await adapter.findTeamById({ teamId });
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			const member = await adapter.findTeamMember({
+				teamId,
+				userId: session.user.id,
+			});
+
+			if (!member) {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				});
+			}
+
 			const updatedSession = await adapter.setActiveTeam(
 				session.session.token,
-				null,
+				team.id,
 			);
-
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,
 			});
 
-			return ctx.json(null);
-		}
-
-		let teamId: string;
-
-		if (!ctx.body.teamId) {
-			const sessionTeamId = session.session.activeTeamId;
-			if (!sessionTeamId) {
-				return ctx.json(null);
-			} else {
-				teamId = sessionTeamId;
-			}
-		} else {
-			teamId = ctx.body.teamId;
-		}
-
-		const team = await adapter.findTeamById({ teamId });
-
-		if (!team) {
-			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
-			});
-		}
-
-		const member = await adapter.findTeamMember({
-			teamId,
-			userId: session.user.id,
-		});
-
-		if (!member) {
-			throw new APIError("FORBIDDEN", {
-				message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
-			});
-		}
-
-		const updatedSession = await adapter.setActiveTeam(
-			session.session.token,
-			team.id,
-		);
-		await setSessionCookie(ctx, {
-			session: updatedSession,
-			user: session.user,
-		});
-
-		return ctx.json(team);
-	},
-);
-
-export const listUserTeams = <O extends OrganizationOptions>(
-	options: O,
-) => createAuthEndpoint(
-	"/organization/list-user-teams",
-	{
-		method: "GET",
-		metadata: {
-			openapi: {
-				description: "List all teams that the current user is a part of.",
-				responses: {
-					"200": {
-						description: "Teams retrieved successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "array",
-									items: {
-										type: "object",
-										description: "The team",
-										$ref: "#/components/schemas/Team",
-									},
-									description: "Array of team objects within the organization",
-								},
-							},
-						},
-					},
-				},
-			},
+			return ctx.json(team);
 		},
-		use: [orgMiddleware, orgSessionMiddleware],
-	},
-	async (ctx) => {
-		const session = ctx.context.session;
-		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const members = await adapter.listTeamsByUser({ userId: session.user.id });
+	);
 
-		return ctx.json(members);
-	},
-);
-
-export const listTeamMembers =<O extends OrganizationOptions>(
-	options: O,
-) => createAuthEndpoint(
-	"/organization/list-team-members",
-	{
-		method: "GET",
-		query: z.optional(
-			z.object({
-				teamId: z.string(),
-			}),
-		),
-		metadata: {
-			openapi: {
-				description: "List the members of the given team.",
-				responses: {
-					"200": {
-						description: "Teams retrieved successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "array",
-									items: {
-										type: "object",
-										description: "The team member",
-										properties: {
-											id: {
-												type: "string",
-												description: "Unique identifier of the team member",
-											},
-											userId: {
-												type: "string",
-												description: "The user ID of the team member",
-											},
-											teamId: {
-												type: "string",
-												description:
-													"The team ID of the team the team member is in",
-											},
-											createdAt: {
-												type: "string",
-												format: "date-time",
-												description:
-													"Timestamp when the team member was created",
-											},
+export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/list-user-teams",
+		{
+			method: "GET",
+			metadata: {
+				openapi: {
+					description: "List all teams that the current user is a part of.",
+					responses: {
+						"200": {
+							description: "Teams retrieved successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "array",
+										items: {
+											type: "object",
+											description: "The team",
+											$ref: "#/components/schemas/Team",
 										},
-										required: ["id", "userId", "teamId", "createdAt"],
+										description:
+											"Array of team objects within the organization",
 									},
-									description: "Array of team member objects within the team",
 								},
 							},
 						},
 					},
 				},
 			},
+			use: [orgMiddleware, orgSessionMiddleware],
 		},
-		use: [orgMiddleware, orgSessionMiddleware],
-	},
-	async (ctx) => {
-		const session = ctx.context.session;
-		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-
-		if (!session.session.activeOrganizationId) {
-			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const members = await adapter.listTeamsByUser({
+				userId: session.user.id,
 			});
-		}
 
-		const member = await adapter.findMemberByOrgId({
-			userId: session.user.id,
-			organizationId: session.session.activeOrganizationId,
-		});
-		if (!member) {
-			throw new APIError("BAD_REQUEST", {
-				message:
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			return ctx.json(members);
+		},
+	);
+
+export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/list-team-members",
+		{
+			method: "GET",
+			query: z.optional(
+				z.object({
+					teamId: z.string(),
+				}),
+			),
+			metadata: {
+				openapi: {
+					description: "List the members of the given team.",
+					responses: {
+						"200": {
+							description: "Teams retrieved successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "array",
+										items: {
+											type: "object",
+											description: "The team member",
+											properties: {
+												id: {
+													type: "string",
+													description: "Unique identifier of the team member",
+												},
+												userId: {
+													type: "string",
+													description: "The user ID of the team member",
+												},
+												teamId: {
+													type: "string",
+													description:
+														"The team ID of the team the team member is in",
+												},
+												createdAt: {
+													type: "string",
+													format: "date-time",
+													description:
+														"Timestamp when the team member was created",
+												},
+											},
+											required: ["id", "userId", "teamId", "createdAt"],
+										},
+										description: "Array of team member objects within the team",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			use: [orgMiddleware, orgSessionMiddleware],
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+			if (!session.session.activeOrganizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: session.session.activeOrganizationId,
 			});
-		}
+			if (!member) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
 
-		if (!session.session.activeTeamId) {
-			throw new APIError("FORBIDDEN", {
-				message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
+			if (!session.session.activeTeamId) {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
+				});
+			}
+
+			if (session.session.activeTeamId !== ctx.query?.teamId) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_CAN_NOT_ACCESS_THE_MEMBERS_OF_THIS_TEAM,
+				});
+			}
+
+			const members = await adapter.listTeamMembers({
+				teamId: session.session.activeTeamId,
 			});
-		}
-
-		if (session.session.activeTeamId !== ctx.query?.teamId) {
-			throw new APIError("FORBIDDEN", {
-				message:
-					ORGANIZATION_ERROR_CODES.YOU_CAN_NOT_ACCESS_THE_MEMBERS_OF_THIS_TEAM,
-			});
-		}
-
-		const members = await adapter.listTeamMembers({
-			teamId: session.session.activeTeamId,
-		});
-		return ctx.json(members);
-	},
-);
+			return ctx.json(members);
+		},
+	);
