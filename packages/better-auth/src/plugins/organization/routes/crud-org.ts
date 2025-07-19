@@ -11,7 +11,6 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
-	InferTeamMember,
 	Member,
 	Team,
 	TeamMember,

@@ -1155,6 +1155,9 @@ describe("Additional Fields", async () => {
 			teamRequiredField: string;
 			teamOptionalField?: string;
 		}[],
+		teamMember: [] as {
+			id: string;
+		}[],
 	};
 
 	const orgOptions = {
