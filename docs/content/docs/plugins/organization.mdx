@@ -1151,6 +1151,80 @@ type removeTeam = {
 ```
 </APIMethod>
 
+#### Set Active Team
+Sets the given team as the current active team. If `teamId` is `null` the current active team is unset.
+
+<APIMethod path="/organization/set-active-team" method="POST">
+```ts
+type setActiveTeam = {
+    /**
+     * The team ID of the team to set as the current active team.
+     */
+    teamId?: string = "team-id"
+}
+```
+</APIMethod>
+
+#### List User Teams
+List all teams that the current user is a part of.
+
+<APIMethod path="/organization/list-user-teams" method="GET">
+```ts
+type listUserTeams = {
+}
+```
+</APIMethod>
+
+#### List Team Members
+List the members of the given team.
+
+<APIMethod path="/organization/list-team-members" method="POST">
+```ts
+type listTeamMembers = {
+    /**
+     * The team whose members we should return. If this is not provided the members of the current active team get returned.
+     */
+    teamId?: string = "team-id"
+}
+```
+</APIMethod>
+
+#### Add Team Member
+Add a member to a team.
+
+<APIMethod path="/organization/add-team-member" method="POST">
+```ts
+type addTeamMember = {
+    /**
+     * The team the user should be a member of.
+     */
+    teamId: string = "team-id"
+    /**
+     * The user Id which represents the user to be added as a member.
+     */
+    userId: string = "user-id"
+}
+```
+</APIMethod>
+
+#### Remove Team Member
+Remove a member from a team.
+
+<APIMethod path="/organization/remove-team-member" method="POST">
+```ts
+type removeTeamMember = {
+    /**
+     * The team the user should be removed from.
+     */
+    teamId: string = "team-id"
+    /**
+     * The user which should be removed from the team.
+     */
+    userId: string = "user-id"
+}
+```
+</APIMethod>
+
 ### Team Permissions
 
 Teams follow the organization's permission system. To manage teams, users need the following permissions:
