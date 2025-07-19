@@ -5,7 +5,6 @@ import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { github } from "./github";
 import { google } from "./google";
-import { kick } from "./kick";
 import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { slack } from "./slack";
