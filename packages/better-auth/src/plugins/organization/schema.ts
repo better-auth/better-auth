@@ -51,7 +51,7 @@ export const teamSchema = z.object({
 export const teamMemberSchema = z.object({
 	id: z.string().default(generateId),
 	teamId: z.string(),
-	userId: z.coerce.string(),
+	userId: z.string(),
 	createdAt: z.date().default(() => new Date()),
 });
 

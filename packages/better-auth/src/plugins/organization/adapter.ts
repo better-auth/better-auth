@@ -446,7 +446,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			includeTeamMembers?: IncludeMembers;
 		}): Promise<
 			| (InferTeam<O> &
-					(IncludeMembers extends true ? { members: TeamMember<O>[] } : {}))
+					(IncludeMembers extends true ? { members: TeamMember[] } : {}))
 			| null
 		> => {
 			const team = await adapter.findOne<InferTeam<O>>({
@@ -470,7 +470,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				return null;
 			}
 
-			let members: InferTeamMember<O>[] = [];
+			let members: TeamMember[] = [];
 			if (includeTeamMembers) {
 				members = await adapter.findMany<TeamMember>({
 					model: "teamMember",
@@ -489,7 +489,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			}
 
 			return team as InferTeam<O> &
-				(IncludeMembers extends true ? { members: InferTeamMember<O>[] } : {});
+				(IncludeMembers extends true ? { members: TeamMember[] } : {});
 		},
 		updateTeam: async (
 			teamId: string,
