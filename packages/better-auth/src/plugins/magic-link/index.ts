@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z, type ZodTypeAny } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -7,7 +7,7 @@ import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../../api";
 
-interface MagicLinkOptions {
+interface MagicLinkOptions<DS extends ZodTypeAny> {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -21,9 +21,19 @@ interface MagicLinkOptions {
 			email: string;
 			url: string;
 			token: string;
+			additionalData?: z.infer<DS>;
 		},
 		request?: Request,
 	) => Promise<void> | void;
+	/**
+	 * Zod schema for the additionalData property of the sendMagicLink function.
+	 * This schema is used to validate and type-safeguard the additional data passed to the sign-in endpoint.
+	 *
+	 * @default z.record(z.any())
+	 * @see {@link https://zod.dev/basics}
+	 */
+	additionalDataSchema?: DS;
+
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -48,7 +58,14 @@ interface MagicLinkOptions {
 	generateToken?: (email: string) => Promise<string> | string;
 }
 
-export const magicLink = (options: MagicLinkOptions) => {
+export const magicLink = <
+	DS extends ZodTypeAny = z.ZodRecord<z.ZodString, z.ZodAny>,
+>(
+	options: MagicLinkOptions<DS>,
+) => {
+	const additionalDataSchema = (options.additionalDataSchema ??
+		z.record(z.any())) as DS;
+
 	return {
 		id: "magic-link",
 		endpoints: {
@@ -74,6 +91,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 								description: "URL to redirect after magic link verification",
 							})
 							.optional(),
+						additionalData: additionalDataSchema.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -99,7 +117,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, additionalData } = ctx.body;
 
 					if (options.disableSignUp) {
 						const user =
@@ -135,6 +153,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							email,
 							url,
 							token: verificationToken,
+							additionalData,
 						},
 						ctx.request,
 					);
