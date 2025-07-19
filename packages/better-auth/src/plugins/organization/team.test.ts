@@ -5,23 +5,22 @@ import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
 
 describe("team", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
-		await getTestInstance({
-			user: {
-				modelName: "users",
-			},
-			plugins: [
-				organization({
-					async sendInvitationEmail(data, request) {},
-					teams: {
-						enabled: true,
-					},
-				}),
-			],
-			logger: {
-				level: "error",
-			},
-		});
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+		user: {
+			modelName: "users",
+		},
+		plugins: [
+			organization({
+				async sendInvitationEmail() {},
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
+		logger: {
+			level: "error",
+		},
+	});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -49,6 +48,11 @@ describe("team", async (it) => {
 		password: "password",
 		name: "Invited User",
 	};
+
+	const signUpHeaders = new Headers();
+	const signUpRes = await client.signUp.email(invitedUser, {
+		onSuccess: cookieSetter(signUpHeaders),
+	});
 
 	it("should create an organization and a team", async () => {
 		const createOrganizationResponse = await client.organization.create({
@@ -119,19 +123,12 @@ describe("team", async (it) => {
 			teamId,
 		});
 
-		const newHeaders = new Headers();
-		const signUpRes = await client.signUp.email(invitedUser, {
-			onSuccess: cookieSetter(newHeaders),
-		});
-
-		expect(signUpRes.data?.user).toBeDefined();
-
 		const invitation = await client.organization.acceptInvitation(
 			{
 				invitationId: res.data?.id as string,
 			},
 			{
-				headers: newHeaders,
+				headers: signUpHeaders,
 			},
 		);
 
@@ -142,47 +139,26 @@ describe("team", async (it) => {
 	});
 
 	it("should add team to the member's list of teams", async () => {
-		const newHeaders = new Headers();
-		await client.signIn.email(invitedUser, {
-			onSuccess: cookieSetter(newHeaders),
-		});
-
-		const res = await client.organization.listUserTeams(
+		const listUserTeamsRes = await client.organization.listUserTeams(
 			{},
 			{
-				headers: newHeaders,
+				headers: signUpHeaders,
 			},
 		);
 
-		expect(res.error).toBeNull();
-		expect(res.data).not.toBeNull();
-		expect(res.data).toHaveLength(1);
+		expect(listUserTeamsRes.error).toBeNull();
+		expect(listUserTeamsRes.data).not.toBeNull();
+		expect(listUserTeamsRes.data).toHaveLength(1);
 	});
 
 	it("should be able to list team members in the current active team", async () => {
-		const signInHeaders = new Headers();
-		await client.signIn.email(invitedUser, {
-			onSuccess: cookieSetter(signInHeaders),
-		});
-
-		const activeOrgHeaders = new Headers();
-		await client.organization.setActive(
-			{
-				organizationId,
-			},
-			{
-				headers: signInHeaders,
-				onSuccess: cookieSetter(activeOrgHeaders),
-			},
-		);
-
 		const activeTeamHeaders = new Headers();
 		await client.organization.setActiveTeam(
 			{
 				teamId,
 			},
 			{
-				headers: activeOrgHeaders,
+				headers: signUpHeaders,
 				onSuccess: cookieSetter(activeTeamHeaders),
 			},
 		);

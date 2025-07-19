@@ -13,7 +13,6 @@ import type {
 	Team,
 	TeamInput,
 	TeamMember,
-	TeamMemberInput,
 } from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";

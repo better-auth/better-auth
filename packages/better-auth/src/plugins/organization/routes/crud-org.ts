@@ -195,7 +195,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			let member:
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
-			let teamMember: TeamMember | undefined;
+			let teamMember: TeamMember | null = null;
 
 			if (
 				options?.teams?.enabled &&

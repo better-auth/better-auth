@@ -444,8 +444,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
-				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
-					"undefined" &&
 				"teamId" in acceptedI &&
 				acceptedI.teamId
 			) {
@@ -458,21 +456,27 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						userId: session.user.id,
 					});
 
-					const members = await adapter.listTeamMembers({ teamId });
-					const maximumMembersPerTeam =
-						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-						"function"
-							? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-									teamId,
-									session: session,
-									organizationId: invitation.organizationId,
-								})
-							: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+					if (
+						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+						"undefined"
+					) {
+						const members = await adapter.listTeamMembers({ teamId });
 
-					if (members.length >= maximumMembersPerTeam) {
-						throw new APIError("FORBIDDEN", {
-							message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-						});
+						const maximumMembersPerTeam =
+							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+							"function"
+								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+										teamId,
+										session: session,
+										organizationId: invitation.organizationId,
+									})
+								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+
+						if (members.length >= maximumMembersPerTeam) {
+							throw new APIError("FORBIDDEN", {
+								message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+							});
+						}
 					}
 				}
 
