@@ -1260,7 +1260,6 @@ describe("Additional Fields", async () => {
 					userId: string;
 					role: string;
 					createdAt: Date;
-					teamId?: string | undefined;
 			  } & {
 					memberRequiredField: string;
 			  } & {
