@@ -580,6 +580,51 @@ type acceptInvitation = {
 ```
 </APIMethod>
 
+#### Accept Invitation Hooks
+
+You can customize the invitation acceptance process using hooks that run before and after an invitation is accepted.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            acceptingInvitation: {
+                disabled: false, // Set to true to disable invitation acceptance
+                beforeAccept: async ({ invitation, user }, request) => {
+                    // Run custom logic before invitation is accepted,
+                    // e.g. verify if user can accept invitation
+                    await verifyInvitationRules(invitation.id, user.id)
+                },
+                afterAccept: async ({ invitation, member, user }, request) => {
+                    // Run custom logic after invitation is accepted
+                    // e.g., send welcome notifications, create default resources
+                    await sendWelcomeEmail(user.email, invitation.organization.name)
+                    await setupDefaultUserResources(member.id)
+                }
+            }
+        })
+    ]
+})
+```
+
+The `beforeAccept` hook runs before an invitation is accepted. It receives:
+
+- `invitation`: The invitation data
+- `user`: The user accepting the invitation
+- `request`: The HTTP request object (optional)
+
+Return an object with `data` property to modify the invitation data that will be processed.
+
+The `afterAccept` hook runs after an invitation is successfully accepted. It receives:
+
+- `invitation`: The accepted invitation
+- `member`: The newly created member record
+- `user`: The user who accepted the invitation
+- `request`: The HTTP request object (optional)
+
 
 ### Cancel Invitation
 
