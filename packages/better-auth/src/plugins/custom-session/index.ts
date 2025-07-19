@@ -92,7 +92,7 @@ export const customSession = <
 							ctx.setHeader(key, value);
 						}
 					});
-					await setCookieCache(ctx, fnResult as any);
+					await setCookieCache(ctx, session.response as any);
 					return ctx.json(fnResult);
 				},
 			),
