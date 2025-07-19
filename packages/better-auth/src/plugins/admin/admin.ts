@@ -5,22 +5,102 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import { type BetterAuthPlugin, type Session, type Where } from "../../types";
+import {
+	type BetterAuthPlugin,
+	type InferOptionSchema,
+	type Session,
+	type User,
+	type Where,
+} from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema } from "../../db/schema";
-import { type AccessControl } from "../access";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { type AccessControl, type Role } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
-import {
-	type AdminOptions,
-	type UserWithRole,
-	type SessionWithImpersonatedBy,
-	type InferAdminRolesFromOption,
-} from "./types";
+import { BASE_ERROR_CODES } from "../../error/codes";
 import { schema } from "./schema";
+
+export interface UserWithRole extends User {
+	role?: string;
+	banned?: boolean | null;
+	banReason?: string | null;
+	banExpires?: Date | null;
+}
+
+export interface SessionWithImpersonatedBy extends Session {
+	impersonatedBy?: string;
+}
+
+export interface AdminOptions {
+	/**
+	 * The default role for a user
+	 *
+	 * @default "user"
+	 */
+	defaultRole?: string;
+	/**
+	 * Roles that are considered admin roles.
+	 *
+	 * Any user role that isn't in this list, even if they have the permission,
+	 * will not be considered an admin.
+	 *
+	 * @default ["admin"]
+	 */
+	adminRoles?: string | string[];
+	/**
+	 * A default ban reason
+	 *
+	 * By default, no reason is provided
+	 */
+	defaultBanReason?: string;
+	/**
+	 * Number of seconds until the ban expires
+	 *
+	 * By default, the ban never expires
+	 */
+	defaultBanExpiresIn?: number;
+	/**
+	 * Duration of the impersonation session in seconds
+	 *
+	 * By default, the impersonation session lasts 1 hour
+	 */
+	impersonationSessionDuration?: number;
+	/**
+	 * Custom schema for the admin plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Configure the roles and permissions for the admin
+	 * plugin.
+	 */
+	ac?: AccessControl;
+	/**
+	 * Custom permissions for roles.
+	 */
+	roles?: {
+		[key in string]?: Role;
+	};
+	/**
+	 * List of user ids that should have admin access
+	 *
+	 * If this is set, the `adminRole` option is ignored
+	 */
+	adminUserIds?: string[];
+	/**
+	 * Message to show when a user is banned
+	 *
+	 * By default, the message is "You have been banned from this application"
+	 */
+	bannedUserMessage?: string;
+}
+
+export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
+	O extends { roles: Record<string, unknown> }
+		? keyof O["roles"]
+		: "user" | "admin";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -246,6 +326,71 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					return ctx.json({
 						user: updatedUser as UserWithRole,
 					});
+				},
+			),
+			getUser: createAuthEndpoint(
+				"/admin/get-user",
+				{
+					method: "GET",
+					query: z.object({
+						id: z.string({
+							description: "The id of the User",
+						}),
+					}),
+					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "getUser",
+							summary: "Get an existing user",
+							description: "Get an existing user",
+							responses: {
+								200: {
+									description: "User",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { id } = ctx.query;
+
+					const canGetUser = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["get"],
+						},
+					});
+
+					if (!canGetUser) {
+						throw ctx.error("FORBIDDEN", {
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
+							code: "YOU_ARE_NOT_ALLOWED_TO_GET_USER",
+						});
+					}
+
+					const user = await ctx.context.internalAdapter.findUserById(id);
+
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+
+					return parseUserOutput(ctx.context.options, user);
 				},
 			),
 			createUser: createAuthEndpoint(
