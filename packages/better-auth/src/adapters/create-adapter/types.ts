@@ -61,10 +61,12 @@ export interface AdapterConfig {
 	adapterId: string;
 	/**
 	 * If the database supports numeric ids, set this to `true`.
+	 * For example, MongoDB doesn't support numeric ids.
+	 * Where as PostgreSQL does via `serial` columns.
 	 *
 	 * @default true
 	 */
-	supportsNumericIds?: boolean;
+	supportsNumericIds: boolean;
 	/**
 	 * If the database doesn't support JSON columns, set this to `false`.
 	 *
@@ -72,7 +74,15 @@ export interface AdapterConfig {
 	 *
 	 * @default false
 	 */
-	supportsJSON?: boolean;
+	supportsJSON: boolean;
+	/**
+	 * If the database doesn't support JSONB columns, set this to `false`.
+	 *
+	 * We will handle the translation between using `JSONB` columns, and saving `string`s to the database.
+	 *
+	 * @default false
+	 */
+	supportsJSONB: boolean;
 	/**
 	 * If the database doesn't support dates, set this to `false`.
 	 *
@@ -80,7 +90,7 @@ export interface AdapterConfig {
 	 *
 	 * @default true
 	 */
-	supportsDates?: boolean;
+	supportsDates: boolean;
 	/**
 	 * If the database doesn't support booleans, set this to `false`.
 	 *
@@ -88,7 +98,7 @@ export interface AdapterConfig {
 	 *
 	 * @default true
 	 */
-	supportsBooleans?: boolean;
+	supportsBooleans: boolean;
 	/**
 	 * Disable id generation for the `create` method.
 	 *
@@ -96,7 +106,24 @@ export interface AdapterConfig {
 	 *
 	 * @default false
 	 */
-	disableIdGeneration?: boolean;
+	disableIdGeneration: boolean;
+
+	/**
+	 * If the database doesn't support numbers, set this to `false`.
+	 *
+	 * We will handle the translation between using `number`s, and saving `string`s to the database.
+	 *
+	 * @default true
+	 */
+	supportsNumbers: boolean;
+	/**
+	 * If the database doesn't support arrays, set this to `false`.
+	 *
+	 * We will handle the translation between using `array`s, and saving `string`s to the database.
+	 *
+	 * @default true
+	 */
+	supportsArrays: boolean;
 	/**
 	 * Map the keys of the input data.
 	 *
@@ -376,4 +403,16 @@ export type CleanedWhere = Prettify<Required<Where>>;
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
 	printDebugLogs: () => void;
+};
+
+export type IdField = ({
+	customModelName,
+	forceAllowId,
+}: {
+	customModelName?: string;
+	forceAllowId?: boolean;
+}) => {
+	defaultValue?: (() => string | undefined) | undefined;
+	type: "string" | "number";
+	required: boolean;
 };
