@@ -156,7 +156,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			});
 
 			if (teamId) {
-				await adapter.createTeamMember({
+				await adapter.findOrCreateTeamMember({
 					userId: user.id,
 					teamId,
 				});

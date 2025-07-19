@@ -572,6 +572,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				if (!sessionTeamId) {
 					return ctx.json(null);
 				}
+
 				const updatedSession = await adapter.setActiveTeam(
 					session.session.token,
 					null,
@@ -621,6 +622,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				session.session.token,
 				team.id,
 			);
+
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,

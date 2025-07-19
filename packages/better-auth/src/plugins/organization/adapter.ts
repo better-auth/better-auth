@@ -617,17 +617,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return members;
 		},
 
-		createTeamMember: async (data: Omit<TeamMemberInput, "id">) => {
-			const member = await adapter.create<Omit<TeamMember, "id">, TeamMember>({
-				model: "teamMember",
-				data: {
-					...data,
-					createdAt: new Date(),
-				},
-			});
-			return member;
-		},
-
 		findTeamMember: async (data: {
 			teamId: string;
 			userId: string;
@@ -725,9 +714,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					status: "pending",
 					expiresAt,
 					inviterId: user.id,
-					email: invitation.email,
-					role: invitation.role,
-					organizationId: invitation.organizationId,
+					...invitation,
 					teamId: invitation.teamIds.join(","),
 				},
 			});

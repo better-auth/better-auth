@@ -11,6 +11,7 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferTeamMember,
 	Member,
 	Team,
 	TeamMember,
@@ -218,7 +219,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 					role: ctx.context.orgOptions.creatorRole || "owner",
 				});
 
-				teamMember = await adapter.createTeamMember({
+				teamMember = await adapter.findOrCreateTeamMember({
 					teamId: defaultTeam.id,
 					userId: user.id,
 				});
