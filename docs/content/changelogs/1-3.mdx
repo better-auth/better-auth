@@ -105,33 +105,6 @@ const auth = betterAuth({
 Key features:
 - Extended Organization Fields:
   - Type-safe additional fields
-
-### **Usage-Based Billing**
-
-Added support for usage-based subscriptions in Stripe plugin.
-
-```ts title="auth.ts"
-stripe({
-  subscription: {
-    enabled: true,
-    usageBased: true,
-    plans: [
-      {
-        name: "starter",
-        priceId: "price_abc",
-        limits: { usageLimit: 100 },
-      },
-    ],
-  },
-});
-```
-
-Key features:
-- Usage tracking and monitoring
-- Plan-level usage limits
-- Automatic limit enforcement
-- Usage reset capabilities
-
 ---
 
 ## ✨ Core Enhancements
