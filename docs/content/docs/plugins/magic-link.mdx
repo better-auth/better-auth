@@ -53,11 +53,13 @@ Magic link or email link is a way to authenticate users without a password. When
 
 To sign in with a magic link, you need to call `signIn.magicLink` with the user's email address. The `sendMagicLink` function is called to send the magic link to the user's email.
 
+
 <APIMethod
   path="/sign-in/magic-link"
   method="POST"
   requireSession
 >
+  
 ```ts
 type signInMagicLink = {
     /**
@@ -72,6 +74,16 @@ type signInMagicLink = {
      * URL to redirect after magic link verification. 
      */
     callbackURL?: string = "/dashboard"
+    /**
+     * URL to redirect after new user signup
+     */
+    newUserCallbackURL?: string = "/welcome"
+    /**
+     * URL to redirect if an error happen on verification
+     * If only callbackURL is provided but without an `errorCallbackURL` then they will be 
+     * redirected to the callbackURL with an `error` query parameter.
+     */
+    errorCallbackURL?: string = "/error"
 }
 ```
 </APIMethod>
