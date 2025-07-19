@@ -12,10 +12,33 @@ We need to mount the handler to SvelteKit server hook.
 ```ts title="hooks.server.ts"
 import { auth } from "$lib/auth";
 import { svelteKitHandler } from "better-auth/svelte-kit";
+import { building } from "$app/environment";
 
 export async function handle({ event, resolve }) {
-	return svelteKitHandler({ event, resolve, auth });
+  return svelteKitHandler({ event, resolve, auth, building });
 }
+```
+
+### Server Action Cookies
+
+To ensure cookies are properly set when you call functions like `signInEmail` or `signUpEmail` in a server action, you should use the `sveltekitCookies` plugin. This plugin will automatically handle setting cookies for you in SvelteKit.
+
+You need to add it as a plugin to your Better Auth instance.
+
+<Callout>
+  The `getRequestEvent` function is available in SvelteKit `2.2.0` and later.
+  Make sure you are using a compatible version.
+</Callout>
+
+```ts title="lib/auth.ts"
+import { BetterAuth } from "better-auth";
+import { sveltekitCookies } from "better-auth/svelte-kit";
+import { getRequestEvent } from "$app/server";
+
+export const auth = betterAuth({
+  // ... your config
+  plugins: [sveltekitCookies(getRequestEvent)],
+});
 ```
 
 ## Create a client
@@ -23,17 +46,18 @@ export async function handle({ event, resolve }) {
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/svelte" // make sure to import from better-auth/svelte
+import { createAuthClient } from "better-auth/svelte"; // make sure to import from better-auth/svelte
 
 export const authClient = createAuthClient({
-    // you can pass client configuration here
-})
+  // you can pass client configuration here
+});
 ```
 
 Once you have created the client, you can use it to sign up, sign in, and perform other actions.
 Some of the actions are reactive. The client use [nano-store](https://github.com/nanostores/nanostores) to store the state and reflect changes when there is a change like a user signing in or out affecting the session state.
 
 ### Example usage
+
 ```svelte
 <script lang="ts">
   import { authClient } from "$lib/client";

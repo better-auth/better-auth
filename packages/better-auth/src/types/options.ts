@@ -163,6 +163,13 @@ export type BetterAuthOptions = {
 		 */
 		sendOnSignUp?: boolean;
 		/**
+		 * Send a verification email automatically
+		 * on sign in when the user's email is not verified
+		 *
+		 * @default false
+		 */
+		sendOnSignIn?: boolean;
+		/**
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
@@ -459,7 +466,13 @@ export type BetterAuthOptions = {
 		freshAge?: number;
 	};
 	account?: {
+		/**
+		 * The model name for the account. Defaults to "account".
+		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
@@ -505,6 +518,20 @@ export type BetterAuthOptions = {
 			 */
 			updateUserInfoOnLink?: boolean;
 		};
+		/**
+		 * Encrypt OAuth tokens
+		 *
+		 * By default, OAuth tokens (access tokens, refresh tokens, ID tokens) are stored in plain text in the database.
+		 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
+		 * on external services.
+		 *
+		 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+		 * - Database breaches and unauthorized access to raw token data
+		 * - Internal threats from database administrators or compromised credentials
+		 * - Token exposure in database backups and logs
+		 * @default false
+		 */
+		encryptOAuthTokens?: boolean;
 	};
 	/**
 	 * Verification configuration

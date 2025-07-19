@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
@@ -333,45 +333,66 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 			};
 		},
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/oauth2`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInWithOAuth2`
+			 *
+			 * **client:**
+			 * `authClient.signIn.oauth2`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sign-in#api-method-sign-in-oauth2)
+			 */
 			signInWithOAuth2: createAuthEndpoint(
 				"/sign-in/oauth2",
 				{
 					method: "POST",
 					body: z.object({
-						providerId: z.string({
+						providerId: z.string().meta({
 							description: "The provider ID for the OAuth provider",
 						}),
 						callbackURL: z
-							.string({
+							.string()
+							.meta({
 								description: "The URL to redirect to after sign in",
 							})
 							.optional(),
 						errorCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description: "The URL to redirect to if an error occurs",
 							})
 							.optional(),
 						newUserCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
-									"The URL to redirect to after login if the user is new",
+									'The URL to redirect to after login if the user is new. Eg: "/welcome"',
 							})
 							.optional(),
 						disableRedirect: z
-							.boolean({
+							.boolean()
+							.meta({
 								description: "Disable redirect",
 							})
 							.optional(),
 						scopes: z
-							.array(z.string(), {
-								message:
+							.array(z.string())
+							.meta({
+								description:
 									"Scopes to be passed to the provider authorization request.",
 							})
 							.optional(),
 						requestSignUp: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
-									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
 							})
 							.optional(),
 					}),
@@ -495,27 +516,32 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					method: "GET",
 					query: z.object({
 						code: z
-							.string({
+							.string()
+							.meta({
 								description: "The OAuth2 code",
 							})
 							.optional(),
 						error: z
-							.string({
+							.string()
+							.meta({
 								description: "The error message, if any",
 							})
 							.optional(),
 						error_description: z
-							.string({
+							.string()
+							.meta({
 								description: "The error description, if any",
 							})
 							.optional(),
 						state: z
-							.string({
+							.string()
+							.meta({
 								description: "The state parameter from the OAuth2 request",
 							})
 							.optional(),
 					}),
 					metadata: {
+						client: false,
 						openapi: {
 							description: "OAuth2 callback",
 							responses: {
@@ -749,6 +775,21 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					throw ctx.redirect(toRedirectTo);
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/oauth2/link`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.oAuth2LinkAccount`
+			 *
+			 * **client:**
+			 * `authClient.oauth2.link`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/generic-oauth#api-method-oauth2-link)
+			 */
 			oAuth2LinkAccount: createAuthEndpoint(
 				"/oauth2/link",
 				{
@@ -765,7 +806,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						 * linking a social account compared to the initial authentication.
 						 */
 						scopes: z
-							.array(z.string(), {
+							.array(z.string())
+							.meta({
 								description:
 									"Additional scopes to request when linking the account",
 							})
@@ -774,7 +816,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						 * The URL to redirect to if there is an error during the link process.
 						 */
 						errorCallbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
 									"The URL to redirect to if there is an error during the link process",
 							})

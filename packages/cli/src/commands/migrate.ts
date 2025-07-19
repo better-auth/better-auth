@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
 import yoctoSpinner from "yocto-spinner";

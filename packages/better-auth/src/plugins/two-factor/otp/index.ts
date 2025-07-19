@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type {
@@ -8,9 +8,15 @@ import type {
 	UserWithTwoFactor,
 } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
-import { generateRandomString } from "../../../crypto";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../../crypto";
 import { setSessionCookie } from "../../../cookies";
 import { BASE_ERROR_CODES } from "../../../error/codes";
+import type { GenericEndpointContext } from "../../../types";
+import { defaultKeyHasher } from "../utils";
 
 export interface OTPOptions {
 	/**
@@ -55,6 +61,15 @@ export interface OTPOptions {
 	 * @default 5
 	 */
 	allowedAttempts?: number;
+	storeOTP?:
+		| "plain"
+		| "encrypted"
+		| "hashed"
+		| { hash: (token: string) => Promise<string> }
+		| {
+				encrypt: (token: string) => Promise<string>;
+				decrypt: (token: string) => Promise<string>;
+		  };
 }
 
 /**
@@ -62,11 +77,50 @@ export interface OTPOptions {
  */
 export const otp2fa = (options?: OTPOptions) => {
 	const opts = {
+		storeOTP: "plain",
+		digits: 6,
 		...options,
-		digits: options?.digits || 6,
 		period: (options?.period || 3) * 60 * 1000,
 	};
 	const twoFactorTable = "twoFactor";
+
+	async function storeOTP(ctx: GenericEndpointContext, otp: string) {
+		if (opts.storeOTP === "hashed") {
+			return await defaultKeyHasher(otp);
+		}
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
+			return await opts.storeOTP.hash(otp);
+		}
+		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
+			return await opts.storeOTP.encrypt(otp);
+		}
+		if (opts.storeOTP === "encrypted") {
+			return await symmetricEncrypt({
+				key: ctx.context.secret,
+				data: otp,
+			});
+		}
+		return otp;
+	}
+
+	async function decryptOTP(ctx: GenericEndpointContext, otp: string) {
+		if (opts.storeOTP === "hashed") {
+			return await defaultKeyHasher(otp);
+		}
+		if (opts.storeOTP === "encrypted") {
+			return await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: otp,
+			});
+		}
+		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
+			return await opts.storeOTP.decrypt(otp);
+		}
+		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
+			return await opts.storeOTP.hash(otp);
+		}
+		return otp;
+	}
 
 	/**
 	 * Generate OTP and send it to the user.
@@ -82,7 +136,10 @@ export const otp2fa = (options?: OTPOptions) => {
 					 * for 30 days. It'll be refreshed on
 					 * every sign in request within this time.
 					 */
-					trustDevice: z.boolean().optional(),
+					trustDevice: z.boolean().optional().meta({
+						description:
+							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+					}),
 				})
 				.optional(),
 			metadata: {
@@ -134,9 +191,10 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const code = generateRandomString(opts.digits, "0-9");
+			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue(
 				{
-					value: `${code}:0`,
+					value: `${hashedCode}:0`,
 					identifier: `2fa-otp-${key}`,
 					expiresAt: new Date(Date.now() + opts.period),
 				},
@@ -155,15 +213,18 @@ export const otp2fa = (options?: OTPOptions) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string({
-					description: "The otp code to verify",
+				code: z.string().meta({
+					description: 'The otp code to verify. Eg: "012345"',
 				}),
 				/**
 				 * if true, the device will be trusted
 				 * for 30 days. It'll be refreshed on
 				 * every sign in request within this time.
 				 */
-				trustDevice: z.boolean().optional(),
+				trustDevice: z.boolean().optional().meta({
+					description:
+						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+				}),
 			}),
 			metadata: {
 				openapi: {
@@ -257,6 +318,7 @@ export const otp2fa = (options?: OTPOptions) => {
 					`2fa-otp-${key}`,
 				);
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
+			const decryptedOtp = await decryptOTP(ctx, otp);
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -276,7 +338,7 @@ export const otp2fa = (options?: OTPOptions) => {
 					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				});
 			}
-			if (otp === ctx.body.code) {
+			if (decryptedOtp === ctx.body.code) {
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
 						throw new APIError("BAD_REQUEST", {
@@ -331,7 +393,37 @@ export const otp2fa = (options?: OTPOptions) => {
 	return {
 		id: "otp",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/send-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.send2FaOTP`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.sendOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-send-otp)
+			 */
 			sendTwoFactorOTP: send2FaOTP,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/verify-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyOTP`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.verifyOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-verify-otp)
+			 */
 			verifyTwoFactorOTP: verifyOTP,
 		},
 	} satisfies TwoFactorProvider;
