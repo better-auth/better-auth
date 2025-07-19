@@ -10,7 +10,7 @@ import type {
 import type { Prettify } from "../../types/helper";
 import { type AccessControl, type Role } from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
-import type { organization } from "./organization";
+import { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
@@ -24,12 +24,10 @@ interface OrganizationClientOptions {
 	teams?: {
 		enabled: boolean;
 	};
+	$inferAuth?: { options: { plugins: BetterAuthPlugin[] } };
 }
 
-export const organizationClient = <
-	Auth extends { options: { plugins: BetterAuthPlugin[] } },
-	CO extends OrganizationClientOptions = OrganizationClientOptions,
->(
+export const organizationClient = <CO extends OrganizationClientOptions>(
 	options?: CO,
 ) => {
 	const $listOrg = atom<boolean>(false);
@@ -78,12 +76,14 @@ export const organizationClient = <
 				invitations: InferInvitation<CO>[];
 			} & Organization;
 
-	type Schema = Auth["options"]["plugins"][number] extends {
-		id: "organization";
-		options: infer O;
-	}
-		? O extends { schema?: infer S }
-			? O["schema"]
+	type Schema = CO["$inferAuth"] extends Object
+		? CO["$inferAuth"]["options"]["plugins"][number] extends {
+				id: "organization";
+				options: infer O;
+			}
+			? O extends { schema?: infer S }
+				? S
+				: undefined
 			: undefined
 		: undefined;
 
@@ -222,3 +222,5 @@ export const organizationClient = <
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+const {} = organizationClient({ teams: { enabled: true } });
