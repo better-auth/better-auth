@@ -19,6 +19,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
+import { logger } from "../../../utils";
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options: O,
@@ -559,6 +560,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			logger.debug("START - getFullOrganization")
 			const session = ctx.context.session;
 			const organizationId =
 				ctx.query?.organizationSlug ||
@@ -570,16 +572,20 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
+			console.time("findFullOrganization")
 			const organization = await adapter.findFullOrganization({
 				organizationId,
 				isSlug: !!ctx.query?.organizationSlug,
 				includeTeams: ctx.context.orgOptions.teams?.enabled,
 			});
+			console.timeEnd("findFullOrganization")
 			const isMember = organization?.members.find(
 				(member) => member.userId === session.user.id,
 			);
 			if (!isMember) {
+				console.time("setActiveOrganization")
 				await adapter.setActiveOrganization(session.session.token, null);
+				console.timeEnd("setActiveOrganization")
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
