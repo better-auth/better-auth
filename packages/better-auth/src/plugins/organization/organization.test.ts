@@ -1780,6 +1780,9 @@ describe("Additional Fields", async () => {
 			teamRequiredField: string;
 			teamOptionalField?: string;
 		}[],
+		teamMember: [] as {
+			id: string;
+		}[],
 	};
 
 	const orgOptions = {
@@ -1882,7 +1885,6 @@ describe("Additional Fields", async () => {
 					userId: string;
 					role: string;
 					createdAt: Date;
-					teamId?: string | undefined;
 			  } & {
 					memberRequiredField: string;
 			  } & {

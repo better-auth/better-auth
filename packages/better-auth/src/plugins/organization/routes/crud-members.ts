@@ -131,9 +131,9 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
-			const members = await adapter.listMembers({ organizationId: orgId });
+			const count = await adapter.countMembers({ organizationId: orgId });
 
-			if (members.length >= membershipLimit) {
+			if (count >= membershipLimit) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
@@ -153,8 +153,14 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				role: parseRoles(ctx.body.role as string | string[]),
 				createdAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
-				...(teamId ? { teamId } : {}),
 			});
+
+			if (teamId) {
+				await adapter.findOrCreateTeamMember({
+					userId: user.id,
+					teamId,
+				});
+			}
 
 			return ctx.json(createdMember);
 		},
