@@ -2,7 +2,8 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
-import { jwt } from "./index";
+import { jwt, type JwtOptions } from "./index";
+import { generateExportedKeyPair } from "./sign";
 import { importJWK, jwtVerify } from "jose";
 
 type JWKOptions =
@@ -185,61 +186,23 @@ describe("jwt", async (it) => {
 				alg: "RS256",
 			},
 		},
-		// We cannot sign using key exchange protocol, need to establish a key first (only allowed usage for these keys is `deriveBits`)
-		/*
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-256",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 43,
-				crv: "P-256",
-				alg: "ECDH-ES",
-			},
-		},
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-384",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 64,
-				crv: "P-384",
-				alg: "ECDH-ES",
-			},
-		},
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-521",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 88,
-				crv: "P-521",
-				alg: "ECDH-ES",
-			},
-		},*/
+		// We cannot sign using key exchange protocol ("ECDH-ES algorithm"), need to establish a key first (only allowed usage for these keys is `deriveBits`)
 	];
 
 	for (const algorithm of algorithmsToTest) {
 		const expectedOutcome = algorithm.expectedOutcome;
 		for (let disablePrivateKeyEncryption of [false, true]) {
+			const jwtOptions: JwtOptions = {
+				jwks: {
+					keyPairConfig: {
+						...algorithm.keyPairConfig,
+					},
+					disablePrivateKeyEncryption: disablePrivateKeyEncryption,
+				},
+			};
 			try {
 				const { auth, signInWithTestUser } = await getTestInstance({
-					plugins: [
-						jwt({
-							jwks: {
-								keyPairConfig: {
-									...algorithm.keyPairConfig,
-								},
-								disablePrivateKeyEncryption: disablePrivateKeyEncryption,
-							},
-						}),
-					],
+					plugins: [jwt(jwtOptions)],
 					logger: {
 						level: "error",
 					},
@@ -269,6 +232,16 @@ describe("jwt", async (it) => {
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
 				});
 
+				it(`${alg} algorithm${enc}: Endpoint "/token" can extract valid keys`, async () => {
+					const { publicWebKey, privateWebKey } =
+						await generateExportedKeyPair(jwtOptions);
+					for (const key of [publicWebKey, privateWebKey]) {
+						expect(key.kty).toBe(expectedOutcome.ec);
+						if (key.x) expect(key.x).toHaveLength(expectedOutcome.length);
+						if (key.y) expect(key.y).toHaveLength(expectedOutcome.length);
+						if (key.n) expect(key.n).toHaveLength(expectedOutcome.length);
+					}
+				});
 				const client = createAuthClient({
 					plugins: [jwtClient()],
 					baseURL: "http://localhost:3000/api/auth",
