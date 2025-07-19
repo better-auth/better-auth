@@ -4,7 +4,15 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import { ZodObject, ZodOptional, ZodSchema } from "zod";
+import {
+	ZodArray,
+	ZodBoolean,
+	ZodNumber,
+	ZodObject,
+	ZodOptional,
+	ZodString,
+	ZodType,
+} from "zod/v4";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db/get-tables";
 import type { AuthContext, BetterAuthOptions } from "../../types";
@@ -69,21 +77,19 @@ export interface Path {
 }
 const paths: Record<string, Path> = {};
 
-function getTypeFromZodType(zodType: ZodSchema) {
-	switch (zodType.constructor.name) {
-		case "ZodString":
-			return "string";
-		case "ZodNumber":
-			return "number";
-		case "ZodBoolean":
-			return "boolean";
-		case "ZodObject":
-			return "object";
-		case "ZodArray":
-			return "array";
-		default:
-			return "string";
+function getTypeFromZodType(zodType: ZodType<any>) {
+	if (zodType instanceof ZodString) {
+		return "string";
+	} else if (zodType instanceof ZodNumber) {
+		return "number";
+	} else if (zodType instanceof ZodBoolean) {
+		return "boolean";
+	} else if (zodType instanceof ZodObject) {
+		return "object";
+	} else if (zodType instanceof ZodArray) {
+		return "array";
 	}
+	return "string";
 }
 
 function getParameters(options: EndpointOptions) {
@@ -94,18 +100,18 @@ function getParameters(options: EndpointOptions) {
 	}
 	if (options.query instanceof ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
-			if (value instanceof ZodSchema) {
+			if (value instanceof ZodType) {
 				parameters.push({
 					name: key,
 					in: "query",
 					schema: {
-						type: getTypeFromZodType(value),
-						...("minLength" in value && value.minLength
+						type: getTypeFromZodType(value as ZodType<any>),
+						...("minLength" in value && (value as any).minLength
 							? {
-									minLength: value.minLength as number,
+									minLength: (value as any).minLength as number,
 								}
 							: {}),
-						description: value.description,
+						description: (value as any).description,
 					},
 				});
 			}
@@ -129,10 +135,10 @@ function getRequestBody(options: EndpointOptions): any {
 		const properties: Record<string, any> = {};
 		const required: string[] = [];
 		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof ZodSchema) {
+			if (value instanceof ZodType) {
 				properties[key] = {
-					type: getTypeFromZodType(value),
-					description: value.description,
+					type: getTypeFromZodType(value as ZodType<any>),
+					description: (value as any).description,
 				};
 				if (!(value instanceof ZodOptional)) {
 					required.push(key);

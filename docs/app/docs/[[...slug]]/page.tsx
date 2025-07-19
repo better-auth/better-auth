@@ -21,6 +21,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
+import { APIMethod } from "@/components/api-method";
+import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 
 const { AutoTypeTable } = createTypeTable();
@@ -40,7 +42,7 @@ export default async function Page({
 	const { nextPage, prevPage } = getPageLinks(page.url);
 
 	const MDX = page.data.body;
-
+	const avoidLLMHeader = ["Introduction", "Comparison"];
 	return (
 		<DocsPage
 			toc={page.data.toc}
@@ -61,6 +63,15 @@ export default async function Page({
 			}}
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
+			{!avoidLLMHeader.includes(page.data.title) && (
+				<div className="flex flex-row gap-2 items-center border-b pb-3">
+					<LLMCopyButton />
+					<ViewOptions
+						markdownUrl={`${page.url}.mdx`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
+					/>
+				</div>
+			)}
 			<DocsBody>
 				<MDX
 					components={{
@@ -95,6 +106,7 @@ export default async function Page({
 						Accordion,
 						Accordions,
 						Endpoint,
+						APIMethod,
 						Callout: ({ children, ...props }) => (
 							<defaultMdxComponents.Callout
 								{...props}

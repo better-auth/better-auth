@@ -52,6 +52,7 @@ export const ERROR_CODES = {
 	SERVER_ONLY_PROPERTY:
 		"The property you're trying to set can only be set from the server auth instance only.",
 	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
+	NAME_REQUIRED: "API Key name is required.",
 };
 
 export const API_KEY_TABLE_NAME = "apikey";
@@ -67,6 +68,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
+		requireName: options?.requireName ?? false,
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -154,13 +156,13 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						}
 
-						if (
-							opts.customAPIKeyValidator &&
-							!opts.customAPIKeyValidator({ ctx, key })
-						) {
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
+						if (opts.customAPIKeyValidator) {
+							const isValid = await opts.customAPIKeyValidator({ ctx, key });
+							if (!isValid) {
+								throw new APIError("FORBIDDEN", {
+									message: ERROR_CODES.INVALID_API_KEY,
+								});
+							}
 						}
 
 						const hashed = opts.disableKeyHashing
@@ -225,12 +227,112 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			],
 		},
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/create`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.createApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.create`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-create)
+			 */
 			createApiKey: routes.createApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyApiKey`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-verify)
+			 */
 			verifyApiKey: routes.verifyApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/api-key/get`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.get`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-get)
+			 */
 			getApiKey: routes.getApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/update`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.updateApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.update`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-update)
+			 */
 			updateApiKey: routes.updateApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/delete`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deleteApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.delete`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-delete)
+			 */
 			deleteApiKey: routes.deleteApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/api-key/list`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.listApiKeys`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.list`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-list)
+			 */
 			listApiKeys: routes.listApiKeys,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/delete-all-expired-api-keys`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deleteAllExpiredApiKeys`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-delete-all-expired-api-keys)
+			 */
+			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
 	} satisfies BetterAuthPlugin;

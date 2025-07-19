@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import {
@@ -152,15 +152,30 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		return otp === storedOtp;
 	}
 	const endpoints = {
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/email-otp/send-verification-otp`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.sendVerificationOTP`
+		 *
+		 * **client:**
+		 * `authClient.emailOtp.sendVerificationOtp`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-send-verification-otp)
+		 */
 		sendVerificationOTP: createAuthEndpoint(
 			"/email-otp/send-verification-otp",
 			{
 				method: "POST",
 				body: z.object({
-					email: z.string({
+					email: z.string({}).meta({
 						description: "Email address to send the OTP",
 					}),
-					type: z.enum(types, {
+					type: z.enum(types).meta({
 						description: "Type of the OTP",
 					}),
 				}),
@@ -261,6 +276,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			},
 		),
 	};
+
 	return {
 		id: "email-otp",
 		init(ctx) {
@@ -294,10 +310,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to send the OTP",
 						}),
-						type: z.enum(types, {
+						type: z.enum(types).meta({
+							required: true,
 							description: "Type of the OTP",
 						}),
 					}),
@@ -338,15 +355,30 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					return otp;
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/email-otp/get-verification-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getVerificationOTP`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-get-verification-otp)
+			 */
 			getVerificationOTP: createAuthEndpoint(
 				"/email-otp/get-verification-otp",
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to get the OTP",
 						}),
-						type: z.enum(types),
+						type: z.enum(types).meta({
+							required: true,
+							description: "Type of the OTP",
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -417,15 +449,31 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/email-otp/verify-email`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.emailOtp.verifyEmail`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-verify-email)
+			 */
 			verifyEmailOTP: createAuthEndpoint(
 				"/email-otp/verify-email",
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to verify",
 						}),
-						otp: z.string({
+						otp: z.string().meta({
+							required: true,
 							description: "OTP to verify",
 						}),
 					}),
@@ -576,15 +624,31 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/email-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.signIn.emailOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-sign-in-email-otp)
+			 */
 			signInEmailOTP: createAuthEndpoint(
 				"/sign-in/email-otp",
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string({}).meta({
 							description: "Email address to sign in",
 						}),
-						otp: z.string({
+						otp: z.string().meta({
+							required: true,
 							description: "OTP sent to the email",
 						}),
 					}),
@@ -729,12 +793,27 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/forget-password/email-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.forgetPasswordEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.forgetPassword.emailOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-forget-password-email-otp)
+			 */
 			forgetPasswordEmailOTP: createAuthEndpoint(
 				"/forget-password/email-otp",
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string().meta({
 							description: "Email address to send the OTP",
 						}),
 					}),
@@ -797,18 +876,33 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/email-otp/reset-password`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.resetPasswordEmailOTP`
+			 *
+			 * **client:**
+			 * `authClient.emailOtp.resetPassword`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-reset-password)
+			 */
 			resetPasswordEmailOTP: createAuthEndpoint(
 				"/email-otp/reset-password",
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({
+						email: z.string().meta({
 							description: "Email address to reset the password",
 						}),
-						otp: z.string({
+						otp: z.string().meta({
 							description: "OTP sent to the email",
 						}),
-						password: z.string({
+						password: z.string().meta({
 							description: "New password",
 						}),
 					}),
@@ -818,7 +912,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							responses: {
 								200: {
 									description: "Success",
-									content: {
+									contnt: {
 										"application/json": {
 											schema: {
 												type: "object",

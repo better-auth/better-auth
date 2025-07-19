@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FieldAttribute } from "./field";
+import * as z from "zod/v4";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";

@@ -10,8 +10,8 @@ catalogs:
       specifier: ^1.1.18
       version: 1.1.18
     better-call:
-      specifier: ^1.0.8
-      version: 1.0.9
+      specifier: ^1.0.12
+      version: 1.0.12
     typescript:
       specifier: ^5.7.3
       version: 5.8.3
@@ -188,7 +188,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
@@ -1453,8 +1453,8 @@ importers:
   packages/better-auth:
     dependencies:
       '@better-auth/utils':
-        specifier: 0.2.6
-        version: 0.2.6
+        specifier: 0.2.5
+        version: 0.2.5
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.18
@@ -1462,7 +1462,7 @@ importers:
         specifier: ^0.6.0
         version: 0.6.0
       '@noble/hashes':
-        specifier: ^1.6.1
+        specifier: ^1.8.0
         version: 1.8.0
       '@simplewebauthn/browser':
         specifier: ^13.0.0
@@ -1472,22 +1472,22 @@ importers:
         version: 13.1.1
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       defu:
         specifier: ^6.1.4
         version: 6.1.4
       jose:
-        specifier: ^6.0.11
-        version: 6.0.11
+        specifier: ^5.9.6
+        version: 5.10.0
       kysely:
-        specifier: ^0.28.2
+        specifier: ^0.28.1
         version: 0.28.2
       nanostores:
         specifier: ^0.11.3
         version: 0.11.4
       zod:
-        specifier: ^3.24.1
-        version: 3.25.42
+        specifier: 4.0.0
+        version: 4.0.0
     devDependencies:
       '@prisma/client':
         specifier: ^5.22.0
@@ -1498,9 +1498,9 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.12
         version: 7.6.13
-      '@types/bun':
-        specifier: latest
-        version: 1.2.18(@types/react@18.3.23)
+      '@types/keccak':
+        specifier: ^3.0.5
+        version: 3.0.5
       '@types/pg':
         specifier: ^8.11.10
         version: 8.15.2
@@ -1675,10 +1675,10 @@ importers:
         version: 1.1.18
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       zod:
-        specifier: ^3.23.8
-        version: 3.25.42
+        specifier: ^4.0.0
+        version: 4.0.0
     devDependencies:
       better-auth:
         specifier: workspace:*
@@ -1727,7 +1727,7 @@ importers:
         version: 7.2.1
       samlify:
         specifier: ^2.10.0
-        version: 2.10.0
+        version: 2.10.1
       zod:
         specifier: ^3.24.1
         version: 3.25.42
@@ -1740,7 +1740,7 @@ importers:
         version: 5.0.3
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       vitest:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@22.13.8)(happy-dom@15.11.7)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)
@@ -1751,15 +1751,15 @@ importers:
         specifier: workspace:^
         version: link:../better-auth
       zod:
-        specifier: ^3.24.1
-        version: 3.25.42
+        specifier: ^4.0.0
+        version: 4.0.0
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.12
         version: 7.6.13
       better-call:
         specifier: 'catalog:'
-        version: 1.0.9
+        version: 1.0.12
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
@@ -2695,8 +2695,8 @@ packages:
     resolution: {integrity: sha512-8OLQgDScAOHXnAz2cV+RfzzNMipuLVBz2biuAJFMV9bfkNf393je3VM8CLkjQodW5+iWsSJdSgSWT6rsZoXHPw==}
     engines: {node: '>=6.9.0'}
 
-  '@better-auth/utils@0.2.6':
-    resolution: {integrity: sha512-3y/vaL5Ox33dBwgJ6ub3OPkVqr6B5xL2kgxNHG8eHZuryLyG/4JSPGqjbdRSgjuy9kALUZYDFl+ORIAxlWMSuA==}
+  '@better-auth/utils@0.2.5':
+    resolution: {integrity: sha512-uI2+/8h/zVsH8RrYdG8eUErbuGBk16rZKQfz8CjxQOyCE6v7BqFYEbFwvOkvl1KbUdxhqOnXp78+uE5h8qVEgQ==}
 
   '@better-fetch/fetch@1.1.18':
     resolution: {integrity: sha512-rEFOE1MYIsBmoMJtQbl32PGHHXuG2hDxvEd7rUHE0vCBoFQVSDqaVs9hkZEtHCxRoY+CljXKFCOuJ8uxqw1LcA==}
@@ -8730,8 +8730,8 @@ packages:
   '@types/estree@1.0.7':
     resolution: {integrity: sha512-w28IoSUCJpidD/TGviZwwMJckNESJZXFu7NBZ5YJ4mEUnNraUn9Pm8HSZm/jDF1pDWYKspWE7oVphigUPRakIQ==}
 
-  '@types/express-serve-static-core@5.0.6':
-    resolution: {integrity: sha512-3xhRnjJPkULekpSzgtoNYYcTWgEZkp4myc+Saevii5JPnHNvHMRlBSHDbs7Bh1iPPoVTERHEZXyhyLbMEsExsA==}
+  '@types/express-serve-static-core@5.0.7':
+    resolution: {integrity: sha512-R+33OsgWw7rOhD1emjU7dzCDHucJrgJXMA5PYCzJxVil0dsyx5iBEPHqpPfiKNJQb7lZ1vxwoLR4Z87bBUpeGQ==}
 
   '@types/express@5.0.3':
     resolution: {integrity: sha512-wGA0NX93b19/dZC1J18tKWVIYWyyF2ZjT9vin/NRu0qzzvfVzWjs04iq2rQ3H65vCTQYlRqs3YHfY7zjdV+9Kw==}
@@ -8792,6 +8792,9 @@ packages:
 
   '@types/jsrsasign@10.5.15':
     resolution: {integrity: sha512-3stUTaSRtN09PPzVWR6aySD9gNnuymz+WviNHoTb85dKu+BjaV4uBbWWGykBBJkfwPtcNZVfTn2lbX00U+yhpQ==}
+
+  '@types/keccak@3.0.5':
+    resolution: {integrity: sha512-Mvu4StIJ9KyfPXDVRv3h0fWNBAjHPBQZ8EPcxhqA8FG6pLzxtytVXU5owB6J2/8xZ+ZspWTXJEUjAHt0pk0I1Q==}
 
   '@types/leaflet@1.7.6':
     resolution: {integrity: sha512-Emkz3V08QnlelSbpT46OEAx+TBZYTOX2r1yM7W+hWg5+djHtQ1GbEXBDRLaqQDOYcDI51Ss0ayoqoKD4CtLUDA==}
@@ -10236,8 +10239,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.9:
-    resolution: {integrity: sha512-Qfm0gjk0XQz0oI7qvTK1hbqTsBY4xV2hsHAxF8LZfUYl3RaECCIifXuVqtPpZJWvlCCMlQSvkvhhyuApGUba6g==}
+  better-call@1.0.12:
+    resolution: {integrity: sha512-ssq5OfB9Ungv2M1WVrRnMBomB0qz1VKuhkY2WxjHaLtlsHoSe9EPolj1xf7xf8LY9o3vfk3Rx6rCWI4oVHeBRg==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -13972,9 +13975,6 @@ packages:
   jose@5.10.0:
     resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
-  jose@6.0.11:
-    resolution: {integrity: sha512-QxG7EaliDARm1O1S8BGakqncGT9s25bKL1WSf6/oa17Tkqwi8D2ZNglqCF+DsYF88/rV66Q/Q2mFAy697E1DUg==}
-
   jotai@2.12.5:
     resolution: {integrity: sha512-G8m32HW3lSmcz/4mbqx0hgJIQ0ekndKWiYP7kWVKi0p6saLXdSoye+FZiOFyonnd7Q482LCzm8sMDl7Ar1NWDw==}
     engines: {node: '>=12.20.0'}
@@ -17566,8 +17566,8 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  samlify@2.10.0:
-    resolution: {integrity: sha512-IIFg193YPn9IpTd2jCWVvLLC9xdWz/eLn1rtF9YMSwK/B1rt2OM2zAuP99cw3MPYyYsm+I9rlvYgq9FuJ9JqSA==}
+  samlify@2.10.1:
+    resolution: {integrity: sha512-4zHbKKTvPnnqfGu4tks26K4fJjsY99ylsP7TPMobW5rggwcsxNlyhLE9ucxW3JFCsUcoKXb77QjQjwQo1TtRgw==}
 
   sass@1.89.1:
     resolution: {integrity: sha512-eMLLkl+qz7tx/0cJ9wI+w09GQ2zodTkcE/aVfywwdlRcI3EO19xGnbmJwg/JMIm+5MxVJ6outddLZ4Von4E++Q==}
@@ -20040,6 +20040,9 @@ packages:
   zod@3.25.42:
     resolution: {integrity: sha512-PcALTLskaucbeHc41tU/xfjfhcz8z0GdhhDcSgrCTmSazUuqnYqiXO63M0QUBVwpBlsLsNVn5qHSC5Dw3KZvaQ==}
 
+  zod@4.0.0:
+    resolution: {integrity: sha512-9diLdTPc/L7w/5jI4C3gHYNiGHDV9IZYxo1e5LSD8cabi65WVTWWb+g2BGPEpUUCOxR4D+6O5B0AzyMdUAXwrw==}
+
   zustand@3.7.2:
     resolution: {integrity: sha512-PIJDIZKtokhof+9+60cpockVOq05sJzHCriyvaLBmEJixseQ1a5Kdov6fWZfWOu5SK9c+FhH1jU0tntLxRJYMA==}
     engines: {node: '>=12.7.0'}
@@ -21346,8 +21349,9 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
-  '@better-auth/utils@0.2.6':
+  '@better-auth/utils@0.2.5':
     dependencies:
+      typescript: 5.8.3
       uncrypto: 0.1.3
 
   '@better-fetch/fetch@1.1.18': {}
@@ -29728,7 +29732,7 @@ snapshots:
 
   '@types/estree@1.0.7': {}
 
-  '@types/express-serve-static-core@5.0.6':
+  '@types/express-serve-static-core@5.0.7':
     dependencies:
       '@types/node': 20.17.57
       '@types/qs': 6.14.0
@@ -29738,7 +29742,7 @@ snapshots:
   '@types/express@5.0.3':
     dependencies:
       '@types/body-parser': 1.19.6
-      '@types/express-serve-static-core': 5.0.6
+      '@types/express-serve-static-core': 5.0.7
       '@types/serve-static': 1.15.8
 
   '@types/filesystem@0.0.36':
@@ -29795,9 +29799,13 @@ snapshots:
 
   '@types/jsonfile@6.1.4':
     dependencies:
-      '@types/node': 20.17.57
+      '@types/node': 22.13.8
 
   '@types/jsrsasign@10.5.15': {}
+
+  '@types/keccak@3.0.5':
+    dependencies:
+      '@types/node': 20.17.57
 
   '@types/leaflet@1.7.6':
     dependencies:
@@ -32020,7 +32028,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.9:
+  better-call@1.0.12:
     dependencies:
       '@better-fetch/fetch': 1.1.18
       rou3: 0.5.1
@@ -36653,8 +36661,6 @@ snapshots:
   join-component@1.1.0: {}
 
   jose@5.10.0: {}
-
-  jose@6.0.11: {}
 
   jotai@2.12.5(@types/react@19.1.6)(react@19.1.0):
     optionalDependencies:
@@ -42075,7 +42081,7 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  samlify@2.10.0:
+  samlify@2.10.1:
     dependencies:
       '@authenio/xml-encryption': 2.0.2
       '@xmldom/xmldom': 0.8.10
@@ -45447,6 +45453,8 @@ snapshots:
   zod@3.22.3: {}
 
   zod@3.25.42: {}
+
+  zod@4.0.0: {}
 
   zustand@3.7.2(react@19.1.0):
     optionalDependencies:

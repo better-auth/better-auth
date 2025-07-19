@@ -2,8 +2,7 @@ import type { BetterAuthOptions } from "../types";
 import type { BetterAuthPlugin } from "../types";
 import { createAuthMiddleware } from "../api";
 import { parseSetCookieHeader } from "../cookies";
-
-let isBuilding: boolean | undefined;
+import type { RequestEvent } from "@sveltejs/kit";
 
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => any;
@@ -16,6 +15,7 @@ export const svelteKitHandler = async ({
 	auth,
 	event,
 	resolve,
+	building,
 }: {
 	auth: {
 		handler: (request: Request) => any;
@@ -23,20 +23,12 @@ export const svelteKitHandler = async ({
 	};
 	event: { request: Request; url: URL };
 	resolve: (event: any) => any;
+	building: boolean;
 }) => {
-	// Only check building state once and cache it
-	if (isBuilding === undefined) {
-		//@ts-expect-error
-		const { building } = await import("$app/environment")
-			.catch((e) => {})
-			.then((m) => m || {});
-
-		isBuilding = building || false;
-	}
-
-	if (isBuilding) {
+	if (building) {
 		return resolve(event);
 	}
+
 	const { request, url } = event;
 	if (isAuthPath(url.toString(), auth.options)) {
 		return auth.handler(request);
@@ -60,7 +52,12 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 		return false;
 	return true;
 }
-export const sveltekitCookies = () => {
+
+export const sveltekitCookies = (
+	getRequestEvent: () => Promise<
+		RequestEvent<Partial<Record<string, string>>, string | null>
+	>,
+) => {
 	return {
 		id: "sveltekit-cookies",
 		hooks: {
@@ -77,8 +74,6 @@ export const sveltekitCookies = () => {
 						if (returned instanceof Headers) {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
-							// @ts-expect-error
-							const { getRequestEvent } = await import("$app/server");
 							const event = await getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);

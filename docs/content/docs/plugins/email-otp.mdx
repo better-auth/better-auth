@@ -52,48 +52,99 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
 
 First, send an OTP to the user's email address.
 
-```ts title="example.ts"
-const { data, error } = await authClient.emailOtp.sendVerificationOtp({
-    email: "user-email@email.com",
-    type: "sign-in" // or "email-verification", "forget-password"
-})
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+```ts
+type sendVerificationOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+    /**
+     * Type of the OTP. `sign-in`, `email-verification`, or `forget-password`. 
+     */
+    type: "email-verification" | "sign-in" | "forget-password" = "sign-in"
+}
 ```
+</APIMethod>
 
 ### Sign in with OTP
 
 Once the user provides the OTP, you can sign in the user using the `signIn.emailOtp()` method.
 
-```ts title="example.ts"
-const { data, error } = await authClient.signIn.emailOtp({
-    email: "user-email@email.com",
-    otp: "123456"
-})
+<APIMethod path="/sign-in/email-otp" method="POST">
+```ts
+type signInEmailOTP = {
+    /**
+     * Email address to sign in. 
+     */
+    email: string = "user@example.com"
+    /**
+     * OTP sent to the email. 
+     */
+    otp: string = "123456"
+}
 ```
+</APIMethod>
 
+<Callout>
 If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the options.
+</Callout>
 
 ### Verify Email
 
 To verify the user's email address, use the `verifyEmail()` method.
 
-```ts title="example.ts"
-const { data, error } = await authClient.emailOtp.verifyEmail({
-    email: "user-email@email.com",
-    otp: "123456"
-})
+<APIMethod path="/email-otp/verify-email" method="POST">
+```ts
+type verifyEmailOTP = {
+    /**
+     * Email address to verify. 
+     */
+    email: string = "user@example.com"
+    /**
+     * OTP to verify. 
+     */
+    otp: string = "123456"
+}
 ```
+</APIMethod>
 
-### Reset Password
+### Forgot & Reset Password
 
-To reset the user's password, use the `resetPassword()` method.
+To reset the user's password, you must use the `forgotPassword` method:
 
-```ts title="example.ts"
-const { data, error } = await authClient.emailOtp.resetPassword({
-    email: "user-email@email.com",
-    otp: "123456",
-    password: "password"
-})
+<APIMethod path="/forget-password/email-otp" method="POST">
+```ts
+type forgetPasswordEmailOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+}
 ```
+</APIMethod>
+
+
+After that, you may use the `resetPassword()` method to apply the password reset.
+
+<APIMethod path="/email-otp/reset-password" method="POST">
+```ts
+type resetPasswordEmailOTP = {
+    /**
+     * Email address to reset the password. 
+     */
+    email: string = "user@example.com"
+    /**
+     * OTP sent to the email. 
+     */
+    otp: string = "123456"
+    /**
+     * New password. 
+     */
+    password: string = "new-secure-password"
+}
+```
+</APIMethod>
 
 ### Override Default Email Verification
 

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -6,12 +6,12 @@ import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { schema } from "./schema";
+import { getSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 export * from "./error-codes";
 export type UsernameOptions = {
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<UsernameSchema>;
 	/**
 	 * The minimum length of the username
 	 *
@@ -30,6 +30,12 @@ export type UsernameOptions = {
 	 * By default, the username should only contain alphanumeric characters and underscores
 	 */
 	usernameValidator?: (username: string) => boolean | Promise<boolean>;
+	/**
+	 * A function to normalize the username
+	 *
+	 * @default (username) => username.toLowerCase()
+	 */
+	usernameNormalization?: ((username: string) => string) | false;
 };
 
 function defaultUsernameValidator(username: string) {
@@ -37,6 +43,16 @@ function defaultUsernameValidator(username: string) {
 }
 
 export const username = (options?: UsernameOptions) => {
+	const normalizer = (username: string) => {
+		if (options?.usernameNormalization === false) {
+			return username;
+		}
+		if (options?.usernameNormalization) {
+			return options.usernameNormalization(username);
+		}
+		return username.toLowerCase();
+	};
+
 	return {
 		id: "username",
 		endpoints: {
@@ -45,15 +61,22 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string({
-							description: "The username of the user",
-						}),
-						password: z.string({
-							description: "The password of the user",
-						}),
+						username: z
+							.string()
+							.meta({ description: "The username of the user" }),
+						password: z
+							.string()
+							.meta({ description: "The password of the user" }),
 						rememberMe: z
-							.boolean({
+							.boolean()
+							.meta({
 								description: "Remember the user session",
+							})
+							.optional(),
+						callbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to after email verification",
 							})
 							.optional(),
 					}),
@@ -132,7 +155,7 @@ export const username = (options?: UsernameOptions) => {
 						where: [
 							{
 								field: "username",
-								value: ctx.body.username.toLowerCase(),
+								value: normalizer(ctx.body.username),
 							},
 						],
 					});
@@ -233,7 +256,7 @@ export const username = (options?: UsernameOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string({
+						username: z.string().meta({
 							description: "The username to check",
 						}),
 					}),
@@ -265,7 +288,7 @@ export const username = (options?: UsernameOptions) => {
 				},
 			),
 		},
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(getSchema(normalizer), options?.schema),
 		hooks: {
 			before: [
 				{
@@ -306,7 +329,7 @@ export const username = (options?: UsernameOptions) => {
 								where: [
 									{
 										field: "username",
-										value: username.toLowerCase(),
+										value: normalizer(username),
 									},
 								],
 							});
@@ -333,8 +356,9 @@ export const username = (options?: UsernameOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (!ctx.body.displayUsername && ctx.body.username) {
-							ctx.body.displayUsername = ctx.body.username;
+						if (ctx.body.username) {
+							ctx.body.displayUsername ||= ctx.body.username;
+							ctx.body.username = normalizer(ctx.body.username);
 						}
 					}),
 				},

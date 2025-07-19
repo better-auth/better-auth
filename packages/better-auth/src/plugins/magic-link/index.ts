@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
@@ -84,6 +84,21 @@ export const magicLink = (options: MagicLinkopts) => {
 	return {
 		id: "magic-link",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/sign-in/magic-link`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInMagicLink`
+			 *
+			 * **client:**
+			 * `authClient.signIn.magicLink`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/sign-in#api-method-sign-in-magic-link)
+			 */
 			signInMagicLink: createAuthEndpoint(
 				"/sign-in/magic-link",
 				{
@@ -91,18 +106,21 @@ export const magicLink = (options: MagicLinkopts) => {
 					requireHeaders: true,
 					body: z.object({
 						email: z
-							.string({
+							.string()
+							.meta({
 								description: "Email address to send the magic link",
 							})
 							.email(),
 						name: z
-							.string({
+							.string()
+							.meta({
 								description:
-									"User display name. Only used if the user is registering for the first time.",
+									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
 							})
 							.optional(),
 						callbackURL: z
-							.string({
+							.string()
+							.meta({
 								description: "URL to redirect after magic link verification",
 							})
 							.optional(),
@@ -176,18 +194,34 @@ export const magicLink = (options: MagicLinkopts) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/magic-link/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.magicLinkVerify`
+			 *
+			 * **client:**
+			 * `authClient.magicLink.verify`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/magic-link#api-method-magic-link-verify)
+			 */
 			magicLinkVerify: createAuthEndpoint(
 				"/magic-link/verify",
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string({
+						token: z.string().meta({
 							description: "Verification token",
 						}),
 						callbackURL: z
-							.string({
+							.string()
+							.meta({
 								description:
-									"URL to redirect after magic link verification, if not provided will return session",
+									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
 							})
 							.optional(),
 					}),
