@@ -1,7 +1,13 @@
 ---
-title: 1.3 Release
-description: SSO with SAML, Performance, Organization Improvements, and more.
+title: "Better Auth 1.3"
+description: "SSO with SAML, Multi Team Support, Additional Fields for Organization, Performance and more."
 date: 2025-07-19
+author:
+  name: "Bereket Engida"
+  avatar: "/blogs/bereket.png"
+  twitter: "iambereket"
+image: "/release-og/1-3.png"
+tags: ["1.3", "authentication", "oidc", "mcp", "sso", "organization"]
 ---
 
 To upgrade, run:
@@ -12,7 +18,7 @@ npm install better-auth@1.3
 
 ### **SSO Plugin**
 
-SSO plugin is now moved to a separate package. It support OIDC and SAML 2.0. Finally!
+SSO plugin is now moved to a separate package. And it finally supports OIDC and SAML 2.0.
 
 [Read the SSO docs](/docs/plugins/sso) for more information.
 
@@ -138,7 +144,7 @@ export const auth = betterAuth({
 
 ### Multi Team Support
 
-Organization plugin now supports a member to be a member of multiple teams
+Organization plugin now supports a member to be a member of multiple teams. This is a breaking change if you were using teams before. It requires new additional table `teamMembers` to be created and `teamId` is now removed from the `member` table.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -150,8 +156,39 @@ export const auth = betterAuth({
 });
 ```
 
-- `MaximumMembersPerTeam`
-- `listUserInvitations`
+### Additional Fields for Organization
+
+Organization plugin now supports additional fields for organization, member, invitation.
+
+```ts title="auth.ts"
+
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      schema: {
+        organization: {
+          additionalFields: {
+            // ...
+          }
+        },
+        member: {
+          additionalFields: {
+            // ...
+          }
+        },
+        invitation: {
+          additionalFields: {
+            // ...
+          }
+        },
+      }
+    }),
+  ],
+});
+```
+
+- `MaximumMembersPerTeam` - Maximum number of members per team.
+- `listUserInvitations` - List all invitations for a user.
 - `AdditionalFields` support for org, member, invitation, team. 
 
 ### Generic OAuth
@@ -194,64 +231,66 @@ export const auth = betterAuth({
 
 ### 🐜 Bug Fixes
 
-Plugin Fixes
+**Plugin Fixes**
   
-* Expo: Fixed type path import. [PR]
-* SSO: SAML redirection & typecheck issues resolved. [PR]
-* Dropbox: Added token access type support. [PR]
+* Expo: Fixed type path import.
+* SSO: SAML redirection & typecheck issues resolved.
+* Dropbox: Added token access type support.
 * Stripe:
-    * Prevented duplicate customers. [PR]
-    * Allowed upgrading incomplete subscriptions. [PR]
+    * Prevented duplicate customers.
+    * Allowed upgrading incomplete subscriptions.
 * Admin:
-    * Fixed missing ctx in hooks. [PR]
-    * Error thrown for invalid user ID on /remove-user. [PR]
+    * Fixed missing ctx in hooks.
+    * Error thrown for invalid user ID on /remove-user.
 
-OAuth & Providers
+**OAuth & Providers**
 
-* Fixed duplicate OAuth registration. [PR]
-* Better handling of Google/Microsoft scopes. [PR]
-* Fixed malformed error URLs in generic OAuth. [PR]
-* Facebook: Correct detection for limited token JWT. [PR]
-* Twitter: Improved email verification logic. [PR]
+* Fixed duplicate OAuth registration. 
+* Better handling of Google/Microsoft scopes.
+* Fixed malformed error URLs in generic OAuth.
+* Facebook: Correct detection for limited token JWT/
+* Twitter: Improved email verification logic.
 
-Core Authentication
+**Core Authentication**
 
-* Exclude current user from username uniqueness check. [PR]
-* Support for callback URL in signInUsername. [PR]
-* Allow linking accounts without email. [PR]
-* Missing null type in /get-session response fixed. [PR]
-* Global onSuccess hook now works. [PR]
-* JWT: Added support for alternate algorithms in JWKS. [PR]
-* origin-check: Wildcard trusted origins now supported. [PR]
+* Exclude current user from username uniqueness check.
+* Support for callback URL in signInUsername. 
+* Allow linking accounts without email. 
+* Missing null type in /get-session response fixed
+* Global onSuccess hook now works.
+* JWT: Added support for alternate algorithms in JWKS. 
+* origin-check: Wildcard trusted origins now supported.
 
-CLI, DB, and Adapter Fixes
+**CLI, DB, and Adapter Fixes**
 
-* CLI: Drizzle schema formatting. [PR]
-* MongoAdapter: Now works with create-adapter. [PR]
-* Schema generation respects useNumberId. [PR]
-* Postgres: varchar normalization and type comparison added. [PR]
-* Drizzle CLI: Uses serial as PK if useNumberId is enabled. [PR]
+* CLI: Drizzle schema formatting.
+* MongoAdapter: Now works with create-adapter.
+* Schema generation respects useNumberId.
+* Postgres: varchar normalization and type comparison added.
+* Drizzle CLI: Uses serial as PK if useNumberId is enabled.
 
-Email/OTP Fixes
+**Email/OTP Fixes**
 
-* OTPs now encrypted. [PR]
-* Fix for onEmailVerification not called. [PR]
-* Proper error thrown when sign-up disabled. [PR]
-* phone-number: Reset clears verification values. [PR]
+* OTPs now encrypted. 
+* Fix for onEmailVerification not called. 
+* Proper error thrown when sign-up disabled. 
+* phone-number: Reset clears verification values. 
 
-Two-Factor Auth
+**Two-Factor Auth**
 
-* OTP period default fix. [PR]
-* URI generation doesn’t require enabling 2FA. [PR]
-* Fixed OTP URI separator mismatch. [PR]
+* OTP period default fix.
+* URI generation doesn’t require enabling 2FA.
+* Fixed OTP URI separator mismatch.
 
-Miscellaneous
+**Miscellaneous**
 
-* Deleted organization if member not found. [PR]
-* Correct error codes for API key rate limits. [PR]
-* Fixed additional fields not showing in OpenAPI. [PR]
-* Fixed foreign key constraint generation for MySQL. [PR]
-* Various enhancements to account linking logic. [ account linking ]
-* OIDC offline_access no longer requires prompt=consent. [PR]
-* Fixed malformed base64 encoding for token validation. [PR]
+* Deleted organization if member not found.
+* Correct error codes for API key rate limits. 
+* Fixed additional fields not showing in OpenAPI
+* Fixed foreign key constraint generation for MySQL.
+* Various enhancements to account linking logic
+* OIDC offline_access no longer requires prompt=consent.
+* Fixed malformed base64 encoding for token validation
 
+
+A lot of fixes and refinements to make everything smoother, faster, and more reliable. Check out the [changelog](https://github.com/better-auth/better-auth/releases/tag/v1.3.0) for more details.
