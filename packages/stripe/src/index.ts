@@ -41,6 +41,31 @@ const STRIPE_ERROR_CODES = {
 		"Subscription is not scheduled for cancellation",
 } as const;
 
+/**
+ * Helper function to check for existing Stripe customer by email
+ */
+const findExistingCustomer = async (
+	client: Stripe,
+	email: string,
+	options: StripeOptions,
+): Promise<Stripe.Customer | null> => {
+	if (!options.preventDuplicateCustomers) {
+		return null;
+	}
+
+	try {
+		const existingCustomers = await client.customers.list({
+			email,
+			limit: 1,
+		});
+
+		return existingCustomers.data.length > 0 ? existingCustomers.data[0] : null;
+	} catch (error) {
+		logger.error("Error checking for existing Stripe customer", error);
+		return null;
+	}
+};
+
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	if (url.startsWith("http")) {
 		return url;
@@ -239,19 +264,34 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					try {
-						const stripeCustomer = await client.customers.create(
-							{
-								email: user.email,
-								name: user.name,
-								metadata: {
-									...ctx.body.metadata,
-									userId: user.id,
+						let stripeCustomer: Stripe.Customer | null = null;
+
+						// Check for existing customer if preventDuplicateCustomers is enabled
+						if (options.preventDuplicateCustomers) {
+							stripeCustomer = await findExistingCustomer(
+								client,
+								user.email,
+								options,
+							);
+						}
+
+						// Create new customer if not found
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create(
+								{
+									email: user.email,
+									name: user.name,
+									metadata: {
+										...ctx.body.metadata,
+										userId: user.id,
+									},
 								},
-							},
-							{
-								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
-							},
-						);
+								{
+									idempotencyKey: generateRandomString(32, "a-z", "0-9"),
+								},
+							);
+						}
+
 						await ctx.context.adapter.update({
 							model: "user",
 							update: {
@@ -1034,13 +1074,28 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							create: {
 								async after(user, ctx) {
 									if (ctx && options.createCustomerOnSignUp) {
-										const stripeCustomer = await client.customers.create({
-											email: user.email,
-											name: user.name,
-											metadata: {
-												userId: user.id,
-											},
-										});
+										let stripeCustomer: Stripe.Customer | null = null;
+
+										// Check for existing customer if preventDuplicateCustomers is enabled
+										if (options.preventDuplicateCustomers) {
+											stripeCustomer = await findExistingCustomer(
+												client,
+												user.email,
+												options,
+											);
+										}
+
+										// Create new customer if not found
+										if (!stripeCustomer) {
+											stripeCustomer = await client.customers.create({
+												email: user.email,
+												name: user.name,
+												metadata: {
+													userId: user.id,
+												},
+											});
+										}
+
 										const customer = await ctx.context.adapter.update<Customer>(
 											{
 												model: "user",
