@@ -680,9 +680,14 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			query: z.optional(
-				z.object({
-					teamId: z.string(),
-				}),
+				z
+					.object({
+						teamId: z.string().optional(),
+					})
+					.meta({
+						description:
+							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
+					}),
 			),
 			metadata: {
 				openapi: {
@@ -740,33 +745,46 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const member = await adapter.findMemberByOrgId({
+			if (!ctx.query?.teamId) {
+				if (!session.session.activeTeamId) {
+					throw new APIError("FORBIDDEN", {
+						message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
+					});
+				}
+
+				const member = await adapter.findTeamMember({
+					userId: session.user.id,
+					teamId: session.session.activeTeamId,
+				});
+
+				if (!member) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+					});
+				}
+
+				const members = await adapter.listTeamMembers({
+					teamId: session.session.activeTeamId,
+				});
+
+				return ctx.json(members);
+			}
+
+			const member = await adapter.findTeamMember({
 				userId: session.user.id,
-				organizationId: session.session.activeOrganizationId,
+				teamId: ctx.query.teamId,
 			});
+
 			if (!member) {
 				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
-			}
-
-			if (!session.session.activeTeamId) {
-				throw new APIError("FORBIDDEN", {
-					message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
-				});
-			}
-
-			if (session.session.activeTeamId !== ctx.query?.teamId) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_CAN_NOT_ACCESS_THE_MEMBERS_OF_THIS_TEAM,
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				});
 			}
 
 			const members = await adapter.listTeamMembers({
-				teamId: session.session.activeTeamId,
+				teamId: ctx.query.teamId,
 			});
+
 			return ctx.json(members);
 		},
 	);

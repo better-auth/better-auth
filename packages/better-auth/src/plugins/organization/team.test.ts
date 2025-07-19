@@ -164,11 +164,7 @@ describe("team", async (it) => {
 		);
 
 		const res = await client.organization.listTeamMembers(
-			{
-				query: {
-					teamId,
-				},
-			},
+			{},
 			{
 				headers: activeTeamHeaders,
 			},
