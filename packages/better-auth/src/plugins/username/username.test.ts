@@ -1,6 +1,6 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { username } from ".";
+import { username, USERNAME_ERROR_CODES } from ".";
 import { usernameClient } from "./client";
 
 describe("username", async (it) => {
@@ -78,6 +78,9 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+		);
 	});
 
 	it("should fail on duplicate username in update-user if user is different", async () => {
@@ -100,6 +103,9 @@ describe("username", async (it) => {
 			},
 		});
 		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+		);
 	});
 
 	it("should succeed on duplicate username in update-user if user is the same", async () => {
@@ -127,7 +133,7 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.INVALID_USERNAME);
 	});
 
 	it("should fail on too short username", async () => {
@@ -138,7 +144,7 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
+		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_TOO_SHORT);
 	});
 
 	it("should fail on empty username", async () => {
@@ -149,6 +155,7 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_TOO_SHORT);
 	});
 
 	it("should check if username is unavailable", async () => {
