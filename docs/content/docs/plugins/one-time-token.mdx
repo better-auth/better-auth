@@ -25,20 +25,16 @@ export const auth = betterAuth({
 
 Generate a token using `auth.api.generateOneTimeToken` or `authClient.oneTimeToken.generate`
 
-<Tabs items={["Server", "Client"]}>
-    <Tab value="Server">
-        ```ts
-        const response = await auth.api.generateOneTimeToken({
-            headers: await headers() // pass the request headers
-        })
-        ```
-    </Tab>
-    <Tab value="Client">
-        ```ts
-        const response = await authClient.oneTimeToken.generate()
-        ```
-    </Tab>
-</Tabs>
+<APIMethod
+  path="/one-time-token/generate"
+  method="GET"
+  requireSession
+>
+```ts
+type generateOneTimeToken = {
+}
+```
+</APIMethod>
 
 This will return a `token` that is attached to the current session which can be used to verify the one-time token. By default, the token will expire in 3 minutes.
 
@@ -46,27 +42,16 @@ This will return a `token` that is attached to the current session which can be 
 
 When the user clicks the link or submits the token, use the `auth.api.verifyOneTimeToken` or `authClient.oneTimeToken.verify` method in another API route to validate it.
 
-<Tabs items={["Server", "Client"]}>
-    <Tab value="Server">
-        ```ts
-        const token = request.query.token as string; //retrieve a token
-        const response = await auth.api.verifyOneTimeToken({
-            body: {
-                token
-            }
-        })
-        ```
-    </Tab>
-    <Tab value="Client">
-        ```ts
-        const url = window.location.href;
-        const token = url.split("token=")[1]; //retrieve a token
-        const response = await authClient.oneTimeToken.verify({
-            token
-        })
-        ```
-    </Tab>
-</Tabs>
+<APIMethod path="/one-time-token/verify" method="POST">
+```ts
+type verifyOneTimeToken = {
+    /**
+     * The token to verify. 
+     */
+    token: string = "some-token"
+}
+```
+</APIMethod>
 
 This will return the session that was attached to the token.
 
@@ -83,3 +68,36 @@ oneTimeToken({
 })
 ```
 * **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as paramters.
+
+* **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
+
+    * **`plain`**: The token is stored in plain text. (Default)
+    * **`hashed`**: The token is hashed using the default hasher.
+    * **`custom-hasher`**: A custom hasher function that takes a token and returns a hashed token.
+
+<Callout type="info">
+    Note: It will not affect the token that's sent, it will only affect the token stored in your database.
+</Callout>
+
+Examples:
+
+```ts title="No hashing (default)"
+oneTimeToken({
+    storeToken: "plain"
+})
+```
+```ts title="built-in hasher"
+oneTimeToken({
+    storeToken: "hashed"
+})
+```
+```ts title="custom hasher"
+oneTimeToken({
+    storeToken: {
+        type: "custom-hasher",
+        hash: async (token) => {
+            return myCustomHasher(token);
+        }
+    }
+})
+```

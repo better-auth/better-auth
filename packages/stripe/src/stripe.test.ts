@@ -561,6 +561,10 @@ describe("stripe", async () => {
 				stripeSubscription: expect.any(Object),
 				plan: expect.any(Object),
 			}),
+			expect.objectContaining({
+				context: expect.any(Object),
+				_flag: expect.any(String),
+			}),
 		);
 
 		const updateEvent = {
