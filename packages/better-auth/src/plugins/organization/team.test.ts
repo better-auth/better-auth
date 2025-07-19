@@ -567,7 +567,7 @@ describe("mulit team support", async (it) => {
 	});
 
 	let team4Id: string | null = null;
-	it("should add directly add a member to a team", async () => {
+	it("should directly add a member to a team", async () => {
 		expect(organizationId).toBeDefined();
 		if (!organizationId) throw Error("can not run test");
 
