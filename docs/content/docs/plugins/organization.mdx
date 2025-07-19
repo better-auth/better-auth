@@ -1637,11 +1637,11 @@ the `createOrganization` endpoint will include this field in its request and res
   and provides a convenient way to attach arbitrary data to a row.
 </Callout>
 
-To infer additional fields on the client, you must pass the `auth` instance to the `organizationClient` function.
+To infer additional fields on the client, you must pass the `auth` instance to the `organizationClient` function like this:
 
 ```ts title="auth-client.ts"
 createAuthClient({
-  plugins: [organizationClient<typeof auth>()]
+  plugins: [organizationClient({ $inferAuth: {} as typeof auth })]
 })
 ```
 
