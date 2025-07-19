@@ -12,6 +12,7 @@ import {
 	originCheck,
 	getSessionFromCtx,
 } from "better-auth/api";
+import { generateRandomString } from "better-auth/crypto";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
