@@ -26,6 +26,7 @@ import type {
 import express from "express";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";
+import { getTestInstanceMemory } from "better-auth/test";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -768,5 +769,150 @@ describe("SAML SSO", async () => {
 			},
 		);
 		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+	});
+
+	it("should not allow creating a provider if limit is set to 0", async () => {
+		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+			plugins: [sso({ providersLimit: 0 })],
+		});
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-provider-1",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { message: "SSO provider registration is disabled" },
+		});
+	});
+
+	it("should not allow creating a provider if limit is reached", async () => {
+		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+			plugins: [sso({ providersLimit: 1 })],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					spMetadata: {
+						metadata: spMetadata,
+					},
+				},
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-provider-2",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: {
+				message: "You have reached the maximum number of SSO providers",
+			},
+		});
+	});
+
+	it("should not allow creating a provider if limit from function is reached", async () => {
+		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+			plugins: [
+				sso({
+					providersLimit: async (user) => {
+						return user.email === "pro@example.com" ? 2 : 1;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					spMetadata: {
+						metadata: spMetadata,
+					},
+				},
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-provider-2",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: {
+				message: "You have reached the maximum number of SSO providers",
+			},
+		});
 	});
 });

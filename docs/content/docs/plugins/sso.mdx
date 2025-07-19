@@ -723,5 +723,10 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         type: "boolean",
         default: false,
     },
+    providersLimit: {
+        description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
+        type: "number | function",
+        default: 10,
+    },
   }}
 />

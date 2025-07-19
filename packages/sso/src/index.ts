@@ -133,6 +133,21 @@ export interface SSOOptions {
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
 	disableImplicitSignUp?: boolean;
+	/**
+	 * Configure the maximum number of SSO providers a user can register.
+	 * You can also pass a function that returns a number.
+	 * Set to 0 to disable SSO provider registration.
+	 *
+	 * @example
+	 * ```ts
+	 * providersLimit: async (user) => {
+	 *   const plan = await getUserPlan(user);
+	 *   return plan.name === "pro" ? 10 : 1;
+	 * }
+	 * ```
+	 * @default 10
+	 */
+	providersLimit?: number | ((user: User) => Promise<number> | number);
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -526,6 +541,33 @@ export const sso = (options?: SSOOptions) => {
 					},
 				},
 				async (ctx) => {
+					const user = ctx.context.session?.user;
+					if (!user) {
+						throw new APIError("UNAUTHORIZED");
+					}
+
+					const limit =
+						typeof options?.providersLimit === "function"
+							? await options.providersLimit(user)
+							: options?.providersLimit ?? 10;
+
+					if (!limit) {
+						throw new APIError("FORBIDDEN", {
+							message: "SSO provider registration is disabled",
+						});
+					}
+
+					const providers = await ctx.context.adapter.findMany({
+						model: "ssoProvider",
+						where: [{ field: "userId", value: user.id }],
+					});
+
+					if (providers.length >= limit) {
+						throw new APIError("FORBIDDEN", {
+							message: "You have reached the maximum number of SSO providers",
+						});
+					}
+
 					const body = ctx.body;
 					const issuerValidator = z.string().url();
 					if (issuerValidator.safeParse(body.issuer).error) {
