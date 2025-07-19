@@ -325,7 +325,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							: callbackURL,
 						ctx.context.baseURL,
 					).toString();
-          const toRedirectTo = callbackURL?.startsWith("http")
+					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
 							? `${ctx.context.options.baseURL}${callbackURL}`
