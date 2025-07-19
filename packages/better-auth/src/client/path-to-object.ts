@@ -55,23 +55,35 @@ export type InferUserUpdateCtx<
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
-> = C["body"] extends Record<string, any>
-	? C["body"] & {
-			fetchOptions?: FetchOptions;
-		}
-	: C["query"] extends Record<string, any>
-		? {
-				query: C["query"];
+	Metadata extends Record<string, any> | undefined = {},
+> = Metadata extends {
+	supportsFormData: boolean;
+}
+	? { formData: FormData } | GetBodyOrQuery<C, FetchOptions>
+	: GetBodyOrQuery<C, FetchOptions>;
+
+type GetBodyOrQuery<
+	C extends InputContext<any, any>,
+	FetchOptions extends BetterFetchOption,
+> = Prettify<
+	C["body"] extends Record<string, any>
+		? C["body"] & {
 				fetchOptions?: FetchOptions;
 			}
-		: C["query"] extends Record<string, any> | undefined
+		: C["query"] extends Record<string, any>
 			? {
-					query?: C["query"];
+					query: C["query"];
 					fetchOptions?: FetchOptions;
 				}
-			: {
-					fetchOptions?: FetchOptions;
-				};
+			: C["query"] extends Record<string, any> | undefined
+				? {
+						query?: C["query"];
+						fetchOptions?: FetchOptions;
+					}
+				: {
+						fetchOptions?: FetchOptions;
+					}
+>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -100,22 +112,22 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 									>,
 								>(
 									...data: HasRequiredKeys<
-										InferCtx<C, FetchOptions>
+										InferCtx<C, FetchOptions, T["options"]["metadata"]>
 									> extends true
 										? [
-												Prettify<
-													T["path"] extends `/sign-up/email`
-														? InferSignUpEmailCtx<COpts, FetchOptions>
-														: InferCtx<C, FetchOptions>
-												>,
+												T["path"] extends `/sign-up/email`
+													? InferSignUpEmailCtx<COpts, FetchOptions>
+													: InferCtx<C, FetchOptions, T["options"]["metadata"]>,
 												FetchOptions?,
 											]
 										: [
-												Prettify<
-													T["path"] extends `/update-user`
-														? InferUserUpdateCtx<COpts, FetchOptions>
-														: InferCtx<C, FetchOptions>
-												>?,
+												(T["path"] extends `/update-user`
+													? InferUserUpdateCtx<COpts, FetchOptions>
+													: InferCtx<
+															C,
+															FetchOptions,
+															T["options"]["metadata"]
+														>)?,
 												FetchOptions?,
 											]
 								) => Promise<
