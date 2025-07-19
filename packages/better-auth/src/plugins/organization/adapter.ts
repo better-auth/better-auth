@@ -613,7 +613,18 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			return members;
+			const teams = await adapter.findMany<Team>({
+				model: "team",
+				where: [
+					{
+						field: "id",
+						operator: "in",
+						value: members.map((m) => m.teamId),
+					},
+				],
+			});
+
+			return teams;
 		},
 
 		findTeamMember: async (data: {

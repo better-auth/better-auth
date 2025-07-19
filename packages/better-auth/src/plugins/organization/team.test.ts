@@ -548,8 +548,8 @@ describe("mulit team support", async (it) => {
 		const team2Members = await auth.api.listTeamMembers({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
 			query: {
-				teamId: team2Id
-			}
+				teamId: team2Id,
+			},
 		});
 
 		expect(team2Members).toHaveLength(1);
@@ -558,8 +558,8 @@ describe("mulit team support", async (it) => {
 		const team3Members = await auth.api.listTeamMembers({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0] },
 			query: {
-				teamId: team3Id
-			}
+				teamId: team3Id,
+			},
 		});
 
 		expect(team3Members).toHaveLength(1);

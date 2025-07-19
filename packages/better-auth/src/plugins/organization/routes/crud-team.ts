@@ -666,11 +666,11 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			const members = await adapter.listTeamsByUser({
+			const teams = await adapter.listTeamsByUser({
 				userId: session.user.id,
 			});
 
-			return ctx.json(members);
+			return ctx.json(teams);
 		},
 	);
 
