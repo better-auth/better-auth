@@ -252,10 +252,11 @@ export const verifyEmail = createAuthEndpoint(
 													description: "User image URL",
 												},
 												emailVerified: {
-													type: "boolean",
-													description:
-														"Indicates if the user email is verified",
-												},
+														type: "string",
+														format: "date-time",
+														nullable: true,
+														description: "Date when the email was verified, or null if not verified",
+													},
 												createdAt: {
 													type: "string",
 													description: "User creation date",
