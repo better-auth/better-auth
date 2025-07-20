@@ -524,6 +524,16 @@
         "types": "./dist/plugins/username/index.d.cts",
         "default": "./dist/plugins/username/index.cjs"
       }
+    },
+    "./plugins/siwe": {
+      "import": {
+        "types": "./dist/plugins/siwe/index.d.ts",
+        "default": "./dist/plugins/siwe/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/siwe/index.d.cts",
+        "default": "./dist/plugins/siwe/index.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -662,6 +672,9 @@
       ],
       "plugins/username": [
         "./dist/plugins/username/index.d.ts"
+      ],
+      "plugins/siwe": [
+        "./dist/plugins/siwe/index.d.ts"
       ]
     }
   },
