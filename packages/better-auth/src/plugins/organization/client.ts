@@ -231,5 +231,3 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		],
 	} satisfies BetterAuthClientPlugin;
 };
-
-const {} = organizationClient({ teams: { enabled: true } });
