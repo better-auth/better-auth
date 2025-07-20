@@ -75,7 +75,7 @@ export const createInternalAdapter = (
 				{
 					createdAt: new Date(),
 					updatedAt: new Date(),
-					emailVerified: false,
+					emailVerified: null,
 					...user,
 					email: user.email?.toLowerCase(),
 				},

@@ -215,7 +215,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name,
 						image,
 						...additionalData,
-						emailVerified: false,
+						emailVerified: null,
 					},
 					ctx,
 				);
