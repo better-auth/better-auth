@@ -58,11 +58,11 @@ export async function BlogPage() {
 			<div className="py-6 lg:py-10 px-3">
 				<div className="flex flex-col gap-2">
 					{posts.map((post) => (
-						<div className="group/blog flex flex-col gap-3 hover:bg-neutral-200/50 dark:hover:bg-neutral-900/50 transition-colors border dark:border-white/10 border-black/10 p-4">
-							<article
-								key={post.slugs.join("/")}
-								className="group relative flex flex-col space-y-2 flex-3/4 py-1"
-							>
+						<div
+							className="group/blog flex flex-col gap-3 transition-colors p-4"
+							key={post.slugs.join("/")}
+						>
+							<article className="group relative flex flex-col space-y-2 flex-3/4 py-1">
 								<div className="flex gap-2">
 									<div className="flex flex-col gap-2  border-b border-dashed pb-2">
 										<p className="text-xs opacity-50">
