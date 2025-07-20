@@ -694,13 +694,10 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				}
 				organizationId = sessionOrgId;
 			}
-			const organization = await adapter.findFullOrganization({
+			const isMember = await adapter.checkMembership({
+				userId: session.user.id,
 				organizationId,
-				isSlug: !!ctx.body.organizationSlug,
 			});
-			const isMember = organization?.members.find(
-				(member) => member.userId === session.user.id,
-			);
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
@@ -708,10 +705,16 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
+			let organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				if (ctx.body.organizationSlug) {
+					organization = await adapter.findOrganizationBySlug(organizationId);
+				}
+				if (!organization) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					});
+				}
 			}
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
