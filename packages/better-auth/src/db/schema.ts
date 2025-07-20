@@ -36,7 +36,7 @@ export const accountSchema = z.object({
 export const userSchema = z.object({
 	id: z.string(),
 	email: z.string().transform((val) => val.toLowerCase()),
-emailVerified: z.date().nullable().default(null),
+	emailVerified: z.date().nullable().default(null),
 	name: z.string(),
 	image: z.string().nullish(),
 	createdAt: z.date().default(() => new Date()),
