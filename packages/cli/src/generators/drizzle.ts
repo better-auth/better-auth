@@ -149,7 +149,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							let type = getType(field, attr);
 							if (
-								attr.defaultValue !== null && 
+								attr.defaultValue !== null &&
 								typeof attr.defaultValue !== "undefined"
 							) {
 								if (typeof attr.defaultValue === "function") {
