@@ -439,6 +439,12 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 							description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
 						})
 						.optional(),
+					userId: z
+						.string()
+						.meta({
+							description: `The user ID which the teams are under to list. Defaults to the current active user. Provide this to skip session check.`,
+						})
+						.optional(),
 				}),
 			),
 			requireHeaders: true,
@@ -501,10 +507,11 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
-			let organizationId = session?.session.activeOrganizationId;
-
-			if (ctx.query?.organizationId && !ctx.request) {
-				organizationId = ctx.body.organizationId;
+			const organizationId =
+				ctx.query?.organizationId || session?.session.activeOrganizationId;
+			const userId = ctx.query?.userId || session?.user.id;
+			if (!userId) {
+				throw ctx.error("UNAUTHORIZED");
 			}
 			if (!organizationId) {
 				throw ctx.error("BAD_REQUEST", {
@@ -512,15 +519,15 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			if (session) {
-				const member = await adapter.findMemberByOrgId({
-					userId: session?.user.id,
-					organizationId: organizationId || "",
+			const member = await adapter.findMemberByOrgId({
+				userId,
+				organizationId: organizationId || "",
+			});
+			if (!member) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
 				});
-
-				if (!member) {
-					throw new APIError("FORBIDDEN");
-				}
 			}
 			const teams = await adapter.listTeams(organizationId);
 			return ctx.json(teams);
@@ -683,11 +690,15 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 				z.object({
 					teamId: z.string().optional().meta({
 						description:
-							"The team whose members we should return. If this is not provided the members of the current active team get returned. Only provide this in a server side request.",
+							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
 					}),
 					organizationId: z.string().optional().meta({
 						description:
-							"The organization whose members we should return. If this is not provided the members of the current active organization get returned. Only provide this in a server side request.",
+							"The organization whose members we should return. If this is not provided the members of the current active organization get returned.",
+					}),
+					userId: z.string().optional().meta({
+						description:
+							"The user whose teams we should return. If this is not provided the teams of the current active user get returned. Provide this to skip session check.",
 					}),
 				}),
 			),
@@ -739,37 +750,36 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
-			let organizationId = session?.session.activeOrganizationId;
-			if (ctx.query?.organizationId && !ctx.request) {
-				organizationId = ctx.query.organizationId;
+			let organizationId =
+				ctx.query?.organizationId || session?.session.activeOrganizationId;
+			const userId = ctx.query?.userId || session?.user.id;
+
+			if (!userId) {
+				throw ctx.error("UNAUTHORIZED");
 			}
+
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
+				throw ctx.error("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			let teamId = session?.session.activeTeamId;
-			if (ctx.query?.teamId && !ctx.request) {
-				teamId = ctx.query.teamId;
-			}
+			let teamId = ctx.query?.teamId || session?.session.activeTeamId;
 			if (!teamId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
 				});
 			}
-			if (session) {
-				const member = await adapter.findTeamMember({
-					userId: session.user.id,
-					teamId: session.session.activeTeamId,
-				});
+			const member = await adapter.findTeamMember({
+				userId,
+				teamId,
+			});
 
-				if (!member) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
-					});
-				}
+			if (!member) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				});
 			}
 			const members = await adapter.listTeamMembers({
 				teamId,
