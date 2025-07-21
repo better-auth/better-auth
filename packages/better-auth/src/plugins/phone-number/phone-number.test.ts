@@ -7,6 +7,11 @@ import { bearer } from "../bearer";
 
 describe("phone-number", async (it) => {
 	let otp = "";
+	let verificationData: {
+		phoneNumber: string;
+		code: string;
+		user: any;
+	} | null = null;
 
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
@@ -18,6 +23,9 @@ describe("phone-number", async (it) => {
 					getTempEmail(phoneNumber) {
 						return `temp-${phoneNumber}`;
 					},
+				},
+				onPhoneNumberVerification: async ({ phoneNumber, code, user }) => {
+					verificationData = { phoneNumber, code, user };
 				},
 			}),
 		],
@@ -54,6 +62,10 @@ describe("phone-number", async (it) => {
 		);
 		expect(res.error).toBe(null);
 		expect(res.data?.status).toBe(true);
+		expect(verificationData).not.toBeNull();
+		expect(verificationData?.phoneNumber).toBe(testPhoneNumber);
+		expect(verificationData?.code).toBe(otp);
+		expect(verificationData?.user).toBeDefined();
 	});
 
 	it("shouldn't verify again with the same code", async () => {

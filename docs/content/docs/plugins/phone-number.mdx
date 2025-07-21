@@ -233,7 +233,7 @@ type resetPasswordPhoneNumber = {
 - `otpLength`: The length of the OTP code to be generated. Default is `6`.
 - `sendOTP`: A function that sends the OTP code to the user's phone number. It takes the phone number and the OTP code as arguments.
 - `expiresIn`: The time in seconds after which the OTP code expires. Default is `300` seconds.
-- `callbackOnVerification`: A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
+- `onPhoneNumberVerification`: A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
 ```ts
 export const auth = betterAuth({
     plugins: [
@@ -241,8 +241,11 @@ export const auth = betterAuth({
             sendOTP: ({ phoneNumber, code }, request) => {
                 // Implement sending OTP code via SMS
             },
-            callbackOnVerification: async ({ phoneNumber, user }, request) => {
-                // Implement callback after phone number verification
+            onPhoneNumberVerification: async ({ phoneNumber, code, user }, request) => {
+                // Called after phone number verification
+                // phoneNumber: The verified phone number
+                // code: The verification code that was used
+                // user: The user object with verified phone number
             }
         })
     ]
