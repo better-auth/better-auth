@@ -1161,7 +1161,7 @@ describe("resend invitation should reuse existing", async () => {
 		);
 		expect(invite.data?.status).toBe("pending");
 		const originalInviteId = invite.data?.id;
-		
+
 		const invite2 = await client.organization.inviteMember(
 			{
 				organizationId: org.data?.id as string,
@@ -1176,7 +1176,7 @@ describe("resend invitation should reuse existing", async () => {
 		expect(invite2.data?.status).toBe("pending");
 		// Should return the same invitation ID, not create a new one
 		expect(invite2.data?.id).toBe(originalInviteId);
-		
+
 		const listInvitations = await client.organization.listInvitations({
 			fetchOptions: {
 				headers,
