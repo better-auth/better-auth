@@ -230,6 +230,36 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
+			
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+			
+			// If resend is true and there's an existing invitation, reuse it
+			if (alreadyInvited.length && ctx.body.resend) {
+				const existingInvitation = alreadyInvited[0];
+				
+				await ctx.context.orgOptions.sendInvitationEmail?.(
+					{
+						id: existingInvitation.id,
+						role: existingInvitation.role as string,
+						email: existingInvitation.email.toLowerCase(),
+						organization: organization,
+						inviter: {
+							...member,
+							user: session.user,
+						},
+						invitation: existingInvitation,
+					},
+					ctx.request,
+				);
+				
+				return ctx.json(existingInvitation);
+			}
+			
 			if (
 				alreadyInvited.length &&
 				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
@@ -237,12 +267,6 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				await adapter.updateInvitation({
 					invitationId: alreadyInvited[0].id,
 					status: "canceled",
-				});
-			}
-			const organization = await adapter.findOrganizationById(organizationId);
-			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 
