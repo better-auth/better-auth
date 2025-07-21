@@ -1,7 +1,12 @@
 import { cn } from "@/lib/utils";
 import { Fingerprint, Hash, Key, Table2 } from "lucide-react";
 import { Handle, type NodeProps } from "@xyflow/react";
-import { Tooltip, TooltipTrigger, TooltipProvider, TooltipContent } from "@/components/ui/tooltip-docs";
+import {
+	Tooltip,
+	TooltipTrigger,
+	TooltipProvider,
+	TooltipContent,
+} from "@/components/ui/tooltip-docs";
 
 // ReactFlow is scaling everything by the factor of 2
 const TABLE_NODE_WIDTH = 420; // before: 320
@@ -114,7 +119,7 @@ const TableNode = ({
 								)}
 
 								{column.isUnique && (
-									// @ts-expect-error - it works	
+									// @ts-expect-error - it works
 									<TooltipProvider delayDuration={10}>
 										{/* @ts-expect-error - it works */}
 										<Tooltip>
