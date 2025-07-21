@@ -680,15 +680,16 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			query: z.optional(
-				z
-					.object({
-						teamId: z.string().optional(),
-						organizationId: z.string().optional(),
-					})
-					.meta({
+				z.object({
+					teamId: z.string().optional().meta({
 						description:
-							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
+							"The team whose members we should return. If this is not provided the members of the current active team get returned. Only provide this in a server side request.",
 					}),
+					organizationId: z.string().optional().meta({
+						description:
+							"The organization whose members we should return. If this is not provided the members of the current active organization get returned. Only provide this in a server side request.",
+					}),
+				}),
 			),
 			metadata: {
 				openapi: {
