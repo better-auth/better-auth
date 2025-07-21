@@ -3,7 +3,10 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { type InferOrganizationRolesFromOption } from "../schema";
+import {
+	type InferOrganizationRolesFromOption,
+	type Invitation,
+} from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
@@ -252,7 +255,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							...member,
 							user: session.user,
 						},
-						invitation: existingInvitation,
+						invitation: existingInvitation as unknown as Invitation,
 					},
 					ctx.request,
 				);
