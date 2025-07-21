@@ -214,21 +214,4 @@ webhooks({
 - **successUrl**: URL to redirect after successful payment
 - **authenticatedUsersOnly**: Require user authentication (default: false)
 
-## Troubleshooting & Tips
-
-<Accordions>
-  <Accordion title="Common Issues">
-    <ul>
-      <li><b>Invalid API key</b>: Double-check your `DODO_PAYMENTS_API_KEY` in .env.</li>
-      <li><b>Webhook signature mismatch</b>: Ensure the webhook secret matches the one set in the Dodo Payments Dashboard.</li>
-      <li><b>Customer not created</b>: Confirm `createCustomerOnSignUp` is set to `true`.</li>
-    </ul>
-  </Accordion>
-  <Accordion title="Best Practices">
-    <ul>
-      <li>Use environment variables for all secrets and keys.</li>
-      <li>Test in `test_mode` before switching to `live_mode`.</li>
-      <li>Log webhook events for debugging and auditing.</li>
-    </ul>
-  </Accordion>
-</Accordions>
+If you encounter any issues, please refer to the [Dodo Payments documentation](https://docs.dodopayments.com) for troubleshooting steps.
