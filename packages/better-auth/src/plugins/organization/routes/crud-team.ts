@@ -503,7 +503,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 			const session = ctx.context.session;
 			let organizationId = session?.session.activeOrganizationId;
 
-			if (ctx.query?.organizationId) {
+			if (ctx.query?.organizationId && !ctx.request) {
 				organizationId = ctx.body.organizationId;
 			}
 			if (!organizationId) {
