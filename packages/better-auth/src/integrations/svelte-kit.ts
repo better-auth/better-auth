@@ -54,8 +54,9 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 }
 
 export const sveltekitCookies = (
-	getRequestEvent: () => Promise<
-		RequestEvent<Partial<Record<string, string>>, string | null>
+	getRequestEvent: () => RequestEvent<
+		Partial<Record<string, string>>,
+		string | null
 	>,
 ) => {
 	return {
@@ -74,7 +75,7 @@ export const sveltekitCookies = (
 						if (returned instanceof Headers) {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
-							const event = await getRequestEvent();
+							const event = getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							for (const [name, { value, ...ops }] of parsed) {
