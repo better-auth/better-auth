@@ -82,11 +82,9 @@ export interface PhoneNumberOptions {
 	 */
 	requireVerification?: boolean;
 	/**
-	 * A function that is called when a user verifies their phone number
-	 * @param data - contains phone number, verification code, and user object
-	 * @param request - the request object
+	 * Callback when phone number is verified
 	 */
-	onPhoneNumberVerification?: (
+	callbackOnVerification?: (
 		data: {
 			phoneNumber: string;
 			code: string;
@@ -696,11 +694,11 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						return ctx.json(null);
 					}
 
-					await options?.onPhoneNumberVerification?.(
+					await options?.callbackOnVerification?.(
 						{
 							phoneNumber: ctx.body.phoneNumber,
-							code: ctx.body.code,
 							user,
+							code: ctx.body.code,
 						},
 						ctx.request,
 					);

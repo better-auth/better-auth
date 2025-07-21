@@ -24,7 +24,7 @@ describe("phone-number", async (it) => {
 						return `temp-${phoneNumber}`;
 					},
 				},
-				onPhoneNumberVerification: async ({ phoneNumber, code, user }) => {
+				callbackOnVerification: async ({ phoneNumber, code, user }) => {
 					verificationData = { phoneNumber, code, user };
 				},
 			}),
