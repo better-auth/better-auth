@@ -497,31 +497,31 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 					},
 				},
 			},
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware],
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const organizationId =
-				session.session.activeOrganizationId || ctx.query?.organizationId;
+			let organizationId = session?.session.activeOrganizationId;
 
+			if (ctx.body.organizationId && !ctx.request) {
+				organizationId = ctx.body.organizationId;
+			}
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-					},
+				throw ctx.error("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session?.user.id,
-				organizationId: organizationId || "",
-			});
+			if (session) {
+				const member = await adapter.findMemberByOrgId({
+					userId: session?.user.id,
+					organizationId: organizationId || "",
+				});
 
-			if (!member) {
-				throw new APIError("FORBIDDEN");
+				if (!member) {
+					throw new APIError("FORBIDDEN");
+				}
 			}
-
 			const teams = await adapter.listTeams(organizationId);
 			return ctx.json(teams);
 		},
