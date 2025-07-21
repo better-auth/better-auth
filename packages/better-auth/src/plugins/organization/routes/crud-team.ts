@@ -500,7 +500,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 			use: [orgMiddleware],
 		},
 		async (ctx) => {
-			const session = ctx.context.session;
+			const session = await getSessionFromCtx(ctx);
 			let organizationId = session?.session.activeOrganizationId;
 
 			if (ctx.query?.organizationId && !ctx.request) {
@@ -738,7 +738,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			use: [orgMiddleware],
 		},
 		async (ctx) => {
-			const session = ctx.context.session;
+			const session = await getSessionFromCtx(ctx);
 			let organizationId = session?.session.activeOrganizationId;
 			if (ctx.query?.organizationId && !ctx.request) {
 				organizationId = ctx.query.organizationId;
