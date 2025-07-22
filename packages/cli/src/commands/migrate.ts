@@ -15,13 +15,17 @@ export async function migrateAction(opts: any) {
 			cwd: z.string(),
 			config: z.string().optional(),
 			y: z.boolean().optional(),
+			yes: z.boolean().optional(),
 		})
+		.transform(({ y, yes, ...otherOpts }) => ({ ...otherOpts, y: yes || y }))
 		.parse(opts);
+
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
 		logger.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
+
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
@@ -116,8 +120,13 @@ export const migrate = new Command("migrate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option(
-		"-y, --y",
+		"-y, --yes",
 		"automatically accept and run migrations without prompting",
+		false,
+	)
+	.option(
+		"--y",
+		"(deprecated) same as --yes",
 		false,
 	)
 	.action(migrateAction);

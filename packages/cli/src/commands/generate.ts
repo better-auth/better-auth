@@ -18,7 +18,9 @@ export async function generateAction(opts: any) {
 			config: z.string().optional(),
 			output: z.string().optional(),
 			y: z.boolean().optional(),
+			yes: z.boolean().optional(),
 		})
+		.transform(({ y, yes, ...otherOpts }) => ({ ...otherOpts, y: yes || y }))
 		.parse(opts);
 
 	const cwd = path.resolve(options.cwd);
@@ -139,5 +141,6 @@ export const generate = new Command("generate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option("--output <output>", "the file to output to the generated schema")
-	.option("-y, --y", "automatically answer yes to all prompts", false)
+	.option("-y, --yes", "automatically answer yes to all prompts", false)
+	.option("--y", "(deprecated) same as --yes", false)
 	.action(generateAction);
