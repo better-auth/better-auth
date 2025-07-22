@@ -1,5 +1,6 @@
 import {
 	generateState,
+	type Account,
 	type BetterAuthPlugin,
 	type OAuth2Tokens,
 	type Session,
@@ -148,6 +149,11 @@ export interface SSOOptions {
 	 * @default 10
 	 */
 	providersLimit?: number | ((user: User) => Promise<number> | number);
+	/**
+	 * Disable setting email verified to true. Set this to true if you don't trust the provider to set the email verified flag.
+	 * @default false
+	 */
+	disableSettingEmailVerified?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -1093,7 +1099,9 @@ export const sso = (options?: SSOOptions) => {
 							),
 							id: idToken[mapping.id || "sub"],
 							email: idToken[mapping.email || "email"],
-							emailVerified: idToken[mapping.emailVerified || "email_verified"],
+							emailVerified: options?.disableSettingEmailVerified
+								? false
+								: idToken[mapping.emailVerified || "email_verified"],
 							name: idToken[mapping.name || "name"],
 							image: idToken[mapping.image || "picture"],
 						} as {
@@ -1340,6 +1348,18 @@ export const sso = (options?: SSOOptions) => {
 					});
 
 					if (existingUser) {
+						const accounts = await ctx.context.adapter.findMany<Account>({
+							model: "account",
+							where: [
+								{ field: "userId", value: existingUser.id },
+								{ field: "providerId", value: provider.providerId },
+							],
+						});
+						if (!accounts.length) {
+							throw ctx.redirect(
+								`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
+							);
+						}
 						user = existingUser;
 					} else {
 						user = await ctx.context.adapter.create({
@@ -1347,7 +1367,21 @@ export const sso = (options?: SSOOptions) => {
 							data: {
 								email: userInfo.email,
 								name: userInfo.name,
-								emailVerified: true,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+							},
+						});
+						await ctx.context.adapter.create({
+							model: "account",
+							data: {
+								userId: user.id,
+								providerId: provider.providerId,
+								accessToken: "",
+								refreshToken: "",
+								accessTokenExpiresAt: new Date(),
+								refreshTokenExpiresAt: new Date(),
+								scope: "",
+								tokenType: "",
 							},
 						});
 					}
