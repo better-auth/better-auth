@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "../../types";
-import type { OauthClient, OIDCOptions, SchemaClient } from "./types";
+import type { OAuthClient, OIDCOptions, SchemaClient } from "./types";
 import { APIError, getSessionFromCtx } from "../../api";
 import { generateRandomString, symmetricEncrypt } from "../../crypto";
 import { defaultClientSecretHasher } from "./utils";
@@ -16,7 +16,7 @@ export async function registerEndpoint(
 		});
 	}
 
-	const body = ctx.body as OauthClient;
+	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
 
 	// Check authorization
@@ -114,9 +114,9 @@ export async function registerEndpoint(
 	}
 
 	// Create the client with the existing schema
-	let schema = oauthToSchema(
+	let schema = oAuthToSchema(
 		{
-			...((body ?? {}) as Partial<OauthClient>),
+			...((body ?? {}) as Partial<OAuthClient>),
 			// Dynamic registration should not have disabled defined
 			disabled: undefined,
 			// Jwks unsupported
@@ -217,8 +217,8 @@ async function storeClientSecret(
  * @param cleaned - determines if the `rest` is converted into metadata
  * @returns
  */
-export function oauthToSchema(
-	input: OauthClient,
+export function oAuthToSchema(
+	input: OAuthClient,
 	cleaned = true,
 ): SchemaClient {
 	const {
@@ -306,7 +306,7 @@ export function oauthToSchema(
 export function schemaToOauth(
 	input: SchemaClient,
 	cleaned = true,
-): OauthClient {
+): OAuthClient {
 	const {
 		// Important Fields
 		clientId,

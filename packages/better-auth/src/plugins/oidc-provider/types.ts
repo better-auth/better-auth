@@ -648,7 +648,7 @@ export interface SchemaClient {
  * OAuth 2.0 Dynamic Client Registration Schema
  * https://datatracker.ietf.org/doc/html/rfc7591#section-2
  */
-export interface OauthClient {
+export interface OAuthClient {
 	client_id: string;
 	client_secret?: string;
 	client_secret_expires_at?: number;

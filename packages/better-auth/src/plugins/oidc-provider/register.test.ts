@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { oidcProvider, type OauthClient } from ".";
+import { oidcProvider, type OAuthClient } from ".";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
@@ -57,7 +57,7 @@ describe("oidc register", async (it) => {
 				customFetchImpl,
 			},
 		});
-		const applicationRedirectOnly: Partial<OauthClient> = {
+		const applicationRedirectOnly: Partial<OAuthClient> = {
 			redirect_uris: [redirectUri],
 		};
 		const response = await unauthenticatedClient.$fetch("/oauth2/register", {
@@ -68,10 +68,10 @@ describe("oidc register", async (it) => {
 	});
 
 	it("should register private client with minimum requirements", async () => {
-		const applicationRedirectOnly: Partial<OauthClient> = {
+		const applicationRedirectOnly: Partial<OAuthClient> = {
 			redirect_uris: [redirectUri],
 		};
-		const response = await serverClient.$fetch<OauthClient>(
+		const response = await serverClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -84,11 +84,11 @@ describe("oidc register", async (it) => {
 	});
 
 	it("should fail authorization_code without response type code", async () => {
-		const applicationImplicit: Partial<OauthClient> = {
+		const applicationImplicit: Partial<OAuthClient> = {
 			response_types: ["token"],
 			redirect_uris: [redirectUri],
 		};
-		const response = await serverClient.$fetch<OauthClient>(
+		const response = await serverClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -99,12 +99,12 @@ describe("oidc register", async (it) => {
 	});
 
 	it("should fail type check for public client request", async () => {
-		const applicationImplicit: Partial<OauthClient> = {
+		const applicationImplicit: Partial<OAuthClient> = {
 			token_endpoint_auth_method: "none",
 			type: "web",
 			redirect_uris: [redirectUri],
 		};
-		const response = await serverClient.$fetch<OauthClient>(
+		const response = await serverClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -115,12 +115,12 @@ describe("oidc register", async (it) => {
 	});
 
 	it("should fail type check for confidential client request", async () => {
-		const applicationImplicit: Partial<OauthClient> = {
+		const applicationImplicit: Partial<OAuthClient> = {
 			token_endpoint_auth_method: "client_secret_post",
 			type: "native",
 			redirect_uris: [redirectUri],
 		};
-		const response = await serverClient.$fetch<OauthClient>(
+		const response = await serverClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -128,11 +128,11 @@ describe("oidc register", async (it) => {
 			},
 		);
 		expect(response.error?.status).toBe(400);
-		const applicationImplicit2: Partial<OauthClient> = {
+		const applicationImplicit2: Partial<OAuthClient> = {
 			...applicationImplicit,
 			type: "user-agent-based",
 		};
-		const response2 = await serverClient.$fetch<OauthClient>(
+		const response2 = await serverClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -143,7 +143,7 @@ describe("oidc register", async (it) => {
 	});
 
 	it("should check that certain fields are overwritten", async () => {
-		const applicationRequest: OauthClient = {
+		const applicationRequest: OAuthClient = {
 			client_id: "bad-actor",
 			client_secret: "bad-actor",
 			client_secret_expires_at: 0,
@@ -180,7 +180,7 @@ describe("oidc register", async (it) => {
 			//---- Not Part of RFC7591 Spec ----//
 			disabled: false,
 		};
-		const response = await serverClient.$fetch<OauthClient>(
+		const response = await serverClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -254,11 +254,11 @@ describe("oidc register - unauthenticated", async (it) => {
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
 	it("should create public clients without authentication", async () => {
-		const applicationRedirectOnly: Partial<OauthClient> = {
+		const applicationRedirectOnly: Partial<OAuthClient> = {
 			token_endpoint_auth_method: "none",
 			redirect_uris: [redirectUri],
 		};
-		const response = await unauthenticatedClient.$fetch<OauthClient>(
+		const response = await unauthenticatedClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -271,10 +271,10 @@ describe("oidc register - unauthenticated", async (it) => {
 	});
 
 	it("should not create confidential clients without authentication", async () => {
-		const applicationRedirectOnly: Partial<OauthClient> = {
+		const applicationRedirectOnly: Partial<OAuthClient> = {
 			redirect_uris: [redirectUri],
 		};
-		const response = await unauthenticatedClient.$fetch<OauthClient>(
+		const response = await unauthenticatedClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",

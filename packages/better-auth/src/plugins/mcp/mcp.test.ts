@@ -2,7 +2,7 @@ import { beforeAll, afterAll, describe, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { mcp } from ".";
 import { genericOAuth } from "../generic-oauth";
-import type { OauthClient } from "../oidc-provider/types";
+import type { OAuthClient } from "../oidc-provider/types";
 import { createAuthClient } from "../../client";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { listen, type Listener } from "listhen";
@@ -44,22 +44,24 @@ describe("mcp", async () => {
 
 	let server: Listener;
 	beforeAll(async () => {
+	beforeAll(async () => {
 		server = await listen(toNodeHandler(auth.handler), {
 			port: 3000,
 		});
+	});
 	});
 
 	afterAll(async () => {
 		await server.close();
 	});
 
-	let publicClient: OauthClient | null;
-	let confidentialClient: OauthClient | null;
+	let publicClient: OAuthClient | null;
+	let confidentialClient: OAuthClient | null;
 
 	it("should register public client with token_endpoint_auth_method: none", async ({
 		expect,
 	}) => {
-		const createdClient = await serverClient.$fetch<OauthClient>(
+		const createdClient = await serverClient.$fetch<OAuthClient>(
 			"/mcp/register",
 			{
 				method: "POST",
@@ -87,7 +89,7 @@ describe("mcp", async () => {
 	it("should register confidential client with client_secret_basic", async ({
 		expect,
 	}) => {
-		const createdClient = await serverClient.$fetch<OauthClient>(
+		const createdClient = await serverClient.$fetch<OAuthClient>(
 			"/mcp/register",
 			{
 				method: "POST",
@@ -110,6 +112,7 @@ describe("mcp", async () => {
 		expect(createdClient.data).toHaveProperty("client_secret_expires_at");
 
 		confidentialClient = createdClient.data;
+		confidentialClient = createdClient.data;
 	});
 
 	it("should authenticate public client with PKCE only", async ({ expect }) => {
@@ -120,6 +123,7 @@ describe("mcp", async () => {
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
 				accountLinking: {
+					trustedProviders: [providerId],
 					trustedProviders: [providerId],
 				},
 			},
@@ -328,6 +332,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
+				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "client_secret_basic",
 			},
 		});
@@ -362,6 +367,7 @@ describe("mcp", async () => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
+				redirect_uris: [redirectUri],
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "none",
 			},
@@ -438,6 +444,7 @@ describe("mcp", async () => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
+				redirect_uris: [redirectUri],
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "client_secret_basic",
 			},

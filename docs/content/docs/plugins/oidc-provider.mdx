@@ -14,7 +14,7 @@ The **OIDC Provider Plugin** enables you to build and manage your own OpenID Con
 - **Public Clients**: Support public clients for SPA, mobile apps, CLI tools, etc.
 - **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
 - **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
-- **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
+- **oAuth Consent**: Implement oAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
 - **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.
 
 <Callout type="warn">
@@ -378,7 +378,7 @@ const auth = betterAuth({
 
 The OIDC Provider plugin adds the following tables to the database:
 
-### OAuth Client
+### oAuth Client
 
 Table Name: `oauthClient`
 
@@ -387,7 +387,7 @@ Table Name: `oauthClient`
     {
       name: "id",
       type: "string",
-      description: "Database ID of the OAuth client",
+      description: "Database ID of the oAuth client",
       isPrimaryKey: true
     },
     { 
@@ -419,17 +419,17 @@ Table Name: `oauthClient`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the OAuth client was created"
+      description: "Timestamp of when the oAuth client was created"
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the OAuth client was last updated"
+      description: "Timestamp of when the oAuth client was last updated"
     },
     { 
       name: "name", 
       type: "string", 
-      description: "Name of the OAuth client",
+      description: "Name of the oAuth client",
       isRequired: true
     },
     {
@@ -513,19 +513,19 @@ Table Name: `oauthClient`
     { 
       name: "type",
       type: "string",
-      description: "Type of OAuth client (e.g., web, mobile)",
+      description: "Type of oAuth client (e.g., web, mobile)",
       isRequired: true
     },
     { 
       name: "metadata",
       type: "string",
-      description: "Additional metadata for the OAuth client",
+      description: "Additional metadata for the oAuth client",
       isOptional: true
     },
   ]}
 />
 
-### OAuth Access Token
+### oAuth Access Token
 
 Table Name: `oauthAccessToken`
 
@@ -563,7 +563,7 @@ Table Name: `oauthAccessToken`
     { 
       name: "clientId", 
       type: "string", 
-      description: "ID of the OAuth client",
+      description: "ID of the oAuth client",
       isForeignKey: true,
       references: { model: "oauthClient", field: "clientId" }
     },
@@ -593,7 +593,7 @@ Table Name: `oauthAccessToken`
   ]}
 />
 
-### OAuth Consent
+### oAuth Consent
 
 Table Name: `oauthConsent`
 
@@ -615,9 +615,9 @@ Table Name: `oauthConsent`
     { 
       name: "clientId", 
       type: "string", 
-      description: "ID of the OAuth client",
+      description: "ID of the oAuth client",
       isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
+      references: { model: "oAuthClient", field: "clientId" }
     },
     { 
       name: "scopes", 

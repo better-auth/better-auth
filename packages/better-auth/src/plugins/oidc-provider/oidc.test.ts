@@ -10,7 +10,7 @@ import {
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oidcProvider } from ".";
 import { genericOAuth, type GenericOAuthConfig } from "../generic-oauth";
-import type { OauthClient } from "./types";
+import type { OAuthClient } from "./types";
 import { createAuthClient } from "../../client";
 import { oidcClient } from "./client";
 import { genericOAuthClient } from "../generic-oauth/client";
@@ -52,7 +52,7 @@ describe("oidc", async () => {
 	});
 
 	let server: Listener;
-	let application: OauthClient | null;
+	let application: OAuthClient | null;
 
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
@@ -65,10 +65,10 @@ describe("oidc", async () => {
 		});
 
 		// This test is performed in register.test.ts
-		const _application: Partial<OauthClient> = {
+		const _application: Partial<OAuthClient> = {
 			redirect_uris: [redirectUri],
 		};
-		const response = await serverClient.$fetch<OauthClient>(
+		const response = await serverClient.$fetch<OAuthClient>(
 			"/oauth2/register",
 			{
 				method: "POST",
@@ -431,7 +431,7 @@ describe("oidc storage", async () => {
 			port: 3000,
 		});
 
-		let application: OauthClient | null;
+		let application: OAuthClient | null;
 		const createdClient = await serverClient.oauth2.register({
 			client_name: "test-client",
 			redirect_uris: [redirectUri],
@@ -570,7 +570,7 @@ describe("oidc-jwt", async () => {
 				port: 3000,
 			});
 
-			let application: OauthClient | null;
+			let application: OAuthClient | null;
 			const createdClient = await serverClient.oauth2.register({
 				client_name: "test-client",
 				redirect_uris: [redirectUri],
