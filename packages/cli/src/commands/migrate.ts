@@ -17,7 +17,6 @@ export async function migrateAction(opts: any) {
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
 		})
-		.transform(({ y, yes, ...otherOpts }) => ({ ...otherOpts, y: yes || y }))
 		.parse(opts);
 
 	const cwd = path.resolve(options.cwd);
@@ -86,7 +85,12 @@ export async function migrateAction(opts: any) {
 		);
 	}
 
-	let migrate = options.y;
+	if (options.y) {
+		console.warn('WARNING: --y is deprecated. Consider -y or --yes');
+		options.yes = true;
+	}
+
+	let migrate = options.yes;
 	if (!migrate) {
 		const response = await prompts({
 			type: "confirm",

@@ -20,7 +20,6 @@ export async function generateAction(opts: any) {
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
 		})
-		.transform(({ y, yes, ...otherOpts }) => ({ ...otherOpts, y: yes || y }))
 		.parse(opts);
 
 	const cwd = path.resolve(options.cwd);
@@ -96,7 +95,12 @@ export async function generateAction(opts: any) {
 		}
 	}
 
-	let confirm = options.y;
+	if (options.y) {
+		console.warn('WARNING: --y is deprecated. Consider -y or --yes');
+		options.yes = true;
+	}
+
+	let confirm = options.yes;
 
 	if (!confirm) {
 		const response = await prompts({
