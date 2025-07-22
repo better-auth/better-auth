@@ -77,16 +77,21 @@ export const sveltekitCookies = (
 							const event = getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
+
 							for (const [name, { value, ...ops }] of parsed) {
-								event.cookies.set(name, decodeURIComponent(value), {
-									sameSite: ops.samesite,
-									path: ops.path || "/",
-									expires: ops.expires,
-									secure: ops.secure,
-									httpOnly: ops.httponly,
-									domain: ops.domain,
-									maxAge: ops["max-age"],
-								});
+								try {
+									event.cookies.set(name, decodeURIComponent(value), {
+										sameSite: ops.samesite,
+										path: ops.path || "/",
+										expires: ops.expires,
+										secure: ops.secure,
+										httpOnly: ops.httponly,
+										domain: ops.domain,
+										maxAge: ops["max-age"],
+									});
+								} catch (e) {
+									// this will avoid any issue related to already streamed response
+								}
 							}
 						}
 					}),
