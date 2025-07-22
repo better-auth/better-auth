@@ -35,7 +35,7 @@ function getRetryAfter(lastRequest: number, window: number) {
 }
 
 function createDBStorage(ctx: AuthContext) {
-	const model = ctx.options.rateLimit?.modelName || "rateLimit";
+	const model = "rateLimit";
 	const db = ctx.adapter;
 	return {
 		get: async (key: string) => {
