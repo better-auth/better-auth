@@ -85,8 +85,11 @@ Once installed, you can utilize the OIDC Provider to manage authentication flows
 
 ### Register a New Client
 
-To register a new OIDC client, use the `oauth2.register` method.
+<Callout>
+This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
+</Callout>
 
+To register a new OIDC client, use the `oauth2.register` method.
 
 #### Simple Example
 
@@ -115,7 +118,7 @@ type registerOAuthApplication = {
     /**
      * The grant types supported by the application. 
      */
-    grant_types?: ("authorization_code" | "implicit" | "password" | "client_credentials" | "refresh_token" | "urn:ietf:params:oauth:grant-type:jwt-bearer" | "urn:ietf:params:oauth:grant-type:saml2-bearer")[] = ["authorization_code"]
+    grant_types?: ("authorization_code" | "client_credentials" | "refresh_token")[] = ["authorization_code"]
     /**
      * The response types supported by the application. 
      */
@@ -149,18 +152,6 @@ type registerOAuthApplication = {
      */
     policy_uri?: string = "https://client.example.com/policy"
     /**
-     * The URI of the application JWKS. 
-     */
-    jwks_uri?: string = "https://client.example.com/jwks"
-    /**
-     * The JWKS of the application. 
-     */
-    jwks?: Record<string, any> = {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}
-    /**
-     * The metadata of the application. 
-     */
-    metadata?: Record<string, any> = {"key": "value"}
-    /**
      * The software ID of the application. 
      */
     software_id?: string = "my-software"
@@ -176,14 +167,8 @@ type registerOAuthApplication = {
 ```
 </APIMethod>
 
-<Callout>
-This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
-</Callout>
-
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
 
-This Endpoint support [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
-  
 ### Trusted Clients
 
 For first-party applications and internal services, you can configure trusted clients directly in your OIDC provider configuration. Trusted clients bypass database lookups for better performance and can optionally skip consent screens for improved user experience.
@@ -250,7 +235,7 @@ The `getAdditionalUserInfoClaim` function receives the user object and the reque
 
 ### Consent Screen
 
-When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.
+When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen.
 
 **Note**: Trusted clients with `skipConsent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
 
@@ -274,7 +259,7 @@ const res = await client.oauth2.consent({
 });
 ```
 
-The `client_id` and other necessary information are stored in the browser cookie, so you don't need to pass them in the request. If they don't exist in the cookie, the consent method will return an error.
+The `client_id` and other necessary information are stored in a browser cookie, so you don't need to pass them in the request. If they don't exist in the cookie, the consent method will return an error.
 
 ### Handling Login
 
@@ -353,33 +338,93 @@ const auth = betterAuth({
 
 This will allow clients to register using the `/register` endpoint to be publicly available.
 
+If you wish to also allow clients to register clients without authentication, such as for MCP, you can enable this feature by setting the `allowUnauthenticatedClientRegistration` option to `true`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+    })]
+})
+```
+
+#### Dynamic Client Registration Scopes
+
+To set a list of default scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationDefaultScopes` field. All scopes must be defined in `scopes`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        scopes: ["reader", "editor"],
+        clientRegistrationDefaultScopes: ["reader"],
+    })]
+})
+```
+
+To also set a list of allowed scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationAllowedScopes` field. These are **in addition** to the `clientRegistrationDefaultScopes`. All scopes must be defined in `scopes`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        scopes: ["reader", "editor"],
+        clientRegistrationDefaultScopes: ["reader"],
+        clientRegistrationAllowedScopes: ["editor"],
+    })]
+})
+```
+
 ## Schema
 
 The OIDC Provider plugin adds the following tables to the database:
 
-### OAuth Application
+### OAuth Client
 
-Table Name: `oauthApplication`
+Table Name: `oauthClient`
 
 <DatabaseTable
   fields={[
-   {
+    {
       name: "id",
       type: "string",
       description: "Database ID of the OAuth client",
-      isPrimaryKey: true
-   },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "Unique identifier for each OAuth client",
       isPrimaryKey: true
     },
     { 
       name: "clientSecret", 
       type: "string", 
-      description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
+      description: "Secret key for confidential oAuth clients. Not available for public clients.",
       isOptional: true
+    },
+    {
+      name: "disabled",
+      type: "boolean",
+      description: "Indicates if the client is disabled",
+      isRequired: true
+    },
+    {
+      name: "scope",
+      type: "string",
+      description: "Space-separated list of scopes",
+      isRequired: true
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "ID of the user who owns the client. (optional)",
+      isOptional: true,
+      isForeignKey: true,
+      references: { model: "user", field: "id" }
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was last updated"
     },
     { 
       name: "name", 
@@ -387,46 +432,96 @@ Table Name: `oauthApplication`
       description: "Name of the OAuth client",
       isRequired: true
     },
-    { 
-      name: "redirectURLs", 
-      type: "string", 
-      description: "Comma-separated list of redirect URLs",
-      isRequired: true
-    },
-    { 
-      name: "metadata", 
+    {
+      name: "uri",
       type: "string",
-      description: "Additional metadata for the OAuth client",
+      description: "Client homepage",
+      isOptional: true
+    },
+    {
+      name: "icon",
+      type: "string",
+      description: "Logo of the client",
+      isOptional: true,
+    },
+    {
+      name: "contacts",
+      type: "string",
+      description: "Comma-separated list of support contacts (likely email)",
+      isOptional: true
+    },
+    {
+      name: "tos",
+      type: "string",
+      description: "Terms of Service uri of the client",
+      isOptional: true
+    },
+    {
+      name: "policy",
+      type: "string",
+      description: "policy uri of the client",
+      isOptional: true
+    },
+    {
+      name: "softwareId",
+      type: "string",
+      description: "Client defined software id",
+      isOptional: true
+    },
+    {
+      name: "softwareVersion",
+      type: "string",
+      description: "Version of the software id",
+      isOptional: true
+    },
+    {
+      name: "softwareStatement",
+      type: "string",
+      description: "Jwt signed statement of the software",
       isOptional: true
     },
     { 
-      name: "type", 
+      name: "redirectURLs",
+      type: "string",
+      description: "Comma-separated list of redirect URLs",
+      isRequired: true
+    },
+    {
+      name: "tokenEndpointAuthMethod",
+      type: "string",
+      description: "Comma-separated token endpoint auth methods allowed",
+      isOptional: true
+    },
+    {
+      name: "grantTypes",
+      type: "string",
+      description: "Comma-separated grant types allowed",
+      isOptional: true
+    },
+    {
+      name: "responseTypes",
+      type: "string",
+      description: "Comma-separated response types allowed",
+      isOptional: true
+    },
+    {
+      name: "public",
+      type: "string",
+      description: "If the oAuth client is a public or confidential client",
+      isRequired: true
+    },
+    { 
+      name: "type",
       type: "string",
       description: "Type of OAuth client (e.g., web, mobile)",
       isRequired: true
     },
     { 
-      name: "disabled", 
-      type: "boolean", 
-      description: "Indicates if the client is disabled",
-      isRequired: true
-    },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user who owns the client. (optional)",
+      name: "metadata",
+      type: "string",
+      description: "Additional metadata for the OAuth client",
       isOptional: true
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the OAuth client was created" 
-    },
-   {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the OAuth client was last updated"
-   }
   ]}
 />
 
@@ -551,7 +646,13 @@ Table Name: `oauthConsent`
 
 ## Options
 
-**allowDynamicClientRegistration**: `boolean` - Enable or disable dynamic client registration.
+**allowUnauthenticatedClientRegistration** `boolean` @default false - Allow dynamic client registration.
+
+**allowDynamicClientRegistration** `boolean` @default false - Allow dynamic client registration.
+
+**clientRegistrationDefaultScopes** `string[]` - List of scopes for newly registered clients if not requested
+
+**clientRegistrationAllowedScopes** `string[]` @default `clientRegistrationDefaultScopes` - List of scopes for allowed clients in addition to those listed in the default scope. Finalized allowed list is the union of `clientRegistrationDefaultScopes` and this list. If both `clientRegistrationDefaultScopes` and this are undefined, only scopes listed in the `scopes` option are allowed.
 
 **metadata**: `OIDCMetadata` - Customize the OIDC provider metadata.
 

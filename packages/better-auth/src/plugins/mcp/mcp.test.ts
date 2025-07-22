@@ -1,42 +1,30 @@
-import { afterAll, describe, it } from "vitest";
+import { beforeAll, afterAll, describe, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { mcp } from ".";
 import { genericOAuth } from "../generic-oauth";
-import type { Client } from "../oidc-provider/types";
+import type { OauthClient } from "../oidc-provider/types";
 import { createAuthClient } from "../../client";
 import { genericOAuthClient } from "../generic-oauth/client";
-import { listen } from "listhen";
+import { listen, type Listener } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
 
 describe("mcp", async () => {
-	// Start server on ephemeral port first to get available port
-	const tempServer = await listen(
-		toNodeHandler(async () => new Response("temp")),
-		{
-			port: 0,
-		},
-	);
-	const port = tempServer.address?.port || 3001;
-	const baseURL = `http://localhost:${port}`;
-	await tempServer.close();
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
 	const { auth, signInWithTestUser, customFetchImpl, testUser } =
 		await getTestInstance({
-			baseURL,
+			baseURL: authServerBaseUrl,
 			plugins: [
 				mcp({
 					loginPage: "/login",
 					oidcConfig: {
 						loginPage: "/login",
 						requirePKCE: true,
-
-						getAdditionalUserInfoClaim(user, scopes) {
-							return {
-								custom: "custom value",
-								userId: user.id,
-							};
-						},
+						allowDynamicClientRegistration: true,
 					},
 				}),
 				jwt(),
@@ -47,47 +35,44 @@ describe("mcp", async () => {
 	const headers = signInResult.headers;
 
 	const serverClient = createAuthClient({
-		baseURL,
+		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
 			headers,
 		},
 	});
 
-	const server = await listen(toNodeHandler(auth.handler), {
-		port,
+	let server: Listener;
+	beforeAll(async () => {
+		server = await listen(toNodeHandler(auth.handler), {
+			port: 3000,
+		});
 	});
+
 	afterAll(async () => {
 		await server.close();
 	});
 
-	let publicClient: Client;
-	let confidentialClient: Client;
+	let publicClient: OauthClient | null;
+	let confidentialClient: OauthClient | null;
 
 	it("should register public client with token_endpoint_auth_method: none", async ({
 		expect,
 	}) => {
-		const createdClient = await serverClient.$fetch("/mcp/register", {
-			method: "POST",
-			body: {
-				client_name: "test-public-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-public",
-				],
-				logo_uri: "",
-				token_endpoint_auth_method: "none",
+		const createdClient = await serverClient.$fetch<OauthClient>(
+			"/mcp/register",
+			{
+				method: "POST",
+				body: {
+					token_endpoint_auth_method: "none",
+					redirect_uris: [redirectUri],
+				},
 			},
-		});
+		);
 
 		expect(createdClient.data).toMatchObject({
 			client_id: expect.any(String),
-			client_name: "test-public-client",
-			logo_uri: "",
-			redirect_uris: [
-				"http://localhost:3000/api/auth/oauth2/callback/test-public",
-			],
-			grant_types: ["authorization_code"],
-			response_types: ["code"],
+			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "none",
 			client_id_issued_at: expect.any(Number),
 		});
@@ -96,44 +81,26 @@ describe("mcp", async () => {
 		expect(createdClient.data).not.toHaveProperty("client_secret");
 		expect(createdClient.data).not.toHaveProperty("client_secret_expires_at");
 
-		publicClient = {
-			clientId: (createdClient.data as any).client_id,
-			clientSecret: "", // Public clients don't have secrets, but our type expects a string
-			redirectURLs: (createdClient.data as any).redirect_uris,
-			metadata: {},
-			icon: (createdClient.data as any).logo_uri || "",
-			type: "public",
-			disabled: false,
-			name: (createdClient.data as any).client_name || "",
-		};
+		publicClient = createdClient.data;
 	});
 
 	it("should register confidential client with client_secret_basic", async ({
 		expect,
 	}) => {
-		const createdClient = await serverClient.$fetch("/mcp/register", {
-			method: "POST",
-			body: {
-				client_name: "test-confidential-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
-				],
-				logo_uri: "",
-				token_endpoint_auth_method: "client_secret_basic",
+		const createdClient = await serverClient.$fetch<OauthClient>(
+			"/mcp/register",
+			{
+				method: "POST",
+				body: {
+					redirect_uris: [redirectUri],
+				},
 			},
-		});
+		);
 
 		expect(createdClient.data).toMatchObject({
 			client_id: expect.any(String),
 			client_secret: expect.any(String),
-			client_name: "test-confidential-client",
-			logo_uri: "",
-			redirect_uris: [
-				"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
-			],
-			grant_types: ["authorization_code"],
-			response_types: ["code"],
-			token_endpoint_auth_method: "client_secret_basic",
+			redirect_uris: [redirectUri],
 			client_id_issued_at: expect.any(Number),
 			client_secret_expires_at: 0,
 		});
@@ -142,34 +109,30 @@ describe("mcp", async () => {
 		expect(createdClient.data).toHaveProperty("client_secret");
 		expect(createdClient.data).toHaveProperty("client_secret_expires_at");
 
-		confidentialClient = {
-			clientId: (createdClient.data as any).client_id,
-			clientSecret: (createdClient.data as any).client_secret,
-			redirectURLs: (createdClient.data as any).redirect_uris,
-			metadata: {},
-			icon: (createdClient.data as any).logo_uri || "",
-			type: "web",
-			disabled: false,
-			name: (createdClient.data as any).client_name || "",
-		};
+		confidentialClient = createdClient.data;
 	});
 
 	it("should authenticate public client with PKCE only", async ({ expect }) => {
+		if (!publicClient?.client_id) {
+			throw Error("publicClient not saved");
+		}
+
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
 				accountLinking: {
-					trustedProviders: ["test-public"],
+					trustedProviders: [providerId],
 				},
 			},
 			plugins: [
 				genericOAuth({
 					config: [
 						{
-							providerId: "test-public",
-							clientId: publicClient.clientId,
+							providerId,
+							clientId: publicClient.client_id,
 							clientSecret: "", // Public client has no secret
-							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
-							tokenUrl: `${baseURL}/api/auth/mcp/token`,
+							redirectURI: redirectUri,
+							authorizationUrl: `${authServerBaseUrl}/api/auth/mcp/authorize`,
+							tokenUrl: `${authServerBaseUrl}/api/auth/mcp/token`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 						},
@@ -180,7 +143,7 @@ describe("mcp", async () => {
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
-			baseURL: "http://localhost:5001",
+			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
@@ -188,16 +151,15 @@ describe("mcp", async () => {
 
 		const data = await client.signIn.oauth2(
 			{
-				providerId: "test-public",
-				callbackURL: "/dashboard",
+				providerId,
+				callbackURL: "/success",
 			},
 			{
 				throw: true,
 			},
 		);
-
-		expect(data.url).toContain(`${baseURL}/api/auth/mcp/authorize`);
-		expect(data.url).toContain(`client_id=${publicClient.clientId}`);
+		expect(data.url).toContain(`${authServerBaseUrl}/api/auth/mcp/authorize`);
+		expect(data.url).toContain(`client_id=${publicClient.client_id}`);
 		expect(data.url).toContain("code_challenge=");
 		expect(data.url).toContain("code_challenge_method=S256");
 
@@ -209,7 +171,7 @@ describe("mcp", async () => {
 			},
 		});
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test-public?code=",
+			`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}?code=`,
 		);
 
 		let callbackURL = "";
@@ -218,12 +180,16 @@ describe("mcp", async () => {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).toContain("/success");
 	});
 
 	it("should reject public client without code_verifier", async ({
 		expect,
 	}) => {
+		if (!publicClient?.client_id) {
+			throw Error("publicClient not saved");
+		}
+
 		// Create a mock token request without code_verifier
 		const authCode = "test-auth-code";
 
@@ -231,9 +197,9 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				grant_type: "authorization_code",
-				client_id: publicClient.clientId,
+				client_id: publicClient.client_id,
 				code: authCode,
-				redirect_uri: publicClient.redirectURLs[0],
+				redirect_uri: redirectUri,
 				// Missing code_verifier for public client
 			},
 		});
@@ -248,21 +214,26 @@ describe("mcp", async () => {
 	it("should still support confidential clients in MCP context", async ({
 		expect,
 	}) => {
+		if (!confidentialClient?.client_id || !confidentialClient?.client_secret) {
+			throw Error("confidentialClient not saved");
+		}
+
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
 				accountLinking: {
-					trustedProviders: ["test-confidential"],
+					trustedProviders: [providerId],
 				},
 			},
 			plugins: [
 				genericOAuth({
 					config: [
 						{
-							providerId: "test-confidential",
-							clientId: confidentialClient.clientId,
-							clientSecret: confidentialClient.clientSecret || "",
-							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
-							tokenUrl: `${baseURL}/api/auth/mcp/token`,
+							providerId,
+							clientId: confidentialClient.client_id,
+							clientSecret: confidentialClient.client_secret,
+							redirectURI: redirectUri,
+							authorizationUrl: `${authServerBaseUrl}/api/auth/mcp/authorize`,
+							tokenUrl: `${authServerBaseUrl}/api/auth/mcp/token`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 						},
@@ -273,7 +244,7 @@ describe("mcp", async () => {
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
-			baseURL: "http://localhost:5001",
+			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
@@ -281,16 +252,16 @@ describe("mcp", async () => {
 
 		const data = await client.signIn.oauth2(
 			{
-				providerId: "test-confidential",
-				callbackURL: "/dashboard",
+				providerId,
+				callbackURL: "/success",
 			},
 			{
 				throw: true,
 			},
 		);
 
-		expect(data.url).toContain(`${baseURL}/api/auth/mcp/authorize`);
-		expect(data.url).toContain(`client_id=${confidentialClient.clientId}`);
+		expect(data.url).toContain(`${authServerBaseUrl}/api/auth/mcp/authorize`);
+		expect(data.url).toContain(`client_id=${confidentialClient.client_id}`);
 
 		let redirectURI = "";
 		await serverClient.$fetch(data.url, {
@@ -300,7 +271,7 @@ describe("mcp", async () => {
 			},
 		});
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test-confidential?code=",
+			`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}?code=`,
 		);
 
 		let callbackURL = "";
@@ -309,7 +280,7 @@ describe("mcp", async () => {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).toContain("/success");
 	});
 
 	it("should expose OAuth discovery metadata", async ({ expect }) => {
@@ -318,12 +289,12 @@ describe("mcp", async () => {
 		);
 
 		expect(metadata.data).toMatchObject({
-			issuer: baseURL,
-			authorization_endpoint: `${baseURL}/api/auth/mcp/authorize`,
-			token_endpoint: `${baseURL}/api/auth/mcp/token`,
-			userinfo_endpoint: `${baseURL}/api/auth/mcp/userinfo`,
-			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
-			registration_endpoint: `${baseURL}/api/auth/mcp/register`,
+			issuer: authServerBaseUrl,
+			authorization_endpoint: `${authServerBaseUrl}/api/auth/mcp/authorize`,
+			token_endpoint: `${authServerBaseUrl}/api/auth/mcp/token`,
+			userinfo_endpoint: `${authServerBaseUrl}/api/auth/mcp/userinfo`,
+			jwks_uri: `${authServerBaseUrl}/api/auth/mcp/jwks`,
+			registration_endpoint: `${authServerBaseUrl}/api/auth/mcp/register`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			response_types_supported: ["code"],
 			response_modes_supported: ["query"],
@@ -356,11 +327,7 @@ describe("mcp", async () => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
-				client_name: "test-refresh-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-refresh",
-				],
-				logo_uri: "",
+				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "client_secret_basic",
 			},
 		});
@@ -395,11 +362,7 @@ describe("mcp", async () => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
-				client_name: "test-userinfo-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-userinfo",
-				],
-				logo_uri: "",
+				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "none",
 			},
 		});
@@ -424,8 +387,8 @@ describe("mcp", async () => {
 							providerId: "test-userinfo",
 							clientId: userinfoClient.clientId,
 							clientSecret: "",
-							authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
-							tokenUrl: `${baseURL}/api/auth/mcp/token`,
+							authorizationUrl: `${authServerBaseUrl}/api/auth/mcp/authorize`,
+							tokenUrl: `${authServerBaseUrl}/api/auth/mcp/token`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 						},
@@ -436,7 +399,7 @@ describe("mcp", async () => {
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
-			baseURL: "http://localhost:5003",
+			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
@@ -446,7 +409,7 @@ describe("mcp", async () => {
 		const data = await client.signIn.oauth2(
 			{
 				providerId: "test-userinfo",
-				callbackURL: "/dashboard",
+				callbackURL: "/success",
 			},
 			{
 				throw: true,
@@ -475,11 +438,7 @@ describe("mcp", async () => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
-				client_name: "test-idtoken-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-idtoken",
-				],
-				logo_uri: "",
+				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "client_secret_basic",
 			},
 		});

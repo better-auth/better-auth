@@ -41,6 +41,7 @@ type JWKOptions =
 			alg: "ES512"; // ECDSA with P-521 curve
 			crv?: never; // Only P-521 for ES512
 	  };
+export type JWSAlgorithms = JWKOptions["alg"];
 
 export interface JwtOptions {
 	jwks?: {
@@ -117,6 +118,13 @@ export interface JwtOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Disables /token endpoint and auth middleware
+	 * in favor of Oidc authentication strategy.
+	 *
+	 * Thus, only the /jwks endpoint is enabled.
+	 */
+	usesOauthProvider?: boolean;
 }
 
 export async function generateExportedKeyPair(

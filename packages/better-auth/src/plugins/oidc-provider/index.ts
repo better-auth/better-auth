@@ -4,22 +4,17 @@ import {
 	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
-import {
-	generateRandomString,
-	symmetricDecrypt,
-	symmetricEncrypt,
-} from "../../crypto";
+import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { schema } from "./schema";
 import type {
-	Client,
 	CodeVerificationValue,
 	OAuthAccessToken,
 	OIDCMetadata,
 	OIDCOptions,
+	SchemaClient,
 } from "./types";
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
@@ -28,6 +23,8 @@ import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
 import type { JwtOptions } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
+import { mergeSchema } from "../../db";
+import { registerEndpoint } from "./register";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -39,30 +36,35 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
  * Get a client by ID, checking trusted clients first, then database
  */
 export async function getClient(
+	ctx: GenericEndpointContext,
+	opts: OIDCOptions,
 	clientId: string,
-	adapter: any,
-	trustedClients: (Client & { skipConsent?: boolean })[] = [],
-): Promise<(Client & { skipConsent?: boolean }) | null> {
-	const trustedClient = trustedClients.find(
+): Promise<(SchemaClient & { skipConsent?: boolean }) | null> {
+	const trustedClient = opts.trustedClients?.find(
 		(client) => client.clientId === clientId,
 	);
 	if (trustedClient) {
-		return trustedClient;
+		return {
+			...trustedClient,
+			skipConsent: true,
+		};
 	}
-	const dbClient = await adapter
+
+	const dbClient = await ctx.context.adapter
 		.findOne({
-			model: "oauthApplication",
+			model: opts.schema?.oauthApplication?.modelName ?? "oauthApplication",
 			where: [{ field: "clientId", value: clientId }],
 		})
-		.then((res: Record<string, any> | null) => {
-			if (!res) {
-				return null;
-			}
+		.then((res) => {
+			if (!res) return null;
+			const record = res as Record<string, string | null>;
 			return {
-				...res,
-				redirectURLs: (res.redirectURLs ?? "").split(","),
-				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
+				...record,
+				contacts: record.contacts?.split(",") ?? undefined,
+				grantTypes: record.grantTypes?.split(",") ?? undefined,
+				responseTypes: record.responseTypes?.split(",") ?? undefined,
+				redirectURLs: record?.redirectURLs?.split(",") ?? undefined,
+			} as SchemaClient;
 		});
 
 	return dbClient;
@@ -129,12 +131,6 @@ export const getMetadata = (
  * @returns A Better Auth plugin.
  */
 export const oidcProvider = (options: OIDCOptions) => {
-	const modelName = {
-		oauthClient: "oauthApplication",
-		oauthAccessToken: "oauthAccessToken",
-		oauthConsent: "oauthConsent",
-	};
-
 	const opts = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
@@ -152,45 +148,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 		],
 	};
 
-	const trustedClients = options.trustedClients || [];
-
-	/**
-	 * Store client secret according to the configured storage method
-	 */
-	async function storeClientSecret(
-		ctx: GenericEndpointContext,
-		clientSecret: string,
-	) {
-		if (opts.storeClientSecret === "encrypted") {
-			return await symmetricEncrypt({
-				key: ctx.context.secret,
-				data: clientSecret,
-			});
-		}
-		if (opts.storeClientSecret === "hashed") {
-			return await defaultClientSecretHasher(clientSecret);
-		}
-		if (
-			typeof opts.storeClientSecret === "object" &&
-			"hash" in opts.storeClientSecret
-		) {
-			return await opts.storeClientSecret.hash(clientSecret);
-		}
-		if (
-			typeof opts.storeClientSecret === "object" &&
-			"encrypt" in opts.storeClientSecret
-		) {
-			return await opts.storeClientSecret.encrypt(clientSecret);
-		}
-
-		return clientSecret;
-	}
-
 	/**
 	 * Verify stored client secret against provided client secret
 	 */
 	async function verifyStoredClientSecret(
 		ctx: GenericEndpointContext,
+		opts: OIDCOptions,
 		storedClientSecret: string,
 		clientSecret: string,
 	): Promise<boolean> {
@@ -404,7 +367,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						},
 					);
 					await ctx.context.adapter.create({
-						model: modelName.oauthConsent,
+						model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 						data: {
 							clientId: value.clientId,
 							userId: value.userId,
@@ -497,7 +460,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 						const token = await ctx.context.adapter.findOne<OAuthAccessToken>({
-							model: modelName.oauthAccessToken,
+							model:
+								opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 							where: [
 								{
 									field: "refreshToken",
@@ -532,7 +496,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							Date.now() + opts.refreshTokenExpiresIn * 1000,
 						);
 						await ctx.context.adapter.create({
-							model: modelName.oauthAccessToken,
+							model:
+								opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 							data: {
 								accessToken,
 								refreshToken: newRefreshToken,
@@ -618,11 +583,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await getClient(
-						client_id.toString(),
-						ctx.context.adapter,
-						trustedClients,
-					);
+					const client = await getClient(ctx, options, client_id.toString());
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -657,7 +618,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
-					if (client.type === "public") {
+					if (client.public) {
 						// For public clients (type: 'public'), validate PKCE instead of client_secret
 						if (!code_verifier) {
 							throw new APIError("BAD_REQUEST", {
@@ -677,6 +638,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						const isValidSecret = await verifyStoredClientSecret(
 							ctx,
+							options,
 							client.clientSecret,
 							client_secret.toString(),
 						);
@@ -714,7 +676,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						Date.now() + opts.refreshTokenExpiresIn * 1000,
 					);
 					await ctx.context.adapter.create({
-						model: modelName.oauthAccessToken,
+						model:
+							opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 						data: {
 							accessToken,
 							refreshToken,
@@ -935,7 +898,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const token = authorization.replace("Bearer ", "");
 					const accessToken =
 						await ctx.context.adapter.findOne<OAuthAccessToken>({
-							model: modelName.oauthAccessToken,
+							model:
+								opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 							where: [
 								{
 									field: "accessToken",
@@ -1005,140 +969,87 @@ export const oidcProvider = (options: OIDCOptions) => {
 			 * **client:**
 			 * `authClient.oauth2.register`
 			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oidc-provider#api-method-oauth2-register)
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oidc-provider#register-a-new-client)
 			 */
 			registerOAuthApplication: createAuthEndpoint(
 				"/oauth2/register",
 				{
 					method: "POST",
 					body: z.object({
-						redirect_uris: z.array(z.string()).meta({
+						client_secret_expires_at: z.number().default(0).optional(),
+						scope: z.string().optional().meta({
+							description:
+								'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
+						}),
+						client_name: z.string().optional().meta({
+							description: 'The name of the application. Eg: "My App"',
+						}),
+						client_uri: z.string().optional().meta({
+							description:
+								'The URI of the application. Eg: "https://client.example.com"',
+						}),
+						logo_uri: z.string().optional().meta({
+							description:
+								'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
+						}),
+						contacts: z.array(z.string()).optional().meta({
+							description:
+								'The contact information for the application. Eg: ["admin@example.com"]',
+						}),
+						tos_uri: z.string().optional().meta({
+							description:
+								'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
+						}),
+						policy_uri: z.string().optional().meta({
+							description:
+								'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
+						}),
+						software_id: z.string().optional().meta({
+							description:
+								'The software ID of the application. Eg: "my-software"',
+						}),
+						software_version: z.string().optional().meta({
+							description:
+								'The software version of the application. Eg: "1.0.0"',
+						}),
+						software_statement: z.string().optional().meta({
+							description: "The software statement of the application.",
+						}),
+						redirect_uris: z.array(z.string()).optional().meta({
 							description:
 								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
 						}),
 						token_endpoint_auth_method: z
 							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.default("client_secret_basic")
+							.optional()
 							.meta({
 								description:
 									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
-							})
-							.default("client_secret_basic")
-							.optional(),
+							}),
 						grant_types: z
 							.array(
 								z.enum([
 									"authorization_code",
-									"implicit",
-									"password",
 									"client_credentials",
 									"refresh_token",
-									"urn:ietf:params:oauth:grant-type:jwt-bearer",
-									"urn:ietf:params:oauth:grant-type:saml2-bearer",
 								]),
 							)
+							.default(["authorization_code"])
+							.optional()
 							.meta({
 								description:
 									'The grant types supported by the application. Eg: ["authorization_code"]',
-							})
-							.default(["authorization_code"])
-							.optional(),
+							}),
 						response_types: z
 							.array(z.enum(["code", "token"]))
+							.default(["code"])
+							.optional()
 							.meta({
 								description:
 									'The response types supported by the application. Eg: ["code"]',
-							})
-							.default(["code"])
-							.optional(),
-						client_name: z
-							.string()
-							.meta({
-								description: 'The name of the application. Eg: "My App"',
-							})
-							.optional(),
-						client_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application. Eg: "https://client.example.com"',
-							})
-							.optional(),
-						logo_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
-							})
-							.optional(),
-						scope: z
-							.string()
-							.meta({
-								description:
-									'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
-							})
-							.optional(),
-						contacts: z
-							.array(z.string())
-							.meta({
-								description:
-									'The contact information for the application. Eg: ["admin@example.com"]',
-							})
-							.optional(),
-						tos_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
-							})
-							.optional(),
-						policy_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
-							})
-							.optional(),
-						jwks_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
-							})
-							.optional(),
-						jwks: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
-							})
-							.optional(),
-						metadata: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The metadata of the application. Eg: {"key": "value"}',
-							})
-							.optional(),
-						software_id: z
-							.string()
-							.meta({
-								description:
-									'The software ID of the application. Eg: "my-software"',
-							})
-							.optional(),
-						software_version: z
-							.string()
-							.meta({
-								description:
-									'The software version of the application. Eg: "1.0.0"',
-							})
-							.optional(),
-						software_statement: z
-							.string()
-							.meta({
-								description: "The software statement of the application.",
-							})
-							.optional(),
+							}),
+						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -1149,81 +1060,140 @@ export const oidcProvider = (options: OIDCOptions) => {
 									content: {
 										"application/json": {
 											schema: {
+												/** @returns {OauthClient} */
 												type: "object",
 												properties: {
-													name: {
-														type: "string",
-														description: "Name of the OAuth2 application",
-													},
-													icon: {
-														type: "string",
-														nullable: true,
-														description: "Icon URL for the application",
-													},
-													metadata: {
-														type: "object",
-														additionalProperties: true,
-														nullable: true,
-														description:
-															"Additional metadata for the application",
-													},
-													clientId: {
+													client_id: {
 														type: "string",
 														description: "Unique identifier for the client",
 													},
-													clientSecret: {
+													client_secret: {
 														type: "string",
 														description: "Secret key for the client",
 													},
-													redirectURLs: {
+													client_secret_expires_at: {
+														type: "number",
+														description:
+															"Time the client secret will expire. If 0, the client secret will never expire.",
+													},
+													scope: {
+														type: "string",
+														description:
+															"Space-separated scopes allowed by the client",
+													},
+													user_id: {
+														type: "string",
+														description:
+															"ID of the user who registered the client, null if registered anonymously",
+													},
+													client_id_issued_at: {
+														type: "number",
+														description: "Creation timestamp of this client",
+													},
+													client_name: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													client_uri: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													logo_uri: {
+														type: "string",
+														description: "Icon URL for the application",
+													},
+													contacts: {
 														type: "array",
-														items: { type: "string", format: "uri" },
-														description: "List of allowed redirect URLs",
+														items: {
+															type: "string",
+														},
+														description:
+															"List representing ways to contact people responsible for this client, typically email addresses",
+													},
+													tos_uri: {
+														type: "string",
+														description: "Client's terms of service uri",
+													},
+													policy_uri: {
+														type: "string",
+														description: "Client's policy uri",
+													},
+													software_id: {
+														type: "string",
+														description:
+															"Unique identifier assigned by the developer to help in the dynamic registration process",
+													},
+													software_version: {
+														type: "string",
+														description:
+															"Version identifier for the software_id",
+													},
+													software_statement: {
+														type: "string",
+														description:
+															"JWT containing metadata values about the client software as claims",
+													},
+													redirect_uris: {
+														type: "array",
+														items: {
+															type: "string",
+															format: "uri",
+														},
+														description: "List of allowed redirect uris",
+													},
+													token_endpoint_auth_method: {
+														type: "string",
+														description:
+															"Requested authentication method for the token endpoint",
+														enum: [
+															"none",
+															"client_secret_basic",
+															"client_secret_post",
+														],
+													},
+													grant_types: {
+														type: "string",
+														description:
+															"Requested authentication method for the token endpoint",
+														nullable: true,
+														enum: [
+															"authorization_code",
+															"client_credentials",
+															"refresh_token",
+														],
+													},
+													response_types: {
+														type: "string",
+														description:
+															"Requested authentication method for the token endpoint",
+														nullable: true,
+														enum: ["code", "token"],
+													},
+													public: {
+														type: "boolean",
+														description:
+															"Whether the client is public as determined by the type",
+														enum: [false],
 													},
 													type: {
 														type: "string",
 														description: "Type of the client",
-														enum: ["web"],
-													},
-													authenticationScheme: {
-														type: "string",
-														description:
-															"Authentication scheme used by the client",
-														enum: ["client_secret"],
+														enum: ["web", "native", "user-agent-based"],
 													},
 													disabled: {
 														type: "boolean",
 														description: "Whether the client is disabled",
 														enum: [false],
 													},
-													userId: {
-														type: "string",
-														nullable: true,
-														description:
-															"ID of the user who registered the client, null if registered anonymously",
-													},
-													createdAt: {
-														type: "string",
-														format: "date-time",
-														description: "Creation timestamp",
-													},
-													updatedAt: {
-														type: "string",
-														format: "date-time",
-														description: "Last update timestamp",
-													},
+													// metadata: {
+													// 	type: "object",
+													// 	additionalProperties: true,
+													// 	nullable: true,
+													// 	description:
+													// 		"Additional metadata for the application",
+													// },
 												},
-												required: [
-													"name",
-													"clientId",
-													"clientSecret",
-													"redirectURLs",
-													"type",
-													"authenticationScheme",
-													"disabled",
-													"createdAt",
-													"updatedAt",
-												],
+												required: ["clientId"],
 											},
 										},
 									},
@@ -1233,124 +1203,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const body = ctx.body;
-					const session = await getSessionFromCtx(ctx);
-
-					// Check authorization
-					if (!session && !options.allowDynamicClientRegistration) {
-						throw new APIError("UNAUTHORIZED", {
-							error: "invalid_token",
-							error_description:
-								"Authentication required for client registration",
-						});
-					}
-
-					// Validate redirect URIs for redirect-based flows
-					if (
-						(!body.grant_types ||
-							body.grant_types.includes("authorization_code") ||
-							body.grant_types.includes("implicit")) &&
-						(!body.redirect_uris || body.redirect_uris.length === 0)
-					) {
-						throw new APIError("BAD_REQUEST", {
-							error: "invalid_redirect_uri",
-							error_description:
-								"Redirect URIs are required for authorization_code and implicit grant types",
-						});
-					}
-
-					// Validate correlation between grant_types and response_types
-					if (body.grant_types && body.response_types) {
-						if (
-							body.grant_types.includes("authorization_code") &&
-							!body.response_types.includes("code")
-						) {
-							throw new APIError("BAD_REQUEST", {
-								error: "invalid_client_metadata",
-								error_description:
-									"When 'authorization_code' grant type is used, 'code' response type must be included",
-							});
-						}
-						if (
-							body.grant_types.includes("implicit") &&
-							!body.response_types.includes("token")
-						) {
-							throw new APIError("BAD_REQUEST", {
-								error: "invalid_client_metadata",
-								error_description:
-									"When 'implicit' grant type is used, 'token' response type must be included",
-							});
-						}
-					}
-
-					const clientId =
-						options.generateClientId?.() ||
-						generateRandomString(32, "a-z", "A-Z");
-					const clientSecret =
-						options.generateClientSecret?.() ||
-						generateRandomString(32, "a-z", "A-Z");
-
-					const storedClientSecret = await storeClientSecret(ctx, clientSecret);
-
-					// Create the client with the existing schema
-					const client: Client = await ctx.context.adapter.create({
-						model: modelName.oauthClient,
-						data: {
-							name: body.client_name,
-							icon: body.logo_uri,
-							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
-							clientId: clientId,
-							clientSecret: storedClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
-							type: "web",
-							authenticationScheme:
-								body.token_endpoint_auth_method || "client_secret_basic",
-							disabled: false,
-							userId: session?.session.userId,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-					});
-
-					// Format the response according to RFC7591
-					return ctx.json(
-						{
-							client_id: clientId,
-							...(client.type !== "public"
-								? {
-										client_secret: clientSecret,
-										client_secret_expires_at: 0, // 0 means it doesn't expire
-									}
-								: {}),
-							client_id_issued_at: Math.floor(Date.now() / 1000),
-							client_secret_expires_at: 0, // 0 means it doesn't expire
-							redirect_uris: body.redirect_uris,
-							token_endpoint_auth_method:
-								body.token_endpoint_auth_method || "client_secret_basic",
-							grant_types: body.grant_types || ["authorization_code"],
-							response_types: body.response_types || ["code"],
-							client_name: body.client_name,
-							client_uri: body.client_uri,
-							logo_uri: body.logo_uri,
-							scope: body.scope,
-							contacts: body.contacts,
-							tos_uri: body.tos_uri,
-							policy_uri: body.policy_uri,
-							jwks_uri: body.jwks_uri,
-							jwks: body.jwks,
-							software_id: body.software_id,
-							software_version: body.software_version,
-							software_statement: body.software_statement,
-							metadata: body.metadata,
-						},
-						{
-							status: 201,
-							headers: {
-								"Cache-Control": "no-store",
-								Pragma: "no-cache",
-							},
-						},
-					);
+					return registerEndpoint(ctx, opts);
 				},
 			),
 			getOAuthClient: createAuthEndpoint(
@@ -1393,11 +1246,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const client = await getClient(
-						ctx.params.id,
-						ctx.context.adapter,
-						trustedClients,
-					);
+					const client = await getClient(ctx, options, ctx.params.id);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {
 							error_description: "client not found",
@@ -1412,7 +1261,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				},
 			),
 		},
-		schema,
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";

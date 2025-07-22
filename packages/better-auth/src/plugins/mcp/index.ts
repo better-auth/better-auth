@@ -6,13 +6,13 @@ import {
 } from "..";
 import {
 	oidcProvider,
-	type Client,
+	type SchemaClient,
 	type CodeVerificationValue,
 	type OAuthAccessToken,
 	type OIDCMetadata,
 	type OIDCOptions,
 } from "../oidc-provider";
-import { APIError, getSessionFromCtx } from "../../api";
+import { APIError } from "../../api";
 import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
 import { createHash } from "@better-auth/utils/hash";
@@ -25,6 +25,7 @@ import { authorizeMCPOAuth } from "./authorize";
 import { getBaseURL } from "../../utils/url";
 import { isProduction } from "../../utils/env";
 import { logger } from "../../utils";
+import { registerEndpoint } from "../oidc-provider/register";
 
 interface MCPOptions {
 	loginPage: string;
@@ -100,11 +101,7 @@ export const mcp = (options: MCPOptions) => {
 			...(options.oidcConfig?.scopes || []),
 		],
 	};
-	const modelName = {
-		oauthClient: "oauthApplication",
-		oauthAccessToken: "oauthAccessToken",
-		oauthConsent: "oauthConsent",
-	};
+
 	const provider = oidcProvider(opts);
 	return {
 		id: "mcp",
@@ -328,7 +325,8 @@ export const mcp = (options: MCPOptions) => {
 							Date.now() + opts.refreshTokenExpiresIn * 1000,
 						);
 						await ctx.context.adapter.create({
-							model: modelName.oauthAccessToken,
+							model:
+								opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 							data: {
 								accessToken,
 								refreshToken: newRefreshToken,
@@ -417,7 +415,8 @@ export const mcp = (options: MCPOptions) => {
 
 					const client = await ctx.context.adapter
 						.findOne<Record<string, any>>({
-							model: modelName.oauthClient,
+							model:
+								opts.schema?.oauthApplication?.modelName ?? "oauthApplication",
 							where: [{ field: "clientId", value: client_id.toString() }],
 						})
 						.then((res) => {
@@ -426,9 +425,11 @@ export const mcp = (options: MCPOptions) => {
 							}
 							return {
 								...res,
-								redirectURLs: res.redirectURLs.split(","),
-								metadata: res.metadata ? JSON.parse(res.metadata) : {},
-							} as Client;
+								contacts: res.contacts?.split(",") ?? undefined,
+								grantTypes: res.grantTypes?.split(",") ?? undefined,
+								responseTypes: res.responseTypes?.split(",") ?? undefined,
+								redirectURLs: res?.redirectURLs?.split(",") ?? undefined,
+							} as SchemaClient;
 						});
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
@@ -443,7 +444,7 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 					// For public clients (type: 'public'), validate PKCE instead of client_secret
-					if (client.type === "public") {
+					if (client.public) {
 						// Public clients must use PKCE
 						if (!code_verifier) {
 							throw new APIError("BAD_REQUEST", {
@@ -520,7 +521,8 @@ export const mcp = (options: MCPOptions) => {
 						Date.now() + opts.refreshTokenExpiresIn * 1000,
 					);
 					await ctx.context.adapter.create({
-						model: modelName.oauthAccessToken,
+						model:
+							opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 						data: {
 							accessToken,
 							refreshToken,
@@ -616,42 +618,80 @@ export const mcp = (options: MCPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						redirect_uris: z.array(z.string()),
+						client_secret_expires_at: z.number().default(0).optional(),
+						scope: z.string().optional().meta({
+							description:
+								'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
+						}),
+						client_name: z.string().optional().meta({
+							description: 'The name of the application. Eg: "My App"',
+						}),
+						client_uri: z.string().optional().meta({
+							description:
+								'The URI of the application. Eg: "https://client.example.com"',
+						}),
+						logo_uri: z.string().optional().meta({
+							description:
+								'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
+						}),
+						contacts: z.array(z.string()).optional().meta({
+							description:
+								'The contact information for the application. Eg: ["admin@example.com"]',
+						}),
+						tos_uri: z.string().optional().meta({
+							description:
+								'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
+						}),
+						policy_uri: z.string().optional().meta({
+							description:
+								'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
+						}),
+						software_id: z.string().optional().meta({
+							description:
+								'The software ID of the application. Eg: "my-software"',
+						}),
+						software_version: z.string().optional().meta({
+							description:
+								'The software version of the application. Eg: "1.0.0"',
+						}),
+						software_statement: z.string().optional().meta({
+							description: "The software statement of the application.",
+						}),
+						redirect_uris: z.array(z.string()).optional().meta({
+							description:
+								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+						}),
 						token_endpoint_auth_method: z
 							.enum(["none", "client_secret_basic", "client_secret_post"])
 							.default("client_secret_basic")
-							.optional(),
+							.optional()
+							.meta({
+								description:
+									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
+							}),
 						grant_types: z
 							.array(
 								z.enum([
 									"authorization_code",
-									"implicit",
-									"password",
 									"client_credentials",
 									"refresh_token",
-									"urn:ietf:params:oauth:grant-type:jwt-bearer",
-									"urn:ietf:params:oauth:grant-type:saml2-bearer",
 								]),
 							)
 							.default(["authorization_code"])
-							.optional(),
+							.optional()
+							.meta({
+								description:
+									'The grant types supported by the application. Eg: ["authorization_code"]',
+							}),
 						response_types: z
 							.array(z.enum(["code", "token"]))
 							.default(["code"])
-							.optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						scope: z.string().optional(),
-						contacts: z.array(z.string()).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						jwks_uri: z.string().optional(),
-						jwks: z.record(z.string(), z.any()).optional(),
-						metadata: z.record(z.any(), z.any()).optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
+							.optional()
+							.meta({
+								description:
+									'The response types supported by the application. Eg: ["code"]',
+							}),
+						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -746,118 +786,7 @@ export const mcp = (options: MCPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const body = ctx.body;
-					const session = await getSessionFromCtx(ctx);
-					ctx.setHeader("Access-Control-Allow-Origin", "*");
-					ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-					ctx.setHeader(
-						"Access-Control-Allow-Headers",
-						"Content-Type, Authorization",
-					);
-					ctx.setHeader("Access-Control-Max-Age", "86400");
-					ctx.headers?.set("Access-Control-Max-Age", "86400");
-					if (
-						(!body.grant_types ||
-							body.grant_types.includes("authorization_code") ||
-							body.grant_types.includes("implicit")) &&
-						(!body.redirect_uris || body.redirect_uris.length === 0)
-					) {
-						throw new APIError("BAD_REQUEST", {
-							error: "invalid_redirect_uri",
-							error_description:
-								"Redirect URIs are required for authorization_code and implicit grant types",
-						});
-					}
-
-					if (body.grant_types && body.response_types) {
-						if (
-							body.grant_types.includes("authorization_code") &&
-							!body.response_types.includes("code")
-						) {
-							throw new APIError("BAD_REQUEST", {
-								error: "invalid_client_metadata",
-								error_description:
-									"When 'authorization_code' grant type is used, 'code' response type must be included",
-							});
-						}
-						if (
-							body.grant_types.includes("implicit") &&
-							!body.response_types.includes("token")
-						) {
-							throw new APIError("BAD_REQUEST", {
-								error: "invalid_client_metadata",
-								error_description:
-									"When 'implicit' grant type is used, 'token' response type must be included",
-							});
-						}
-					}
-
-					const clientId =
-						opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
-					const clientSecret =
-						opts.generateClientSecret?.() ||
-						generateRandomString(32, "a-z", "A-Z");
-
-					// Determine client type based on auth method
-					const clientType =
-						body.token_endpoint_auth_method === "none" ? "public" : "web";
-					const finalClientSecret = clientType === "public" ? "" : clientSecret;
-
-					await ctx.context.adapter.create({
-						model: modelName.oauthClient,
-						data: {
-							name: body.client_name,
-							icon: body.logo_uri,
-							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
-							clientId: clientId,
-							clientSecret: finalClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
-							type: clientType,
-							authenticationScheme:
-								body.token_endpoint_auth_method || "client_secret_basic",
-							disabled: false,
-							userId: session?.session.userId,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-					});
-
-					const responseData = {
-						client_id: clientId,
-						client_id_issued_at: Math.floor(Date.now() / 1000),
-						redirect_uris: body.redirect_uris,
-						token_endpoint_auth_method:
-							body.token_endpoint_auth_method || "client_secret_basic",
-						grant_types: body.grant_types || ["authorization_code"],
-						response_types: body.response_types || ["code"],
-						client_name: body.client_name,
-						client_uri: body.client_uri,
-						logo_uri: body.logo_uri,
-						scope: body.scope,
-						contacts: body.contacts,
-						tos_uri: body.tos_uri,
-						policy_uri: body.policy_uri,
-						jwks_uri: body.jwks_uri,
-						jwks: body.jwks,
-						software_id: body.software_id,
-						software_version: body.software_version,
-						software_statement: body.software_statement,
-						metadata: body.metadata,
-						...(clientType !== "public"
-							? {
-									client_secret: finalClientSecret,
-									client_secret_expires_at: 0, // 0 means it doesn't expire
-								}
-							: {}),
-					};
-
-					return ctx.json(responseData, {
-						status: 201,
-						headers: {
-							"Cache-Control": "no-store",
-							Pragma: "no-cache",
-						},
-					});
+					return registerEndpoint(ctx, opts);
 				},
 			),
 			getMcpSession: createAuthEndpoint(
@@ -876,7 +805,8 @@ export const mcp = (options: MCPOptions) => {
 					}
 					const accessTokenData =
 						await c.context.adapter.findOne<OAuthAccessToken>({
-							model: modelName.oauthAccessToken,
+							model:
+								opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 							where: [
 								{
 									field: "accessToken",

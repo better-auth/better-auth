@@ -1,6 +1,24 @@
+import type { GrantType } from "../../oauth2.1/types";
 import type { User } from "../../types";
 
 export interface OIDCOptions {
+	/**
+	 * schema for the oidc plugin
+	 */
+	schema?: {
+		oauthApplication?: {
+			/** @default "oauthApplication" */
+			modelName?: string;
+		};
+		oauthAccessToken?: {
+			/** @default "oauthAccessToken" */
+			modelName?: string;
+		};
+		oauthConsent?: {
+			/** @default "oauthConsent" */
+			modelName?: string;
+		};
+	};
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *
@@ -9,8 +27,35 @@ export interface OIDCOptions {
 	accessTokenExpiresIn?: number;
 	/**
 	 * Allow dynamic client registration.
+	 *
+	 * @default false
+	 */
+	allowUnauthenticatedClientRegistration?: boolean;
+	/**
+	 * Allow dynamic client registration.
+	 *
+	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
+	/**
+	 * List of scopes for newly registered clients
+	 * if not requested.
+	 *
+	 * @default undefined
+	 */
+	clientRegistrationDefaultScopes?: string[];
+	/**
+	 * List of scopes for allowed clients in addition to
+	 * those listed in the default scope. Finalized allowed list is
+	 * the union of the default scopes and this list.
+	 *
+	 * If both clientRegistrationDefaultScopes and this
+	 * are undefined, only scopes listed in the scopes option
+	 * are allowed.
+	 *
+	 * @default - clientRegistrationDefaultScopes
+	 */
+	clientRegistrationAllowedScopes?: string[];
 	/**
 	 * The metadata for the OpenID Connect provider.
 	 */
@@ -125,7 +170,7 @@ export interface OIDCOptions {
 	 * Trusted clients that are configured directly in the provider options.
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
-	trustedClients?: Client[];
+	trustedClients?: (SchemaClient & { skipConsent?: boolean })[];
 	/**
 	 * Store the client secret in your database in a secure way
 	 * Note: This will not affect the client secret sent to the user, it will only affect the client secret stored in your database
@@ -262,67 +307,6 @@ export interface AuthorizationQuery {
 	 * with the Claim Value being the nonce value sent in the Authentication Request.
 	 */
 	nonce?: string;
-}
-
-export interface Client {
-	/**
-	 * Client ID
-	 *
-	 * size 32
-	 *
-	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.2
-	 */
-	clientId: string;
-	/**
-	 * Client Secret
-	 *
-	 * A secret for the client, if required by the authorization server.
-	 * Optional for public clients using PKCE.
-	 *
-	 * size 32
-	 */
-	clientSecret?: string;
-	/**
-	 * The client type
-	 *
-	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * - web - A web application
-	 * - native - A mobile application
-	 * - user-agent-based - A user-agent-based application
-	 * - public - A public client (PKCE-enabled, no client_secret)
-	 */
-	type: "web" | "native" | "user-agent-based" | "public";
-	/**
-	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
-	 * and path.
-	 *
-	 * For example, `https://example.com/auth/callback`
-	 */
-	redirectURLs: string[];
-	/**
-	 * The name of the client.
-	 */
-	name: string;
-	/**
-	 * The icon of the client.
-	 */
-	icon?: string;
-	/**
-	 * Additional metadata about the client.
-	 */
-	metadata: {
-		[key: string]: any;
-	} | null;
-	/**
-	 * Whether the client is disabled or not.
-	 */
-	disabled: boolean;
-	/**
-	 * Whether to skip the consent screen for this client.
-	 * Only applies to trusted clients.
-	 */
-	skipConsent?: boolean;
 }
 
 export interface TokenBody {
@@ -560,4 +544,145 @@ export interface OIDCMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: ["S256"];
+}
+
+/**
+ * Client registered values as stored on the database
+ */
+export interface SchemaClient {
+	//---- Required ----//
+	/**
+	 * Client ID
+	 *
+	 * size 32
+	 *
+	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.2
+	 */
+	clientId: string;
+	/**
+	 * Client Secret
+	 *
+	 * A secret for the client, if required by the authorization server.
+	 *
+	 * size 32
+	 */
+	clientSecret?: string;
+	/** Whether the client is disabled or not. */
+	disabled?: boolean;
+	/**
+	 * Restricts scopes allowed for the client.
+	 *
+	 * If not defined, any scope can be requested.
+	 */
+	allowedScopes?: string[];
+	//---- Recommended client data ----//
+	userId?: string;
+	/** Created time */
+	createdAt?: Date;
+	/** Last updated time */
+	updatedAt?: Date;
+	/** Expires time */
+	expiresAt?: Date;
+	//---- UI Metadata ----//
+	/** The name of the client. */
+	name?: string;
+	/** Linkable uri of the client. */
+	uri?: string;
+	/** The icon of the client. */
+	icon?: string;
+	/** List of contacts for the client. */
+	contacts?: string[];
+	/** Client Terms of Service Uri */
+	tos?: string;
+	/** Client Privacy Policy Uri */
+	policy?: string;
+	//---- User Software Identifiers ----//
+	softwareId?: string;
+	softwareVersion?: string;
+	softwareStatement?: string;
+	//---- Authentication Metadata ----//
+	/**
+	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
+	 * and path.
+	 *
+	 * For example, `https://example.com/auth/callback`
+	 */
+	redirectURLs?: string[];
+	tokenEndpointAuthMethod?:
+		| "none"
+		| "client_secret_basic"
+		| "client_secret_post";
+	grantTypes?: GrantType[];
+	responseTypes?: ("code" | "token")[];
+	//---- RFC6749 Spec ----//
+	/**
+	 * Indicates whether the client is public or confidential.
+	 * If public, refreshing tokens doesn't require
+	 * a client_secret. Clients are considered confidential by default.
+	 *
+	 * Uses `token_endpoint_auth_method` field or `type` field to determine
+	 *
+	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
+	 *
+	 * @default undefined
+	 */
+	public?: boolean;
+	/**
+	 * The client type
+	 *
+	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
+	 *
+	 * - web - A web application (confidential client)
+	 * - native - A mobile application (public client)
+	 * - user-agent-based - A user-agent-based application (public client)
+	 */
+	type?: "web" | "native" | "user-agent-based";
+	//---- All other metadata ----//
+	/**
+	 * Additional metadata about the client.
+	 */
+	metadata?: string; // in JSON format
+}
+
+/**
+ * OAuth 2.0 Dynamic Client Registration Schema
+ * https://datatracker.ietf.org/doc/html/rfc7591#section-2
+ */
+export interface OauthClient {
+	client_id: string;
+	client_secret?: string;
+	client_secret_expires_at?: number;
+	scope?: string;
+	//---- Recommended client data ----//
+	user_id?: string;
+	client_id_issued_at?: number;
+	//---- UI Metadata ----//
+	client_name?: string;
+	client_uri?: string;
+	logo_uri?: string;
+	contacts?: string[];
+	tos_uri?: string;
+	policy_uri?: string;
+	//---- Jwks (only one can be used) ----//
+	jwks?: string[];
+	jwks_uri?: string;
+	//---- User Software Identifiers ----//
+	software_id?: string;
+	software_version?: string;
+	software_statement?: string;
+	//---- Authentication Metadata ----//
+	redirect_uris?: string[];
+	token_endpoint_auth_method?:
+		| "none"
+		| "client_secret_basic"
+		| "client_secret_post";
+	grant_types?: GrantType[];
+	response_types?: ("code" | "token")[];
+	//---- RFC6749 Spec ----//
+	public?: boolean;
+	type?: "web" | "native" | "user-agent-based";
+	//---- Not Part of RFC7591 Spec ----//
+	disabled?: boolean;
+	//---- All other metadata ----//
+	[key: string]: any;
 }

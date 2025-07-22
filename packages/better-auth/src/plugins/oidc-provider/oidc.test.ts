@@ -9,8 +9,8 @@ import {
 } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oidcProvider } from ".";
-import { genericOAuth } from "../generic-oauth";
-import type { Client } from "./types";
+import { genericOAuth, type GenericOAuthConfig } from "../generic-oauth";
+import type { OauthClient } from "./types";
 import { createAuthClient } from "../../client";
 import { oidcClient } from "./client";
 import { genericOAuthClient } from "../generic-oauth/client";
@@ -20,26 +20,25 @@ import { jwt } from "../jwt";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 
 describe("oidc", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
 		customFetchImpl,
 		testUser,
 	} = await getTestInstance({
-		baseURL: "http://localhost:3000",
+		baseURL: authServerBaseUrl,
 		plugins: [
+			jwt({
+				usesOauthProvider: true,
+			}),
 			oidcProvider({
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
-				requirePKCE: true,
-				getAdditionalUserInfoClaim(user, scopes) {
-					return {
-						custom: "custom value",
-						userId: user.id,
-					};
-				},
+				allowDynamicClientRegistration: true,
 			}),
-			jwt(),
 		],
 	});
 	const { headers } = await signInWithTestUser();
@@ -53,187 +52,228 @@ describe("oidc", async () => {
 	});
 
 	let server: Listener;
+	let application: OauthClient | null;
 
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	// Registers a confidential client application to work with
 	beforeAll(async () => {
+		// Opens the authorization server for testing with genericOAuth
 		server = await listen(toNodeHandler(authorizationServer.handler), {
 			port: 3000,
 		});
+
+		// This test is performed in register.test.ts
+		const _application: Partial<OauthClient> = {
+			redirect_uris: [redirectUri],
+		};
+		const response = await serverClient.$fetch<OauthClient>(
+			"/oauth2/register",
+			{
+				method: "POST",
+				body: _application,
+			},
+		);
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.user_id).toBeDefined();
+		expect(response.data?.client_secret).toBeDefined();
+		expect(response.data?.redirect_uris).toEqual(_application.redirect_uris);
+
+		application = response.data;
 	});
 
 	afterAll(async () => {
 		await server.close();
 	});
 
-	let application: Client = {
-		clientId: "test-client-id",
-		clientSecret: "test-client-secret-oidc",
-		redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-		metadata: {},
-		icon: "",
-		type: "web",
-		disabled: false,
-		name: "test",
-	};
-
-	it("should create oidc client", async ({ expect }) => {
-		const createdClient = await serverClient.oauth2.register({
-			client_name: application.name,
-			redirect_uris: application.redirectURLs,
-			logo_uri: application.icon,
-		});
-		expect(createdClient.data).toMatchObject({
-			client_id: expect.any(String),
-			client_secret: expect.any(String),
-			client_name: "test",
-			logo_uri: "",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-			grant_types: ["authorization_code"],
-			response_types: ["code"],
-			token_endpoint_auth_method: "client_secret_basic",
-			client_id_issued_at: expect.any(Number),
-			client_secret_expires_at: 0,
-		});
-		if (createdClient.data) {
-			application = {
-				clientId: createdClient.data.client_id,
-				clientSecret: createdClient.data.client_secret,
-				redirectURLs: createdClient.data.redirect_uris,
-				metadata: {},
-				icon: createdClient.data.logo_uri || "",
-				type: "web",
-				disabled: false,
-				name: createdClient.data.client_name || "",
-			};
+	async function createTestInstance(
+		config?: Omit<
+			GenericOAuthConfig,
+			"providerId" | "clientId" | "clientSecret"
+		>,
+	) {
+		if (!application?.client_id || !application?.client_secret) {
+			throw Error("beforeAll not run properly");
 		}
-	});
-
-	it("should sign in the user with the provider", async ({ expect }) => {
-		// The RP (Relying Party) - the client application
-		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
+		return await getTestInstance({
+			// Used to trust callbackUrl in test
 			account: {
 				accountLinking: {
-					trustedProviders: ["test"],
+					trustedProviders: [providerId],
 				},
 			},
 			plugins: [
 				genericOAuth({
 					config: [
 						{
-							providerId: "test",
-							clientId: application.clientId,
-							clientSecret: application.clientSecret || "",
-							authorizationUrl:
-								"http://localhost:3000/api/auth/oauth2/authorize",
-							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
 							scopes: ["openid", "profile", "email"],
+							...config,
+							providerId,
+							redirectURI: redirectUri,
+							authorizationUrl: config?.discoveryUrl
+								? undefined
+								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+							tokenUrl: config?.discoveryUrl
+								? undefined
+								: `${authServerBaseUrl}/api/auth/oauth2/token`,
+							clientId: application.client_id,
+							clientSecret: application.client_secret,
 							pkce: true,
 						},
 					],
 				}),
 			],
 		});
+	}
+
+	// Tests if it is oauth2 compatible
+	it("should sign in using generic oauth plugin", async ({ expect }) => {
+		if (!application?.client_id || !application?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
-			baseURL: "http://localhost:5000",
+			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const data = await client.signIn.oauth2(
 			{
-				providerId: "test",
-				callbackURL: "/dashboard",
+				providerId,
+				callbackURL: "/success",
 			},
 			{
 				throw: true,
 			},
 		);
 		expect(data.url).toContain(
-			"http://localhost:3000/api/auth/oauth2/authorize",
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
-		expect(data.url).toContain(`client_id=${application.clientId}`);
+		expect(data.url).toContain(`client_id=${application.client_id}`);
 
-		let redirectURI = "";
+		let redirectUri = "";
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
-				redirectURI = context.response.headers.get("Location") || "";
+				redirectUri = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-		);
+		expect(redirectUri).toContain(redirectUri);
+		expect(redirectUri).toContain("code=");
 
 		let callbackURL = "";
-		await client.$fetch(redirectURI, {
+		await client.$fetch(redirectUri, {
+			method: "GET",
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).toContain("/success");
 	});
 
-	it("should sign in after a consent flow", async ({ expect }) => {
-		// The RP (Relying Party) - the client application
-		const { customFetchImpl: customFetchImplRP, cookieSetter } =
-			await getTestInstance({
-				account: {
-					accountLinking: {
-						trustedProviders: ["test"],
-					},
-				},
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "test",
-								clientId: application.clientId,
-								clientSecret: application.clientSecret || "",
-								authorizationUrl:
-									"http://localhost:3000/api/auth/oauth2/authorize",
-								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-								scopes: ["openid", "profile", "email"],
-								prompt: "consent",
-								pkce: true,
-							},
-						],
-					}),
-				],
-			});
+	it("should sign in using generic oauth discovery", async ({ expect }) => {
+		if (!application?.client_id || !application?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		// The RP (Relying Party) - the client
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
+			discoveryUrl: `${authServerBaseUrl}/api/auth/.well-known/openid-configuration`,
+		});
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
-			baseURL: "http://localhost:5000",
+			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const data = await client.signIn.oauth2(
 			{
-				providerId: "test",
-				callbackURL: "/dashboard",
+				providerId,
+				callbackURL: "/success",
 			},
 			{
 				throw: true,
 			},
 		);
 		expect(data.url).toContain(
-			"http://localhost:3000/api/auth/oauth2/authorize",
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
-		expect(data.url).toContain(`client_id=${application.clientId}`);
+		expect(data.url).toContain(`client_id=${application.client_id}`);
 
-		let redirectURI = "";
+		let redirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectUri = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(redirectUri).toContain(redirectUri);
+		expect(redirectUri).toContain("code=");
+
+		let callbackURL = "";
+		await client.$fetch(redirectUri, {
+			method: "GET",
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackURL).toContain("/success");
+	});
+
+	it("should sign in after a consent flow", async ({ expect }) => {
+		if (!application?.client_id || !application?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				prompt: "consent",
+			});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${application.client_id}`);
+
+		let consentRedirectUri = "";
 		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
-				redirectURI = context.response.headers.get("Location") || "";
+				consentRedirectUri = context.response.headers.get("Location") || "";
 				cookieSetter(newHeaders)(context);
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
-		expect(redirectURI).toContain("/oauth2/authorize?client_id=");
+		expect(consentRedirectUri).toContain(`/oauth2/authorize`);
+		expect(consentRedirectUri).toContain(`client_id=${application.client_id}`);
+		expect(consentRedirectUri).toContain(`scope=`);
+
+		// Give consent and obtain redirect callback
 		const res = await serverClient.oauth2.consent(
 			{
 				accept: true,
@@ -243,80 +283,71 @@ describe("oidc", async () => {
 				throw: true,
 			},
 		);
-		expect(res.redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-		);
+		expect(res.redirectURI).toContain(redirectUri);
+		expect(res.redirectURI).toContain(`code=`);
 
 		let callbackURL = "";
 		await client.$fetch(res.redirectURI, {
+			method: "GET",
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).toContain("/success");
 	});
 
-	it("should sign in after a login flow", async ({ expect }) => {
-		// The RP (Relying Party) - the client application
+	// NOTE: Previous test must be successful since consent for user was given in the previous test
+	it("should sign in after a login flow (consent given in previous test)", async ({
+		expect,
+	}) => {
+		if (!application?.client_id || !application?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
-			await getTestInstance({
-				account: {
-					accountLinking: {
-						trustedProviders: ["test"],
-					},
-				},
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "test",
-								clientId: application.clientId,
-								clientSecret: application.clientSecret || "",
-								authorizationUrl:
-									"http://localhost:3000/api/auth/oauth2/authorize",
-								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-								scopes: ["openid", "profile", "email"],
-								prompt: "login",
-								pkce: true,
-							},
-						],
-					}),
-				],
+			await createTestInstance({
+				prompt: "login",
 			});
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
-			baseURL: "http://localhost:5000",
+			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const data = await client.signIn.oauth2(
 			{
-				providerId: "test",
-				callbackURL: "/dashboard",
+				providerId,
+				callbackURL: "/success",
 			},
 			{
 				throw: true,
 			},
 		);
 		expect(data.url).toContain(
-			"http://localhost:3000/api/auth/oauth2/authorize",
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
-		expect(data.url).toContain(`client_id=${application.clientId}`);
+		expect(data.url).toContain(`client_id=${application.client_id}`);
 
-		let redirectURI = "";
+		let loginRedirectURI = "";
 		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
-				redirectURI = context.response.headers.get("Location") || "";
+				loginRedirectURI = context.response.headers.get("Location") || "";
 				cookieSetter(newHeaders)(context);
 			},
 			headers: newHeaders,
 		});
-		expect(redirectURI).toContain("/login");
+		expect(loginRedirectURI).toContain("/login");
+		expect(loginRedirectURI).toContain(`prompt=login`);
+		expect(loginRedirectURI).toContain(`client_id=${application.client_id}`);
+		expect(loginRedirectURI).toContain(
+			`redirect_uri=${encodeURIComponent(application?.redirect_uris?.at(0)!)}`,
+		);
 
+		let redirectUri = "";
 		await serverClient.signIn.email(
 			{
 				email: testUser.email,
@@ -325,26 +356,30 @@ describe("oidc", async () => {
 			{
 				headers: newHeaders,
 				onError(context) {
-					redirectURI = context.response.headers.get("Location") || "";
+					redirectUri = context.response.headers.get("Location") || "";
 					cookieSetter(newHeaders)(context);
 				},
 			},
 		);
+		expect(redirectUri).toContain(redirectUri);
+		expect(redirectUri).toContain("code=");
 
-		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-		);
 		let callbackURL = "";
-		await client.$fetch(redirectURI, {
+		await client.$fetch(redirectUri, {
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).toContain("/success");
 	});
 });
 
 describe("oidc storage", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
 	test.each([
 		{
 			storeClientSecret: undefined,
@@ -355,18 +390,22 @@ describe("oidc storage", async () => {
 		{
 			storeClientSecret: "encrypted" as const,
 		},
-	])("OIDC base test", async ({ storeClientSecret }) => {
+	])("Client stored $storeClientSecret", async ({ storeClientSecret }) => {
 		const {
 			auth: authorizationServer,
 			signInWithTestUser,
 			customFetchImpl,
 			testUser,
 		} = await getTestInstance({
-			baseURL: "http://localhost:3000",
+			baseURL: authServerBaseUrl,
 			plugins: [
+				jwt({
+					usesOauthProvider: true,
+				}),
 				oidcProvider({
 					loginPage: "/login",
 					consentPage: "/oauth2/authorize",
+					allowDynamicClientRegistration: true,
 					requirePKCE: true,
 					getAdditionalUserInfoClaim(user, scopes) {
 						return {
@@ -376,79 +415,57 @@ describe("oidc storage", async () => {
 					},
 					storeClientSecret,
 				}),
-				jwt(),
 			],
 		});
 		const { headers } = await signInWithTestUser();
 		const serverClient = createAuthClient({
 			plugins: [oidcClient()],
-			baseURL: "http://localhost:3000",
+			baseURL: authServerBaseUrl,
 			fetchOptions: {
 				customFetchImpl,
 				headers,
 			},
 		});
 
-		let server = await listen(toNodeHandler(authorizationServer.handler), {
+		const server = await listen(toNodeHandler(authorizationServer.handler), {
 			port: 3000,
 		});
 
-		let application: Client = {
-			clientId: "test-client-id",
-			clientSecret: "test-client-secret-oidc",
-			redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-			metadata: {},
-			icon: "",
-			type: "web",
-			disabled: false,
-			name: "test",
-		};
+		let application: OauthClient | null;
 		const createdClient = await serverClient.oauth2.register({
-			client_name: application.name,
-			redirect_uris: application.redirectURLs,
-			logo_uri: application.icon,
+			client_name: "test-client",
+			redirect_uris: [redirectUri],
 		});
 		expect(createdClient.data).toMatchObject({
 			client_id: expect.any(String),
 			client_secret: expect.any(String),
-			client_name: "test",
-			logo_uri: "",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-			grant_types: ["authorization_code"],
-			response_types: ["code"],
-			token_endpoint_auth_method: "client_secret_basic",
+			client_name: "test-client",
+			redirect_uris: [redirectUri],
 			client_id_issued_at: expect.any(Number),
 			client_secret_expires_at: 0,
 		});
-		if (createdClient.data) {
-			application = {
-				clientId: createdClient.data.client_id,
-				clientSecret: createdClient.data.client_secret,
-				redirectURLs: createdClient.data.redirect_uris,
-				metadata: {},
-				icon: createdClient.data.logo_uri || "",
-				type: "web",
-				disabled: false,
-				name: createdClient.data.client_name || "",
-			};
+		application = createdClient.data;
+		if (!application?.client_id || !application?.client_secret) {
+			throw Error("createdClient not created as intended");
 		}
+
 		// The RP (Relying Party) - the client application
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
 				accountLinking: {
-					trustedProviders: ["test"],
+					trustedProviders: [providerId],
 				},
 			},
 			plugins: [
 				genericOAuth({
 					config: [
 						{
-							providerId: "test",
-							clientId: application.clientId,
-							clientSecret: application.clientSecret || "",
-							authorizationUrl:
-								"http://localhost:3000/api/auth/oauth2/authorize",
-							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+							providerId,
+							redirectURI: redirectUri,
+							clientId: application.client_id,
+							clientSecret: application.client_secret,
+							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+							tokenUrl: `${authServerBaseUrl}/api/auth/oauth2/token`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 						},
@@ -459,24 +476,24 @@ describe("oidc storage", async () => {
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
-			baseURL: "http://localhost:5000",
+			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const data = await client.signIn.oauth2(
 			{
-				providerId: "test",
-				callbackURL: "/dashboard",
+				providerId,
+				callbackURL: "/success",
 			},
 			{
 				throw: true,
 			},
 		);
 		expect(data.url).toContain(
-			"http://localhost:3000/api/auth/oauth2/authorize",
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
-		expect(data.url).toContain(`client_id=${application.clientId}`);
+		expect(data.url).toContain(`client_id=${application.client_id}`);
 
 		let redirectURI = "";
 		await serverClient.$fetch(data.url, {
@@ -486,7 +503,7 @@ describe("oidc storage", async () => {
 			},
 		});
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+			`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}?code=`,
 		);
 
 		let callbackURL = "";
@@ -495,7 +512,7 @@ describe("oidc storage", async () => {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).toContain("/success");
 
 		afterEach(async () => {
 			await server.close();
@@ -504,106 +521,90 @@ describe("oidc storage", async () => {
 });
 
 describe("oidc-jwt", async () => {
-	let server: Listener | null = null;
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
 	test.each([
 		{ useJwt: true, description: "with jwt plugin", expected: "EdDSA" },
 		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
 	])(
 		"testing oidc-provider $description to return token signed with $expected",
-		async ({ useJwt, description, expected }) => {
+		async ({ useJwt, expected }) => {
 			const {
 				auth: authorizationServer,
 				signInWithTestUser,
 				customFetchImpl,
 				testUser,
 			} = await getTestInstance({
-				baseURL: "http://localhost:3000",
+				baseURL: authServerBaseUrl,
 				plugins: [
 					oidcProvider({
 						loginPage: "/login",
 						consentPage: "/oauth2/authorize",
+						allowDynamicClientRegistration: true,
 						requirePKCE: true,
-						getAdditionalUserInfoClaim(user, scopes) {
-							return {
-								custom: "custom value",
-								userId: user.id,
-							};
-						},
 						useJWTPlugin: useJwt,
 					}),
-					...(useJwt ? [jwt()] : []),
+					...(useJwt
+						? [
+								jwt({
+									usesOauthProvider: true,
+								}),
+							]
+						: []),
 				],
 			});
 			const { headers } = await signInWithTestUser();
 			const serverClient = createAuthClient({
 				plugins: [oidcClient()],
-				baseURL: "http://localhost:3000",
+				baseURL: authServerBaseUrl,
 				fetchOptions: {
 					customFetchImpl,
 					headers,
 				},
 			});
-			if (server) console.log("server is not null");
-			server = await listen(toNodeHandler(authorizationServer.handler), {
+
+			const server = await listen(toNodeHandler(authorizationServer.handler), {
 				port: 3000,
 			});
-			let application: Client = {
-				clientId: "test-client-id",
-				clientSecret: "test-client-secret-oidc",
-				redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-				metadata: {},
-				icon: "",
-				type: "web",
-				disabled: false,
-				name: "test",
-			};
+
+			let application: OauthClient | null;
 			const createdClient = await serverClient.oauth2.register({
-				client_name: application.name,
-				redirect_uris: application.redirectURLs,
-				logo_uri: application.icon,
+				client_name: "test-client",
+				redirect_uris: [redirectUri],
 			});
 			expect(createdClient.data).toMatchObject({
 				client_id: expect.any(String),
 				client_secret: expect.any(String),
-				client_name: "test",
-				logo_uri: "",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-				grant_types: ["authorization_code"],
-				response_types: ["code"],
-				token_endpoint_auth_method: "client_secret_basic",
+				client_name: "test-client",
+				redirect_uris: [redirectUri],
 				client_id_issued_at: expect.any(Number),
 				client_secret_expires_at: 0,
 			});
-			if (createdClient.data) {
-				application = {
-					clientId: createdClient.data.client_id,
-					clientSecret: createdClient.data.client_secret,
-					redirectURLs: createdClient.data.redirect_uris,
-					metadata: {},
-					icon: createdClient.data.logo_uri || "",
-					type: "web",
-					disabled: false,
-					name: createdClient.data.client_name || "",
-				};
+			application = createdClient.data;
+			if (!application?.client_id || !application?.client_secret) {
+				throw Error("createdClient not created as intended");
 			}
 
 			// The RP (Relying Party) - the client application
 			const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 				account: {
 					accountLinking: {
-						trustedProviders: ["test"],
+						trustedProviders: [providerId],
 					},
 				},
 				plugins: [
 					genericOAuth({
 						config: [
 							{
-								providerId: "test",
-								clientId: application.clientId,
-								clientSecret: application.clientSecret || "",
-								authorizationUrl:
-									"http://localhost:3000/api/auth/oauth2/authorize",
-								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								providerId,
+								redirectURI: redirectUri,
+								clientId: application.client_id,
+								clientSecret: application.client_secret,
+								authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+								tokenUrl: `${authServerBaseUrl}/api/auth/oauth2/token`,
 								scopes: ["openid", "profile", "email"],
 								pkce: true,
 							},
@@ -614,24 +615,24 @@ describe("oidc-jwt", async () => {
 
 			const client = createAuthClient({
 				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:5000",
+				baseURL: rpBaseUrl,
 				fetchOptions: {
 					customFetchImpl: customFetchImplRP,
 				},
 			});
 			const data = await client.signIn.oauth2(
 				{
-					providerId: "test",
-					callbackURL: "/dashboard",
+					providerId,
+					callbackURL: "/success",
 				},
 				{
 					throw: true,
 				},
 			);
 			expect(data.url).toContain(
-				"http://localhost:3000/api/auth/oauth2/authorize",
+				`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 			);
-			expect(data.url).toContain(`client_id=${application.clientId}`);
+			expect(data.url).toContain(`client_id=${application.client_id}`);
 
 			let redirectURI = "";
 			await serverClient.$fetch(data.url, {
@@ -641,7 +642,7 @@ describe("oidc-jwt", async () => {
 				},
 			});
 			expect(redirectURI).toContain(
-				"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+				`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}?code=`,
 			);
 			let authToken = undefined;
 			let callbackURL = "";
@@ -651,9 +652,10 @@ describe("oidc-jwt", async () => {
 					authToken = context.response.headers.get("set-auth-token")!;
 				},
 			});
-			expect(callbackURL).toContain("/dashboard");
+
+			expect(callbackURL).toContain("/success");
 			const accessToken = await client.getAccessToken(
-				{ providerId: "test", userId: testUser.id },
+				{ providerId, userId: testUser.id },
 				{
 					auth: {
 						type: "Bearer",
@@ -671,7 +673,7 @@ describe("oidc-jwt", async () => {
 				);
 				expect(checkSignature).toBeDefined();
 			} else {
-				const clientSecret = application.clientSecret;
+				const clientSecret = application.client_secret;
 				const checkSignature = await jwtVerify(
 					accessToken.data?.idToken!,
 					new TextEncoder().encode(clientSecret),
@@ -683,10 +685,7 @@ describe("oidc-jwt", async () => {
 			expect(decoded.alg).toBe(expected);
 
 			afterEach(async () => {
-				if (server) {
-					await server.close();
-					server = null;
-				}
+				await server.close();
 			});
 		},
 	);
