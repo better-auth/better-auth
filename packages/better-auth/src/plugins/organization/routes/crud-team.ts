@@ -439,12 +439,6 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 							description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
 						})
 						.optional(),
-					userId: z
-						.string()
-						.meta({
-							description: `The user ID which the teams are under to list. Defaults to the current active user. Provide this to skip session check.`,
-						})
-						.optional(),
 				}),
 			),
 			requireHeaders: true,
@@ -503,20 +497,12 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 					},
 				},
 			},
-			use: [orgMiddleware],
+			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = ctx.context.session;
 			const organizationId =
 				ctx.query?.organizationId || session?.session.activeOrganizationId;
-			let userId = session?.user.id;
-			if (!userId) {
-				if (ctx.query?.userId && !ctx.request) {
-					userId = ctx.query.userId;
-				} else {
-					throw ctx.error("UNAUTHORIZED");
-				}
-			}
 			if (!organizationId) {
 				throw ctx.error("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
@@ -524,7 +510,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
-				userId,
+				userId: session.user.id,
 				organizationId: organizationId || "",
 			});
 			if (!member) {
@@ -700,10 +686,6 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 						description:
 							"The organization whose members we should return. If this is not provided the members of the current active organization get returned.",
 					}),
-					userId: z.string().optional().meta({
-						description:
-							"The user whose teams we should return. If this is not provided the teams of the current active user get returned. Provide this to skip session check.",
-					}),
 				}),
 			),
 			metadata: {
@@ -750,20 +732,12 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
-			use: [orgMiddleware],
+			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = ctx.context.session;
 			let organizationId =
 				ctx.query?.organizationId || session?.session.activeOrganizationId;
-			let userId = session?.user.id;
-			if (!userId) {
-				if (ctx.query?.userId && !ctx.request) {
-					userId = ctx.query.userId;
-				} else {
-					throw ctx.error("UNAUTHORIZED");
-				}
-			}
 
 			if (!organizationId) {
 				throw ctx.error("BAD_REQUEST", {
@@ -779,7 +753,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			const member = await adapter.findTeamMember({
-				userId,
+				userId: session.user.id,
 				teamId,
 			});
 
