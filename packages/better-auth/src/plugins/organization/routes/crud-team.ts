@@ -682,10 +682,6 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 						description:
 							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
 					}),
-					organizationId: z.string().optional().meta({
-						description:
-							"The organization whose members we should return. If this is not provided the members of the current active organization get returned.",
-					}),
 				}),
 			),
 			metadata: {
@@ -736,15 +732,6 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			let organizationId =
-				ctx.query?.organizationId || session?.session.activeOrganizationId;
-
-			if (!organizationId) {
-				throw ctx.error("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
-			}
-
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			let teamId = ctx.query?.teamId || session?.session.activeTeamId;
 			if (!teamId) {
