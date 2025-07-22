@@ -77,10 +77,6 @@ export const sveltekitCookies = (
 							const event = getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
-							const routeId = event.route.id;
-							if (routeId) {
-								return;
-							}
 							for (const [name, { value, ...ops }] of parsed) {
 								event.cookies.set(name, decodeURIComponent(value), {
 									sameSite: ops.samesite,
