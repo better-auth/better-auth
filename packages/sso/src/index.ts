@@ -1348,17 +1348,36 @@ export const sso = (options?: SSOOptions) => {
 					});
 
 					if (existingUser) {
-						const accounts = await ctx.context.adapter.findMany<Account>({
+						const accounts = await ctx.context.adapter.findOne<Account>({
 							model: "account",
 							where: [
 								{ field: "userId", value: existingUser.id },
 								{ field: "providerId", value: provider.providerId },
+								{ field: "accountId", value: userInfo.id },
 							],
 						});
-						if (!accounts.length) {
-							throw ctx.redirect(
-								`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
-							);
+						if (!accounts) {
+							const isTrustedProvider =
+								ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
+									provider.providerId,
+								);
+							if (!isTrustedProvider) {
+								throw ctx.redirect(
+									`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
+								);
+							}
+							await ctx.context.adapter.create<Account>({
+								model: "account",
+								data: {
+									userId: existingUser.id,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+									accessToken: "",
+									refreshToken: "",
+								},
+							});
 						}
 						user = existingUser;
 					} else {
@@ -1371,17 +1390,19 @@ export const sso = (options?: SSOOptions) => {
 								updatedAt: new Date(),
 							},
 						});
-						await ctx.context.adapter.create({
+						await ctx.context.adapter.create<Account>({
 							model: "account",
 							data: {
 								userId: user.id,
 								providerId: provider.providerId,
+								accountId: userInfo.id,
 								accessToken: "",
 								refreshToken: "",
 								accessTokenExpiresAt: new Date(),
 								refreshTokenExpiresAt: new Date(),
 								scope: "",
-								tokenType: "",
+								createdAt: new Date(),
+								updatedAt: new Date(),
 							},
 						});
 					}
