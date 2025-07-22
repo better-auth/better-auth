@@ -671,8 +671,9 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
-			let organizationId = ctx.body.organizationSlug || ctx.body.organizationId;
-			if (organizationId === null) {
+
+			// 1. Handle explicit "unset" (both organizationId and organizationSlug === null)
+			if (ctx.body.organizationId === null && ctx.body.organizationSlug === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
@@ -687,16 +688,33 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				});
 				return ctx.json(null);
 			}
-			if (!organizationId) {
+
+			// 2. Resolve organization from provided identifier or current session
+			let organization: InferOrganization<O> | null = null;
+
+			if (ctx.body.organizationId) {
+				organization = await adapter.findOrganizationById(ctx.body.organizationId);
+			} else if (ctx.body.organizationSlug) {
+				organization = await adapter.findOrganizationBySlug(ctx.body.organizationSlug);
+			} else {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
 				}
-				organizationId = sessionOrgId;
+				organization = await adapter.findOrganizationById(sessionOrgId);
 			}
+
+			// 3. Validate organization existence
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// 4. Ensure user is a member using resolved organization.id
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
-				organizationId,
+				organizationId: organization.id,
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
@@ -705,17 +723,8 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			let organization = await adapter.findOrganizationById(organizationId);
-			if (!organization) {
-				if (ctx.body.organizationSlug) {
-					organization = await adapter.findOrganizationBySlug(organizationId);
-				}
-				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
-				}
-			}
+
+			// 5. Update session & cookie
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
 				organization.id,
@@ -724,16 +733,17 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				session: updatedSession,
 				user: session.user,
 			});
+
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+					teams: Team[];
+				} & InferOrganization<O>
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+				} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
