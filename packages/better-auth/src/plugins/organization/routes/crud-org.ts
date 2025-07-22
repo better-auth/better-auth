@@ -673,7 +673,10 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const session = ctx.context.session;
 
 			// 1. Handle explicit "unset" (both organizationId and organizationSlug === null)
-			if (ctx.body.organizationId === null && ctx.body.organizationSlug === null) {
+			if (
+				ctx.body.organizationId === null &&
+				ctx.body.organizationSlug === null
+			) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
@@ -693,9 +696,13 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			let organization: InferOrganization<O> | null = null;
 
 			if (ctx.body.organizationId) {
-				organization = await adapter.findOrganizationById(ctx.body.organizationId);
+				organization = await adapter.findOrganizationById(
+					ctx.body.organizationId,
+				);
 			} else if (ctx.body.organizationSlug) {
-				organization = await adapter.findOrganizationBySlug(ctx.body.organizationSlug);
+				organization = await adapter.findOrganizationBySlug(
+					ctx.body.organizationSlug,
+				);
 			} else {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
@@ -736,14 +743,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-					members: InferMember<O>[];
-					invitations: InferInvitation<O>[];
-					teams: Team[];
-				} & InferOrganization<O>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: Team[];
+					} & InferOrganization<O>
 				: {
-					members: InferMember<O>[];
-					invitations: InferInvitation<O>[];
-				} & InferOrganization<O>;
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
