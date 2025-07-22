@@ -672,11 +672,8 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
 
-			// 1. Handle explicit "unset" (both organizationId and organizationSlug === null)
-			if (
-				ctx.body.organizationId === null &&
-				ctx.body.organizationSlug === null
-			) {
+			// 1. Handle explicit "unset" – if the identifier provided (id or slug) is explicitly null
+			if ((ctx.body.organizationId ?? ctx.body.organizationSlug) === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
