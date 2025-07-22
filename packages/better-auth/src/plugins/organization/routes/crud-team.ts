@@ -509,9 +509,13 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 			const session = await getSessionFromCtx(ctx);
 			const organizationId =
 				ctx.query?.organizationId || session?.session.activeOrganizationId;
-			const userId = ctx.query?.userId || session?.user.id;
+			let userId = session?.user.id;
 			if (!userId) {
-				throw ctx.error("UNAUTHORIZED");
+				if (ctx.query?.userId && !ctx.request) {
+					userId = ctx.query.userId;
+				} else {
+					throw ctx.error("UNAUTHORIZED");
+				}
 			}
 			if (!organizationId) {
 				throw ctx.error("BAD_REQUEST", {
@@ -752,10 +756,13 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			const session = await getSessionFromCtx(ctx);
 			let organizationId =
 				ctx.query?.organizationId || session?.session.activeOrganizationId;
-			const userId = ctx.query?.userId || session?.user.id;
-
+			let userId = session?.user.id;
 			if (!userId) {
-				throw ctx.error("UNAUTHORIZED");
+				if (ctx.query?.userId && !ctx.request) {
+					userId = ctx.query.userId;
+				} else {
+					throw ctx.error("UNAUTHORIZED");
+				}
 			}
 
 			if (!organizationId) {
