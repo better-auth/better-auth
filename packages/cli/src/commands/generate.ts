@@ -96,7 +96,7 @@ export async function generateAction(opts: any) {
 	}
 
 	if (options.y) {
-		console.warn('WARNING: --y is deprecated. Consider -y or --yes');
+		console.warn("WARNING: --y is deprecated. Consider -y or --yes");
 		options.yes = true;
 	}
 

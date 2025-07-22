@@ -86,7 +86,7 @@ export async function migrateAction(opts: any) {
 	}
 
 	if (options.y) {
-		console.warn('WARNING: --y is deprecated. Consider -y or --yes');
+		console.warn("WARNING: --y is deprecated. Consider -y or --yes");
 		options.yes = true;
 	}
 
@@ -128,9 +128,5 @@ export const migrate = new Command("migrate")
 		"automatically accept and run migrations without prompting",
 		false,
 	)
-	.option(
-		"--y",
-		"(deprecated) same as --yes",
-		false,
-	)
+	.option("--y", "(deprecated) same as --yes", false)
 	.action(migrateAction);
