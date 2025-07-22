@@ -5,14 +5,13 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	sessionMiddleware,
 	APIError,
 	originCheck,
 	getSessionFromCtx,
 } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -91,12 +90,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 			}
 			const isAuthorized = ctx.body?.referenceId
-				? await options.subscription?.authorizeReference?.({
-						user: session.user,
-						session: session.session,
-						referenceId,
-						action,
-					})
+				? await options.subscription?.authorizeReference?.(
+						{
+							user: session.user,
+							session: session.session,
+							referenceId,
+							action,
+						},
+						ctx,
+					)
 				: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
@@ -106,6 +108,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		});
 
 	const subscriptionEndpoints = {
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/subscription/upgrade`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.upgradeSubscription`
+		 *
+		 * **client:**
+		 * `authClient.subscription.upgrade`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/stripe#api-method-subscription-upgrade)
+		 */
 		upgradeSubscription: createAuthEndpoint(
 			"/subscription/upgrade",
 			{
@@ -114,15 +131,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * The name of the plan to subscribe
 					 */
-					plan: z.string({
-						description: "The name of the plan to upgrade to",
+					plan: z.string().meta({
+						description: 'The name of the plan to upgrade to. Eg: "pro"',
 					}),
 					/**
 					 * If annual plan should be applied.
 					 */
 					annual: z
-						.boolean({
-							description: "Whether to upgrade to an annual plan",
+						.boolean()
+						.meta({
+							description: "Whether to upgrade to an annual plan. Eg: true",
 						})
 						.optional(),
 					/**
@@ -131,8 +149,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If not provided, the user's id will be used
 					 */
 					referenceId: z
-						.string({
-							description: "Reference id of the subscription to upgrade",
+						.string()
+						.meta({
+							description:
+								'Reference id of the subscription to upgrade. Eg: "123"',
 						})
 						.optional(),
 					/**
@@ -141,8 +161,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * it'll throw an error.
 					 */
 					subscriptionId: z
-						.string({
-							description: "The id of the subscription to upgrade",
+						.string()
+						.meta({
+							description:
+								'The id of the subscription to upgrade. Eg: "sub_123"',
 						})
 						.optional(),
 					/**
@@ -154,36 +176,52 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					 * If a subscription
 					 */
 					seats: z
-						.number({
-							description: "Number of seats to upgrade to (if applicable)",
+						.number()
+						.meta({
+							description:
+								"Number of seats to upgrade to (if applicable). Eg: 1",
 						})
 						.optional(),
 					/**
 					 * Success URL to redirect back after successful subscription
 					 */
 					successUrl: z
-						.string({
+						.string()
+						.meta({
 							description:
-								"Callback URL to redirect back after successful subscription",
+								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
 						})
 						.default("/"),
 					/**
 					 * Cancel URL
 					 */
 					cancelUrl: z
-						.string({
+						.string()
+						.meta({
 							description:
-								"Callback URL to redirect back after successful subscription",
+								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
 						})
 						.default("/"),
 					/**
 					 * Return URL
 					 */
-					returnUrl: z.string().optional(),
+					returnUrl: z
+						.string()
+						.meta({
+							description:
+								'Return URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+						})
+						.optional(),
 					/**
 					 * Disable Redirect
 					 */
-					disableRedirect: z.boolean().default(false),
+					disableRedirect: z
+						.boolean()
+						.meta({
+							description:
+								"Disable redirect after successful subscription. Eg: true",
+						})
+						.default(false),
 				}),
 				use: [
 					sessionMiddleware,
@@ -239,19 +277,26 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					try {
-						const stripeCustomer = await client.customers.create(
-							{
+						// Try to find existing Stripe customer by email
+						const existingCustomers = await client.customers.list({
+							email: user.email,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingCustomers.data[0];
+
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create({
 								email: user.email,
 								name: user.name,
 								metadata: {
 									...ctx.body.metadata,
 									userId: user.id,
 								},
-							},
-							{
-								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
-							},
-						);
+							});
+						}
+
+						// Update local DB with Stripe customer ID
 						await ctx.context.adapter.update({
 							model: "user",
 							update: {
@@ -264,6 +309,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						});
+
 						customerId = stripeCustomer.id;
 					} catch (e: any) {
 						ctx.context.logger.error(e);
@@ -352,20 +398,49 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				let subscription = existingSubscription;
 				if (!subscription) {
-					const newSubscription = await ctx.context.adapter.create<
-						InputSubscription,
-						Subscription
-					>({
-						model: "subscription",
-						data: {
+					const incompleteSubscription = subscriptions.find(
+						(sub) => sub.status === "incomplete",
+					);
+
+					if (incompleteSubscription) {
+						await ctx.context.adapter.update({
+							model: "subscription",
+							update: {
+								...incompleteSubscription,
+								plan: plan.name.toLowerCase(),
+								seats: ctx.body.seats || 1,
+								stripeCustomerId: customerId,
+								status: "active",
+							},
+							where: [
+								{
+									field: "id",
+									value: incompleteSubscription.id,
+								},
+							],
+						});
+						subscription = {
+							...incompleteSubscription,
 							plan: plan.name.toLowerCase(),
-							stripeCustomerId: customerId,
-							status: "incomplete",
-							referenceId,
 							seats: ctx.body.seats || 1,
-						},
-					});
-					subscription = newSubscription;
+							stripeCustomerId: customerId,
+						};
+					} else {
+						const newSubscription = await ctx.context.adapter.create<
+							InputSubscription,
+							Subscription
+						>({
+							model: "subscription",
+							data: {
+								plan: plan.name.toLowerCase(),
+								stripeCustomerId: customerId,
+								status: "incomplete",
+								referenceId,
+								seats: ctx.body.seats || 1,
+							},
+						});
+						subscription = newSubscription;
+					}
 				}
 
 				if (!subscription) {
@@ -381,6 +456,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription,
 					},
 					ctx.request,
+					//@ts-expect-error
+					ctx,
 				);
 
 				const freeTrail = plan.freeTrial
@@ -541,14 +618,44 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			},
 		),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/subscription/cancel`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.cancelSubscription`
+		 *
+		 * **client:**
+		 * `authClient.subscription.cancel`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/stripe#api-method-subscription-cancel)
+		 */
 		cancelSubscription: createAuthEndpoint(
 			"/subscription/cancel",
 			{
 				method: "POST",
 				body: z.object({
-					referenceId: z.string().optional(),
-					subscriptionId: z.string().optional(),
-					returnUrl: z.string(),
+					referenceId: z
+						.string()
+						.meta({
+							description:
+								"Reference id of the subscription to cancel. Eg: '123'",
+						})
+						.optional(),
+					subscriptionId: z
+						.string()
+						.meta({
+							description:
+								"The id of the subscription to cancel. Eg: 'sub_123'",
+						})
+						.optional(),
+					returnUrl: z.string().meta({
+						description:
+							"Return URL to redirect back after successful subscription. Eg: 'https://example.com/success'",
+					}),
 				}),
 				use: [
 					sessionMiddleware,
@@ -675,8 +782,20 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					referenceId: z.string().optional(),
-					subscriptionId: z.string().optional(),
+					referenceId: z
+						.string()
+						.meta({
+							description:
+								"Reference id of the subscription to restore. Eg: '123'",
+						})
+						.optional(),
+					subscriptionId: z
+						.string()
+						.meta({
+							description:
+								"The id of the subscription to restore. Eg: 'sub_123'",
+						})
+						.optional(),
 				}),
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
@@ -776,13 +895,34 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 			},
 		),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/subscription/list`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listActiveSubscriptions`
+		 *
+		 * **client:**
+		 * `authClient.subscription.list`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/stripe#api-method-subscription-list)
+		 */
 		listActiveSubscriptions: createAuthEndpoint(
 			"/subscription/list",
 			{
 				method: "GET",
 				query: z.optional(
 					z.object({
-						referenceId: z.string().optional(),
+						referenceId: z
+							.string()
+							.meta({
+								description:
+									"Reference id of the subscription to list. Eg: '123'",
+							})
+							.optional(),
 					}),
 				),
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
@@ -1029,11 +1169,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										if (!customer) {
 											logger.error("#BETTER_AUTH: Failed to create  customer");
 										} else {
-											await options.onCustomerCreate?.({
-												customer,
-												stripeCustomer,
-												user,
-											});
+											await options.onCustomerCreate?.(
+												{
+													customer,
+													stripeCustomer,
+													user,
+												},
+												ctx,
+											);
 										}
 									}
 								},
