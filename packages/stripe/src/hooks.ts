@@ -1,7 +1,7 @@
 import { type GenericEndpointContext, logger } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
-import { getPlanByPriceId } from "./utils";
+import { getPlanByLookupKey, getPlanByPriceId } from "./utils";
 
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
@@ -18,7 +18,25 @@ export async function onCheckoutSessionCompleted(
 			checkoutSession.subscription as string,
 		);
 		const priceId = subscription.items.data[0]?.price.id;
-		const plan = await getPlanByPriceId(options, priceId as string);
+		const lookupKey = subscription.items.data[0]?.price.lookup_key;
+
+		if (!priceId && !lookupKey) {
+			logger.warn(
+				`Stripe webhook error: No priceId or lookupKey found in checkout session: ${
+					checkoutSession.id
+				}`,
+			);
+			return;
+		}
+		// Use lookupKey if available, otherwise fallback to priceId
+		let plan
+		if (lookupKey) {
+			plan = await getPlanByLookupKey(options, lookupKey);
+		}
+		else {
+			plan = await getPlanByPriceId(options, priceId as string);
+		}
+
 		if (plan) {
 			const referenceId =
 				checkoutSession?.client_reference_id ||
