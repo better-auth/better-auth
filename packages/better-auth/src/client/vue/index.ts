@@ -17,6 +17,7 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { BASE_ERROR_CODES } from "../../error/codes";
+import { getBaseURL } from "../../utils/url";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -93,10 +94,8 @@ export function createAuthClient<Option extends ClientOptions>(
 	) {
 		if (useFetch) {
 			const ref = useStore(pluginsAtoms.$sessionSignal);
-			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
-			let authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
-			authPath = authPath === "/" ? "/api/auth" : authPath; //fix for root path
-			authPath = authPath.endsWith("/") ? authPath.slice(0, -1) : authPath; //fix for trailing slash
+			const authPath = getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL);
+
 			return useFetch(`${authPath}/get-session`, {
 				ref,
 			}).then((res: any) => {
