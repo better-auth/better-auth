@@ -39,6 +39,15 @@ exports[`init > should match config 1`] = `
         "secure": false,
       },
     },
+    "lastUsedSocial": {
+      "name": "better-auth.last_used_social",
+      "options": {
+        "httpOnly": true,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
     "sessionData": {
       "name": "better-auth.session_data",
       "options": {
