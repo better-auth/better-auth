@@ -10,10 +10,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	adapter,
 	options,
 	file,
+	schemaFile,
 }) => {
 	const provider = adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
-	const filePath = file || "./prisma/schema.prisma";
+	const filePath = schemaFile || file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {

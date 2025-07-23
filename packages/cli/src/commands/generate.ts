@@ -17,6 +17,7 @@ export async function generateAction(opts: any) {
 			cwd: z.string(),
 			config: z.string().optional(),
 			output: z.string().optional(),
+			schemaFile: z.string().optional(),
 			y: z.boolean().optional(),
 		})
 		.parse(opts);
@@ -47,6 +48,7 @@ export async function generateAction(opts: any) {
 	const schema = await getGenerator({
 		adapter,
 		file: options.output,
+		schemaFile: options.schemaFile,
 		options: config,
 	});
 
@@ -139,5 +141,6 @@ export const generate = new Command("generate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option("--output <output>", "the file to output to the generated schema")
+	.option("--schema-file <path>", "Path to your prisma schema file.")
 	.option("-y, --y", "automatically answer yes to all prompts", false)
 	.action(generateAction);
