@@ -22,6 +22,7 @@
     },
     "dependencies": {
         "@biomejs/biome": "1.7.3",
+        "@changesets/cli": "^2.29.5",
         "@types/node": "^20.17.9",
         "bumpp": "^9.8.1",
         "cross-env": "^7.0.3",
