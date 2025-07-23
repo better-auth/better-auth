@@ -1335,6 +1335,9 @@ export const sso = (options?: SSOOptions) => {
 								.filter(Boolean)
 								.join(" ") || parsedResponse.extract.attributes?.displayName,
 						attributes: parsedResponse.extract.attributes,
+						emailVerified: options?.trustEmailVerified
+							? ((attributes?.[mapping.emailVerified] || false) as boolean)
+							: false,
 					};
 
 					let user: User;
@@ -1388,6 +1391,9 @@ export const sso = (options?: SSOOptions) => {
 							data: {
 								email: userInfo.email,
 								name: userInfo.name,
+								emailVerified: options?.trustEmailVerified
+									? userInfo.emailVerified || false
+									: false,
 								createdAt: new Date(),
 								updatedAt: new Date(),
 							},
