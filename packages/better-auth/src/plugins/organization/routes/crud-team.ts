@@ -502,7 +502,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const session = ctx.context.session;
 			const organizationId =
-				session.session.activeOrganizationId || ctx.query?.organizationId;
+				ctx.query?.organizationId || session.session.activeOrganizationId;
 
 			if (!organizationId) {
 				return ctx.json(null, {
