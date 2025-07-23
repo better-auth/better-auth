@@ -180,6 +180,7 @@ describe("stripe", async () => {
 			status: "incomplete",
 			periodStart: undefined,
 			cancelAtPeriodEnd: undefined,
+			createdAt: expect.any(Date),
 		});
 	});
 
