@@ -102,6 +102,14 @@ describe("Waitlist Plugin", () => {
 				metadata: { source: "landing-page" },
 			});
 
+			// Debug the response structure
+			console.log("Response:", JSON.stringify(response, null, 2));
+
+			// Check if there's an error first
+			if (response.error) {
+				console.error("Error in response:", response.error);
+			}
+
 			expect(response.data?.entry).toBeDefined();
 			expect(response.data?.entry.email).toBe("user1@test.com");
 			expect(response.data?.entry.position).toBe(1);
