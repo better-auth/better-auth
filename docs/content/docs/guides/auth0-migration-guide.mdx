@@ -162,11 +162,11 @@ Create a new file called `migrate-auth0.ts` in the `scripts` folder and add the 
 <Callout type="info">
 Instead of using the Management API, you can use Auth0's bulk user export functionality and pass the exported JSON data directly to the `auth0Users` array. This is especially useful if you need to migrate password hashes and complete user data, which are not available through the Management API.
 
-> **Important Notes:**
-> - Password hashes export is only available for Auth0 Enterprise users
-> - Free plan users cannot export password hashes and will need to request a support ticket
-> - For detailed information about bulk user exports, see the [Auth0 Bulk User Export Documentation](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports)
-> - For password hash export details, refer to [Exporting Password Hashes](https://auth0.com/docs/troubleshoot/customer-support/manage-subscriptions/export-data#user-passwords)
+**Important Notes:**
+- Password hashes export is only available for Auth0 Enterprise users
+- Free plan users cannot export password hashes and will need to request a support ticket
+- For detailed information about bulk user exports, see the [Auth0 Bulk User Export Documentation](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports)
+- For password hash export details, refer to [Exporting Password Hashes](https://auth0.com/docs/troubleshoot/customer-support/manage-subscriptions/export-data#user-passwords)
 
 Example:
 ```ts
