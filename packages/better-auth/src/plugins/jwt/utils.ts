@@ -1,5 +1,18 @@
+import type { AuthContext, BetterAuthPlugin } from "../../types";
 import { subtle, getRandomValues } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
+import { BetterAuthError } from "../../error";
+import type { JwtPluginOptions } from "./types";
+
+export const getJwtPlugin = (ctx: AuthContext) => {
+	const plugin:
+		| (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions })
+		| undefined = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
+	if (!plugin) {
+		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+	}
+	return plugin;
+};
 
 async function deriveKey(secretKey: string): Promise<CryptoKey> {
 	const enc = new TextEncoder();
