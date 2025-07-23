@@ -169,6 +169,7 @@ const auth0Users = [
     "email": "helloworld@gmail.com",
     "email_verified": false,
     "name": "Hello world",
+    // this will be available for enterprise users.
     "password_hash": "$2b$10$w4kfaZVjrcQ6ZOMiG.M8JeNvnVQkPKZV03pbDUHbxy9Ug0h/McDXi",
     // ... other user data
   }
@@ -324,10 +325,10 @@ async function migrateOAuthAccounts(auth0User: any, userId: string | undefined, 
                     password: await migratePassword(auth0User),
                     providerId: providerId || identity.provider,
                     accountId: identity.user_id,
-                    accessToken: identity.access_token,
-                    tokenType: identity.token_type,
-                    refreshToken: identity.refresh_token,
-                    expiresAt: identity.expires_in ? Math.floor(Date.now() / 1000) + identity.expires_in : undefined,
+                    accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
+                    // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.getAllTokensets 
+                    refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
+                    tokenType: identity.token_type,  
                     scope: identity.scope,
                     idToken: identity.id_token,
                     createdAt: safeDateConversion(auth0User.created_at),
