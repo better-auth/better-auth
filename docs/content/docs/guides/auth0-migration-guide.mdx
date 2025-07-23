@@ -192,12 +192,13 @@ const auth0Client = new ManagementClient({
 
 
 
-
 function safeDateConversion(timestamp?: string | number): Date {
     if (!timestamp) return new Date();
 
     const numericTimestamp = typeof timestamp === 'string' ? Date.parse(timestamp) : timestamp;
+
     const milliseconds = numericTimestamp < 1000000000000 ? numericTimestamp * 1000 : numericTimestamp;
+
     const date = new Date(milliseconds);
 
     if (isNaN(date.getTime())) {
@@ -205,6 +206,7 @@ function safeDateConversion(timestamp?: string | number): Date {
         return new Date();
     }
 
+    // Check for unreasonable dates (before 2000 or after 2100)
     const year = date.getFullYear();
     if (year < 2000 || year > 2100) {
         console.warn(`Suspicious date year: ${year}, falling back to current date`);
@@ -214,6 +216,7 @@ function safeDateConversion(timestamp?: string | number): Date {
     return date;
 }
 
+// Helper function to generate backup codes for 2FA
 async function generateBackupCodes(secret: string) {
     const key = secret;
     const backupCodes = Array.from({ length: 10 })
@@ -228,12 +231,11 @@ async function generateBackupCodes(secret: string) {
     return encCodes;
 }
 
-function mapAuth0RoleToBetterAuthRole(auth0Roles: string[]): string {
-    if (auth0Roles.includes('admin')) return 'admin';
-    if (auth0Roles.includes('moderator')) return 'moderator';
-    return 'user';
+function mapAuth0RoleToBetterAuthRole(auth0Roles: string[]) {
+    if (typeof auth0Roles === 'string') return auth0Roles;
+    if (Array.isArray(auth0Roles)) return auth0Roles.join(',');
 }
-
+// helper function to migrate password from auth0 to better auth for custom hashes and algs
 async function migratePassword(auth0User: any) {
     if (auth0User.password_hash) {
         if (auth0User.password_hash.startsWith('$2a$') || auth0User.password_hash.startsWith('$2b$')) {
@@ -292,6 +294,7 @@ async function migrateMFAFactors(auth0User: any, userId: string | undefined, ctx
     if (!userId || !auth0User.mfa_factors || !Array.isArray(auth0User.mfa_factors)) {
         return;
     }
+
     for (const factor of auth0User.mfa_factors) {
         try {
             if (factor.totp && factor.totp.secret) {
@@ -326,11 +329,13 @@ async function migrateOAuthAccounts(auth0User: any, userId: string | undefined, 
                     password: await migratePassword(auth0User),
                     providerId: providerId || identity.provider,
                     accountId: identity.user_id,
+                    accessToken: identity.access_token,
+                    tokenType: identity.token_type,
+                    refreshToken: identity.refresh_token,
                     accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
-                    // Note: Full token sets (including refresh tokens) are only available for Auth0 Enterprise users
-                    // Enterprise users can use: auth0Client.users.getAllTokensets() to get complete token information
+                    // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.getAllTokensets 
                     refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
-                    tokenType: identity.token_type,  
+
                     scope: identity.scope,
                     idToken: identity.id_token,
                     createdAt: safeDateConversion(auth0User.created_at),
@@ -339,10 +344,87 @@ async function migrateOAuthAccounts(auth0User: any, userId: string | undefined, 
                 forceAllowId: true
             }).catch((error: Error) => {
                 console.error(`Failed to create OAuth account for user ${userId} with provider ${providerId}:`, error);
+                return ctx.adapter.create({
+                    // Try creating without optional fields if the first attempt failed
+                    model: "account",
+                    data: {
+                        id: `${auth0User.user_id}|${identity.provider}|${identity.user_id}`,
+                        userId: userId,
+                        password: migratePassword(auth0User),
+                        providerId: providerId,
+                        accountId: identity.user_id,
+                        accessToken: identity.access_token,
+                        tokenType: identity.token_type,
+                        refreshToken: identity.refresh_token,
+                        accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
+                        refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
+                        scope: identity.scope,
+                        idToken: identity.id_token,
+                        createdAt: safeDateConversion(auth0User.created_at),
+                        updatedAt: safeDateConversion(auth0User.updated_at)
+                    },
+                    forceAllowId: true
+                });
             });
+
+            console.log(`Successfully migrated OAuth account for user ${userId} with provider ${providerId}`);
         } catch (error) {
             console.error(`Failed to migrate OAuth account for user ${userId}:`, error);
         }
+    }
+}
+
+async function migrateOrganizations(ctx: any) {
+    try {
+        const organizations = await auth0Client.organizations.getAll();
+        for (const org of organizations.data || []) {
+            try {
+                await ctx.adapter.create({
+                    model: "organization",
+                    data: {
+                        id: org.id,
+                        name: org.display_name || org.id,
+                        slug: (org.display_name || org.id).toLowerCase().replace(/[^a-z0-9]/g, '-'),
+                        logo: org.branding?.logo_url,
+                        metadata: JSON.stringify(org.metadata || {}),
+                        createdAt: safeDateConversion(org.created_at),
+                    },
+                    forceAllowId: true
+                });
+                const members = await auth0Client.organizations.getMembers({ id: org.id });
+                for (const member of members.data || []) {
+                    try {
+                        const userRoles = await auth0Client.organizations.getMemberRoles({
+                            id: org.id,
+                            user_id: member.user_id
+                        });
+                        const role = mapAuth0RoleToBetterAuthRole(userRoles.data?.map(r => r.name) || []);
+                        await ctx.adapter.create({
+                            model: "member",
+                            data: {
+                                id: `${org.id}|${member.user_id}`,
+                                organizationId: org.id,
+                                userId: member.user_id,
+                                role: role,
+                                createdAt: new Date()
+                            },
+                            forceAllowId: true
+                        });
+
+                        console.log(`Successfully migrated member ${member.user_id} for organization ${org.display_name || org.id}`);
+                    } catch (error) {
+                        console.error(`Failed to migrate member ${member.user_id} for organization ${org.display_name || org.id}:`, error);
+                    }
+                }
+
+                console.log(`Successfully migrated organization: ${org.display_name || org.id}`);
+            } catch (error) {
+                console.error(`Failed to migrate organization ${org.display_name || org.id}:`, error);
+            }
+        }
+        console.log('Organization migration completed');
+    } catch (error) {
+        console.error('Failed to migrate organizations:', error);
     }
 }
 
@@ -350,12 +432,11 @@ async function migrateFromAuth0() {
     try {
         const ctx = await auth.$context;
         const isAdminEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "admin");
-        const isTwoFactorEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "two-factor");
         const isUsernameEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "username");
-
+        const isOrganizationEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "organization");
         const perPage = 100;
-        let pageNumber = 0;
         const auth0Users: any[] = [];
+        let pageNumber = 0;
 
         while (true) {
             try {
@@ -364,11 +445,9 @@ async function migrateFromAuth0() {
                     page: pageNumber,
                     include_totals: true,
                 };
-                const response = await auth0Client.users.getAll(params);
-                const users = response.data.users || [];
-
+                const response = (await auth0Client.users.getAll(params)).data as any;
+                const users = response.users || [];
                 if (users.length === 0) break;
-
                 auth0Users.push(...users);
                 pageNumber++;
 
@@ -379,12 +458,16 @@ async function migrateFromAuth0() {
             }
         }
 
+
         console.log(`Found ${auth0Users.length} users to migrate`);
 
         for (const auth0User of auth0Users) {
             try {
+                // Determine if this is a password-based or OAuth user
                 const isOAuthUser = auth0User.identities?.some((identity: any) => identity.provider !== 'auth0');
+                // Base user data that's common for both types
                 const baseUserData = {
+                    id: auth0User.user_id,
                     email: auth0User.email,
                     emailVerified: auth0User.email_verified || false,
                     name: auth0User.name || auth0User.nickname,
@@ -395,9 +478,11 @@ async function migrateFromAuth0() {
                         banned: auth0User.blocked || false,
                         role: mapAuth0RoleToBetterAuthRole(auth0User.roles || []),
                     } : {}),
+
                     ...(isUsernameEnabled ? {
                         username: auth0User.username || auth0User.nickname,
                     } : {}),
+
                 };
 
                 const createdUser = await ctx.adapter.create({
@@ -405,21 +490,24 @@ async function migrateFromAuth0() {
                     data: {
                         ...baseUserData,
                     },
+                    forceAllowId: true
                 });
 
                 if (!createdUser?.id) {
                     throw new Error('Failed to create user');
                 }
 
-                await migrateOAuthAccounts(auth0User, createdUser.id, ctx);
-                if (isTwoFactorEnabled) {
-                    await migrateMFAFactors(auth0User, createdUser.id, ctx);
-                }
+
+                await migrateOAuthAccounts(auth0User, createdUser.id, ctx)
                 console.log(`Successfully migrated user: ${auth0User.email}`);
             } catch (error) {
                 console.error(`Failed to migrate user ${auth0User.email}:`, error);
             }
         }
+        if (isOrganizationEnabled) {
+            await migrateOrganizations(ctx);
+        }
+        // the reset of migration will be here.
         console.log('Migration completed successfully');
     } catch (error) {
         console.error('Migration failed:', error);
@@ -435,7 +523,7 @@ migrateFromAuth0()
     .catch((error) => {
         console.error('Migration failed:', error);
         process.exit(1);
-    });
+    }); 
 ```
 
 Make sure to replace the Auth0 environment variables with your own values:
