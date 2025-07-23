@@ -114,6 +114,7 @@ export default defineBuildConfig({
 		"./src/plugins/username/index.ts",
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
+		"./src/plugins/waitlist/index.ts",
 		"./src/plugins/siwe/index.ts",
 		"./src/plugins/waitlist/index.ts",
 		"./src/test-utils/index.ts",
