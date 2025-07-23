@@ -73,6 +73,8 @@ export function getCookies(options: BetterAuthOptions) {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
 	const dontRememberToken = createCookie("dont_remember");
+	const lastUsedSocial = createCookie("last_used_social");
+
 	return {
 		sessionToken: {
 			name: sessionToken.name,
@@ -89,6 +91,10 @@ export function getCookies(options: BetterAuthOptions) {
 		dontRememberToken: {
 			name: dontRememberToken.name,
 			options: dontRememberToken.attributes,
+		},
+		lastUsedSocial: {
+			name: lastUsedSocial.name,
+			options: lastUsedSocial.attributes,
 		},
 	};
 }

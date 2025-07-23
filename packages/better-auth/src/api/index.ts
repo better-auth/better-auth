@@ -32,6 +32,7 @@ import {
 	accountInfo,
 	requestPasswordReset,
 	requestPasswordResetCallback,
+	lastUsedSocialProvider,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -120,6 +121,7 @@ export function getEndpoints<
 		refreshToken,
 		getAccessToken,
 		accountInfo,
+		lastUsedSocialProvider,
 	};
 	const endpoints = {
 		...baseEndpoints,

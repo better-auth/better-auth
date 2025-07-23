@@ -215,6 +215,13 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+
+		c.setCookie(
+			c.context.authCookies.lastUsedSocial.name,
+			provider.id,
+			c.context.authCookies.lastUsedSocial.options,
+		);
+
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
