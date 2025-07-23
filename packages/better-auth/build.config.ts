@@ -9,7 +9,7 @@ export default defineBuildConfig({
 	},
 	declaration: true,
 	outDir: "dist",
-	clean: false,
+	clean: true,
 	failOnWarn: false,
 	externals: [
 		"prisma",
@@ -55,7 +55,11 @@ export default defineBuildConfig({
 		"@babel/types",
 		"@babel/parser",
 		"punycode",
+		"@sveltejs/kit",
+		"svelte/compiler",
+		"@sveltejs/vite-plugin-svelte",
 		"csstype",
+		"siwe",
 	],
 	entries: [
 		"./src/index.ts",
@@ -111,5 +115,7 @@ export default defineBuildConfig({
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
 		"./src/plugins/waitlist/index.ts",
+		"./src/plugins/siwe/index.ts",
+		"./src/test-utils/index.ts",
 	],
 });

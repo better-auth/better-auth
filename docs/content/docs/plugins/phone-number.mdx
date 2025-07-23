@@ -67,24 +67,47 @@ The phone number plugin extends the authentication system by allowing users to s
 
 To send an OTP to a user's phone number for verification, you can use the `sendVerificationCode` endpoint.
 
-```ts title="auth-client.ts"
-await authClient.phoneNumber.sendOtp({
-    phoneNumber: "+1234567890"
-})
+<APIMethod path="/phone-number/send-otp" method="POST">
+```ts
+type sendPhoneNumberOTP = {
+    /**
+     * Phone number to send OTP. 
+     */
+    phoneNumber: string = "+1234567890"
+}
 ```
+</APIMethod>
 
 ### Verify Phone Number
 
 After the OTP is sent, users can verify their phone number by providing the code.
 
-```ts title="auth-client.ts"
-const isVerified = await authClient.phoneNumber.verify({
-    phoneNumber: "+1234567890",
-    code: "123456"
-})
+<APIMethod path="/phone-number/verify" method="POST">
+```ts
+type verifyPhoneNumber = {
+    /**
+     * Phone number to verify. 
+     */
+    phoneNumber: string = "+1234567890"
+    /**
+     * OTP code. 
+     */
+    code: string = "123456"
+    /**
+     * Disable session creation after verification. 
+     */
+    disableSession?: boolean = false
+    /**
+     * Check if there is a session and update the phone number. 
+     */
+    updatePhoneNumber?: boolean = true
+}
 ```
+</APIMethod>
 
+<Callout>
 When the phone number is verified, the `phoneNumberVerified` field in the user table is set to `true`. If `disableSession` is not set to `true`, a session is created for the user. Additionally, if `callbackOnVerification` is provided, it will be called.
+</Callout>
 
 ### Allow Sign-Up with Phone Number
 
@@ -115,18 +138,28 @@ export const auth = betterAuth({
 
 In addition to signing in a user using send-verify flow, you can also use phone number as an identifier and sign in a user using phone number and password.
 
+<APIMethod path="/sign-in/phone-number" method="POST">
 ```ts
-await authClient.signIn.phoneNumber({
-    phoneNumber: "+123456789",
-    password: "password",
-    rememberMe: true //optional defaults to true
-})
+type signInPhoneNumber = {
+    /**
+     * Phone number to sign in. 
+     */
+    phoneNumber: string = "+1234567890"
+    /**
+     * Password to use for sign in. 
+     */
+    password: string
+    /**
+     * Remember the session. 
+     */
+    rememberMe?: boolean = true
+}
 ```
+</APIMethod>
 
 ### Update Phone Number
 
 Updating phone number uses the same process as verifying a phone number. The user will receive an OTP code to verify the new phone number.
-
 
 ```ts title="auth-client.ts"
 await authClient.phoneNumber.sendOtp({
@@ -140,7 +173,7 @@ Then verify the new phone number with the OTP code.
 const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456",
-    updatePhoneNumber: true // Set to true to update the phone number
+    updatePhoneNumber: true // Set to true to update the phone number [!code highlight]
 })
 ```
 
@@ -155,7 +188,7 @@ By default, the plugin creates a session for the user after verifying the phone 
 const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456",
-    disableSession: true
+    disableSession: true // [!code highlight]
 })
 ```
 
@@ -163,21 +196,37 @@ const isVerified = await authClient.phoneNumber.verify({
 
 To initiate a request password reset flow using `phoneNumber`, you can start by calling `requestPasswordReset` on the client to send an OTP code to the user's phone number.
 
-```ts title="auth-client.ts"
-await authClient.phoneNumber.requestPasswordReset({
-    phoneNumber: "+1234567890"
-})
+<APIMethod path="/phone-number/request-password-reset" method="POST">
+```ts
+type requestPasswordResetPhoneNumber = {
+    /**
+     * The phone number which is associated with the user. 
+     */
+    phoneNumber: string = "+1234567890"
+}
 ```
+</APIMethod>
 
 Then, you can reset the password by calling `resetPassword` on the client with the OTP code and the new password.
 
-```ts title="auth-client.ts"
-const isVerified = await authClient.phoneNumber.resetPassword({
-    otp: "123456", // OTP code sent to the user's phone number
-    phoneNumber: "+1234567890",
-    newPassword: "newPassword"
-})  
+<APIMethod path="/phone-number/reset-password" method="POST">
+```ts
+type resetPasswordPhoneNumber = {
+    /**
+     * The one time password to reset the password. 
+     */
+    otp: string = "123456"
+    /**
+     * The phone number to the account which intends to reset the password for. 
+     */
+    phoneNumber: string = "+1234567890"
+    /**
+     * The new password. 
+     */
+    newPassword: string = "new-and-secure-password"
+}
 ```
+</APIMethod>
 
 ## Options
 

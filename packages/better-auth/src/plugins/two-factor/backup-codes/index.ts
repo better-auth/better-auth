@@ -1,5 +1,5 @@
 import { generateRandomString } from "../../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
@@ -11,6 +11,7 @@ import type {
 import { APIError } from "better-call";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { verifyTwoFactor } from "../verify-two-factor";
+import type { GenericEndpointContext } from "../../../types";
 
 export interface BackupCodeOptions {
 	/**
@@ -25,7 +26,20 @@ export interface BackupCodeOptions {
 	 * @default 10
 	 */
 	length?: number;
+	/**
+	 * An optional custom function to generate backup codes
+	 */
 	customBackupCodesGenerate?: () => string[];
+	/**
+	 * How to store the backup codes in the database, whether encrypted or plain.
+	 */
+	storeBackupCodes?:
+		| "plain"
+		| "encrypted"
+		| {
+				encrypt: (token: string) => Promise<string>;
+				decrypt: (token: string) => Promise<string>;
+		  };
 }
 
 function generateBackupCodesFn(options?: BackupCodeOptions) {
@@ -89,21 +103,78 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 
 export const backupCode2fa = (options?: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
+
+	async function storeBackupCodes(
+		ctx: GenericEndpointContext,
+		backupCodes: string,
+	) {
+		if (options?.storeBackupCodes === "encrypted") {
+			return await symmetricEncrypt({
+				key: ctx.context.secret,
+				data: backupCodes,
+			});
+		}
+		if (
+			typeof options?.storeBackupCodes === "object" &&
+			"encrypt" in options?.storeBackupCodes
+		) {
+			return await options?.storeBackupCodes.encrypt(backupCodes);
+		}
+		return backupCodes;
+	}
+
+	async function decryptBackupCodes(
+		ctx: GenericEndpointContext,
+		backupCodes: string,
+	) {
+		if (options?.storeBackupCodes === "encrypted") {
+			return await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: backupCodes,
+			});
+		}
+		if (
+			typeof options?.storeBackupCodes === "object" &&
+			"decrypt" in options?.storeBackupCodes
+		) {
+			return await options?.storeBackupCodes.decrypt(backupCodes);
+		}
+		return backupCodes;
+	}
+
 	return {
 		id: "backup_code",
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/verify-backup-code`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyBackupCode`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.verifyBackupCode`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-verify-backup-code)
+			 */
 			verifyBackupCode: createAuthEndpoint(
 				"/two-factor/verify-backup-code",
 
 				{
 					method: "POST",
 					body: z.object({
-						code: z.string(),
+						code: z.string().meta({
+							description: `A backup code to verify. Eg: "123456"`,
+						}),
 						/**
 						 * Disable setting the session cookie
 						 */
 						disableSession: z
-							.boolean({
+							.boolean()
+							.meta({
 								description: "If true, the session cookie will not be set.",
 							})
 							.optional(),
@@ -113,9 +184,10 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						 * every sign in request within this time.
 						 */
 						trustDevice: z
-							.boolean({
+							.boolean()
+							.meta({
 								description:
-									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
+									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
 							})
 							.optional(),
 					}),
@@ -247,9 +319,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
+					const decryptedBackupCodes = await decryptBackupCodes(
+						ctx,
+						twoFactor.backupCodes,
+					);
 					const validate = await verifyBackupCode(
 						{
-							backupCodes: twoFactor.backupCodes,
+							backupCodes: decryptedBackupCodes,
 							code: ctx.body.code,
 						},
 						ctx.context.secret,
@@ -294,12 +370,29 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/generate-backup-codes`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.generateBackupCodes`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.generateBackupCodes`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-generate-backup-codes)
+			 */
 			generateBackupCodes: createAuthEndpoint(
 				"/two-factor/generate-backup-codes",
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string(),
+						password: z.string().meta({
+							description: "The users password.",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -348,10 +441,14 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						ctx.context.secret,
 						options,
 					);
+					const storedBackupCodes = await storeBackupCodes(
+						ctx,
+						backupCodes.encryptedBackupCodes,
+					);
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
-							backupCodes: backupCodes.encryptedBackupCodes,
+							backupCodes: storedBackupCodes,
 						},
 						where: [
 							{
@@ -366,12 +463,29 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/two-factor/view-backup-codes`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.viewBackupCodes`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.viewBackupCodes`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
+			 */
 			viewBackupCodes: createAuthEndpoint(
 				"/two-factor/view-backup-codes",
 				{
 					method: "GET",
 					body: z.object({
-						userId: z.coerce.string(),
+						userId: z.coerce.string().meta({
+							description: `The user ID to view all backup codes. Eg: "user-id"`,
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -401,9 +515,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
+					const decryptedBackupCodes = await decryptBackupCodes(
+						ctx,
+						twoFactor.backupCodes,
+					);
 					return ctx.json({
 						status: true,
-						backupCodes: backupCodes,
+						backupCodes: decryptedBackupCodes,
 					});
 				},
 			),
