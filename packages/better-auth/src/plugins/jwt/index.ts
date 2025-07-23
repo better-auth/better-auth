@@ -15,7 +15,7 @@ import { mergeSchema } from "../../db/schema";
 import { BetterAuthError } from "../../error";
 import { createJwk, signJwt } from "./sign";
 import type { JwtPluginOptions } from "./types";
-export { createJwk, signJwt } from "./sign";
+export * from "./sign";
 
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin:
@@ -26,29 +26,6 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	}
 	return plugin;
 };
-
-/**
- * Backwards compatable version of signJwt
- *
- * @deprecated - prefer signJwt
- *
- * @param ctx - endpoint context
- * @param options - Jwt signing options. If not provided, uses the jwtPlugin options
- */
-export async function getJwtToken(
-	ctx: GenericEndpointContext,
-	options?: JwtPluginOptions,
-) {
-	if (!options) {
-		options = getJwtPlugin(ctx.context).options;
-	}
-
-	const payload = !options?.jwt?.definePayload
-		? ctx.context.session!.user
-		: await options?.jwt.definePayload(ctx.context.session!);
-
-	return await signJwt(ctx, payload, options);
-}
 
 export const jwt = (options?: JwtPluginOptions) => {
 	const endpoints: BetterAuthPlugin["endpoints"] = {};
