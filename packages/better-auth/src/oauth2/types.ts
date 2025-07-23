@@ -8,6 +8,12 @@ export interface OAuth2Tokens {
 	refreshTokenExpiresAt?: Date;
 	scopes?: string[];
 	idToken?: string;
+	/**
+	 * Raw response data from the OAuth provider's token endpoint.
+	 * Contains additional fields that may be specific to the provider,
+	 * such as openid, open_id, unionid, etc.
+	 */
+	raw?: Record<string, any>;
 }
 
 export interface OAuthProvider<

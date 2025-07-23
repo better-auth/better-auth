@@ -29,6 +29,7 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 				: data.scope
 			: [],
 		idToken: data.id_token,
+		raw: data,
 	};
 }
 
