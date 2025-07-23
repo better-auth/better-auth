@@ -387,28 +387,28 @@ This will reactivate a subscription that was previously set to cancel at the end
 
 To create a Stripe billing portal session where customers can manage their subscriptions, update payment methods, and view billing history:
 
-```ts title="client.ts"
-const { data } = await client.subscription.billingPortal({
-    returnUrl: "/dashboard", // optional, defaults to "/"
-    referenceId: "org_123" // optional, defaults to userId
-});
 
-if (data?.url) {
-    // Redirect user to the billing portal
-    window.location.href = data.url;
+
+<APIMethod
+  path="/subscription/billing-portal"
+  method="POST"
+  requireSession
+>
+```ts
+type billingPortal = {
+    /**
+     * Reference id of the subscription to upgrade. 
+     */
+    referenceId?: string = "123"
+    /**
+     * Return URL to redirect back after successful subscription. 
+     */
+    returnUrl?: string
 }
 ```
-
-This will create a Stripe billing portal session and return a URL that you can redirect users to. The billing portal allows customers to:
-
-- Update payment methods
-- View billing history and invoices
-- Cancel or modify subscriptions
-- Update billing addresses
-
-The plugin will automatically find the customer ID from either the user's `stripeCustomerId` field or from their active subscription records.
-
-> **Note:** The user must have an existing Stripe customer ID (either directly on their user record or through a subscription) to create a billing portal session.
+</APIMethod>
+        
+This endpoint creates a Stripe billing portal session and returns a URL in the response as `data.url`. You can redirect users to this URL to allow them to manage their subscription, payment methods, and billing history.
 
 ### Reference System
 
