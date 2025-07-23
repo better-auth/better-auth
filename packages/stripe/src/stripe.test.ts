@@ -873,7 +873,6 @@ describe("stripe", async () => {
 				headers,
 			},
 		});
-
 		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
 		expect(billingPortalRes.data?.redirect).toBe(true);
 		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
