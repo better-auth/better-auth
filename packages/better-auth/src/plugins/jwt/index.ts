@@ -1,9 +1,4 @@
-import type {
-	AuthContext,
-	BetterAuthPlugin,
-	GenericEndpointContext,
-	HookEndpointContext,
-} from "../../types";
+import type { BetterAuthPlugin, HookEndpointContext } from "../../types";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import {
@@ -15,17 +10,10 @@ import { mergeSchema } from "../../db/schema";
 import { BetterAuthError } from "../../error";
 import { createJwk, signJwt } from "./sign";
 import type { JwtPluginOptions } from "./types";
-export * from "./sign";
 
-export const getJwtPlugin = (ctx: AuthContext) => {
-	const plugin:
-		| (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions })
-		| undefined = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
-	if (!plugin) {
-		throw new BetterAuthError("jwt_config", "jwt plugin not found");
-	}
-	return plugin;
-};
+export * from "./types";
+export { createJwk, getJwtToken, signJwt } from "./sign";
+export { getJwtPlugin } from "./utils";
 
 export const jwt = (options?: JwtPluginOptions) => {
 	const endpoints: BetterAuthPlugin["endpoints"] = {};
