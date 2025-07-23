@@ -150,10 +150,10 @@ export interface SSOOptions {
 	 */
 	providersLimit?: number | ((user: User) => Promise<number> | number);
 	/**
-	 * Disable setting email verified to true. Set this to true if you don't trust the provider to set the email verified flag.
+	 * Trust the email verified flag from the provider.
 	 * @default false
 	 */
-	disableSettingEmailVerified?: boolean;
+	trustEmailVerified?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -1099,9 +1099,9 @@ export const sso = (options?: SSOOptions) => {
 							),
 							id: idToken[mapping.id || "sub"],
 							email: idToken[mapping.email || "email"],
-							emailVerified: options?.disableSettingEmailVerified
-								? false
-								: idToken[mapping.emailVerified || "email_verified"],
+							emailVerified: options?.trustEmailVerified
+								? idToken[mapping.emailVerified || "email_verified"]
+								: false,
 							name: idToken[mapping.name || "name"],
 							image: idToken[mapping.image || "picture"],
 						} as {
@@ -1157,7 +1157,9 @@ export const sso = (options?: SSOOptions) => {
 							name: userInfo.name || userInfo.email,
 							id: userInfo.id,
 							image: userInfo.image,
-							emailVerified: userInfo.emailVerified || false,
+							emailVerified: options?.trustEmailVerified
+								? userInfo.emailVerified || false
+								: false,
 						},
 						account: {
 							idToken: tokenResponse.idToken,
