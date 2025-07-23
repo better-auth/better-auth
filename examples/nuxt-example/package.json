@@ -1,5 +1,5 @@
 {
-  "name": "@examples/nuxt",
+  "name": "@better-auth/nuxt-example",
   "private": true,
   "type": "module",
   "scripts": {

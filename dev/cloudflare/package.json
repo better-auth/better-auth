@@ -1,6 +1,7 @@
 {
-	"name": "better-auth-cloudflare",
+	"name": "@better-auth/cloudflare",
 	"type": "module",
+	"private": true,
 	"scripts": {
 		"dev": "wrangler dev",
 		"migrate:local": "wrangler d1 migrations apply db --local",
