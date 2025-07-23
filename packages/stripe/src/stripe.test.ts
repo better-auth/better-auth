@@ -868,7 +868,7 @@ describe("stripe", async () => {
 			},
 		);
 		const billingPortalRes = await authClient.subscription.billingPortal({
-			returnUrl: "https://example.com/dashboard",
+			returnUrl: "/dashboard",
 			fetchOptions: {
 				headers,
 			},
@@ -878,7 +878,7 @@ describe("stripe", async () => {
 		expect(billingPortalRes.data?.redirect).toBe(true);
 		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
 			customer: expect.any(String),
-			return_url: "https://example.com/dashboard",
+			return_url: "http://localhost:3000/dashboard",
 		});
 	});
 });
