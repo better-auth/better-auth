@@ -155,11 +155,13 @@ npm install auth0
 Create a new file called `migrate-auth0.ts` in the `scripts` folder and add the following code:
 
 <Callout type="info">
-Instead of using the Management API, you can use Auth0's bulk user export functionality and pass the exported JSON data directly to the `auth0Users` array. This is especially useful if you need to migrate password hashes, which are not available through the Management API. To get the password hashes and other password-related information, you must create an Auth0 support ticket.
+Instead of using the Management API, you can use Auth0's bulk user export functionality and pass the exported JSON data directly to the `auth0Users` array. This is especially useful if you need to migrate password hashes and complete user data, which are not available through the Management API.
 
-> **Note:** Exporting password hashes is only available on Auth0's paid plans. On the free plan, password hashes cannot be exported and you need to ask for support ticket.  
-> - [Auth0 Bulk User Export Documentation](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports)
-> - [Exporting Password Hashes](https://auth0.com/docs/troubleshoot/customer-support/manage-subscriptions/export-data#user-passwords)
+> **Important Notes:**
+> - Password hashes export is only available for Auth0 Enterprise users
+> - Free plan users cannot export password hashes and will need to request a support ticket
+> - For detailed information about bulk user exports, see the [Auth0 Bulk User Export Documentation](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports)
+> - For password hash export details, refer to [Exporting Password Hashes](https://auth0.com/docs/troubleshoot/customer-support/manage-subscriptions/export-data#user-passwords)
 
 Example:
 ```ts
@@ -169,7 +171,7 @@ const auth0Users = [
     "email": "helloworld@gmail.com",
     "email_verified": false,
     "name": "Hello world",
-    // this will be available for enterprise users.
+    // Note: password_hash is only available for Enterprise users
     "password_hash": "$2b$10$w4kfaZVjrcQ6ZOMiG.M8JeNvnVQkPKZV03pbDUHbxy9Ug0h/McDXi",
     // ... other user data
   }
@@ -325,7 +327,8 @@ async function migrateOAuthAccounts(auth0User: any, userId: string | undefined, 
                     providerId: providerId || identity.provider,
                     accountId: identity.user_id,
                     accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
-                    // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.getAllTokensets 
+                    // Note: Full token sets (including refresh tokens) are only available for Auth0 Enterprise users
+                    // Enterprise users can use: auth0Client.users.getAllTokensets() to get complete token information
                     refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
                     tokenType: identity.token_type,  
                     scope: identity.scope,
