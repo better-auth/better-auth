@@ -17,7 +17,8 @@
         "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
         "bump": "bumpp",
         "test": "turbo --filter \"./packages/*\" test",
-        "typecheck": "turbo --filter \"./packages/*\" typecheck"
+        "typecheck": "turbo --filter \"./packages/*\" typecheck",
+        "changelog:check": "changeset status --since=main"
     },
     "dependencies": {
         "@biomejs/biome": "1.7.3",
