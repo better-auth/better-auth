@@ -26,7 +26,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { signJwt } from "../jwt/sign";
-import type { JwtPluginOptions } from "../jwt";
+import type { JwtPluginOptions } from "../jwt/types";
 import { defaultClientSecretHasher } from "./utils";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {

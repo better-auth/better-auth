@@ -4,7 +4,7 @@ import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
 import { jwt } from "./index";
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
-import type { JWKOptions, JwtPluginOptions } from ".";
+import type { JWKOptions, JwtPluginOptions } from "./types";
 import { generateExportedKeyPair } from "./sign";
 
 describe("jwt", async (it) => {
