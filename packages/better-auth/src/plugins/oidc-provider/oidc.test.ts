@@ -17,7 +17,13 @@ import { genericOAuthClient } from "../generic-oauth/client";
 import { listen, type Listener } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
-import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
+import {
+	createLocalJWKSet,
+	decodeProtectedHeader,
+	jwtVerify,
+	type JSONWebKeySet,
+} from "jose";
+import { jwtClient } from "../jwt/client";
 
 describe("oidc", async () => {
 	const {
@@ -531,6 +537,13 @@ describe("oidc-jwt", async () => {
 			} = await getTestInstance({
 				baseURL: "http://localhost:3000",
 				plugins: [
+					...(useJwt
+						? [
+								jwt({
+									usesOauthProvider: true,
+								}),
+							]
+						: []),
 					oidcProvider({
 						loginPage: "/login",
 						consentPage: "/oauth2/authorize",
@@ -543,12 +556,11 @@ describe("oidc-jwt", async () => {
 						},
 						useJWTPlugin: useJwt,
 					}),
-					...(useJwt ? [jwt()] : []),
 				],
 			});
 			const { headers } = await signInWithTestUser();
 			const serverClient = createAuthClient({
-				plugins: [oidcClient()],
+				plugins: [oidcClient(), jwtClient()],
 				baseURL: "http://localhost:3000",
 				fetchOptions: {
 					customFetchImpl,
@@ -674,8 +686,11 @@ describe("oidc-jwt", async () => {
 			);
 			const decoded = decodeProtectedHeader(accessToken.data?.idToken!);
 			if (useJwt) {
-				const jwks = await authorizationServer.api.getJwks();
-				const jwkSet = createLocalJWKSet(jwks);
+				const jwksResponse = await serverClient.$fetch<JSONWebKeySet>("/jwks");
+				const jwksData = jwksResponse?.data ?? undefined;
+				expect(jwksData).toBeDefined();
+
+				const jwkSet = createLocalJWKSet(jwksData!);
 				const checkSignature = await jwtVerify(
 					accessToken.data?.idToken!,
 					jwkSet,
