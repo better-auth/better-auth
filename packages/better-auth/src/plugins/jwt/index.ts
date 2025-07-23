@@ -16,6 +16,8 @@ import {
 import { symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
 
+export * from "./sign";
+
 type JWKOptions =
 	| {
 			alg: "EdDSA"; // EdDSA with either Ed25519 or Ed448 curve
