@@ -4,7 +4,7 @@ import { base64 } from "@better-auth/utils/base64";
 import { BetterAuthError } from "../../error";
 import type { JwtPluginOptions } from "./types";
 
-export const getJwtPlugin = (ctx: AuthContext) => {
+export const getJwtPlugin = (ctx: AuthContext): Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions } => {
 	const plugin:
 		| (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions })
 		| undefined = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
