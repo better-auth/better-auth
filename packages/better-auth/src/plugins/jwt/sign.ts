@@ -8,10 +8,10 @@ import {
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { getJwtPlugin } from "./utils";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import type { JwtPluginOptions } from "./types";
-import { getJwtPlugin } from "./utils";
 
 /**
  * Signs a payload in jwt format

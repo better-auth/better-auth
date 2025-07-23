@@ -10,8 +10,8 @@ import { mergeSchema } from "../../db/schema";
 import { BetterAuthError } from "../../error";
 import { createJwk, signJwt } from "./sign";
 import type { JwtPluginOptions } from "./types";
-export type * from "./types";
-export { createJwk, signJwt, getJwtToken } from "./sign";
+export * from "./types";
+export { createJwk, getJwtToken, signJwt } from "./sign";
 export { getJwtPlugin } from "./utils";
 
 export const jwt = (options?: JwtPluginOptions) => {
