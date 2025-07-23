@@ -24,8 +24,8 @@ jobs:
               with:
                 path: .turbo
                 key: ${{ runner.os }}-turbo-${{ github.sha }}
-                # restore-keys: |
-                #   ${{ runner.os }}-turbo-
+                restore-keys: |
+                  ${{ runner.os }}-turbo-
 
             - uses: pnpm/action-setup@v4
 
