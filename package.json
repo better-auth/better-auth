@@ -18,7 +18,7 @@
         "bump": "bumpp",
         "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck",
-        "changelog:check": "changeset status --since=main"
+        "changelog:check": "changeset status"
     },
     "dependencies": {
         "@biomejs/biome": "1.7.3",

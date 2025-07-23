@@ -13,7 +13,7 @@
 	],
 	"linked": [],
 	"access": "restricted",
-	"baseBranch": "main",
+	"baseBranch": "orgin/main",
 	"updateInternalDependencies": "patch",
 	"ignore": [
 		"@better-auth/docs",
