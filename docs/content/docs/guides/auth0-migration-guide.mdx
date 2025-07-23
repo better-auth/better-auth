@@ -290,7 +290,6 @@ async function migrateMFAFactors(auth0User: any, userId: string | undefined, ctx
     if (!userId || !auth0User.mfa_factors || !Array.isArray(auth0User.mfa_factors)) {
         return;
     }
-
     for (const factor of auth0User.mfa_factors) {
         try {
             if (factor.totp && factor.totp.secret) {
@@ -382,7 +381,6 @@ async function migrateFromAuth0() {
         for (const auth0User of auth0Users) {
             try {
                 const isOAuthUser = auth0User.identities?.some((identity: any) => identity.provider !== 'auth0');
-
                 const baseUserData = {
                     email: auth0User.email,
                     emailVerified: auth0User.email_verified || false,
@@ -550,14 +548,11 @@ The migration script handles bcrypt password hashes by default. If you're using 
 ### Role Mapping
 The script includes a basic role mapping function (`mapAuth0RoleToBetterAuthRole`). Customize this function based on your Auth0 roles and Better Auth role requirements.
 
-### Custom Claims
-If you have custom claims in Auth0, you'll need to modify the migration script to handle these claims and store them appropriately in Better Auth.
-
 ### Rate Limiting
 The migration script includes pagination to handle large numbers of users. Adjust the `perPage` value based on your needs and Auth0's rate limits.
 
 ## Wrapping Up
 
-Congratulations! You've successfully migrated from Auth0 to Better Auth.
+Now! You've successfully migrated from Auth0 to Better Auth.
 
 Better Auth offers greater flexibility and more features—be sure to explore the [documentation](/docs) to unlock its full potential. 
