@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
 import { generateRandomString } from "../crypto";
