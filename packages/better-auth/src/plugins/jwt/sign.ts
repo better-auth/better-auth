@@ -82,6 +82,29 @@ export async function signJwt(
 	return await jwt.sign(privateKey);
 }
 
+/**
+ * Backwards compatable version of signJwt
+ *
+ * @deprecated - prefer signJwt
+ *
+ * @param ctx - endpoint context
+ * @param options - Jwt signing options. If not provided, uses the jwtPlugin options
+ */
+export async function getJwtToken(
+	ctx: GenericEndpointContext,
+	options?: JwtPluginOptions,
+) {
+	if (!options) {
+		options = getJwtPlugin(ctx.context).options;
+	}
+
+	const payload = !options?.jwt?.definePayload
+		? ctx.context.session!.user
+		: await options?.jwt.definePayload(ctx.context.session!);
+
+	return await signJwt(ctx, payload, options);
+}
+
 export async function generateExportedKeyPair(options?: JwtPluginOptions) {
 	const { publicKey, privateKey } = await generateKeyPair(
 		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
