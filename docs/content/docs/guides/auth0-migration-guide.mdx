@@ -110,6 +110,11 @@ export const auth = betterAuth({
     }),
     emailAndPassword: { 
         enabled: true,
+        password: {
+            verify: (data) => {
+                // this for an edgecase that you might run in to on verifying the password
+            }
+        }
     },
     socialProviders: {
         google: {
