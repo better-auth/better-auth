@@ -49,11 +49,16 @@ export function setTokenUtil(
 	token: string | null | undefined,
 	ctx: AuthContext,
 ) {
-	if (ctx.options.account?.encryptOAuthTokens && token) {
+	// If the provider didn't send a value we keep it as-is so that
+	// update queries don't overwrite previously stored tokens.
+	if (token == null) {
+		return token;
+	}
+	if (ctx.options.account?.encryptOAuthTokens) {
 		return symmetricEncrypt({
 			key: ctx.secret,
 			data: token,
 		});
 	}
-	return token ?? null;
+	return token;
 }

@@ -702,7 +702,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 									scope: tokens.scopes?.join(","),
-								}).filter(([_, value]) => value !== undefined),
+								}).filter(([_, value]) => value != null),
 							);
 							await ctx.context.internalAdapter.updateAccount(
 								existingAccount.id,

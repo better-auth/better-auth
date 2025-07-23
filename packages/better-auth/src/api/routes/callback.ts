@@ -148,7 +148,7 @@ export const callbackOAuth = createAuthEndpoint(
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 						scope: tokens.scopes?.join(","),
-					}).filter(([_, value]) => value !== undefined),
+					}).filter(([_, value]) => value != null),
 				);
 				await c.context.internalAdapter.updateAccount(
 					existingAccount.id,
