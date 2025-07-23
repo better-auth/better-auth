@@ -25,7 +25,9 @@ interface OrganizationClientOptions {
 	teams?: {
 		enabled: boolean;
 	};
-	$inferAuth?: { options: { plugins: BetterAuthPlugin[] } };
+	$inferAuth?:
+		| { options: { plugins: BetterAuthPlugin[] } }
+		| OrganizationOptions["schema"];
 }
 
 export const organizationClient = <CO extends OrganizationClientOptions>(
@@ -90,10 +92,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		Auth["options"]["plugins"],
 		"organization"
 	>;
-	type Schema = OrganizationPlugin extends { options: { schema: infer S } }
-		? S extends OrganizationOptions["schema"]
-			? S
-			: undefined
+	type Schema = CO["$inferAuth"] extends Object
+		? CO["$inferAuth"] extends Exclude<OrganizationOptions["schema"], undefined>
+			? CO["$inferAuth"]
+			: OrganizationPlugin extends { options: { schema: infer S } }
+				? S extends OrganizationOptions["schema"]
+					? S
+					: undefined
+				: undefined
 		: undefined;
 
 	return {
