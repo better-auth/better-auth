@@ -15,5 +15,13 @@
 	"access": "restricted",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
-	"ignore": []
+	"ignore": [
+		"@better-auth/docs",
+		"@better-auth/demo-nextjs",
+		"@better-auth/expo-example",
+		"@better-auth/astro-example",
+		"@better-auth/svelte-kit-example",
+		"@better-auth/nextjs-mcp-example",
+		"@better-auth/browser-extension-example"
+	]
 }
