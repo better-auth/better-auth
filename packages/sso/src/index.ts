@@ -66,6 +66,14 @@ export interface SAMLConfig {
 	signingKey: string;
 	certificate: string;
 	attributeConsumingServiceIndex: number;
+	mapping?: {
+		id?: string;
+		email?: string;
+		name?: string;
+		firstName?: string;
+		lastName?: string;
+		extraFields?: Record<string, string>;
+	};
 }
 
 export interface SSOProvider {
@@ -629,6 +637,7 @@ export const sso = (options?: SSOOptions) => {
 										privateKey: body.samlConfig.privateKey,
 										decryptionPvk: body.samlConfig.decryptionPvk,
 										additionalParams: body.samlConfig.additionalParams,
+										mapping: body.mapping,
 									})
 								: null,
 							organizationId: body.organizationId,
