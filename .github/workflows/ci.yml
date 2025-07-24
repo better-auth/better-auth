@@ -44,7 +44,10 @@ jobs:
                 TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
                 TURBO_REMOTE_ONLY: true
               run: pnpm build
-            
+
+            - name: Check for Changesets
+              run: pnpm changeset status --since origin/main
+
             - name: Start Docker Containers
               run: |
                 docker compose up -d
@@ -73,6 +76,3 @@ jobs:
 
             - name: Stop Docker Containers
               run: docker compose down
-
-            - name: Check for Changesets
-              run: pnpm changeset status --since origin/main
