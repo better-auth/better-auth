@@ -841,7 +841,7 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 	);
 
 /**
- * List all invitations recieved for a user
+ * List all invitations a user has received
  */
 export const listUserInvitations = <O extends OrganizationOptions>(
 	options: O,

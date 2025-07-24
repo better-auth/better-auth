@@ -324,6 +324,28 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return organization;
 		},
+		checkMembership: async ({
+			userId,
+			organizationId,
+		}: {
+			userId: string;
+			organizationId: string;
+		}) => {
+			const member = await adapter.findOne<InferMember<O>>({
+				model: "member",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+					{
+						field: "organizationId",
+						value: organizationId,
+					},
+				],
+			});
+			return member;
+		},
 		/**
 		 * @requires db
 		 */
