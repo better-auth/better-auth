@@ -448,6 +448,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 							plan: plan.name.toLowerCase(),
 							stripeCustomerId: customerId,
+							seats: ctx.body.seats || incompleteSubscription.seats || 1,
 
 							status: "active",
 						};
