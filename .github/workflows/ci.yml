@@ -39,7 +39,7 @@ jobs:
               run: pnpm install
 
             - name: Check for Changesets
-              run: pnpm changeset --since=main
+              run: pnpm changeset status --since=main
 
             - name: Build
               env:
