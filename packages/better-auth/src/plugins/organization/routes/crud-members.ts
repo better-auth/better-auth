@@ -664,21 +664,39 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 							description: "The operator to use for the filter",
 						})
 						.optional(),
+					organizationId: z
+						.string()
+						.meta({
+							description:
+								'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
+						})
+						.optional(),
 				})
 				.optional(),
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const organizationId = session.session.activeOrganizationId;
+			const organizationId =
+				ctx.query?.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const isMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId,
+			});
+			if (!isMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				});
+			}
 			const { members, total } = await adapter.listMembers({
-				organizationId: organizationId,
+				organizationId,
 				limit: ctx.query?.limit ? Number(ctx.query.limit) : undefined,
 				offset: ctx.query?.offset ? Number(ctx.query.offset) : undefined,
 				sortBy: ctx.query?.sortBy,
