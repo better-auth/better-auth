@@ -54,10 +54,9 @@ description: Apple provider setup and usage.
         6.  **Generate the Client Secret (JWT):**
             Apple requires a JSON Web Token (JWT) to be generated dynamically using the downloaded `.p8` key, the Key ID, and your Team ID. This JWT serves as your `clientSecret`.
 
-            You can use the guide below from Apple's documentation to understand how to generate this client secret:
-            <Link href="https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret">
-               Creating a client secret
-            </Link>
+            You can use the guide below from [Apple's documentation](https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret) to understand how to generate this client secret. You can also use our built in generator [below](#generate-apple-client-secret-jwt) to generate the client secret JWT required for 'Sign in with Apple'.
+
+
     </Step>
     <Step>
         ### Configure the provider
@@ -126,3 +125,7 @@ await authClient.signIn.social({
     }
 })
 ```
+
+## Generate Apple Client Secret (JWT)
+
+<GenerateAppleJwt />

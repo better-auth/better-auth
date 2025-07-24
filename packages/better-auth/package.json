@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.12",
+  "version": "1.3.3",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -133,6 +133,16 @@
       "require": {
         "types": "./dist/client/solid/index.d.cts",
         "default": "./dist/client/solid/index.cjs"
+      }
+    },
+    "./test": {
+      "import": {
+        "types": "./dist/test-utils/index.d.ts",
+        "default": "./dist/test-utils/index.mjs"
+      },
+      "require": {
+        "types": "./dist/test-utils/index.d.cts",
+        "default": "./dist/test-utils/index.cjs"
       }
     },
     "./api": {
@@ -514,6 +524,16 @@
         "types": "./dist/plugins/username/index.d.cts",
         "default": "./dist/plugins/username/index.cjs"
       }
+    },
+    "./plugins/siwe": {
+      "import": {
+        "types": "./dist/plugins/siwe/index.d.ts",
+        "default": "./dist/plugins/siwe/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/siwe/index.d.cts",
+        "default": "./dist/plugins/siwe/index.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -652,6 +672,9 @@
       ],
       "plugins/username": [
         "./dist/plugins/username/index.d.ts"
+      ],
+      "plugins/siwe": [
+        "./dist/plugins/siwe/index.d.ts"
       ]
     }
   },
@@ -659,15 +682,15 @@
     "@better-auth/utils": "0.2.5",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^0.6.0",
-    "@noble/hashes": "^1.6.1",
+    "@noble/hashes": "^1.8.0",
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0",
     "better-call": "catalog:",
     "defu": "^6.1.4",
-    "jose": "^6.0.11",
-    "kysely": "^0.28.2",
+    "jose": "^5.9.6",
+    "kysely": "^0.28.1",
     "nanostores": "^0.11.3",
-    "zod": "^3.24.1"
+    "zod": "^4.0.5"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -685,7 +708,7 @@
     "@prisma/client": "^5.22.0",
     "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
-    "@types/bun": "latest",
+    "@types/keccak": "^3.0.5",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.14",
