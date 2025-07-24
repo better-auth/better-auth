@@ -44,23 +44,31 @@ export function isRateLimited(
 
 	const elapsed = now.getTime() - lastRequest.getTime();
 
+	let updatedLastRequest = lastRequest;
+
 	// Token bucket refill logic
 	if (refillInterval > 0 && refillAmount > 0) {
 		const refills = Math.floor(elapsed / refillInterval);
 		if (refills > 0) {
 			requestCount = Math.max(0, requestCount - refills * refillAmount);
 			requestCount = Math.min(requestCount, rateLimitMax); // cap at max
+			// update the lastRequest to reflect refilled time
+			updatedLastRequest = new Date(
+				lastRequest.getTime() + refills * refillInterval,
+			);
 		}
 	} else if (elapsed >= rateLimitTimeWindow) {
 		// fallback: reset after window
 		requestCount = 0;
+		updatedLastRequest = now;
 	}
 
 	if (requestCount >= rateLimitMax) {
 		const retryMs =
 			refillInterval > 0
-				? refillInterval - (elapsed % refillInterval)
-				: rateLimitTimeWindow - elapsed;
+				? refillInterval -
+					((now.getTime() - updatedLastRequest.getTime()) % refillInterval)
+				: rateLimitTimeWindow - (now.getTime() - updatedLastRequest.getTime());
 
 		return {
 			success: false,
@@ -70,6 +78,7 @@ export function isRateLimited(
 		};
 	}
 
+	// Allow request
 	requestCount++;
 	return {
 		success: true,
