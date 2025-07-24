@@ -45,14 +45,18 @@ export function isRateLimited(
 		};
 	}
 
-	// Calculate how many tokens to refill since last request
 	const elapsed = now.getTime() - lastRequest.getTime();
+
+	// Refill tokens if refill logic is configured
 	if (refillInterval > 0 && refillAmount > 0) {
 		const refills = Math.floor(elapsed / refillInterval);
 		if (refills > 0) {
 			requestCount = Math.max(0, requestCount - refills * refillAmount);
 			requestCount = Math.min(requestCount, rateLimitMax); // cap at max
 		}
+	} else if (elapsed >= rateLimitTimeWindow) {
+		// Fallback: reset count after full window if no refill logic
+		requestCount = 0;
 	}
 
 	if (requestCount >= rateLimitMax) {
@@ -60,7 +64,7 @@ export function isRateLimited(
 			success: false,
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED,
 			update: null,
-			tryAgainIn: Math.ceil(rateLimitTimeWindow - elapsed),
+			tryAgainIn: Math.max(0, Math.ceil(rateLimitTimeWindow - elapsed)), // Fix: avoid negative retry time
 		};
 	}
 
