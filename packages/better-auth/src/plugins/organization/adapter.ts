@@ -1,4 +1,4 @@
-import type { Session, User } from "../../types";
+import type { Session, User, Where } from "../../types";
 import { getDate } from "../../utils/date";
 import type { OrganizationOptions } from "./types";
 import type {
@@ -327,22 +327,42 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		checkMembership: async ({
 			userId,
 			organizationId,
+			organizationSlug,
 		}: {
 			userId: string;
-			organizationId: string;
+			organizationId?: string;
+			organizationSlug?: string;
 		}) => {
+			const where: Where[] = [
+				{
+					field: "userId",
+					value: userId,
+				},
+			];
+
+			if (!organizationId && !organizationSlug) {
+				throw new BetterAuthError(
+					"Either organizationId or organizationSlug must be provided",
+				);
+			}
+
+			if(organizationId) {
+				where.push({
+					field: "organizationId",
+					value: organizationId,
+				});
+			}
+
+			if(organizationSlug) {
+				where.push({
+					field: "organizationSlug",
+					value: organizationSlug,
+				});
+			}
+
 			const member = await adapter.findOne<InferMember<O>>({
 				model: "member",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
+				where,
 			});
 			return member;
 		},

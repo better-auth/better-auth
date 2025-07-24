@@ -696,7 +696,8 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			}
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
-				organizationId,
+				organizationId: ctx.body.organizationId,
+				organizationSlug: ctx.body.organizationSlug,
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
