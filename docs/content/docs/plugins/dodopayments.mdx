@@ -45,7 +45,7 @@ DODO_PAYMENTS_WEBHOOK_SECRET=your_webhook_secret_here
   <Step title="Set up server-side integration">
     Create or update `src/lib/auth.ts`:
 ```typescript
-import { BetterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 import {
   dodopayments,
   checkout,
@@ -59,7 +59,7 @@ export const dodoPayments = new DodoPayments({
   environment: "test_mode"
 });
 
-export const { auth, endpoints, client } = BetterAuth({
+export const auth = betterAuth({
   plugins: [
     dodopayments({
       client: dodoPayments,
@@ -95,7 +95,6 @@ export const { auth, endpoints, client } = BetterAuth({
   <Step title="Set up client-side integration">
     Create or update `src/lib/auth-client.ts`:
 ```typescript
-import { createAuthClient } from "better-auth/react";
 import { dodopaymentsClient } from "@dodopayments/better-auth";
 
 export const authClient = createAuthClient({

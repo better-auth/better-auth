@@ -420,6 +420,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
+
 				let subscription = existingSubscription;
 				if (!subscription) {
 					const incompleteSubscription = subscriptions.find(
@@ -445,9 +446,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription = {
 							id: incompleteSubscription.id,
 							referenceId: incompleteSubscription.referenceId,
+
+				
+
 							plan: plan.name.toLowerCase(),
-							seats: ctx.body.seats || 1,
 							stripeCustomerId: customerId,
+
 							status: "active",
 						};
 					} else {
@@ -467,6 +471,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription = newSubscription;
 					}
 				}
+
+				
+
 
 				if (!subscription) {
 					ctx.context.logger.error("Subscription ID not found");
