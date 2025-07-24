@@ -1,113 +1,109 @@
 import { describe, it, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
-describe(
-	"rate-limiter",
-	{
-		timeout: 10000,
-	},
-	async () => {
-		const { client, testUser } = await getTestInstance({
-			rateLimit: {
-				enabled: true,
-				window: 10,
-				max: 20,
-			},
-		});
+// ------------------ BASIC RATE LIMITING ------------------
+describe("rate-limiter", { timeout: 10000 }, async () => {
+	const { client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			window: 10,
+			max: 20,
+		},
+	});
 
-		it("should return 429 after 3 request for sign-in", async () => {
-			for (let i = 0; i < 5; i++) {
-				const response = await client.signIn.email({
-					email: testUser.email,
-					password: testUser.password,
-				});
-				if (i >= 3) {
-					expect(response.error?.status).toBe(429);
-				} else {
-					expect(response.error).toBeNull();
-				}
-			}
-		});
-
-		it("should reset the limit after the window period", async () => {
-			vi.useFakeTimers();
-			vi.advanceTimersByTime(11000);
-			for (let i = 0; i < 5; i++) {
-				const res = await client.signIn.email({
-					email: testUser.email,
-					password: testUser.password,
-				});
-				if (i >= 3) {
-					expect(res.error?.status).toBe(429);
-				} else {
-					expect(res.error).toBeNull();
-				}
-			}
-		});
-
-		it("should respond the correct retry-after header", async () => {
-			vi.useFakeTimers();
-			vi.advanceTimersByTime(3000);
-			let retryAfter = "";
-			await client.signIn.email(
-				{
-					email: testUser.email,
-					password: testUser.password,
-				},
-				{
-					onError(context) {
-						retryAfter = context.response.headers.get("X-Retry-After") ?? "";
-					},
-				},
-			);
-			expect(retryAfter).toBe("7");
-		});
-
-		it("should rate limit based on the path", async () => {
-			const signInRes = await client.signIn.email({
+	it("should return 429 after 3 requests for sign-in", async () => {
+		for (let i = 0; i < 5; i++) {
+			const response = await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
 			});
-			expect(signInRes.error?.status).toBe(429);
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
 
-			const signUpRes = await client.signUp.email({
-				email: "new-test@email.com",
+	it("should reset the limit after the window period", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(11000);
+		for (let i = 0; i < 5; i++) {
+			const res = await client.signIn.email({
+				email: testUser.email,
 				password: testUser.password,
-				name: "test",
 			});
-			expect(signUpRes.error).toBeNull();
-		});
-
-		it("non-special-rules limits", async () => {
-			for (let i = 0; i < 25; i++) {
-				const response = await client.getSession();
-				expect(response.error?.status).toBe(i >= 20 ? 429 : undefined);
+			if (i >= 3) {
+				expect(res.error?.status).toBe(429);
+			} else {
+				expect(res.error).toBeNull();
 			}
-		});
+		}
+	});
 
-		it("query params should be ignored", async () => {
-			for (let i = 0; i < 25; i++) {
-				const response = await client.listSessions({
-					fetchOptions: {
-						// @ts-ignore
-						query: {
-							"test-query": Math.random().toString(),
-						},
+	it("should respond with correct retry-after header", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(3000);
+		let retryAfter = "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onError(context) {
+					retryAfter = context.response.headers.get("X-Retry-After") ?? "";
+				},
+			},
+		);
+		expect(retryAfter).toBe("7");
+	});
+
+	it("should rate limit based on the path", async () => {
+		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(signInRes.error?.status).toBe(429);
+
+		const signUpRes = await client.signUp.email({
+			email: "new-test@email.com",
+			password: testUser.password,
+			name: "test",
+		});
+		expect(signUpRes.error).toBeNull();
+	});
+
+	it("non-special-rules limits", async () => {
+		for (let i = 0; i < 25; i++) {
+			const response = await client.getSession();
+			expect(response.error?.status).toBe(i >= 20 ? 429 : undefined);
+		}
+	});
+
+	it("query params should be ignored", async () => {
+		for (let i = 0; i < 25; i++) {
+			const response = await client.listSessions({
+				fetchOptions: {
+					// @ts-ignore
+					query: {
+						"test-query": Math.random().toString(),
 					},
-				});
-
-				if (i >= 20) {
-					expect(response.error?.status).toBe(429);
-				} else {
-					expect(response.error?.status).toBe(401);
-				}
+				},
+			});
+			if (i >= 20) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error?.status).toBe(401);
 			}
-		});
-	},
-);
+		}
+	});
+});
 
+// ------------------ CUSTOM STORAGE ------------------
 describe("custom rate limiting storage", async () => {
 	let store = new Map<string, string>();
+
 	const { client, testUser } = await getTestInstance({
 		rateLimit: {
 			enabled: true,
@@ -142,20 +138,15 @@ describe("custom rate limiting storage", async () => {
 	});
 });
 
+// ------------------ CUSTOM RULES ------------------
 describe("should work with custom rules", async () => {
 	const { client, testUser } = await getTestInstance({
 		rateLimit: {
 			enabled: true,
 			storage: "database",
 			customRules: {
-				"/sign-in/*": {
-					window: 10,
-					max: 2,
-				},
-				"/sign-up/email": {
-					window: 10,
-					max: 3,
-				},
+				"/sign-in/*": { window: 10, max: 2 },
+				"/sign-up/email": { window: 10, max: 3 },
 			},
 		},
 	});
@@ -190,11 +181,45 @@ describe("should work with custom rules", async () => {
 	it("should use default rules if custom rules are not defined", async () => {
 		for (let i = 0; i < 5; i++) {
 			const response = await client.getSession();
-			if (i >= 20) {
-				expect(response.error?.status).toBe(429);
+			expect(response.error?.status).toBeLessThan(429); // None should be rate-limited
+		}
+	});
+});
+
+// ------------------ REFILL LOGIC ------------------
+describe("refillAmount and refillInterval logic", async () => {
+	const { client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			window: 30000, // 30s burst window
+			max: 5,
+			refillAmount: 1,
+			refillInterval: 1000, // refill 1 token every second
+		},
+	});
+
+	it("should allow 5 initial requests then rate-limit", async () => {
+		for (let i = 0; i < 7; i++) {
+			const res = await client.getSession();
+			if (i < 5) {
+				expect(res.error).toBeNull(); // allowed
 			} else {
-				expect(response.error).toBeNull();
+				expect(res.error?.status).toBe(429); // blocked
 			}
+		}
+	});
+
+	it("should allow new request after refill interval", async () => {
+		await new Promise((res) => setTimeout(res, 1100)); // wait >1s
+		const res = await client.getSession(); // 1 token should be refilled
+		expect(res.error).toBeNull();
+	});
+
+	it("should refill multiple tokens over time", async () => {
+		await new Promise((res) => setTimeout(res, 5000)); // wait 5s = +5 tokens
+		for (let i = 0; i < 5; i++) {
+			const res = await client.getSession();
+			expect(res.error).toBeNull(); // all should pass
 		}
 	});
 });

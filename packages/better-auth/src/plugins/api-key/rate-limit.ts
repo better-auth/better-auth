@@ -16,36 +16,27 @@ interface RateLimitResult {
  *          a message and updated ApiKey data.
  */
 export function isRateLimited(
-	/**
-	 * The ApiKey object containing rate limiting information
-	 */
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
 ): RateLimitResult {
 	const now = new Date();
-	const lastRequest = apiKey.lastRequest;
+	const lastRequest = apiKey.lastRequest ?? now;
 	const rateLimitTimeWindow = apiKey.rateLimitTimeWindow;
 	const rateLimitMax = apiKey.rateLimitMax;
-	let requestCount = apiKey.requestCount;
+	const refillAmount = apiKey.refillAmount ?? 0;
+	const refillInterval = apiKey.refillInterval ?? 0;
+	let requestCount = apiKey.requestCount ?? 0;
 
-	if (opts.rateLimit.enabled === false)
+	if (opts.rateLimit.enabled === false || apiKey.rateLimitEnabled === false) {
 		return {
 			success: true,
 			message: null,
 			update: { lastRequest: now },
 			tryAgainIn: null,
 		};
-
-	if (apiKey.rateLimitEnabled === false)
-		return {
-			success: true,
-			message: null,
-			update: { lastRequest: now },
-			tryAgainIn: null,
-		};
+	}
 
 	if (rateLimitTimeWindow === null || rateLimitMax === null) {
-		// Rate limiting is disabled.
 		return {
 			success: true,
 			message: null,
@@ -54,44 +45,31 @@ export function isRateLimited(
 		};
 	}
 
-	if (lastRequest === null) {
-		// No previous requests, so allow the first one.
-		return {
-			success: true,
-			message: null,
-			update: { lastRequest: now, requestCount: 1 },
-			tryAgainIn: null,
-		};
-	}
-
-	const timeSinceLastRequest = now.getTime() - lastRequest.getTime();
-
-	if (timeSinceLastRequest > rateLimitTimeWindow) {
-		// Time window has passed, reset the request count.
-		return {
-			success: true,
-			message: null,
-			update: { lastRequest: now, requestCount: 1 },
-			tryAgainIn: null,
-		};
+	// Calculate how many tokens to refill since last request
+	const elapsed = now.getTime() - lastRequest.getTime();
+	if (refillInterval > 0 && refillAmount > 0) {
+		const refills = Math.floor(elapsed / refillInterval);
+		if (refills > 0) {
+			requestCount = Math.max(0, requestCount - refills * refillAmount);
+			requestCount = Math.min(requestCount, rateLimitMax); // cap at max
+		}
 	}
 
 	if (requestCount >= rateLimitMax) {
-		// Rate limit exceeded.
 		return {
 			success: false,
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED,
 			update: null,
-			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
+			tryAgainIn: Math.ceil(rateLimitTimeWindow - elapsed),
 		};
 	}
 
-	// Request is allowed.
 	requestCount++;
 	return {
 		success: true,
 		message: null,
 		tryAgainIn: null,
-		update: { lastRequest: now, requestCount: requestCount },
+		update: { lastRequest: now, requestCount },
 	};
 }
+
