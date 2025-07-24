@@ -739,6 +739,123 @@ Storing API keys in plaintext makes them vulnerable to database breaches, potent
 
 ---
 
+## Permissions
+
+API keys can have permissions associated with them, allowing you to control access at a granular level. Permissions are structured as a record of resource types to arrays of allowed actions.
+
+### Setting Default Permissions
+
+You can configure default permissions that will be applied to all newly created API keys:
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      permissions: {
+        defaultPermissions: {
+          files: ["read"],
+          users: ["read"],
+        },
+      },
+    }),
+  ],
+});
+```
+
+You can also provide a function that returns permissions dynamically:
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      permissions: {
+        defaultPermissions: async (userId, ctx) => {
+          // Fetch user role or other data to determine permissions
+          return {
+            files: ["read"],
+            users: ["read"],
+          };
+        },
+      },
+    }),
+  ],
+});
+```
+
+### Creating API Keys with Permissions
+
+When creating an API key, you can specify custom permissions:
+
+```ts
+const apiKey = await auth.api.createApiKey({
+  body: {
+    name: "My API Key",
+    permissions: {
+      files: ["read", "write"],
+      users: ["read"],
+    },
+    userId: "userId",
+  },
+});
+```
+
+### Verifying API Keys with Required Permissions
+
+When verifying an API key, you can check if it has the required permissions:
+
+```ts
+const result = await auth.api.verifyApiKey({
+  body: {
+    key: "your_api_key_here",
+    permissions: {
+      files: ["read"],
+    },
+  },
+});
+
+if (result.valid) {
+  // API key is valid and has the required permissions
+} else {
+  // API key is invalid or doesn't have the required permissions
+}
+```
+
+### Updating API Key Permissions
+
+You can update the permissions of an existing API key:
+
+```ts
+const apiKey = await auth.api.updateApiKey({
+  body: {
+    keyId: existingApiKeyId,
+    permissions: {
+      files: ["read", "write", "delete"],
+      users: ["read", "write"],
+    },
+  },
+  headers: user_headers,
+});
+```
+
+### Permissions Structure
+
+Permissions follow a resource-based structure:
+
+```ts
+type Permissions = {
+  [resourceType: string]: string[];
+};
+
+// Example:
+const permissions = {
+  files: ["read", "write", "delete"],
+  users: ["read"],
+  projects: ["read", "write"],
+};
+```
+
+When verifying an API key, all required permissions must be present in the API key's permissions for validation to succeed.
+
 ## Schema
 
 Table: `apiKey`
@@ -871,120 +988,3 @@ Table: `apiKey`
     },
   ]}
 />
-
-## Permissions
-
-API keys can have permissions associated with them, allowing you to control access at a granular level. Permissions are structured as a record of resource types to arrays of allowed actions.
-
-### Setting Default Permissions
-
-You can configure default permissions that will be applied to all newly created API keys:
-
-```ts
-export const auth = betterAuth({
-  plugins: [
-    apiKey({
-      permissions: {
-        defaultPermissions: {
-          files: ["read"],
-          users: ["read"],
-        },
-      },
-    }),
-  ],
-});
-```
-
-You can also provide a function that returns permissions dynamically:
-
-```ts
-export const auth = betterAuth({
-  plugins: [
-    apiKey({
-      permissions: {
-        defaultPermissions: async (userId, ctx) => {
-          // Fetch user role or other data to determine permissions
-          return {
-            files: ["read"],
-            users: ["read"],
-          };
-        },
-      },
-    }),
-  ],
-});
-```
-
-### Creating API Keys with Permissions
-
-When creating an API key, you can specify custom permissions:
-
-```ts
-const apiKey = await auth.api.createApiKey({
-  body: {
-    name: "My API Key",
-    permissions: {
-      files: ["read", "write"],
-      users: ["read"],
-    },
-    userId: "userId",
-  },
-});
-```
-
-### Verifying API Keys with Required Permissions
-
-When verifying an API key, you can check if it has the required permissions:
-
-```ts
-const result = await auth.api.verifyApiKey({
-  body: {
-    key: "your_api_key_here",
-    permissions: {
-      files: ["read"],
-    },
-  },
-});
-
-if (result.valid) {
-  // API key is valid and has the required permissions
-} else {
-  // API key is invalid or doesn't have the required permissions
-}
-```
-
-### Updating API Key Permissions
-
-You can update the permissions of an existing API key:
-
-```ts
-const apiKey = await auth.api.updateApiKey({
-  body: {
-    keyId: existingApiKeyId,
-    permissions: {
-      files: ["read", "write", "delete"],
-      users: ["read", "write"],
-    },
-  },
-  headers: user_headers,
-});
-```
-
-### Permissions Structure
-
-Permissions follow a resource-based structure:
-
-```ts
-type Permissions = {
-  [resourceType: string]: string[];
-};
-
-// Example:
-const permissions = {
-  files: ["read", "write", "delete"],
-  users: ["read"],
-  projects: ["read", "write"],
-};
-```
-
-When verifying an API key, all required permissions must be present in the API key's permissions for validation to succeed.
