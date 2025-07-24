@@ -245,7 +245,7 @@ By default the issuer for TOTP is set to the app name provided in the auth confi
 
 #### Verifying TOTP
 
-After the user has entered their 2FA code, you can verify it using `twoFactor.verifyTotp` method.
+After the user has entered their 2FA code, you can verify it using `twoFactor.verifyTotp` method. `Better Auth` follows standard practice by accepting TOTP codes from one period before and one after the current code, ensuring users can authenticate even with minor time delays on their end.
 
 <APIMethod path="/two-factor/verify-totp" method="POST">
 ```ts
