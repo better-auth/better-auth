@@ -20,7 +20,7 @@ export type {
 	WaitlistFilters,
 	WaitlistOptions,
 	WaitlistPriority,
-	WaitlistStatus
+	WaitlistStatus,
 } from "./types";
 
 // Zod validation schemas for endpoints
@@ -159,12 +159,15 @@ export const waitlist = <O extends WaitlistOptions>(
 				},
 				async (ctx) => {
 					console.log("Waitlist join endpoint called with body:", ctx.body);
-					
+
 					try {
 						const body = ctx.body;
 						const session = await getSessionFromCtx(ctx);
 
-						console.log("Session retrieved:", session?.user?.email || "no session");
+						console.log(
+							"Session retrieved:",
+							session?.user?.email || "no session",
+						);
 
 						// Validate email format
 						if (!isValidEmail(body.email)) {
@@ -176,122 +179,126 @@ export const waitlist = <O extends WaitlistOptions>(
 
 						console.log("Email validation passed for:", body.email);
 
-					console.log("Checking for existing entry...");
-					
-					// Check if user is already on waitlist
-					const existingEntry =
-						await ctx.context.adapter.findOne<WaitlistEntry>({
-							model: "waitlist",
-							where: [{ field: "email", value: body.email }],
-						});
+						console.log("Checking for existing entry...");
 
-					console.log("Existing entry check completed:", existingEntry ? "found existing" : "no existing entry");
+						// Check if user is already on waitlist
+						const existingEntry =
+							await ctx.context.adapter.findOne<WaitlistEntry>({
+								model: "waitlist",
+								where: [{ field: "email", value: body.email }],
+							});
 
-					if (existingEntry) {
-						throw new APIError("BAD_REQUEST", {
-							message: WAITLIST_ERROR_CODES.ALREADY_ON_WAITLIST,
-						});
-					}
+						console.log(
+							"Existing entry check completed:",
+							existingEntry ? "found existing" : "no existing entry",
+						);
 
-					// Check if user has multiple entries (if not allowed)
-					if (!options?.allowMultipleEntries && session?.user) {
-						const userEntry = await ctx.context.adapter.findOne<WaitlistEntry>({
-							model: "waitlist",
-							where: [{ field: "userId", value: session.user.id }],
-						});
-
-						if (userEntry) {
+						if (existingEntry) {
 							throw new APIError("BAD_REQUEST", {
 								message: WAITLIST_ERROR_CODES.ALREADY_ON_WAITLIST,
 							});
 						}
-					}
 
-					// Get current waitlist count
-					const currentEntries =
-						await ctx.context.adapter.findMany<WaitlistEntry>({
-							model: "waitlist",
-						});
-					const currentCount = currentEntries.length;
+						// Check if user has multiple entries (if not allowed)
+						if (!options?.allowMultipleEntries && session?.user) {
+							const userEntry =
+								await ctx.context.adapter.findOne<WaitlistEntry>({
+									model: "waitlist",
+									where: [{ field: "userId", value: session.user.id }],
+								});
 
-					// Check capacity
-					if (options?.maxCapacity && currentCount >= options.maxCapacity) {
-						throw new APIError("BAD_REQUEST", {
-							message: WAITLIST_ERROR_CODES.WAITLIST_FULL,
-						});
-					}
+							if (userEntry) {
+								throw new APIError("BAD_REQUEST", {
+									message: WAITLIST_ERROR_CODES.ALREADY_ON_WAITLIST,
+								});
+							}
+						}
 
-					// Calculate priority
-					let priority: WaitlistPriority = "normal";
-					if (options?.calculatePriority) {
-						priority = await options.calculatePriority({
-							email: body.email,
-							name: body.name,
-							metadata: body.metadata,
+						// Get current waitlist count
+						const currentEntries =
+							await ctx.context.adapter.findMany<WaitlistEntry>({
+								model: "waitlist",
+							});
+						const currentCount = currentEntries.length;
+
+						// Check capacity
+						if (options?.maxCapacity && currentCount >= options.maxCapacity) {
+							throw new APIError("BAD_REQUEST", {
+								message: WAITLIST_ERROR_CODES.WAITLIST_FULL,
+							});
+						}
+
+						// Calculate priority
+						let priority: WaitlistPriority = "normal";
+						if (options?.calculatePriority) {
+							priority = await options.calculatePriority({
+								email: body.email,
+								name: body.name,
+								metadata: body.metadata,
+								referralCode: body.referralCode,
+								context: ctx.context,
+							});
+						}
+
+						// Generate referral code if referral system is enabled
+						let referralCode: string | undefined;
+						if (options?.referral?.enabled) {
+							referralCode = generateReferralCode(body.email);
+						}
+
+						// Generate metadata
+						const metadata = generateMetadata({
+							source: body.source,
+							campaign: body.campaign,
 							referralCode: body.referralCode,
-							context: ctx.context,
+							customData: body.metadata,
 						});
-					}
 
-					// Generate referral code if referral system is enabled
-					let referralCode: string | undefined;
-					if (options?.referral?.enabled) {
-						referralCode = generateReferralCode(body.email);
-					}
+						const position = currentCount + 1;
 
-					// Generate metadata
-					const metadata = generateMetadata({
-						source: body.source,
-						campaign: body.campaign,
-						referralCode: body.referralCode,
-						customData: body.metadata,
-					});
-
-					const position = currentCount + 1;
-
-					// Create waitlist entry
-					const entry = await ctx.context.adapter.create<
-						Omit<WaitlistEntry, "id">,
-						WaitlistEntry
-					>({
-						model: "waitlist",
-						data: {
-							email: body.email,
-							name: body.name || null,
-							position,
-							status: "pending",
-							priority,
-							joinedAt: new Date(),
-							metadata: JSON.stringify(metadata),
-							userId: session?.user?.id || null,
-							referralCode,
-							referredBy: body.referralCode || null,
-							source: body.source || null,
-							campaign: body.campaign || null,
-						},
-					});
-
-					if (!entry) {
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: WAITLIST_ERROR_CODES.FAILED_TO_JOIN_WAITLIST,
+						// Create waitlist entry
+						const entry = await ctx.context.adapter.create<
+							Omit<WaitlistEntry, "id">,
+							WaitlistEntry
+						>({
+							model: "waitlist",
+							data: {
+								email: body.email,
+								name: body.name || null,
+								position,
+								status: "pending",
+								priority,
+								joinedAt: new Date(),
+								metadata: JSON.stringify(metadata),
+								userId: session?.user?.id || null,
+								referralCode,
+								referredBy: body.referralCode || null,
+								source: body.source || null,
+								campaign: body.campaign || null,
+							},
 						});
-					}
 
-					// Call hook if provided
-					if (options?.onUserJoined) {
-						await options.onUserJoined({
-							entry: entry as WaitlistEntry,
+						if (!entry) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message: WAITLIST_ERROR_CODES.FAILED_TO_JOIN_WAITLIST,
+							});
+						}
+
+						// Call hook if provided
+						if (options?.onUserJoined) {
+							await options.onUserJoined({
+								entry: entry as WaitlistEntry,
+								position,
+								totalCount: position,
+								context: ctx.context,
+							});
+						}
+
+						return ctx.json({
+							entry,
 							position,
 							totalCount: position,
-							context: ctx.context,
 						});
-					}
-
-					return ctx.json({
-						entry,
-						position,
-						totalCount: position,
-					});
 					} catch (error) {
 						console.error("Error in waitlist join endpoint:", error);
 						throw error;

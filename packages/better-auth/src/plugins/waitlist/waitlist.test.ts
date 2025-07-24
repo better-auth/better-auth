@@ -112,9 +112,13 @@ describe("Waitlist Plugin", () => {
 						message: response.error.message,
 						status: response.error.status,
 						statusText: response.error.statusText,
-						body: response.error.body
+						body: response.error.body,
 					});
-					throw new Error(`Request failed: ${response.error.message || 'Unknown error'} (${response.error.status})`);
+					throw new Error(
+						`Request failed: ${response.error.message || "Unknown error"} (${
+							response.error.status
+						})`,
+					);
 				}
 
 				// Also check if response.data exists
