@@ -103,11 +103,18 @@ describe("Waitlist Plugin", () => {
 			});
 
 			// Debug the response structure
-			console.log("Response:", JSON.stringify(response, null, 2));
+			console.log("Full Response:", JSON.stringify(response, null, 2));
 
 			// Check if there's an error first
 			if (response.error) {
 				console.error("Error in response:", response.error);
+				throw new Error(`Request failed: ${response.error.message}`);
+			}
+
+			// Also check if response.data exists
+			if (!response.data) {
+				console.error("response.data is undefined");
+				throw new Error("response.data is undefined");
 			}
 
 			expect(response.data?.entry).toBeDefined();
