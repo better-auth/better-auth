@@ -345,13 +345,13 @@ jwt({
 
 ### JWT Safety Options
 
-**disallowFutureIatTime** @default true - Set false to allow setting issue times in the future.
+**allowFutureIatTime** @default false - Set true to allow setting issue times in the future.
 
-**disallowLongerExpTime** @default true - Set false to allows signing tokens past `expirationTime`
+**allowLongerExpTime** @default false - Set true to allow signing tokens past `expirationTime`
 
-**disallowIssuerMismatch** @default true - Allows issuer to mismatch jwt plugin option setting
+**allowIssuerMismatch** @default false - Set true to allow issuer to mismatch jwt plugin option setting
 
-**disallowAudienceMismatch** @default true - Allows audience to mismatch jwt plugin option setting
+**allowAudienceMismatch** @default false - Set true to allow audience to mismatch jwt plugin option setting
 
 ### Custom Signing
 

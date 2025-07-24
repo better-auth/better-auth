@@ -115,29 +115,29 @@ export interface JwtOptions {
 	 */
 	expirationTime?: number | string | Date;
 	/**
-	 * Set false to allow setting issue times in the future.
+	 * Set true to allow setting issue times in the future.
 	 *
-	 * @default true
+	 * @default false
 	 */
-	disallowFutureIatTime?: boolean;
+	allowFutureIatTime?: boolean;
 	/**
-	 * Set false to allows signing tokens past `expirationTime`
+	 * Set true to allow signing tokens past `expirationTime`
 	 *
-	 * @default true
+	 * @default false
 	 */
-	disallowLongerExpTime?: boolean;
+	allowLongerExpTime?: boolean;
 	/**
-	 * Allows issuer to mismatch jwt plugin option setting
+	 * Set true to allow issuer to mismatch jwt plugin option setting
 	 *
-	 * @default true
+	 * @default false
 	 */
-	disallowIssuerMismatch?: boolean;
+	allowIssuerMismatch?: boolean;
 	/**
-	 * Allows audience to mismatch jwt plugin option setting
+	 * Set true to allow audience to mismatch jwt plugin option setting
 	 *
-	 * @default true
+	 * @default false
 	 */
-	disallowAudienceMismatch?: boolean;
+	allowAudienceMismatch?: boolean;
 	/**
 	 * A function that is called to define the payload of the JWT
 	 *

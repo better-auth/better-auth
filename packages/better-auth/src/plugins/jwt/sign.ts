@@ -26,11 +26,12 @@ async function signJwtPayload(
 	payload: JWTPayload,
 	options?: JwtPluginOptions,
 ) {
-	const disallowFutureIatTime = options?.jwt?.disallowFutureIatTime ?? true;
-	const disallowLargerExpTime = options?.jwt?.disallowLongerExpTime ?? true;
-	const disallowIssuerMismatch = options?.jwt?.disallowIssuerMismatch ?? true;
-	const disallowAudienceMismatch =
-		options?.jwt?.disallowAudienceMismatch ?? true;
+	const disallowFutureIatTime = !(options?.jwt?.allowFutureIatTime ?? false);
+	const disallowLargerExpTime = !(options?.jwt?.allowLongerExpTime ?? false);
+	const disallowIssuerMismatch = !(options?.jwt?.allowIssuerMismatch ?? false);
+	const disallowAudienceMismatch = !(
+		options?.jwt?.allowAudienceMismatch ?? false
+	);
 
 	// Iat safety check
 	let iat = payload.iat;
