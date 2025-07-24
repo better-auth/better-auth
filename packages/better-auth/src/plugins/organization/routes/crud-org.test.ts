@@ -7,9 +7,6 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 
 describe("get-full-organization", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
-		user: {
-			modelName: "users",
-		},
 		plugins: [
 			organization({
 				membershipLimit: 6,
