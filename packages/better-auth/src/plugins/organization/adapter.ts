@@ -353,10 +353,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId,
 			isSlug,
 			includeTeams,
+			membersLimit,
 		}: {
 			organizationId: string;
 			isSlug?: boolean;
 			includeTeams?: boolean;
+			membersLimit?: number;
 		}) => {
 			const org = await adapter.findOne<InferOrganization<O>>({
 				model: "organization",
@@ -373,7 +375,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				adapter.findMany<InferMember<O>>({
 					model: "member",
 					where: [{ field: "organizationId", value: org.id }],
-					limit: options?.membershipLimit || 100,
+                    limit: membersLimit ?? options?.membershipLimit ?? 100,
 				}),
 				includeTeams
 					? adapter.findMany<InferTeam<O>>({

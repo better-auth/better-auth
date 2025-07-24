@@ -767,6 +767,20 @@ describe("organization", async (it) => {
 		expect(getFullOrganization.data?.members.length).toBe(6);
 	});
 
+	it("should allow listing members with membersLimit", async () => {
+		const { headers } = await signInWithTestUser();
+		const members = await client.organization.getFullOrganization({
+			query: {
+				membersLimit: 1,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		console.log(members);
+		expect(members.data?.members.length).toBe(1);
+	});
+
 	it("should allow listing invitations for an org", async () => {
 		const invitations = await client.organization.listInvitations({
 			query: {
