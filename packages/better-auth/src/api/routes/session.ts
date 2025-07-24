@@ -135,6 +135,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						sessionDataPayload.expiresAt < Date.now() ||
 						session.session.expiresAt < new Date();
 					if (!hasExpired) {
+						ctx.context.session = session;
 						return ctx.json(
 							session as {
 								session: InferSession<Option>;
