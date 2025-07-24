@@ -10,24 +10,7 @@ describe("get-full-organization", async () => {
 		user: {
 			modelName: "users",
 		},
-		plugins: [
-			organization({
-				membershipLimit: 6,
-				async sendInvitationEmail(data, request) {},
-				schema: {
-					organization: {
-						modelName: "team",
-					},
-					member: {
-						modelName: "teamMembers",
-						fields: {
-							userId: "user_id",
-						},
-					},
-				},
-				invitationLimit: 3,
-			}),
-		],
+		plugins: [organization()],
 		logger: {
 			level: "error",
 		},

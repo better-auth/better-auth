@@ -272,10 +272,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 					});
 				}
-				const members = await adapter.listMembers({
+				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
 				});
-				const owners = members.filter((member) => {
+				const owners = members.filter((member: Member) => {
 					const roles = member.role.split(",");
 					return roles.includes(creatorRole);
 				});
@@ -608,5 +608,92 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
 			return ctx.json(member);
+		},
+	);
+
+export const listMembers = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/list-members",
+		{
+			method: "GET",
+			query: z
+				.object({
+					limit: z
+						.string()
+						.meta({
+							description: "The number of users to return",
+						})
+						.or(z.number())
+						.optional(),
+					offset: z
+						.string()
+						.meta({
+							description: "The offset to start from",
+						})
+						.or(z.number())
+						.optional(),
+					sortBy: z
+						.string()
+						.meta({
+							description: "The field to sort by",
+						})
+						.optional(),
+					sortDirection: z
+						.enum(["asc", "desc"])
+						.meta({
+							description: "The direction to sort by",
+						})
+						.optional(),
+					filterField: z
+						.string()
+						.meta({
+							description: "The field to filter by",
+						})
+						.optional(),
+					filterValue: z
+						.string()
+						.meta({
+							description: "The value to filter by",
+						})
+						.or(z.number())
+						.or(z.boolean())
+						.optional(),
+					filterOperator: z
+						.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+						.meta({
+							description: "The operator to use for the filter",
+						})
+						.optional(),
+				})
+				.optional(),
+			use: [orgMiddleware, orgSessionMiddleware],
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId = session.session.activeOrganizationId;
+			if (!organizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const { members, total } = await adapter.listMembers({
+				organizationId: organizationId,
+				limit: ctx.query?.limit ? Number(ctx.query.limit) : undefined,
+				offset: ctx.query?.offset ? Number(ctx.query.offset) : undefined,
+				sortBy: ctx.query?.sortBy,
+				sortOrder: ctx.query?.sortDirection,
+				filter: ctx.query?.filterField
+					? {
+							field: ctx.query?.filterField,
+							operator: ctx.query.filterOperator,
+							value: ctx.query.filterValue,
+						}
+					: undefined,
+			});
+			return ctx.json({
+				members,
+				total,
+			});
 		},
 	);
