@@ -348,7 +348,7 @@ describe("api-key", async () => {
 			{
 				plugins: [
 					apiKey({
-						disableKeyHashing: true,
+						storeKey: "plain",
 					}),
 				],
 			},
@@ -381,7 +381,7 @@ describe("api-key", async () => {
 			{
 				plugins: [
 					apiKey({
-						disableKeyHashing: true,
+						storeKey: "plain",
 					}),
 				],
 			},

@@ -11,27 +11,54 @@ import { role } from "../../access";
 import { defaultKeyHasher } from "../";
 
 export async function validateApiKey({
-	hashedKey,
+	rawKey,
 	ctx,
 	opts,
-	schema,
 	permissions,
+	verifyStoredKey,
 }: {
-	hashedKey: string;
+	rawKey: string;
 	opts: PredefinedApiKeyOptions;
-	schema: ReturnType<typeof apiKeySchema>;
 	permissions?: Record<string, string[]>;
 	ctx: GenericEndpointContext;
+	verifyStoredKey: (ctx: any, storedKey: string, key: string) => Promise<boolean>;
 }) {
-	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			{
-				field: "key",
-				value: hashedKey,
-			},
-		],
-	});
+	// When storage method is hashed, we can directly query by the hashed key
+	// For other methods, we need to fetch all keys and verify one by one
+	let apiKey: ApiKey | null = null;
+
+	if (opts.storeKey === "hashed" || (typeof opts.storeKey === "object" && "hash" in opts.storeKey)) {
+		// For hashed keys, we can still do direct lookup
+		const storedHashedKey = opts.storeKey === "hashed" 
+			? await defaultKeyHasher(rawKey)
+			: typeof opts.storeKey === "object" && "hash" in opts.storeKey
+			? await opts.storeKey.hash(rawKey)
+			: rawKey;
+
+		apiKey = await ctx.context.adapter.findOne<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{
+					field: "key",
+					value: storedHashedKey,
+				},
+			],
+		});
+	} else {
+		// For encrypted or plain keys, we need to verify each key
+		// This is less efficient but necessary for these storage methods
+		const allKeys = await ctx.context.adapter.findMany<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+		});
+
+		for (const key of allKeys) {
+			const isValid = await verifyStoredKey(ctx, key.key, rawKey);
+			if (isValid) {
+				apiKey = key;
+				break;
+			}
+		}
+	}
 
 	if (!apiKey) {
 		throw new APIError("UNAUTHORIZED", {
@@ -188,6 +215,7 @@ export function verifyApiKey({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
+	verifyStoredKey,
 }: {
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
@@ -195,6 +223,7 @@ export function verifyApiKey({
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
 	): Promise<number> | undefined;
+	verifyStoredKey: (ctx: any, storedKey: string, key: string) => Promise<boolean>;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",
@@ -246,17 +275,15 @@ export function verifyApiKey({
 				}
 			}
 
-			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
-
 			let apiKey: ApiKey | null = null;
 
 			try {
 				apiKey = await validateApiKey({
-					hashedKey: hashed,
+					rawKey: key,
 					permissions: ctx.body.permissions,
 					ctx,
 					opts,
-					schema,
+					verifyStoredKey,
 				});
 				await deleteAllExpiredApiKeys(ctx.context);
 			} catch (error) {

@@ -10,6 +10,11 @@ import type { User } from "../../types";
 import { validateApiKey } from "./routes/verify-api-key";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import {
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../crypto";
+import type { GenericEndpointContext } from "../../types";
 
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
@@ -67,7 +72,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		maximumNameLength: options?.maximumNameLength ?? 32,
 		minimumNameLength: options?.minimumNameLength ?? 1,
 		enableMetadata: options?.enableMetadata ?? false,
-		disableKeyHashing: options?.disableKeyHashing ?? false,
+		storeKey: options?.storeKey ?? "hashed",
 		requireName: options?.requireName ?? false,
 		rateLimit: {
 			enabled:
@@ -91,6 +96,55 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		},
 		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;
+
+	async function storeKey(ctx: GenericEndpointContext, key: string) {
+		if (opts.storeKey === "encrypted") {
+			return await symmetricEncrypt({
+				key: ctx.context.secret,
+				data: key,
+			});
+		}
+		if (opts.storeKey === "hashed") {
+			return await defaultKeyHasher(key);
+		}
+		if (typeof opts.storeKey === "object" && "hash" in opts.storeKey) {
+			return await opts.storeKey.hash(key);
+		}
+		if (typeof opts.storeKey === "object" && "encrypt" in opts.storeKey) {
+			return await opts.storeKey.encrypt(key);
+		}
+
+		return key;
+	}
+
+	async function verifyStoredKey(
+		ctx: GenericEndpointContext,
+		storedKey: string,
+		key: string,
+	): Promise<boolean> {
+		if (opts.storeKey === "encrypted") {
+			return (
+				(await symmetricDecrypt({
+					key: ctx.context.secret,
+					data: storedKey,
+				})) === key
+			);
+		}
+		if (opts.storeKey === "hashed") {
+			const hashedKey = await defaultKeyHasher(key);
+			return hashedKey === storedKey;
+		}
+		if (typeof opts.storeKey === "object" && "hash" in opts.storeKey) {
+			const hashedKey = await opts.storeKey.hash(key);
+			return hashedKey === storedKey;
+		}
+		if (typeof opts.storeKey === "object" && "decrypt" in opts.storeKey) {
+			const decryptedKey = await opts.storeKey.decrypt(storedKey);
+			return decryptedKey === key;
+		}
+
+		return key === storedKey;
+	}
 
 	const schema = mergeSchema(
 		apiKeySchema({
@@ -128,7 +182,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			return apiKey;
 		});
 
-	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
+	const routes = createApiKeyRoutes({ keyGenerator, opts, schema, storeKey, verifyStoredKey });
 
 	return {
 		id: "api-key",
@@ -165,15 +219,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							}
 						}
 
-						const hashed = opts.disableKeyHashing
-							? key
-							: await defaultKeyHasher(key);
-
 						const apiKey = await validateApiKey({
-							hashedKey: hashed,
+							rawKey: key,
 							ctx,
 							opts,
-							schema,
+							verifyStoredKey,
 						});
 
 						await deleteAllExpiredApiKeys(ctx.context);

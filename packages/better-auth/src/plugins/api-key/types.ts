@@ -8,14 +8,20 @@ export interface ApiKeyOptions {
 	 */
 	apiKeyHeaders?: string | string[];
 	/**
-	 * Disable hashing of the API key.
+	 * Store the API key in your database in a secure way
+	 * Note: This will not affect the API key sent to the user, it will only affect the API key stored in your database
 	 *
-	 * ⚠️ Security Warning: It's strongly recommended to not disable hashing.
-	 * Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
-	 *
-	 * @default false
+	 * @default "hashed"
 	 */
-	disableKeyHashing?: boolean;
+	storeKey?:
+		| "hashed"
+		| "plain"
+		| "encrypted"
+		| { hash: (key: string) => Promise<string> }
+		| {
+				encrypt: (key: string) => Promise<string>;
+				decrypt: (key: string) => Promise<string>;
+		  };
 	/**
 	 * The function to get the API key from the context
 	 */

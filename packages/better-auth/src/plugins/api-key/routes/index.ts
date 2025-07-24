@@ -21,7 +21,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "maximumPrefixLength"
 			| "minimumPrefixLength"
 			| "maximumNameLength"
-			| "disableKeyHashing"
+			| "storeKey"
 			| "minimumNameLength"
 			| "requireName"
 			| "enableMetadata"
@@ -74,12 +74,16 @@ export function createApiKeyRoutes({
 	keyGenerator,
 	opts,
 	schema,
+	storeKey,
+	verifyStoredKey,
 }: {
 	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
 		| Promise<string>
 		| string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
+	storeKey: (ctx: any, key: string) => Promise<string>;
+	verifyStoredKey: (ctx: any, storedKey: string, key: string) => Promise<boolean>;
 }) {
 	return {
 		createApiKey: createApiKey({
@@ -87,8 +91,9 @@ export function createApiKeyRoutes({
 			opts,
 			schema,
 			deleteAllExpiredApiKeys,
+			storeKey,
 		}),
-		verifyApiKey: verifyApiKey({ opts, schema, deleteAllExpiredApiKeys }),
+		verifyApiKey: verifyApiKey({ opts, schema, deleteAllExpiredApiKeys, verifyStoredKey }),
 		getApiKey: getApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		updateApiKey: updateApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),

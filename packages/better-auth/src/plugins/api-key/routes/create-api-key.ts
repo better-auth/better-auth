@@ -7,13 +7,13 @@ import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
-import { defaultKeyHasher } from "../";
 
 export function createApiKey({
 	keyGenerator,
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
+	storeKey,
 }: {
 	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
 		| Promise<string>
@@ -24,6 +24,7 @@ export function createApiKey({
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
 	): Promise<number> | undefined;
+	storeKey: (ctx: any, key: string) => Promise<string>;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
@@ -377,7 +378,7 @@ export function createApiKey({
 				prefix: prefix || opts.defaultPrefix,
 			});
 
-			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
+			const hashed = await storeKey(ctx, key);
 
 			let start: string | null = null;
 
