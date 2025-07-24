@@ -2,8 +2,6 @@ import {
 	type GenericEndpointContext,
 	type BetterAuthPlugin,
 	logger,
-	type User,
-	type Session,
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
