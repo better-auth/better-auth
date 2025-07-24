@@ -25,7 +25,7 @@ export interface OrganizationOptions {
 	 */
 	allowUserToCreateOrganization?:
 		| boolean
-		| ((user: User) => Promise<boolean> | boolean);
+		| ((user: User & Record<string, any>) => Promise<boolean> | boolean);
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
