@@ -62,6 +62,17 @@ async function resolvePriceIdFromLookupKey(
 	return prices.data[0]?.id;
 }
 
+function subscriptionMatches(
+	subscription: Stripe.Subscription,
+	targetSubscriptionId?: string,
+): boolean {
+	const isValidStatus =
+		subscription.status === "active" || subscription.status === "trialing";
+	return targetSubscriptionId
+		? subscription.id === targetSubscriptionId && isValidStatus
+		: isValidStatus;
+}
+
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
@@ -320,20 +331,33 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 
 				const activeSubscription = customerId
-					? await client.subscriptions
-							.list({
+					? await Promise.all([
+							client.subscriptions.list({
 								customer: customerId,
 								status: "active",
+							}),
+							client.subscriptions.list({
+								customer: customerId,
+								status: "trialing",
+							}),
+						])
+							.then(([activeRes, trialRes]) => {
+								const allSubs = [...activeRes.data, ...trialRes.data];
+								const targetSubscriptionId =
+									subscriptionToUpdate?.stripeSubscriptionId ||
+									ctx.body.subscriptionId;
+								const matchingSubscription = allSubs.find((subscription) =>
+									subscriptionMatches(subscription, targetSubscriptionId),
+								);
+								return matchingSubscription ?? null;
 							})
-							.then((res) =>
-								res.data.find(
-									(subscription) =>
-										subscription.id ===
-											subscriptionToUpdate?.stripeSubscriptionId ||
-										ctx.body.subscriptionId,
-								),
-							)
-							.catch((e) => null)
+							.catch((error) => {
+								ctx.context.logger.error(
+									"Error retrieving subscriptions from Stripe",
+									error,
+								);
+								return null;
+							})
 					: null;
 
 				const subscriptions = subscriptionToUpdate
