@@ -17,14 +17,14 @@ export async function getJwtToken(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		const alg = options?.jwks?.keyPairConfig?.alg || "EdDSA"
+		const alg = options?.jwks?.keyPairConfig?.alg || "EdDSA";
 
 		const { publicWebKey, privateWebKey } =
 			await generateExportedKeyPair(options);
 		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 
 		let jwk: Partial<Jwk> = {
-			publicKey: JSON.stringify({alg, ...publicWebKey}),
+			publicKey: JSON.stringify({ alg, ...publicWebKey }),
 			privateKey: privateKeyEncryptionEnabled
 				? JSON.stringify(
 						await symmetricEncrypt({

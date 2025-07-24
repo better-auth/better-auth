@@ -85,7 +85,7 @@ describe("jwt", async (it) => {
 		const jwks = await client.jwks();
 
 		expect(jwks.data?.keys).length.above(0);
-		expect(jwks.data?.keys[0].alg).toBe("EdDSA")
+		expect(jwks.data?.keys[0].alg).toBe("EdDSA");
 	});
 
 	it("Signed tokens can be validated with the JWKS", async () => {
