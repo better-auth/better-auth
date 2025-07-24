@@ -181,7 +181,7 @@ describe("should work with custom rules", async () => {
 	it("should use default rules if custom rules are not defined", async () => {
 		for (let i = 0; i < 5; i++) {
 			const response = await client.getSession();
-			expect(response.error?.status).toBeLessThan(429); // None should be rate-limited
+			expect(response.error?.status).toBeLessThan(429);
 		}
 	});
 });
@@ -191,10 +191,10 @@ describe("refillAmount and refillInterval logic", async () => {
 	const { client, testUser } = await getTestInstance({
 		rateLimit: {
 			enabled: true,
-			window: 30000, // 30s burst window
+			window: 30000,
 			max: 5,
 			refillAmount: 1,
-			refillInterval: 1000, // refill 1 token every second
+			refillInterval: 1000,
 		},
 	});
 
@@ -202,24 +202,24 @@ describe("refillAmount and refillInterval logic", async () => {
 		for (let i = 0; i < 7; i++) {
 			const res = await client.getSession();
 			if (i < 5) {
-				expect(res.error).toBeNull(); // allowed
+				expect(res.error).toBeNull();
 			} else {
-				expect(res.error?.status).toBe(429); // blocked
+				expect(res.error?.status).toBe(429);
 			}
 		}
 	});
 
 	it("should allow new request after refill interval", async () => {
-		await new Promise((res) => setTimeout(res, 1100)); // wait >1s
-		const res = await client.getSession(); // 1 token should be refilled
+		await new Promise((res) => setTimeout(res, 1100));
+		const res = await client.getSession();
 		expect(res.error).toBeNull();
 	});
 
 	it("should refill multiple tokens over time", async () => {
-		await new Promise((res) => setTimeout(res, 5000)); // wait 5s = +5 tokens
+		await new Promise((res) => setTimeout(res, 5000));
 		for (let i = 0; i < 5; i++) {
 			const res = await client.getSession();
-			expect(res.error).toBeNull(); // all should pass
+			expect(res.error).toBeNull();
 		}
 	});
 });
