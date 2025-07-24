@@ -106,7 +106,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			};
 		},
 		listMembers: async (data: {
-			organizationId: string;
+			organizationId?: string;
 			limit?: number;
 			offset?: number;
 			sortBy?: string;

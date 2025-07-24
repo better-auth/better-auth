@@ -3,16 +3,11 @@ import { getTestInstance } from "../../../test-utils/test-instance";
 import { organization } from "../organization";
 import { createAuthClient } from "../../../client";
 import { organizationClient } from "../client";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 
 describe("listMembers", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
-		user: {
-			modelName: "users",
-		},
 		plugins: [organization()],
-		logger: {
-			level: "error",
-		},
 	});
 	const ctx = await auth.$context;
 	const { headers } = await signInWithTestUser();
@@ -35,6 +30,17 @@ describe("listMembers", async () => {
 			headers,
 		},
 	});
+	const secondOrg = await client.organization.create({
+		name: "test-second",
+		slug: "test-second",
+		metadata: {
+			test: "second-org",
+		},
+		fetchOptions: {
+			headers,
+		},
+	});
+
 	for (let i = 0; i < 10; i++) {
 		const user = await ctx.adapter.create({
 			model: "user",
@@ -166,6 +172,43 @@ describe("listMembers", async () => {
 		expect(members.data?.members[0].id).toBe(secondMember.id);
 		expect(members.data?.members[members.data?.members.length - 1].id).toBe(
 			oneBeforeLastMember.id,
+		);
+	});
+
+	it("should list members by organization id", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				organizationId: secondOrg.data?.id as string,
+			},
+		});
+		expect(members.data?.members.length).toBe(1);
+		expect(members.data?.total).toBe(1);
+	});
+
+	it("should not list members if not a member", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			email: "test21@test.com",
+			name: "test22",
+			password: "password",
+			fetchOptions: {
+				onSuccess: cookieSetter(newHeaders),
+			},
+		});
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+			query: {
+				organizationId: org.data?.id as string,
+			},
+		});
+		expect(members.error).toBeTruthy();
+		expect(members.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 		);
 	});
 });

@@ -672,10 +672,52 @@ const invitations = await auth.api.listUserInvitations({
 The `email` query parameter is only available on the server to query for invitations for a specific user.
 </Callout>
 
-
-
-
 ## Members
+
+### List Members
+
+To list all members of an organization you can use the `listMembers` function.
+
+<APIMethod path="/organization/list-members" method="GET">
+
+```ts
+type listMembers = {
+    /**
+     * An optional organization ID to list members for. If not provided, will default to the user's active organization. 
+     */
+    organizationId?: string = "organization-id"
+    /**
+     * The limit of members to return.
+     */
+    limit?: number = 100
+    /**
+     * The offset to start from.
+     */
+    offset?: number = 0
+    /**
+     * The field to sort by.
+     */
+    sortBy?: string = "createdAt"
+    /**
+     * The direction to sort by.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * The field to filter by.
+     */
+    filterField?: string = "createdAt"
+    /**
+     * The operator to filter by.
+     */
+    filterOperator?: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "nin" | "contains" = "eq"
+    /**
+     * The value to filter by.
+     */
+    filterValue?: string = "value"
+    /**
+}
+```
+</APIMethod>
 
 ### Remove Member
 
