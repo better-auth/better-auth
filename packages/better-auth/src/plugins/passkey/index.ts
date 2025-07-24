@@ -133,9 +133,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							authenticatorAttachment: z
 								.enum(["platform", "cross-platform"])
 								.optional(),
-							name: z
-								.string()
-								.optional(),
+							name: z.string().optional(),
 						})
 						.optional(),
 					metadata: {
