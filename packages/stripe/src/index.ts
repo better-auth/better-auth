@@ -420,7 +420,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-
 				let subscription = existingSubscription;
 				if (!subscription) {
 					const incompleteSubscription = subscriptions.find(
@@ -447,8 +446,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							id: incompleteSubscription.id,
 							referenceId: incompleteSubscription.referenceId,
 
-				
-
 							plan: plan.name.toLowerCase(),
 							stripeCustomerId: customerId,
 
@@ -471,9 +468,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription = newSubscription;
 					}
 				}
-
-				
-
 
 				if (!subscription) {
 					ctx.context.logger.error("Subscription ID not found");
