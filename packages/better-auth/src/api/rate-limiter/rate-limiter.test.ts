@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 // ------------------ BASIC RATE LIMITING ------------------
@@ -98,7 +98,6 @@ describe("rate-limiter", { timeout: 10000 }, async () => {
 			if (i >= 20) {
 				expect(response.error?.status).toBe(429);
 			} else {
-				// Acceptable status for unauthenticated access
 				expect([null, 401]).toContain(response.error?.status ?? null);
 			}
 		}
@@ -197,16 +196,28 @@ describe("should work with custom rules", async () => {
 });
 
 // ------------------ REFILL LOGIC ------------------
-describe("refillAmount and refillInterval logic", async () => {
-	vi.useFakeTimers();
-	const { client } = await getTestInstance({
-		rateLimit: {
-			enabled: true,
-			window: 30000,
-			max: 5,
-			refillAmount: 1,
-			refillInterval: 1000,
-		},
+describe("refillAmount and refillInterval logic", () => {
+	beforeAll(() => {
+		vi.useFakeTimers();
+	});
+
+	afterAll(() => {
+		vi.useRealTimers();
+	});
+
+	let client: Awaited<ReturnType<typeof getTestInstance>>["client"];
+
+	beforeEach(async () => {
+		const instance = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 30000,
+				max: 5,
+				refillAmount: 1,
+				refillInterval: 1000,
+			},
+		});
+		client = instance.client;
 	});
 
 	it("should allow 5 initial requests then rate-limit", async () => {
@@ -221,13 +232,13 @@ describe("refillAmount and refillInterval logic", async () => {
 	});
 
 	it("should allow 1 new request after refill interval", async () => {
-		vi.advanceTimersByTime(1100);
+		await vi.advanceTimersByTimeAsync(1100);
 		const res = await client.getSession();
 		expect(res.error).toBeNull();
 	});
 
 	it("should refill multiple tokens over time", async () => {
-		vi.advanceTimersByTime(5000);
+		await vi.advanceTimersByTimeAsync(5000);
 		for (let i = 0; i < 5; i++) {
 			const res = await client.getSession();
 			expect(res.error).toBeNull();
