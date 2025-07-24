@@ -356,7 +356,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									"Error retrieving subscriptions from Stripe",
 									error,
 								);
-								return null;
+								throw ctx.error("BAD_REQUEST", {
+									message: error.message,
+									code: error.code,
+								});
 							})
 					: null;
 
