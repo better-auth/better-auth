@@ -38,6 +38,9 @@ jobs:
             - name: Install
               run: pnpm install
 
+            - name: Check for Changesets
+              run: pnpm changeset --since=main
+
             - name: Build
               env:
                 TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -70,9 +73,6 @@ jobs:
                 TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
                 TURBO_REMOTE_ONLY: true
               run: pnpm typecheck
-
-            - name: Check for Changesets
-              run: pnpm changelog:check
 
             - name: Stop Docker Containers
               run: docker compose down
