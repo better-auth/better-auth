@@ -430,7 +430,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						await ctx.context.adapter.update({
 							model: "subscription",
 							update: {
-								...incompleteSubscription,
 								plan: plan.name.toLowerCase(),
 								seats: ctx.body.seats || 1,
 								stripeCustomerId: customerId,
@@ -444,10 +443,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 						});
 						subscription = {
-							...incompleteSubscription,
+							id: incompleteSubscription.id,
+							referenceId: incompleteSubscription.referenceId,
 							plan: plan.name.toLowerCase(),
 							seats: ctx.body.seats || 1,
 							stripeCustomerId: customerId,
+							status: "active",
 						};
 					} else {
 						const newSubscription = await ctx.context.adapter.create<
