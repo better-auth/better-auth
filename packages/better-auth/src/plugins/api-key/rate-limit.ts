@@ -11,9 +11,6 @@ interface RateLimitResult {
 
 /**
  * Determines if a request is allowed based on rate limiting parameters.
- *
- * @returns An object indicating whether the request is allowed and, if not,
- *          a message and updated ApiKey data.
  */
 export function isRateLimited(
 	apiKey: ApiKey,
@@ -47,7 +44,7 @@ export function isRateLimited(
 
 	const elapsed = now.getTime() - lastRequest.getTime();
 
-	// Refill tokens if refill logic is configured
+	// Token bucket refill logic
 	if (refillInterval > 0 && refillAmount > 0) {
 		const refills = Math.floor(elapsed / refillInterval);
 		if (refills > 0) {
@@ -55,16 +52,21 @@ export function isRateLimited(
 			requestCount = Math.min(requestCount, rateLimitMax); // cap at max
 		}
 	} else if (elapsed >= rateLimitTimeWindow) {
-		// Fallback: reset count after full window if no refill logic
+		// fallback: reset after window
 		requestCount = 0;
 	}
 
 	if (requestCount >= rateLimitMax) {
+		const retryMs =
+			refillInterval > 0
+				? refillInterval - (elapsed % refillInterval)
+				: rateLimitTimeWindow - elapsed;
+
 		return {
 			success: false,
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED,
+			tryAgainIn: Math.max(0, Math.ceil(retryMs / 1000)),
 			update: null,
-			tryAgainIn: Math.max(0, Math.ceil(rateLimitTimeWindow - elapsed)), // Fix: avoid negative retry time
 		};
 	}
 

@@ -7,7 +7,6 @@ import {
 	afterAll,
 	beforeEach,
 } from "vitest";
-
 import { getTestInstance } from "../../test-utils/test-instance";
 
 // ------------------ BASIC RATE LIMITING ------------------
