@@ -72,4 +72,3 @@ export function isRateLimited(
 		update: { lastRequest: now, requestCount },
 	};
 }
-
