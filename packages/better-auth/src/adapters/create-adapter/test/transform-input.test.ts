@@ -260,5 +260,4 @@ describe("create adapter's transformInput", () => {
 			throw error;
 		}
 	});
-
 });
