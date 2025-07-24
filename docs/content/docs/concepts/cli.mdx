@@ -13,6 +13,10 @@ The `generate` command creates the schema required by Better Auth. If you're usi
 npx @better-auth/cli@latest generate
 ```
 
+<Callout type="warn">
+We recommend not using Bun to run the generate / migrate CLI commands, as we've seen several reports of issues with Bun.
+</Callout>
+
 ### Options
 
 - `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
@@ -27,6 +31,10 @@ The migrate command applies the Better Auth schema directly to your database. Th
 ```bash title="Terminal"
 npx @better-auth/cli@latest migrate
 ```
+
+<Callout type="warn">
+We recommend not using Bun to run the generate / migrate CLI commands, as we've seen several reports of issues with Bun.
+</Callout>
 
 ### Options
 
