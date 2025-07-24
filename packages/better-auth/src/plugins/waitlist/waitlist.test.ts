@@ -102,10 +102,6 @@ describe("Waitlist Plugin", () => {
 					name: "User One",
 					metadata: { source: "landing-page" },
 				});
-
-				// Debug the response structure
-				console.log("Full Response:", JSON.stringify(response, null, 2));
-
 				// Check if there's an error first
 				if (response.error) {
 					console.error("Error details:", {
@@ -176,10 +172,24 @@ describe("Waitlist Plugin", () => {
 		it("should enforce capacity limits", async () => {
 			// Update auth with smaller capacity
 			const smallDatabase = new Database(":memory:");
-			auth = betterAuth({
+			const smallAuthOptions = {
 				database: smallDatabase,
+				emailAndPassword: {
+					enabled: true,
+				},
 				plugins: [waitlist({ maxCapacity: 2 })],
-			});
+				baseURL: "http://localhost:3000",
+				secret: "test-secret",
+				advanced: {
+					disableCSRFCheck: true,
+				},
+			};
+
+			auth = betterAuth(smallAuthOptions);
+
+			// Run migrations to create database tables for the new database
+			const { runMigrations } = await getMigrations(smallAuthOptions);
+			await runMigrations();
 
 			await client.waitlist.join({
 				email: "user1@test.com",
