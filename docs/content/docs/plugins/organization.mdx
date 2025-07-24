@@ -1645,6 +1645,23 @@ createAuthClient({
 })
 ```
 
+For separate client-server projects, we support providing the schema object directly:
+
+```ts title="auth-client.ts"
+const schema = {
+  organization: {
+    additionalFields: {
+      myCustomField: {
+        type: "string",
+      },
+    },
+  },
+};
+
+createAuthClient({
+  plugins: [organizationClient({ $inferAuth: {} as typeof schema })]
+})
+```
 
 
 ## Options
