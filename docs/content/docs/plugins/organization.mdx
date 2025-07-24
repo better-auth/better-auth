@@ -407,6 +407,10 @@ type getFullOrganization = {
      * The organization slug to get.  
      */
     organizationSlug?: string = "org-slug"
+    /**
+     * The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.
+     */
+    membersLimit?: number = 100
 }
 ```
 </APIMethod>

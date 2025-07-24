@@ -553,6 +553,14 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 							description: "The organization slug to get",
 						})
 						.optional(),
+					membersLimit: z
+						.number()
+						.meta({
+							description:
+								"The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.",
+						})
+						.min(1)
+						.optional(),
 				}),
 			),
 			requireHeaders: true,
@@ -593,6 +601,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				organizationId,
 				isSlug: !!ctx.query?.organizationSlug,
 				includeTeams: ctx.context.orgOptions.teams?.enabled,
+				membersLimit: ctx.query?.membersLimit,
 			});
 			const isMember = organization?.members.find(
 				(member) => member.userId === session.user.id,
