@@ -20,7 +20,7 @@ export type {
 	WaitlistFilters,
 	WaitlistOptions,
 	WaitlistPriority,
-	WaitlistStatus,
+	WaitlistStatus
 } from "./types";
 
 // Zod validation schemas for endpoints
@@ -158,22 +158,34 @@ export const waitlist = <O extends WaitlistOptions>(
 					},
 				},
 				async (ctx) => {
-					const body = ctx.body;
-					const session = await getSessionFromCtx(ctx);
+					console.log("Waitlist join endpoint called with body:", ctx.body);
+					
+					try {
+						const body = ctx.body;
+						const session = await getSessionFromCtx(ctx);
 
-					// Validate email format
-					if (!isValidEmail(body.email)) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid email format",
-						});
-					}
+						console.log("Session retrieved:", session?.user?.email || "no session");
 
+						// Validate email format
+						if (!isValidEmail(body.email)) {
+							console.log("Email validation failed for:", body.email);
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid email format",
+							});
+						}
+
+						console.log("Email validation passed for:", body.email);
+
+					console.log("Checking for existing entry...");
+					
 					// Check if user is already on waitlist
 					const existingEntry =
 						await ctx.context.adapter.findOne<WaitlistEntry>({
 							model: "waitlist",
 							where: [{ field: "email", value: body.email }],
 						});
+
+					console.log("Existing entry check completed:", existingEntry ? "found existing" : "no existing entry");
 
 					if (existingEntry) {
 						throw new APIError("BAD_REQUEST", {
@@ -280,6 +292,10 @@ export const waitlist = <O extends WaitlistOptions>(
 						position,
 						totalCount: position,
 					});
+					} catch (error) {
+						console.error("Error in waitlist join endpoint:", error);
+						throw error;
+					}
 				},
 			),
 

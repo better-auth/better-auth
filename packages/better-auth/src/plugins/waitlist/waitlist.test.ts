@@ -96,32 +96,42 @@ describe("Waitlist Plugin", () => {
 
 	describe("Basic Functionality", () => {
 		it("should allow users to join waitlist", async () => {
-			const response = await client.waitlist.join({
-				email: "user1@test.com",
-				name: "User One",
-				metadata: { source: "landing-page" },
-			});
+			try {
+				const response = await client.waitlist.join({
+					email: "user1@test.com",
+					name: "User One",
+					metadata: { source: "landing-page" },
+				});
 
-			// Debug the response structure
-			console.log("Full Response:", JSON.stringify(response, null, 2));
+				// Debug the response structure
+				console.log("Full Response:", JSON.stringify(response, null, 2));
 
-			// Check if there's an error first
-			if (response.error) {
-				console.error("Error in response:", response.error);
-				throw new Error(`Request failed: ${response.error.message}`);
+				// Check if there's an error first
+				if (response.error) {
+					console.error("Error details:", {
+						message: response.error.message,
+						status: response.error.status,
+						statusText: response.error.statusText,
+						body: response.error.body
+					});
+					throw new Error(`Request failed: ${response.error.message || 'Unknown error'} (${response.error.status})`);
+				}
+
+				// Also check if response.data exists
+				if (!response.data) {
+					console.error("response.data is undefined");
+					throw new Error("response.data is undefined");
+				}
+
+				expect(response.data?.entry).toBeDefined();
+				expect(response.data?.entry.email).toBe("user1@test.com");
+				expect(response.data?.entry.position).toBe(1);
+				expect(response.data?.entry.status).toBe("pending");
+				expect(response.data?.totalCount).toBe(1);
+			} catch (error) {
+				console.error("Test failed with error:", error);
+				throw error;
 			}
-
-			// Also check if response.data exists
-			if (!response.data) {
-				console.error("response.data is undefined");
-				throw new Error("response.data is undefined");
-			}
-
-			expect(response.data?.entry).toBeDefined();
-			expect(response.data?.entry.email).toBe("user1@test.com");
-			expect(response.data?.entry.position).toBe(1);
-			expect(response.data?.entry.status).toBe("pending");
-			expect(response.data?.totalCount).toBe(1);
 		});
 
 		it("should prevent duplicate email entries", async () => {
