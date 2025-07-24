@@ -1421,7 +1421,23 @@ describe("Additional Fields", async () => {
 		},
 	});
 
-	it("Expect team endpoints to still be defined on authClient", async () => {
+	const client2 = createAuthClient({
+		plugins: [
+			organizationClient({
+				// We also support passing the schema directly
+				$inferAuth: {} as typeof orgOptions.schema,
+				teams: { enabled: true },
+			}),
+		],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("Expect team endpoints to still be defined", async () => {
 		const teams = client.organization.createTeam;
 		expect(teams).toBeDefined();
 		expectTypeOf<typeof teams>().not.toEqualTypeOf<undefined>();
@@ -1429,16 +1445,28 @@ describe("Additional Fields", async () => {
 
 	it("Should infer the organization schema", async () => {
 		const org = client.organization.create;
-		type Params = Parameters<typeof org>[0];
+		const org2 = client2.organization.create;
+		type Params = Omit<Parameters<typeof org>[0], "fetchOptions">;
+		type Params2 = Omit<Parameters<typeof org2>[0], "fetchOptions">;
 		expect(org).toBeDefined();
-		expectTypeOf<Omit<Params, "fetchOptions">>().toEqualTypeOf<{
+		expectTypeOf<Params>().toEqualTypeOf<{
 			name: string;
 			slug: string;
+			logo?: string | undefined;
+			userId?: string | undefined;
+			metadata?: Record<string, any> | undefined;
 			someRequiredField: string;
 			someOptionalField?: string | undefined;
-			metadata?: Record<string, any> | undefined;
-			userId?: string | undefined;
+			keepCurrentActiveOrganization?: boolean | undefined;
+		}>();
+		expectTypeOf<Params2>().toEqualTypeOf<{
+			name: string;
+			slug: string;
 			logo?: string | undefined;
+			userId?: string | undefined;
+			metadata?: Record<string, any> | undefined;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
 			keepCurrentActiveOrganization?: boolean | undefined;
 		}>();
 	});
