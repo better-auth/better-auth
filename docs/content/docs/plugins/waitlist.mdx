@@ -1,0 +1,853 @@
+---
+title: Waitlist
+description: Comprehensive waitlist management plugin for Better Auth with queue management, analytics, and administrative controls.
+---
+
+The Waitlist plugin provides a comprehensive solution for managing user waitlists with advanced features including priority queuing, analytics tracking, referral systems, bulk operations, and administrative controls. Perfect for product launches, beta programs, and feature rollouts.
+
+## Features
+
+- **Intelligent Queue Management** - Automatic position tracking with smart rebalancing
+- **Multi-level Priority System** - Four priority levels: `low`, `normal`, `high`, `urgent`
+- **Comprehensive Analytics** - Track signups, conversions, wait times, and performance metrics
+- **Admin Operations** - Bulk approve/reject, export data, and advanced filtering
+- **Referral System** - Reward users for referring others with priority boosts
+- **Campaign Support** - Separate waitlists for different campaigns or products
+- **Auto-cleanup** - Automatically remove expired entries based on configurable rules
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the plugin to your auth config
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { waitlist } from "better-auth/plugins" // [!code highlight]
+
+        export const auth = betterAuth({
+            plugins: [
+                waitlist() // [!code highlight]
+            ]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+    <Step>
+        ### Add the client plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { waitlistClient } from "better-auth/client/plugins" // [!code highlight]
+
+        export const authClient = createAuthClient({
+            plugins: [
+                waitlistClient() // [!code highlight]
+            ]
+        })
+        ```
+    </Step>
+</Steps>
+
+## Basic Usage
+
+Once installed, you can start using the waitlist functionality. Users can join the waitlist, check their status, and admins can manage entries.
+
+### Join Waitlist
+
+<Endpoint path="/waitlist/join" method="POST" />
+
+Allow users to join your waitlist with email and optional metadata.
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+        ```ts
+        const { data, error } = await authClient.waitlist.join({
+            email: "user@example.com",
+            name: "John Doe",
+            metadata: { 
+                source: "landing-page",
+                utm_campaign: "launch"
+            },
+            source: "twitter",
+            campaign: "early-access",
+            referralCode: "FRIEND123"
+        });
+
+        if (data) {
+            console.log(`Position: ${data.position}`);
+            console.log(`Total in queue: ${data.totalCount}`);
+            console.log(`Estimated wait: ${data.estimatedWaitTime} days`);
+        }
+        ```
+    </Tab>
+    <Tab value="Server">
+        ```ts
+        const result = await auth.api.joinWaitlist({
+            body: {
+                email: "user@example.com",
+                name: "John Doe",
+                metadata: { source: "landing-page" }
+            }
+        });
+        ```
+    </Tab>
+</Tabs>
+
+### Check Status
+
+<Endpoint path="/waitlist/status" method="GET" />
+
+Users can check their current position and status in the waitlist.
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+        ```ts
+        const { data, error } = await authClient.waitlist.getStatus({
+            email: "user@example.com"
+        });
+
+        if (data) {
+            console.log(`Status: ${data.entry.status}`);
+            console.log(`Position: ${data.position}`);
+            console.log(`Priority: ${data.entry.priority}`);
+        }
+        ```
+    </Tab>
+    <Tab value="Server">
+        ```ts
+        const status = await auth.api.getWaitlistStatus({
+            query: { email: "user@example.com" }
+        });
+        ```
+    </Tab>
+</Tabs>
+
+### Leave Waitlist
+
+<Endpoint path="/waitlist/leave" method="POST" />
+
+Allow users to leave the waitlist.
+
+```ts
+await authClient.waitlist.leave({
+    email: "user@example.com"
+});
+```
+
+## Configuration
+
+### Basic Configuration
+
+Configure the waitlist plugin with capacity limits, cleanup settings, and event hooks.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { waitlist } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        waitlist({
+            maxCapacity: 1000, // [!code highlight]
+            allowMultipleEntries: false, // [!code highlight]
+            enableAutoCleanup: true, // [!code highlight]
+            expirationDays: 30, // [!code highlight]
+            
+            // Event hooks // [!code highlight]
+            onUserJoined: async ({ entry, position, totalCount, context }) => { // [!code highlight]
+                console.log(`${entry.email} joined at position ${position}`); // [!code highlight]
+                // Send welcome email // [!code highlight]
+            }, // [!code highlight]
+            
+            onUserApproved: async ({ entry, approvedBy, context }) => { // [!code highlight]
+                console.log(`${entry.email} approved`); // [!code highlight]
+                // Send approval email and grant access // [!code highlight]
+            }, // [!code highlight]
+            
+            // Admin authorization // [!code highlight]
+            isAdmin: (context, user) => user.role === "admin" // [!code highlight]
+        })
+    ]
+})
+```
+
+### Analytics Configuration
+
+Enable comprehensive tracking and analytics for your waitlist.
+
+```ts title="auth.ts"
+waitlist({
+    analytics: { // [!code highlight]
+        enabled: true, // [!code highlight]
+        trackSources: true, // [!code highlight]
+        trackCampaigns: true, // [!code highlight]
+        retentionPeriodDays: 365 // [!code highlight]
+    } // [!code highlight]
+})
+```
+
+### Referral System
+
+Set up a referral system to reward users for inviting others.
+
+```ts title="auth.ts"
+waitlist({
+    referral: { // [!code highlight]
+        enabled: true, // [!code highlight]
+        rewardType: "skip_positions", // [!code highlight]
+        rewardValue: 3, // Skip 3 positions // [!code highlight]
+        maxReferrals: 10, // [!code highlight]
+        trackingEnabled: true // [!code highlight]
+    } // [!code highlight]
+})
+```
+
+### Campaign Support
+
+Enable campaign support for multiple waitlists.
+
+```ts title="auth.ts"
+waitlist({
+    campaigns: { // [!code highlight]
+        enabled: true, // [!code highlight]
+        allowUserToCreateCampaign: (user, context) => { // [!code highlight]
+            return user.role === "admin" // [!code highlight]
+        } // [!code highlight]
+    } // [!code highlight]
+})
+```
+
+### Custom Priority Calculation
+
+Implement custom logic for determining user priority.
+
+```ts title="auth.ts"
+waitlist({
+    calculatePriority: async ({ email, metadata, referralCode, context }) => { // [!code highlight]
+        // VIP domains get urgent priority // [!code highlight]
+        if (email.endsWith("@vip-domain.com")) { // [!code highlight]
+            return "urgent"; // [!code highlight]
+        } // [!code highlight]
+        
+        // Referred users get high priority // [!code highlight]
+        if (referralCode) { // [!code highlight]
+            return "high"; // [!code highlight]
+        } // [!code highlight]
+        
+        // Check metadata for premium sources // [!code highlight]
+        if (metadata?.source === "twitter") { // [!code highlight]
+            return "normal"; // [!code highlight]
+        } // [!code highlight]
+        
+        return "low"; // [!code highlight]
+    } // [!code highlight]
+})
+```
+
+## Admin Operations
+
+The waitlist plugin provides comprehensive admin functionality for managing entries, viewing analytics, and performing bulk operations.
+
+### Get All Entries
+
+<Endpoint path="/waitlist" method="GET" />
+
+Retrieve waitlist entries with filtering and pagination.
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+        ```ts
+        // Get all pending entries
+        const { data } = await authClient.waitlist.admin.getWaitlist({
+            status: "pending",
+            limit: 50,
+            offset: 0,
+            sortBy: "position",
+            sortOrder: "asc"
+        });
+
+        // Advanced filtering
+        const filtered = await authClient.waitlist.admin.getWaitlist({
+            status: "pending",
+            priority: "high",
+            dateRange: {
+                start: new Date("2024-01-01"),
+                end: new Date("2024-01-31")
+            },
+            source: "twitter",
+            campaign: "early-access",
+            search: "john" // search by name or email
+        });
+        ```
+    </Tab>
+    <Tab value="Server">
+        ```ts
+        const entries = await auth.api.getWaitlist({
+            query: {
+                status: "pending",
+                limit: 50
+            }
+        });
+        ```
+    </Tab>
+</Tabs>
+
+### Bulk Operations
+
+<Endpoint path="/waitlist/bulk-update" method="POST" />
+
+Perform bulk approve, reject, or priority updates on multiple entries.
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+        ```ts
+        // Bulk approve users
+        const result = await authClient.waitlist.admin.bulkUpdate({
+            action: "approve",
+            ids: ["wl_123", "wl_456", "wl_789"],
+            reason: "Early access granted for beta testers"
+        });
+
+        // Bulk update priority
+        await authClient.waitlist.admin.bulkUpdate({
+            action: "update_priority",
+            ids: ["wl_123", "wl_456"],
+            priority: "high",
+            reason: "VIP users"
+        });
+
+        // Bulk reject
+        await authClient.waitlist.admin.bulkUpdate({
+            action: "reject",
+            ids: ["wl_999"],
+            reason: "Invalid email domain"
+        });
+        ```
+    </Tab>
+    <Tab value="Server">
+        ```ts
+        const result = await auth.api.bulkUpdateWaitlist({
+            body: {
+                action: "approve",
+                ids: ["wl_123", "wl_456"],
+                reason: "Manual approval"
+            }
+        });
+        ```
+    </Tab>
+</Tabs>
+
+### Analytics & Insights
+
+<Endpoint path="/waitlist/analytics" method="GET" />
+
+Get comprehensive analytics and performance metrics for your waitlist.
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+        ```ts
+        const { data: analytics } = await authClient.waitlist.admin.getAnalytics({
+            period: "30d"
+        });
+
+        console.log({
+            totalEntries: analytics.totalEntries,
+            conversionRate: analytics.conversionRate,
+            averageWaitTime: analytics.averageWaitTime,
+            topSources: analytics.topSources,
+            campaignPerformance: analytics.campaignPerformance
+        });
+        ```
+    </Tab>
+    <Tab value="Server">
+        ```ts
+        const analytics = await auth.api.getWaitlistAnalytics({
+            query: { period: "30d" }
+        });
+        ```
+    </Tab>
+</Tabs>
+
+### Export Data
+
+<Endpoint path="/waitlist/export" method="GET" />
+
+Export waitlist data in CSV or JSON format with filtering options.
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+        ```ts
+        // Export to CSV
+        const csvData = await authClient.waitlist.admin.export({
+            format: "csv",
+            status: "pending",
+            includeAnalytics: true
+        });
+
+        // Export with filters
+        const jsonData = await authClient.waitlist.admin.export({
+            format: "json",
+            filters: {
+                priority: ["high", "urgent"],
+                dateRange: {
+                    start: new Date("2024-01-01"),
+                    end: new Date("2024-01-31")
+                }
+            },
+            fields: ["email", "name", "position", "status", "joinedAt"]
+        });
+        ```
+    </Tab>
+    <Tab value="Server">
+        ```ts
+        const exportData = await auth.api.exportWaitlist({
+            query: {
+                format: "csv",
+                status: "pending"
+            }
+        });
+        ```
+    </Tab>
+</Tabs>
+
+### Cleanup Operations
+
+<Endpoint path="/waitlist/cleanup" method="POST" />
+
+Clean up expired entries based on configurable rules.
+
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+        ```ts
+        // Dry run to see what would be cleaned up
+        const dryRun = await authClient.waitlist.admin.cleanup({
+            expirationDays: 30,
+            dryRun: true
+        });
+
+        console.log(`Would remove ${dryRun.data.expiredCount} entries`);
+
+        // Actual cleanup
+        const cleanup = await authClient.waitlist.admin.cleanup({
+            expirationDays: 30,
+            dryRun: false
+        });
+        ```
+    </Tab>
+    <Tab value="Server">
+        ```ts
+        const cleanup = await auth.api.cleanupExpired({
+            body: {
+                expirationDays: 30,
+                dryRun: false
+            }
+        });
+        ```
+    </Tab>
+</Tabs>
+
+## Event Hooks
+
+The waitlist plugin provides several hooks to customize behavior and integrate with your application.
+
+### User Joined Hook
+
+Triggered when someone joins the waitlist.
+
+```ts title="auth.ts"
+waitlist({
+    onUserJoined: async ({ entry, position, totalCount, context }) => {
+        // Send welcome email
+        await emailService.send({
+            to: entry.email,
+            template: "waitlist-welcome",
+            data: {
+                position,
+                totalCount,
+                estimatedWaitTime: Math.ceil(position / 10) // Example calculation
+            }
+        });
+
+        // Track analytics
+        await analytics.track("waitlist_joined", {
+            email: entry.email,
+            position,
+            source: entry.source
+        });
+
+        // Send Slack notification for milestones
+        if (totalCount % 100 === 0) {
+            await slack.send(`🎉 ${totalCount} people on waitlist!`);
+        }
+    }
+})
+```
+
+### User Approved Hook
+
+Triggered when an admin approves a user.
+
+```ts title="auth.ts"
+waitlist({
+    onUserApproved: async ({ entry, approvedBy, context }) => {
+        // Send approval email
+        await emailService.send({
+            to: entry.email,
+            template: "waitlist-approved",
+            data: {
+                name: entry.name,
+                accessLink: "https://example.com/welcome"
+            }
+        });
+
+        // Grant access to your application
+        await grantUserAccess(entry.userId, {
+            plan: "beta",
+            features: ["all"]
+        });
+
+        // Track conversion
+        await analytics.track("waitlist_converted", {
+            email: entry.email,
+            waitTime: Date.now() - entry.joinedAt.getTime()
+        });
+    }
+})
+```
+
+### User Rejected Hook
+
+Triggered when an admin rejects a user.
+
+```ts title="auth.ts"
+waitlist({
+    onUserRejected: async ({ entry, rejectedBy, reason, context }) => {
+        // Log rejection for audit trail
+        await auditLog.log("waitlist_rejection", {
+            email: entry.email,
+            rejectedBy: rejectedBy?.email,
+            reason
+        });
+
+        // Optionally send rejection email
+        if (reason !== "spam") {
+            await emailService.send({
+                to: entry.email,
+                template: "waitlist-rejected",
+                data: { reason }
+            });
+        }
+    }
+})
+```
+
+## Advanced Use Cases
+
+### Multi-Product Waitlists
+
+Use campaigns to manage separate waitlists for different products.
+
+```ts title="auth.ts"
+waitlist({
+    campaigns: {
+        enabled: true
+    },
+    calculatePriority: ({ campaign }) => {
+        if (campaign === "enterprise") return "urgent";
+        if (campaign === "pro") return "high";
+        return "normal";
+    }
+})
+```
+
+Join a specific product waitlist:
+
+```ts
+await authClient.waitlist.join({
+    email: "user@example.com",
+    campaign: "enterprise",
+    metadata: { company: "BigCorp Inc" }
+});
+```
+
+### Geographic Prioritization
+
+Prioritize users based on their location for regional rollouts.
+
+```ts title="auth.ts"
+waitlist({
+    calculatePriority: ({ metadata }) => {
+        const country = metadata?.country;
+        
+        // Prioritize by market launch order
+        if (["US", "CA", "UK"].includes(country)) return "high";
+        if (["DE", "FR", "AU"].includes(country)) return "normal";
+        return "low";
+    }
+})
+```
+
+### Invitation-Based System
+
+Convert approved users to invited status with time-limited access tokens.
+
+```ts title="auth.ts"
+waitlist({
+    onUserApproved: async ({ entry }) => {
+        // Generate invitation token
+        const inviteToken = await generateInviteToken(entry.email);
+        
+        await emailService.send({
+            to: entry.email,
+            template: "waitlist-invitation",
+            data: {
+                inviteUrl: "https://example.com/invite/abc123",
+                expiresIn: "7 days"
+            }
+        });
+        
+        // Update status to invited
+        await updateEntryStatus(entry.id, "invited");
+    }
+})
+```
+
+## Data Types
+
+### WaitlistEntry
+
+```ts
+interface WaitlistEntry {
+    id: string                    // Unique identifier
+    email: string                 // User's email (unique)
+    name?: string                 // User's display name
+    position: number              // Current position in queue
+    status: WaitlistStatus        // Current status
+    priority: WaitlistPriority    // Priority level
+    joinedAt: Date               // When user joined
+    updatedAt?: Date             // Last update time
+    approvedAt?: Date            // When approved (if applicable)
+    rejectedAt?: Date            // When rejected (if applicable)
+    metadata?: Record<string, any> // Custom tracking data
+    userId?: string              // Associated user ID
+    referralCode?: string        // User's referral code
+    referredBy?: string          // Who referred this user
+    source?: string              // Traffic source
+    campaign?: string            // Campaign identifier
+}
+```
+
+### Status Types
+
+```ts
+type WaitlistStatus = 
+    | "pending"     // Waiting for approval
+    | "approved"    // Approved and notified
+    | "rejected"    // Rejected by admin
+    | "invited"     // Invited but not yet converted
+    | "expired"     // Entry expired due to time limit
+    | "converted"   // Successfully became a user
+```
+
+### Priority Levels
+
+```ts
+type WaitlistPriority = 
+    | "low"         // Default priority
+    | "normal"      // Standard priority
+    | "high"        // Higher priority (moved up in queue)
+    | "urgent"      // Highest priority (processed first)
+```
+
+## Waitlist Plugin Options
+
+You can configure the waitlist plugin with the following options:
+
+```ts
+interface WaitlistOptions {
+    /**
+     * Maximum number of people allowed on the waitlist.
+     * Set to undefined for unlimited capacity.
+     * @default undefined
+     */
+    maxCapacity?: number;
+
+    /**
+     * Whether to allow users to join multiple times with different emails.
+     * When false, prevents duplicate entries based on user ID.
+     * @default false
+     */
+    allowMultipleEntries?: boolean;
+
+    /**
+     * Enable automatic cleanup of expired entries.
+     * @default false
+     */
+    enableAutoCleanup?: boolean;
+
+    /**
+     * Days after which pending entries expire.
+     * Only applies when enableAutoCleanup is true.
+     * @default 30
+     */
+    expirationDays?: number;
+
+    /**
+     * Analytics configuration.
+     */
+    analytics?: {
+        enabled: boolean;
+        trackSources?: boolean;
+        trackCampaigns?: boolean;
+        retentionPeriodDays?: number;
+    };
+
+    /**
+     * Referral system configuration.
+     */
+    referral?: {
+        enabled: boolean;
+        rewardType: "priority" | "skip_positions" | "custom";
+        rewardValue?: number;
+        maxReferrals?: number;
+        trackingEnabled?: boolean;
+    };
+
+    /**
+     * Campaign system configuration.
+     */
+    campaigns?: {
+        enabled: boolean;
+        allowUserToCreateCampaign?: boolean | ((user: User, context: AuthContext) => boolean);
+    };
+
+    /**
+     * Hook called when someone joins the waitlist.
+     */
+    onUserJoined?: (data: {
+        entry: WaitlistEntry;
+        position: number;
+        totalCount: number;
+        context: AuthContext;
+    }) => Promise<void> | void;
+
+    /**
+     * Hook called when someone leaves the waitlist.
+     */
+    onUserLeft?: (data: {
+        entry: WaitlistEntry;
+        position: number;
+        context: AuthContext;
+    }) => Promise<void> | void;
+
+    /**
+     * Hook called when someone is approved.
+     */
+    onUserApproved?: (data: {
+        entry: WaitlistEntry;
+        approvedBy?: User;
+        context: AuthContext;
+    }) => Promise<void> | void;
+
+    /**
+     * Hook called when someone is rejected.
+     */
+    onUserRejected?: (data: {
+        entry: WaitlistEntry;
+        rejectedBy?: User;
+        reason?: string;
+        context: AuthContext;
+    }) => Promise<void> | void;
+
+    /**
+     * Custom function to determine if a user can access admin endpoints.
+     */
+    isAdmin?: (context: AuthContext, user: User) => boolean | Promise<boolean>;
+
+    /**
+     * Custom function to determine priority for new entries.
+     */
+    calculatePriority?: (data: {
+        email: string;
+        name?: string;
+        metadata?: Record<string, any>;
+        referralCode?: string;
+        context: AuthContext;
+    }) => Promise<WaitlistPriority> | WaitlistPriority;
+}
+```
+
+## Schema
+
+The waitlist plugin creates the following database tables:
+
+### waitlist
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `email` | `string` | User's email address (unique) |
+| `name` | `string?` | User's display name |
+| `position` | `number` | Current position in queue |
+| `status` | `string` | Current status (pending, approved, etc.) |
+| `priority` | `string` | Priority level (low, normal, high, urgent) |
+| `joinedAt` | `Date` | When user joined |
+| `updatedAt` | `Date?` | Last update time |
+| `approvedAt` | `Date?` | When approved |
+| `rejectedAt` | `Date?` | When rejected |
+| `metadata` | `string?` | JSON metadata |
+| `userId` | `string?` | Associated user ID |
+| `referralCode` | `string?` | User's referral code |
+| `referredBy` | `string?` | Who referred this user |
+| `source` | `string?` | Traffic source |
+| `campaign` | `string?` | Campaign identifier |
+
+### waitlist_campaigns (if campaigns enabled)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `name` | `string` | Campaign name |
+| `description` | `string?` | Campaign description |
+| `startDate` | `Date` | Campaign start date |
+| `endDate` | `Date?` | Campaign end date |
+| `maxCapacity` | `number?` | Maximum capacity for this campaign |
+| `priority` | `string` | Default priority for campaign |
+| `metadata` | `string?` | JSON metadata |
+| `isActive` | `boolean` | Whether campaign is active |
+| `createdAt` | `Date` | When campaign was created |
+| `updatedAt` | `Date?` | Last update time |
+
+### waitlist_analytics (if analytics enabled)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `date` | `Date` | Date for analytics data |
+| `totalEntries` | `number` | Total entries on this date |
+| `pendingCount` | `number` | Pending entries count |
+| `approvedCount` | `number` | Approved entries count |
+| `rejectedCount` | `number` | Rejected entries count |
+| `convertedCount` | `number` | Converted entries count |
+| `signupsCount` | `number` | New signups on this date |
+| `metadata` | `string?` | Additional metrics in JSON |
+
+You can manually add these fields to your database schema if you prefer not to use the migration tool. 
