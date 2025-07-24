@@ -431,7 +431,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							model: "subscription",
 							update: {
 								plan: plan.name.toLowerCase(),
-								seats: ctx.body.seats || 1,
+								seats: ctx.body.seats || incompleteSubscription.seats || 1,
 								stripeCustomerId: customerId,
 								status: "active",
 							},
