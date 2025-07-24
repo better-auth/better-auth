@@ -78,11 +78,13 @@ export const initTransformInput = ({
 				newValue = null;
 			} else if (
 				config.supportsJSON === false &&
+				//@ts-expect-error - Future proofing
 				fieldAttributes.type === "json"
 			) {
 				newValue = JSON.stringify(newValue);
 			} else if (
 				config.supportsJSONB === false &&
+				//@ts-expect-error - Future proofing
 				fieldAttributes.type === "jsonb" &&
 				!config.supportsJSON
 			) {

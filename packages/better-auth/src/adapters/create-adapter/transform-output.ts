@@ -54,7 +54,15 @@ export const initTransformOutput = ({
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "string" &&
+					//@ts-expect-error - Future proofing
 					field.type === "json"
+				) {
+					newValue = safeJSONParse(newValue);
+				} else if (
+					config.supportsJSONB === false &&
+					typeof newValue === "string" &&
+					//@ts-expect-error - Future proofing
+					field.type === "jsonb"
 				) {
 					newValue = safeJSONParse(newValue);
 				} else if (
