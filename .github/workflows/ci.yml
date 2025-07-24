@@ -58,14 +58,14 @@ jobs:
                 TURBO_REMOTE_ONLY: true
               run: pnpm lint
 
+            - name: Check for Changesets
+              run: pnpm changeset status --since origin/main
+
             - name: Test
               env:
                 TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
                 TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
               run: pnpm test
-
-            - name: Check for Changesets
-              run: pnpm changeset status --since origin/main
 
             - name: Typecheck
               env:
