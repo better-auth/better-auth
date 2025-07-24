@@ -14,11 +14,15 @@ const testSchemaPlugin = {
 	schema: {
 		test: {
 			fields: {
+				//@ts-expect-error - Future proofing
 				jsonRequired: { type: "json", required: true },
 				dateRequired: { type: "date", required: true },
 				dateOptional: { type: "date", required: false },
+				//@ts-expect-error - Future proofing
 				jsonOptional: { type: "json", required: false },
+				//@ts-expect-error - Future proofing
 				jsonbRequired: { type: "jsonb", required: true },
+				//@ts-expect-error - Future proofing
 				jsonbOptional: { type: "jsonb", required: false },
 				numberRequired: { type: "number", required: true },
 				stringRequired: { type: "string", required: true },
