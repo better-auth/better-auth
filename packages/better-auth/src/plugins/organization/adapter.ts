@@ -346,14 +346,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				);
 			}
 
-			if(organizationId) {
+			if (organizationId) {
 				where.push({
 					field: "organizationId",
 					value: organizationId,
 				});
 			}
 
-			if(organizationSlug) {
+			if (organizationSlug) {
 				where.push({
 					field: "organizationSlug",
 					value: organizationSlug,
