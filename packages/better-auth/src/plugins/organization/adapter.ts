@@ -17,7 +17,7 @@ import type {
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../init";
 import parseJSON from "../../client/parser";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
+import { type InferAdditionalFieldsFromPluginOptions } from "../../db";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -107,18 +107,81 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listMembers: async (data: {
 			organizationId: string;
+			limit?: number;
+			offset?: number;
+			sortBy?: string;
+			sortOrder?: "asc" | "desc";
+			filter?: {
+				field: string;
+				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+				value: any;
+			};
 		}) => {
-			const members = await adapter.findMany<Member>({
-				model: "member",
+			const members = await Promise.all([
+				adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{ field: "organizationId", value: data.organizationId },
+						...(data.filter?.field
+							? [
+									{
+										field: data.filter?.field,
+										value: data.filter?.value,
+									},
+								]
+							: []),
+					],
+					limit: data.limit || options?.membershipLimit || 100,
+					offset: data.offset || 0,
+					sortBy: data.sortBy
+						? { field: data.sortBy, direction: data.sortOrder || "asc" }
+						: undefined,
+				}),
+				adapter.count({
+					model: "member",
+					where: [
+						{ field: "organizationId", value: data.organizationId },
+						...(data.filter?.field
+							? [
+									{
+										field: data.filter?.field,
+										value: data.filter?.value,
+									},
+								]
+							: []),
+					],
+				}),
+			]);
+			const users = await adapter.findMany<User>({
+				model: "user",
 				where: [
 					{
-						field: "organizationId",
-						value: data.organizationId,
+						field: "id",
+						value: members[0].map((member) => member.userId),
+						operator: "in",
 					},
 				],
-				limit: options?.membershipLimit || 100,
 			});
-			return members;
+			return {
+				members: members[0].map((member) => {
+					const user = users.find((user) => user.id === member.userId);
+					if (!user) {
+						throw new BetterAuthError(
+							"Unexpected error: User not found for member",
+						);
+					}
+					return {
+						...member,
+						user: {
+							id: user.id,
+							name: user.name,
+							email: user.email,
+							image: user.image,
+						},
+					};
+				}),
+				total: members[1],
+			};
 		},
 		findMemberByOrgId: async (data: {
 			userId: string;
@@ -375,7 +438,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				adapter.findMany<InferMember<O>>({
 					model: "member",
 					where: [{ field: "organizationId", value: org.id }],
-                    limit: membersLimit ?? options?.membershipLimit ?? 100,
+					limit: membersLimit ?? options?.membershipLimit ?? 100,
 				}),
 				includeTeams
 					? adapter.findMany<InferTeam<O>>({
@@ -622,6 +685,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 
 			return members;
+		},
+		countTeamMembers: async (data: {
+			teamId: string;
+		}) => {
+			const count = await adapter.count({
+				model: "teamMember",
+				where: [{ field: "teamId", value: data.teamId }],
+			});
+			return count;
 		},
 		countMembers: async (data: {
 			organizationId: string;

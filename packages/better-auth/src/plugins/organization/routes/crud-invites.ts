@@ -420,11 +420,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
-			const members = await adapter.listMembers({
+			const membersCount = await adapter.countMembers({
 				organizationId: invitation.organizationId,
 			});
 
-			if (members.length >= membershipLimit) {
+			if (membersCount >= membershipLimit) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
@@ -460,7 +460,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
 						"undefined"
 					) {
-						const members = await adapter.listTeamMembers({ teamId });
+						const members = await adapter.countTeamMembers({ teamId });
 
 						const maximumMembersPerTeam =
 							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
@@ -472,7 +472,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 									})
 								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
 
-						if (members.length >= maximumMembersPerTeam) {
+						if (members >= maximumMembersPerTeam) {
 							throw new APIError("FORBIDDEN", {
 								message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
 							});
