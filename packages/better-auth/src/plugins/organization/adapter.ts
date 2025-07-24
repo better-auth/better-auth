@@ -438,7 +438,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				adapter.findMany<InferMember<O>>({
 					model: "member",
 					where: [{ field: "organizationId", value: org.id }],
-                    limit: membersLimit ?? options?.membershipLimit ?? 100,
+					limit: membersLimit ?? options?.membershipLimit ?? 100,
 				}),
 				includeTeams
 					? adapter.findMany<InferTeam<O>>({
