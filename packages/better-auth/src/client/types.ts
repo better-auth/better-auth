@@ -66,11 +66,32 @@ export interface BetterAuthClientPlugin {
 	atomListeners?: AtomListener[];
 }
 
+/**
+ * Configuration for handling plugin routes.
+ */
+export type PluginRoutesOptions = {
+	/**
+	 * Automatically namespaces plugin API endpoints to avoid conflicts.
+	 * When `true`, each endpoint path and key is prefixed with the plugin's ID.
+	 * Defaults to `false`.
+	 *
+	 * @example
+	 * // if a plugin with id 'myPlugin' has an endpoint with path '/action',
+	 * // with autoNamespace: true, the path becomes '/myPlugin/action'
+	 * @default false
+	 */
+	autoNamespace?: boolean;
+};
+
 export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
 	basePath?: string;
+	/**
+	 * Configuration for handling plugin routes.
+	 */
+	pluginRoutes?: PluginRoutesOptions;
 	disableDefaultFetchPlugins?: boolean;
 	$InferAuth?: BetterAuthOptions;
 }

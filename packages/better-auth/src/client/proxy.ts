@@ -35,7 +35,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	knownPathMethods: Record<string, "POST" | "GET">,
 	atoms: Record<string, Atom>,
 	atomListeners: BetterAuthClientPlugin["atomListeners"],
+	autoNamespace: boolean,
 ): T {
+	const suffixCache = new Map<string, string>();
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
 			get(target, prop: string) {
@@ -55,13 +57,43 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 				return createProxy(fullPath);
 			},
 			apply: async (_, __, args) => {
-				const routePath =
+				let routePath =
 					"/" +
 					path
 						.map((segment) =>
 							segment.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
 						)
 						.join("/");
+
+				// If autoNamespace is enabled and the generated path is not present in knownPathMethods,
+				// attempt to find a namespaced variant ("/<pluginId>" + path).
+				if (autoNamespace && !(routePath in knownPathMethods)) {
+					const suffix = routePath.startsWith("/")
+						? routePath
+						: `/${routePath}`;
+					if (suffixCache.has(suffix)) {
+						routePath = suffixCache.get(suffix)!;
+					} else {
+						const matches = Object.keys(knownPathMethods).filter((p) =>
+							p.endsWith(suffix),
+						);
+						if (matches.length > 1) {
+							matches.sort();
+							console.warn(
+								`[better-auth] Ambiguous route for "${suffix}". Found ${
+									matches.length
+								} matches: ${matches.join(", ")}. Using the first one: ${
+									matches[0]
+								}.`,
+							);
+						}
+						const match = matches[0];
+						if (match) {
+							routePath = match;
+							suffixCache.set(suffix, match);
+						}
+					}
+				}
 				const arg = (args[0] || {}) as ProxyRequest;
 				const fetchOptions = (args[1] || {}) as BetterFetchOption;
 				const { query, fetchOptions: argFetchOptions, ...body } = arg;

@@ -62,6 +62,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginPathMethods,
 		pluginsAtoms,
 		atomListeners,
+		options?.pluginRoutes?.autoNamespace ?? false,
 	);
 	type ClientAPI = InferClientAPI<Option>;
 	type Session = ClientAPI extends {

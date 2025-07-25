@@ -124,6 +124,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginPathMethods,
 		pluginsAtoms,
 		atomListeners,
+		options?.pluginRoutes?.autoNamespace ?? false,
 	);
 
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &

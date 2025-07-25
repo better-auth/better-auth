@@ -87,7 +87,19 @@ export const getClientConfig = (options?: ClientOptions) => {
 			Object.assign(pluginsAtoms, plugin.getAtoms?.($fetch));
 		}
 		if (plugin.pathMethods) {
-			Object.assign(pluginPathMethods, plugin.pathMethods);
+			const transformed: Record<string, "POST" | "GET"> = {};
+			for (const [p, method] of Object.entries(plugin.pathMethods)) {
+				let pathKey = p.startsWith("/") ? p : `/${p}`;
+				if (
+					options?.pluginRoutes?.autoNamespace &&
+					plugin.id &&
+					!pathKey.startsWith(`/${plugin.id}/`)
+				) {
+					pathKey = `/${plugin.id}${pathKey}`;
+				}
+				transformed[pathKey] = method;
+			}
+			Object.assign(pluginPathMethods, transformed);
 		}
 		if (plugin.atomListeners) {
 			atomListeners.push(...plugin.atomListeners);
