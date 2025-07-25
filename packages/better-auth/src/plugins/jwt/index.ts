@@ -8,10 +8,10 @@ import {
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import { BetterAuthError } from "../../error";
-import { createJwk, signJwt } from "./sign";
+import { createJwkOnDb, signJwtPayload } from "./sign";
 import type { JwtPluginOptions } from "./types";
 export type * from "./types";
-export { createJwk, getJwtToken } from "./sign";
+export { createJwk, getJwtToken, signJwt } from "./sign";
 export { getJwtPlugin } from "./utils";
 
 export const jwt = (options?: JwtPluginOptions) => {
@@ -133,7 +133,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 				const keySets = await adapter.getAllKeys();
 
 				if (keySets.length === 0) {
-					const key = await createJwk(ctx, options);
+					const key = await createJwkOnDb(ctx, options);
 					keySets.push(key);
 				}
 
@@ -190,7 +190,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 				}
 
 				// Convert into JWT token
-				const jwt = await signJwt(ctx, payload);
+				const jwt = await signJwtPayload(ctx, payload, options);
 				return ctx.json({
 					token: jwt,
 				});
@@ -219,7 +219,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 					}
 
 					if (!payload) return;
-					const jwt = await signJwt(ctx, payload);
+					const jwt = await signJwtPayload(ctx, payload, options);
 					const exposedHeaders =
 						ctx.context.responseHeaders?.get("access-control-expose-headers") ||
 						"";
