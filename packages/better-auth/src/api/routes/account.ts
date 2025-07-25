@@ -521,7 +521,7 @@ export const getAccessToken = createAuthEndpoint(
 			if (
 				account.refreshToken &&
 				account.accessTokenExpiresAt &&
-				account.accessTokenExpiresAt.getTime() - Date.now() < 5_000 &&
+				new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000 &&
 				provider.refreshAccessToken
 			) {
 				newTokens = await provider.refreshAccessToken(
