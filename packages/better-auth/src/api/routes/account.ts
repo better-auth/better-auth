@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import {
 	generateState,
-	getAccessTokenUtil,
+	decryptOAuthToken,
 	setTokenUtil,
 	type OAuth2Tokens,
 } from "../../oauth2";
@@ -520,8 +520,8 @@ export const getAccessToken = createAuthEndpoint(
 
 			if (
 				account.refreshToken &&
-				(!account.accessTokenExpiresAt ||
-					account.accessTokenExpiresAt.getTime() - Date.now() < 5_000) &&
+				account.accessTokenExpiresAt &&
+				account.accessTokenExpiresAt.getTime() - Date.now() < 5_000 &&
 				provider.refreshAccessToken
 			) {
 				newTokens = await provider.refreshAccessToken(
@@ -534,9 +534,8 @@ export const getAccessToken = createAuthEndpoint(
 					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
 				});
 			}
-
 			const tokens = {
-				accessToken: await getAccessTokenUtil(
+				accessToken: await decryptOAuthToken(
 					newTokens?.accessToken ?? account.accessToken ?? "",
 					ctx.context,
 				),
@@ -546,8 +545,7 @@ export const getAccessToken = createAuthEndpoint(
 					undefined,
 				scopes: account.scope?.split(",") ?? [],
 				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
-			} satisfies OAuth2Tokens;
-
+			};
 			return ctx.json(tokens);
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
@@ -759,7 +757,6 @@ export const accountInfo = createAuthEndpoint(
 				message: `Provider account provider is ${account.providerId} but it is not configured`,
 			});
 		}
-
 		const tokens = await getAccessToken({
 			...ctx,
 			body: {
@@ -768,9 +765,15 @@ export const accountInfo = createAuthEndpoint(
 			},
 			returnHeaders: false,
 		});
-
-		const info = await provider.getUserInfo(tokens);
-
+		if (!tokens.accessToken) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Access token not found",
+			});
+		}
+		const info = await provider.getUserInfo({
+			...tokens,
+			accessToken: tokens.accessToken as string,
+		});
 		return ctx.json(info);
 	},
 );
