@@ -41,7 +41,7 @@ export async function signJwtPayload(
 
 	// Exp safety check
 	let exp = payload.exp;
-	const defaultExp = options?.jwt?.expirationTime ?? "15m";
+	const defaultExp = options?.jwt?.expirationTime ?? "1h";
 	if (disallowLargerExpTime && exp && exp > toExpJWT(defaultExp, iat)) {
 		throw new Error("unable to set future exp time");
 	}

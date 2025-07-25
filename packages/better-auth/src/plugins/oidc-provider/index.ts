@@ -725,11 +725,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
-					const accessTokenExpiresAt = new Date(
-						Date.now() + opts.accessTokenExpiresIn * 1000,
-					);
+
+					const now = Date.now();
+					const iat = Math.floor(now / 1000);
+					const exp = iat + (opts.accessTokenExpiresIn ?? 3600);
+
+					const accessTokenExpiresAt = new Date(exp * 1000);
 					const refreshTokenExpiresAt = new Date(
-						Date.now() + opts.refreshTokenExpiresIn * 1000,
+						(iat + (opts.accessTokenExpiresIn ?? 3600)) * 1000,
 					);
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,
@@ -741,8 +744,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: client_id.toString(),
 							userId: value.userId,
 							scopes: requestedScopes.join(" "),
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: new Date(now),
+							updatedAt: new Date(now),
 						},
 					});
 					const user = await ctx.context.internalAdapter.findUserById(
@@ -782,7 +785,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
-						iat: Date.now() / 1000,
+						iat,
+						exp,
 						auth_time: ctx.context.session
 							? new Date(ctx.context.session.session.createdAt).getTime()
 							: undefined,
