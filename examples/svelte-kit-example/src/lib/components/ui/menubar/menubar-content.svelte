@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Menubar as MenubarPrimitive } from "bits-ui";
-import { flyAndScale } from "$lib/utils.js";
+import { cn, flyAndScale } from "$lib/utils.js";
 
 type $$Props = MenubarPrimitive.ContentProps;
 let className: $$Props["class"] = undefined;
