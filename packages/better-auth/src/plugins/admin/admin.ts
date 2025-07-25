@@ -5,22 +5,22 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db/schema";
+import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { mergeSchema } from "../../db/schema";
 import { type AccessControl } from "../access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
+import { schema } from "./schema";
 import {
 	type AdminOptions,
-	type UserWithRole,
-	type SessionWithImpersonatedBy,
 	type InferAdminRolesFromOption,
+	type SessionWithImpersonatedBy,
+	type UserWithRole,
 } from "./types";
-import { schema } from "./schema";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -659,7 +659,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					} catch (e) {
 						return ctx.json({
-							users: [],
+							users: [] as UserWithRole[],
 							total: 0,
 						});
 					}
