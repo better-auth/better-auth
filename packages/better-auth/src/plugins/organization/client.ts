@@ -15,9 +15,8 @@ import { useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
 import type { FieldAttribute } from "../../db";
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { OrganizationOptions } from "./types";
-import type { BetterAuthOptions } from "../../../dist";
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;

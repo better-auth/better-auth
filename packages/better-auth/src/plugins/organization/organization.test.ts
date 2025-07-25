@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
-import { organizationClient } from "./client";
+import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { APIError, type Prettify } from "better-call";
@@ -1409,7 +1409,7 @@ describe("Additional Fields", async () => {
 	const client = createAuthClient({
 		plugins: [
 			organizationClient({
-				$inferAuth: {} as typeof auth,
+				schema: inferOrgAdditionalFields<typeof auth>(),
 				teams: { enabled: true },
 			}),
 		],
@@ -1424,8 +1424,7 @@ describe("Additional Fields", async () => {
 	const client2 = createAuthClient({
 		plugins: [
 			organizationClient({
-				// We also support passing the schema directly
-				$inferAuth: {} as typeof orgOptions.schema,
+				schema: inferOrgAdditionalFields<typeof auth>(),
 				teams: { enabled: true },
 			}),
 		],
