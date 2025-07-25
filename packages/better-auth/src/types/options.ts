@@ -293,6 +293,55 @@ export type BetterAuthOptions = {
 	 */
 	plugins?: BetterAuthPlugin[];
 	/**
+	 * Plugin routes configuration.
+	 *
+	 * Determines how routes exposed by Better Auth plugins are mounted.
+	 * When `autoNamespace` is set to `true`, each plugin route is automatically
+	 * prefixed with `/<plugin.id>` (both in the URL and the generated endpoint key),
+	 * preventing accidental collisions with core Better Auth endpoints or routes
+	 * coming from other plugins.
+	 *
+	 * If left `false` (default), plugins register their routes verbatim. Only
+	 * disable automatic namespacing when you are certain your paths will not
+	 * conflict with existing endpoints, as overriding sensitive authentication
+	 * routes such as `/sign-in` or `/sign-out` can break functionality or
+	 * pose security risks.
+	 */
+	pluginRoutes?: {
+		/**
+		 * Automatically prefix plugin routes with the plugin's namespace.
+		 *
+		 * When `true`, every route registered by a plugin is re-written under
+		 * `/<plugin.id>` and the endpoint key is updated accordingly.
+		 *
+		 * Note: The original route string registered by the plugin **must** start with a leading slash (e.g., "/callback"). Omitting the slash will cause the final path to concatenate incorrectly (e.g., "/oauthcallback").
+		 *
+		 * @example
+		 * ```ts
+		 * // Plugin "oauth" registers route "/callback"
+		 *
+		 * // autoNamespace enabled
+		 * {
+		 *   pluginRoutes: { autoNamespace: true },
+		 *   plugins: [oauthPlugin],
+		 * }
+		 * // URL  => /oauth/callback
+		 * // Key  => "oauth.callback"
+		 *
+		 * // autoNamespace disabled
+		 * {
+		 *   pluginRoutes: { autoNamespace: false },
+		 *   plugins: [oauthPlugin],
+		 * }
+		 * // URL  => /callback
+		 * // Key  => "callback"
+		 * ```
+		 *
+		 * @default false
+		 */
+		autoNamespace?: boolean;
+	};
+	/**
 	 * User configuration
 	 */
 	user?: {

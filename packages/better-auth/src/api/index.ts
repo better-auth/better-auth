@@ -40,20 +40,49 @@ import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
+import { BetterAuthError } from "../error";
 
 export function getEndpoints<
 	C extends AuthContext,
 	Option extends BetterAuthOptions,
 >(ctx: Promise<C> | C, options: Option) {
-	const pluginEndpoints = options.plugins?.reduce(
-		(acc, plugin) => {
-			return {
-				...acc,
-				...plugin.endpoints,
-			};
-		},
-		{} as Record<string, any>,
-	);
+	const usedPaths = new Map<string, string>();
+	const collectedPluginEndpoints: Record<string, any> = {};
+	for (const plugin of options.plugins || []) {
+		if (!plugin.endpoints) continue;
+		for (const [key, ep] of Object.entries(plugin.endpoints)) {
+			let path: string | undefined = (ep as any).path;
+			let endpoint: any = ep;
+			if (path && !path.startsWith("/")) path = `/${path}`;
+			if (path && usedPaths.has(path)) {
+				if (options.pluginRoutes?.autoNamespace) {
+					path = `/${plugin.id}${path}`;
+					endpoint = { ...ep, path };
+				} else {
+					throw new BetterAuthError(
+						`Route conflict detected: plugin \"${
+							plugin.id
+						}\" endpoint \"${key}\" uses path \"${path}\" which is already registered by plugin \"${usedPaths.get(
+							path,
+						)}\". Enable pluginRoutes.autoNamespace or provide unique paths.`,
+					);
+				}
+			}
+			if (path) usedPaths.set(path, plugin.id);
+
+			let targetKey = key;
+			if (collectedPluginEndpoints[targetKey]) {
+				if (options.pluginRoutes?.autoNamespace) {
+					targetKey = `${plugin.id}_${key}`;
+				} else {
+					throw new BetterAuthError(
+						`Endpoint key conflict detected: plugin \"${plugin.id}\" endpoint \"${key}\" duplicates existing key. Enable pluginRoutes.autoNamespace or use unique keys.`,
+					);
+				}
+			}
+			collectedPluginEndpoints[targetKey] = endpoint;
+		}
+	}
 
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
@@ -123,7 +152,7 @@ export function getEndpoints<
 	};
 	const endpoints = {
 		...baseEndpoints,
-		...pluginEndpoints,
+		...collectedPluginEndpoints,
 		ok,
 		error,
 	};
