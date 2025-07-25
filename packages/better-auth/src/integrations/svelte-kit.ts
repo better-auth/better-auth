@@ -28,7 +28,6 @@ export const svelteKitHandler = async ({
 	if (building) {
 		return resolve(event);
 	}
-
 	const { request, url } = event;
 	if (isAuthPath(url.toString(), auth.options)) {
 		return auth.handler(request);
@@ -54,8 +53,9 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 }
 
 export const sveltekitCookies = (
-	getRequestEvent: () => Promise<
-		RequestEvent<Partial<Record<string, string>>, string | null>
+	getRequestEvent: () => RequestEvent<
+		Partial<Record<string, string>>,
+		string | null
 	>,
 ) => {
 	return {
@@ -74,19 +74,24 @@ export const sveltekitCookies = (
 						if (returned instanceof Headers) {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
-							const event = await getRequestEvent();
+							const event = getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
+
 							for (const [name, { value, ...ops }] of parsed) {
-								event.cookies.set(name, decodeURIComponent(value), {
-									sameSite: ops.samesite,
-									path: ops.path || "/",
-									expires: ops.expires,
-									secure: ops.secure,
-									httpOnly: ops.httponly,
-									domain: ops.domain,
-									maxAge: ops["max-age"],
-								});
+								try {
+									event.cookies.set(name, decodeURIComponent(value), {
+										sameSite: ops.samesite,
+										path: ops.path || "/",
+										expires: ops.expires,
+										secure: ops.secure,
+										httpOnly: ops.httponly,
+										domain: ops.domain,
+										maxAge: ops["max-age"],
+									});
+								} catch (e) {
+									// this will avoid any issue related to already streamed response
+								}
 							}
 						}
 					}),
