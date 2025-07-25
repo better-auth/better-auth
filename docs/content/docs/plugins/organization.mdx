@@ -1668,47 +1668,71 @@ const auth = betterAuth({
 
 #### Additional Fields
 
-Starting with Better Auth v1.3, you can easily add custom fields to the `organization`, `invitation`, `member`, and `team` tables.
+Starting with [Better Auth v1.3](https://github.com/better-auth/better-auth/releases/tag/v1.3.0), you can easily add custom fields to the `organization`, `invitation`, `member`, and `team` tables.
 
-Refer to the [example above](#customizing-the-schema) to learn how to define additional fields in your schema configuration.
+When you add extra fields to a model, the relevant API endpoints will automatically accept and return these new properties. For instance, if you add a custom field to the `organization` table, the `createOrganization` endpoint will include this field in its request and response payloads as needed.
 
-When you add extra fields to a model, the relevant API endpoints will automatically
-accept and return these new properties. For instance, if you add a custom field to the `organization` table,
-the `createOrganization` endpoint will include this field in its request and response payloads as needed.
-
-<Callout>
-  What about the `metadata` field?
-
-  The `metadata` field is still supported for backward compatibility,
-  and provides a convenient way to attach arbitrary data to a row.
-</Callout>
-
-To infer additional fields on the client, you must pass the `auth` instance to the `organizationClient` function like this:
-
-```ts title="auth-client.ts"
-createAuthClient({
-  plugins: [organizationClient({ $inferAuth: {} as typeof auth })]
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [
+    organization({
+      schema: {
+        organization: {
+          additionalFields: {
+            myCustomField: { // [!code highlight]
+              type: "string", // [!code highlight]
+              input: true, // [!code highlight]
+              required: false // [!code highlight]
+            } // [!code highlight]
+          }
+        }
+      }
+    })
+  ]
 })
 ```
 
-For separate client-server projects, we support providing the schema object directly:
+For inferring the additional fields, you can use the `inferOrgAdditionalFields` function. This function will infer the additional fields from the auth object type.
 
 ```ts title="auth-client.ts"
-const schema = {
-  organization: {
-    additionalFields: {
-      myCustomField: {
-        type: "string",
-      },
-    },
-  },
-};
+import { createAuthClient } from "better-auth/client";
+import { inferOrgAdditionalFields, organizationClient } from "better-auth/plugins/organization/client"
+import type { auth } from "@/auth" // import the auth object type only
 
-createAuthClient({
-  plugins: [organizationClient({ $inferAuth: {} as typeof schema })]
+const client = createAuthClient({
+    plugins: [organizationClient({
+        schema: inferOrgAdditionalFields<typeof auth>()
+    })]
 })
 ```
 
+if you can't import the auth object type, you can use the `inferOrgAdditionalFields` function without the generic. This function will infer the additional fields from the schema object.
+
+```ts title="auth-client.ts"
+
+const client = createAuthClient({
+    plugins: [organizationClient({
+        schema: inferOrgAdditionalFields({
+          organization: { // [!code highlight]
+            additionalFields: {
+              newField: { // [!code highlight]
+                type: "string", // [!code highlight]
+              }, // [!code highlight]
+            },
+          },
+        })
+    })]
+})
+
+//example usage
+await client.organization.create({
+    name: "Test",
+    slug: "test",
+    newField: "123", //this should be allowed
+    //@ts-expect-error - this field is not available
+    unavalibleField: "123", //this should be not allowed
+})
+```
 
 ## Options
 
