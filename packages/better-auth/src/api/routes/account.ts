@@ -517,11 +517,11 @@ export const getAccessToken = createAuthEndpoint(
 
 		try {
 			let newTokens: OAuth2Tokens | null = null;
-
+       const accessTokenExpired = account.accessTokenExpiresAt &&
+				new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000 &&
 			if (
 				account.refreshToken &&
-				account.accessTokenExpiresAt &&
-				new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000 &&
+			  accessTokenExpired &&
 				provider.refreshAccessToken
 			) {
 				newTokens = await provider.refreshAccessToken(

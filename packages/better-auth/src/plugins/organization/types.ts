@@ -253,7 +253,6 @@ export interface OrganizationOptions {
 				[key in string]: FieldAttribute;
 			};
 		};
-
 		team?: {
 			modelName?: string;
 			fields?: {
@@ -263,7 +262,6 @@ export interface OrganizationOptions {
 				[key in string]: FieldAttribute;
 			};
 		};
-
 		teamMember?: {
 			modelName?: string;
 			fields?: {
