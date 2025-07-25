@@ -64,7 +64,7 @@ export function isRateLimited(
 		};
 	}
 
-	const timeSinceLastRequest = now.getTime() - lastRequest.getTime();
+	const timeSinceLastRequest = now.getTime() - new Date(lastRequest).getTime();
 
 	if (timeSinceLastRequest > rateLimitTimeWindow) {
 		// Time window has passed, reset the request count.
