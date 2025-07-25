@@ -16,12 +16,12 @@ import type { JwtPluginOptions } from "./types";
 /**
  * Signs a payload in jwt format.
  *
- * DO NOT EXPORT THIS - use either signJwt or getJwtToken (depreciated)
+ * @internal - SCOPED TO PLUGIN. Use signJwt for usage in other plugins.
  *
  * @param ctx - endpoint context
  * @param payload - payload to sign
  */
-async function signJwtPayload(
+export async function signJwtPayload(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
 	options?: JwtPluginOptions,
@@ -89,7 +89,7 @@ async function signJwtPayload(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		key = await createJwk(ctx, options);
+		key = await createJwkOnDb(ctx, options);
 	}
 
 	let privateWebKey = privateKeyEncryptionEnabled
@@ -132,6 +132,7 @@ async function signJwtPayload(
  * @param ctx - endpoint context
  * @param payload - payload to sign
  */
+// Plugin exportable
 export async function signJwt(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
@@ -175,8 +176,10 @@ export async function generateExportedKeyPair(options?: JwtPluginOptions) {
 
 /**
  * Creates a new JWK (JSON Web Key) on the database.
+ *
+ * @internal - SCOPED TO PLUGIN. Use createJwk for usage in other plugins.
  */
-export async function createJwk(
+export async function createJwkOnDb(
 	ctx: GenericEndpointContext,
 	options?: JwtPluginOptions,
 ) {
@@ -210,4 +213,15 @@ export async function createJwk(
 	const key = await adapter.createJwk(jwk as Jwk);
 
 	return key;
+}
+
+/**
+ * Creates a new JWK (JSON Web Key) on the database.
+ *
+ * @param ctx - endpoint context
+ */
+// Plugin exportable
+export async function createJwk(ctx: GenericEndpointContext) {
+	const options = getJwtPlugin(ctx.context).options;
+	return createJwkOnDb(ctx, options);
 }
