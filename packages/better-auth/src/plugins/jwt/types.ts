@@ -111,7 +111,7 @@ export interface JwtOptions {
 	 * subtracted from the current unix timestamp. A "from now" suffix can also be used for
 	 * readability when adding to the current unix timestamp.
 	 *
-	 * @default 15m
+	 * @default 1hr
 	 */
 	expirationTime?: number | string | Date;
 	/**
