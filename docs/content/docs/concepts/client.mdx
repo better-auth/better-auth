@@ -305,7 +305,7 @@ const authClient = createAuthClient();
 
 type ErrorTypes = Partial<
 	Record<
-		keyof typeof client.$ERROR_CODES,
+		keyof typeof authClient.$ERROR_CODES,
 		{
 			en: string;
 			es: string;

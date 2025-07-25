@@ -18,6 +18,9 @@ import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 import type { AuthMiddleware } from "../plugins";
 import type { LiteralUnion, OmitId } from "./helper";
+import type { AdapterDebugLogs } from "../adapters";
+//@ts-ignore - we need to import this to get the type of the database
+import type { Database as BunDatabase } from "bun:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -80,6 +83,7 @@ export type BetterAuthOptions = {
 		| Database
 		| Dialect
 		| AdapterInstance
+		| BunDatabase
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -89,6 +93,12 @@ export type BetterAuthOptions = {
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  }
 		| {
 				/**
@@ -105,6 +115,12 @@ export type BetterAuthOptions = {
 				 * @default "camel"
 				 */
 				casing?: "snake" | "camel";
+				/**
+				 * Enable debug logs for the adapter
+				 *
+				 * @default false
+				 */
+				debugLogs?: AdapterDebugLogs;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -147,6 +163,13 @@ export type BetterAuthOptions = {
 		 */
 		sendOnSignUp?: boolean;
 		/**
+		 * Send a verification email automatically
+		 * on sign in when the user's email is not verified
+		 *
+		 * @default false
+		 */
+		sendOnSignIn?: boolean;
+		/**
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
@@ -163,6 +186,12 @@ export type BetterAuthOptions = {
 		 * @param request the request object
 		 */
 		onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+		/**
+		 * A function that is called when a user's email is updated to verified
+		 * @param user the user that verified their email
+		 * @param request the request object
+		 */
+		afterEmailVerification?: (user: User, request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -223,6 +252,14 @@ export type BetterAuthOptions = {
 		 * @default 1 hour (60 * 60)
 		 */
 		resetPasswordTokenExpiresIn?: number;
+		/**
+		 * A callback function that is triggered
+		 * when a user's password is changed successfully.
+		 */
+		onPasswordReset?: (
+			data: { user: User },
+			request?: Request,
+		) => Promise<void>;
 		/**
 		 * Password hashing and verification
 		 *
@@ -443,7 +480,13 @@ export type BetterAuthOptions = {
 		freshAge?: number;
 	};
 	account?: {
+		/**
+		 * The model name for the account. Defaults to "account".
+		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
@@ -482,7 +525,27 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			allowUnlinkingAll?: boolean;
+			/**
+			 * If enabled (true), this will update the user information based on the newly linked account
+			 *
+			 * @default false
+			 */
+			updateUserInfoOnLink?: boolean;
 		};
+		/**
+		 * Encrypt OAuth tokens
+		 *
+		 * By default, OAuth tokens (access tokens, refresh tokens, ID tokens) are stored in plain text in the database.
+		 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
+		 * on external services.
+		 *
+		 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+		 * - Database breaches and unauthorized access to raw token data
+		 * - Internal threats from database administrators or compromised credentials
+		 * - Token exposure in database backups and logs
+		 * @default false
+		 */
+		encryptOAuthTokens?: boolean;
 	};
 	/**
 	 * Verification configuration
@@ -598,7 +661,7 @@ export type BetterAuthOptions = {
 			 *
 			 * Ip address is used for rate limiting and session tracking
 			 *
-			 * @example ["x-client-ip", "x-forwarded-for"]
+			 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 			 *
 			 * @default
 			 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8

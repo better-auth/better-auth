@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin, Store } from "better-auth";
+import { BetterAuthClientPlugin, Store } from "better-auth/types";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -203,6 +203,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						...options.headers,
 						cookie,
 						"expo-origin": getOrigin(scheme!),
+						"x-skip-oauth-proxy": "true", // skip oauth proxy for expo
 					};
 					if (options.body?.callbackURL) {
 						if (options.body.callbackURL.startsWith("/")) {

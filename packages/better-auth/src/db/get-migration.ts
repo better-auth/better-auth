@@ -10,7 +10,7 @@ import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "text"],
+	string: ["character varying", "varchar", "text"],
 	number: [
 		"int4",
 		"integer",
@@ -64,15 +64,17 @@ export function matchType(
 	fieldType: FieldType,
 	dbType: KyselyDatabaseType,
 ) {
+	function normalize(type: string) {
+		return type.toLowerCase().split("(")[0].trim();
+	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
-	const type = Array.isArray(fieldType)
+	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
 		: types[fieldType].map((t) => t.toLowerCase());
-	const matches = type.includes(columnDataType.toLowerCase());
-	return matches;
+	return expected.includes(normalize(columnDataType));
 }
 
 export async function getMigrations(config: BetterAuthOptions) {

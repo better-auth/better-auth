@@ -4,10 +4,20 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import { ZodObject, ZodOptional, ZodSchema } from "zod";
+import {
+	z,
+	ZodArray,
+	ZodBoolean,
+	ZodNumber,
+	ZodObject,
+	ZodOptional,
+	ZodString,
+	ZodType,
+} from "zod/v4";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
+import type { FieldAttribute } from "../../db";
 
 export interface Path {
 	get?: {
@@ -67,23 +77,39 @@ export interface Path {
 		};
 	};
 }
-const paths: Record<string, Path> = {};
 
-function getTypeFromZodType(zodType: ZodSchema) {
-	switch (zodType.constructor.name) {
-		case "ZodString":
-			return "string";
-		case "ZodNumber":
-			return "number";
-		case "ZodBoolean":
-			return "boolean";
-		case "ZodObject":
-			return "object";
-		case "ZodArray":
-			return "array";
-		default:
-			return "string";
+function getTypeFromZodType(zodType: ZodType<any>) {
+	if (zodType instanceof ZodString) {
+		return "string";
+	} else if (zodType instanceof ZodNumber) {
+		return "number";
+	} else if (zodType instanceof ZodBoolean) {
+		return "boolean";
+	} else if (zodType instanceof ZodObject) {
+		return "object";
+	} else if (zodType instanceof ZodArray) {
+		return "array";
 	}
+	return "string";
+}
+
+function getFieldSchema(field: FieldAttribute) {
+	const schema: any = {
+		type: field.type === "date" ? "string" : field.type,
+	};
+
+	if (field.defaultValue !== undefined) {
+		schema.default =
+			typeof field.defaultValue === "function"
+				? "Generated at runtime"
+				: field.defaultValue;
+	}
+
+	if (field.input === false) {
+		schema.readOnly = true;
+	}
+
+	return schema;
 }
 
 function getParameters(options: EndpointOptions) {
@@ -94,18 +120,18 @@ function getParameters(options: EndpointOptions) {
 	}
 	if (options.query instanceof ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
-			if (value instanceof ZodSchema) {
+			if (value instanceof ZodType) {
 				parameters.push({
 					name: key,
 					in: "query",
 					schema: {
-						type: getTypeFromZodType(value),
-						...("minLength" in value && value.minLength
+						type: getTypeFromZodType(value as ZodType<any>),
+						...("minLength" in value && (value as any).minLength
 							? {
-									minLength: value.minLength as number,
+									minLength: (value as any).minLength as number,
 								}
 							: {}),
-						description: value.description,
+						description: (value as any).description,
 					},
 				});
 			}
@@ -129,12 +155,12 @@ function getRequestBody(options: EndpointOptions): any {
 		const properties: Record<string, any> = {};
 		const required: string[] = [];
 		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof ZodSchema) {
+			if (value instanceof ZodType) {
 				properties[key] = {
-					type: getTypeFromZodType(value),
-					description: value.description,
+					type: getTypeFromZodType(value as ZodType<any>),
+					description: (value as any).description,
 				};
-				if (!(value instanceof ZodOptional)) {
+				if (!(value instanceof z.ZodOptional)) {
 					required.push(key);
 				}
 			}
@@ -280,18 +306,24 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const tables = getAuthTables(options);
 	const models = Object.entries(tables).reduce((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
+		const fields = value.fields;
+		const required: string[] = [];
+		const properties: Record<string, any> = {
+			id: { type: "string" },
+		};
+		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
+			if (!fieldValue) return;
+			properties[fieldKey] = getFieldSchema(fieldValue);
+			if (fieldValue.required && fieldValue.input !== false) {
+				required.push(fieldKey);
+			}
+		});
+
 		// @ts-ignore
 		acc[modelName] = {
 			type: "object",
-			properties: Object.entries(value.fields).reduce(
-				(acc, [key, value]) => {
-					acc[key] = {
-						type: value.type,
-					};
-					return acc;
-				},
-				{ id: { type: "string" } } as Record<string, any>,
-			),
+			properties,
+			...(required.length > 0 ? { required } : {}),
 		};
 		return acc;
 	}, {});
@@ -301,6 +333,8 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			...models,
 		},
 	};
+
+	const paths: Record<string, Path> = {};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (ctx.options.disabledPaths?.includes(value.path)) return;

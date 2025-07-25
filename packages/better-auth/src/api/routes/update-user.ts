@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -16,7 +16,12 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
-			body: z.record(z.string(), z.any()),
+			body: z.record(
+				z.string().meta({
+					description: "Field name must be a string",
+				}),
+				z.any(),
+			),
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
@@ -125,22 +130,23 @@ export const changePassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string({
+			newPassword: z.string().meta({
 				description: "The new password to set",
 			}),
 			/**
 			 * The current password of the user
 			 */
-			currentPassword: z.string({
-				description: "The current password",
+			currentPassword: z.string().meta({
+				description: "The current password is required",
 			}),
 			/**
 			 * revoke all sessions that are not the
 			 * current one logged in by the user
 			 */
 			revokeOtherSessions: z
-				.boolean({
-					description: "Revoke all other sessions",
+				.boolean()
+				.meta({
+					description: "Must be a boolean value",
 				})
 				.optional(),
 		}),
@@ -305,7 +311,9 @@ export const setPassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string(),
+			newPassword: z.string().meta({
+				description: "The new password to set is required",
+			}),
 		}),
 		metadata: {
 			SERVER_ONLY: true,
@@ -369,16 +377,33 @@ export const deleteUser = createAuthEndpoint(
 			 * The callback URL to redirect to after the user is deleted
 			 * this is only used on delete user callback
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string()
+				.meta({
+					description:
+						"The callback URL to redirect to after the user is deleted",
+				})
+				.optional(),
 			/**
 			 * The password of the user. If the password isn't provided, session freshness
 			 * will be checked.
 			 */
-			password: z.string().optional(),
+			password: z
+				.string()
+				.meta({
+					description:
+						"The password of the user is required to delete the user",
+				})
+				.optional(),
 			/**
 			 * The token to delete the user. If the token is provided, the user will be deleted
 			 */
-			token: z.string().optional(),
+			token: z
+				.string()
+				.meta({
+					description: "The token to delete the user is required",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -443,17 +468,6 @@ export const deleteUser = createAuthEndpoint(
 					message: BASE_ERROR_CODES.INVALID_PASSWORD,
 				});
 			}
-		} else {
-			if (ctx.context.options.session?.freshAge) {
-				const currentAge = session.session.createdAt.getTime();
-				const freshAge = ctx.context.options.session.freshAge;
-				const now = Date.now();
-				if (now - currentAge > freshAge) {
-					throw new APIError("BAD_REQUEST", {
-						message: BASE_ERROR_CODES.SESSION_EXPIRED,
-					});
-				}
-			}
 		}
 
 		if (ctx.body.token) {
@@ -503,6 +517,18 @@ export const deleteUser = createAuthEndpoint(
 				message: "Verification email sent",
 			});
 		}
+
+		if (!ctx.body.password && ctx.context.sessionConfig.freshAge !== 0) {
+			const currentAge = session.session.createdAt.getTime();
+			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
+			const now = Date.now();
+			if (now - currentAge > freshAge * 1000) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.SESSION_EXPIRED,
+				});
+			}
+		}
+
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
@@ -527,8 +553,15 @@ export const deleteUserCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string(),
-			callbackURL: z.string().optional(),
+			token: z.string().meta({
+				description: "The token to verify the deletion request",
+			}),
+			callbackURL: z
+				.string()
+				.meta({
+					description: "The URL to redirect to after deletion",
+				})
+				.optional(),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
@@ -618,13 +651,13 @@ export const changeEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			newEmail: z
-				.string({
-					description: "The new email to set",
-				})
-				.email(),
+			newEmail: z.email().meta({
+				description:
+					"The new email address to set must be a valid email address",
+			}),
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to redirect to after email verification",
 				})
 				.optional(),

@@ -1,10 +1,9 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
-import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
@@ -69,13 +68,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z
-				.string({
-					description: "The email to send the verification email to",
-				})
-				.email(),
+			email: z.email().meta({
+				description: "The email to send the verification email to",
+			}),
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to use for email verification callback",
 				})
 				.optional(),
@@ -155,13 +153,32 @@ export const sendVerificationEmail = createAuthEndpoint(
 			});
 		}
 		const { email } = ctx.body;
-		const user = await ctx.context.internalAdapter.findUserByEmail(email);
-		if (!user) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.USER_NOT_FOUND,
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			if (!user) {
+				//we're returning true to avoid leaking information about the user
+				return ctx.json({
+					status: true,
+				});
+			}
+			await sendVerificationEmailFn(ctx, user.user);
+			return ctx.json({
+				status: true,
 			});
 		}
-		await sendVerificationEmailFn(ctx, user.user);
+		if (session?.user.emailVerified) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"You can only send a verification email to an unverified email",
+			});
+		}
+		if (session?.user.email !== email) {
+			throw new APIError("BAD_REQUEST", {
+				message: "You can only send a verification email to your own email",
+			});
+		}
+		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
 			status: true,
 		});
@@ -173,11 +190,12 @@ export const verifyEmail = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string({
+			token: z.string().meta({
 				description: "The token to verify the email",
 			}),
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to redirect to after email verification",
 				})
 				.optional(),
@@ -379,17 +397,25 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
-		await ctx.context.options.emailVerification?.onEmailVerification?.(
-			user.user,
-			ctx.request,
-		);
-		await ctx.context.internalAdapter.updateUserByEmail(
+		if (ctx.context.options.emailVerification?.onEmailVerification) {
+			await ctx.context.options.emailVerification.onEmailVerification(
+				user.user,
+				ctx.request,
+			);
+		}
+		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 			parsed.email,
 			{
 				emailVerified: true,
 			},
 			ctx,
 		);
+		if (ctx.context.options.emailVerification?.afterEmailVerification) {
+			await ctx.context.options.emailVerification.afterEmailVerification(
+				updatedUser,
+				ctx.request,
+			);
+		}
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
 			if (!currentSession || currentSession.user.email !== parsed.email) {

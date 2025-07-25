@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
@@ -145,9 +145,10 @@ export default function Hero() {
 									</div>
 								</GradientBG>
 							</div>
+
 							{
 								<>
-									<div className="mt-8 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
+									<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
 										<Link
 											href="/docs"
 											className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
@@ -206,7 +207,7 @@ function CodePreview() {
 			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
 				<motion.div
 					animate={{ height: height > 0 ? height : undefined }}
-					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-stone-950/10 dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
+					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-black dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
 				>
 					<div ref={ref}>
 						<div className="absolute -top-px left-0 right-0 h-px" />
@@ -267,10 +268,10 @@ function CodePreview() {
 										{Array.from({
 											length: code.split("\n").length,
 										}).map((_, index) => (
-											<Fragment key={index}>
+											<div key={index}>
 												{(index + 1).toString().padStart(2, "0")}
 												<br />
-											</Fragment>
+											</div>
 										))}
 									</div>
 									<Highlight

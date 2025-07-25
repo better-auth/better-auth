@@ -3,15 +3,19 @@ import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("forget password", async (it) => {
 	const mockSendEmail = vi.fn();
+	const mockonPasswordReset = vi.fn();
 	let token = "";
 
-	const { client, testUser } = await getTestInstance(
+	const { client, testUser, auth } = await getTestInstance(
 		{
 			emailAndPassword: {
 				enabled: true,
 				async sendResetPassword({ url }) {
 					token = url.split("?")[0].split("/").pop() || "";
 					await mockSendEmail();
+				},
+				onPasswordReset: async ({ user }) => {
+					await mockonPasswordReset(user);
 				},
 			},
 		},
@@ -20,7 +24,7 @@ describe("forget password", async (it) => {
 		},
 	);
 	it("should send a reset password email when enabled", async () => {
-		await client.forgetPassword({
+		await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://localhost:3000",
 		});
@@ -99,7 +103,7 @@ describe("forget password", async (it) => {
 			},
 		});
 		const { headers } = await signInWithTestUser();
-		await client.forgetPassword({
+		await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "/sign-in",
 			fetchOptions: {
@@ -126,7 +130,7 @@ describe("forget password", async (it) => {
 			token,
 		});
 		expect(res.data?.status).toBe(true);
-		await client.forgetPassword({
+		await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "/sign-in",
 			fetchOptions: {
@@ -139,7 +143,34 @@ describe("forget password", async (it) => {
 			newPassword: "new-password",
 			token,
 		});
+		expect(mockonPasswordReset).toHaveBeenCalled();
 		expect(res2.error?.status).toBe(400);
+	});
+
+	it("should allow callbackURL to have multiple query params", async () => {
+		let url = "";
+
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword(context) {
+					url = context.url;
+					await mockSendEmail();
+				},
+				resetPasswordTokenExpiresIn: 10,
+			},
+		});
+
+		const queryParams = "foo=bar&baz=qux";
+		const redirectTo = `http://localhost:3000?${queryParams}`;
+		const res = await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo,
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(url).not.toContain(queryParams);
+		expect(url).toContain(`callbackURL=${encodeURIComponent(redirectTo)}`);
 	});
 });
 
@@ -166,7 +197,7 @@ describe("revoke sessions on password reset", async (it) => {
 	it("should revoke other sessions when revokeSessionsOnPasswordReset is enabled", async () => {
 		const { headers } = await signInWithTestUser();
 
-		await client.forgetPassword({
+		await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://localhost:3000",
 		});
@@ -208,7 +239,7 @@ describe("revoke sessions on password reset", async (it) => {
 
 		const { headers } = await signInWithTestUser();
 
-		await client.forgetPassword({
+		await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://localhost:3000",
 		});

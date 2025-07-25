@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import type { AuthContext } from "../../init";
@@ -31,20 +31,18 @@ function redirectCallback(
 	return url.href;
 }
 
-export const forgetPassword = createAuthEndpoint(
-	"/forget-password",
+export const requestPasswordReset = createAuthEndpoint(
+	"/request-password-reset",
 	{
 		method: "POST",
 		body: z.object({
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z
-				.string({
-					description:
-						"The email address of the user to send a password reset email to",
-				})
-				.email(),
+			email: z.email().meta({
+				description:
+					"The email address of the user to send a password reset email to",
+			}),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
@@ -52,7 +50,8 @@ export const forgetPassword = createAuthEndpoint(
 			 * token=VALID_TOKEN
 			 */
 			redirectTo: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
 				})
@@ -71,6 +70,9 @@ export const forgetPassword = createAuthEndpoint(
 									properties: {
 										status: {
 											type: "boolean",
+										},
+										message: {
+											type: "string",
 										},
 									},
 								},
@@ -99,6 +101,8 @@ export const forgetPassword = createAuthEndpoint(
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
 				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
 			});
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
@@ -116,7 +120,8 @@ export const forgetPassword = createAuthEndpoint(
 			},
 			ctx,
 		);
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
+		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			{
 				user: user.user,
@@ -131,12 +136,121 @@ export const forgetPassword = createAuthEndpoint(
 	},
 );
 
-export const forgetPasswordCallback = createAuthEndpoint(
+/**
+ * @deprecated Use requestPasswordReset instead. This endpoint will be removed in the next major
+ * version.
+ */
+export const forgetPassword = createAuthEndpoint(
+	"/forget-password",
+	{
+		method: "POST",
+		body: z.object({
+			/**
+			 * The email address of the user to send a password reset email to.
+			 */
+			email: z.string().email().meta({
+				description:
+					"The email address of the user to send a password reset email to",
+			}),
+			/**
+			 * The URL to redirect the user to reset their password.
+			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
+			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
+			 * token=VALID_TOKEN
+			 */
+			redirectTo: z
+				.string()
+				.meta({
+					description:
+						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+				})
+				.optional(),
+		}),
+		metadata: {
+			openapi: {
+				description: "Send a password reset email to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+										message: {
+											type: "string",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
+			ctx.context.logger.error(
+				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!",
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Reset password isn't enabled",
+			});
+		}
+		const { email, redirectTo } = ctx.body;
+
+		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
+			includeAccounts: true,
+		});
+		if (!user) {
+			ctx.context.logger.error("Reset Password: User not found", { email });
+			return ctx.json({
+				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
+			});
+		}
+		const defaultExpiresIn = 60 * 60 * 1;
+		const expiresAt = getDate(
+			ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
+				defaultExpiresIn,
+			"sec",
+		);
+		const verificationToken = generateId(24);
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			},
+			ctx,
+		);
+		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
+		await ctx.context.options.emailAndPassword.sendResetPassword(
+			{
+				user: user.user,
+				url,
+				token: verificationToken,
+			},
+			ctx.request,
+		);
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+export const requestPasswordResetCallback = createAuthEndpoint(
 	"/reset-password/:token",
 	{
 		method: "GET",
 		query: z.object({
-			callbackURL: z.string({
+			callbackURL: z.string().meta({
 				description: "The URL to redirect the user to reset their password",
 			}),
 		}),
@@ -186,6 +300,11 @@ export const forgetPasswordCallback = createAuthEndpoint(
 	},
 );
 
+/**
+ * @deprecated Use requestPasswordResetCallback instead
+ */
+export const forgetPasswordCallback = requestPasswordResetCallback;
+
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
@@ -196,11 +315,12 @@ export const resetPassword = createAuthEndpoint(
 			})
 			.optional(),
 		body: z.object({
-			newPassword: z.string({
+			newPassword: z.string().meta({
 				description: "The new password to set",
 			}),
 			token: z
-				.string({
+				.string()
+				.meta({
 					description: "The token to reset the password",
 				})
 				.optional(),
@@ -274,20 +394,26 @@ export const resetPassword = createAuthEndpoint(
 				},
 				ctx,
 			);
-			await ctx.context.internalAdapter.deleteVerificationValue(
-				verification.id,
+		} else {
+			await ctx.context.internalAdapter.updatePassword(
+				userId,
+				hashedPassword,
+				ctx,
 			);
-
-			return ctx.json({
-				status: true,
-			});
 		}
-		await ctx.context.internalAdapter.updatePassword(
-			userId,
-			hashedPassword,
-			ctx,
-		);
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+
+		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
+			const user = await ctx.context.internalAdapter.findUserById(userId);
+			if (user) {
+				await ctx.context.options.emailAndPassword.onPasswordReset(
+					{
+						user,
+					},
+					ctx.request,
+				);
+			}
+		}
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}
