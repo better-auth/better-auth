@@ -15,6 +15,7 @@ import type { JwtPluginOptions } from "./types";
 
 /**
  * Signs a payload in jwt format.
+ * For security, iat and exp will be generated if not supplied.
  *
  * @internal - SCOPED TO PLUGIN. Use signJwt for usage in other plugins.
  *
@@ -26,45 +27,54 @@ export async function signJwtPayload(
 	payload: JWTPayload,
 	options?: JwtPluginOptions,
 ) {
-	const disallowFutureIatTime = !(options?.jwt?.allowFutureIatTime ?? false);
-	const disallowLargerExpTime = !(options?.jwt?.allowLongerExpTime ?? false);
-	const disallowIssuerMismatch = !(options?.jwt?.allowIssuerMismatch ?? false);
-	const disallowAudienceMismatch = !(
-		options?.jwt?.allowAudienceMismatch ?? false
-	);
-
-	// Iat safety check
+	// Iat safety checks
 	let iat = payload.iat;
-	if (disallowFutureIatTime && iat && iat > Date.now() / 1000) {
-		throw new Error("unable to set a future iat time");
+	const nowSeconds = Math.floor(Date.now() / 1000);
+	const allowFutureIatTime = options?.jwt?.allowFutureIatTime;
+	if (!allowFutureIatTime && iat && iat > nowSeconds) {
+		throw new BetterAuthError("unable to set a future iat time");
 	}
+	iat = iat ?? nowSeconds;
 
-	// Exp safety check
+	// Exp safety checks
 	let exp = payload.exp;
-	const defaultExp = options?.jwt?.expirationTime ?? "1h";
-	if (disallowLargerExpTime && exp && exp > toExpJWT(defaultExp, iat)) {
-		throw new Error("unable to set future exp time");
+	const allowLargerExpTime = options?.jwt?.allowLongerExpTime;
+	const defaultExp = toExpJWT(options?.jwt?.expirationTime ?? "1h", iat);
+	if (!allowLargerExpTime && exp && exp > defaultExp) {
+		throw new BetterAuthError("unable to set future exp time");
+	}
+	exp = exp ?? defaultExp;
+
+	// Nbf strict checks
+	const nbf = payload.nbf;
+	if (nbf && !(nbf < iat || nbf > exp)) {
+		throw new BetterAuthError("nbf invalid");
+	}
+	if (iat > nowSeconds && !nbf) {
+		throw new BetterAuthError("cannot issue future iat without nbf");
 	}
 
-	// Iss safety check
+	// Iss safety checks
 	const iss = payload.iss;
 	const defaultIss = options?.jwt?.issuer ?? ctx.context.options.baseURL!;
-	if (disallowIssuerMismatch && iss && iss !== defaultIss) {
-		throw new Error(`iss ${iss} not allowed`);
+	const allowIssuerMismatch = options?.jwt?.allowIssuerMismatch;
+	if (!allowIssuerMismatch && iss && iss !== defaultIss) {
+		throw new BetterAuthError(`iss ${iss} not allowed`);
 	}
 
-	// Aud safety check (for non-oAuth mode, audience checking shall be performed in oAuth plugin instead)
+	// Aud safety checks (for non-oAuth mode, audience checking shall be performed in oAuth plugin instead)
 	const aud = payload.aud;
 	const defaultAud = options?.jwt?.audience ?? ctx.context.options.baseURL!;
-	if (!options?.usesOauthProvider && disallowAudienceMismatch && aud) {
+	const allowAudienceMismatch = options?.jwt?.allowAudienceMismatch;
+	if (!options?.usesOauthProvider && !allowAudienceMismatch && aud) {
 		const allowedAudiences =
 			typeof defaultAud === "string" ? [defaultAud] : defaultAud;
 		if (typeof aud === "string" && !allowedAudiences.includes(aud)) {
-			throw new Error(`aud ${aud} not allowed`);
+			throw new BetterAuthError(`aud ${aud} not allowed`);
 		} else {
 			for (const _aud of aud) {
 				if (!allowedAudiences.includes(_aud)) {
-					throw new Error(`aud ${aud} not allowed`);
+					throw new BetterAuthError(`aud ${aud} not allowed`);
 				}
 			}
 		}
@@ -75,7 +85,7 @@ export async function signJwtPayload(
 		payload = {
 			...payload,
 			iat,
-			exp: exp ?? toExpJWT(defaultExp, iat),
+			exp,
 			iss: iss ?? defaultIss,
 			aud: aud ?? defaultAud,
 		};
@@ -115,7 +125,7 @@ export async function signJwtPayload(
 			typ: "JWT",
 		})
 		.setIssuedAt(iat)
-		.setExpirationTime(exp ?? defaultExp)
+		.setExpirationTime(exp)
 		.setIssuer(iss ?? defaultIss)
 		.setAudience(aud ?? defaultAud);
 	const sub =
@@ -123,6 +133,8 @@ export async function signJwtPayload(
 		(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
 		ctx.context.session?.user.id;
 	if (sub) jwt.setSubject(sub);
+	if (payload.nbf) jwt.setNotBefore(payload.nbf);
+	if (payload.jti) jwt.setJti(payload.jti);
 	return await jwt.sign(privateKey);
 }
 
