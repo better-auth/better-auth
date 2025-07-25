@@ -16,8 +16,8 @@ export const getJwtPlugin = (
 	return plugin;
 };
 
-export function toExpJWT(input: number | Date | string): number {
-	const now = Math.floor(Date.now() / 1000); // current Unix timestamp in seconds
+export function toExpJWT(input: number | Date | string, iat?: number): number {
+	const now = iat ?? Math.floor(Date.now() / 1000); // current Unix timestamp in seconds
 
 	if (typeof input === "number") {
 		return now + input;
