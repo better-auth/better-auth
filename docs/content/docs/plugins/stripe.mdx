@@ -224,6 +224,9 @@ type upgradeSubscription = {
      * The id of the subscription to upgrade. 
      */
     subscriptionId?: string = "sub_123"
+    /**
+     * Any metadata to pass to the subscription.
+    */
     metadata?: Record<string, any>
     /**
      * Number of seats to upgrade to (if applicable). 
@@ -237,13 +240,14 @@ type upgradeSubscription = {
      * Callback URL to redirect back after successful subscription. 
      */
     cancelUrl: string 
+    /**
      * Return URL to redirect back after successful subscription. 
      */
     returnUrl?: string
     /**
-     * Disable redirect after successful subscription. 
+     * Disable redirect after successful subscription. Default is false.
      */
-    disableRedirect: boolean = true
+    disableRedirect?: boolean = false
 }
 ```
 </APIMethod>
