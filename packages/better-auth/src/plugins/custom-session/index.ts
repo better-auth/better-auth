@@ -1,5 +1,6 @@
 import * as z from "zod/v4";
 import { createAuthEndpoint, getSession } from "../../api";
+import { setCookieCache } from "../../cookies";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -88,9 +89,12 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
-					session.headers.forEach((value, key) => {
-						ctx.setHeader(key, value);
+					session.headers.forEach((value: string, key: string) => {
+						if (key.toLowerCase() !== "set-cookie") {
+							ctx.setHeader(key, value);
+						}
 					});
+					await setCookieCache(ctx, session.response as any);
 					return ctx.json(fnResult);
 				},
 			),
