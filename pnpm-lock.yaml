@@ -1652,8 +1652,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.2
       zod:
-        specifier: ^3.23.8
-        version: 3.25.42
+        specifier: ^4.0.5
+        version: 4.0.5
     devDependencies:
       '@types/diff':
         specifier: ^7.0.1
