@@ -14,7 +14,8 @@ import { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
-import type { BetterAuthPlugin } from "..";
+import type { FieldAttribute } from "../../db";
+import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { OrganizationOptions } from "./types";
 
 interface OrganizationClientOptions {
@@ -25,9 +26,28 @@ interface OrganizationClientOptions {
 	teams?: {
 		enabled: boolean;
 	};
-	$inferAuth?:
-		| { options: { plugins: BetterAuthPlugin[] } }
-		| OrganizationOptions["schema"];
+	schema?: {
+		organization?: {
+			additionalFields?: {
+				[key: string]: FieldAttribute;
+			};
+		};
+		member?: {
+			additionalFields?: {
+				[key: string]: FieldAttribute;
+			};
+		};
+		invitation?: {
+			additionalFields?: {
+				[key: string]: FieldAttribute;
+			};
+		};
+		team?: {
+			additionalFields?: {
+				[key: string]: FieldAttribute;
+			};
+		};
+	};
 }
 
 export const organizationClient = <CO extends OrganizationClientOptions>(
@@ -79,29 +99,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				invitations: InferInvitation<CO>[];
 			} & Organization;
 
-	type FindById<
-		T extends readonly BetterAuthPlugin[],
-		TargetId extends string,
-	> = Extract<T[number], { id: TargetId }>;
-
-	type Auth = CO["$inferAuth"] extends { options: any }
-		? CO["$inferAuth"]
-		: { options: { plugins: [] } };
-
-	type OrganizationPlugin = FindById<
-		Auth["options"]["plugins"],
-		"organization"
-	>;
-	type Schema = CO["$inferAuth"] extends Object
-		? CO["$inferAuth"] extends Exclude<OrganizationOptions["schema"], undefined>
-			? CO["$inferAuth"]
-			: OrganizationPlugin extends { options: { schema: infer S } }
-				? S extends OrganizationOptions["schema"]
-					? S
-					: undefined
-				: undefined
-		: undefined;
-
+	type Schema = CO["schema"];
 	return {
 		id: "organization",
 		$InferServerPlugin: {} as ReturnType<
@@ -236,4 +234,36 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 		],
 	} satisfies BetterAuthClientPlugin;
+};
+
+export const inferOrgAdditionalFields = <
+	O extends {
+		options: BetterAuthOptions;
+	},
+	S extends OrganizationOptions["schema"] = undefined,
+>(
+	schema?: S,
+) => {
+	type FindById<
+		T extends readonly BetterAuthPlugin[],
+		TargetId extends string,
+	> = Extract<T[number], { id: TargetId }>;
+
+	type Auth = O extends { options: any } ? O : { options: { plugins: [] } };
+
+	type OrganizationPlugin = FindById<
+		// @ts-expect-error
+		Auth["options"]["plugins"],
+		"organization"
+	>;
+	type Schema = O extends Object
+		? O extends Exclude<OrganizationOptions["schema"], undefined>
+			? O
+			: OrganizationPlugin extends { options: { schema: infer S } }
+				? S extends OrganizationOptions["schema"]
+					? S
+					: undefined
+				: undefined
+		: undefined;
+	return {} as undefined extends S ? Schema : S;
 };
