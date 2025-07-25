@@ -11,11 +11,10 @@ import type { Prettify } from "../../types/helper";
 import { type AccessControl, type Role } from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import { organization } from "./organization";
-import { useAuthQuery } from "../../client";
+import { createAuthClient, useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
-import type { BetterAuthPlugin } from "..";
-import type { OrganizationOptions } from "./types";
+import type { FieldAttribute } from "../../db";
 
 interface OrganizationClientOptions {
 	ac?: AccessControl;
@@ -25,7 +24,20 @@ interface OrganizationClientOptions {
 	teams?: {
 		enabled: boolean;
 	};
-	$inferAuth?: { options: { plugins: BetterAuthPlugin[] } };
+	additionalFields?: {
+		organization?: {
+			[key: string]: FieldAttribute;
+		};
+		member?: {
+			[key: string]: FieldAttribute;
+		};
+		invitation?: {
+			[key: string]: FieldAttribute;
+		};
+		team?: {
+			[key: string]: FieldAttribute;
+		};
+	};
 }
 
 export const organizationClient = <CO extends OrganizationClientOptions>(
@@ -77,25 +89,32 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				invitations: InferInvitation<CO>[];
 			} & Organization;
 
-	type FindById<
-		T extends readonly BetterAuthPlugin[],
-		TargetId extends string,
-	> = Extract<T[number], { id: TargetId }>;
-
-	type Auth = CO["$inferAuth"] extends { options: any }
-		? CO["$inferAuth"]
-		: { options: { plugins: [] } };
-
-	type OrganizationPlugin = FindById<
-		Auth["options"]["plugins"],
-		"organization"
-	>;
-	type Schema = OrganizationPlugin extends { options: { schema: infer S } }
-		? S extends OrganizationOptions["schema"]
-			? S
-			: undefined
+	type Schema = CO["additionalFields"] extends {
+		organization?: {
+			[key: string]: FieldAttribute;
+		};
+		member?: {
+			[key: string]: FieldAttribute;
+		};
+		invitation?: {
+			[key: string]: FieldAttribute;
+		};
+	}
+		? {
+				organization: {
+					additionalFields: CO["additionalFields"]["organization"];
+				};
+				member: {
+					additionalFields: CO["additionalFields"]["member"];
+				};
+				invitation: {
+					additionalFields: CO["additionalFields"]["invitation"];
+				};
+				team: {
+					additionalFields: CO["additionalFields"]["team"];
+				};
+			}
 		: undefined;
-
 	return {
 		id: "organization",
 		$InferServerPlugin: {} as ReturnType<
@@ -231,3 +250,15 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export const client = createAuthClient({
+	plugins: [
+		organizationClient({
+			additionalFields: {
+				organization: {
+					xyz: { type: "string" },
+				},
+			},
+		}),
+	],
+});
