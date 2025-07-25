@@ -27,6 +27,18 @@
 			}
 		}
 	},
+	"overrides": [
+		{
+			"include": ["examples/svelte-kit-example/**"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedImports": "off"
+					}
+				}
+			}
+		}
+	],
 	"files": {
 		"ignore": [
 			"dist",
