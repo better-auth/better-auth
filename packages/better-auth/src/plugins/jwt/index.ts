@@ -190,9 +190,9 @@ export const jwt = (options?: JwtPluginOptions) => {
 				}
 
 				// Convert into JWT token
-				const jwt = await signJwtPayload(ctx, payload, options);
+				const token = await signJwtPayload(ctx, payload, options);
 				return ctx.json({
-					token: jwt,
+					token,
 				});
 			},
 		);
@@ -219,7 +219,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 					}
 
 					if (!payload) return;
-					const jwt = await signJwtPayload(ctx, payload, options);
+					const token = await signJwtPayload(ctx, payload, options);
 					const exposedHeaders =
 						ctx.context.responseHeaders?.get("access-control-expose-headers") ||
 						"";
@@ -230,7 +230,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 							.filter(Boolean),
 					);
 					headersSet.add("set-auth-jwt");
-					ctx.setHeader("set-auth-jwt", jwt);
+					ctx.setHeader("set-auth-jwt", token);
 					ctx.setHeader(
 						"Access-Control-Expose-Headers",
 						Array.from(headersSet).join(", "),

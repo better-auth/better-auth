@@ -345,8 +345,6 @@ jwt({
 
 ### JWT Safety Options
 
-**allowFutureIatTime** @default false - Set true to allow setting issue times in the future.
-
 **allowLongerExpTime** @default false - Set true to allow signing tokens past `expirationTime`
 
 **allowIssuerMismatch** @default false - Set true to allow issuer to mismatch jwt plugin option setting
@@ -377,7 +375,7 @@ jwt({
           alg: "EdDSA",
           kid: process.env.currentKid,
           typ: "JWT",
-        });
+        })
         .sign(process.env.clientPrivateKey);
     },
   },
