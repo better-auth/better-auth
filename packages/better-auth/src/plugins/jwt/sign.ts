@@ -15,7 +15,7 @@ import type { JwtPluginOptions } from "./types";
 
 /**
  * Signs a payload in jwt format.
- * For security, iat and exp will be generated if not supplied.
+ * For security, exp will be generated (from iat or current time) if not supplied.
  *
  * @internal - SCOPED TO PLUGIN. Use signJwt for usage in other plugins.
  *
@@ -27,19 +27,20 @@ export async function signJwtPayload(
 	payload: JWTPayload,
 	options?: JwtPluginOptions,
 ) {
-	// Iat safety checks
-	let iat = payload.iat;
+	// Iat strict checks
 	const nowSeconds = Math.floor(Date.now() / 1000);
-	const allowFutureIatTime = options?.jwt?.allowFutureIatTime;
-	if (!allowFutureIatTime && iat && iat > nowSeconds) {
+	const iat = payload.iat;
+	if (iat && iat > nowSeconds) {
 		throw new BetterAuthError("unable to set a future iat time");
 	}
-	iat = iat ?? nowSeconds;
 
 	// Exp safety checks
 	let exp = payload.exp;
 	const allowLargerExpTime = options?.jwt?.allowLongerExpTime;
-	const defaultExp = toExpJWT(options?.jwt?.expirationTime ?? "1h", iat);
+	const defaultExp = toExpJWT(
+		options?.jwt?.expirationTime ?? "1h",
+		iat ?? nowSeconds,
+	);
 	if (!allowLargerExpTime && exp && exp > defaultExp) {
 		throw new BetterAuthError("unable to set future exp time");
 	}
@@ -47,11 +48,8 @@ export async function signJwtPayload(
 
 	// Nbf strict checks
 	const nbf = payload.nbf;
-	if (nbf && !(nbf < iat || nbf > exp)) {
+	if (nbf && ((iat && nbf < iat) || nbf > exp)) {
 		throw new BetterAuthError("nbf invalid");
-	}
-	if (iat > nowSeconds && !nbf) {
-		throw new BetterAuthError("cannot issue future iat without nbf");
 	}
 
 	// Iss safety checks
@@ -74,7 +72,7 @@ export async function signJwtPayload(
 		} else {
 			for (const _aud of aud) {
 				if (!allowedAudiences.includes(_aud)) {
-					throw new BetterAuthError(`aud ${aud} not allowed`);
+					throw new BetterAuthError(`aud ${_aud} not allowed`);
 				}
 			}
 		}
@@ -124,7 +122,6 @@ export async function signJwtPayload(
 			kid: key.id,
 			typ: "JWT",
 		})
-		.setIssuedAt(iat)
 		.setExpirationTime(exp)
 		.setIssuer(iss ?? defaultIss)
 		.setAudience(aud ?? defaultAud);
@@ -133,6 +130,7 @@ export async function signJwtPayload(
 		(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
 		ctx.context.session?.user.id;
 	if (sub) jwt.setSubject(sub);
+	if (payload.iat) jwt.setIssuedAt(iat);
 	if (payload.nbf) jwt.setNotBefore(payload.nbf);
 	if (payload.jti) jwt.setJti(payload.jti);
 	return await jwt.sign(privateKey);

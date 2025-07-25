@@ -115,12 +115,6 @@ export interface JwtOptions {
 	 */
 	expirationTime?: number | string | Date;
 	/**
-	 * Set true to allow setting issue times in the future.
-	 *
-	 * @default false
-	 */
-	allowFutureIatTime?: boolean;
-	/**
 	 * Set true to allow signing tokens past `expirationTime`
 	 *
 	 * @default false
