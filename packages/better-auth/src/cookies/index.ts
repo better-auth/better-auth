@@ -118,9 +118,9 @@ export async function setCookieCache(
 			{} as Record<string, any>,
 		);
 		const sessionData = { session: filteredSession, user: session.user };
-		const expiresAtDate =  getDate(
-		  ctx.context.authCookies.sessionData.options.maxAge || 60,
-		  "sec",
+		const expiresAtDate = getDate(
+			ctx.context.authCookies.sessionData.options.maxAge || 60,
+			"sec",
 		).getTime();
 		const data = base64Url.encode(
 			JSON.stringify({
