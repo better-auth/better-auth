@@ -23,6 +23,7 @@ import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
+	Usage,
 } from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
 import { getSchema } from "./schema";
@@ -1029,6 +1030,130 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			},
 		),
 	} as const;
+
+	const usageBasedBillingEndPoints = {
+		trackUsage: createAuthEndpoint(
+			"/usage/track",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					stripeCustomerId: z.string(),
+					eventName: z.string(),
+					value: z.number(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { stripeCustomerId, eventName, value, plan } = ctx.body;
+				const planInfo = await getPlanByName(options, plan);
+				if (!planInfo) {
+					throw ctx.error("BAD_REQUEST", {
+						message: "Plan not found",
+					});
+				}
+
+				// Find LatestUsage to aggregate to
+				const latestUsage: Usage[] = await ctx.context.adapter.findMany({
+					model: "usage",
+					where: [
+						{
+							field: "stripeCustomerId",
+							value: stripeCustomerId,
+						},
+						{
+							field: "eventName",
+							value: eventName,
+						},
+					],
+					sortBy: {
+						direction: "desc",
+						field: "createdAt",
+					},
+					limit: 1,
+				});
+
+				// Check time and date
+				const createdAt = latestUsage[0]?.["createdAt"];
+				const date = createdAt ? new Date(createdAt) : new Date();
+				const isMatchingDay =
+					date.toString().substring(0, 15) ==
+					new Date().toString().substring(0, 15);
+				const isMatchingHour =
+					date.toString().substring(0, 18) ==
+					new Date().toString().substring(0, 18);
+
+				// Create new usage or aggregate
+				if (latestUsage.length == 0) {
+					// Create new usage
+					await ctx.context.adapter.create({
+						model: "usage",
+						data: {
+							stripeCustomerId: stripeCustomerId,
+							eventName: eventName,
+							value: value,
+							createdAt: Date.now(),
+						},
+					});
+				} else {
+					// Update latest usage based on aggregation formula
+					if (planInfo.usageBased?.defaultAggregation == "sum") {
+						if (
+							(planInfo.usageBased?.aggregationTime == "hour" &&
+								isMatchingHour) ||
+							(planInfo.usageBased?.aggregationTime == "day" && isMatchingDay)
+						) {
+							await ctx.context.adapter.update({
+								model: "usage",
+								update: {
+									value: latestUsage[0].value + value,
+								},
+								where: [
+									{
+										field: "stripeCustomerId",
+										value: stripeCustomerId,
+									},
+									{
+										field: "eventName",
+										value: eventName,
+									},
+								],
+							});
+						} else {
+							// Create new usage
+							await ctx.context.adapter.create({
+								model: "usage",
+								data: {
+									stripeCustomerId: stripeCustomerId,
+									eventName: eventName,
+									value: value,
+									createdAt: Date.now(),
+								},
+							});
+						}
+					} else {
+					}
+				}
+
+				// Sync to Stripe
+				await client.billing.meterEvents.create({
+					event_name: eventName,
+					payload: {
+						value: value.toString(),
+						stripeCustomerId: stripeCustomerId,
+					},
+				});
+
+				return ctx.json({
+					// usage: res,
+					success: true,
+					// planInfo: planInfo,
+					latestUsage: latestUsage,
+				});
+			},
+		),
+	} as const;
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -1095,6 +1220,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.json({ success: true });
 				},
 			),
+			...usageBasedBillingEndPoints,
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {
