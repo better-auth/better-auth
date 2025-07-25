@@ -2,6 +2,7 @@ import { betterAuth } from "../../auth";
 import { createAuthClient } from "../../client";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { organization } from "./organization";
+import { describe, it } from "vitest";
 
 describe("organization", () => {
 	const auth = betterAuth({
