@@ -5,9 +5,6 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
-
 jobs:
   release:
     if: ${{ github.repository_owner == 'better-auth' }}
@@ -21,17 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20.x
-
-      - run: npx changelogithub
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-          
       - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-            node-version: 20.x
-            registry-url: 'https://registry.npmjs.org'
 
       - run: pnpm install
       
