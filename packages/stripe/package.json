@@ -17,6 +17,9 @@
     "typecheck": "tsc --noEmit",
     "dev": "unbuild --watch"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

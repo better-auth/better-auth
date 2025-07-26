@@ -45,6 +45,9 @@
     "typescript",
     "better-auth"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",

@@ -16,6 +16,9 @@
         "openid connect",
         "single sign on"
     ],
+    "publishConfig": {
+        "access": "public"
+    },
     "module": "dist/index.mjs",
     "description": "SSO plugin for Better Auth",
     "scripts": {
