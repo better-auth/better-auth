@@ -426,7 +426,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx,
 				);
 
-				const freeTrail = plan.freeTrial
+				const freeTrial = plan.freeTrial
 					? {
 							trial_period_days: plan.freeTrial.days,
 						}
@@ -480,7 +480,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 							subscription_data: {
-								...freeTrail,
+								...freeTrial,
 							},
 							mode: "subscription",
 							client_reference_id: referenceId,
