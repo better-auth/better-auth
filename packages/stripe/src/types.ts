@@ -318,6 +318,11 @@ export interface StripeOptions {
 			enabled: boolean;
 		};
 	};
+	/**
+	 * A callback to run after a stripe event is received
+	 * @param event - Stripe Event
+	 * @returns
+	 */
 	onEvent?: (event: Stripe.Event) => Promise<void>;
 	/**
 	 * Schema for the stripe plugin

@@ -8,9 +8,8 @@ const tierVariants = cva(
 		variants: {
 			variant: {
 				free: "bg-gray-500 text-white ring-gray-400 hover:bg-gray-600",
-				starter: "bg-lime-700/40 text-white ring-lime-200/40 hover:bg-lime-600",
-				professional: "bg-purple-800/80 ring-purple-400 hover:bg-purple-700",
-				enterprise: "bg-amber-500 text-black ring-amber-400 hover:bg-amber-600",
+				plus: "bg-lime-700/40 text-white ring-lime-200/40 hover:bg-lime-600",
+				pro: "bg-purple-800/80 ring-purple-400 hover:bg-purple-700",
 			},
 		},
 		defaultVariants: {
@@ -22,7 +21,7 @@ const tierVariants = cva(
 export interface SubscriptionTierLabelProps
 	extends React.HTMLAttributes<HTMLSpanElement>,
 		VariantProps<typeof tierVariants> {
-	tier?: "free" | "starter" | "professional" | "enterprise";
+	tier?: "free" | "plus" | "pro";
 }
 
 export const SubscriptionTierLabel: React.FC<SubscriptionTierLabelProps> = ({
