@@ -1731,9 +1731,6 @@ importers:
       samlify:
         specifier: ^2.10.0
         version: 2.10.1
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.42
     devDependencies:
       '@types/body-parser':
         specifier: ^1.19.6
@@ -1747,6 +1744,9 @@ importers:
       vitest:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@22.13.8)(happy-dom@15.11.7)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)
+      zod:
+        specifier: ^4.0.0
+        version: 4.0.5
 
   packages/stripe:
     dependencies:
