@@ -69,7 +69,7 @@ export interface AppleNonConformUser {
 }
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
-	appBundleIdentifier?: string;
+	audience?: string[];
 }
 
 export const apple = (options: AppleOptions) => {
@@ -116,7 +116,7 @@ export const apple = (options: AppleOptions) => {
 			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 				algorithms: [jwtAlg],
 				issuer: "https://appleid.apple.com",
-				audience: options.appBundleIdentifier || options.clientId,
+				audience: options.audience || options.clientId,
 				maxTokenAge: "1h",
 			});
 			["email_verified", "is_private_email"].forEach((field) => {
