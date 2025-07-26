@@ -187,10 +187,9 @@ await authClient.deleteUser();
 3. Enabled email verification (needed for OAuth users)
 
 As OAuth users don't have a password, we need to send a verification email to confirm the user's intent to delete their account. If you have already added the `sendDeleteAccountVerification` callback, you can just call the `deleteUser` method without providing any other information.
-Note that this would fail if they have a password. In that case, you need to provide the password to delete the account.
 
 ```ts title="delete-user.ts"
-await authClient.deleteUser({});
+await authClient.deleteUser();
 ```
 
 4. If you have a custom delete account page and sent that url via the `sendDeleteAccountVerification` callback.

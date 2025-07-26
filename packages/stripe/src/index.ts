@@ -18,7 +18,6 @@ import {
 	onSubscriptionUpdated,
 } from "./hooks";
 import type {
-	Customer,
 	InputSubscription,
 	StripeOptions,
 	StripePlan,
@@ -1123,26 +1122,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												userId: user.id,
 											},
 										});
-										const customer = await ctx.context.adapter.update<Customer>(
-											{
-												model: "user",
-												update: {
-													stripeCustomerId: stripeCustomer.id,
-												},
-												where: [
-													{
-														field: "id",
-														value: user.id,
-													},
-												],
-											},
-										);
-										if (!customer) {
+										const updatedUser =
+											await ctx.context.internalAdapter.updateUser(user.id, {
+												stripeCustomerId: stripeCustomer.id,
+											});
+										if (!updatedUser) {
 											logger.error("#BETTER_AUTH: Failed to create  customer");
 										} else {
 											await options.onCustomerCreate?.(
 												{
-													customer,
 													stripeCustomer,
 													user,
 												},
