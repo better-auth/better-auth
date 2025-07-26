@@ -164,6 +164,11 @@ export interface Subscription {
 	seats?: number;
 }
 
+export type Storage = {
+	get: (k: string) => Promise<string | null> | string | null;
+	set: (k: string, v: string, ttl?: number) => Promise<void> | void;
+};
+
 export interface StripeOptions {
 	/**
 	 * Stripe Client
@@ -324,6 +329,10 @@ export interface StripeOptions {
 	 * @returns
 	 */
 	onEvent?: (event: Stripe.Event) => Promise<void>;
+	/**
+	 * Optional secondary storage to cache Stripe priceId lookups and other shared data
+	 */
+	secondaryStorage?: Storage;
 	/**
 	 * Schema for the stripe plugin
 	 */
