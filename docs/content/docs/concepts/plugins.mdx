@@ -242,7 +242,7 @@ const myPlugin = ()=>{
                     matcher: (context)=>{
                         return context.headers.get("x-my-header") === "my-value"
                     },
-                    handler: createAuthMiddleware(async(ctx)=>{
+                    handler: createAuthMiddleware(async (ctx)=>{
                         //do something before the request
                         return  {
                             context: ctx // if you want to modify the context
@@ -253,11 +253,11 @@ const myPlugin = ()=>{
                 matcher: (context)=>{
                     return context.path === "/sign-up/email"
                 },
-                handler: async(ctx)=>{
+                handler: createAuthMiddleware(async (ctx)=>{
                     return ctx.json({
                         message: "Hello World"
                     }) // if you want to modify the response
-                }
+                })
             }]
         }
     } satisfies BetterAuthPlugin
