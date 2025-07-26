@@ -270,7 +270,8 @@ export interface StripeOptions {
 					| "upgrade-subscription"
 					| "list-subscription"
 					| "cancel-subscription"
-					| "restore-subscription";
+					| "restore-subscription"
+					| "billing-portal";
 			},
 			request?: Request,
 		) => Promise<boolean>;
