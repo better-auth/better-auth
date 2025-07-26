@@ -55,7 +55,7 @@
         "fast-xml-parser": "^5.2.5",
         "jose": "^5.9.6",
         "oauth2-mock-server": "^7.2.0",
-        "samlify": "^2.10.0",
+        "samlify": "^2.10.0"
     },
     "devDependencies": {
         "@types/body-parser": "^1.19.6",
