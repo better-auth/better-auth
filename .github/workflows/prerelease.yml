@@ -41,7 +41,7 @@ jobs:
           commit: "chore(pre-release): version packages"
           title: "chore(pre-release): version packages"
           version: node .github/prerelease.js
-          publish: npx changeset publish --tag next
+          publish: npx changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
