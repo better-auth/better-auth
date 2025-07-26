@@ -64,6 +64,7 @@ export async function refreshAccessToken({
 		tokenType: data.token_type,
 		scopes: data.scope?.split(" "),
 		idToken: data.id_token,
+		raw: data,
 	};
 
 	if (data.expires_in) {
