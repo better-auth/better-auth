@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,9 @@
     "typescript",
     "nextjs"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
