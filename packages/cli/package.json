@@ -36,7 +36,8 @@
     "@types/fs-extra": "^11.0.4",
     "typescript": "catalog:",
     "unbuild": "catalog:",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "zod": "^4.0.0"
   },
   "dependencies": {
     "@babel/core": "^7.0.0",
@@ -61,8 +62,10 @@
     "prompts": "^2.4.2",
     "semver": "^7.7.1",
     "tinyexec": "^0.3.1",
-    "yocto-spinner": "^0.1.1",
-    "zod": "^4.0.5"
+    "yocto-spinner": "^0.1.1"
+  },
+  "peerDependencies": {
+    "zod": "3.25.0 || ^4.0.0"
   },
   "files": [
     "dist"
