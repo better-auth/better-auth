@@ -428,8 +428,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					//@ts-expect-error
 					ctx,
 				);
+
 				const alreadyHasTrial = subscription.status === "trialing";
-				const freeTrail =
+				const freeTrial =
 					!alreadyHasTrial && plan.freeTrial
 						? {
 								trial_period_days: plan.freeTrial.days,
@@ -484,7 +485,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 							subscription_data: {
-								...freeTrail,
+								...freeTrial,
 							},
 							mode: "subscription",
 							client_reference_id: referenceId,
