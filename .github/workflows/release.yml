@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+  
 jobs:
   release:
     if: ${{ github.repository_owner == 'better-auth' }}
