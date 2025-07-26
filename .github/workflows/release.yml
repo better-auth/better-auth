@@ -2,14 +2,16 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   release:
+    if: ${{ github.repository_owner == 'better-auth' }}
+    name: Create a PR for release workflow
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
