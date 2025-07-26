@@ -2,24 +2,38 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    if: ${{ github.repository_owner == 'better-auth' }}
-    name: Create a PR for release workflow
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/setup
 
-      - name: Check for errors
-        run: pnpm check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
 
-      - name: Build the package
+      - run: npx changelogithub
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+            node-version: 20.x
+            registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install
+      
+      - name: Build
         run: pnpm build
 
       - name: Create Version PR or Publish to NPM
