@@ -1031,7 +1031,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		),
 	} as const;
 
-	const usageBasedBillingEndPoints = {
+	const usageBasedBillingEndpoints = {
 		trackUsage: createAuthEndpoint(
 			"/usage/track",
 			{
@@ -1298,7 +1298,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return ctx.json({ success: true });
 				},
 			),
-			...usageBasedBillingEndPoints,
+			...usageBasedBillingEndpoints,
 			...((options.subscription?.enabled
 				? subscriptionEndpoints
 				: {}) as O["subscription"] extends {

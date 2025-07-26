@@ -999,7 +999,7 @@ describe("stripe", async () => {
 			value: 20,
 			fetchOptions: { headers },
 		});
-		var abc = await authClient.usage.track({
+		await authClient.usage.track({
 			plan: "starter",
 			eventName: "api_calls_starter",
 			stripeCustomerId: "cus_mock123",
