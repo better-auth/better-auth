@@ -553,6 +553,14 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 							description: "The organization slug to get",
 						})
 						.optional(),
+					membersLimit: z
+						.number()
+						.or(z.string().transform((val) => parseInt(val)))
+						.meta({
+							description:
+								"The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.",
+						})
+						.optional(),
 				}),
 			),
 			requireHeaders: true,
@@ -583,7 +591,9 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				ctx.query?.organizationSlug ||
 				ctx.query?.organizationId ||
 				session.session.activeOrganizationId;
+			// return null if no organization is found to avoid erroring since this is a usual scenario
 			if (!organizationId) {
+				ctx.context.logger.info("No active organization found, returning null");
 				return ctx.json(null, {
 					status: 200,
 				});
@@ -593,7 +603,13 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				organizationId,
 				isSlug: !!ctx.query?.organizationSlug,
 				includeTeams: ctx.context.orgOptions.teams?.enabled,
+				membersLimit: ctx.query?.membersLimit,
 			});
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
 			const isMember = organization?.members.find(
 				(member) => member.userId === session.user.id,
 			);
