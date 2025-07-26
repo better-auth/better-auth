@@ -319,23 +319,20 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 
-				const activeSubscription = customerId
-					? await client.subscriptions
-							.list({
-								customer: customerId,
-								status: "active",
-							})
-							.then((res) =>
-								res.data.find(
-									(subscription) =>
-										subscription.id ===
-											subscriptionToUpdate?.stripeSubscriptionId ||
-										ctx.body.subscriptionId,
-								),
-							)
-							.catch((e) => null)
-					: null;
-
+				const activeSubscriptions = await client.subscriptions
+					.list({
+						customer: customerId,
+					})
+					.then((res) =>
+						res.data.filter(
+							(sub) => sub.status === "active" || sub.status === "trialing",
+						),
+					);
+				const activeSubscription = activeSubscriptions.find((sub) =>
+					subscriptionToUpdate?.stripeSubscriptionId
+						? sub.id === subscriptionToUpdate?.stripeSubscriptionId
+						: true,
+				);
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
 					: await ctx.context.adapter.findMany<Subscription>({
@@ -370,6 +367,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
 							flow_data: {
 								type: "subscription_update_confirm",
+								after_completion: {
+									type: "redirect",
+									redirect: {
+										return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+									},
+								},
 								subscription_update_confirm: {
 									subscription: activeSubscription.id,
 									items: [
@@ -426,11 +429,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx,
 				);
 
-				const freeTrial = plan.freeTrial
-					? {
-							trial_period_days: plan.freeTrial.days,
-						}
-					: undefined;
+				const alreadyHasTrial = subscription.status === "trialing";
+				const freeTrial =
+					!alreadyHasTrial && plan.freeTrial
+						? {
+								trial_period_days: plan.freeTrial.days,
+							}
+						: undefined;
 
 				let priceIdToUse: string | undefined = undefined;
 				if (ctx.body.annual) {
