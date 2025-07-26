@@ -88,6 +88,15 @@ export type StripePlan = {
 			ctx: GenericEndpointContext,
 		) => Promise<void>;
 	};
+	/**
+	 * Usage Based
+	 */
+	usageBased?: {
+		limit: number;
+		eventName: string;
+		defaultAggregation: "sum" | "count" | "last";
+		aggregationTime?: "hour" | "day";
+	};
 };
 
 export interface Subscription {
@@ -328,6 +337,10 @@ export interface StripeOptions {
 	 * Schema for the stripe plugin
 	 */
 	schema?: InferOptionSchema<typeof subscriptions & typeof user>;
+	/**
+	 * Usage Based
+	 */
+	usageBased?: boolean;
 }
 
 export interface Customer {
@@ -336,6 +349,14 @@ export interface Customer {
 	userId: string;
 	createdAt: Date;
 	updatedAt: Date;
+}
+
+export interface Usage {
+	id: string;
+	stripeCustomerId: string;
+	eventName: string;
+	value: number;
+	createdAt: Date;
 }
 
 export interface InputSubscription extends Omit<Subscription, "id"> {}

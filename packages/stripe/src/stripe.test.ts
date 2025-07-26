@@ -40,6 +40,94 @@ describe("stripe", async () => {
 		webhooks: {
 			constructEvent: vi.fn(),
 		},
+		billing: {
+			meters: {
+				create: vi.fn().mockResolvedValue({
+					id: "meter_123",
+					display_name: "API Calls",
+					event_name: "api_calls",
+					status: "active",
+				}),
+				retrieve: vi.fn().mockResolvedValue({
+					id: "meter_123",
+					display_name: "Update API Calls",
+					event_name: "api_calls",
+					status: "active",
+					status_transitions: {
+						deactivated_at: Date.now(),
+					},
+				}),
+				deactivate: vi.fn().mockResolvedValue({
+					id: "meter_123",
+					display_name: "Update API Calls",
+					event_name: "api_calls",
+					status: "active",
+					status_transitions: {
+						deactivated_at: Date.now(),
+					},
+				}),
+				reactivate: vi.fn().mockResolvedValue({
+					id: "meter_123",
+					display_name: "Update API Calls",
+					event_name: "api_calls",
+					status: "active",
+					status_transitions: {
+						deactivated_at: null,
+					},
+				}),
+				list: vi.fn().mockResolvedValue({
+					data: [
+						{
+							id: "meter_123",
+							display_name: "Update API Calls",
+							event_name: "api_calls",
+							status: "active",
+						},
+						{
+							id: "meter_1234",
+							display_name: "API Calls",
+							event_name: "api_calls",
+							status: "active",
+						},
+					],
+				}),
+				update: vi.fn().mockImplementation((id, { display_name }) => {
+					if (id === "meter_123") {
+						return Promise.resolve({
+							id: "meter_123",
+							display_name,
+							event_name: "api_calls",
+							status: "active",
+						});
+					}
+					return Promise.reject(new Error("Meter not found"));
+				}),
+				event: vi.fn().mockImplementation(({ event_name }) => {
+					return Promise.resolve({
+						object: "v2.billing.meter_event",
+						id: "meter_123",
+						event_name: "api_calls",
+						status: "active",
+					});
+				}),
+			},
+			meterEvents: {
+				create: vi.fn().mockImplementation((data) => {
+					return Promise.resolve({
+						object: "v2.billing.meter_event",
+						created: "2024-06-01T12:10:00.000Z",
+						livemode: false,
+						identifier: "idmp_12345678",
+						event_name: data.eventName,
+						timestamp: Date.now(),
+						payload: {
+							stripeCustomerId: data.payload.stripeCustomerId,
+							value: data.payload.value,
+						},
+					});
+				}),
+			},
+		},
 	};
 
 	const _stripe = mockStripe as unknown as Stripe;
@@ -50,6 +138,7 @@ describe("stripe", async () => {
 		account: [],
 		customer: [],
 		subscription: [],
+		usage: [],
 	};
 	const memory = memoryAdapter(data);
 	const stripeOptions = {
@@ -63,14 +152,30 @@ describe("stripe", async () => {
 					priceId: process.env.STRIPE_PRICE_ID_1!,
 					name: "starter",
 					lookupKey: "lookup_key_123",
+					// If you're using Usage Based
+					usageBased: {
+						eventName: "api_calls_starter",
+						limit: 100,
+						defaultAggregation: "sum",
+						aggregationTime: "day",
+					},
 				},
 				{
 					priceId: process.env.STRIPE_PRICE_ID_2!,
 					name: "premium",
 					lookupKey: "lookup_key_234",
+					// If you're using Usage Based
+					usageBased: {
+						eventName: "api_calls_premium",
+						limit: 200,
+						defaultAggregation: "sum",
+						aggregationTime: "day",
+					},
 				},
 			],
 		},
+		// If you're using Usage Based
+		usageBased: true,
 	} satisfies StripeOptions;
 	const auth = betterAuth({
 		database: memory,
@@ -110,6 +215,7 @@ describe("stripe", async () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
+		data.usage = [];
 
 		vi.clearAllMocks();
 	});
@@ -843,5 +949,179 @@ describe("stripe", async () => {
 		});
 
 		expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
+	});
+
+	it("should track usage", async () => {
+		// Create user
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		// Login User
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Create Subscription
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Track Usage
+		await authClient.usage.track({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			value: 10,
+			fetchOptions: { headers },
+		});
+		await authClient.usage.track({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			value: 20,
+			fetchOptions: { headers },
+		});
+		await authClient.usage.track({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			value: 30,
+			fetchOptions: { headers },
+		});
+
+		expect(data["usage"][0]["value"]).toBe(60);
+	});
+
+	it("should get usage data", async () => {
+		// Create user
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		// Login User
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Create Subscription
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Track Usage
+		await authClient.usage.track({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			value: 10,
+			fetchOptions: { headers },
+		});
+		await authClient.usage.track({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			value: 20,
+			fetchOptions: { headers },
+		});
+		await authClient.usage.track({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			value: 30,
+			fetchOptions: { headers },
+		});
+
+		// Get Usage
+		const res = await authClient.usage.get({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.usageThisMonth[0].value).toBe(60);
+		expect(res.data?.usageThisYear[0].value).toBe(60);
+		expect(res.data?.allUsageByUser[0].value).toBe(60);
+	});
+
+	it("should report no usage when no usage is tracked", async () => {
+		// Create user
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		// Login User
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "current-subscriptions@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Create Subscription
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Get Usage
+		const res = await authClient.usage.get({
+			plan: "starter",
+			eventName: "api_calls_starter",
+			stripeCustomerId: "cus_mock123",
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.usageThisMonth.length).toBe(0);
+		expect(res.data?.usageThisYear.length).toBe(0);
+		expect(res.data?.allUsageByUser.length).toBe(0);
 	});
 });

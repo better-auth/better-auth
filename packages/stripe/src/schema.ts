@@ -57,6 +57,29 @@ export const user = {
 	},
 } satisfies AuthPluginSchema;
 
+export const usage = {
+	usage: {
+		fields: {
+			stripeCustomerId: {
+				type: "string",
+				required: true,
+			},
+			eventName: {
+				type: "string",
+				required: true,
+			},
+			value: {
+				type: "number",
+				required: true,
+			},
+			createdAt: {
+				type: "date",
+				required: true,
+			},
+		},
+	},
+} satisfies AuthPluginSchema;
+
 export const getSchema = (options: StripeOptions) => {
 	if (
 		options.schema &&
@@ -68,6 +91,7 @@ export const getSchema = (options: StripeOptions) => {
 	return mergeSchema(
 		{
 			...(options.subscription?.enabled ? subscriptions : {}),
+			...(options.usageBased ? usage : {}),
 			...user,
 		},
 		options.schema,
