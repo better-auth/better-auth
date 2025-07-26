@@ -1,5 +1,12 @@
 # @better-auth/stripe
 
+## 1.3.5
+
+### Patch Changes
+
+- a536de9: Fix an issue where updating Stripe customer ID wasn't properly syncing with secondary storage during user creation
+  - better-auth@1.3.5
+
 ## 1.3.4
 
 ### Patch Changes
