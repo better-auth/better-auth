@@ -1,14 +1,7 @@
-// ORIGINALLY FROM CLOUDFLARE WRANGLER:
-// https://github.com/cloudflare/wrangler2/blob/main/.github/changeset-version.js
-
 import { exec } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
-
-// This script is used by pre-release workflows to update the version of packages being released.
-// It enters pre-release mode, runs changeset version to create pre-release versions,
-// and updates the package-lock.json file.
 
 async function prerelease() {
 	try {
