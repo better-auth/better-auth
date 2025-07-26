@@ -25,7 +25,7 @@ import type {
 	Subscription,
 	Usage,
 } from "./types";
-import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
+import { getPlanByName, getPlanByPriceId, getPlans, isSameDay } from "./utils";
 import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
@@ -1073,16 +1073,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					limit: 1,
 				});
 
-				// Check time and date
-				const createdAt = latestUsage[0]?.["createdAt"];
-				const date = createdAt ? new Date(createdAt) : new Date();
-				const isMatchingDay =
-					date.toString().substring(0, 15) ==
-					new Date().toString().substring(0, 15);
-				const isMatchingHour =
-					date.toString().substring(0, 18) ==
-					new Date().toString().substring(0, 18);
-
 				// Create new usage or aggregate
 				if (latestUsage.length == 0) {
 					// Create new usage
@@ -1096,6 +1086,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						},
 					});
 				} else {
+					// Check time and date
+					const createdAt = latestUsage[0]?.["createdAt"];
+					const date = createdAt ? new Date(createdAt) : new Date();
+					const today = new Date();
+					const isMatchingDay = isSameDay(date, today);
+					const isMatchingHour =
+						planInfo.usageBased?.aggregationTime == "hour" &&
+						isSameDay(date, today);
+
 					// Update latest usage based on aggregation formula
 					if (planInfo.usageBased?.defaultAggregation == "sum") {
 						if (
@@ -1132,11 +1131,22 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							});
 						}
 					} else {
+						// Implement Count and Last
+						// Create new usage
+						await ctx.context.adapter.create({
+							model: "usage",
+							data: {
+								stripeCustomerId: stripeCustomerId,
+								eventName: eventName,
+								value: value,
+								createdAt: Date.now(),
+							},
+						});
 					}
 				}
 
 				// Sync to Stripe
-				await client.billing.meterEvents.create({
+				const res = await client.billing.meterEvents.create({
 					event_name: eventName,
 					payload: {
 						value: value.toString(),
@@ -1145,10 +1155,78 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 
 				return ctx.json({
-					// usage: res,
 					success: true,
-					// planInfo: planInfo,
+					usage: res,
+					planInfo: planInfo,
 					latestUsage: latestUsage,
+				});
+			},
+		),
+		getUsage: createAuthEndpoint(
+			"/usage/get",
+			{
+				method: "POST",
+				body: z.object({
+					plan: z.string(),
+					eventName: z.string(),
+					stripeCustomerId: z.string(),
+				}),
+				use: [sessionMiddleware],
+			},
+			async (ctx) => {
+				const { plan, eventName, stripeCustomerId } = ctx.body;
+				// Check if plan exists
+				const planInfo = await getPlanByName(options, plan);
+				if (!planInfo) {
+					throw ctx.error("BAD_REQUEST", {
+						message: "Plan not found",
+					});
+				}
+				// Check if event exists
+				if (planInfo.usageBased?.eventName != eventName) {
+					throw ctx.error("BAD_REQUEST", {
+						message: "Event not found for this plan",
+					});
+				}
+
+				// Get usage
+				const allUsageByUser: Usage[] = await ctx.context.adapter.findMany({
+					model: "usage",
+					where: [
+						{
+							field: "stripeCustomerId",
+							value: stripeCustomerId,
+						},
+						{
+							field: "eventName",
+							value: eventName,
+						},
+					],
+					sortBy: {
+						direction: "desc",
+						field: "createdAt",
+					},
+				});
+
+				// Get This Month's Usage
+				const usageThisMonth = allUsageByUser.filter((usage) => {
+					const date = new Date(usage.createdAt);
+					return (
+						date.getMonth() == new Date().getMonth() &&
+						date.getFullYear() == new Date().getFullYear()
+					);
+				});
+
+				// Get This Year's Usage
+				const usageThisYear = allUsageByUser.filter((usage) => {
+					const date = new Date(usage.createdAt);
+					return date.getFullYear() == new Date().getFullYear();
+				});
+
+				return ctx.json({
+					usageThisMonth: usageThisMonth,
+					usageThisYear: usageThisYear,
+					allUsageByUser: allUsageByUser,
 				});
 			},
 		),
