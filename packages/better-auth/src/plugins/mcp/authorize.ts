@@ -3,7 +3,7 @@ import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type {
 	AuthorizationQuery,
-	Client,
+	SchemaClient,
 	OIDCOptions,
 } from "../oidc-provider/types";
 import { generateRandomString } from "../../crypto";
@@ -61,7 +61,7 @@ export async function authorizeMCPOAuth(
 	}
 
 	const query = ctx.query as AuthorizationQuery;
-	console.log(query);
+
 	if (!query.client_id) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -78,7 +78,7 @@ export async function authorizeMCPOAuth(
 
 	const client = await ctx.context.adapter
 		.findOne<Record<string, any>>({
-			model: "oauthApplication",
+			model: options.schema?.oauthApplication?.modelName ?? "oauthApplication",
 			where: [
 				{
 					field: "clientId",
@@ -92,15 +92,17 @@ export async function authorizeMCPOAuth(
 			}
 			return {
 				...res,
-				redirectURLs: res.redirectURLs.split(","),
-				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
+				contacts: res.contacts?.split(",") ?? undefined,
+				grantTypes: res.grantTypes?.split(",") ?? undefined,
+				responseTypes: res.responseTypes?.split(",") ?? undefined,
+				redirectURLs: res?.redirectURLs?.split(",") ?? undefined,
+			} as SchemaClient;
 		});
-	console.log(client);
+
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectURLs?.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 

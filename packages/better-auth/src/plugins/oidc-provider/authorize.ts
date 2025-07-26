@@ -97,11 +97,7 @@ export async function authorize(
 		);
 	}
 
-	const client = await getClient(
-		ctx.query.client_id,
-		ctx.context.adapter,
-		options.trustedClients || [],
-	);
+	const client = await getClient(ctx, options, ctx.query.client_id);
 	if (!client) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -110,7 +106,7 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectURLs?.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 
@@ -244,7 +240,7 @@ export async function authorize(
 		.findOne<{
 			consentGiven: boolean;
 		}>({
-			model: "oauthConsent",
+			model: options.schema?.oauthConsent?.modelName ?? "oauthConsent",
 			where: [
 				{
 					field: "clientId",
@@ -285,10 +281,10 @@ export async function authorize(
 	return new Response(
 		htmlFn({
 			scopes: requestScope,
-			clientMetadata: client.metadata,
+			clientMetadata: client.metadata ? JSON.parse(client.metadata) : null,
 			clientIcon: client?.icon,
 			clientId: client.clientId,
-			clientName: client.name,
+			clientName: client.name!,
 			code,
 		}),
 		{
