@@ -4,7 +4,6 @@
 "@better-auth/expo": patch
 "@better-auth/sso": patch
 "@better-auth/stripe": patch
-"@better-auth/docs": patch
 ---
 
 Added support for listing organization members with pagination, sorting, and filtering, and improved client inference for additional organization fields. Also fixed date handling in rate limits and tokens, improved Notion OAuth user extraction, and ensured session is always set in context.
