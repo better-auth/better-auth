@@ -6,9 +6,9 @@ on:
       - main
 
 permissions:
-  contents: write
-  pull-requests: write
-  
+  contents: read
+  # note: no write permissions are needed since the workflow uses GH_ACCESS_TOKEN instead of GITHUB_TOKEN
+
 jobs:
   release:
     if: ${{ github.repository_owner == 'better-auth' }}
@@ -38,6 +38,6 @@ jobs:
           version: node .github/changeset-version.js
           publish: npx changeset publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
           NODE_ENV: "production"
