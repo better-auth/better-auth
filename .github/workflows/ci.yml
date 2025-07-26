@@ -11,6 +11,10 @@ on:
         - 'v**'
     merge_group: {}
 
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+
 jobs:
     test:
         runs-on: ubuntu-latest
@@ -59,6 +63,7 @@ jobs:
               run: pnpm lint
 
             - name: Check for Changesets
+              if: ${{ !startsWith(github.head_ref, 'changeset-release/') && !startsWith(github.ref_name, 'changeset-release/') }}
               run: pnpm changeset status --since origin/main
 
             - name: Test
