@@ -13,7 +13,7 @@ import {
 	ZodOptional,
 	ZodString,
 	ZodType,
-} from "zod/v4";
+} from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";

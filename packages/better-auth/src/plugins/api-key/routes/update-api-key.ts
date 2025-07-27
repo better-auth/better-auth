@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";

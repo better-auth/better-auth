@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import { z } from "zod";
 import type { FieldAttribute } from ".";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";

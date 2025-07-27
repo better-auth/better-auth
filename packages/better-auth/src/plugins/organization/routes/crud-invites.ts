@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
