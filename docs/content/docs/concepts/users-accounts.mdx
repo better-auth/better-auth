@@ -73,7 +73,7 @@ After verification, the new email is updated in the user table, and a confirmati
 A user's password isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use one of the following approaches:
 
 
-<APIMethod path="/change-password" method="POST">
+<APIMethod path="/change-password" method="POST" requireSession>
 ```ts
 type changePassword = {
     /**
