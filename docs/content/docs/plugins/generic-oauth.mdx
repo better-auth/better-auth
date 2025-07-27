@@ -251,6 +251,8 @@ genericOAuth({
 For OAuth providers that return ID tokens, use `verifyIdToken` to verify the token and extract user info from the JWT claims.
 
 ```ts
+import { decodeJwt, jwtVerify } from "jose";
+
 genericOAuth({
   config: [
     {
