@@ -182,6 +182,8 @@ interface GenericOAuthConfig {
 
 **mapProfileToUser**: (Optional) A function to map the provider's user profile to your app's user object. Useful for custom field mapping or transformations.
 
+**verifyIdToken**: (Optional) A function to verify the ID token returned by the provider. Takes the token string and optional nonce as parameters and returns a Promise<boolean>.
+
 **authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters.
 
 **disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
@@ -237,6 +239,41 @@ genericOAuth({
         return {
           firstName: profile.given_name,
           // ... map other fields as needed
+        };
+      }
+    }
+  ]
+})
+```
+
+### Verify ID Token
+
+If you are using an OAuth provider that returns an ID token, you can verify it using the `verifyIdToken` function. 
+By default, the user info will be extracted from the decoded JWT, which requires `sub` and `email` claims to be present. If you need custom user info handling, you can override this behavior by providing your own `getUserInfo` function.
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      // ... other config options
+      verifyIdToken: async (idToken, nonce) => {
+        // Custom logic to verify the ID token using jose
+        // You can use jose's jwtVerify or other methods to verify the token
+        const verified = await jwtVerify(idToken, nonce);
+        return verified;
+      },
+      getUserInfo: async (tokens) => {
+        // Custom logic to fetch and return user info
+        // You can use jose's decodeJwt to decode the token payload
+        if (!tokens.idToken) return null;
+        const decoded = decodeJwt(tokens.idToken);
+        return {
+          id: decoded.sub,
+          email: decoded.email,
+          name: decoded.name,
+          emailVerified: decoded.email_verified,
+          image: decoded.picture
         };
       }
     }
