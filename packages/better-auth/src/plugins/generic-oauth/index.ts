@@ -713,7 +713,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								await ctx.context.internalAdapter.createAccount({
 									userId: link.userId,
 									providerId: provider.providerId,
-									accountId: userInfo.id,
+									accountId: mapUser.id ?? userInfo.id,
 									accessToken: tokens.accessToken,
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
