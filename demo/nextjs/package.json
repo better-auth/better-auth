@@ -88,7 +88,7 @@
     "three": "^0.168.0",
     "ua-parser-js": "^0.7.39",
     "vaul": "^0.9.9",
-    "zod": "^3.23.8"
+    "zod": "^4.0.10"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

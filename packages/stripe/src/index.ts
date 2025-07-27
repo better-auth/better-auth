@@ -5,7 +5,7 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
-import * as z from "zod/v4";
+import { z } from "zod";
 import {
 	sessionMiddleware,
 	APIError,
@@ -1150,3 +1150,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 };
 
 export type { Subscription, StripePlan };
+
+export type * from "zod";
+//@ts-expect-error: we need to export helper types even when they conflict with better-call types to avoid "The inferred type of 'auth' cannot be named without a reference to..."
+export type * from "zod/v4/core";
