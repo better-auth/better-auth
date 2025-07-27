@@ -246,7 +246,9 @@ genericOAuth({
 })
 ```
 
-### Verify ID Token
+### ID Tokens
+
+#### Verify ID Token
 
 For OAuth providers that return ID tokens, use `verifyIdToken` to verify the token and extract user info from the JWT claims.
 
@@ -279,6 +281,24 @@ genericOAuth({
   ]
 })
 ```
+
+#### Sign In with ID Token
+
+To sign in with an OAuth provider using an ID Token, you can use the `signIn.social` function to pass the ID Token directly.
+
+<Callout>
+ If an ID token is provided no redirection will happen, and the user will be signed in directly.
+</Callout>
+
+```ts title="auth-client.ts"
+await authClient.signIn.social({
+    providerId: "custom-provider",
+    idToken: {
+        token: // OAuth Provider ID Token,
+    }
+})
+```
+
 
 ### Error Handling
 
