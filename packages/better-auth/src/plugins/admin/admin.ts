@@ -1581,3 +1581,5 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		options: options as any,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";
