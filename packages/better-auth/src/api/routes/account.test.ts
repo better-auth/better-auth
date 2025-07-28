@@ -14,6 +14,7 @@ import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
 import { signJWT } from "../../crypto/jwt";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import type { Account } from "../../types";
 
 let email = "";
 vi.mock("../../oauth2", async (importOriginal) => {
@@ -146,11 +147,17 @@ describe("account", async () => {
 
 	it("should encrypt access token and refresh token", async () => {
 		const { headers: headers2 } = await signInWithTestUser();
+		const account = await ctx.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "providerId", value: "google" }],
+		});
+		expect(account).toBeTruthy();
+		expect(account?.accessToken).not.toBe("test");
 		const accessToken = await client.getAccessToken({
 			providerId: "google",
 			fetchOptions: { headers: headers2 },
 		});
-		expect(accessToken.data).not.toBe("test");
+		expect(accessToken.data?.accessToken).toBe("test");
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {

@@ -1,6 +1,11 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import { signUp } from "$lib/auth-client";
 import { writable } from "svelte/store";
+import { Button } from "$lib/components/ui/button";
+import * as Card from "$lib/components/ui/card";
+import { Input } from "$lib/components/ui/input";
+import { Label } from "$lib/components/ui/label";
 
 // Create writable stores for form fields
 const firstName = writable("");
@@ -22,6 +27,10 @@ const handleSignUp = async () => {
 		name: `${user.firstName} ${user.lastName}`,
 		callbackURL: "/",
 		fetchOptions: {
+			onSuccess() {
+				alert("Your account has been created.");
+				goto("/dashboard");
+			},
 			onError(context) {
 				alert(context.error.message);
 			},

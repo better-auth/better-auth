@@ -1,7 +1,15 @@
 <script>
+import { goto } from "$app/navigation";
 import { client } from "$lib/auth-client";
+import * as Avatar from "$lib/components/ui/avatar";
+import { Button } from "$lib/components/ui/button";
+import * as Card from "$lib/components/ui/card";
 
 const session = client.useSession();
+
+if (!session) {
+	goto("/sign-in");
+}
 </script>
 
 <Card.Root class="w-[350px]">
@@ -33,9 +41,7 @@ const session = client.useSession();
       on:click={() => {
         client.signOut({
           fetchOptions: {
-            body: {
-              callbackURL: "/",
-            },
+            onSuccess: () => goto("/auth"),
           },
         });
       }}>Sign Out</Button

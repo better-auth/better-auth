@@ -17,7 +17,7 @@ npx @better-auth/cli@latest generate
 
 - `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
-- `--y` - Skip the confirmation prompt and generate the schema directly.
+- `--yes` - Skip the confirmation prompt and generate the schema directly.
 
 
 ## Migrate
@@ -31,7 +31,7 @@ npx @better-auth/cli@latest migrate
 ### Options
 
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
-- `--y` - Skip the confirmation prompt and apply the schema directly.
+- `--yes` - Skip the confirmation prompt and apply the schema directly.
 
 ## Init
 

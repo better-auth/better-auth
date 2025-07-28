@@ -1,7 +1,8 @@
 {
-  "name": "@dev/bun",
+  "name": "@better-auth/bun",
   "module": "index.ts",
   "type": "module",
+  "private": true,
   "scripts": {
     "dev": "bun index.ts --hot"
   },

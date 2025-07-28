@@ -48,7 +48,7 @@ export async function validateApiKey({
 
 	if (apiKey.expiresAt) {
 		const now = new Date().getTime();
-		const expiresAt = apiKey.expiresAt.getTime();
+		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
 				ctx.context.adapter.delete({
@@ -124,7 +124,7 @@ export async function validateApiKey({
 		let now = new Date().getTime();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
-		let lastTime = (lastRefillAt ?? apiKey.createdAt).getTime();
+		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
 
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.

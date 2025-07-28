@@ -142,11 +142,11 @@ export default function UserCard(props: {
 					<div className="flex items-center justify-between">
 						<div>
 							<SubscriptionTierLabel
-								tier={subscription?.plan?.toLowerCase() as "starter"}
+								tier={subscription?.plan?.toLowerCase() as "plus"}
 							/>
 						</div>
 						<Component
-							currentPlan={subscription?.plan?.toLowerCase() as "starter"}
+							currentPlan={subscription?.plan?.toLowerCase() as "plus"}
 							isTrial={subscription?.status === "trialing"}
 						/>
 					</div>

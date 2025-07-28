@@ -16,4 +16,10 @@ export const auth = betterAuth({
 			console.log("Reset password url:", url);
 		},
 	},
+	emailVerification: {
+		sendOnSignUp: false, // TODO enable this option to send email to the user on sign up
+		// sendVerificationEmail: async ({ user, url, token }, request) => {
+		// 	// TODO add function(s) to send verification email.
+		// },
+	},
 });

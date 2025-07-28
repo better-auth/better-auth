@@ -502,26 +502,23 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const session = ctx.context.session;
 			const organizationId =
-				session.session.activeOrganizationId || ctx.query?.organizationId;
-
+				ctx.query?.organizationId || session?.session.activeOrganizationId;
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-					},
+				throw ctx.error("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
-				userId: session?.user.id,
+				userId: session.user.id,
 				organizationId: organizationId || "",
 			});
-
 			if (!member) {
-				throw new APIError("FORBIDDEN");
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+				});
 			}
-
 			const teams = await adapter.listTeams(organizationId);
 			return ctx.json(teams);
 		},
@@ -680,14 +677,12 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			query: z.optional(
-				z
-					.object({
-						teamId: z.string().optional(),
-					})
-					.meta({
+				z.object({
+					teamId: z.string().optional().meta({
 						description:
 							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
 					}),
+				}),
 			),
 			metadata: {
 				openapi: {
@@ -738,41 +733,15 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-
-			if (!session.session.activeOrganizationId) {
+			let teamId = ctx.query?.teamId || session?.session.activeTeamId;
+			if (!teamId) {
 				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
 				});
 			}
-
-			if (!ctx.query?.teamId) {
-				if (!session.session.activeTeamId) {
-					throw new APIError("FORBIDDEN", {
-						message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
-					});
-				}
-
-				const member = await adapter.findTeamMember({
-					userId: session.user.id,
-					teamId: session.session.activeTeamId,
-				});
-
-				if (!member) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
-					});
-				}
-
-				const members = await adapter.listTeamMembers({
-					teamId: session.session.activeTeamId,
-				});
-
-				return ctx.json(members);
-			}
-
 			const member = await adapter.findTeamMember({
 				userId: session.user.id,
-				teamId: ctx.query.teamId,
+				teamId,
 			});
 
 			if (!member) {
@@ -780,11 +749,9 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				});
 			}
-
 			const members = await adapter.listTeamMembers({
-				teamId: ctx.query.teamId,
+				teamId,
 			});
-
 			return ctx.json(members);
 		},
 	);
