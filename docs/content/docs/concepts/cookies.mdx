@@ -52,9 +52,7 @@ export const auth = betterAuth({
 
 ### Cross Subdomain Cookies
 
-Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `example.com`, and if you authenticate on `example.com`, you may want to access the same session on `app.example.com`.
-
-By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies by configuring `crossSubDomainCookies` and `defaultCookieAttributes` in the `advanced` object of the auth options.
+Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `auth.example.com`, and if you authenticate on `auth.example.com`, you may want to access the same session on `app.example.com`.
 
 <Callout type="warn">
 The `domain` attribute controls which domains can access the cookie. Setting it to your root domain (e.g. `example.com`) makes the cookie accessible across all subdomains. For security, you should:
@@ -72,7 +70,7 @@ export const auth = betterAuth({
     advanced: {
         crossSubDomainCookies: {
             enabled: true,
-            domain: "app.example.com", // your domain -
+            domain: "app.example.com", // your domain
         },
     },
     trustedOrigins: [
