@@ -167,6 +167,7 @@ const ChangelogPage = async () => {
 										</time>
 									</div>
 									<Link
+										className="-mt-2"
 										href={
 											props.children
 												?.toString()
