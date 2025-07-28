@@ -284,6 +284,37 @@ export const sso = (options?: SSOOptions) => {
 									})
 									.default(true)
 									.optional(),
+								mapping: z
+									.object({
+										id: z.string({}).meta({
+											description:
+												"The field in the user info response that contains the id. Defaults to 'sub'",
+										}),
+										email: z.string({}).meta({
+											description:
+												"The field in the user info response that contains the email. Defaults to 'email'",
+										}),
+										emailVerified: z
+											.string({})
+											.meta({
+												description:
+													"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'",
+											})
+											.optional(),
+										name: z.string({}).meta({
+											description:
+												"The field in the user info response that contains the name. Defaults to 'name'",
+										}),
+										image: z
+											.string({})
+											.meta({
+												description:
+													"The field in the user info response that contains the image. Defaults to 'picture'",
+											})
+											.optional(),
+										extraFields: z.record(z.string(), z.any()).optional(),
+									})
+									.optional(),
 							})
 							.optional(),
 						samlConfig: z
@@ -325,37 +356,37 @@ export const sso = (options?: SSOOptions) => {
 								privateKey: z.string().optional(),
 								decryptionPvk: z.string().optional(),
 								additionalParams: z.record(z.string(), z.any()).optional(),
-							})
-							.optional(),
-						mapping: z
-							.object({
-								id: z.string({}).meta({
-									description:
-										"The field in the user info response that contains the id. Defaults to 'sub'",
-								}),
-								email: z.string({}).meta({
-									description:
-										"The field in the user info response that contains the email. Defaults to 'email'",
-								}),
-								emailVerified: z
-									.string({})
-									.meta({
-										description:
-											"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'",
+								mapping: z
+									.object({
+										id: z.string({}).meta({
+											description:
+												"The field in the SAML response that contains the id. Used as unique identifier.",
+										}),
+										email: z.string({}).meta({
+											description:
+												"The field in the SAML response that contains the email.",
+										}),
+										name: z.string({}).meta({
+											description:
+												"The field in the SAML response that contains the full name.",
+										}).optional(),
+										firstName: z
+											.string({})
+											.meta({
+												description:
+													"The field in the SAML response that contains the first name.",
+											})
+											.optional(),
+										lastName: z
+											.string({})
+											.meta({
+												description:
+													"The field in the SAML response that contains the last name.",
+											})
+											.optional(),
+										extraFields: z.record(z.string(), z.any()).optional(),
 									})
 									.optional(),
-								name: z.string({}).meta({
-									description:
-										"The field in the user info response that contains the name. Defaults to 'name'",
-								}),
-								image: z
-									.string({})
-									.meta({
-										description:
-											"The field in the user info response that contains the image. Defaults to 'picture'",
-									})
-									.optional(),
-								extraFields: z.record(z.string(), z.any()).optional(),
 							})
 							.optional(),
 						organizationId: z
@@ -612,7 +643,7 @@ export const sso = (options?: SSOOptions) => {
 										discoveryEndpoint:
 											body.oidcConfig.discoveryEndpoint ||
 											`${body.issuer}/.well-known/openid-configuration`,
-										mapping: body.mapping,
+										mapping: body.oidcConfig.mapping,
 										scopes: body.oidcConfig.scopes,
 										userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
 										overrideUserInfo:
@@ -637,7 +668,7 @@ export const sso = (options?: SSOOptions) => {
 										privateKey: body.samlConfig.privateKey,
 										decryptionPvk: body.samlConfig.decryptionPvk,
 										additionalParams: body.samlConfig.additionalParams,
-										mapping: body.mapping,
+										mapping: body.samlConfig.mapping,
 									})
 								: null,
 							organizationId: body.organizationId,
@@ -1324,6 +1355,35 @@ export const sso = (options?: SSOOptions) => {
 					const { extract } = parsedResponse;
 					const attributes = parsedResponse.extract.attributes;
 					const mapping = parsedSamlConfig?.mapping ?? {};
+					
+					// Extract user ID using mapping or fallback to standard attributes
+					const userId = mapping.id ? attributes[mapping.id] : (
+						attributes["nameID"] || 
+						attributes["http://schemas.microsoft.com/identity/claims/emailaddress"] ||
+						attributes["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"]
+					);
+					
+					// Extract email using mapping or fallback to standard attributes  
+					const userEmail = mapping.email ? attributes[mapping.email] : (
+						attributes["nameID"] ||
+						attributes["email"] ||
+						attributes["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] ||
+						attributes["http://schemas.microsoft.com/identity/claims/emailaddress"]
+					);
+					
+					// Extract name using mapping or fallback to standard attributes
+					const userName = mapping.name ? attributes[mapping.name] : (
+						[
+							attributes[mapping.firstName] || attributes["givenName"],
+							attributes[mapping.lastName] || attributes["surname"],
+						]
+							.filter(Boolean)
+							.join(" ") || 
+						attributes["displayName"] ||
+						attributes["http://schemas.microsoft.com/identity/claims/displayname"] ||
+						parsedResponse.extract.attributes?.displayName
+					);
+
 					const userInfo = {
 						...Object.fromEntries(
 							Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1331,23 +1391,25 @@ export const sso = (options?: SSOOptions) => {
 								extract.attributes[value as string],
 							]),
 						),
-						id: attributes[mapping.id] || attributes["nameID"],
-						email:
-							attributes[mapping.email] ||
-							attributes["nameID"] ||
-							attributes["email"],
-						name:
-							[
-								attributes[mapping.firstName] || attributes["givenName"],
-								attributes[mapping.lastName] || attributes["surname"],
-							]
-								.filter(Boolean)
-								.join(" ") || parsedResponse.extract.attributes?.displayName,
+						id: userId,
+						email: userEmail,
+						name: userName,
 						attributes: parsedResponse.extract.attributes,
-						emailVerified: options?.trustEmailVerified
-							? ((attributes?.[mapping.emailVerified] || false) as boolean)
-							: false,
+						emailVerified: options?.trustEmailVerified || false,
 					};
+					
+					// Validate that we have essential user information
+					if (!userInfo.id || !userInfo.email) {
+						ctx.context.logger.error("Missing essential user info from SAML response", {
+							attributes: Object.keys(attributes),
+							mapping,
+							extractedId: userInfo.id,
+							extractedEmail: userInfo.email
+						});
+						throw new APIError("BAD_REQUEST", {
+							message: "Unable to extract user ID or email from SAML response",
+						});
+					}
 
 					let user: User;
 
@@ -1472,11 +1534,12 @@ export const sso = (options?: SSOOptions) => {
 					let session: Session =
 						await ctx.context.internalAdapter.createSession(user.id, ctx);
 					await setSessionCookie(ctx, { session, user });
-					throw ctx.redirect(
-						RelayState ||
-							`${parsedSamlConfig.callbackUrl}` ||
-							`${parsedSamlConfig.issuer}`,
-					);
+					
+					// Decode RelayState URL if present to get the original callback URL
+					const callbackUrl = RelayState ? decodeURIComponent(RelayState) : 
+						`${parsedSamlConfig.callbackUrl}` || `${parsedSamlConfig.issuer}`;
+					
+					throw ctx.redirect(callbackUrl);
 				},
 			),
 		},

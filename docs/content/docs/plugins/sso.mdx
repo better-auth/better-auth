@@ -95,13 +95,13 @@ await authClient.sso.register({
         discoveryEndpoint: "https://idp.example.com/.well-known/openid-configuration",
         scopes: ["openid", "email", "profile"],
         pkce: true,
-    },
-    mapping: {
-        id: "sub",
-        email: "email",
-        emailVerified: "email_verified",
-        name: "name",
-        image: "picture",
+        mapping: {
+            id: "sub",
+            email: "email",
+            emailVerified: "email_verified",
+            name: "name",
+            image: "picture",
+        },
     },
 });
 ```
@@ -124,13 +124,13 @@ await auth.api.registerSSOProvider({
             discoveryEndpoint: "https://idp.example.com/.well-known/openid-configuration",
             scopes: ["openid", "email", "profile"],
             pkce: true,
-        },
-        mapping: {
-            id: "sub",
-            email: "email",
-            emailVerified: "email_verified",
-            name: "name",
-            image: "picture",
+            mapping: {
+                id: "sub",
+                email: "email",
+                emailVerified: "email_verified",
+                name: "name",
+                image: "picture",
+            },
         },
     },
     headers,
@@ -178,17 +178,17 @@ await authClient.sso.register({
             isAssertionEncrypted: true,
             encPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
             encPrivateKeyPass: "your-sp-encryption-key-password"
-        }
-    },
-    mapping: {
-        id: "nameID",
-        email: "email",
-        name: "displayName",
-        firstName: "givenName",
-        lastName: "surname",
-        extraFields: {
-            department: "department",
-            role: "role"
+        },
+        mapping: {
+            id: "nameID",
+            email: "email",
+            name: "displayName",
+            firstName: "givenName",
+            lastName: "surname",
+            extraFields: {
+                department: "department",
+                role: "role"
+            }
         }
     },
 });
@@ -228,17 +228,17 @@ await auth.api.registerSSOProvider({
                 isAssertionEncrypted: true,
                 encPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
                 encPrivateKeyPass: "your-sp-encryption-key-password"
-            }
-        },
-        mapping: {
-            id: "nameID",
-            email: "email",
-            name: "displayName",
-            firstName: "givenName",
-            lastName: "surname",
-            extraFields: {
-                department: "department",
-                role: "role"
+            },
+            mapping: {
+                id: "nameID",
+                email: "email",
+                name: "displayName",
+                firstName: "givenName",
+                lastName: "surname",
+                extraFields: {
+                    department: "department",
+                    role: "role"
+                }
             }
         },
     },
@@ -631,19 +631,22 @@ You also need to provide Identity Provider (IdP) configuration:
 
 ### SAML Attribute Mapping
 
-Configure how SAML attributes map to user fields:
+Configure how SAML attributes map to user fields within the `samlConfig`:
 
 ```ts
-mapping: {
-    id: "nameID",           // Default: "nameID"
-    email: "email",         // Default: "email" or "nameID"
-    name: "displayName",    // Default: "displayName"
-    firstName: "givenName", // Default: "givenName"
-    lastName: "surname",    // Default: "surname"
-    extraFields: {
-        department: "department",
-        role: "jobTitle",
-        phone: "telephoneNumber"
+samlConfig: {
+    // ... other SAML configuration
+    mapping: {
+        id: "nameID",           // Default: "nameID"
+        email: "email",         // Default: "email" or "nameID"
+        name: "displayName",    // Default: "displayName"
+        firstName: "givenName", // Default: "givenName"
+        lastName: "surname",    // Default: "surname"
+        extraFields: {
+            department: "department",
+            role: "jobTitle",
+            phone: "telephoneNumber"
+        }
     }
 }
 ```
