@@ -1865,10 +1865,46 @@ export const sso = (options?: SSOOptions) => {
 					let user: User;
 					const existingUser = await ctx.context.adapter.findOne<User>({
 						model: "user",
-						where: [{ field: "email", value: userInfo.email }],
+						where: [
+							{
+								field: "email",
+								value: userInfo.email,
+							},
+						],
 					});
 
 					if (existingUser) {
+						const account = await ctx.context.adapter.findOne<Account>({
+							model: "account",
+							where: [
+								{ field: "userId", value: existingUser.id },
+								{ field: "providerId", value: provider.providerId },
+								{ field: "accountId", value: userInfo.id },
+							],
+						});
+						if (!account) {
+							const isTrustedProvider =
+								ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
+									provider.providerId,
+								);
+							if (!isTrustedProvider) {
+								throw ctx.redirect(
+									`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
+								);
+							}
+							await ctx.context.adapter.create<Account>({
+								model: "account",
+								data: {
+									userId: existingUser.id,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+									accessToken: "",
+									refreshToken: "",
+								},
+							});
+						}
 						user = existingUser;
 					} else {
 						user = await ctx.context.adapter.create({
