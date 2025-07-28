@@ -1408,7 +1408,7 @@ export const sso = (options?: SSOOptions) => {
 						email: userEmail,
 						name: userName,
 						attributes: parsedResponse.extract.attributes,
-						emailVerified: options?.trustEmailVerified || false,
+                        emailVerified: options?.trustEmailVerified ? Boolean(attributes?.[mapping.emailVerified || "email_verified"]) : false,
 					};
 
 					// Validate that we have essential user information
