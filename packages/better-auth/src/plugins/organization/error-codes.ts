@@ -65,4 +65,6 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to remove a team member",
 	YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION:
 		"You are not allowed to access this organization as an owner",
+	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
+		"You are not a member of this organization",
 } as const;

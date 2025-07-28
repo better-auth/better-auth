@@ -118,21 +118,19 @@ export async function setCookieCache(
 			{} as Record<string, any>,
 		);
 		const sessionData = { session: filteredSession, user: session.user };
+		const expiresAtDate = getDate(
+			ctx.context.authCookies.sessionData.options.maxAge || 60,
+			"sec",
+		).getTime();
 		const data = base64Url.encode(
 			JSON.stringify({
 				session: sessionData,
-				expiresAt: getDate(
-					ctx.context.authCookies.sessionData.options.maxAge || 60,
-					"sec",
-				).getTime(),
+				expiresAt: expiresAtDate,
 				signature: await createHMAC("SHA-256", "base64urlnopad").sign(
 					ctx.context.secret,
 					JSON.stringify({
 						...sessionData,
-						expiresAt: getDate(
-							ctx.context.authCookies.sessionData.options.maxAge || 60,
-							"sec",
-						).getTime(),
+						expiresAt: expiresAtDate,
 					}),
 				),
 			}),

@@ -1,5 +1,5 @@
 {
-  "name": "expo-example",
+  "name": "@better-auth/expo-example",
   "main": "index.ts",
   "private": true,
   "version": "1.0.0",

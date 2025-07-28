@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/demo",
+  "name": "@better-auth/demo-nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {

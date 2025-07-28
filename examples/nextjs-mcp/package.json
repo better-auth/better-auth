@@ -1,5 +1,5 @@
 {
-  "name": "nextjs-mcp",
+  "name": "@better-auth/nextjs-mcp-example",
   "version": "0.1.0",
   "private": true,
   "scripts": {

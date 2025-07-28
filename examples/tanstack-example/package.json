@@ -1,6 +1,7 @@
 {
-  "name": "tanstack-example",
+  "name": "@better-auth/tanstack-example",
   "type": "module",
+  "private": true,
   "scripts": {
     "dev": "vinxi dev",
     "build": "vinxi build",

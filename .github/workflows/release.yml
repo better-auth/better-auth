@@ -2,63 +2,45 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
-  contents: write
+  contents: read
+  # note: no write permissions are needed since the workflow uses GH_ACCESS_TOKEN instead of GITHUB_TOKEN
 
 jobs:
   release:
+    if: ${{ github.repository_owner == 'better-auth' }}
+    name: Create a PR for release workflow
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # See https://github.com/changesets/action/issues/187
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20.x
-
-      - run: npx changelogithub
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-          
+        
       - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-            node-version: 20.x
-            registry-url: 'https://registry.npmjs.org'
 
       - run: pnpm install
       
       - name: Build
         run: pnpm build
 
-      - name: Determine npm tag
-        id: determine_npm_tag
-        shell: bash
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          if [[ "$TAG" =~ -(next|canary|beta|rc) ]]; then
-            # Extract pre-release tag (e.g., beta, rc)
-            NPM_TAG=${BASH_REMATCH[1]}
-          else
-            # Check if the commit is on the main branch
-            git fetch origin main
-            if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-              NPM_TAG="latest"
-            else
-              echo "The tagged commit is not on the main branch."
-              echo "::error ::Releases with the 'latest' npm tag must be on the main branch."
-              exit 1
-            fi
-          fi
-          echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
-          echo "Using npm tag: $NPM_TAG"
-
-      - name: Publish to npm
-        run: pnpm -r publish --access public --no-git-checks --tag ${{ steps.determine_npm_tag.outputs.npm_tag }}
+      - name: Create Version PR or Publish to NPM
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
+          version: node .github/changeset-version.js
+          publish: npx changeset publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+          NODE_ENV: "production"

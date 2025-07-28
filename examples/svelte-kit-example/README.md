@@ -12,7 +12,11 @@ Email & Password . <u>Social Sign-in with Google</u> . Passkeys . Email Verifica
 2. Move .env.example to .env and provide necessary variables
 3. Run the following commands
    ```bash
+   cd /path/to/better-auth/ # Project root of this better-auth repo, not the root of this example
    pnpm install
+   pnpm build
+   cd ./examples/svelte-kit-example/ # The root of this example project
+   pnpm migrate
    pnpm dev
    ```
 4. Open the browser and navigate to `http://localhost:3000`

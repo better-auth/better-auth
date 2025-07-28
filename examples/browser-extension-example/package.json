@@ -1,5 +1,5 @@
 {
-  "name": "better-auth-browser-extension",
+  "name": "@better-auth/browser-extension-example",
   "displayName": "Better auth browser extension",
   "version": "0.0.1",
   "private": true,

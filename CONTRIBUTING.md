@@ -142,6 +142,11 @@ pnpm lint:fix
    pnpm --filter "{packagename}" test
    ```
 5. Ensure all tests pass and the code is properly formatted
+7. If your change is either a bug fix or a feature in the following packages: `better-auth`, `@better-auth/cli`, `@better-auth/expo`,
+   `@better-auth/sso` or `@better-auth/stripe`. Run the following command to create a [changeset](https://github.com/changesets/changesets/tree/main?tab=readme-ov-file#how-do-we-do-that).
+   ```
+   pnpm changeset
+   ```
 6. Commit your changes with a descriptive message following the [Conventional Commits](https://www.conventionalcommits.org/) format:
    ```
    type(scope): description

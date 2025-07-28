@@ -1,5 +1,6 @@
 <script lang="ts">
 import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
+import { cn } from "$lib/utils.js";
 
 type $$Props = ContextMenuPrimitive.CheckboxItemProps;
 type $$Events = ContextMenuPrimitive.CheckboxItemEvents;
