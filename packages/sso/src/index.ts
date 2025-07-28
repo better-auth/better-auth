@@ -976,12 +976,16 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 					if (provider.samlConfig) {
+						const parsedSamlConfig =
+							!options?.defaultSSO && provider.samlConfig
+								? provider.samlConfig
+								: JSON.parse(provider.samlConfig as unknown as string);
 						const sp = saml.ServiceProvider({
-							metadata: provider.samlConfig.spMetadata.metadata,
+							metadata: parsedSamlConfig.spMetadata.metadata,
 							allowCreate: true,
 						});
 						const idp = saml.IdentityProvider({
-							metadata: provider.samlConfig.idpMetadata.metadata,
+							metadata: parsedSamlConfig.idpMetadata.metadata,
 						});
 						const loginRequest = sp.createLoginRequest(
 							idp,
