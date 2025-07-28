@@ -1,6 +1,9 @@
 {
 	"$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
-	"changelog": "@changesets/cli/changelog",
+	"changelog": [
+		"@changesets/changelog-github",
+		{ "repo": "better-auth/better-auth" }
+	],
 	"commit": false,
 	"fixed": [
 		[
@@ -12,7 +15,7 @@
 		]
 	],
 	"linked": [],
-	"access": "restricted",
+	"access": "public",
 	"baseBranch": "origin/main",
 	"updateInternalDependencies": "patch",
 	"ignore": [
