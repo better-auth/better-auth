@@ -1465,7 +1465,6 @@ export const sso = (options?: SSOOptions) => {
 							SAMLResponse,
 							"base64",
 						).toString("utf-8");
-						console.log("Decoded SAML Response:", decodedResponse);
 
 						try {
 							parsedResponse = await sp.parseLoginResponse(idp, "post", {
@@ -1475,10 +1474,6 @@ export const sso = (options?: SSOOptions) => {
 								},
 							});
 						} catch (parseError) {
-							console.log(
-								"Normal parsing failed, trying fallback:",
-								parseError,
-							);
 							const nameIDMatch = decodedResponse.match(
 								/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
 							);
@@ -1865,8 +1860,6 @@ export const sso = (options?: SSOOptions) => {
 							message: "No ID found in SAML response",
 						});
 					}
-
-					console.log("Extracted User Info:", userInfo);
 
 					// Find or create user
 					let user: User;
