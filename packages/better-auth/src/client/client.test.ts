@@ -307,3 +307,19 @@ describe("type", () => {
 		>();
 	});
 });
+
+
+it("should not expose a 'then' property on the proxy", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Accessing 'then' should not make Vitest treat proxy as a Promise
+		const proxy = (client as any).test;
+		expect(proxy.then).toBeUndefined();
+	});
+
