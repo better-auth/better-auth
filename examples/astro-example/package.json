@@ -1,5 +1,5 @@
 {
-  "name": "@examples/astro",
+  "name": "@better-auth/astro-example",
   "type": "module",
   "private": true,
   "version": "0.0.1",

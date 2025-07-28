@@ -361,3 +361,5 @@ export const jwt = (options?: JwtOptions) => {
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
+
+export { getJwtToken };

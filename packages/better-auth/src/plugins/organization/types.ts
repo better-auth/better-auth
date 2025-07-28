@@ -40,7 +40,7 @@ export interface OrganizationOptions {
 	 */
 	creatorRole?: string;
 	/**
-	 * The number of memberships a user can have in an organization.
+	 * The maximum number of members allowed in an organization.
 	 *
 	 * @default 100
 	 */
@@ -253,7 +253,6 @@ export interface OrganizationOptions {
 				[key in string]: FieldAttribute;
 			};
 		};
-
 		team?: {
 			modelName?: string;
 			fields?: {
@@ -263,7 +262,6 @@ export interface OrganizationOptions {
 				[key in string]: FieldAttribute;
 			};
 		};
-
 		teamMember?: {
 			modelName?: string;
 			fields?: {

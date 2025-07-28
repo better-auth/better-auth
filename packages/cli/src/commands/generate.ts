@@ -18,6 +18,7 @@ export async function generateAction(opts: any) {
 			config: z.string().optional(),
 			output: z.string().optional(),
 			y: z.boolean().optional(),
+			yes: z.boolean().optional(),
 		})
 		.parse(opts);
 
@@ -94,7 +95,12 @@ export async function generateAction(opts: any) {
 		}
 	}
 
-	let confirm = options.y;
+	if (options.y) {
+		console.warn("WARNING: --y is deprecated. Consider -y or --yes");
+		options.yes = true;
+	}
+
+	let confirm = options.yes;
 
 	if (!confirm) {
 		const response = await prompts({
@@ -139,5 +145,6 @@ export const generate = new Command("generate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option("--output <output>", "the file to output to the generated schema")
-	.option("-y, --y", "automatically answer yes to all prompts", false)
+	.option("-y, --yes", "automatically answer yes to all prompts", false)
+	.option("--y", "(deprecated) same as --yes", false)
 	.action(generateAction);
