@@ -78,6 +78,10 @@ export interface SAMLConfig {
 		isAssertionEncrypted?: boolean;
 		encPrivateKey?: string;
 		encPrivateKeyPass?: string;
+		singleSignOnService?: Array<{
+			Binding: string;
+			Location: string;
+		}>;
 	};
 	spMetadata: {
 		metadata?: string;
@@ -363,6 +367,21 @@ export const sso = (options?: SSOOptions) => {
 										isAssertionEncrypted: z.boolean().optional(),
 										encPrivateKey: z.string().optional(),
 										encPrivateKeyPass: z.string().optional(),
+										singleSignOnService: z
+											.array(
+												z.object({
+													Binding: z.string().meta({
+														description: "The binding type for the SSO service",
+													}),
+													Location: z.string().meta({
+														description: "The URL for the SSO service",
+													}),
+												}),
+											)
+											.optional()
+											.meta({
+												description: "Single Sign-On service configuration",
+											}),
 									})
 									.optional(),
 								spMetadata: z.object({
@@ -977,15 +996,20 @@ export const sso = (options?: SSOOptions) => {
 					}
 					if (provider.samlConfig) {
 						const parsedSamlConfig =
-							!options?.defaultSSO && provider.samlConfig
+							typeof provider.samlConfig === "object"
 								? provider.samlConfig
 								: JSON.parse(provider.samlConfig as unknown as string);
 						const sp = saml.ServiceProvider({
 							metadata: parsedSamlConfig.spMetadata.metadata,
 							allowCreate: true,
 						});
+
 						const idp = saml.IdentityProvider({
 							metadata: parsedSamlConfig.idpMetadata.metadata,
+							entityID: parsedSamlConfig.idpMetadata.entityID,
+							encryptCert: parsedSamlConfig.idpMetadata.cert,
+							singleSignOnService:
+								parsedSamlConfig.idpMetadata.singleSignOnService,
 						});
 						const loginRequest = sp.createLoginRequest(
 							idp,
@@ -1720,11 +1744,12 @@ export const sso = (options?: SSOOptions) => {
 						privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
 					});
 
+					// Update where we construct the IdP
 					const idpData = parsedSamlConfig.idpMetadata;
 					const idp = !idpData?.metadata
 						? saml.IdentityProvider({
 								entityID: idpData?.entityID || parsedSamlConfig.issuer,
-								singleSignOnService: [
+								singleSignOnService: idpData?.singleSignOnService || [
 									{
 										Binding:
 											"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
