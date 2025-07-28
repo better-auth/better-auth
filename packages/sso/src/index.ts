@@ -1700,7 +1700,6 @@ export const sso = (options?: SSOOptions) => {
 					}
 
 					const parsedSamlConfig = provider.samlConfig;
-					console.log(parsedSamlConfig);
 					// Configure SP and IdP
 					const sp = saml.ServiceProvider({
 						entityID:
