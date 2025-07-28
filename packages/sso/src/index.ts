@@ -976,15 +976,12 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 					if (provider.samlConfig) {
-						const parsedSamlConfig = JSON.parse(
-							provider.samlConfig as unknown as string,
-						);
 						const sp = saml.ServiceProvider({
-							metadata: parsedSamlConfig.spMetadata.metadata,
+							metadata: provider.samlConfig.spMetadata.metadata,
 							allowCreate: true,
 						});
 						const idp = saml.IdentityProvider({
-							metadata: parsedSamlConfig.idpMetadata.metadata,
+							metadata: provider.samlConfig.idpMetadata.metadata,
 						});
 						const loginRequest = sp.createLoginRequest(
 							idp,
@@ -1379,7 +1376,6 @@ export const sso = (options?: SSOOptions) => {
 							message: "No provider found for the given providerId",
 						});
 					}
-
 					const parsedSamlConfig = JSON.parse(
 						provider.samlConfig as unknown as string,
 					);
