@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import { z } from "zod";
 import {
 	createAuthEndpoint,
 	defaultKeyHasher,
@@ -7,6 +7,7 @@ import {
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { GenericEndpointContext, Session, User } from "../../types";
+import { setSessionCookie } from "../../cookies";
 
 interface OneTimeTokenopts {
 	/**
@@ -29,6 +30,10 @@ interface OneTimeTokenopts {
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<string>;
+	/**
+	 * Disable setting the session cookie when the token is verified
+	 */
+	disableSetSessionCookie?: boolean;
 	/**
 	 * This option allows you to configure how the token is stored in your database.
 	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
@@ -164,6 +169,9 @@ export const oneTimeToken = (options?: OneTimeTokenopts) => {
 						throw c.error("BAD_REQUEST", {
 							message: "Session not found",
 						});
+					}
+					if (!opts?.disableSetSessionCookie) {
+						await setSessionCookie(c, session);
 					}
 					return c.json(session);
 				},
