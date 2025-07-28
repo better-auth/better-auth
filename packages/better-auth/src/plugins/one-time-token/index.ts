@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
 	createAuthEndpoint,
+	createAuthMiddleware,
 	defaultKeyHasher,
 	type BetterAuthPlugin,
 } from "..";
@@ -9,7 +10,7 @@ import { generateRandomString } from "../../crypto";
 import type { GenericEndpointContext, Session, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 
-interface OneTimeTokenopts {
+interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
 	 *
@@ -44,13 +45,17 @@ interface OneTimeTokenopts {
 		| "plain"
 		| "hashed"
 		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
+	/**
+	 * Set the OTT header on new sessions
+	 */
+	setOttHeaderOnNewSession?: boolean;
 }
 
-export const oneTimeToken = (options?: OneTimeTokenopts) => {
+export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies OneTimeTokenopts;
+	} satisfies OneTimeTokenOptions;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -64,6 +69,26 @@ export const oneTimeToken = (options?: OneTimeTokenopts) => {
 			return await opts.storeToken.hash(token);
 		}
 
+		return token;
+	}
+
+	async function generateToken(
+		c: GenericEndpointContext,
+		session: {
+			session: Session;
+			user: User;
+		},
+	) {
+		const token = opts?.generateToken
+			? await opts.generateToken(session, c)
+			: generateRandomString(32);
+		const expiresAt = new Date(Date.now() + (opts?.expiresIn ?? 3) * 60 * 1000);
+		const storedToken = await storeToken(c, token);
+		await c.context.internalAdapter.createVerificationValue({
+			value: session.session.token,
+			identifier: `one-time-token:${storedToken}`,
+			expiresAt,
+		});
 		return token;
 	}
 
@@ -99,18 +124,7 @@ export const oneTimeToken = (options?: OneTimeTokenopts) => {
 						});
 					}
 					const session = c.context.session;
-					const token = opts?.generateToken
-						? await opts.generateToken(session, c)
-						: generateRandomString(32);
-					const expiresAt = new Date(
-						Date.now() + (opts?.expiresIn ?? 3) * 60 * 1000,
-					);
-					const storedToken = await storeToken(c, token);
-					await c.context.internalAdapter.createVerificationValue({
-						value: session.session.token,
-						identifier: `one-time-token:${storedToken}`,
-						expiresAt,
-					});
+					const token = await generateToken(c, session);
 					return c.json({ token });
 				},
 			),
@@ -176,6 +190,34 @@ export const oneTimeToken = (options?: OneTimeTokenopts) => {
 					return c.json(session);
 				},
 			),
+		},
+		hooks: {
+			before: [
+				{
+					matcher: () => true,
+					handler: createAuthMiddleware(async (ctx) => {
+						if (ctx.context.newSession) {
+							const exposedHeaders =
+								ctx.context.responseHeaders?.get(
+									"access-control-expose-headers",
+								) || "";
+							const headersSet = new Set(
+								exposedHeaders
+									.split(",")
+									.map((header) => header.trim())
+									.filter(Boolean),
+							);
+							headersSet.add("set-ott");
+							const token = await generateToken(ctx, ctx.context.newSession);
+							ctx.setHeader("set-ott", token);
+							ctx.setHeader(
+								"Access-Control-Expose-Headers",
+								Array.from(headersSet).join(", "),
+							);
+						}
+					}),
+				},
+			],
 		},
 	} satisfies BetterAuthPlugin;
 };
