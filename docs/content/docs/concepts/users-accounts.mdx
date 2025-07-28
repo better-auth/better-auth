@@ -70,16 +70,27 @@ After verification, the new email is updated in the user table, and a confirmati
 </Callout>
  
 ### Change Password
+A user's password isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use one of the following approaches:
 
-Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:
 
+<APIMethod path="/change-password" method="POST" requireSession>
 ```ts
-await authClient.changePassword({
-    newPassword: "newPassword123",
-    currentPassword: "oldPassword123",
-    revokeOtherSessions: true, // revoke all other sessions the user is signed into
-});
+type changePassword = {
+    /**
+     * The new password to set 
+     */
+    newPassword: string = "newpassword1234"
+    /**
+     * The current user password 
+     */
+    currentPassword: string = "oldpassword1234"
+    /**
+     * When set to true, all other active sessions for this user will be invalidated
+     */
+    revokeOtherSessions?: boolean = true
+}
 ```
+</APIMethod>
 
 ### Set Password
 
@@ -187,10 +198,9 @@ await authClient.deleteUser();
 3. Enabled email verification (needed for OAuth users)
 
 As OAuth users don't have a password, we need to send a verification email to confirm the user's intent to delete their account. If you have already added the `sendDeleteAccountVerification` callback, you can just call the `deleteUser` method without providing any other information.
-Note that this would fail if they have a password. In that case, you need to provide the password to delete the account.
 
 ```ts title="delete-user.ts"
-await authClient.deleteUser({});
+await authClient.deleteUser();
 ```
 
 4. If you have a custom delete account page and sent that url via the `sendDeleteAccountVerification` callback.

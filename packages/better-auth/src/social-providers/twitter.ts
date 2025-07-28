@@ -138,6 +138,7 @@ export const twitter = (options: TwitterOption) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
+						authentication: "basic",
 						tokenEndpoint: "https://api.x.com/2/oauth2/token",
 					});
 				},
