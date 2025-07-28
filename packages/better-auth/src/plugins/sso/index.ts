@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import { z } from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
 import {

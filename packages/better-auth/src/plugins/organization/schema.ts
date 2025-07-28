@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import { z } from "zod";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";

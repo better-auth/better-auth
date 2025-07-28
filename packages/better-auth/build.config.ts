@@ -12,6 +12,7 @@ export default defineBuildConfig({
 	clean: true,
 	failOnWarn: false,
 	externals: [
+		"zod",
 		"prisma",
 		"@prisma/client",
 		"better-sqlite3",

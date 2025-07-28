@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import * as z from "zod/v4";
+import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { createEmailVerificationToken } from "./email-verification";
