@@ -192,7 +192,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 			),
 		},
 		hooks: {
-			before: [
+			after: [
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
