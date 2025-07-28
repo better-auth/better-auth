@@ -27,15 +27,15 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
+import { trackEvents } from "./telemetry";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
-
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
-
+	trackEvents(options);
 	const secret =
 		options.secret ||
 		env.BETTER_AUTH_SECRET ||
