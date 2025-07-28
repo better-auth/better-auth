@@ -38,7 +38,35 @@ const ChangelogPage = async () => {
 			}),
 			url: release.html_url,
 		}));
+	function cleanCommitMessage(message: string): string {
+		message = message.replace(/^[a-f0-9]{7}:\s*/, "");
 
+		const prefixes = [
+			"chore:",
+			"fix:",
+			"feat:",
+			"docs:",
+			"style:",
+			"refactor:",
+			"perf:",
+			"test:",
+			"build:",
+			"ci:",
+			"revert:",
+		];
+		for (const prefix of prefixes) {
+			if (message.toLowerCase().startsWith(prefix)) {
+				message = message.substring(prefix.length);
+			}
+		}
+
+		message = message.trim();
+		if (message) {
+			message = message.charAt(0).toUpperCase() + message.slice(1);
+		}
+
+		return message;
+	}
 	function getContent(content: string) {
 		const lines = content.split("\n");
 		const newContext = lines.map((line) => {
@@ -169,7 +197,23 @@ const ChangelogPage = async () => {
 									<hr className="h-[1px] my-1 mb-2 bg-input" />
 								</h3>
 							),
-							p: (props) => <p className="my-0 ml-10 text-sm" {...props} />,
+							p: (props) => {
+								const children = props.children;
+								let text =
+									typeof children === "string"
+										? children
+										: Array.isArray(children) && typeof children[0] === "string"
+											? children[0]
+											: undefined;
+
+								const cleaned = text ? cleanCommitMessage(text) : children;
+
+								return (
+									<p className="my-0 ml-0 text-sm" {...props}>
+										{text ? cleaned : children}
+									</p>
+								);
+							},
 							ul: (props) => (
 								<ul
 									className="list-disc ml-10 text-[0.855rem] text-gray-600 dark:text-gray-300"
@@ -198,10 +242,14 @@ const ChangelogPage = async () => {
 					>
 						{messages
 							?.map((message) => {
+								if (message.content.includes("No changes")) return;
 								return `
-## ${message.title} date=${message.date}
-
-${message.content}
+## ${
+									message.title.slice(2).includes("@")
+										? "v" + message.title.trim().slice(2).split("@")[1]
+										: message.title
+								} date=${message.date}
+${message.content.trim().replace(";;;", "").trim()}
 								`;
 							})
 							.join("\n")}
