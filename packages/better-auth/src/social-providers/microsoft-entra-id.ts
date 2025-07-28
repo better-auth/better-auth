@@ -57,7 +57,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				scopes,
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
-				loginHint: data.loginHint
+				loginHint: data.loginHint,
 			});
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {
