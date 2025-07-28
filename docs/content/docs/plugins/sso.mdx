@@ -606,6 +606,35 @@ organizationProvisioning: {
 
 ## SAML Configuration
 
+### Default SSO Provider
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [
+        sso({
+            defaultSSO: {
+                providerId: "default-saml", // Provider ID for the default provider
+                samlConfig: {
+                    issuer: "https://your-app.com",
+                    entryPoint: "https://idp.example.com/sso",
+                    cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                    callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs",
+                    spMetadata: {
+                        entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
+                        metadata: "<!-- Your SP Metadata XML -->",
+                    }
+                }
+            }
+        })
+    ]
+});
+```
+
+The defaultSSO provider will be used when:
+1. No matching provider is found in the database
+
+This allows you to test SAML authentication without setting up providers in the database. The defaultSSO provider supports all the same configuration options as regular SAML providers.
+
 ### Service Provider Configuration
 
 When registering a SAML provider, you need to provide Service Provider (SP) metadata configuration:
@@ -729,6 +758,32 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
         type: "number | function",
         default: 10,
+    },
+    defaultSSO: {
+        description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
+        type: "object",
+        properties: {
+            domain: {
+                description: "The domain to match for this default provider.",
+                type: "string",
+                required: true,
+            },
+            providerId: {
+                description: "The provider ID to use for the default provider.",
+                type: "string",
+                required: true,
+            },
+            samlConfig: {
+                description: "SAML configuration for the default provider.",
+                type: "SAMLConfig",
+                required: false,
+            },
+            oidcConfig: {
+                description: "OIDC configuration for the default provider.",
+                type: "OIDCConfig",
+                required: false,
+            },
+        },
     },
   }}
 />

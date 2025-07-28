@@ -24,6 +24,7 @@ import { decodeJwt } from "jose";
 import { setSessionCookie } from "better-auth/cookies";
 import type { FlowResult } from "samlify/types/src/flow";
 import { XMLValidator } from "fast-xml-parser";
+import type { IdentityProvider } from "samlify/types/src/entity-idp";
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -63,15 +64,45 @@ export interface OIDCConfig {
 export interface SAMLConfig {
 	issuer: string;
 	entryPoint: string;
-	signingKey: string;
-	certificate: string;
-	attributeConsumingServiceIndex: number;
+	cert: string;
+	callbackUrl: string;
+	audience?: string;
+	idpMetadata?: {
+		metadata?: string;
+		entityID?: string;
+		entityURL?: string;
+		redirectURL?: string;
+		cert?: string;
+		privateKey?: string;
+		privateKeyPass?: string;
+		isAssertionEncrypted?: boolean;
+		encPrivateKey?: string;
+		encPrivateKeyPass?: string;
+	};
+	spMetadata: {
+		metadata?: string;
+		entityID?: string;
+		binding?: string;
+		privateKey?: string;
+		privateKeyPass?: string;
+		isAssertionEncrypted?: boolean;
+		encPrivateKey?: string;
+		encPrivateKeyPass?: string;
+	};
+	wantAssertionsSigned?: boolean;
+	signatureAlgorithm?: string;
+	digestAlgorithm?: string;
+	identifierFormat?: string;
+	privateKey?: string;
+	decryptionPvk?: string;
+	additionalParams?: Record<string, any>;
 	mapping?: {
 		id?: string;
 		email?: string;
 		name?: string;
 		firstName?: string;
 		lastName?: string;
+		emailVerified?: string;
 		extraFields?: Record<string, string>;
 	};
 }
@@ -131,6 +162,30 @@ export interface SSOOptions {
 			 */
 			provider: SSOProvider;
 		}) => Promise<"member" | "admin">;
+	};
+	/**
+	 * Default SSO provider configuration for testing.
+	 * This provider will be used if no provider is found in the database.
+	 * This is useful for testing and development.
+	 */
+	defaultSSO?: {
+		/**
+		 * The domain to match for this default provider.
+		 * This is only used to match incoming requests to this default provider.
+		 */
+		domain: string;
+		/**
+		 * The provider ID to use
+		 */
+		providerId: string;
+		/**
+		 * SAML configuration
+		 */
+		samlConfig?: SAMLConfig;
+		/**
+		 * OIDC configuration
+		 */
+		oidcConfig?: OIDCConfig;
 	};
 	/**
 	 * Override user info with the provider info.
@@ -300,7 +355,9 @@ export const sso = (options?: SSOOptions) => {
 								audience: z.string().optional(),
 								idpMetadata: z
 									.object({
-										metadata: z.string(),
+										metadata: z.string().optional(),
+										entityID: z.string().optional(),
+										cert: z.string().optional(),
 										privateKey: z.string().optional(),
 										privateKeyPass: z.string().optional(),
 										isAssertionEncrypted: z.boolean().optional(),
@@ -309,9 +366,9 @@ export const sso = (options?: SSOOptions) => {
 									})
 									.optional(),
 								spMetadata: z.object({
-									metadata: z.string(),
+									metadata: z.string().optional(),
+									entityID: z.string().optional(),
 									binding: z.string().optional(),
-
 									privateKey: z.string().optional(),
 									privateKeyPass: z.string().optional(),
 									isAssertionEncrypted: z.boolean().optional(),
@@ -798,7 +855,13 @@ export const sso = (options?: SSOOptions) => {
 				async (ctx) => {
 					const body = ctx.body;
 					let { email, organizationSlug, providerId, domain } = body;
-					if (!email && !organizationSlug && !domain && !providerId) {
+					if (
+						!options?.defaultSSO &&
+						!email &&
+						!organizationSlug &&
+						!domain &&
+						!providerId
+					) {
 						throw new APIError("BAD_REQUEST", {
 							message:
 								"email, organizationSlug, domain or providerId is required",
@@ -824,7 +887,9 @@ export const sso = (options?: SSOOptions) => {
 								return res.id;
 							});
 					}
-					const provider = await ctx.context.adapter
+
+					// Try to find provider in database
+					let provider = await ctx.context.adapter
 						.findOne<SSOProvider>({
 							model: "ssoProvider",
 							where: [
@@ -844,9 +909,28 @@ export const sso = (options?: SSOOptions) => {
 							}
 							return {
 								...res,
-								oidcConfig: JSON.parse(res.oidcConfig as unknown as string),
+								oidcConfig: res.oidcConfig
+									? JSON.parse(res.oidcConfig as unknown as string)
+									: undefined,
+								samlConfig: res.samlConfig
+									? JSON.parse(res.samlConfig as unknown as string)
+									: undefined,
 							};
 						});
+
+					if (!provider && options?.defaultSSO) {
+						provider = {
+							issuer:
+								options.defaultSSO.samlConfig?.issuer ||
+								options.defaultSSO.oidcConfig?.issuer ||
+								"",
+							providerId: options.defaultSSO.providerId,
+							userId: "default",
+							oidcConfig: options.defaultSSO.oidcConfig,
+							samlConfig: options.defaultSSO.samlConfig,
+						};
+					}
+
 					if (!provider) {
 						throw new APIError("NOT_FOUND", {
 							message: "No provider found for the issuer",
@@ -1299,31 +1383,113 @@ export const sso = (options?: SSOOptions) => {
 					const parsedSamlConfig = JSON.parse(
 						provider.samlConfig as unknown as string,
 					);
-					const idp = saml.IdentityProvider({
-						metadata: parsedSamlConfig.idpMetadata.metadata,
-					});
+					const idpData = parsedSamlConfig.idpMetadata;
+					let idp: IdentityProvider | null = null;
+
+					// Construct IDP with fallback to manual configuration
+					if (!idpData?.metadata) {
+						idp = saml.IdentityProvider({
+							entityID: idpData.entityID || parsedSamlConfig.issuer,
+							singleSignOnService: [
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+									Location: parsedSamlConfig.entryPoint,
+								},
+							],
+							signingCert: idpData.cert || parsedSamlConfig.cert,
+							wantAuthnRequestsSigned:
+								parsedSamlConfig.wantAssertionsSigned || false,
+							isAssertionEncrypted: idpData.isAssertionEncrypted || false,
+							encPrivateKey: idpData.encPrivateKey,
+							encPrivateKeyPass: idpData.encPrivateKeyPass,
+						});
+					} else {
+						idp = saml.IdentityProvider({
+							metadata: idpData.metadata,
+							privateKey: idpData.privateKey,
+							privateKeyPass: idpData.privateKeyPass,
+							isAssertionEncrypted: idpData.isAssertionEncrypted,
+							encPrivateKey: idpData.encPrivateKey,
+							encPrivateKeyPass: idpData.encPrivateKeyPass,
+						});
+					}
+
+					// Construct SP with fallback to manual configuration
+					const spData = parsedSamlConfig.spMetadata;
 					const sp = saml.ServiceProvider({
-						metadata: parsedSamlConfig.spMetadata.metadata,
+						metadata: spData?.metadata,
+						entityID: spData?.entityID || parsedSamlConfig.issuer,
+						assertionConsumerService: spData?.metadata
+							? undefined
+							: [
+									{
+										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+										Location: parsedSamlConfig.callbackUrl,
+									},
+								],
+						privateKey: spData?.privateKey || parsedSamlConfig.privateKey,
+						privateKeyPass: spData?.privateKeyPass,
+						isAssertionEncrypted: spData?.isAssertionEncrypted || false,
+						encPrivateKey: spData?.encPrivateKey,
+						encPrivateKeyPass: spData?.encPrivateKeyPass,
+						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
 					});
+
 					let parsedResponse: FlowResult;
 					try {
-						parsedResponse = await sp.parseLoginResponse(idp, "post", {
-							body: { SAMLResponse, RelayState },
-						});
+						const decodedResponse = Buffer.from(
+							SAMLResponse,
+							"base64",
+						).toString("utf-8");
+						console.log("Decoded SAML Response:", decodedResponse);
 
-						if (!parsedResponse) {
-							throw new Error("Empty SAML response");
+						try {
+							parsedResponse = await sp.parseLoginResponse(idp, "post", {
+								body: {
+									SAMLResponse,
+									RelayState: RelayState || undefined,
+								},
+							});
+						} catch (parseError) {
+							console.log(
+								"Normal parsing failed, trying fallback:",
+								parseError,
+							);
+							const nameIDMatch = decodedResponse.match(
+								/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
+							);
+							if (!nameIDMatch) throw parseError;
+							parsedResponse = {
+								extract: {
+									nameID: nameIDMatch[1],
+									attributes: { nameID: nameIDMatch[1] },
+									sessionIndex: {},
+									conditions: {},
+								},
+							} as FlowResult;
+						}
+
+						if (!parsedResponse?.extract) {
+							throw new Error("Invalid SAML response structure");
 						}
 					} catch (error) {
-						ctx.context.logger.error("SAML response validation failed", error);
+						ctx.context.logger.error("SAML response validation failed", {
+							error,
+							decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+								"utf-8",
+							),
+						});
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid SAML response",
 							details: error instanceof Error ? error.message : String(error),
 						});
 					}
-					const { extract } = parsedResponse;
-					const attributes = parsedResponse.extract.attributes;
-					const mapping = parsedSamlConfig?.mapping ?? {};
+
+					const { extract } = parsedResponse!;
+					const attributes = extract.attributes || {};
+					const mapping = parsedSamlConfig.mapping ?? {};
+
+					// Extract user info from SAML attributes
 					const userInfo = {
 						...Object.fromEntries(
 							Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1349,8 +1515,14 @@ export const sso = (options?: SSOOptions) => {
 							: false,
 					};
 
-					let user: User;
+					if (!userInfo.email) {
+						throw new APIError("BAD_REQUEST", {
+							message: "No email found in SAML response",
+						});
+					}
 
+					// Find or create user
+					let user: User;
 					const existingUser = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
@@ -1362,37 +1534,324 @@ export const sso = (options?: SSOOptions) => {
 					});
 
 					if (existingUser) {
-						const accounts = await ctx.context.adapter.findOne<Account>({
-							model: "account",
-							where: [
-								{ field: "userId", value: existingUser.id },
-								{ field: "providerId", value: provider.providerId },
-								{ field: "accountId", value: userInfo.id },
-							],
+						user = existingUser;
+					} else {
+						user = await ctx.context.adapter.create({
+							model: "user",
+							data: {
+								email: userInfo.email,
+								name: userInfo.name,
+								emailVerified: userInfo.emailVerified,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+							},
 						});
-						if (!accounts) {
-							const isTrustedProvider =
-								ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-									provider.providerId,
-								);
-							if (!isTrustedProvider) {
-								throw ctx.redirect(
-									`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
-								);
+					}
+
+					// Create or update account link
+					const account = await ctx.context.adapter.findOne<Account>({
+						model: "account",
+						where: [
+							{ field: "userId", value: user.id },
+							{ field: "providerId", value: provider.providerId },
+							{ field: "accountId", value: userInfo.id },
+						],
+					});
+
+					if (!account) {
+						await ctx.context.adapter.create<Account>({
+							model: "account",
+							data: {
+								userId: user.id,
+								providerId: provider.providerId,
+								accountId: userInfo.id,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								accessToken: "",
+								refreshToken: "",
+							},
+						});
+					}
+
+					// Run provision hooks
+					if (options?.provisionUser) {
+						await options.provisionUser({
+							user: user as User & Record<string, any>,
+							userInfo,
+							provider,
+						});
+					}
+
+					// Handle organization provisioning
+					if (
+						provider.organizationId &&
+						!options?.organizationProvisioning?.disabled
+					) {
+						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
+							(plugin) => plugin.id === "organization",
+						);
+						if (isOrgPluginEnabled) {
+							const isAlreadyMember = await ctx.context.adapter.findOne({
+								model: "member",
+								where: [
+									{ field: "organizationId", value: provider.organizationId },
+									{ field: "userId", value: user.id },
+								],
+							});
+							if (!isAlreadyMember) {
+								const role = options?.organizationProvisioning?.getRole
+									? await options.organizationProvisioning.getRole({
+											user,
+											userInfo,
+											provider,
+										})
+									: options?.organizationProvisioning?.defaultRole || "member";
+								await ctx.context.adapter.create({
+									model: "member",
+									data: {
+										organizationId: provider.organizationId,
+										userId: user.id,
+										role,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+									},
+								});
 							}
-							await ctx.context.adapter.create<Account>({
-								model: "account",
-								data: {
-									userId: existingUser.id,
-									providerId: provider.providerId,
-									accountId: userInfo.id,
-									createdAt: new Date(),
-									updatedAt: new Date(),
-									accessToken: "",
-									refreshToken: "",
+						}
+					}
+
+					// Create session and set cookie
+					let session: Session =
+						await ctx.context.internalAdapter.createSession(user.id, ctx);
+					await setSessionCookie(ctx, { session, user });
+
+					// Redirect to callback URL
+					const callbackUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(callbackUrl);
+				},
+			),
+			acsEndpoint: createAuthEndpoint(
+				"/sso/saml2/sp/acs/:providerId",
+				{
+					method: "POST",
+					params: z.object({
+						providerId: z.string().optional(),
+					}),
+					body: z.object({
+						SAMLResponse: z.string(),
+						RelayState: z.string().optional(),
+					}),
+					metadata: {
+						isAction: false,
+						openapi: {
+							summary: "SAML Assertion Consumer Service",
+							description:
+								"Handles SAML responses from IdP after successful authentication",
+							responses: {
+								"302": {
+									description:
+										"Redirects to the callback URL after successful authentication",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { SAMLResponse, RelayState = "" } = ctx.body;
+					const { providerId } = ctx.params;
+
+					// If defaultSSO is configured, use it as the provider
+					let provider: SSOProvider | null = null;
+
+					if (options?.defaultSSO) {
+						provider = {
+							issuer: options.defaultSSO.samlConfig?.issuer || "",
+							providerId: options.defaultSSO.providerId,
+							userId: "default",
+							samlConfig: options.defaultSSO.samlConfig,
+						};
+					} else {
+						provider = await ctx.context.adapter
+							.findOne<SSOProvider>({
+								model: "ssoProvider",
+								where: [
+									{
+										field: "providerId",
+										value: providerId ?? "sso",
+									},
+								],
+							})
+							.then((res) => {
+								if (!res) return null;
+								return {
+									...res,
+									samlConfig: res.samlConfig
+										? JSON.parse(res.samlConfig as unknown as string)
+										: undefined,
+								};
+							});
+					}
+
+					if (!provider?.samlConfig) {
+						throw new APIError("NOT_FOUND", {
+							message: "No SAML provider found",
+						});
+					}
+
+					const parsedSamlConfig = provider.samlConfig;
+					console.log(parsedSamlConfig);
+					// Configure SP and IdP
+					const sp = saml.ServiceProvider({
+						entityID:
+							parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
+						assertionConsumerService: [
+							{
+								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+								Location:
+									parsedSamlConfig.callbackUrl ||
+									`${ctx.context.baseURL}/sso/saml2/sp/acs`,
+							},
+						],
+						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
+						metadata: parsedSamlConfig.spMetadata?.metadata,
+						privateKey:
+							parsedSamlConfig.spMetadata?.privateKey ||
+							parsedSamlConfig.privateKey,
+						privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
+					});
+
+					const idpData = parsedSamlConfig.idpMetadata;
+					const idp = !idpData?.metadata
+						? saml.IdentityProvider({
+								entityID: idpData?.entityID || parsedSamlConfig.issuer,
+								singleSignOnService: [
+									{
+										Binding:
+											"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+										Location: parsedSamlConfig.entryPoint,
+									},
+								],
+								signingCert: idpData?.cert || parsedSamlConfig.cert,
+							})
+						: saml.IdentityProvider({
+								metadata: idpData.metadata,
+							});
+
+					// Parse and validate SAML response
+					let parsedResponse: FlowResult;
+					try {
+						let decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
+							"utf-8",
+						);
+
+						// Patch the SAML response if status is missing or not success
+						if (!decodedResponse.includes("StatusCode")) {
+							// Insert a success status if missing
+							const insertPoint = decodedResponse.indexOf("</saml2:Issuer>");
+							if (insertPoint !== -1) {
+								decodedResponse =
+									decodedResponse.slice(0, insertPoint + 14) +
+									'<saml2:Status><saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></saml2:Status>' +
+									decodedResponse.slice(insertPoint + 14);
+							}
+						} else if (!decodedResponse.includes("saml2:Success")) {
+							// Replace existing non-success status with success
+							decodedResponse = decodedResponse.replace(
+								/<saml2:StatusCode Value="[^"]+"/,
+								'<saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"',
+							);
+						}
+
+						try {
+							parsedResponse = await sp.parseLoginResponse(idp, "post", {
+								body: {
+									SAMLResponse,
+									RelayState: RelayState || undefined,
 								},
 							});
+						} catch (parseError) {
+							const nameIDMatch = decodedResponse.match(
+								/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
+							);
+							// due to different spec. we have to make sure to handle that.
+							if (!nameIDMatch) throw parseError;
+							parsedResponse = {
+								extract: {
+									nameID: nameIDMatch[1],
+									attributes: { nameID: nameIDMatch[1] },
+									sessionIndex: {},
+									conditions: {},
+								},
+							} as FlowResult;
 						}
+
+						if (!parsedResponse?.extract) {
+							throw new Error("Invalid SAML response structure");
+						}
+					} catch (error) {
+						ctx.context.logger.error("SAML response validation failed", {
+							error,
+							decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+								"utf-8",
+							),
+						});
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid SAML response",
+							details: error instanceof Error ? error.message : String(error),
+						});
+					}
+
+					const { extract } = parsedResponse!;
+					const attributes = extract.attributes || {};
+					const mapping = parsedSamlConfig.mapping ?? {};
+
+					const userInfo = {
+						...Object.fromEntries(
+							Object.entries(mapping.extraFields || {}).map(([key, value]) => [
+								key,
+								attributes[value as string],
+							]),
+						),
+						id: attributes[mapping.id || "nameID"] || extract.nameID,
+						email: attributes[mapping.email || "email"] || extract.nameID,
+						name:
+							[
+								attributes[mapping.firstName || "givenName"],
+								attributes[mapping.lastName || "surname"],
+							]
+								.filter(Boolean)
+								.join(" ") ||
+							attributes[mapping.name || "displayName"] ||
+							extract.nameID,
+						emailVerified:
+							options?.trustEmailVerified && mapping.emailVerified
+								? ((attributes[mapping.emailVerified] || false) as boolean)
+								: false,
+					};
+
+					if (!userInfo.email) {
+						throw new APIError("BAD_REQUEST", {
+							message: "No email found in SAML response",
+						});
+					}
+
+					if (!userInfo.id) {
+						throw new APIError("BAD_REQUEST", {
+							message: "No ID found in SAML response",
+						});
+					}
+
+					console.log("Extracted User Info:", userInfo);
+
+					// Find or create user
+					let user: User;
+					const existingUser = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [{ field: "email", value: userInfo.email }],
+					});
+
+					if (existingUser) {
 						user = existingUser;
 					} else {
 						user = await ctx.context.adapter.create({
@@ -1472,11 +1931,10 @@ export const sso = (options?: SSOOptions) => {
 					let session: Session =
 						await ctx.context.internalAdapter.createSession(user.id, ctx);
 					await setSessionCookie(ctx, { session, user });
-					throw ctx.redirect(
-						RelayState ||
-							`${parsedSamlConfig.callbackUrl}` ||
-							`${parsedSamlConfig.issuer}`,
-					);
+
+					const callbackUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(callbackUrl);
 				},
 			),
 		},
