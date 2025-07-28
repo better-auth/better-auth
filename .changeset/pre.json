@@ -1,0 +1,19 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@better-auth/demo-nextjs": "0.1.0",
+    "@better-auth/docs": "0.0.0",
+    "@better-auth/astro-example": "0.0.1",
+    "@better-auth/browser-extension-example": "0.0.1",
+    "@better-auth/expo-example": "1.0.0",
+    "@better-auth/nextjs-mcp-example": "0.1.0",
+    "@better-auth/svelte-kit-example": "0.0.1",
+    "better-auth": "1.3.4",
+    "@better-auth/cli": "1.3.4",
+    "@better-auth/expo": "1.3.4",
+    "@better-auth/sso": "1.3.4",
+    "@better-auth/stripe": "1.3.4"
+  },
+  "changesets": []
+}
