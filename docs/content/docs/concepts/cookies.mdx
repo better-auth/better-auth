@@ -56,10 +56,10 @@ Sometimes you may need to share cookies across subdomains. For example, if you h
 
 By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies by configuring `crossSubDomainCookies` and `defaultCookieAttributes` in the `advanced` object of the auth options.
 
-<Callout type="warning">
+<Callout type="warn">
 The `domain` attribute controls which domains can access the cookie. Setting it to your root domain (e.g. `example.com`) makes the cookie accessible across all subdomains. For security, you should:
 
-1. Only enable cross-subdomain cookies if absolutely necessary
+1. Only enable cross-subdomain cookies if it's necessary
 2. Set the domain to the most specific scope needed (e.g. `app.example.com` instead of `.example.com`)
 3. Be cautious of untrusted subdomains that could potentially access these cookies
 4. Consider using separate domains for untrusted services (e.g. `status.company.com` vs `app.company.com`)
