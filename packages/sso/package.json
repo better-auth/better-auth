@@ -49,19 +49,22 @@
             ]
         }
     },
+    "peerDependencies": {
+        "zod": "3.25.0 || ^4.0.0"
+    },
     "dependencies": {
         "@better-fetch/fetch": "^1.1.18",
         "better-auth": "workspace:^",
         "fast-xml-parser": "^5.2.5",
         "jose": "^5.9.6",
         "oauth2-mock-server": "^7.2.0",
-        "samlify": "^2.10.0",
-        "zod": "^3.24.1"
+        "samlify": "^2.10.0"
     },
     "devDependencies": {
         "@types/body-parser": "^1.19.6",
         "@types/express": "^5.0.3",
         "better-call": "catalog:",
-        "vitest": "^1.6.0"
+        "vitest": "^1.6.0",
+        "zod": "^4.0.0"
     }
 }
