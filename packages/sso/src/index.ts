@@ -1507,36 +1507,42 @@ export const sso = (options?: SSOOptions) => {
 					const { extract } = parsedResponse!;
 					const attributes = extract.attributes || {};
 					const mapping = parsedSamlConfig.mapping ?? {};
-
-					// Extract user info from SAML attributes
+					
 					const userInfo = {
 						...Object.fromEntries(
 							Object.entries(mapping.extraFields || {}).map(([key, value]) => [
 								key,
-								extract.attributes[value as string],
+								attributes[value as string],
 							]),
 						),
-						id: attributes[mapping.id] || attributes["nameID"],
-						email:
-							attributes[mapping.email] ||
-							attributes["nameID"] ||
-							attributes["email"],
+						id: attributes[mapping.id || "nameID"] || extract.nameID,
+						email: attributes[mapping.email || "email"] || extract.nameID,
 						name:
 							[
-								attributes[mapping.firstName] || attributes["givenName"],
-								attributes[mapping.lastName] || attributes["surname"],
+								attributes[mapping.firstName || "givenName"],
+								attributes[mapping.lastName || "surname"],
 							]
 								.filter(Boolean)
-								.join(" ") || parsedResponse.extract.attributes?.displayName,
-						attributes: parsedResponse.extract.attributes,
-						emailVerified: options?.trustEmailVerified
-							? ((attributes?.[mapping.emailVerified] || false) as boolean)
-							: false,
+								.join(" ") ||
+							attributes[mapping.name || "displayName"] ||
+							extract.nameID,
+						emailVerified:
+							options?.trustEmailVerified && mapping.emailVerified
+								? ((attributes[mapping.emailVerified] || false) as boolean)
+								: false,
 					};
-
-					if (!userInfo.email) {
+					if (!userInfo.id || !userInfo.email) {
+						ctx.context.logger.error(
+							"Missing essential user info from SAML response",
+							{
+								attributes: Object.keys(attributes),
+								mapping,
+								extractedId: userInfo.id,
+								extractedEmail: userInfo.email,
+							},
+						);
 						throw new APIError("BAD_REQUEST", {
-							message: "No email found in SAML response",
+							message: "Unable to extract user ID or email from SAML response",
 						});
 					}
 
