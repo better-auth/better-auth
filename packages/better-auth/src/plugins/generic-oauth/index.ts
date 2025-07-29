@@ -62,8 +62,16 @@ export interface GenericOAuthConfig {
 	 */
 	responseType?: string;
 	/**
+	 * A JWT signed with the client’s private key, used for client authentication instead of a client_secret
+	 */
+	clientAssertion?: string;
+	/**
+	 * The client assertion type if client assertion used
+	 * @see https://datatracker.ietf.org/doc/html/rfc6755
+	 */
+	clientAssertionType?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
+	/**
 	 * The response mode to use for the authorization code request.
-
 	 */
 	responseMode?: "query" | "form_post";
 	/**
@@ -232,6 +240,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
+
 							},
 							authorizationEndpoint: c.authorizationUrl!,
 							state: data.state,
@@ -269,6 +278,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
+								clientAssertion: c.clientAssertion,
+								clientAssertionType: c.clientAssertionType,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
