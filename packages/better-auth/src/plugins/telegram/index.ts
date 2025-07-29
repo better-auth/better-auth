@@ -1,8 +1,21 @@
-import type { BetterAuthPlugin } from "..";
+import z from "zod/v4";
+import { createAuthEndpoint, type BetterAuthPlugin } from "..";
 import type { TelegramProfile } from "./types";
+import { APIError } from "better-call";
+import { createHash, createHmac } from "node:crypto";
+import type { Account, User } from "../../types";
+import { setSessionCookie } from "../../cookies";
 
 export type TelegramOptions = {
+	/**
+	 * Bot token created from BotFather
+	 */
 	botToken: string;
+	/**
+	 * The email domain name for creating user accounts.
+	 * Defaults to the domain from your base URL
+	 */
+	emailDomainName?: string;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
@@ -26,15 +39,229 @@ export type TelegramOptions = {
 };
 
 export const ERROR_CODES = {
-	INVALID_DATA_OR_HASH: "Invalid Telegram sign-in data",
+	EXPIRED_AUTH_DATE: "Expired auth date",
+	INVALID_DATA_OR_HASH: "Failed to validate data or hash",
 	FAILED_TO_CREATE_USER: "Failed to create user",
 	FAILED_TO_CREATE_SESSION: "Failed to create session",
 };
 
+function getOriginHostname(url: string) {
+	try {
+		const parsedUrl = new URL(url);
+		return parsedUrl.hostname;
+	} catch (error) {
+		return null;
+	}
+}
+
 export const telegram = (options: TelegramOptions) => {
 	return {
 		id: "telegram",
-		endpoints: {},
+		endpoints: {
+			signIn: createAuthEndpoint(
+				"/telegram/sign-in",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.number(),
+						first_name: z.string().nullable(),
+						last_name: z.string().nullable(),
+						username: z.string().nullable(),
+						photo_url: z.string().nullable(),
+						auth_date: z.number(),
+						hash: z.string(),
+						callbackURL: z
+							.string({
+								error: "Callback URL to use as a redirect",
+							})
+							.optional(),
+					}),
+				},
+				async (ctx) => {
+					const {
+						id,
+						first_name,
+						last_name,
+						username,
+						photo_url,
+						auth_date,
+						hash,
+					} = ctx.body;
+
+					// create data-check-string by sorting all fields except hash
+					const dataFields = {
+						id: id,
+						first_name: first_name,
+						last_name: last_name,
+						username: username,
+						photo_url: photo_url,
+						auth_date: auth_date,
+					};
+
+					const authDate = parseInt(auth_date.toString());
+					const currentTime = Math.floor(Date.now() / 1000);
+					const maxAge = 60 * 60; // 1 hour in seconds
+
+					if (currentTime - authDate > maxAge) {
+						ctx.context.logger.error("Expired auth date", {
+							telegramId: id,
+						});
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.EXPIRED_AUTH_DATE,
+						});
+					}
+
+					const sortedFields = Object.keys(dataFields)
+						.filter(
+							(key) => dataFields[key as keyof typeof dataFields] !== undefined,
+						)
+						.sort()
+						.map(
+							(key) => `${key}=${dataFields[key as keyof typeof dataFields]}`,
+						);
+
+					const dataCheckString = sortedFields.join("\n");
+
+					// create secret key by hashing the bot token with sha256
+					const secretKey = createHash("sha256")
+						.update(options.botToken)
+						.digest();
+
+					// create hmac-sha256 signature
+					const calculatedHash = createHmac("sha256", secretKey)
+						.update(dataCheckString)
+						.digest("hex");
+
+					// compare with received hash
+					if (calculatedHash !== hash) {
+						ctx.context.logger.error("Invalid hash", {
+							telegramId: id,
+						});
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.INVALID_DATA_OR_HASH,
+						});
+					}
+
+					let profile: TelegramProfile = {
+						id: id,
+						first_name: first_name ?? undefined,
+						last_name: last_name ?? undefined,
+						username: username ?? undefined,
+						photo_url: photo_url ?? undefined,
+					};
+
+					let user: User | null = null;
+
+					// look for existing account by telegram id
+					const existingAccount: Account | null =
+						await ctx.context.adapter.findOne({
+							model: "account",
+							where: [
+								{
+									field: "providerId",
+									operator: "eq",
+									value: "telegram",
+								},
+								{
+									field: "accountId",
+									operator: "eq",
+									value: profile.id.toString(),
+								},
+							],
+						});
+
+					if (existingAccount) {
+						user = await ctx.context.adapter.findOne<User>({
+							model: "user",
+							where: [
+								{
+									field: "id",
+									operator: "eq",
+									value: existingAccount.userId,
+								},
+							],
+						});
+					}
+
+					const domain =
+						options.emailDomainName ?? getOriginHostname(ctx.context.baseURL);
+					const userMap = await options.mapProfileToUser?.(profile);
+					const userEmail =
+						userMap?.email ?? `telegram-${profile.id}@${domain}`;
+
+					// create new user if none exists
+					if (!user) {
+						try {
+							user = await ctx.context.internalAdapter.createUser(
+								{
+									firstName: profile.first_name,
+									lastName: profile.last_name,
+									name:
+										[profile.first_name, profile.last_name]
+											.filter(Boolean)
+											.join(" ") ?? `telegram-${profile.id}`,
+									emailVerified: false,
+									image: profile.photo_url ?? null,
+									...userMap,
+									email: userEmail,
+								},
+								ctx,
+							);
+						} catch (e) {
+							if (e instanceof APIError) {
+								throw e;
+							}
+							throw new APIError("UNPROCESSABLE_ENTITY", {
+								message: ERROR_CODES.FAILED_TO_CREATE_USER,
+								details: e,
+							});
+						}
+
+						await ctx.context.internalAdapter.linkAccount(
+							{
+								userId: user.id,
+								providerId: "telegram",
+								accountId: profile.id.toString(),
+							},
+							ctx,
+						);
+					}
+
+					const session = await ctx.context.internalAdapter.createSession(
+						user.id,
+						ctx,
+						true,
+					);
+
+					if (!session) {
+						ctx.context.logger.error("Failed to create session");
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						});
+					}
+
+					await setSessionCookie(ctx, {
+						session,
+						user: user,
+					});
+
+					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
+						token: session.token,
+						url: ctx.body.callbackURL,
+						user: {
+							id: user.id,
+							name: user.name,
+							email: user.email,
+							emailVerified: user.emailVerified,
+							image: user.image,
+							createdAt: user.createdAt,
+							updatedAt: user.updatedAt,
+						},
+					});
+				},
+			),
+		},
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
