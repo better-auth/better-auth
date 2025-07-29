@@ -217,7 +217,6 @@ async function getUserInfo(
 		...userInfo.data,
 	};
 }
-
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
