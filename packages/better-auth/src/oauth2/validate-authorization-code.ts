@@ -48,12 +48,15 @@ export async function validateAuthorizationCode({
 			`${options.clientId}:${options.clientSecret}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
-	} else if(options.clientAssertion && options.clientAssertionType) {
+	} else if (options.clientAssertion && options.clientAssertionType) {
 		body.set("client_assertion", options.clientAssertion);
 		body.set("client_assertion_type", options.clientAssertionType);
-
-	} else {
+	} else if (options.clientSecret) {
 		body.set("client_secret", options.clientSecret);
+	} else {
+		throw new Error(
+			"Either clientSecret or clientAssertion with clientAssertionType must be provided.",
+		);
 	}
 
 	for (const [key, value] of Object.entries(additionalParams)) {

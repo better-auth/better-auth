@@ -92,7 +92,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	clientAssertion?: string;
 	/**
 	 * The client assertion type of your application
-	 * 	
+	 *
 	 * @see https://datatracker.ietf.org/doc/html/rfc6755
 	 * */
 	clientAssertionType?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
