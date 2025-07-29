@@ -19,3 +19,8 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# You cannot create root page under (protected)/ route
+# because it is not protected by authwall.
+./src/routes/(protected)/+page.*
+./src/routes/(protected)/+server.*

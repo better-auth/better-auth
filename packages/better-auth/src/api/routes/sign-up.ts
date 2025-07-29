@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
@@ -163,7 +163,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				rememberMe,
 				...additionalFields
 			} = body;
-			const isValidEmail = z.string().email().safeParse(email);
+			const isValidEmail = z.email().safeParse(email);
 
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {

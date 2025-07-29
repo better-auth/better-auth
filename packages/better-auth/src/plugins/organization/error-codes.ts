@@ -55,4 +55,16 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to delete this team",
 	INVITATION_LIMIT_REACHED: "Invitation limit reached",
 	TEAM_MEMBER_LIMIT_REACHED: "Team member limit reached",
+	USER_IS_NOT_A_MEMBER_OF_THE_TEAM: "User is not a member of the team",
+	YOU_CAN_NOT_ACCESS_THE_MEMBERS_OF_THIS_TEAM:
+		"You are not allowed to list the members of this team",
+	YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM: "You do not have an active team",
+	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER:
+		"You are not allowed to create a new member",
+	YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER:
+		"You are not allowed to remove a team member",
+	YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION:
+		"You are not allowed to access this organization as an owner",
+	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
+		"You are not a member of this organization",
 } as const;

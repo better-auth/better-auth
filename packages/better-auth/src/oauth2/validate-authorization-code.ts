@@ -38,21 +38,22 @@ export async function validateAuthorizationCode({
 	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
+	// for resolving the issue with some oauth server.
+	body.set("client_id", options.clientId);
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		requestHeaders["authorization"] = base64.encode(
+		const encodedCredentials = base64.encode(
 			`${options.clientId}:${options.clientSecret}`,
 		);
+		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
 	}
 
 	for (const [key, value] of Object.entries(additionalParams)) {
 		if (!body.has(key)) body.append(key, value);
 	}
-
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
