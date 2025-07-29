@@ -62,15 +62,6 @@ export interface GenericOAuthConfig {
 	 */
 	responseType?: string;
 	/**
-	 * A JWT signed with the client’s private key, used for client authentication instead of a client_secret
-	 */
-	clientAssertion?: string;
-	/**
-	 * The client assertion type if client assertion used
-	 * @see https://datatracker.ietf.org/doc/html/rfc6755
-	 */
-	clientAssertionType?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
-	/**
 	 * The response mode to use for the authorization code request.
 	 */
 	responseMode?: "query" | "form_post";
@@ -116,6 +107,17 @@ export interface GenericOAuthConfig {
 				emailVerified?: boolean;
 				[key: string]: any;
 		  }>;
+
+	injectClientAssertion?: (args: {
+		params: Record<string, any>;
+	}) => Promise<
+		{
+			[key: string]: any;
+		} & {
+			client_assertion?: string;
+			client_assertion_type?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
+		}
+	>;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
@@ -266,6 +268,23 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration. Token URL not found.",
 							});
 						}
+
+						let baseParams = {
+							client_id: c.clientId,
+							redirect_uri: c.redirectURI,
+							code: data.code,
+							code_verifier: data.codeVerifier,
+						};
+
+						const finalParams: {
+							[key: string]: any;
+						} & {
+							client_assertion?: string;
+							client_assertion_type?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
+						} = c.injectClientAssertion
+							? await c.injectClientAssertion({ params: baseParams })
+							: baseParams;
+
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
@@ -275,8 +294,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
-								clientAssertion: c.clientAssertion,
-								clientAssertionType: c.clientAssertionType,
+								clientAssertion: finalParams.client_assertion,
+								clientAssertionType: finalParams.client_assertion_type,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
