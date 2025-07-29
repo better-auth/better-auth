@@ -25,19 +25,122 @@ const ChangelogPage = async () => {
 		}[]
 	>("https://api.github.com/repos/better-auth/better-auth/releases");
 
-	const messages = releases
+	function extractVersion(title: string): string {
+		if (title.slice(2).includes("@")) {
+			return "v" + title.trim().slice(2).split("@")[1];
+		}
+		return title;
+	}
+
+	const groupedReleases = new Map<string, any[]>();
+
+	function getPackageName(title: string): string {
+		const text = title.trim();
+		console.log({ text });
+		if (text.startsWith("@better-auth")) {
+			const packageName = text.split("@")[1].split("/")[1];
+			return packageName.charAt(0).toUpperCase() + packageName.slice(1);
+		}
+		return "Core";
+	}
+
+	function getContent(content: string, title: string) {
+		const lines = content.split("\n");
+		let skipNextPatchChanges = false;
+		const packageName = getPackageName(title);
+
+		const newContext = lines.map((line, index) => {
+			if (skipNextPatchChanges) {
+				if (line.toLowerCase().includes("patch changes")) {
+					skipNextPatchChanges = false;
+					return "";
+				}
+				skipNextPatchChanges = false;
+			}
+
+			if (line.toLowerCase().includes("patch changes")) {
+				skipNextPatchChanges = true;
+				return `### ${packageName}`;
+			}
+
+			if (line.trim().startsWith("- ")) {
+				const mainContent = line.split(";")[0];
+				const context = line.split(";")[2];
+				const mentions = context
+					?.split(" ")
+					.filter((word) => word.startsWith("@"))
+					.map((mention) => {
+						const username = mention.replace("@", "");
+						const avatarUrl = `https://github.com/${username}.png`;
+						return `[![${mention}](${avatarUrl})](https://github.com/${username})`;
+					});
+				if (!mentions) {
+					return line;
+				}
+				// Remove &nbsp
+				return mainContent.replace(/&nbsp/g, "") + " – " + mentions.join(" ");
+			}
+			return line;
+		});
+		return newContext.filter((line) => line !== "").join("\n");
+	}
+
+	releases
 		?.filter((release) => !release.prerelease)
-		.map((release) => ({
-			tag: release.tag_name,
-			title: release.name,
-			content: getContent(release.body),
-			date: new Date(release.published_at).toLocaleDateString("en-US", {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-			}),
-			url: release.html_url,
-		}));
+		.forEach((release) => {
+			const version = extractVersion(release.name);
+			if (!groupedReleases.has(version)) {
+				groupedReleases.set(version, []);
+			}
+			groupedReleases.get(version)?.push({
+				tag: release.tag_name,
+				title: release.name,
+				content: getContent(release.body, release.name),
+				date: new Date(release.published_at).toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				}),
+				url: release.html_url,
+			});
+		});
+	const messages = Array.from(groupedReleases.entries())
+		.sort((a, b) => {
+			const [majorA, minorA, patchA = 0] = a[0]
+				.replace("v", "")
+				.split(".")
+				.map(Number);
+			const [majorB, minorB, patchB = 0] = b[0]
+				.replace("v", "")
+				.split(".")
+				.map(Number);
+			if (majorB !== majorA) return majorB - majorA;
+			if (minorB !== minorA) return minorB - minorA;
+			return patchB - patchA;
+		})
+		.map(([version, releases]) => {
+			const combinedContent = releases
+				.map((r) => (r.content.includes("No changes") ? "" : r.content))
+				.join("\n\n");
+			const latestDate = releases
+				.map((r) => new Date(r.date))
+				.sort((a, b) => b.getTime() - a.getTime())[0]
+				.toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				});
+
+			return {
+				tag: releases[0].tag.includes("@")
+					? "v" + releases[0].tag.slice(4).split("@")[1]
+					: releases[0].tag,
+				title: version,
+				content: combinedContent,
+				date: latestDate,
+				url: releases[0].url,
+			};
+		});
 	function cleanCommitMessage(message: string): string {
 		message = message.replace(/^[a-f0-9]{7}:\s*/, "");
 
@@ -66,30 +169,6 @@ const ChangelogPage = async () => {
 		}
 
 		return message;
-	}
-	function getContent(content: string) {
-		const lines = content.split("\n");
-		const newContext = lines.map((line) => {
-			if (line.trim().startsWith("- ")) {
-				const mainContent = line.split(";")[0];
-				const context = line.split(";")[2];
-				const mentions = context
-					?.split(" ")
-					.filter((word) => word.startsWith("@"))
-					.map((mention) => {
-						const username = mention.replace("@", "");
-						const avatarUrl = `https://github.com/${username}.png`;
-						return `[![${mention}](${avatarUrl})](https://github.com/${username})`;
-					});
-				if (!mentions) {
-					return line;
-				}
-				// Remove &nbsp
-				return mainContent.replace(/&nbsp/g, "") + " – " + mentions.join(" ");
-			}
-			return line;
-		});
-		return newContext.join("\n");
 	}
 
 	return (
@@ -243,17 +322,13 @@ const ChangelogPage = async () => {
 					>
 						{messages
 							?.map((message) => {
-								if (message.content.includes("No changes")) return;
 								return `
-## ${
-									message.title.slice(2).includes("@")
-										? "v" + message.title.trim().slice(2).split("@")[1]
-										: message.title
-								} date=${message.date}
+## ${message.title} date=${message.date}
 ${message.content.trim().replace(";;;", "").trim()}
 								`;
 							})
-							.join("\n")}
+							.filter(Boolean)
+							.join("\n\n")}
 					</Markdown>
 				</div>
 			</div>
