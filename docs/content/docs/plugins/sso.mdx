@@ -606,6 +606,7 @@ organizationProvisioning: {
 
 ## SAML Configuration
 
+
 ### Default SSO Provider
 
 ```ts title="auth.ts"
@@ -702,6 +703,8 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
     ]}
 />
+
+For a detailed guide on setting up SAML SSO with examples for Okta and testing with DummyIDP, see our [SAML SSO Setup Guide](/docs/guides/sso-saml-guide).
 
 ## Options
 
