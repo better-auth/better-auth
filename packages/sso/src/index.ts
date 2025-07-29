@@ -1507,7 +1507,7 @@ export const sso = (options?: SSOOptions) => {
 					const { extract } = parsedResponse!;
 					const attributes = extract.attributes || {};
 					const mapping = parsedSamlConfig.mapping ?? {};
-					
+
 					const userInfo = {
 						...Object.fromEntries(
 							Object.entries(mapping.extraFields || {}).map(([key, value]) => [
