@@ -1,0 +1,262 @@
+---
+title: SAML SSO Setup guide 
+description: A guide to integrating SAML Single Sign-On (SSO) with Better Auth, featuring Okta and test IdP examples.
+---
+
+# SAML SSO Integration Guide
+
+This guide will help you set up SAML SSO integration with your Identity Provider (IdP). We'll cover setup with Okta as the primary example and include testing strategies using DummyIDP.com for IdP-initiated flows.
+
+For detailed configuration options and API reference, see the [SSO Plugin Documentation](/docs/plugins/sso).
+
+## Overview
+
+SAML (Security Assertion Markup Language) is an XML-based standard for exchanging authentication and authorization data between an Identity Provider (IdP) and a Service Provider (SP). Better Auth acts as the Service Provider in this setup.
+
+## Setting up SAML with Okta
+
+### 1. Create a SAML Application in Okta
+
+1. Log in to your Okta Admin Console
+2. Navigate to Applications > Applications
+3. Click "Create App Integration"
+4. Select "SAML 2.0" as the Sign-in method
+5. Configure the following settings:
+
+   - **Single Sign-on URL**: Your Better Auth ACS endpoint (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/acs`)
+   - **Audience URI (SP Entity ID)**: Your Better Auth metadata URL (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/metadata`)
+   - **Name ID format**: Email Address
+   - **Application username**: Email
+
+6. Download the IdP metadata XML file and certificate
+
+### 2. Configure Better Auth
+
+Here's a production-ready configuration example using Okta:
+
+```typescript
+const ssoConfig = {
+  defaultSSO: {
+    domain: "localhost:3000", // Your domain
+    providerId: "sso",
+    samlConfig: {
+      // SP Configuration
+      issuer: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
+      entryPoint: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml",
+      callbackUrl: "/dashboard", // Redirect after successful authentication
+      
+      // IdP Configuration
+      idpMetadata: {
+        entityID: "https://trial-1076874.okta.com/app/exktofb0a62hqLAUL697/sso/saml/metadata",
+        singleSignOnService: [{
+          Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+          Location: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml"
+        }],
+        cert: `-----BEGIN CERTIFICATE-----
+MIIDqjCCApKgAwIBAgIGAZhVGMeUMA0GCSqGSIb3DQEBCwUAMIGVMQswCQYDVQQGEwJVUzETMBEG
+...
+[Your Okta Certificate]
+...
+-----END CERTIFICATE-----`
+      },
+      
+      // SP Metadata
+      spMetadata: {
+        metadata: `<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" 
+          entityID="http://localhost:3000/api/sso/saml2/sp/metadata">
+          ...
+          [Your SP Metadata XML]
+          ...
+        </md:EntityDescriptor>`
+      }
+    }
+  }
+}
+```
+If you want to register a SAML endpoint (provider) like the one shown in our documentation, make sure to use the SSO plugin's registration API. This approach lets you manage SAML providers directly in your database and is recommended for production environments. For step-by-step instructions and required fields, see the [SSO Plugin Documentation](/docs/plugins/sso#register-a-saml-provider).
+
+
+For production environments, you should register the SSO provider using the API instead of using `defaultSSO`. See the [SSO Plugin Documentation](/docs/plugins/sso#register-a-saml-provider) for registration details.
+
+## Testing with DummyIDP.com (IdP-Initiated Testing)
+
+[DummyIDP.com](https://dummyidp.com) is specifically useful for testing IdP-initiated flows in development environments. This allows you to simulate IdP-initiated SSO without setting up a full IdP infrastructure.
+
+### Setting up DummyIDP for Testing
+
+Here's a complete example using DummyIDP for development testing:
+
+```typescript
+const auth = betterAuth({
+  plugins: [
+    sso({
+      defaultSSO: {
+        domain: "localhost:3000",
+        providerId: "sso",
+        samlConfig: {
+          // Service Provider Configuration
+          issuer: "http://localhost:3000/api/sso/saml2/sp/metadata",
+          entryPoint: "http://localhost:3000/api/sso/saml2/sp/acs",
+          callbackUrl: "/dashboard",
+
+          // DummyIDP Certificate
+          cert: `-----BEGIN CERTIFICATE-----
+MIIDBzCCAe+gAwIBAgIUCLBK4f75EXEe4gyroYnVaqLoSp4wDQYJKoZIhvcNAQEL
+BQAwEzERMA8GA1UEAwwIZHVtbXlpZHAwHhcNMjQwNTEzMjE1NDE2WhcNMzQwNTEx
+MjE1NDE2WjATMREwDwYDVQQDDAhkdW1teWlkcDCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAKhmgQmWb8NvGhz952XY4SlJlpWIK72RilhOZS9frDYhqWVJ
+HsGH9Z7sSzrM/0+YvCyEWuZV9gpMeIaHZxEPDqW3RJ7KG51fn/s/qFvwctf+CZDj
+yfGDzYs+XIgf7p56U48EmYeWpB/aUW64gSbnPqrtWmVFBisOfIx5aY3NubtTsn+g
+0XbdX0L57+NgSvPQHXh/GPXA7xCIWm54G5kqjozxbKEFA0DS3yb6oHRQWHqIAM/7
+mJMdUVZNIV1q7c2JIgAl23uDWq+2KTE2R5liP/KjvjwKonVKtTqGqX6ei25rsTHO
+aDpBH/LdQK2txgsm7R7+IThWNvUI0TttrmwBqyMCAwEAAaNTMFEwHQYDVR0OBBYE
+FD142gxIAJMhpgMkgpzmRNoW9XbEMB8GA1UdIwQYMBaAFD142gxIAJMhpgMkgpzm
+RNoW9XbEMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBADQd6k6z
+FIc20GfGHY5C2MFwyGOmP5/UG/JiTq7Zky28G6D0NA0je+GztzXx7VYDfCfHxLcm
+2k5t9nYhb9kVawiLUUDVF6s+yZUXA4gUA3KoTWh1/oRxR3ggW7dKYm9fsNOdQAbx
+UUkzp7HLZ45ZlpKUS0hO7es+fPyF5KVw0g0SrtQWwWucnQMAQE9m+B0aOf+92y7J
+QkdgdR8Gd/XZ4NZfoOnKV7A1utT4rWxYCgICeRTHx9tly5OhPW4hQr5qOpngcsJ9
+vhr86IjznQXhfj3hql5lA3VbHW04ro37ROIkh2bShDq5dwJJHpYCGrF3MQv8S3m+
+jzGhYL6m9gFTm/8=
+-----END CERTIFICATE-----`,
+
+          // DummyIDP Metadata Configuration
+          idpMetadata: {
+            entityURL: "https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
+            entityID: "https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
+            redirectURL: "https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
+            singleSignOnService: [{
+              Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+              Location: "https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso"
+            }]
+          },
+
+          // Service Provider Metadata
+          spMetadata: {
+            metadata: `<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3000/api/sso/saml2/sp/metadata">
+              <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+                <!-- Key descriptors and other SP configuration -->
+                <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3000/api/sso/saml2/sp/sls"/>
+                <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+                <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:3000/api/sso/saml2/sp/acs" index="1"/>
+                <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3000/api/sso/saml2/sp/acs" index="1"/>
+              </md:SPSSODescriptor>
+              <!-- Organization and contact information -->
+            </md:EntityDescriptor>`
+          }
+        }
+      }
+    })
+  ]
+});
+```
+
+### Testing Steps with DummyIDP
+
+1. **Setup Configuration**:
+   - Configure your Better Auth instance with the above settings
+   - Make sure your development server is running on `localhost:3000`
+
+2. **DummyIDP Dashboard**:
+   - Access your DummyIDP dashboard
+   - Navigate to the SAML testing section
+   - Enter your SP metadata URL: `http://localhost:3000/api/sso/saml2/sp/metadata`
+
+3. **Test IdP-Initiated Flow**:
+   - In the DummyIDP dashboard, locate the "Simulate Login" section
+   - Configure test user attributes if needed
+   - Click "Initiate SAML Login"
+   - Verify the SAML response handling
+   - Confirm successful redirection to your dashboard
+
+4. **Verify Integration**:
+   - Check that the user is properly authenticated
+   - Verify user attributes are correctly mapped
+   - Confirm the session is established
+
+**Important Notes**:
+ - DummyIDP should ONLY be used for development and testing
+ - Never use these certificates in production
+ - The example uses `localhost:3000` - adjust URLs for your environment
+ - For production, always use proper IdP providers like Okta, Azure AD, or OneLogin
+
+### Common Testing Issues
+
+1. **URL Mismatches**:
+   - Ensure all URLs match exactly (including http/https)
+   - Check for trailing slashes
+   - Verify port numbers in development
+
+2. **Certificate Issues**:
+   - Use the exact certificate provided by DummyIDP
+   - Don't modify certificate formatting
+   - Keep line breaks intact
+
+3. **Metadata Configuration**:
+   - Verify entityID matches
+   - Ensure all required endpoints are configured
+   - Check binding types are correct
+
+## Production Deployment Checklist
+
+1. **Certificate Management**:
+   - Use proper SSL certificates
+   - Keep IdP certificates up to date
+   - Implement certificate rotation procedures
+
+2. **Security Configuration**:
+   - Enable HTTPS for all endpoints
+   - Set appropriate assertion encryption
+   - Configure signature validation
+
+3. **Monitoring**:
+   - Set up logging for SAML transactions
+   - Monitor certificate expiration
+   - Track authentication failures
+
+4. **Error Handling**:
+   - Implement proper error pages
+   - Set up error notifications
+   - Maintain audit logs
+
+## Registering SAML Providers
+
+For production use, you should register SAML providers using the API instead of `defaultSSO`. See the [SSO Plugin Documentation](/docs/plugins/sso#register-a-saml-provider) for detailed registration instructions.
+
+Example registration:
+
+```typescript
+await authClient.sso.register({
+  providerId: "okta-prod",
+  issuer: "https://your-domain.com",
+  domain: "your-domain.com",
+  samlConfig: {
+    // Your production SAML configuration
+  }
+});
+```
+
+## Troubleshooting
+
+Common issues and solutions:
+
+1. **Metadata Mismatches**:
+   - Verify SP metadata matches your configuration
+   - Confirm IdP metadata is correctly parsed
+   - Check entity ID configurations
+
+2. **Certificate Issues**:
+   - Ensure certificates are in PEM format
+   - Verify certificate chain validity
+   - Check certificate expiration dates
+
+3. **URL Configuration**:
+   - Confirm ACS URL matches IdP configuration
+   - Verify SP metadata URL is accessible
+   - Check callback URL configurations
+
+## Additional Resources
+
+- [SSO Plugin Documentation](/docs/plugins/sso)
+- [Okta SAML Documentation](https://developer.okta.com/docs/concepts/saml/)
+- [SAML 2.0 Specification](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)
