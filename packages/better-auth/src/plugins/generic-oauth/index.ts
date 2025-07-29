@@ -45,7 +45,7 @@ export interface GenericOAuthConfig {
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -238,9 +238,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							id: c.providerId,
 							options: {
 								clientId: c.clientId,
-								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
-
 							},
 							authorizationEndpoint: c.authorizationUrl!,
 							state: data.state,
