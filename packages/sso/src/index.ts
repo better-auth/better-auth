@@ -1849,15 +1849,18 @@ export const sso = (options?: SSOOptions) => {
 								: false,
 					};
 
-					if (!userInfo.email) {
+					if (!userInfo.id || !userInfo.email) {
+						ctx.context.logger.error(
+							"Missing essential user info from SAML response",
+							{
+								attributes: Object.keys(attributes),
+								mapping,
+								extractedId: userInfo.id,
+								extractedEmail: userInfo.email,
+							},
+						);
 						throw new APIError("BAD_REQUEST", {
-							message: "No email found in SAML response",
-						});
-					}
-
-					if (!userInfo.id) {
-						throw new APIError("BAD_REQUEST", {
-							message: "No ID found in SAML response",
+							message: "Unable to extract user ID or email from SAML response",
 						});
 					}
 
