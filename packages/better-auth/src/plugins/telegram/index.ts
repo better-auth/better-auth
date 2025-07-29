@@ -6,6 +6,11 @@ import { createHash, createHmac } from "node:crypto";
 import type { Account, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 
+// TODO move createHash, createHmac to better-auth functions
+// TODO implement widget redirect
+// TODO docs texts
+// TODO prevent timing attacks
+
 export type TelegramOptions = {
 	/**
 	 * Bot token created from BotFather
