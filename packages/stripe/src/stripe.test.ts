@@ -988,25 +988,24 @@ describe("stripe", async () => {
 		await authClient.usage.track({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			value: 10,
+			userId: userRes.user.id,
 			fetchOptions: { headers },
 		});
 		await authClient.usage.track({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			value: 20,
+			userId: userRes.user.id,
 			fetchOptions: { headers },
 		});
 		await authClient.usage.track({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			value: 30,
+			userId: userRes.user.id,
 			fetchOptions: { headers },
 		});
-
 		expect(data["usage"][0]["value"]).toBe(60);
 	});
 
@@ -1047,22 +1046,22 @@ describe("stripe", async () => {
 		await authClient.usage.track({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			value: 10,
+			userId: userRes.user.id,
 			fetchOptions: { headers },
 		});
 		await authClient.usage.track({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			value: 20,
+			userId: userRes.user.id,
 			fetchOptions: { headers },
 		});
 		await authClient.usage.track({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			value: 30,
+			userId: userRes.user.id,
 			fetchOptions: { headers },
 		});
 
@@ -1070,7 +1069,6 @@ describe("stripe", async () => {
 		const res = await authClient.usage.get({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			fetchOptions: { headers },
 		});
 
@@ -1116,7 +1114,6 @@ describe("stripe", async () => {
 		const res = await authClient.usage.get({
 			plan: "starter",
 			eventName: "api_calls_starter",
-			stripeCustomerId: "cus_mock123",
 			fetchOptions: { headers },
 		});
 

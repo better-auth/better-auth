@@ -25,7 +25,13 @@ import type {
 	Subscription,
 	Usage,
 } from "./types";
-import { getPlanByName, getPlanByPriceId, getPlans, isSameDay } from "./utils";
+import {
+	getPlanByName,
+	getPlanByPriceId,
+	getPlans,
+	isSameDay,
+	isSameDayAndHour,
+} from "./utils";
 import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
@@ -1038,14 +1044,35 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				method: "POST",
 				body: z.object({
 					plan: z.string(),
-					stripeCustomerId: z.string(),
 					eventName: z.string(),
 					value: z.number(),
+					userId: z.string(),
 				}),
-				use: [sessionMiddleware],
+				// use: [sessionMiddleware],
 			},
 			async (ctx) => {
-				const { stripeCustomerId, eventName, value, plan } = ctx.body;
+				const { eventName, value, plan } = ctx.body;
+				// const { user } = ctx.context.session;
+				const user: Customer | null = await ctx.context.adapter.findOne({
+					model: "user",
+					where: [
+						{
+							field: "id",
+							value: ctx.body.userId,
+						},
+					],
+				});
+				if (!user) {
+					throw ctx.error("BAD_REQUEST", {
+						message: "User not found",
+					});
+				}
+				if (!user.stripeCustomerId) {
+					throw ctx.error("BAD_REQUEST", {
+						message: "User has not subscribed",
+					});
+				}
+				const stripeCustomerId = user.stripeCustomerId!;
 				const planInfo = await getPlanByName(options, plan);
 				if (!planInfo) {
 					throw ctx.error("BAD_REQUEST", {
@@ -1093,7 +1120,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					const isMatchingDay = isSameDay(date, today);
 					const isMatchingHour =
 						planInfo.usageBased?.aggregationTime == "hour" &&
-						isSameDay(date, today);
+						isSameDayAndHour(date, today);
 
 					// Update latest usage based on aggregation formula
 					if (planInfo.usageBased?.defaultAggregation == "sum") {
@@ -1150,7 +1177,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					event_name: eventName,
 					payload: {
 						value: value.toString(),
-						stripeCustomerId: stripeCustomerId,
+						stripe_customer_id: stripeCustomerId,
 					},
 				});
 
@@ -1169,12 +1196,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				body: z.object({
 					plan: z.string(),
 					eventName: z.string(),
-					stripeCustomerId: z.string(),
 				}),
 				use: [sessionMiddleware],
 			},
 			async (ctx) => {
-				const { plan, eventName, stripeCustomerId } = ctx.body;
+				const { plan, eventName } = ctx.body;
+				const { user } = ctx.context.session;
+				const stripeCustomerId = user.stripeCustomerId;
+				if (!stripeCustomerId) {
+					throw ctx.error("BAD_REQUEST", {
+						message: "User not found",
+					});
+				}
+
 				// Check if plan exists
 				const planInfo = await getPlanByName(options, plan);
 				if (!planInfo) {
