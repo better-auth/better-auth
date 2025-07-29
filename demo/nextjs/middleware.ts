@@ -4,7 +4,7 @@ import { getOrgAdapter } from "../../packages/better-auth/src/plugins/organizati
 import { auth } from "./lib/auth";
 
 export async function middleware(request: NextRequest) {
-    const hostname = request.headers.get("host");
+    const hostname = request.nextUrl.hostname;
 
     if (hostname) {
         const orgAdapter = getOrgAdapter(auth.context, {});
