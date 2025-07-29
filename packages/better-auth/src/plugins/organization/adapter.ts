@@ -31,7 +31,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "customDomain",
-						value: domain,
+						value: domain.toLowerCase().trim(),
 					},
 				],
 			});
