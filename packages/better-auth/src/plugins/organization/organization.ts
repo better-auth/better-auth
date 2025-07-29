@@ -27,6 +27,11 @@ import {
 	updateMemberRole,
 } from "./routes/crud-members";
 import {
+	addCustomDomain,
+	removeCustomDomain,
+	verifyCustomDomain,
+} from "./routes/domain";
+import {
 	checkOrganizationSlug,
 	createOrganization,
 	deleteOrganization,
@@ -400,6 +405,9 @@ export const organization = <O extends OrganizationOptions>(
 		 * `authClient.organization.listMembers`
 		 */
 		listMembers: listMembers(options as O),
+		addCustomDomain: addCustomDomain(options as O),
+		verifyCustomDomain: verifyCustomDomain(options as O),
+		removeCustomDomain: removeCustomDomain(options as O),
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {

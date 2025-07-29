@@ -14,6 +14,9 @@ export const organizationSchema = z.object({
 	name: z.string(),
 	slug: z.string(),
 	logo: z.string().nullish().optional(),
+	customDomain: z.string().nullish().optional(),
+	customDomainVerified: z.boolean().default(false),
+	customDomainVerificationToken: z.string().nullish().optional(),
 	metadata: z
 		.record(z.string(), z.unknown())
 		.or(z.string().transform((v) => JSON.parse(v)))

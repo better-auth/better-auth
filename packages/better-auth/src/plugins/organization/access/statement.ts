@@ -2,6 +2,7 @@ import { createAccessControl } from "../../access";
 
 export const defaultStatements = {
 	organization: ["update", "delete"],
+	"org:domain": ["create", "delete"],
 	member: ["create", "update", "delete"],
 	invitation: ["create", "cancel"],
 	team: ["create", "update", "delete"],
@@ -11,6 +12,7 @@ export const defaultAc = createAccessControl(defaultStatements);
 
 export const adminAc = defaultAc.newRole({
 	organization: ["update"],
+	"org:domain": ["create", "delete"],
 	invitation: ["create", "cancel"],
 	member: ["create", "update", "delete"],
 	team: ["create", "update", "delete"],
@@ -18,6 +20,7 @@ export const adminAc = defaultAc.newRole({
 
 export const ownerAc = defaultAc.newRole({
 	organization: ["update", "delete"],
+	"org:domain": ["create", "delete"],
 	member: ["create", "update", "delete"],
 	invitation: ["create", "cancel"],
 	team: ["create", "update", "delete"],

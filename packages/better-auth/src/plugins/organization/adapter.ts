@@ -25,6 +25,18 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 ) => {
 	const adapter = context.adapter;
 	return {
+		findOrganizationByDomain: async (domain: string) => {
+			const organization = await adapter.findOne<InferOrganization<O>>({
+				model: "organization",
+				where: [
+					{
+						field: "customDomain",
+						value: domain,
+					},
+				],
+			});
+			return organization;
+		},
 		findOrganizationBySlug: async (slug: string) => {
 			const organization = await adapter.findOne<InferOrganization<O>>({
 				model: "organization",
