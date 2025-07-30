@@ -687,8 +687,9 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
-			let organizationId = ctx.body.organizationSlug || ctx.body.organizationId;
-			if (organizationId === null) {
+			
+			// Handle null case first
+			if (ctx.body.organizationId === null || ctx.body.organizationSlug === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
@@ -703,6 +704,9 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				});
 				return ctx.json(null);
 			}
+			
+			// Determine which identifier to use - prioritize organizationId over organizationSlug
+			let organizationId = ctx.body.organizationId || ctx.body.organizationSlug;
 			if (!organizationId) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
@@ -711,29 +715,28 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				organizationId = sessionOrgId;
 			}
 			
-			// If we have a slug, we need to resolve it to an ID first
-			let resolvedOrgId = organizationId;
+			// Resolve organization based on whether we have an ID or slug
 			let organization;
-			if (ctx.body.organizationSlug && !ctx.body.organizationId) {
-				organization = await adapter.findOrganizationBySlug(organizationId);
-				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
-				}
-				resolvedOrgId = organization.id;
+			if (ctx.body.organizationId) {
+				// We have an explicit organizationId, use it directly
+				organization = await adapter.findOrganizationById(ctx.body.organizationId);
+			} else if (ctx.body.organizationSlug) {
+				// We only have a slug, resolve it to get the organization
+				organization = await adapter.findOrganizationBySlug(ctx.body.organizationSlug);
 			} else {
-				organization = await adapter.findOrganizationById(resolvedOrgId);
-				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
-				}
+				// Fallback to session organization (should be an ID)
+				organization = await adapter.findOrganizationById(organizationId);
+			}
+			
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
 			}
 			
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
-				organizationId: resolvedOrgId,
+				organizationId: organization.id,
 			});
 			
 			if (!isMember) {
