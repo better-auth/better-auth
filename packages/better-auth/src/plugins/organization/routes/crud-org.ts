@@ -710,27 +710,38 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				}
 				organizationId = sessionOrgId;
 			}
+			
+			// If we have a slug, we need to resolve it to an ID first
+			let resolvedOrgId = organizationId;
+			let organization;
+			if (ctx.body.organizationSlug && !ctx.body.organizationId) {
+				organization = await adapter.findOrganizationBySlug(organizationId);
+				if (!organization) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					});
+				}
+				resolvedOrgId = organization.id;
+			} else {
+				organization = await adapter.findOrganizationById(resolvedOrgId);
+				if (!organization) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					});
+				}
+			}
+			
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
-				organizationId,
+				organizationId: resolvedOrgId,
 			});
+			
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
-			}
-			let organization = await adapter.findOrganizationById(organizationId);
-			if (!organization) {
-				if (ctx.body.organizationSlug) {
-					organization = await adapter.findOrganizationBySlug(organizationId);
-				}
-				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
-				}
 			}
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
