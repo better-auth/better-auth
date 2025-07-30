@@ -38,6 +38,25 @@ const fastValidator = {
 
 saml.setSchemaValidator(fastValidator);
 
+export interface OIDCMapping {
+	id?: string;
+	email?: string;
+	emailVerified?: string;
+	name?: string;
+	image?: string;
+	extraFields?: Record<string, string>;
+}
+
+export interface SAMLMapping {
+	id?: string;
+	email?: string;
+	emailVerified?: string;
+	name?: string;
+	firstName?: string;
+	lastName?: string;
+	extraFields?: Record<string, string>;
+}
+
 export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
@@ -51,14 +70,7 @@ export interface OIDCConfig {
 	tokenEndpoint?: string;
 	tokenEndpointAuthentication?: "client_secret_post" | "client_secret_basic";
 	jwksEndpoint?: string;
-	mapping?: {
-		id?: string;
-		email?: string;
-		emailVerified?: string;
-		name?: string;
-		image?: string;
-		extraFields?: Record<string, string>;
-	};
+	mapping?: OIDCMapping;
 }
 
 export interface SAMLConfig {
@@ -100,15 +112,7 @@ export interface SAMLConfig {
 	privateKey?: string;
 	decryptionPvk?: string;
 	additionalParams?: Record<string, any>;
-	mapping?: {
-		id?: string;
-		email?: string;
-		name?: string;
-		firstName?: string;
-		lastName?: string;
-		emailVerified?: string;
-		extraFields?: Record<string, string>;
-	};
+	mapping?: SAMLMapping;
 }
 
 export interface SSOProvider {
@@ -343,6 +347,24 @@ export const sso = (options?: SSOOptions) => {
 									})
 									.default(true)
 									.optional(),
+								mapping: z.object({
+									id: z.string({}).meta({
+										description: "Field mapping for user ID (defaults to 'sub')",
+									}),
+									email: z.string({}).meta({
+										description: "Field mapping for email (defaults to 'email')",
+									}),
+									emailVerified: z.string({}).meta({
+										description: "Field mapping for email verification (defaults to 'email_verified')",
+									}).optional(),
+									name: z.string({}).meta({
+										description: "Field mapping for name (defaults to 'name')",
+									}),
+									image: z.string({}).meta({
+										description: "Field mapping for image (defaults to 'picture')",
+									}).optional(),
+									extraFields: z.record(z.string(), z.any()).optional(),
+								}).optional(),
 							})
 							.optional(),
 						samlConfig: z
@@ -401,37 +423,27 @@ export const sso = (options?: SSOOptions) => {
 								privateKey: z.string().optional(),
 								decryptionPvk: z.string().optional(),
 								additionalParams: z.record(z.string(), z.any()).optional(),
-							})
-							.optional(),
-						mapping: z
-							.object({
-								id: z.string({}).meta({
-									description:
-										"The field in the user info response that contains the id. Defaults to 'sub'",
-								}),
-								email: z.string({}).meta({
-									description:
-										"The field in the user info response that contains the email. Defaults to 'email'",
-								}),
-								emailVerified: z
-									.string({})
-									.meta({
-										description:
-											"The field in the user info response that contains whether the email is verified. defaults to 'email_verified'",
-									})
-									.optional(),
-								name: z.string({}).meta({
-									description:
-										"The field in the user info response that contains the name. Defaults to 'name'",
-								}),
-								image: z
-									.string({})
-									.meta({
-										description:
-											"The field in the user info response that contains the image. Defaults to 'picture'",
-									})
-									.optional(),
-								extraFields: z.record(z.string(), z.any()).optional(),
+								mapping: z.object({
+									id: z.string({}).meta({
+										description: "Field mapping for user ID (defaults to 'nameID')",
+									}),
+									email: z.string({}).meta({
+										description: "Field mapping for email (defaults to 'email')",
+									}),
+									emailVerified: z.string({}).meta({
+										description: "Field mapping for email verification",
+									}).optional(),
+									name: z.string({}).meta({
+										description: "Field mapping for name (defaults to 'displayName')",
+									}),
+									firstName: z.string({}).meta({
+										description: "Field mapping for first name (defaults to 'givenName')",
+									}).optional(),
+									lastName: z.string({}).meta({
+										description: "Field mapping for last name (defaults to 'surname')",
+									}).optional(),
+									extraFields: z.record(z.string(), z.any()).optional(),
+								}).optional(),
 							})
 							.optional(),
 						organizationId: z
@@ -688,7 +700,7 @@ export const sso = (options?: SSOOptions) => {
 										discoveryEndpoint:
 											body.oidcConfig.discoveryEndpoint ||
 											`${body.issuer}/.well-known/openid-configuration`,
-										mapping: body.mapping,
+										mapping: body.oidcConfig.mapping,
 										scopes: body.oidcConfig.scopes,
 										userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
 										overrideUserInfo:
@@ -713,7 +725,7 @@ export const sso = (options?: SSOOptions) => {
 										privateKey: body.samlConfig.privateKey,
 										decryptionPvk: body.samlConfig.decryptionPvk,
 										additionalParams: body.samlConfig.additionalParams,
-										mapping: body.mapping,
+										mapping: body.samlConfig.mapping,
 									})
 								: null,
 							organizationId: body.organizationId,
