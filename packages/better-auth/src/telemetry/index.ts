@@ -1,7 +1,47 @@
 import { generateId } from "../utils/id";
 import { getEnvVar, getBooleanEnvVar } from "../utils/env";
+import type { AuthContext } from "../types";
+import { TELEMETRY_CONFIG_KEY } from "./config-key";
+import {
+	debugEndpoint,
+	realEndpoint,
+	type TelemetryEndpoint,
+} from "./endpoint";
+import type { GlobalConfig } from "../config";
 
 const TELEMETRY_ENDPOINT = "http://localhost:4000/v1/track";
+
+type Logger = AuthContext["logger"];
+
+interface TelemetryOptions {
+	logger: Logger;
+	config: GlobalConfig;
+}
+
+export class Telemetry {
+	private logger: Logger;
+	private config: GlobalConfig;
+	private telemetryEndpoint: TelemetryEndpoint;
+
+	constructor({ logger, config }: TelemetryOptions) {
+		this.logger = logger;
+		this.config = config;
+		const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", true);
+		this.telemetryEndpoint = debugEnabled
+			? debugEndpoint(logger)
+			: realEndpoint;
+	}
+
+	public async isEnabled() {
+		const telemetryConfig = await this.config.getWithFallback(
+			TELEMETRY_CONFIG_KEY,
+			() => "true",
+		);
+		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
+
+		return telemetryConfig === "true" && envEnabled;
+	}
+}
 
 interface TelemetryEvent {
 	event: "auth_";

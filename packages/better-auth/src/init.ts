@@ -27,7 +27,7 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
-import { trackEvents } from "./telemetry";
+import { Telemetry, trackEvents } from "./telemetry";
 import { GlobalConfig } from "./config";
 
 export const init = async (options: BetterAuthOptions) => {
@@ -92,7 +92,10 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const ctx: AuthContext = {
+	const config = new GlobalConfig();
+	const telemetry = new Telemetry({ logger, config });
+
+	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -121,7 +124,7 @@ export const init = async (options: BetterAuthOptions) => {
 				(options.secondaryStorage ? "secondary-storage" : "memory"),
 		},
 		authCookies: cookies,
-		logger: logger,
+		logger,
 		generateId: generateIdFunc,
 		session: null,
 		secondaryStorage: options.secondaryStorage,
@@ -155,7 +158,8 @@ export const init = async (options: BetterAuthOptions) => {
 			const { runMigrations } = await getMigrations(options);
 			await runMigrations();
 		},
-		config: new GlobalConfig(),
+		config,
+		telemetry,
 	};
 	let { context } = runPluginInit(ctx);
 	return context;
@@ -221,6 +225,7 @@ export type AuthContext = {
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
 	config: GlobalConfig;
+	telemetry: Telemetry;
 };
 
 function runPluginInit(ctx: AuthContext) {

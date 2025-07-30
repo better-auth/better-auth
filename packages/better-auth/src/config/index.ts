@@ -50,6 +50,16 @@ export class GlobalConfig {
 		return value !== undefined;
 	}
 
+	public async getWithFallback(key: string, getValue: () => string) {
+		const currentValue = await this.get(key);
+		if (currentValue !== undefined) {
+			return currentValue;
+		}
+		const newValue = getValue();
+		this.set(key, newValue);
+		return newValue;
+	}
+
 	private async writeStore() {
 		const contents = JSON.stringify(this.store, null, "\t");
 		await fs.writeFile(this.storePath, contents);
