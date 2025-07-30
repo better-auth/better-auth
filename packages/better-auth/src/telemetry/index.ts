@@ -26,6 +26,7 @@ function getTelemetryId(): string {
 
 	if (typeof process !== "undefined" && process.env) {
 		process.env.BETTER_AUTH_TELEMETRY_ID = id;
+		// @ts-ignore
 	} else if (typeof Deno !== "undefined") {
 		Deno.env.set("BETTER_AUTH_TELEMETRY_ID", id);
 	} else if (typeof Bun !== "undefined") {

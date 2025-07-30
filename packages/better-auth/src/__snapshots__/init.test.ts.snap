@@ -61,6 +61,13 @@ exports[`init > should match config 1`] = `
     },
   },
   "baseURL": "http://localhost:3000/api/auth",
+  "config": GlobalConfig {
+    "options": {
+      "name": "better-auth",
+    },
+    "store": {},
+    "storePath": "/Users/frectonz/Library/Preferences/better-auth/config.json",
+  },
   "createAuthCookie": [Function],
   "generateId": [Function],
   "internalAdapter": {
@@ -116,7 +123,7 @@ exports[`init > should match config 1`] = `
       "readonly": false,
     },
     "plugins": [],
-    "secret": "better-auth-secret-123456789",
+    "secret": "MKHwop6MjXXscHqrlKxfkmj2ypxNeTLW",
   },
   "password": {
     "checkPassword": [Function],
@@ -135,7 +142,7 @@ exports[`init > should match config 1`] = `
   },
   "runMigrations": [Function],
   "secondaryStorage": undefined,
-  "secret": "better-auth-secret-123456789",
+  "secret": "MKHwop6MjXXscHqrlKxfkmj2ypxNeTLW",
   "session": null,
   "sessionConfig": {
     "expiresIn": 604800,

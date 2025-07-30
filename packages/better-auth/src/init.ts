@@ -28,6 +28,7 @@ import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
 import { trackEvents } from "./telemetry";
+import { GlobalConfig } from "./config";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -154,6 +155,7 @@ export const init = async (options: BetterAuthOptions) => {
 			const { runMigrations } = await getMigrations(options);
 			await runMigrations();
 		},
+		config: new GlobalConfig(),
 	};
 	let { context } = runPluginInit(ctx);
 	return context;
@@ -218,6 +220,7 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
+	config: GlobalConfig;
 };
 
 function runPluginInit(ctx: AuthContext) {
