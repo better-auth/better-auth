@@ -687,9 +687,12 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
-			
+
 			// Handle null case first
-			if (ctx.body.organizationId === null || ctx.body.organizationSlug === null) {
+			if (
+				ctx.body.organizationId === null ||
+				ctx.body.organizationSlug === null
+			) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
@@ -704,7 +707,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				});
 				return ctx.json(null);
 			}
-			
+
 			// Determine which identifier to use - prioritize organizationId over organizationSlug
 			let organizationId = ctx.body.organizationId || ctx.body.organizationSlug;
 			if (!organizationId) {
@@ -714,31 +717,35 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				}
 				organizationId = sessionOrgId;
 			}
-			
+
 			// Resolve organization based on whether we have an ID or slug
-			let organization;
+			let organization: InferOrganization<O> | null = null;
 			if (ctx.body.organizationId) {
 				// We have an explicit organizationId, use it directly
-				organization = await adapter.findOrganizationById(ctx.body.organizationId);
+				organization = await adapter.findOrganizationById(
+					ctx.body.organizationId,
+				);
 			} else if (ctx.body.organizationSlug) {
 				// We only have a slug, resolve it to get the organization
-				organization = await adapter.findOrganizationBySlug(ctx.body.organizationSlug);
+				organization = await adapter.findOrganizationBySlug(
+					ctx.body.organizationSlug,
+				);
 			} else {
 				// Fallback to session organization (should be an ID)
 				organization = await adapter.findOrganizationById(organizationId);
 			}
-			
+
 			if (!organization) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
-			
+
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
 				organizationId: organization.id,
 			});
-			
+
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				throw new APIError("FORBIDDEN", {
