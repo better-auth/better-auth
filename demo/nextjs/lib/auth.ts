@@ -39,15 +39,14 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-const PROFESSION_PRICE_ID = {
-	default: "price_1QxWZ5LUjnrYIrml5Dnwnl0X",
-	annual: "price_1QxWZTLUjnrYIrmlyJYpwyhz",
+const PRO_PRICE_ID = {
+	default: "price_1RoxnRHmTADgihIt4y8c0lVE",
+	annual: "price_1RoxnoHmTADgihItzFvVP8KT",
 };
-const STARTER_PRICE_ID = {
-	default: "price_1QxWWtLUjnrYIrmleljPKszG",
-	annual: "price_1QxWYqLUjnrYIrmlonqPThVF",
+const PLUS_PRICE_ID = {
+	default: "price_1RoxnJHmTADgihIthZTLmrPn",
+	annual: "price_1Roxo5HmTADgihItEbJu5llL",
 };
-
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
@@ -174,26 +173,33 @@ export const auth = betterAuth({
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
+				allowReTrialsForDifferentPlans: true,
 				plans: [
 					{
-						name: "Starter",
-						priceId: STARTER_PRICE_ID.default,
-						annualDiscountPriceId: STARTER_PRICE_ID.annual,
+						name: "Plus",
+						priceId: PLUS_PRICE_ID.default,
+						annualDiscountPriceId: PLUS_PRICE_ID.annual,
 						freeTrial: {
 							days: 7,
 						},
 					},
 					{
-						name: "Professional",
-						priceId: PROFESSION_PRICE_ID.default,
-						annualDiscountPriceId: PROFESSION_PRICE_ID.annual,
-					},
-					{
-						name: "Enterprise",
+						name: "Pro",
+						priceId: PRO_PRICE_ID.default,
+						annualDiscountPriceId: PRO_PRICE_ID.annual,
+						freeTrial: {
+							days: 7,
+						},
 					},
 				],
 			},
 		}),
 	],
 	trustedOrigins: ["exp://"],
+	advanced: {
+		crossSubDomainCookies: {
+			enabled: process.env.NODE_ENV === "production",
+			domain: ".better-auth.com",
+		},
+	},
 });

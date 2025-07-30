@@ -110,7 +110,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									if (user.banned) {
 										if (
 											user.banExpires &&
-											user.banExpires.getTime() < Date.now()
+											new Date(user.banExpires).getTime() < Date.now()
 										) {
 											await ctx.context.internalAdapter.updateUser(
 												session.userId,
