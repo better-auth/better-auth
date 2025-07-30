@@ -658,6 +658,24 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+
+						let baseParams = {
+							client_id: provider.clientId,
+							redirect_uri: provider.redirectURI,
+							code: code,
+						};
+
+						const finalParams: {
+							[key: string]: any;
+						} & {
+							client_assertion?: string;
+							client_assertion_type?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
+						} = provider.injectClientAssertion
+							? await provider.injectClientAssertion({
+									params: {},
+								})
+							: baseParams;
+
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
@@ -667,6 +685,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: provider.clientId,
 								clientSecret: provider.clientSecret,
 								redirectURI: provider.redirectURI,
+								clientAssertion: finalParams.client_assertion,
+								clientAssertionType: finalParams.client_assertion_type,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: provider.authentication,
