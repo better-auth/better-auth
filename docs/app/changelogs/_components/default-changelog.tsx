@@ -33,10 +33,8 @@ const ChangelogPage = async () => {
 	}
 
 	const groupedReleases = new Map<string, any[]>();
-
 	function getPackageName(title: string): string {
 		const text = title.trim();
-		console.log({ text });
 		if (text.startsWith("@better-auth")) {
 			const packageName = text.split("@")[1].split("/")[1];
 			return packageName.charAt(0).toUpperCase() + packageName.slice(1);
@@ -48,7 +46,6 @@ const ChangelogPage = async () => {
 		const lines = content.split("\n");
 		let skipNextPatchChanges = false;
 		const packageName = getPackageName(title);
-
 		const newContext = lines.map((line, index) => {
 			if (skipNextPatchChanges) {
 				if (line.toLowerCase().includes("patch changes")) {
@@ -130,7 +127,6 @@ const ChangelogPage = async () => {
 					month: "short",
 					day: "numeric",
 				});
-
 			return {
 				tag: releases[0].tag.includes("@")
 					? "v" + releases[0].tag.slice(4).split("@")[1]
@@ -143,7 +139,6 @@ const ChangelogPage = async () => {
 		});
 	function cleanCommitMessage(message: string): string {
 		message = message.replace(/^[a-f0-9]{7}:\s*/, "");
-
 		const prefixes = [
 			"chore:",
 			"fix:",
@@ -300,7 +295,67 @@ const ChangelogPage = async () => {
 									{...props}
 								/>
 							),
-							li: (props) => <li className="my-1" {...props} />,
+							li: (props) => {
+								const children = props.children;
+								let text =
+									typeof children === "string"
+										? children
+										: Array.isArray(children)
+											? children.map((child, idx) => {
+													if (typeof child === "string") {
+														const cleaned = cleanCommitMessage(child);
+														return <span key={idx}>{cleaned}</span>;
+													}
+													if (
+														child &&
+														typeof child === "object" &&
+														child.type === "code"
+													) {
+														return (
+															<code
+																key={idx}
+																className="px-0.5 py-0.5 rounded bg-transparent text-xs font-mono"
+															>
+																{child.props.children}
+															</code>
+														);
+													}
+													return child;
+												})
+											: typeof children === "string"
+												? cleanCommitMessage(children)
+												: children;
+
+								return (
+									<li className="my-1" {...props}>
+										{Array.isArray(children)
+											? children.map((child, idx) => {
+													if (typeof child === "string") {
+														const cleaned = cleanCommitMessage(child);
+														return <span key={idx}>{cleaned}</span>;
+													}
+													if (
+														child &&
+														typeof child === "object" &&
+														child.type === "code"
+													) {
+														return (
+															<code
+																key={idx}
+																className="px-1 py-0.5 rounded bg-muted/70 text-xs font-mono"
+															>
+																{child.props.children}
+															</code>
+														);
+													}
+													return child;
+												})
+											: typeof children === "string"
+												? cleanCommitMessage(children)
+												: children}
+									</li>
+								);
+							},
 							a: ({ className, ...props }: any) => (
 								<Link
 									target="_blank"
@@ -324,7 +379,7 @@ const ChangelogPage = async () => {
 							?.map((message) => {
 								return `
 ## ${message.title} date=${message.date}
-${message.content.trim().replace(";;;", "").trim()}
+${cleanCommitMessage(message.content.replace(";;;", "").trim())}
 								`;
 							})
 							.filter(Boolean)
