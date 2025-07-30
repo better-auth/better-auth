@@ -328,8 +328,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						),
 					);
 				const activeSubscription = activeSubscriptions.find((sub) =>
-					subscriptionToUpdate?.stripeSubscriptionId
-						? sub.id === subscriptionToUpdate?.stripeSubscriptionId
+					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
+						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
+							sub.id === ctx.body.subscriptionId
 						: true,
 				);
 				const subscriptions = subscriptionToUpdate
