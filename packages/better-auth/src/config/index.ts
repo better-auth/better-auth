@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import { loadConfig } from "./load-config";
@@ -25,37 +25,46 @@ export class GlobalConfig {
 		this.store = loadConfig(this.storePath);
 	}
 
-	public set(key: string, value: string) {
+	public async set(key: string, value: string) {
 		this.store[key] = value;
-		this.writeStore();
+		await this.writeStore();
 	}
 
-	public get(key: string) {
-		this.readStore();
+	public async get(key: string) {
+		await this.readStore();
 		return this.store[key];
 	}
 
-	public delete(key: string) {
+	public async delete(key: string) {
 		this.store[key] = undefined;
-		this.writeStore();
+		await this.writeStore();
 	}
 
-	public clear() {
+	public async clear() {
 		this.store = {};
-		this.writeStore();
+		await this.writeStore();
 	}
 
-	public has(key: string) {
-		return this.get(key) !== undefined;
+	public async has(key: string) {
+		const value = await this.get(key);
+		return value !== undefined;
 	}
 
-	private writeStore() {
+	private async writeStore() {
 		const contents = JSON.stringify(this.store, null, "\t");
-		fs.writeFileSync(this.storePath, contents);
+		await fs.writeFile(this.storePath, contents);
 	}
 
-	private readStore() {
-		const contents = fs.readFileSync(this.storePath).toString();
-		this.store = JSON.parse(contents);
+	private async readStore() {
+		try {
+			const contents = await fs.readFile(this.storePath, "utf8");
+			this.store = JSON.parse(contents);
+		} catch (err: any) {
+			if (err.code === "ENOENT") {
+				this.store = {};
+			} else {
+				throw err;
+			}
+		}
 	}
 }

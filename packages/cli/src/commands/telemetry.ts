@@ -7,17 +7,17 @@ export const telemetry = new Command("telemetry");
 telemetry
 	.command("enable")
 	.description("Enable telemetry")
-	.action(() => {
+	.action(async () => {
 		const config = new GlobalConfig();
-		config.set(TELEMETRY_CONFIG_KEY, "true");
+		await config.set(TELEMETRY_CONFIG_KEY, "true");
 		console.log("Telemetry enabled");
 	});
 
 telemetry
 	.command("disable")
 	.description("Disable telemetry")
-	.action(() => {
+	.action(async () => {
 		const config = new GlobalConfig();
-		config.set(TELEMETRY_CONFIG_KEY, "false");
+		await config.set(TELEMETRY_CONFIG_KEY, "false");
 		console.log("Telemetry disabled");
 	});
