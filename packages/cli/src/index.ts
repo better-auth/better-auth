@@ -31,7 +31,8 @@ async function main() {
 		.addCommand(generateSecret)
 		.addCommand(init)
 		.version(packageInfo.version || "1.1.2")
-		.description("Better Auth CLI");
+		.description("Better Auth CLI")
+		.action(() => program.help());
 
 	program.parse();
 }
