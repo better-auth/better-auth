@@ -11,6 +11,9 @@ import type { StripeOptions, Subscription } from "./types";
 
 describe("stripe", async () => {
 	const mockStripe = {
+		prices: {
+			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
+		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
 		},
@@ -59,10 +62,12 @@ describe("stripe", async () => {
 				{
 					priceId: process.env.STRIPE_PRICE_ID_1!,
 					name: "starter",
+					lookupKey: "lookup_key_123",
 				},
 				{
 					priceId: process.env.STRIPE_PRICE_ID_2!,
 					name: "premium",
+					lookupKey: "lookup_key_234",
 				},
 			],
 		},
@@ -699,5 +704,117 @@ describe("stripe", async () => {
 		await eventTestAuth.handler(deleteRequest);
 
 		expect(onSubscriptionDeleted).toHaveBeenCalled();
+	});
+
+	it("should allow seat upgrades for the same plan", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "seat-upgrade@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "seat-upgrade@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 5,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(upgradeRes.data?.url).toBeDefined();
+	});
+
+	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
+		const userRes = await authClient.signUp.email(
+			{
+				...testUser,
+				email: "duplicate-prevention@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "duplicate-prevention@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				seats: 3,
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "starter",
+			seats: 3,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(upgradeRes.error).toBeDefined();
+		expect(upgradeRes.error?.message).toContain("already subscribed");
 	});
 });

@@ -54,4 +54,5 @@ export const ORGANIZATION_ERROR_CODES = {
 	YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM:
 		"You are not allowed to delete this team",
 	INVITATION_LIMIT_REACHED: "Invitation limit reached",
+	TEAM_MEMBER_LIMIT_REACHED: "Team member limit reached",
 } as const;

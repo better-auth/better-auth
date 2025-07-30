@@ -213,4 +213,103 @@ describe("team", async (it) => {
 			expect(error).toBeDefined();
 		}
 	});
+
+	it("should not be allowed to invite a member to a team that's reached maximum members", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					teams: {
+						enabled: true,
+						maximumMembersPerTeam: 1,
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [
+				organizationClient({
+					teams: {
+						enabled: true,
+					},
+				}),
+			],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+		const createOrganizationResponse = await client.organization.create({
+			name: "Test Organization",
+			slug: "test-org",
+			metadata: {
+				test: "organization-metadata",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(createOrganizationResponse.data?.id).toBeDefined();
+
+		const createTeamResponse = await client.organization.createTeam(
+			{
+				name: "Development Team",
+				organizationId: createOrganizationResponse.data?.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(createTeamResponse.data?.id).toBeDefined();
+
+		const res = await client.organization.inviteMember(
+			{
+				teamId: createTeamResponse.data?.id,
+				email: invitedUser.email,
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.data).toBeDefined();
+		const newHeaders = new Headers();
+		const signUpRes = await client.signUp.email(invitedUser, {
+			onSuccess: cookieSetter(newHeaders),
+		});
+
+		expect(signUpRes.data?.user).toBeDefined();
+
+		const acceptInvitationResponse = await client.organization.acceptInvitation(
+			{
+				invitationId: res.data?.id as string,
+			},
+			{
+				headers: newHeaders,
+			},
+		);
+		expect(acceptInvitationResponse.data).toBeDefined();
+
+		const res2 = await client.organization.inviteMember(
+			{
+				teamId: createTeamResponse.data?.id,
+				email: "test2@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res2.data).toBeNull();
+		expect(res2.error?.code).toEqual("TEAM_MEMBER_LIMIT_REACHED");
+	});
 });

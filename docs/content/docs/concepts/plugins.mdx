@@ -5,7 +5,7 @@ description: Learn how to use plugins with Better Auth.
 
 Plugins are a key part of Better Auth, they let you extend the base functionalities. You can use them to add new authentication methods, features, or customize behaviors.
 
-Better Auth offers comes with many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
+Better Auth comes with many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
 
 ## Using a Plugin
 
@@ -510,7 +510,7 @@ See built-in plugins for examples of how to use atoms properly.
 
 ### Path methods
 
-by default, inferred paths use `GET` method if they don't require a body and `POST` if they do. You can override this by passing a `pathMethods` object. The key should be the path and the value should be the method ("POST" | "GET").
+By default, inferred paths use `GET` method if they don't require a body and `POST` if they do. You can override this by passing a `pathMethods` object. The key should be the path and the value should be the method ("POST" | "GET").
 
 ```ts title="client-plugin.ts"
 import type { BetterAuthClientPlugin } from "better-auth/client";

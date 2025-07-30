@@ -1,4 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+	type MockInstance,
+} from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import type { GoogleProfile } from "../../social-providers";
@@ -61,6 +69,20 @@ describe("account", async () => {
 
 	const ctx = await auth.$context;
 
+	let googleVerifyIdTokenMock: MockInstance;
+	let googleGetUserInfoMock: MockInstance;
+	beforeAll(() => {
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		expect(googleProvider).toBeTruthy();
+
+		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
+		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
+	});
+	afterEach(() => {
+		googleVerifyIdTokenMock.mockClear();
+		googleGetUserInfoMock.mockClear();
+	});
+
 	const { headers } = await signInWithTestUser();
 
 	it("should list all accounts", async () => {
@@ -96,7 +118,9 @@ describe("account", async () => {
 			redirect: true,
 		});
 		const state =
-			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+				: "";
 		email = "test@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
@@ -139,7 +163,10 @@ describe("account", async () => {
 			redirect: true,
 		});
 
-		const url = new URL(linkAccountRes.data!.url);
+		const url =
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url)
+				: new URL("");
 		const scopesParam = url.searchParams.get("scope");
 		expect(scopesParam).toContain(customScope);
 	});
@@ -169,7 +196,9 @@ describe("account", async () => {
 			redirect: true,
 		});
 		const state =
-			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
+			linkAccountRes.data && "url" in linkAccountRes.data
+				? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+				: "";
 		email = "test2@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
@@ -192,6 +221,53 @@ describe("account", async () => {
 		});
 		expect(accounts.data?.length).toBe(2);
 	});
+
+	it("should link third account with idToken", async () => {
+		googleVerifyIdTokenMock.mockResolvedValueOnce(true);
+		const user = {
+			id: "0987654321",
+			name: "test2",
+			email: "test2@gmail.com",
+			sub: "test2",
+			emailVerified: true,
+		};
+		const userInfo = {
+			user,
+			data: user,
+		};
+		googleGetUserInfoMock.mockResolvedValueOnce(userInfo);
+
+		const { headers: headers2 } = await signInWithTestUser();
+		const linkAccountRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				idToken: { token: "test" },
+			},
+			{
+				headers: headers2,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					headers.set(
+						"cookie",
+						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+					);
+				},
+			},
+		);
+
+		expect(googleVerifyIdTokenMock).toHaveBeenCalledOnce();
+		expect(googleGetUserInfoMock).toHaveBeenCalledOnce();
+
+		const { headers: headers3 } = await signInWithTestUser();
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: headers3 },
+		});
+		expect(accounts.data?.length).toBe(3);
+	});
+
 	it("should unlink account", async () => {
 		const { headers } = await signInWithTestUser();
 		const previousAccounts = await client.listAccounts({
@@ -199,7 +275,7 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(previousAccounts.data?.length).toBe(2);
+		expect(previousAccounts.data?.length).toBe(3);
 		const unlinkAccountId = previousAccounts.data![1].accountId;
 		const unlinkRes = await client.unlinkAccount({
 			providerId: "google",
@@ -214,7 +290,7 @@ describe("account", async () => {
 				headers,
 			},
 		});
-		expect(accounts.data?.length).toBe(1);
+		expect(accounts.data?.length).toBe(2);
 	});
 
 	it("should fail to unlink the last account of a provider", async () => {

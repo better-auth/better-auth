@@ -498,6 +498,12 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			allowUnlinkingAll?: boolean;
+			/**
+			 * If enabled (true), this will update the user information based on the newly linked account
+			 *
+			 * @default false
+			 */
+			updateUserInfoOnLink?: boolean;
 		};
 	};
 	/**
@@ -999,10 +1005,4 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
-	/**
-	 * Custom paths
-	 *
-	 * This is used to modify the underlying path of a route.
-	 */
-	customPaths?: Record<string, string>;
 };

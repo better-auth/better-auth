@@ -374,15 +374,15 @@ Better Auth supports any backend framework with standard Request and Response ob
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
     import { auth } from '~/lib/server/auth'
-    import { createAPIFileRoute } from '@tanstack/react-start/api'
+    import { createServerFileRoute } from '@tanstack/react-start/server'
 
-    export const APIRoute = createAPIFileRoute('/api/auth/$')({
-        GET: ({ request }) => {
-            return auth.handler(request)
-        },
-        POST: ({ request }) => {
-            return auth.handler(request)
-        },
+    export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
+    GET: ({ request }) => {
+        return auth.handler(request)
+    },
+    POST: ({ request }) => {
+        return auth.handler(request)
+    },
     });
     ```
     </Tab>

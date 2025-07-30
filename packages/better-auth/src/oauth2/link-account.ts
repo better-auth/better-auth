@@ -31,16 +31,18 @@ export async function handleOAuthUserInfo(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=internal_server_error`,
-			);
+			const errorURL =
+				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			throw c.redirect(`${errorURL}?error=internal_server_error`);
 		});
 	let user = dbUser?.user;
 	let isRegister = !user;
 
 	if (dbUser) {
 		const hasBeenLinked = dbUser.accounts.find(
-			(a) => a.providerId === account.providerId,
+			(a) =>
+				a.providerId === account.providerId &&
+				a.accountId === account.accountId,
 		);
 		if (!hasBeenLinked) {
 			const trustedProviders =

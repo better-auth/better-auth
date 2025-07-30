@@ -1115,7 +1115,7 @@ async function updateEnvs({
 	 */
 	files: string[];
 	/**
-	 * Weather to comment the all of the envs or not
+	 * Whether to comment the all of the envs or not
 	 */
 	isCommented: boolean;
 }) {

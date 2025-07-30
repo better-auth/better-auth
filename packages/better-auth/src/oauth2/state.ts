@@ -24,7 +24,6 @@ export async function generateState(
 		errorURL: c.body?.errorCallbackURL,
 		newUserURL: c.body?.newUserCallbackURL,
 		link,
-
 		/**
 		 * This is the actual expiry time of the state
 		 */
@@ -62,9 +61,9 @@ export async function parseState(c: GenericEndpointContext) {
 		c.context.logger.error("State Mismatch. Verification not found", {
 			state,
 		});
-		throw c.redirect(
-			`${c.context.baseURL}/error?error=please_restart_the_process`,
-		);
+		const errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 	const parsedData = z
 		.object({
@@ -88,9 +87,9 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 	if (parsedData.expiresAt < Date.now()) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
-		throw c.redirect(
-			`${c.context.baseURL}/error?error=please_restart_the_process`,
-		);
+		const errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 	await c.context.internalAdapter.deleteVerificationValue(data.id);
 	return parsedData;

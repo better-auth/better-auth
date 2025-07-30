@@ -168,8 +168,10 @@ export const twitter = (options: TwitterOption) => {
 					Authorization: `Bearer ${token.accessToken}`,
 				},
 			});
+			let emailVerified = false;
 			if (!emailError && emailData?.data?.confirmed_email) {
 				profile.data.email = emailData.data.confirmed_email;
+				emailVerified = true;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
@@ -178,7 +180,7 @@ export const twitter = (options: TwitterOption) => {
 					name: profile.data.name,
 					email: profile.data.email || profile.data.username || null,
 					image: profile.data.profile_image_url,
-					emailVerified: profile.data.verified || false,
+					emailVerified: emailVerified,
 					...userMap,
 				},
 				data: profile,

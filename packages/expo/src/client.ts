@@ -203,6 +203,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						...options.headers,
 						cookie,
 						"expo-origin": getOrigin(scheme!),
+						"x-skip-oauth-proxy": "true", // skip oauth proxy for expo
 					};
 					if (options.body?.callbackURL) {
 						if (options.body.callbackURL.startsWith("/")) {

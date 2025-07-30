@@ -4,6 +4,7 @@ import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { github } from "./github";
 import { google } from "./google";
+import { huggingface } from "./huggingface";
 import { microsoft } from "./microsoft-entra-id";
 import { spotify } from "./spotify";
 import { twitch } from "./twitch";
@@ -25,6 +26,7 @@ export const socialProviders = {
 	github,
 	microsoft,
 	google,
+	huggingface,
 	spotify,
 	twitch,
 	twitter,
@@ -76,5 +78,6 @@ export * from "./roblox";
 export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
+export * from "./huggingface";
 
 export type SocialProviderList = typeof socialProviderList;

@@ -8,5 +8,5 @@ export const optionsAtom = atom({
 	signUp: true,
 	label: true,
 	rememberMe: true,
-	forgetPassword: true,
+	requestPasswordReset: true,
 });

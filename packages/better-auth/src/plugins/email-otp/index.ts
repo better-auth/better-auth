@@ -392,6 +392,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 						ctx,
 					);
+					await ctx.context.options.emailVerification?.onEmailVerification?.(
+						updatedUser,
+						ctx.request,
+					);
 
 					if (
 						ctx.context.options.emailVerification?.autoSignInAfterVerification
@@ -763,6 +767,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						await ctx.context.internalAdapter.updatePassword(
 							user.user.id,
 							passwordHash,
+							ctx,
+						);
+					}
+
+					if (!user.user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(
+							user.user.id,
+							{
+								emailVerified: true,
+							},
 							ctx,
 						);
 					}

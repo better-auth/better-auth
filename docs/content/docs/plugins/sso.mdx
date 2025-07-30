@@ -69,7 +69,7 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
 To register an OIDC provider, use the `createOIDCProvider` endpoint and provide the necessary configuration details for the provider.
 
-A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
