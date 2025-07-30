@@ -387,15 +387,13 @@ This will reactivate a subscription that was previously set to cancel at the end
 
 To create a Stripe billing portal session where customers can manage their subscriptions, update payment methods, and view billing history:
 
-
-
 <APIMethod
   path="/subscription/billing-portal"
   method="POST"
   requireSession
 >
 ```ts
-type billingPortal = {
+type createBillingPortal = {
     /**
      * Reference id of the subscription to upgrade. 
      */
