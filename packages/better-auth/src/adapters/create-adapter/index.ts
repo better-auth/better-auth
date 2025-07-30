@@ -422,6 +422,11 @@ export const createAdapter =
 				}
 				const field = tableSchema[key];
 				if (field) {
+					// Skip fields that are explicitly marked as not returned
+					if (field.returned === false) {
+						continue;
+					}
+
 					const originalKey = field.fieldName || key;
 					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
 					let newValue =
@@ -473,6 +478,8 @@ export const createAdapter =
 						});
 					}
 
+					// Always include the field in the output, even if it's undefined
+					// This ensures additional fields are returned even if they're null/missing from the database
 					transformedData[newFieldName] = newValue;
 				}
 			}
