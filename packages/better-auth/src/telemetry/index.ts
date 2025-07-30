@@ -1,13 +1,17 @@
+import { randomBytes } from "node:crypto";
+
 import { generateId } from "../utils/id";
 import { getEnvVar, getBooleanEnvVar } from "../utils/env";
+
 import type { AuthContext } from "../types";
-import { TELEMETRY_CONFIG_KEY } from "./config-key";
+import type { GlobalConfig } from "../config";
+
 import {
 	debugEndpoint,
 	realEndpoint,
 	type TelemetryEndpoint,
 } from "./endpoint";
-import type { GlobalConfig } from "../config";
+import { TELEMETRY_CONFIG_KEY, TELEMETRY_ID_CONFIG_KEY } from "./config-key";
 
 const TELEMETRY_ENDPOINT = "http://localhost:4000/v1/track";
 
@@ -19,6 +23,8 @@ interface TelemetryOptions {
 }
 
 export class Telemetry {
+	private telemetryId: string | undefined = undefined;
+
 	private logger: Logger;
 	private config: GlobalConfig;
 	private telemetryEndpoint: TelemetryEndpoint;
@@ -26,6 +32,7 @@ export class Telemetry {
 	constructor({ logger, config }: TelemetryOptions) {
 		this.logger = logger;
 		this.config = config;
+
 		const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", true);
 		this.telemetryEndpoint = debugEnabled
 			? debugEndpoint(logger)
@@ -37,9 +44,21 @@ export class Telemetry {
 			TELEMETRY_CONFIG_KEY,
 			() => "true",
 		);
-		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
 
-		return telemetryConfig === "true" && envEnabled;
+		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
+		const telemetryConfigEnabled = telemetryConfig === "true";
+
+		return telemetryConfigEnabled && envEnabled;
+	}
+
+	public async anonymousId() {
+		if (this.telemetryId) return this.telemetryId;
+
+		this.telemetryId = await this.config.getWithFallback(
+			TELEMETRY_ID_CONFIG_KEY,
+			() => randomBytes(32).toString("hex"),
+		);
+		return this.telemetryId;
 	}
 }
 
