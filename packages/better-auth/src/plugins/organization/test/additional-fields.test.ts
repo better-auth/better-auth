@@ -47,12 +47,14 @@ describe("organization additional fields", async () => {
 		expect(createRes).toBeDefined();
 		const orgId = createRes!.id;
 
-		// Check that fields with returned: true are present (using bracket notation to avoid TypeScript issues)
-		expect(createRes).toHaveProperty("publicId");
-		expect(createRes).toHaveProperty("description");
-		expect((createRes as any).description).toBe("A test organization");
+	// Debug: Log the actual response to see what we're getting
+	console.log("CreateRes structure:", createRes ? Object.keys(createRes) : "null");
+	console.log("CreateRes data:", createRes);
 
-		// Check that fields with returned: false are NOT present
+	// Check that fields with returned: true are present (using bracket notation to avoid TypeScript issues)
+	expect(createRes).toHaveProperty("publicId");
+	expect(createRes).toHaveProperty("description");
+	expect((createRes as any).description).toBe("A test organization");		// Check that fields with returned: false are NOT present
 		expect(createRes).not.toHaveProperty("website");
 
 		// List organizations - this should include additional fields

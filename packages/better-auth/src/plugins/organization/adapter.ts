@@ -55,13 +55,19 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 
-			return {
+			// Preserve all fields from the transformed output and only override metadata parsing
+			const result = {
 				...organization,
-				metadata:
-					organization.metadata && typeof organization.metadata === "string"
-						? JSON.parse(organization.metadata)
-						: undefined,
 			} as typeof organization;
+
+			// Parse metadata if it's a string (from database) but preserve if already parsed
+			if (organization.metadata && typeof organization.metadata === "string") {
+				(result as any).metadata = JSON.parse(organization.metadata);
+			} else {
+				(result as any).metadata = organization.metadata;
+			}
+
+			return result;
 		},
 		findMemberByEmail: async (data: {
 			email: string;
