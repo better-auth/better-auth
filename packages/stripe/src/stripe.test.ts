@@ -881,4 +881,3 @@ describe("stripe", async () => {
 		});
 	});
 });
-});
