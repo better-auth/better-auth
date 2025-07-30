@@ -347,24 +347,37 @@ export const sso = (options?: SSOOptions) => {
 									})
 									.default(true)
 									.optional(),
-								mapping: z.object({
-									id: z.string({}).meta({
-										description: "Field mapping for user ID (defaults to 'sub')",
-									}),
-									email: z.string({}).meta({
-										description: "Field mapping for email (defaults to 'email')",
-									}),
-									emailVerified: z.string({}).meta({
-										description: "Field mapping for email verification (defaults to 'email_verified')",
-									}).optional(),
-									name: z.string({}).meta({
-										description: "Field mapping for name (defaults to 'name')",
-									}),
-									image: z.string({}).meta({
-										description: "Field mapping for image (defaults to 'picture')",
-									}).optional(),
-									extraFields: z.record(z.string(), z.any()).optional(),
-								}).optional(),
+								mapping: z
+									.object({
+										id: z.string({}).meta({
+											description:
+												"Field mapping for user ID (defaults to 'sub')",
+										}),
+										email: z.string({}).meta({
+											description:
+												"Field mapping for email (defaults to 'email')",
+										}),
+										emailVerified: z
+											.string({})
+											.meta({
+												description:
+													"Field mapping for email verification (defaults to 'email_verified')",
+											})
+											.optional(),
+										name: z.string({}).meta({
+											description:
+												"Field mapping for name (defaults to 'name')",
+										}),
+										image: z
+											.string({})
+											.meta({
+												description:
+													"Field mapping for image (defaults to 'picture')",
+											})
+											.optional(),
+										extraFields: z.record(z.string(), z.any()).optional(),
+									})
+									.optional(),
 							})
 							.optional(),
 						samlConfig: z
@@ -423,27 +436,43 @@ export const sso = (options?: SSOOptions) => {
 								privateKey: z.string().optional(),
 								decryptionPvk: z.string().optional(),
 								additionalParams: z.record(z.string(), z.any()).optional(),
-								mapping: z.object({
-									id: z.string({}).meta({
-										description: "Field mapping for user ID (defaults to 'nameID')",
-									}),
-									email: z.string({}).meta({
-										description: "Field mapping for email (defaults to 'email')",
-									}),
-									emailVerified: z.string({}).meta({
-										description: "Field mapping for email verification",
-									}).optional(),
-									name: z.string({}).meta({
-										description: "Field mapping for name (defaults to 'displayName')",
-									}),
-									firstName: z.string({}).meta({
-										description: "Field mapping for first name (defaults to 'givenName')",
-									}).optional(),
-									lastName: z.string({}).meta({
-										description: "Field mapping for last name (defaults to 'surname')",
-									}).optional(),
-									extraFields: z.record(z.string(), z.any()).optional(),
-								}).optional(),
+								mapping: z
+									.object({
+										id: z.string({}).meta({
+											description:
+												"Field mapping for user ID (defaults to 'nameID')",
+										}),
+										email: z.string({}).meta({
+											description:
+												"Field mapping for email (defaults to 'email')",
+										}),
+										emailVerified: z
+											.string({})
+											.meta({
+												description: "Field mapping for email verification",
+											})
+											.optional(),
+										name: z.string({}).meta({
+											description:
+												"Field mapping for name (defaults to 'displayName')",
+										}),
+										firstName: z
+											.string({})
+											.meta({
+												description:
+													"Field mapping for first name (defaults to 'givenName')",
+											})
+											.optional(),
+										lastName: z
+											.string({})
+											.meta({
+												description:
+													"Field mapping for last name (defaults to 'surname')",
+											})
+											.optional(),
+										extraFields: z.record(z.string(), z.any()).optional(),
+									})
+									.optional(),
 							})
 							.optional(),
 						organizationId: z
