@@ -10,16 +10,12 @@ export async function loadConfig(
 	configPath: string,
 ): Promise<Record<string, string | undefined>> {
 	await ensureDir(configPath);
-	const configExists = await fs.exists(configPath);
-
-	if (configExists) {
+	try {
 		const contents = (await fs.readFile(configPath)).toString();
 		const store = JSON.parse(contents);
 		return store;
-	} else {
-		const store = {};
-		const contents = JSON.stringify(store, null, "\t");
-		await fs.writeFile(configPath, contents);
-		return store;
+	} catch {
+		await fs.writeFile(configPath, "{}");
+		return {};
 	}
 }
