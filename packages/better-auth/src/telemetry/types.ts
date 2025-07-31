@@ -19,7 +19,7 @@ export interface SystemInfo {
 	isDocker: boolean;
 	isTTY: boolean;
 	isWSL: boolean;
-	ciName: string | null;
+	isCI: boolean;
 }
 
 export interface AuthConfigInfo {

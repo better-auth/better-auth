@@ -689,10 +689,7 @@
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0",
     "better-call": "catalog:",
-    "ci-info": "^4.3.0",
     "defu": "^6.1.4",
-    "is-docker": "^3.0.0",
-    "is-wsl": "^3.1.0",
     "jose": "^5.9.6",
     "kysely": "^0.28.1",
     "nanostores": "^0.11.3"
