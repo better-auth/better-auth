@@ -13,10 +13,12 @@ export const debugEndpoint =
 	};
 
 const TELEMETRY_ENDPOINT = "http://telemetry.better-auth.com/v1/track";
-export const realEndpoint: TelemetryEndpoint = async (event) => {
-	await betterFetch(TELEMETRY_ENDPOINT, {
-		method: "POST",
-		body: JSON.stringify(event),
-		headers: { "content-type": "application/json" },
-	});
-};
+export const realEndpoint =
+	(endpoint?: string): TelemetryEndpoint =>
+	async (event) => {
+		await betterFetch(endpoint ?? TELEMETRY_ENDPOINT, {
+			method: "POST",
+			body: JSON.stringify(event),
+			headers: { "content-type": "application/json" },
+		});
+	};

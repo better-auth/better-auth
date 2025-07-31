@@ -15,9 +15,11 @@ interface TelemetryOptions {
 	options: BetterAuthOptions;
 }
 
-export function createTelemetry({ logger, config }: TelemetryOptions) {
+export function createTelemetry({ logger, config, options }: TelemetryOptions) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", true);
-	const telemetryEndpoint = debugEnabled ? debugEndpoint(logger) : realEndpoint;
+	const telemetryEndpoint = debugEnabled
+		? debugEndpoint(logger)
+		: realEndpoint(options.telemetry?.endpoint);
 
 	const isEnabled = async () => {
 		const telemetryConfig = await config.getWithFallback(
@@ -25,10 +27,11 @@ export function createTelemetry({ logger, config }: TelemetryOptions) {
 			() => "true",
 		);
 
+		const telemetryEnabled = options.telemetry?.enabled ?? true;
 		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
 		const telemetryConfigEnabled = telemetryConfig === "true";
 
-		return telemetryConfigEnabled && envEnabled;
+		return telemetryConfigEnabled && envEnabled && telemetryEnabled;
 	};
 
 	let telemetryId: string | undefined;
