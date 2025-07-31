@@ -121,7 +121,6 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	let max = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
-		console.warn("No IP address found for rate limiting");
 		return;
 	}
 	const key = ip + path;
