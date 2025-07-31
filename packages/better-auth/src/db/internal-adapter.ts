@@ -538,13 +538,15 @@ export const createInternalAdapter = (
 					model: "account",
 					where: [
 						{
-							value: accountId,
+							value: accountId.toString(),
 							field: "accountId",
 						},
 					],
 				})
 				.then((accounts) => {
-					return accounts.find((a) => a.providerId === providerId);
+					return accounts.find(
+						(a) => a.providerId === providerId && a.accountId === accountId,
+					);
 				});
 			if (account) {
 				const user = await adapter.findOne<User>({
