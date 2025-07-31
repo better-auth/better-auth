@@ -71,7 +71,7 @@ export async function createGlobalConfig(options?: GlobalConfigOptions) {
 				return currentValue;
 			}
 			const newValue = getValue();
-			crud.set(key, newValue);
+			await crud.set(key, newValue);
 			return newValue;
 		},
 	});
