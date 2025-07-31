@@ -29,7 +29,7 @@
 	},
 	"overrides": [
 		{
-			"include": ["examples/svelte-kit-example/**"],
+			"include": ["**/*.svelte"],
 			"linter": {
 				"rules": {
 					"correctness": {
@@ -52,7 +52,8 @@
 			".source",
 			".expo",
 			".cache",
-			"dev/cloudflare/drizzle"
+			"dev/cloudflare/drizzle",
+			"examples/svelte-kit-example/**"
 		]
 	}
 }
