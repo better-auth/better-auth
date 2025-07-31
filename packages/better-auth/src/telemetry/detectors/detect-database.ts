@@ -9,7 +9,7 @@ const DATABASES: Record<string, string> = {
 	mysql: "mysql",
 	mariadb: "mariadb",
 	sqlite3: "sqlite",
-	betterSqlite3: "sqlite",
+	"better-sqlite3": "sqlite",
 	"@prisma/client": "prisma",
 	mongoose: "mongodb",
 	mongodb: "mongodb",
