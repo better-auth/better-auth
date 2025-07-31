@@ -121,8 +121,8 @@ export const apple = (options: AppleOptions) => {
 					options.audience && options.audience.length
 						? options.audience
 						: options.appBundleIdentifier
-						? options.appBundleIdentifier
-						: options.clientId,
+							? options.appBundleIdentifier
+							: options.clientId,
 				maxTokenAge: "1h",
 			});
 			["email_verified", "is_private_email"].forEach((field) => {
