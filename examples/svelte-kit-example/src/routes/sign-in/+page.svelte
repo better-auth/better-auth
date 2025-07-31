@@ -6,23 +6,23 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 
-const email = writable("");
-const password = writable("");
+  const email = writable("");
+  const password = writable("");
 
-const handleSignIn = async () => {
-	await signIn.email(
-		{
-			email: $email,
-			password: $password,
-			callbackURL: "/",
-		},
-		{
-			onError(context) {
-				alert(context.error.message);
-			},
-		},
-	);
-};
+  const handleSignIn = async () => {
+    await signIn.email(
+      {
+        email: $email,
+        password: $password,
+        callbackURL: "/",
+      },
+      {
+        onError(context) {
+          alert(context.error.message);
+        },
+      }
+    );
+  };
 </script>
 
 <Card.Root class="mx-auto max-w-sm">
@@ -75,9 +75,3 @@ const handleSignIn = async () => {
     </div>
   </Card.Content>
 </Card.Root>
-
-
-
-
-   
-  

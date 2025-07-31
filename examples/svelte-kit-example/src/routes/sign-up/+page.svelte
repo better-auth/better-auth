@@ -7,11 +7,11 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 
-// Create writable stores for form fields
-const firstName = writable("");
-const lastName = writable("");
-const email = writable("");
-const password = writable("");
+  // Create writable stores for form fields
+  const firstName = writable("");
+  const lastName = writable("");
+  const email = writable("");
+  const password = writable("");
 
 // Function to handle form submission
 const handleSignUp = async () => {

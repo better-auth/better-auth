@@ -10,8 +10,16 @@ const features = [
 	"email-verification",
 ];
 
-const session = client.useSession();
-$: to = $session.data ? "/dashboard" : "/sign-in";
+  const features = [
+    "social sign-in",
+    "email and password",
+    "two-factor",
+    "password-rest",
+    "email-verification",
+  ];
+
+  const session = client.useSession();
+  $: to = $session.data ? "/dashboard" : "/sign-in";
 </script>
 
 <div
