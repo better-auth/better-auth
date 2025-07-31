@@ -95,6 +95,7 @@ export const init = async (options: BetterAuthOptions) => {
 
 	const config = createGlobalConfig();
 	const telemetry = createTelemetry({ logger, config, options });
+	telemetry.report();
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",

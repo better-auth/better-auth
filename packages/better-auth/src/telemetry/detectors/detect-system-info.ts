@@ -5,7 +5,7 @@ import isWSL from "is-wsl";
 
 import type { SystemInfo } from "../types";
 
-export async function detectSystem(): Promise<SystemInfo> {
+export async function detectSystemInfo(): Promise<SystemInfo> {
 	const cpus = os.cpus() || [];
 
 	return {

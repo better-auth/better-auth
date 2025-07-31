@@ -1,12 +1,21 @@
 import { generateId } from "../utils/id";
 import { getBooleanEnvVar } from "../utils/env";
+import { awaitObject } from "../utils/await-object";
 
 import type { GlobalConfig } from "../config";
 import type { AuthContext, BetterAuthOptions } from "../types";
 
 import { realEndpoint, debugEndpoint } from "./endpoint";
 import { TELEMETRY_CONFIG_KEY, TELEMETRY_ID_CONFIG_KEY } from "./config-key";
-import type { TelemetryEvent } from "./types";
+
+import { detectRuntime } from "./detectors/detect-runtime";
+import { detectDatabase } from "./detectors/detect-database";
+import { detectFramework } from "./detectors/detect-framework";
+import { detectProduction } from "./detectors/detect-production";
+import { detectAuthConfig } from "./detectors/detect-auth-config";
+import { detectBetterAuth } from "./detectors/detect-better-auth";
+import { detectSystemInfo } from "./detectors/detect-system-info";
+import { detectProjectInfo } from "./detectors/detect-project-info";
 
 type Logger = AuthContext["logger"];
 
@@ -57,10 +66,29 @@ export function createTelemetry({ logger, config, options }: TelemetryOptions) {
 		});
 	};
 
+	const report = async () => {
+		if (!(await isEnabled())) return;
+
+		const payload = await awaitObject({
+			betterAuth: detectBetterAuth(),
+			authConfig: detectAuthConfig(options),
+
+			runtime: detectRuntime(),
+			database: detectDatabase(),
+			framework: detectFramework(),
+			production: detectProduction(),
+			systemInfo: detectSystemInfo(),
+			projectInfo: detectProjectInfo(options.baseURL),
+		});
+
+		await publish("init", payload);
+	};
+
 	return Object.freeze({
 		isEnabled,
 		anonymousId,
 		publish,
+		report,
 	});
 }
 

@@ -3,19 +3,25 @@ import type { DetectionInfo, ProjectInfo } from "../types";
 import { hashToBase64 } from "../../crypto";
 import { getNameFromLocalPackageJson } from "../../utils/package-json";
 
-export async function detectProjectInfo(baseUrl: string): Promise<ProjectInfo> {
+export async function detectProjectInfo(
+	baseUrl: string | undefined,
+): Promise<ProjectInfo> {
 	let isGit = false;
 	let anonymousProjectId = null;
 
 	const firstCommit = getFirstCommitHash();
 	if (firstCommit) {
 		isGit = true;
-		anonymousProjectId = await hashToBase64(baseUrl + firstCommit);
+		anonymousProjectId = await hashToBase64(
+			baseUrl ? baseUrl + firstCommit : firstCommit,
+		);
 	}
 
 	const projectName = await getNameFromLocalPackageJson();
 	if (projectName) {
-		anonymousProjectId = await hashToBase64(baseUrl + projectName);
+		anonymousProjectId = await hashToBase64(
+			baseUrl ? baseUrl + projectName : projectName,
+		);
 	}
 
 	return {
