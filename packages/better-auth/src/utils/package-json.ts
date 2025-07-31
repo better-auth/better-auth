@@ -34,3 +34,15 @@ export async function getVersionFromLocalPackageJson(pkg: string) {
 	} catch {}
 	return undefined;
 }
+
+export async function getNameFromLocalPackageJson() {
+	try {
+		const raw = await fs.readFile(
+			path.join(process.cwd(), "package.json"),
+			"utf-8",
+		);
+		const json = JSON.parse(raw);
+		return json.name as string;
+	} catch {}
+	return undefined;
+}

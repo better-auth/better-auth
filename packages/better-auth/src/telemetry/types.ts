@@ -1,6 +1,6 @@
 export interface DetectionInfo {
 	name: string;
-	version?: string;
+	version: string | null;
 }
 
 export interface SystemInfo {
@@ -25,4 +25,10 @@ export interface SystemInfo {
 export interface AuthConfigInfo {
 	options: any;
 	plugins: string[];
+}
+
+export interface ProjectInfo {
+	isGit: boolean;
+	anonymousProjectId: string | null;
+	packageManager: DetectionInfo | null;
 }
