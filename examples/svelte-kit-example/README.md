@@ -1,6 +1,5 @@
 # SvelteKit Better Auth Example
 
-
 This is an example of how to use Better Auth with SvelteKit.
 
 **Implements the following features:**
@@ -20,4 +19,3 @@ Email & Password . <u>Social Sign-in with Google</u> . Passkeys . Email Verifica
    pnpm dev
    ```
 4. Open the browser and navigate to `http://localhost:3000`
-

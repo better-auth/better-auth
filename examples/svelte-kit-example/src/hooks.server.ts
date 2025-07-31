@@ -1,9 +1,9 @@
-import { auth } from "$lib/auth";
-import { redirect, type Handle } from "@sveltejs/kit";
-import { svelteKitHandler } from "better-auth/svelte-kit";
+import { auth } from '$lib/auth';
+import { redirect, type Handle } from '@sveltejs/kit';
+import { svelteKitHandler } from 'better-auth/svelte-kit';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	if (event.route.id?.startsWith("/(protected)/")) {
+	if (event.route.id?.startsWith('/(protected)/')) {
 		const session = await auth.api.getSession({
 			headers: event.request.headers,
 		});
@@ -14,7 +14,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 			return svelteKitHandler({ event, resolve, auth });
 		} else {
-			redirect(307, "/sign-in");
+			redirect(307, '/sign-in');
 		}
 	} else {
 		return svelteKitHandler({ event, resolve, auth });
