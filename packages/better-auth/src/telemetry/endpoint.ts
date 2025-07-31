@@ -1,6 +1,6 @@
 import type { AuthContext } from "../types";
 import type { TelemetryEvent } from "./types";
-import { betterFetch } from '@better-fetch/fetch';
+import { betterFetch } from "@better-fetch/fetch";
 
 export type TelemetryEndpoint = (event: TelemetryEvent) => Promise<void>;
 

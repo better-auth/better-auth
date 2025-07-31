@@ -22,25 +22,12 @@ interface TelemetryOptions {
 	config: GlobalConfig;
 }
 
-export class Telemetry {
-	private telemetryId: string | undefined = undefined;
+export function createTelemetry({ logger, config }: TelemetryOptions) {
+	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", true);
+	const telemetryEndpoint = debugEnabled ? debugEndpoint(logger) : realEndpoint;
 
-	private logger: Logger;
-	private config: GlobalConfig;
-	private telemetryEndpoint: TelemetryEndpoint;
-
-	constructor({ logger, config }: TelemetryOptions) {
-		this.logger = logger;
-		this.config = config;
-
-		const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", true);
-		this.telemetryEndpoint = debugEnabled
-			? debugEndpoint(logger)
-			: realEndpoint;
-	}
-
-	public async isEnabled() {
-		const telemetryConfig = await this.config.getWithFallback(
+	const isEnabled = async () => {
+		const telemetryConfig = await config.getWithFallback(
 			TELEMETRY_CONFIG_KEY,
 			() => "true",
 		);
@@ -49,18 +36,24 @@ export class Telemetry {
 		const telemetryConfigEnabled = telemetryConfig === "true";
 
 		return telemetryConfigEnabled && envEnabled;
-	}
+	};
 
-	public async anonymousId() {
-		if (this.telemetryId) return this.telemetryId;
+	let telemetryId: string | undefined;
 
-		this.telemetryId = await this.config.getWithFallback(
-			TELEMETRY_ID_CONFIG_KEY,
-			() => randomBytes(32).toString("hex"),
+	const anonymousId = async () => {
+		if (telemetryId) return telemetryId;
+
+		telemetryId = await config.getWithFallback(TELEMETRY_ID_CONFIG_KEY, () =>
+			randomBytes(32).toString("hex"),
 		);
-		return this.telemetryId;
-	}
+
+		return telemetryId;
+	};
+
+	return Object.freeze({ isEnabled, anonymousId });
 }
+
+export type Telemetry = ReturnType<typeof createTelemetry>;
 
 interface TelemetryEvent {
 	event: "auth_";
