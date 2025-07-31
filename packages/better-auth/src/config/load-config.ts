@@ -6,7 +6,9 @@ function ensureDir(configPath: string) {
 	fs.mkdirSync(dir, { recursive: true });
 }
 
-export function loadConfig(configPath: string): Record<string, string> {
+export function loadConfig(
+	configPath: string,
+): Record<string, string | undefined> {
 	ensureDir(configPath);
 	const configExists = fs.existsSync(configPath);
 
