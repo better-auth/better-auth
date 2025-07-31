@@ -33,7 +33,8 @@ export function createGlobalConfig(options?: GlobalConfigOptions) {
 			if (err.code === "ENOENT") {
 				store = {};
 			} else {
-				throw err;
+			const contents = await fs.readFile(storePath, "utf8");
+				throw {contents, err};
 			}
 		}
 	};
