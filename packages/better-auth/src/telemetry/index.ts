@@ -1,8 +1,8 @@
 import { generateId } from "../utils/id";
 import { getBooleanEnvVar } from "../utils/env";
 
-import type { AuthContext, BetterAuthOptions } from "../types";
 import type { GlobalConfig } from "../config";
+import type { AuthContext, BetterAuthOptions } from "../types";
 
 import { realEndpoint, debugEndpoint } from "./endpoint";
 import { TELEMETRY_CONFIG_KEY, TELEMETRY_ID_CONFIG_KEY } from "./config-key";
@@ -50,58 +50,3 @@ export function createTelemetry({ logger, config, options }: TelemetryOptions) {
 }
 
 export type Telemetry = ReturnType<typeof createTelemetry>;
-
-function sanitizeAuthConfig(config: any): any {
-	if (!config) return undefined;
-
-	const sanitized = JSON.parse(JSON.stringify(config));
-
-	const sensitiveFields = [
-		"secret",
-		"password",
-		"token",
-		"key",
-		"apiKey",
-		"clientSecret",
-		"privateKey",
-		"credentials",
-		"connection",
-		"connectionString",
-		"uri",
-		"url",
-	];
-
-	function sanitizeObject(obj: any) {
-		if (!obj || typeof obj !== "object") return;
-
-		for (const key of Object.keys(obj)) {
-			const lowerKey = key.toLowerCase();
-
-			if (
-				sensitiveFields.some((field) => lowerKey.includes(field.toLowerCase()))
-			) {
-				obj[key] = "[REDACTED]";
-				continue;
-			}
-
-			if (obj[key] && typeof obj[key] === "object") {
-				sanitizeObject(obj[key]);
-			}
-		}
-	}
-
-	sanitizeObject(sanitized);
-	return sanitized;
-}
-
-function getPlugins(config: any): any {
-	const plugins = [
-		...new Set(
-			(config.plugins || [])
-				.map((p: any) => [p.name || p.id])
-				.filter((x: any) => x !== undefined),
-		).values(),
-	] as any[];
-
-	return plugins;
-}
