@@ -69,7 +69,8 @@ export interface AppleNonConformUser {
 }
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
-	audience?: string[];
+	appBundleIdentifier?: string;
+	audience?: string;
 }
 
 export const apple = (options: AppleOptions) => {
@@ -119,6 +120,8 @@ export const apple = (options: AppleOptions) => {
 				audience:
 					options.audience && options.audience.length
 						? options.audience
+						: options.appBundleIdentifier
+						? options.appBundleIdentifier
 						: options.clientId,
 				maxTokenAge: "1h",
 			});
