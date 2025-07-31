@@ -268,12 +268,39 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						ctx.context.logger.error("Username too short", { username });
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						ctx.context.logger.error("Username too long", { username });
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!validator(username)) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: username.toLowerCase(),
+								value: normalizer(username),
 							},
 						],
 					});
