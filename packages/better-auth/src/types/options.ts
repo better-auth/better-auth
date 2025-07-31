@@ -1059,7 +1059,7 @@ export type BetterAuthOptions = {
 		/**
 		 * Telemetry endpoint to send events to
 		 *
-		 * @default - "http://telemetry.better-auth.com/v1/track"
+		 * @default - "https://telemetry.better-auth.com/v1/track"
 		 */
 		endpoint?: string;
 	};
