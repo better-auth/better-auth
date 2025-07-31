@@ -20,5 +20,6 @@ export const realEndpoint =
 			method: "POST",
 			body: JSON.stringify(event),
 			headers: { "content-type": "application/json" },
+			retry: 5,
 		});
 	};
