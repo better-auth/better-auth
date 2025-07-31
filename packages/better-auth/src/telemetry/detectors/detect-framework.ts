@@ -1,5 +1,8 @@
 import type { DetectionInfo } from "../types";
-import { getVersionFromLocalPackageJson, readPackageJson } from "../utils";
+import {
+	readPackageJson,
+	getVersionFromLocalPackageJson,
+} from "../../utils/package-json";
 
 const FRAMEWORKS: Record<string, string> = {
 	next: "next",
