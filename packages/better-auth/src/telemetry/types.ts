@@ -54,3 +54,8 @@ export interface TelemetryOptions {
 	enabled?: boolean;
 	endpoint?: string;
 }
+
+export interface DetectionInfo {
+	name: string;
+	version?: string;
+}

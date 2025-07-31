@@ -6,11 +6,7 @@ import { getEnvVar, getBooleanEnvVar } from "../utils/env";
 import type { AuthContext } from "../types";
 import type { GlobalConfig } from "../config";
 
-import {
-	debugEndpoint,
-	realEndpoint,
-	type TelemetryEndpoint,
-} from "./endpoint";
+import { realEndpoint, debugEndpoint } from "./endpoint";
 import { TELEMETRY_CONFIG_KEY, TELEMETRY_ID_CONFIG_KEY } from "./config-key";
 
 const TELEMETRY_ENDPOINT = "http://localhost:4000/v1/track";
