@@ -1,25 +1,25 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 
-function ensureDir(configPath: string) {
+async function ensureDir(configPath: string) {
 	const dir = path.dirname(configPath);
-	fs.mkdirSync(dir, { recursive: true });
+	await fs.mkdir(dir, { recursive: true });
 }
 
-export function loadConfig(
+export async function loadConfig(
 	configPath: string,
-): Record<string, string | undefined> {
-	ensureDir(configPath);
-	const configExists = fs.existsSync(configPath);
+): Promise<Record<string, string | undefined>> {
+	await ensureDir(configPath);
+	const configExists = await fs.exists(configPath);
 
 	if (configExists) {
-		const contents = fs.readFileSync(configPath).toString();
+		const contents = (await fs.readFile(configPath)).toString();
 		const store = JSON.parse(contents);
 		return store;
 	} else {
 		const store = {};
 		const contents = JSON.stringify(store, null, "\t");
-		fs.writeFileSync(configPath, contents);
+		await fs.writeFile(configPath, contents);
 		return store;
 	}
 }

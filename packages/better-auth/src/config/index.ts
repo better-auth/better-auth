@@ -10,7 +10,7 @@ export interface GlobalConfigOptions {
 
 type RealizedGlobalConfigOptions = Required<GlobalConfigOptions>;
 
-export function createGlobalConfig(options?: GlobalConfigOptions) {
+export async function createGlobalConfig(options?: GlobalConfigOptions) {
 	const opts: RealizedGlobalConfigOptions = {
 		name: options?.name ?? "better-auth",
 	};
@@ -18,7 +18,7 @@ export function createGlobalConfig(options?: GlobalConfigOptions) {
 	const configDir = getConfigDir(opts.name);
 	const storePath = path.join(configDir, "config.json");
 
-	let store = loadConfig(storePath);
+	let store = await loadConfig(storePath);
 
 	const writeStore = async () => {
 		const contents = JSON.stringify(store, null, "\t");
@@ -33,8 +33,7 @@ export function createGlobalConfig(options?: GlobalConfigOptions) {
 			if (err.code === "ENOENT") {
 				store = {};
 			} else {
-				const contents = await fs.readFile(storePath, "utf8");
-				throw { contents, err };
+				throw err;
 			}
 		}
 	};
@@ -78,4 +77,4 @@ export function createGlobalConfig(options?: GlobalConfigOptions) {
 	});
 }
 
-export type GlobalConfig = ReturnType<typeof createGlobalConfig>;
+export type GlobalConfig = Awaited<ReturnType<typeof createGlobalConfig>>;

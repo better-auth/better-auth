@@ -93,7 +93,7 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const config = createGlobalConfig();
+	const config = await createGlobalConfig();
 	const telemetry = createTelemetry({ logger, config, options });
 	telemetry.report();
 
