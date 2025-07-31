@@ -6,6 +6,7 @@ import type { AuthContext, BetterAuthOptions } from "../types";
 
 import { realEndpoint, debugEndpoint } from "./endpoint";
 import { TELEMETRY_CONFIG_KEY, TELEMETRY_ID_CONFIG_KEY } from "./config-key";
+import type { TelemetryEvent } from "./types";
 
 type Logger = AuthContext["logger"];
 
@@ -46,7 +47,21 @@ export function createTelemetry({ logger, config, options }: TelemetryOptions) {
 		return telemetryId;
 	};
 
-	return Object.freeze({ isEnabled, anonymousId });
+	const publish = async (event: string, payload: any) => {
+		if (!(await isEnabled())) return;
+
+		telemetryEndpoint({
+			event,
+			payload,
+			anonymousId: await anonymousId(),
+		});
+	};
+
+	return Object.freeze({
+		isEnabled,
+		anonymousId,
+		publish,
+	});
 }
 
 export type Telemetry = ReturnType<typeof createTelemetry>;

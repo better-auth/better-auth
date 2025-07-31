@@ -32,3 +32,9 @@ export interface ProjectInfo {
 	anonymousProjectId: string | null;
 	packageManager: DetectionInfo | null;
 }
+
+export interface TelemetryEvent {
+	event: string;
+	anonymousId: string;
+	payload: any;
+}
