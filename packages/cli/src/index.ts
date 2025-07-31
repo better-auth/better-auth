@@ -5,7 +5,7 @@ import { Command } from "commander";
 import { init } from "./commands/init";
 import { migrate } from "./commands/migrate";
 import { generate } from "./commands/generate";
-import { telemetry } from "./commands/telemetry";
+import { telemetryCommand } from "./commands/telemetry";
 import { generateSecret } from "./commands/secret";
 import { getPackageInfo } from "./utils/get-package-info";
 
@@ -25,11 +25,11 @@ async function main() {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
 	program
-		.addCommand(telemetry)
+		.addCommand(init)
 		.addCommand(migrate)
 		.addCommand(generate)
 		.addCommand(generateSecret)
-		.addCommand(init)
+		.addCommand(telemetryCommand)
 		.version(packageInfo.version || "1.1.2")
 		.description("Better Auth CLI")
 		.action(() => program.help());
