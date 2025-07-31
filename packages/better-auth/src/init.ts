@@ -28,7 +28,7 @@ import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
 import { Telemetry, trackEvents } from "./telemetry";
-import { GlobalConfig } from "./config";
+import { type GlobalConfig, createGlobalConfig } from "./config";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -92,7 +92,7 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const config = new GlobalConfig();
+	const config = createGlobalConfig();
 	const telemetry = new Telemetry({ logger, config });
 
 	let ctx: AuthContext = {

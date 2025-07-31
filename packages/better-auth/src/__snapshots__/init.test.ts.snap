@@ -61,15 +61,13 @@ exports[`init > should match config 1`] = `
     },
   },
   "baseURL": "http://localhost:3000/api/auth",
-  "config": GlobalConfig {
-    "options": {
-      "name": "better-auth",
-    },
-    "store": {
-      "telemetry": "true",
-      "telemetry.enabled": "true",
-    },
-    "storePath": "/Users/frectonz/Library/Preferences/better-auth/config.json",
+  "config": {
+    "clear": [Function],
+    "delete": [Function],
+    "get": [Function],
+    "getWithFallback": [Function],
+    "has": [Function],
+    "set": [Function],
   },
   "createAuthCookie": [Function],
   "generateId": [Function],
@@ -350,15 +348,13 @@ exports[`init > should match config 1`] = `
     },
   },
   "telemetry": Telemetry {
-    "config": GlobalConfig {
-      "options": {
-        "name": "better-auth",
-      },
-      "store": {
-        "telemetry": "true",
-        "telemetry.enabled": "true",
-      },
-      "storePath": "/Users/frectonz/Library/Preferences/better-auth/config.json",
+    "config": {
+      "clear": [Function],
+      "delete": [Function],
+      "get": [Function],
+      "getWithFallback": [Function],
+      "has": [Function],
+      "set": [Function],
     },
     "logger": {
       "debug": [Function],
