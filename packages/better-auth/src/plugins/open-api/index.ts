@@ -68,8 +68,9 @@ export interface OpenAPIOptions {
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 	const path = (options?.path ?? "/reference") as "/reference";
-	const apiReferenceScriptSrc = (options?.apiReferenceScriptSrc ??
-		"https://cdn.jsdelivr.net/npm/@scalar/api-reference") as "https://cdn.jsdelivr.net/npm/@scalar/api-reference";
+	const apiReferenceScriptSrc = options?.apiReferenceScriptSrc
+		? new URL(options.apiReferenceScriptSrc).toString()
+		: "https://cdn.jsdelivr.net/npm/@scalar/api-reference";
 	return {
 		id: "open-api",
 		endpoints: {
