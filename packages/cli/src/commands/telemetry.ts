@@ -2,24 +2,24 @@ import { Command } from "commander";
 import { createGlobalConfig } from "../../../better-auth/src/config";
 import { TELEMETRY_CONFIG_KEY } from "../../../better-auth/src/telemetry/config-key";
 
-export const telemetry = new Command("telemetry").action(() =>
-	telemetry.help(),
+export const telemetryCommand = new Command("telemetry").action(() =>
+	telemetryCommand.help(),
 );
 
-telemetry
+telemetryCommand
 	.command("enable")
 	.description("Enable telemetry")
 	.action(async () => {
-		const config = createGlobalConfig();
+		const config = await createGlobalConfig();
 		await config.set(TELEMETRY_CONFIG_KEY, "true");
 		console.log("Telemetry enabled");
 	});
 
-telemetry
+telemetryCommand
 	.command("disable")
 	.description("Disable telemetry")
 	.action(async () => {
-		const config = createGlobalConfig();
+		const config = await createGlobalConfig();
 		await config.set(TELEMETRY_CONFIG_KEY, "false");
 		console.log("Telemetry disabled");
 	});

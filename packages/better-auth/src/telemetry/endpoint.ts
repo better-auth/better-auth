@@ -12,7 +12,7 @@ export const debugEndpoint =
 		logger.debug("telemetry event", event);
 	};
 
-const TELEMETRY_ENDPOINT = "http://telemetry.better-auth.com/v1/track";
+const TELEMETRY_ENDPOINT = "https://telemetry.better-auth.com/v1/track";
 export const realEndpoint =
 	(endpoint?: string): TelemetryEndpoint =>
 	async (event) => {
