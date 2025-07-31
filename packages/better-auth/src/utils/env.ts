@@ -61,7 +61,7 @@ export const isTest = nodeENV === "test" || toBoolean(env.TEST);
  */
 export function getEnvVar(key: string, fallback?: string): string | undefined {
 	if (typeof process !== "undefined" && process.env) {
-		return process.env[key] || fallback;
+		return process.env[key] ?? fallback;
 	}
 
 	// @ts-expect-error deno
