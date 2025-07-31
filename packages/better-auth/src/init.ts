@@ -27,7 +27,7 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
-import { createTelemetry, trackEvents, type Telemetry } from "./telemetry";
+import { createTelemetry, type Telemetry } from "./telemetry";
 import { type GlobalConfig, createGlobalConfig } from "./config";
 
 export const init = async (options: BetterAuthOptions) => {
@@ -36,7 +36,7 @@ export const init = async (options: BetterAuthOptions) => {
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
-	trackEvents(options);
+
 	const secret =
 		options.secret ||
 		env.BETTER_AUTH_SECRET ||
@@ -58,6 +58,7 @@ export const init = async (options: BetterAuthOptions) => {
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
 	};
+
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
@@ -93,7 +94,7 @@ export const init = async (options: BetterAuthOptions) => {
 	};
 
 	const config = createGlobalConfig();
-	const telemetry = createTelemetry({ logger, config });
+	const telemetry = createTelemetry({ logger, config, options });
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",

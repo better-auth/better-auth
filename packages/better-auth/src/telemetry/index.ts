@@ -1,7 +1,7 @@
 import { generateId } from "../utils/id";
 import { getBooleanEnvVar } from "../utils/env";
 
-import type { AuthContext } from "../types";
+import type { AuthContext, BetterAuthOptions } from "../types";
 import type { GlobalConfig } from "../config";
 
 import { realEndpoint, debugEndpoint } from "./endpoint";
@@ -12,6 +12,7 @@ type Logger = AuthContext["logger"];
 interface TelemetryOptions {
 	logger: Logger;
 	config: GlobalConfig;
+	options: BetterAuthOptions;
 }
 
 export function createTelemetry({ logger, config }: TelemetryOptions) {

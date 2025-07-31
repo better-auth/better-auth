@@ -1046,4 +1046,21 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+	/**
+	 * Telemetry configuration
+	 */
+	telemetry?: {
+		/**
+		 * Enable telemetry collection
+		 *
+		 * @default true
+		 */
+		enabled?: boolean;
+		/**
+		 * Telemetry endpoint to send events to
+		 *
+		 * @default - "http://telemetry.better-auth.com/v1/track"
+		 */
+		endpoint?: string;
+	};
 };
