@@ -347,24 +347,11 @@ exports[`init > should match config 1`] = `
       "order": 4,
     },
   },
-  "telemetry": Telemetry {
-    "config": {
-      "clear": [Function],
-      "delete": [Function],
-      "get": [Function],
-      "getWithFallback": [Function],
-      "has": [Function],
-      "set": [Function],
-    },
-    "logger": {
-      "debug": [Function],
-      "error": [Function],
-      "info": [Function],
-      "success": [Function],
-      "warn": [Function],
-    },
-    "telemetryEndpoint": [Function],
-    "telemetryId": undefined,
+  "telemetry": {
+    "anonymousId": [Function],
+    "isEnabled": [Function],
+    "publish": [Function],
+    "report": [Function],
   },
   "trustedOrigins": [
     "http://localhost:3000",
