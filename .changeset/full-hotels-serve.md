@@ -3,4 +3,4 @@
 "@better-auth/cli": patch
 ---
 
-Initial telemetry implementaion
+Initial telemetry implementation
