@@ -64,47 +64,29 @@ describe("phone-number", async (it) => {
 		expect(res.error?.status).toBe(400);
 	});
 
-	it("should update phone number and refresh session", async () => {
+	it("should update phone number", async () => {
 		const newPhoneNumber = "+0123456789";
-		const oldSession = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
 		await client.phoneNumber.sendOtp({
 			phoneNumber: newPhoneNumber,
 			fetchOptions: {
 				headers,
 			},
 		});
-		const res = await client.phoneNumber.verify(
-			{
-				phoneNumber: newPhoneNumber,
-				updatePhoneNumber: true,
-				code: otp,
-				fetchOptions: {
-					headers,
-				},
-			},
-			{
-				onSuccess: sessionSetter(headers),
-			},
-		);
-		const user = await client.getSession({
+		const res = await client.phoneNumber.verify({
+			phoneNumber: newPhoneNumber,
+			updatePhoneNumber: true,
+			code: otp,
 			fetchOptions: {
 				headers,
 			},
 		});
-		const newSession = await client.getSession({
+		const user = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(user.data?.user.phoneNumber).toBe(newPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
-		expect(oldSession.data?.session.token).not.toBe(
-			newSession.data?.session.token,
-		);
 	});
 
 	it("should not verify if code expired", async () => {

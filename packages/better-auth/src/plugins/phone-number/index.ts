@@ -580,23 +580,12 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							},
 							ctx,
 						);
-						const newSession = await ctx.context.internalAdapter.createSession(
-							user.id,
-							ctx,
-						);
-						if (!newSession) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							});
-						}
-
 						await setSessionCookie(ctx, {
-							session: newSession,
+							session: session.session,
 							user,
 						});
 						return ctx.json({
 							status: true,
-							token: newSession.token,
 							user: {
 								id: user.id,
 								email: user.email,
