@@ -1,5 +1,5 @@
 import { ObjectId, type Db } from "mongodb";
-import type { Where } from "../../types";
+import type { BetterAuthOptions, Where } from "../../types";
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface MongoDBAdapterConfig {
@@ -17,8 +17,16 @@ export interface MongoDBAdapterConfig {
 	usePlural?: boolean;
 }
 
-export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
-	createAdapter({
+export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+	const getCustomIdGenerator = (options: BetterAuthOptions) => {
+		const generator =
+			options.advanced?.database?.generateId || options.advanced?.generateId;
+		if (typeof generator === "function") {
+			return generator;
+		}
+		return undefined;
+	};
+	return createAdapter({
 		config: {
 			adapterId: "mongodb-adapter",
 			adapterName: "MongoDB Adapter",
@@ -38,9 +46,14 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 				fieldAttributes,
 				schema,
 				model,
+				options,
 			}) {
-				// Given the key transformation, we know that `id` is already mapped to `_id`
+				const customIdGen = getCustomIdGenerator(options);
+
 				if (field === "_id" || fieldAttributes.references?.field === "id") {
+					if (customIdGen) {
+						return data;
+					}
 					if (action === "update") {
 						return data;
 					}
@@ -77,10 +90,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 			},
 		},
 		adapter: ({ options, getFieldName, schema, getDefaultModelName }) => {
-			/**
-			 * if custom id gen is provided we don't want to override with object id
-			 */
-			const customIdGen = options.advanced?.database?.generateId;
+			const customIdGen = getCustomIdGenerator(options);
 
 			function serializeID({
 				field,
@@ -272,3 +282,4 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) =>
 			};
 		},
 	});
+};

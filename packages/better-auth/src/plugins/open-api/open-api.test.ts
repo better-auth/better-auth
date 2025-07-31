@@ -25,16 +25,10 @@ describe("open-api", async (it) => {
 
 	it("should use the api reference script src provided", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [
-				openAPI({
-					apiReferenceScriptSrc:
-						"https://cdn.jsdelivr.net/npm/@scalar/api-reference/test",
-				}),
-			],
+			plugins: [openAPI({ apiReferenceScriptSrc: "TEST-SCRIPT-SRC" })],
 		});
 		const reference = await auth.api.openAPIReference();
 		const referenceHTML = await reference.text();
-		console.log(referenceHTML);
 		expect(referenceHTML).toContain("TEST-SCRIPT-SRC");
 	});
 });

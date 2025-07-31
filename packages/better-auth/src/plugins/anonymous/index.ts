@@ -58,7 +58,7 @@ export interface AnonymousOptions {
 			},
 			AuthContext
 		>,
-	) => string;
+	) => Promise<string> | string;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */
@@ -121,7 +121,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
-					const name = options?.generateName?.(ctx) || "Anonymous";
+					const name = (await options?.generateName?.(ctx)) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{
 							email,
@@ -179,7 +179,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 							ctx.path.startsWith("/oauth2/callback") ||
 							ctx.path.startsWith("/magic-link/verify") ||
 							ctx.path.startsWith("/email-otp/verify-email") ||
-							ctx.path.startsWith("/phone-number/verify")
+							ctx.path.startsWith("/one-tap/callback") ||
+							ctx.path.startsWith("/passkey/verify-authentication")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {

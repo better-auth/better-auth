@@ -74,6 +74,9 @@ export const google = (options: GoogleOptions) => {
 				: ["email", "profile", "openid"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
+			if (options.prompt === "select_account+consent")
+				//@ts-expect-error - Google expects there to be a space not `+` in the prompt
+				options.prompt = "select_account consent";
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,

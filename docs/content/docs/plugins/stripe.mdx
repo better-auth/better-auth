@@ -3,11 +3,7 @@ title: Stripe
 description: Stripe plugin for Better Auth to manage subscriptions and payments.
 ---
 
-The Stripe plugin integrates Stripe's payment and subscription functionality with Better Auth. Since payment and authentication are often tightly coupled, this plugin simplifies the integration of stripe into your application, handling customer creation, subscription management, and webhook processing.
-
-<Callout type="warn">
-This plugin is currently in beta. We're actively collecting feedback and exploring additional features. If you have feature requests or suggestions, please join our [Discord community](https://discord.gg/better-auth) to discuss them.
-</Callout>
+The Stripe plugin integrates Stripe's payment and subscription functionality with Better Auth. Since payment and authentication are often tightly coupled, this plugin simplifies the integration of Stripe into your application, handling customer creation, subscription management, and webhook processing.
 
 ## Features
 
@@ -205,6 +201,55 @@ see [plan configuration](#plan-configuration) for more.
 
 To create a subscription, use the `subscription.upgrade` method:
 
+<APIMethod
+  path="/subscription/upgrade"
+  method="POST"
+  requireSession
+>
+```ts
+type upgradeSubscription = {
+    /**
+     * The name of the plan to upgrade to. 
+     */
+    plan: string = "pro"
+    /**
+     * Whether to upgrade to an annual plan. 
+     */
+    annual?: boolean = true
+    /**
+     * Reference id of the subscription to upgrade. 
+     */
+    referenceId?: string = "123"
+    /**
+     * The id of the subscription to upgrade. 
+     */
+    subscriptionId?: string = "sub_123"
+    metadata?: Record<string, any>
+    /**
+     * Number of seats to upgrade to (if applicable). 
+     */
+    seats?: number = 1
+    /**
+     * Callback URL to redirect back after successful subscription. 
+     */
+    successUrl: string
+    /**
+     * Callback URL to redirect back after successful subscription. 
+     */
+    cancelUrl: string 
+     * Return URL to redirect back after successful subscription. 
+     */
+    returnUrl?: string
+    /**
+     * Disable redirect after successful subscription. 
+     */
+    disableRedirect: boolean = true
+}
+```
+</APIMethod>
+
+**Simple Example:**
+
 ```ts title="client.ts"
 await client.subscription.upgrade({
     plan: "pro",
@@ -256,8 +301,19 @@ This ensures that the user only pays for the new plan, and not both.
 
 To get the user's active subscriptions:
 
-```ts title="client.ts"
-const { data: subscriptions } = await client.subscription.list();
+<APIMethod
+  path="/subscription/list"
+  method="GET"
+  requireSession
+  resultVariable="subscriptions"
+>
+```ts
+type listActiveSubscriptions = {
+    /**
+     * Reference id of the subscription to list. 
+     */
+    referenceId?: string = '123'
+}
 
 // get the active subscription
 const activeSubscription = subscriptions.find(
@@ -267,17 +323,34 @@ const activeSubscription = subscriptions.find(
 // Check subscription limits
 const projectLimit = subscriptions?.limits?.projects || 0;
 ```
+</APIMethod>
 
 #### Canceling a Subscription
 
 To cancel a subscription:
 
-```ts title="client.ts"
-const { data } = await client.subscription.cancel({
-    returnUrl: "/account",
-    referenceId: "org_123" // optional defaults to userId
-});
+<APIMethod
+  path="/subscription/cancel"
+  method="POST"
+  requireSession
+>
+```ts
+type cancelSubscription = {
+    /**
+     * Reference id of the subscription to cancel. Defaults to the userId.
+     */
+    referenceId?: string = 'org_123'
+    /**
+     * The id of the subscription to cancel. 
+     */
+    subscriptionId?: string = 'sub_123'
+    /**
+     * Return URL to redirect back after successful subscription. 
+     */
+    returnUrl: string = '/account'
+}
 ```
+</APIMethod>
 
 This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
 
@@ -285,11 +358,26 @@ This will redirect the user to the Stripe Billing Portal where they can cancel t
 
 If a user changes their mind after canceling a subscription (but before the subscription period ends), you can restore the subscription:
 
-```ts title="client.ts"
-const { data } = await client.subscription.restore({
-    referenceId: "org_123" // optional, defaults to userId
-});
+
+<APIMethod
+  path="/subscription/restore"
+  method="POST"
+  requireSession
+>
+```ts
+type restoreSubscription = {
+    /**
+     * Reference id of the subscription to restore. Defaults to the userId.
+     */
+    referenceId?: string = '123'
+    /**
+     * The id of the subscription to restore. 
+     */
+    subscriptionId?: string = 'sub_123'
+}
 ```
+</APIMethod>
+
 
 This will reactivate a subscription that was previously set to cancel at the end of the billing period (`cancelAtPeriodEnd: true`). The subscription will continue to renew automatically.
 
@@ -670,7 +758,7 @@ getCheckoutSessionParams: async ({ user, session, plan, subscription }, request)
 
 ### Tax Collection
 
-To enable tax collection:
+To collect tax IDs from the customer, set `tax_id_collection` to true:
 
 ```ts title="auth.ts"
 subscription: {
@@ -679,6 +767,25 @@ subscription: {
         return {
             params: {
                 tax_id_collection: {
+                    enabled: true
+                }
+            }
+        };
+    }
+}
+```
+
+### Automatic Tax Calculation
+
+To enable automatic tax calculation using the customer’s location, set `automatic_tax` to true. Enabling this parameter causes Checkout to collect any billing address information necessary for tax calculation. You need to have tax registration setup and configured in the Stripe dashboard first for this to work.
+
+```ts title="auth.ts"
+subscription: {
+    // ... other options
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+        return {
+            params: {
+                automatic_tax: {
                     enabled: true
                 }
             }
