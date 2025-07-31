@@ -65,7 +65,10 @@ exports[`init > should match config 1`] = `
     "options": {
       "name": "better-auth",
     },
-    "store": {},
+    "store": {
+      "telemetry": "true",
+      "telemetry.enabled": "true",
+    },
     "storePath": "/Users/frectonz/Library/Preferences/better-auth/config.json",
   },
   "createAuthCookie": [Function],
@@ -123,7 +126,7 @@ exports[`init > should match config 1`] = `
       "readonly": false,
     },
     "plugins": [],
-    "secret": "MKHwop6MjXXscHqrlKxfkmj2ypxNeTLW",
+    "secret": "better-auth-secret-123456789",
   },
   "password": {
     "checkPassword": [Function],
@@ -142,7 +145,7 @@ exports[`init > should match config 1`] = `
   },
   "runMigrations": [Function],
   "secondaryStorage": undefined,
-  "secret": "MKHwop6MjXXscHqrlKxfkmj2ypxNeTLW",
+  "secret": "better-auth-secret-123456789",
   "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
@@ -345,6 +348,27 @@ exports[`init > should match config 1`] = `
       "modelName": "verification",
       "order": 4,
     },
+  },
+  "telemetry": Telemetry {
+    "config": GlobalConfig {
+      "options": {
+        "name": "better-auth",
+      },
+      "store": {
+        "telemetry": "true",
+        "telemetry.enabled": "true",
+      },
+      "storePath": "/Users/frectonz/Library/Preferences/better-auth/config.json",
+    },
+    "logger": {
+      "debug": [Function],
+      "error": [Function],
+      "info": [Function],
+      "success": [Function],
+      "warn": [Function],
+    },
+    "telemetryEndpoint": [Function],
+    "telemetryId": undefined,
   },
   "trustedOrigins": [
     "http://localhost:3000",
