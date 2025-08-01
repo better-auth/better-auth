@@ -553,7 +553,7 @@ export const createInternalAdapter = (
 					model: "user",
 					where: [
 						{
-							value: accountId,
+							value: account.userId,
 							field: "id",
 						},
 					],
