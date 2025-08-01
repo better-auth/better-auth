@@ -146,7 +146,11 @@ describe("account", async () => {
 	});
 
 	it("should reject linking when account linking is disabled", async () => {
-		const { auth: disabledAuth, client: disabledClient, signInWithTestUser: disabledSignIn } = await getTestInstance({
+		const {
+			auth: disabledAuth,
+			client: disabledClient,
+			signInWithTestUser: disabledSignIn,
+		} = await getTestInstance({
 			socialProviders: {
 				google: {
 					clientId: "test",
@@ -185,11 +189,17 @@ describe("account", async () => {
 			},
 		);
 
-		expect(result.error?.message).toBe("Account not linked - linking not allowed");
+		expect(result.error?.message).toBe(
+			"Account not linked - linking not allowed",
+		);
 	});
 
 	it("should reject linking accounts with different emails when not allowed", async () => {
-		const { auth: strictAuth, client: strictClient, signInWithTestUser: strictSignIn } = await getTestInstance({
+		const {
+			auth: strictAuth,
+			client: strictClient,
+			signInWithTestUser: strictSignIn,
+		} = await getTestInstance({
 			socialProviders: {
 				google: {
 					clientId: "test",
@@ -229,7 +239,9 @@ describe("account", async () => {
 			},
 		);
 
-		expect(result.error?.message).toBe("Account not linked - different emails not allowed");
+		expect(result.error?.message).toBe(
+			"Account not linked - different emails not allowed",
+		);
 	});
 
 	it("should encrypt access token and refresh token", async () => {
