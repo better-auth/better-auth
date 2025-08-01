@@ -28,7 +28,6 @@ import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
 import { createTelemetry, type Telemetry } from "./telemetry";
-import { type GlobalConfig, createGlobalConfig } from "./config";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -93,7 +92,6 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const config = await createGlobalConfig();
 	const telemetry = await createTelemetry({ logger, options });
 	telemetry.report();
 
@@ -160,7 +158,6 @@ export const init = async (options: BetterAuthOptions) => {
 			const { runMigrations } = await getMigrations(options);
 			await runMigrations();
 		},
-		config,
 		telemetry,
 	};
 	let { context } = runPluginInit(ctx);
@@ -226,7 +223,6 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
-	config: GlobalConfig;
 	telemetry: Telemetry;
 };
 
