@@ -25,7 +25,11 @@ interface TelemetryOptions {
 	options: BetterAuthOptions;
 }
 
-export function createTelemetry({ logger, config, options }: TelemetryOptions) {
+export async function createTelemetry({
+	logger,
+	config,
+	options,
+}: TelemetryOptions) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 	const telemetryEndpoint = debugEnabled
 		? debugEndpoint(logger)
@@ -57,19 +61,15 @@ export function createTelemetry({ logger, config, options }: TelemetryOptions) {
 	};
 
 	const publish = async (event: string, payload: any) => {
-		const enabled = await isEnabled();
-		if (!enabled) return;
-
 		return telemetryEndpoint({
 			event,
 			payload,
 			anonymousId: await anonymousId(),
 		});
 	};
+	const noOpPublish = async (_event: string, _payload: any) => {};
 
 	const report = async () => {
-		if (!(await isEnabled())) return;
-
 		const payload = await awaitObject({
 			betterAuth: detectBetterAuth(),
 			authConfig: detectAuthConfig(options),
@@ -84,13 +84,21 @@ export function createTelemetry({ logger, config, options }: TelemetryOptions) {
 
 		await publish("init", payload);
 	};
+	const noOpReport = async () => {};
 
-	return Object.freeze({
-		isEnabled,
-		anonymousId,
-		publish,
-		report,
-	});
+	const enabled = await isEnabled();
+
+	return Object.freeze(
+		enabled
+			? {
+					publish,
+					report,
+				}
+			: {
+					publish: noOpPublish,
+					report: noOpReport,
+				},
+	);
 }
 
 export type Telemetry = ReturnType<typeof createTelemetry>;
