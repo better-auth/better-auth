@@ -348,8 +348,6 @@ exports[`init > should match config 1`] = `
     },
   },
   "telemetry": {
-    "anonymousId": [Function],
-    "isEnabled": [Function],
     "publish": [Function],
     "report": [Function],
   },
