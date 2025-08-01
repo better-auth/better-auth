@@ -533,9 +533,7 @@ export const createInternalAdapter = (
 			providerId: string,
 		) => {
 			if (!accountId || !providerId || !email) {
-				throw new Error(
-					"accountId, providerId and email are required to find an OAuth user",
-				);
+				return null;
 			}
 			const account = await adapter
 				.findMany<Account>({
