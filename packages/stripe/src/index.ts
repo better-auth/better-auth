@@ -1054,7 +1054,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				let customerId = user.stripeCustomerId;
 
-				// If no customer ID on user, try to get it from subscription
 				if (!customerId) {
 					const subscription = await ctx.context.adapter
 						.findMany<Subscription>({
