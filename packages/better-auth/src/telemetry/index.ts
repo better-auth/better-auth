@@ -1,12 +1,9 @@
 import { getBooleanEnvVar } from "../utils/env";
 import { awaitObject } from "../utils/await-object";
 
-import type { GlobalConfig } from "../config";
-import type { AuthContext, BetterAuthOptions } from "../types";
-
 import { projectId } from "./project-id";
-import { TELEMETRY_CONFIG_KEY } from "./config-key";
 import { realEndpoint, debugEndpoint } from "./endpoint";
+import type { AuthContext, BetterAuthOptions } from "../types";
 
 import { detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
@@ -21,31 +18,20 @@ type Logger = AuthContext["logger"];
 
 interface TelemetryOptions {
 	logger: Logger;
-	config: GlobalConfig;
 	options: BetterAuthOptions;
 }
 
-export async function createTelemetry({
-	logger,
-	config,
-	options,
-}: TelemetryOptions) {
+export async function createTelemetry({ logger, options }: TelemetryOptions) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 	const telemetryEndpoint = debugEnabled
 		? debugEndpoint(logger)
 		: realEndpoint(options.telemetry?.endpoint);
 
 	const isEnabled = async () => {
-		const telemetryConfig = await config.getWithFallback(
-			TELEMETRY_CONFIG_KEY,
-			() => "true",
-		);
-
 		const telemetryEnabled = options.telemetry?.enabled ?? true;
 		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
-		const telemetryConfigEnabled = telemetryConfig === "true";
 
-		return telemetryConfigEnabled && envEnabled && telemetryEnabled;
+		return envEnabled && telemetryEnabled;
 	};
 
 	const anonymousId = await projectId(options.baseURL);
@@ -91,4 +77,4 @@ export async function createTelemetry({
 	);
 }
 
-export type Telemetry = ReturnType<typeof createTelemetry>;
+export type Telemetry = Awaited<ReturnType<typeof createTelemetry>>;
