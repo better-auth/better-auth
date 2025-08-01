@@ -245,22 +245,44 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			if (alreadyInvited.length && ctx.body.resend) {
 				const existingInvitation = alreadyInvited[0];
 
+				// Update the invitation's expiration date
+				const expiresIn = 1000 * 60 * 60 * 48; // 48 hours (default)
+				const newExpiresAt = new Date(Date.now() + expiresIn);
+
+				await ctx.context.adapter.update({
+					model: "invitation",
+					where: [
+						{
+							field: "id",
+							value: existingInvitation.id,
+						},
+					],
+					update: {
+						expiresAt: newExpiresAt,
+					},
+				});
+
+				const updatedInvitation = {
+					...existingInvitation,
+					expiresAt: newExpiresAt,
+				};
+
 				await ctx.context.orgOptions.sendInvitationEmail?.(
 					{
-						id: existingInvitation.id,
-						role: existingInvitation.role as string,
-						email: existingInvitation.email.toLowerCase(),
+						id: updatedInvitation.id,
+						role: updatedInvitation.role as string,
+						email: updatedInvitation.email.toLowerCase(),
 						organization: organization,
 						inviter: {
 							...member,
 							user: session.user,
 						},
-						invitation: existingInvitation as unknown as Invitation,
+						invitation: updatedInvitation as unknown as Invitation,
 					},
 					ctx.request,
 				);
 
-				return ctx.json(existingInvitation);
+				return ctx.json(updatedInvitation);
 			}
 
 			if (
