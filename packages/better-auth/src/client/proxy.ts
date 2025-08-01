@@ -36,9 +36,16 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	atoms: Record<string, Atom>,
 	atomListeners: BetterAuthClientPlugin["atomListeners"],
 ): T {
+	console.log("createDynamicPathProxy", routes);
 	function createProxy(path: string[] = []): any {
+		console.log("createProxy", path);
 		return new Proxy(function () {}, {
 			get(target, prop: string) {
+				// Special case: handle JS promise unwrapping.
+				if (prop === "then" || prop === "catch" || prop === "finally") {
+					return undefined;
+				}
+
 				const fullPath = [...path, prop];
 				let current: any = routes;
 				for (const segment of fullPath) {
