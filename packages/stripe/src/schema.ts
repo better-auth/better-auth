@@ -42,6 +42,11 @@ export const subscriptions = {
 				type: "number",
 				required: false,
 			},
+			createdAt: {
+				type: "date",
+				required: true,
+				defaultValue: new Date(),
+			},
 		},
 	},
 } satisfies AuthPluginSchema;
