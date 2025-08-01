@@ -1696,7 +1696,7 @@ For inferring the additional fields, you can use the `inferOrgAdditionalFields` 
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
-import { inferOrgAdditionalFields, organizationClient } from "better-auth/plugins/organization/client"
+import { inferOrgAdditionalFields, organizationClient } from "better-auth/client/plugins";
 import type { auth } from "@/auth" // import the auth object type only
 
 const client = createAuthClient({
