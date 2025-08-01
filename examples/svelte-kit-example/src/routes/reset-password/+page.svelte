@@ -32,7 +32,7 @@
 					await client.resetPassword({
 						newPassword: $password,
 						fetchOptions: {
-							onSuccess(context) {
+							onSuccess(_context) {
 								window.location.href = '/sign-in';
 							},
 							onError(context) {

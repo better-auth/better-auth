@@ -24,7 +24,7 @@
 					</div>
 				</div>
 				<div class="flex gap-2 justify-center flex-wrap">
-					{#each features as feature}
+					{#each features as feature (feature)}
 						<span
 							class="border-b pb-1 text-muted-foreground text-xs cursor-pointer hover:text-foreground duration-150 ease-in-out transition-all hover:border-foreground flex items-center gap-1"
 							>{feature}</span
