@@ -1,4 +1,6 @@
 import { execSync } from "child_process";
+
+import { generateId } from "../utils";
 import { hashToBase64 } from "../crypto";
 import { getNameFromLocalPackageJson } from "../utils/package-json";
 
@@ -23,7 +25,12 @@ export async function projectId(baseUrl: string | undefined) {
 		return id;
 	}
 
-	return null;
+	if (baseUrl) {
+		const id = await hashToBase64(baseUrl);
+		return id;
+	}
+
+	return generateId(32);
 }
 
 function getFirstCommitHash(): string | null {
