@@ -542,7 +542,7 @@ export const createInternalAdapter = (
 					model: "account",
 					where: [
 						{
-							value: accountId,
+							value: `${accountId}`,
 							field: "accountId",
 						},
 					],
