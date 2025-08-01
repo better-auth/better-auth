@@ -7,13 +7,6 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript-eslint';
 import svelteConfig from './svelte.config.js';
 
-// Fix for globals.browser AudioWorkletGlobalScope trailing space bug
-// See: https://github.com/sindresorhus/globals/issues/239
-const GLOBALS_BROWSER_FIX = Object.assign({}, globals.browser, {
-	AudioWorkletGlobalScope: globals.browser['AudioWorkletGlobalScope '],
-});
-delete GLOBALS_BROWSER_FIX['AudioWorkletGlobalScope '];
-
 const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
 export default ts.config(
@@ -26,7 +19,6 @@ export default ts.config(
 	{
 		languageOptions: {
 			globals: {
-				...GLOBALS_BROWSER_FIX,
 				...globals.node,
 			},
 		},
