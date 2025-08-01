@@ -40,7 +40,10 @@ export interface OIDCDiscoveryData {
 	issuer: string;
 	token_endpoint: string;
 	userinfo_endpoint?: string;
-	token_endpoint_auth_method?: "client_secret_basic" | "client_secret_post";
+	token_endpoint_auth_methods_supported?: (
+		| "client_secret_basic"
+		| "client_secret_post"
+	)[];
 	scopes_supported?: string[];
 	authorization_endpoint?: string;
 	jwks_uri?: string;
@@ -631,7 +634,8 @@ export const sso = (options?: SSOOptions) => {
 						}
 						if (!discovery.data.userinfo_endpoint) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Discovery endpoint does not contain a user info endpoint",
+								message:
+									"Discovery endpoint does not contain a user info endpoint",
 							});
 						}
 						if (!discovery.data.jwks_uri) {
@@ -1067,19 +1071,15 @@ export const sso = (options?: SSOOptions) => {
 						);
 					}
 
-					const discovery = await betterFetch<{
-						token_endpoint: string;
-						userinfo_endpoint: string;
-						token_endpoint_auth_method:
-							| "client_secret_basic"
-							| "client_secret_post";
-					}>(config.discoveryEndpoint);
+					const discovery = await betterFetch<OIDCDiscoveryData>(
+						config.discoveryEndpoint,
+					);
 
 					if (discovery.data) {
 						config = {
 							tokenEndpoint: discovery.data.token_endpoint,
 							tokenEndpointAuthentication:
-								discovery.data.token_endpoint_auth_method,
+								discovery.data.token_endpoint_auth_methods_supported?.[0],
 							userInfoEndpoint: discovery.data.userinfo_endpoint,
 							scopes: ["openid", "email", "profile", "offline_access"],
 							...config,
