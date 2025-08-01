@@ -1,3 +1,4 @@
+import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
 	generateState,
 	type Account,
@@ -7,6 +8,7 @@ import {
 	type User,
 } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import {
 	createAuthorizationURL,
 	handleOAuthUserInfo,
@@ -14,16 +16,13 @@ import {
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth/oauth2";
-
 import { createAuthEndpoint } from "better-auth/plugins";
-import * as z from "zod/v4";
+import { XMLValidator } from "fast-xml-parser";
+import { decodeJwt } from "jose";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
-import { betterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
-import { setSessionCookie } from "better-auth/cookies";
 import type { FlowResult } from "samlify/types/src/flow";
-import { XMLValidator } from "fast-xml-parser";
+import * as z from "zod/v4";
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -36,6 +35,16 @@ const fastValidator = {
 };
 
 saml.setSchemaValidator(fastValidator);
+
+export interface OIDCDiscoveryData {
+	issuer: string;
+	token_endpoint: string;
+	userinfo_endpoint?: string;
+	token_endpoint_auth_method?: "client_secret_basic" | "client_secret_post";
+	scopes_supported?: string[];
+	authorization_endpoint?: string;
+	jwks_uri?: string;
+}
 
 export interface OIDCConfig {
 	issuer: string;
@@ -588,6 +597,61 @@ export const sso = (options?: SSOOptions) => {
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid issuer. Must be a valid URL",
 						});
+					}
+					if (body.oidcConfig && body.oidcConfig.discoveryEndpoint) {
+						const discovery = await betterFetch<OIDCDiscoveryData>(
+							body.oidcConfig.discoveryEndpoint,
+						);
+						if (discovery.error) {
+							throw new APIError("BAD_REQUEST", {
+								message: `Invalid discovery endpoint: ${discovery.error.message}`,
+							});
+						}
+						if (!discovery.data.issuer) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Discovery endpoint does not contain an issuer",
+							});
+						}
+						if (discovery.data.issuer !== body.issuer) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									"Discovery endpoint issuer does not match the provided issuer",
+							});
+						}
+						if (!discovery.data.token_endpoint) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Discovery endpoint does not contain a token endpoint",
+							});
+						}
+						if (!discovery.data.authorization_endpoint) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									"Discovery endpoint does not contain an authorization endpoint",
+							});
+						}
+						if (!discovery.data.userinfo_endpoint) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Discovery endpoint does not contain a user info endpoint",
+							});
+						}
+						if (!discovery.data.jwks_uri) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Discovery endpoint does not contain a JWKS endpoint",
+							});
+						}
+						body.oidcConfig = {
+							authorizationEndpoint:
+								body.oidcConfig.authorizationEndpoint ||
+								discovery.data.authorization_endpoint,
+							tokenEndpoint:
+								body.oidcConfig.tokenEndpoint || discovery.data.token_endpoint,
+							userInfoEndpoint:
+								body.oidcConfig.userInfoEndpoint ||
+								discovery.data.userinfo_endpoint,
+							jwksEndpoint:
+								body.oidcConfig.jwksEndpoint || discovery.data.jwks_uri,
+							...body.oidcConfig,
+						};
 					}
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
