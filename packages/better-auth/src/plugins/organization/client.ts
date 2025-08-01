@@ -123,10 +123,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		getActions: ($fetch) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
-				Organization: {} as InferOrganization<CO>,
-				Invitation: {} as InferInvitation<CO>,
-				Member: {} as InferMember<CO>,
-				Team: {} as Team,
+				Organization: {} as InferOrganization<CO, false>,
+				Invitation: {} as InferInvitation<CO, false>,
+				Member: {} as InferMember<CO, false>,
+				Team: {} as InferTeam<CO, false>,
 			},
 			organization: {
 				checkRolePermission: <
