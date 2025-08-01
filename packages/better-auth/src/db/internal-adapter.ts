@@ -545,7 +545,9 @@ export const createInternalAdapter = (
 						: undefined,
 				})
 				.then((accounts) => {
-					return accounts.find((a) => a.providerId === providerId);
+					return accounts.find(
+						(a) => a.providerId === providerId && a.accountId === accountId,
+					);
 				});
 
 			if (account) {
