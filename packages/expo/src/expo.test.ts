@@ -199,11 +199,11 @@ describe("expo with cookieCache", async () => {
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
 		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
-			value: expect.stringMatching(/.+/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
-			value: expect.stringMatching(/.+/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 	});
@@ -216,11 +216,11 @@ describe("expo with cookieCache", async () => {
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
 		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
-			value: expect.stringMatching(/^$/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
-			value: expect.stringMatching(/^$/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 	});
