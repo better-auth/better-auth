@@ -1,45 +1,23 @@
 import { execSync } from "child_process";
 import type { DetectionInfo, ProjectInfo } from "../types";
-import { hashToBase64 } from "../../crypto";
-import { getNameFromLocalPackageJson } from "../../utils/package-json";
 
-export async function detectProjectInfo(
-	baseUrl: string | undefined,
-): Promise<ProjectInfo> {
-	let isGit = false;
-	let anonymousProjectId = null;
-
-	const firstCommit = getFirstCommitHash();
-	if (firstCommit) {
-		isGit = true;
-		anonymousProjectId = await hashToBase64(
-			baseUrl ? baseUrl + firstCommit : firstCommit,
-		);
-	}
-
-	const projectName = await getNameFromLocalPackageJson();
-	if (projectName) {
-		anonymousProjectId = await hashToBase64(
-			baseUrl ? baseUrl + projectName : projectName,
-		);
-	}
-
+export async function detectProjectInfo(): Promise<ProjectInfo> {
 	return {
-		isGit,
-		anonymousProjectId,
+		isGit: isGit(),
 		packageManager: detectPackageManager(),
 	};
 }
 
-function getFirstCommitHash(): string | null {
+export function isGit(): boolean {
 	try {
-		const originBuffer = execSync(`git rev-list --max-parents=0 HEAD`, {
-			timeout: 500,
+		const output = execSync("git rev-parse --is-inside-work-tree", {
 			stdio: ["ignore", "pipe", "ignore"],
-		});
-		return String(originBuffer).trim();
-	} catch (_) {
-		return null;
+		})
+			.toString()
+			.trim();
+		return output === "true";
+	} catch {
+		return false;
 	}
 }
 

@@ -1,12 +1,12 @@
-import { generateId } from "../utils/id";
 import { getBooleanEnvVar } from "../utils/env";
 import { awaitObject } from "../utils/await-object";
 
 import type { GlobalConfig } from "../config";
 import type { AuthContext, BetterAuthOptions } from "../types";
 
+import { projectId } from "./project-id";
+import { TELEMETRY_CONFIG_KEY } from "./config-key";
 import { realEndpoint, debugEndpoint } from "./endpoint";
-import { TELEMETRY_CONFIG_KEY, TELEMETRY_ID_CONFIG_KEY } from "./config-key";
 
 import { detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
@@ -48,23 +48,13 @@ export async function createTelemetry({
 		return telemetryConfigEnabled && envEnabled && telemetryEnabled;
 	};
 
-	let telemetryId: string | undefined;
-
-	const anonymousId = async () => {
-		if (telemetryId) return telemetryId;
-
-		telemetryId = await config.getWithFallback(TELEMETRY_ID_CONFIG_KEY, () =>
-			generateId(32),
-		);
-
-		return telemetryId;
-	};
+	const anonymousId = await projectId(options.baseURL);
 
 	const publish = async (event: string, payload: any) => {
 		return telemetryEndpoint({
 			event,
 			payload,
-			anonymousId: await anonymousId(),
+			anonymousId,
 		});
 	};
 	const noOpPublish = async (_event: string, _payload: any) => {};
@@ -79,7 +69,7 @@ export async function createTelemetry({
 			framework: detectFramework(),
 			production: detectProduction(),
 			systemInfo: detectSystemInfo(),
-			projectInfo: detectProjectInfo(options.baseURL),
+			projectInfo: detectProjectInfo(),
 		});
 
 		await publish("init", payload);

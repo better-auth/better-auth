@@ -29,7 +29,6 @@ export interface AuthConfigInfo {
 
 export interface ProjectInfo {
 	isGit: boolean;
-	anonymousProjectId: string | null;
 	packageManager: DetectionInfo | null;
 }
 
