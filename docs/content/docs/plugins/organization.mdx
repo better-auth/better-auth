@@ -1512,6 +1512,13 @@ Table Name: `invitation`
       isForeignKey: true
     },
     {
+      name: "teamId",
+      type: "string",
+      description: "The ID of the team",
+      isOptional: true,
+      isForeignKey: true
+    },
+    {
       name: "role",
       type: "string",
       description: "The role of the user in the organization"
@@ -1525,11 +1532,6 @@ Table Name: `invitation`
       name: "expiresAt",
       type: "Date",
       description: "Timestamp of when the invitation expires"
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the invitation was created"
     },
   ]}
   />
