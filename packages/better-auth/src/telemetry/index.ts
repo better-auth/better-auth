@@ -57,7 +57,8 @@ export function createTelemetry({ logger, config, options }: TelemetryOptions) {
 	};
 
 	const publish = async (event: string, payload: any) => {
-		if (!(await isEnabled())) return;
+		const enabled = await isEnabled();
+		if (!enabled) return;
 
 		return telemetryEndpoint({
 			event,
