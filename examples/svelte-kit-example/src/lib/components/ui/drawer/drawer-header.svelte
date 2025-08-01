@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { HTMLAttributes } from "svelte/elements";
+import { cn } from "$lib/utils";
 
 type $$Props = HTMLAttributes<HTMLDivElement> & {
 	el?: HTMLDivElement;

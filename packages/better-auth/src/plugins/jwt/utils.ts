@@ -1,17 +1,13 @@
-import type { AuthContext, BetterAuthPlugin } from "../../types";
+import type { AuthContext } from "../../types";
 import { BetterAuthError } from "../../error";
-import type { JwtPluginOptions } from "./types";
+import type { jwt } from "./index";
 
-export const getJwtPlugin = (
-	ctx: AuthContext,
-): Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions } => {
-	const plugin:
-		| (Omit<BetterAuthPlugin, "options"> & { options?: JwtPluginOptions })
-		| undefined = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
+export const getJwtPlugin = (ctx: AuthContext): ReturnType<typeof jwt> => {
+	const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config", "jwt plugin not found");
 	}
-	return plugin;
+	return plugin as ReturnType<typeof jwt>;
 };
 
 /**

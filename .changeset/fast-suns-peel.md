@@ -1,5 +1,5 @@
 ---
-"better-auth": major
+"better-auth": patch
 ---
 
-Bug fix for refreshing twitter tokens
+fix(twitter): refreshing twitter utilizes basic

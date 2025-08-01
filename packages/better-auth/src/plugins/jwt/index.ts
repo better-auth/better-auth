@@ -242,14 +242,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 
 	return {
 		id: "jwt",
-		init: (ctx) => {
-			// Add the jwt plugin options to ctx
-			const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
-			if (!plugin) {
-				throw Error("Plugin should have been registered! Should never hit!");
-			}
-			plugin.options = options;
-		},
+		options,
 		endpoints,
 		hooks,
 		schema: mergeSchema(schema, options?.schema),

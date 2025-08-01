@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { Dialog as SheetPrimitive } from "bits-ui";
 
 type $$Props = SheetPrimitive.TitleProps;

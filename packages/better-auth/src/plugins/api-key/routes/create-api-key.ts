@@ -419,7 +419,8 @@ export function createApiKey({
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow:
 					rateLimitTimeWindow ?? opts.rateLimit.timeWindow ?? null,
-				remaining: remaining || refillAmount || null,
+				remaining:
+					remaining === null ? remaining : remaining ?? refillAmount ?? null,
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled:

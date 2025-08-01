@@ -205,7 +205,7 @@ export type AuthContext = {
 	generateId: (options: {
 		model: LiteralUnion<Models, string>;
 		size?: number;
-	}) => string;
+	}) => string | false;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;

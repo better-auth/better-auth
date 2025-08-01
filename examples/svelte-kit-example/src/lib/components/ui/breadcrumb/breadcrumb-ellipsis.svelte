@@ -1,4 +1,6 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
+import DotsHorizontal from "svelte-radix/DotsHorizontal.svelte";
 import type { HTMLAttributes } from "svelte/elements";
 
 type $$Props = HTMLAttributes<HTMLSpanElement> & {
@@ -17,6 +19,6 @@ export { className as class };
 	class={cn("flex h-9 w-9 items-center justify-center", className)}
 	{...$$restProps}
 >
-	<DotsHorizontal class="h-4 w-4 outline-none" tabindex="-1" />
+	<DotsHorizontal class="h-4 w-4 outline-none" />
 	<span class="sr-only">More</span>
 </span>

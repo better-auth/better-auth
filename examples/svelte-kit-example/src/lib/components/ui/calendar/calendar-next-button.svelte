@@ -1,6 +1,8 @@
 <script lang="ts">
 import { Calendar as CalendarPrimitive } from "bits-ui";
 import { cn } from "$lib/utils.js";
+import { buttonVariants } from "../button";
+import ChevronRight from "svelte-radix/ChevronRight.svelte";
 
 type $$Props = CalendarPrimitive.NextButtonProps;
 type $$Events = CalendarPrimitive.NextButtonEvents;

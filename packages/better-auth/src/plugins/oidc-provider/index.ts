@@ -225,18 +225,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 	return {
 		id: "oidc",
+		options: opts,
 		init: (ctx) => {
-			// Add the oidc plugin options to ctx
-			const plugin = ctx.options.plugins?.find(
-				(plugin) => plugin.id === "oidc",
-			);
-			if (!plugin) {
-				throw Error("Plugin should have been registered! Should never hit!");
-			}
-			plugin.options = opts;
-
 			// Check for jwt plugin registration
-			if (plugin.options.useJWTPlugin) {
+			if (opts.useJWTPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
 				if (!jwtPlugin.options?.usesOauthProvider) {
 					throw new BetterAuthError(

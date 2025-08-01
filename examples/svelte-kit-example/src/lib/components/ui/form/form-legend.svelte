@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import * as FormPrimitive from "formsnap";
 
 type $$Props = FormPrimitive.LegendProps;

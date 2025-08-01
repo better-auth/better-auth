@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { AlertDialog as AlertDialogPrimitive } from "bits-ui";
 import { fade } from "svelte/transition";
 
