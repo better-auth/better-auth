@@ -1989,13 +1989,13 @@ describe("Additional Fields", async () => {
 	});
 
 	it("get invitation", async () => {
-		const recievedInvitation = await auth.api.getInvitation({
+		const receivedInvitation = await auth.api.getInvitation({
 			query: {
 				id: invitation.id,
 			},
 			headers: invitedHeaders,
 		});
-		type Result = PrettifyDeep<typeof recievedInvitation>;
+		type Result = PrettifyDeep<typeof receivedInvitation>;
 		type ExpectedResult = {
 			id: string;
 			organizationId: string;
@@ -2013,11 +2013,11 @@ describe("Additional Fields", async () => {
 			inviterEmail: string;
 		};
 		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
-		expect(recievedInvitation?.invitationRequiredField).toBe("hey");
-		expect(recievedInvitation?.invitationOptionalField).toBe("hey2");
-		expect(recievedInvitation?.invitationHiddenField).toBeUndefined();
-		expect(recievedInvitation?.organizationName).toBe(org.name);
-		expect(recievedInvitation?.organizationSlug).toBe(org.slug);
+		expect(receivedInvitation?.invitationRequiredField).toBe("hey");
+		expect(receivedInvitation?.invitationOptionalField).toBe("hey2");
+		expect(receivedInvitation?.invitationHiddenField).toBeUndefined();
+		expect(receivedInvitation?.organizationName).toBe(org.name);
+		expect(receivedInvitation?.organizationSlug).toBe(org.slug);
 	});
 
 	it("accept invitation", async () => {
