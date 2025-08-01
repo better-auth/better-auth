@@ -23,9 +23,7 @@ interface TelemetryOptions {
 
 export async function createTelemetry({ logger, options }: TelemetryOptions) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
-	const telemetryEndpoint = debugEnabled
-		? debugEndpoint(logger)
-		: realEndpoint(options.telemetry?.endpoint);
+	const telemetryEndpoint = debugEnabled ? debugEndpoint(logger) : realEndpoint;
 
 	const isEnabled = async () => {
 		const telemetryEnabled = options.telemetry?.enabled ?? true;

@@ -13,15 +13,13 @@ export const debugEndpoint =
 	};
 
 const TELEMETRY_ENDPOINT = "https://telemetry.better-auth.com/v1/track";
-export const realEndpoint =
-	(endpoint?: string): TelemetryEndpoint =>
-	async (event) => {
-		try {
-			await betterFetch(endpoint ?? TELEMETRY_ENDPOINT, {
-				method: "POST",
-				body: JSON.stringify(event),
-				headers: { "content-type": "application/json" },
-				retry: 5,
-			});
-		} catch {}
-	};
+export const realEndpoint: TelemetryEndpoint = async (event) => {
+	try {
+		await betterFetch(TELEMETRY_ENDPOINT, {
+			method: "POST",
+			body: JSON.stringify(event),
+			headers: { "content-type": "application/json" },
+			retry: 5,
+		});
+	} catch {}
+};

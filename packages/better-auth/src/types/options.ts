@@ -1056,11 +1056,5 @@ export type BetterAuthOptions = {
 		 * @default true
 		 */
 		enabled?: boolean;
-		/**
-		 * Telemetry endpoint to send events to
-		 *
-		 * @default - "https://telemetry.better-auth.com/v1/track"
-		 */
-		endpoint?: string;
 	};
 };
