@@ -87,6 +87,7 @@ export interface PhoneNumberOptions {
 	callbackOnVerification?: (
 		data: {
 			phoneNumber: string;
+			code: string;
 			user: UserWithPhoneNumber;
 		},
 		request?: Request,
@@ -697,6 +698,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						{
 							phoneNumber: ctx.body.phoneNumber,
 							user,
+							code: ctx.body.code,
 						},
 						ctx.request,
 					);
