@@ -535,17 +535,17 @@ export const createInternalAdapter = (
 			const account = await adapter
 				.findMany<Account>({
 					model: "account",
-					where: [
-						{
-							value: accountId,
-							field: "accountId",
-						},
-					],
+					where: accountId
+						? [
+								{
+									value: accountId.toString(),
+									field: "accountId",
+								},
+							]
+						: undefined,
 				})
 				.then((accounts) => {
-					return accounts.find(
-						(a) => a.providerId === providerId && a.accountId === accountId,
-					);
+					return accounts.find((a) => a.providerId === providerId);
 				});
 
 			if (account) {
@@ -553,7 +553,7 @@ export const createInternalAdapter = (
 					model: "user",
 					where: [
 						{
-							value: account.userId,
+							value: accountId,
 							field: "id",
 						},
 					],
