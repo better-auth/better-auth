@@ -113,7 +113,7 @@ describe("run time proxy", async () => {
 		expect(called).toBe(true);
 	});
 
-	it("should not expose a 'then' property on the proxy", async () => {
+	it("should not expose a 'then', 'catch', 'finally' property on the proxy", async () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
 			fetchOptions: {
@@ -121,8 +121,6 @@ describe("run time proxy", async () => {
 				baseURL: "http://localhost:3000",
 			},
 		});
-
-		// Accessing 'then' should not make Vitest treat proxy as a Promise
 		const proxy = (client as any).test;
 		expect(proxy.then).toBeUndefined();
 		expect(proxy.catch).toBeUndefined();
