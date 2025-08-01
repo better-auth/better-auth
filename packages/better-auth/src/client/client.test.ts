@@ -112,6 +112,22 @@ describe("run time proxy", async () => {
 		);
 		expect(called).toBe(true);
 	});
+
+	it("should return undefined if `then`, `catch`, `finally` is called", async () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		const thenFn = (client as any).then;
+		expect(thenFn).toBe(undefined);
+		const catchFn = (client as any).catch;
+		expect(catchFn).toBe(undefined);
+		const finallyFn = (client as any).finally;
+		expect(finallyFn).toBe(undefined);
+	});
 });
 
 describe("type", () => {
