@@ -74,59 +74,94 @@ Before performing any admin operations, the user must be authenticated with an a
 
 Allows an admin to create a new user.
 
-```ts title="admin.ts"
-const newUser = await authClient.admin.createUser({
-  name: "Test User",
-  email: "test@example.com",
-  password: "password123",
-  role: "user", // this can also be an array for multiple roles (e.g. ["user", "sale"])
-  data: {
-    // any additional on the user table including plugin fields and custom fields
-    customField: "customValue",
-  },
-});
+<APIMethod
+  path="/admin/create-user"
+  method="POST"
+  resultVariable="newUser"
+>
+```ts
+type createUser = {
+    /**
+     * The email of the user. 
+     */
+    email: string = "user@example.com"
+    /**
+     * The password of the user. 
+     */
+    password: string = "some-secure-password"
+    /**
+     * The name of the user. 
+     */
+    name: string = "James Smith"
+    /**
+     * A string or array of strings representing the roles to apply to the new user. 
+     */
+    role?: string | string[] = "user"
+    /**
+     * Extra fields for the user. Including custom additional fields. 
+     */
+    data?: Record<string, any> = { customField: "customValue" }
+}
 ```
+</APIMethod>
 
 ### List Users
 
 Allows an admin to list all users in the database.
 
-```ts title="admin.ts"
-const users = await authClient.admin.listUsers({
-  query: {
-    limit: 10,
-  },
-});
+<APIMethod
+  path="/admin/list-users"
+  method="GET"
+  requireSession
+  note={"All properties are optional to configure. By default, 100 rows are returned, you can configure this by the `limit` property."}
+  resultVariable={"users"}
+>
+```ts
+type listUsers = {
+    /**
+     * The value to search for. 
+     */
+    searchValue?: string = "some name"
+    /**
+     * The field to search in, defaults to email. Can be `email` or `name`. 
+     */
+    searchField?: "email" | "name" = "name"
+    /**
+     * The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. 
+     */
+    searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
+    /**
+     * The number of users to return. Defaults to 100.
+     */
+    limit?: string | number = 100
+    /**
+     * The offset to start from. 
+     */
+    offset?: string | number = 100
+    /**
+     * The field to sort by. 
+     */
+    sortBy?: string = "name"
+    /**
+     * The direction to sort by. 
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * The field to filter by. 
+     */
+    filterField?: string = "email"
+    /**
+     * The value to filter by. 
+     */
+    filterValue?: string | number | boolean = "hello@example.com"
+    /**
+     * The operator to use for the filter. 
+     */
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" = "eq"
+}
 ```
+</APIMethod>
 
-By default, 100 users are returned. You can adjust the limit and offset using the following query parameters:
-
-- `search`: The search query to apply to the users. It can be an object with the following properties:
-  - `field`: The field to search on, which can be `email` or `name`.
-  - `operator`: The operator to use for the search. It can be `contains`, `starts_with`, or `ends_with`.
-  - `value`: The value to search for.
-- `limit`: The number of users to return.
-- `offset`: The number of users to skip.
-- `sortBy`: The field to sort the users by.
-- `sortDirection`: The direction to sort the users by. Defaults to `asc`.
-- `filter`: The filter to apply to the users. It can be an array of objects.
-
-```ts title="admin.ts"
-const users = await authClient.admin.listUsers({
-    query: {
-        searchField: "email",
-        searchOperator: "contains",
-        searchValue: "@example.com",
-        limit: 10,
-        offset: 0,
-        sortBy: "createdAt",
-        sortDirection: "desc",
-        filterField: "role",
-        filterOperator: "eq",
-        filterValue: "admin"
-    }
-});
-```
 
 #### Query Filtering
 
@@ -177,92 +212,204 @@ const totalPages = Math.ceil(totalUsers / limit)
 
 Changes the role of a user.
 
-```ts title="admin.ts"
-const updatedUser = await authClient.admin.setRole({
-  userId: "user_id_here",
-  role: "admin", // this can also be an array for multiple roles (e.g. ["admin", "sale"])
-});
+<APIMethod
+  path="/admin/set-role"
+  method="POST"
+  requireSession
+>
+```ts
+type setRole = {
+    /**
+     * The user id which you want to set the role for.
+     */
+    userId?: string = "user-id"
+    /**
+     * The role to set, this can be a string or an array of strings. 
+     */
+    role: string | string[] = "admin"
+}
 ```
+</APIMethod>
+
+### Set User Password
+
+Changes the password of a user.
+
+<APIMethod
+  path="/admin/set-user-password"
+  method="POST"
+  requireSession
+>
+```ts
+type setUserPassword = {
+    /**
+     * The new password. 
+     */
+    newPassword: string = 'new-password'
+    /**
+     * The user id which you want to set the password for.
+     */
+    userId: string = 'user-id'
+}
+```
+</APIMethod>
 
 ### Ban User
 
 Bans a user, preventing them from signing in and revokes all of their existing sessions.
 
-```ts title="admin.ts"
-const bannedUser = await authClient.admin.banUser({
-  userId: "user_id_here",
-  banReason: "Spamming", // Optional (if not provided, the default ban reason will be used - No reason)
-  banExpiresIn: 60 * 60 * 24 * 7, // Optional (if not provided, the ban will never expire)
-});
+
+<APIMethod
+  path="/admin/ban-user"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+type banUser = {
+    /**
+     * The user id which you want to ban.
+     */
+    userId: string = "user-id"
+    /**
+     * The reason for the ban. 
+     */
+    banReason?: string = "Spamming"
+    /**
+     * The number of seconds until the ban expires. If not provided, the ban will never expire. 
+     */
+    banExpiresIn?: number = 60 * 60 * 24 * 7
+}
 ```
+</APIMethod>
 
 ### Unban User
 
 Removes the ban from a user, allowing them to sign in again.
 
-```ts title="admin.ts"
-const unbannedUser = await authClient.admin.unbanUser({
-  userId: "user_id_here",
-});
+<APIMethod
+  path="/admin/unban-user"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+type unbanUser = {
+    /**
+     * The user id which you want to unban.
+     */
+    userId: string = "user-id"
+}
 ```
+</APIMethod>
 
 ### List User Sessions
 
 Lists all sessions for a user.
 
-```ts title="admin.ts"
-const sessions = await authClient.admin.listUserSessions({
-  userId: "user_id_here",
-});
+<APIMethod
+  path="/admin/list-user-sessions"
+  method="POST"
+  requireSession
+>
+```ts
+type listUserSessions = {
+    /**
+     * The user id. 
+     */
+    userId: string = "user-id"
+}
 ```
+</APIMethod>
 
 ### Revoke User Session
 
 Revokes a specific session for a user.
 
-```ts title="admin.ts"
-const revokedSession = await authClient.admin.revokeUserSession({
-  sessionToken: "session_token_here",
-});
+
+<APIMethod
+  path="/admin/revoke-user-session"
+  method="POST"
+  requireSession
+>
+```ts
+type revokeUserSession = {
+    /**
+     * The session token which you want to revoke. 
+     */
+    sessionToken: string = "session_token_here"
+}
 ```
+</APIMethod>
 
 ### Revoke All Sessions for a User
 
 Revokes all sessions for a user.
 
-```ts title="admin.ts"
-const revokedSessions = await authClient.admin.revokeUserSessions({
-  userId: "user_id_here",
-});
+<APIMethod
+  path="/admin/revoke-user-sessions"
+  method="POST"
+  requireSession
+>
+```ts
+type revokeUserSessions = {
+    /**
+     * The user id which you want to revoke all sessions for. 
+     */
+    userId: string = "user-id"
+}
 ```
+</APIMethod>
 
 ### Impersonate User
 
 This feature allows an admin to create a session that mimics the specified user. The session will remain active until either the browser session ends or it reaches 1 hour. You can change this duration by setting the `impersonationSessionDuration` option.
 
-```ts title="admin.ts"
-const impersonatedSession = await authClient.admin.impersonateUser({
-  userId: "user_id_here",
-});
+<APIMethod
+  path="/admin/impersonate-user"
+  method="POST"
+  requireSession
+>
+```ts
+type impersonateUser = {
+    /**
+     * The user id which you want to impersonate. 
+     */
+    userId: string = "user-id"
+}
 ```
+</APIMethod>
 
 ### Stop Impersonating User
 
 To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
 
-```ts title="admin.ts"
-await authClient.admin.stopImpersonating();
+<APIMethod path="/admin/stop-impersonating" method="POST" noResult requireSession>
+```ts
+type stopImpersonating = {
+}
 ```
+</APIMethod>
 
 ### Remove User
 
 Hard deletes a user from the database.
 
-```ts title="admin.ts"
-const deletedUser = await authClient.admin.removeUser({
-  userId: "user_id_here",
-});
+<APIMethod
+  path="/admin/remove-user"
+  method="POST"
+  requireSession
+  resultVariable="deletedUser"
+>
+```ts
+type removeUser = {
+    /**
+     * The user id which you want to remove. 
+     */
+    userId: string = "user-id"
+}
 ```
+</APIMethod>
 
 ## Access Control
 
@@ -418,6 +565,33 @@ The plugin provides an easy way to define your own set of permissions for each r
 
 To check a user's permissions, you can use the `hasPermission` function provided by the client.
 
+
+<APIMethod path="/admin/has-permission" method="POST">
+```ts
+type userHasPermission = {
+    /**
+     * The user id which you want to check the permissions for. 
+     */
+    userId?: string = "user-id"
+    /**
+     * Check role permissions.
+     * @serverOnly
+     */
+    role?: string = "admin"
+    /**
+     * Optionally check if a single permission is granted. Must use this, or permissions. 
+     */
+    permission?: Record<string, string[]> = { "project": ["create", "update"] } /* Must use this, or permissions */,
+    /**
+     * Optionally check if multiple permissions are granted. Must use this, or permission. 
+     */
+    permissions?: Record<string, string[]>
+}
+```
+</APIMethod>
+
+Example usage:
+
 ```ts title="auth-client.ts"
 const canCreateProject = await authClient.admin.hasPermission({
   permissions: {
@@ -435,6 +609,8 @@ const canCreateProjectAndCreateSale = await authClient.admin.hasPermission({
 ```
 
 If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
+
+
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
@@ -473,10 +649,12 @@ await auth.api.userHasPermission({
 
 **Check Role Permission**:
 
-Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
+Use the `checkRolePermission` function on the client side to verify whether a given **role** has a specific **permission**. This is helpful after defining roles and their permissions, as it allows you to perform permission checks without needing to contact the server.
+
+Note that this function does **not** check the permissions of the currently logged-in user directly. Instead, it checks what permissions are assigned to a specified role. The function is synchronous, so you don't need to use `await` when calling it.
 
 ```ts title="auth-client.ts"
-const canCreateProject = await authClient.admin.checkRolePermission({
+const canCreateProject = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
   },
@@ -484,7 +662,7 @@ const canCreateProject = await authClient.admin.checkRolePermission({
 });
 
 // You can also check multiple resource permissions at the same time
-const canCreateProjectAndRevokeSession = await authClient.admin.checkRolePermission({
+const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
     session: ["revoke"]

@@ -9,7 +9,9 @@ The **OIDC Provider Plugin** enables you to build and manage your own OpenID Con
 
 - **Client Registration**: Register clients to authenticate with your OIDC provider.
 - **Dynamic Client Registration**: Allow clients to register dynamically.
+- **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
 - **Authorization Code Flow**: Support the Authorization Code Flow.
+- **Public Clients**: Support public clients for SPA, mobile apps, CLI tools, etc.
 - **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
 - **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
 - **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
@@ -85,18 +87,140 @@ Once installed, you can utilize the OIDC Provider to manage authentication flows
 
 To register a new OIDC client, use the `oauth2.register` method.
 
-<Endpoint path="/oauth2/register" method="POST" />
 
-```ts title="client.ts"
+#### Simple Example
+
+```ts
 const application = await client.oauth2.register({
-    name: "My Client",
+    client_name: "My Client",
     redirect_uris: ["https://client.example.com/callback"],
 });
 ```
 
+
+#### Full Method
+
+
+<APIMethod path="/oauth2/register" method="POST">
+```ts
+type registerOAuthApplication = {
+    /**
+     * A list of redirect URIs. 
+     */
+    redirect_uris: string[] = ["https://client.example.com/callback"]
+    /**
+     * The authentication method for the token endpoint. 
+     */
+    token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" = "client_secret_basic"
+    /**
+     * The grant types supported by the application. 
+     */
+    grant_types?: ("authorization_code" | "implicit" | "password" | "client_credentials" | "refresh_token" | "urn:ietf:params:oauth:grant-type:jwt-bearer" | "urn:ietf:params:oauth:grant-type:saml2-bearer")[] = ["authorization_code"]
+    /**
+     * The response types supported by the application. 
+     */
+    response_types?: ("code" | "token")[] = ["code"]
+    /**
+     * The name of the application. 
+     */
+    client_name?: string = "My App"
+    /**
+     * The URI of the application. 
+     */
+    client_uri?: string = "https://client.example.com"
+    /**
+     * The URI of the application logo. 
+     */
+    logo_uri?: string = "https://client.example.com/logo.png"
+    /**
+     * The scopes supported by the application. Separated by spaces. 
+     */
+    scope?: string = "profile email"
+    /**
+     * The contact information for the application. 
+     */
+    contacts?: string[] = ["admin@example.com"]
+    /**
+     * The URI of the application terms of service. 
+     */
+    tos_uri?: string = "https://client.example.com/tos"
+    /**
+     * The URI of the application privacy policy. 
+     */
+    policy_uri?: string = "https://client.example.com/policy"
+    /**
+     * The URI of the application JWKS. 
+     */
+    jwks_uri?: string = "https://client.example.com/jwks"
+    /**
+     * The JWKS of the application. 
+     */
+    jwks?: Record<string, any> = {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}
+    /**
+     * The metadata of the application. 
+     */
+    metadata?: Record<string, any> = {"key": "value"}
+    /**
+     * The software ID of the application. 
+     */
+    software_id?: string = "my-software"
+    /**
+     * The software version of the application. 
+     */
+    software_version?: string = "1.0.0"
+    /**
+     * The software statement of the application. 
+     */
+    software_statement?: string
+}
+```
+</APIMethod>
+
+<Callout>
+This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
+</Callout>
+
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
 
 This Endpoint support [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
+  
+### Trusted Clients
+
+For first-party applications and internal services, you can configure trusted clients directly in your OIDC provider configuration. Trusted clients bypass database lookups for better performance and can optionally skip consent screens for improved user experience.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+
+const auth = betterAuth({
+    plugins: [
+      oidcProvider({
+        loginPage: "/sign-in",
+        trustedClients: [
+            {
+                clientId: "internal-dashboard",
+                clientSecret: "secure-secret-here",
+                name: "Internal Dashboard",
+                type: "web",
+                redirectURLs: ["https://dashboard.company.com/auth/callback"],
+                disabled: false,
+                skipConsent: true, // Skip consent for this trusted client
+                metadata: { internal: true }
+            },
+            {
+                clientId: "mobile-app",
+                clientSecret: "mobile-secret", 
+                name: "Company Mobile App",
+                type: "native",
+                redirectURLs: ["com.company.app://auth"],
+                disabled: false,
+                skipConsent: false, // Still require consent if needed
+                metadata: {}
+            }
+        ]
+    })]
+})
+```
 
 ### UserInfo Endpoint
 
@@ -127,6 +251,8 @@ The `getAdditionalUserInfoClaim` function receives the user object and the reque
 ### Consent Screen
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.
+
+**Note**: Trusted clients with `skipConsent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -188,12 +314,29 @@ export const auth = betterAuth({
 })
 ```
 
-### JWKS Endpoint (Not Fully Implemented)
+### JWKS Endpoint
 
-For JWKS support, you need to use the `jwt` plugin. It exposes the `/jwks` endpoint to provide the public keys.
+The OIDC Provider plugin can integrate with the JWT plugin to provide proper asymmetric key signing for ID tokens. When enabled, ID tokens will be signed using RSA/EdDSA keys and can be verified using the JWKS endpoint.
 
-<Callout type="warn">
-Currently, the token is signed with the application's secret key. The JWKS endpoint is not fully implemented yet.
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+import { jwt } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        jwt(), // Make sure to add the JWT plugin
+        oidcProvider({
+            useJWTPlugin: true, // Enable JWT plugin integration
+            loginPage: "/sign-in",
+            // ... other options
+        })
+    ]
+})
+```
+
+<Callout type="info">
+When `useJWTPlugin: false` (default), ID tokens are signed with the application secret.
 </Callout>
 
 ### Dynamic Client Registration
@@ -235,8 +378,8 @@ Table Name: `oauthApplication`
     { 
       name: "clientSecret", 
       type: "string", 
-      description: "Secret key for the OAuth client",
-      isRequired: true
+      description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
+      isOptional: true
     },
     { 
       name: "name", 
@@ -416,4 +559,8 @@ Table Name: `oauthConsent`
 
 **consentPage**: `string` - Path to the custom consent page.
 
+**trustedClients**: `(Client & { skipConsent?: boolean })[]` - Array of trusted clients that are configured directly in the provider options. These clients bypass database lookups and can optionally skip consent screens.
+
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.
+
+**useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.

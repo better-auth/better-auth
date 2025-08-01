@@ -30,6 +30,11 @@ if you can't set `strict` to `true`, you can enable `strictNullChecks`:
 }
 ```
 
+<Callout type="warn">
+If you're running into issues with TypeScript inference exceeding maximum length the compiler will serialize,
+then please make sure you're following the instructions above, as well as ensuring that both `declaration` and `composite` are not enabled.
+</Callout>
+
 ## Inferring Types
 
 Both the client SDK and the server offer types that can be inferred using the `$Infer` property. Plugins can extend base types like `User` and `Session`, and you can use `$Infer` to infer these types. Additionally, plugins can provide extra types that can also be inferred through `$Infer`.
@@ -71,7 +76,8 @@ export const auth = betterAuth({
     user: {
        additionalFields: {
           role: {
-              type: "string"
+              type: "string",
+              input: false
             } 
         }
     }
@@ -82,6 +88,26 @@ type Session = typeof auth.$Infer.Session
 ```
 
 In the example above, we added a `role` field to the user object. This field is now available on the `Session` type.
+
+
+### The `input` property
+
+The `input` property in an additional field configuration determines whether the field should be included in the user input. This property defaults to `true`, meaning the field will be part of the user input during operations like registration.
+
+To prevent a field from being part of the user input, you must explicitly set `input: false`:
+
+```ts
+additionalFields: {
+    role: {
+        type: "string",
+        input: false
+    }
+}
+```
+
+When `input` is set to `false`, the field will be excluded from user input, preventing users from passing a value for it.
+
+By default, additional fields are included in the user input, which can lead to security vulnerabilities if not handled carefully. For fields that should not be set by the user, like a `role`, it is crucial to set `input: false` in the configuration.
 
 ### Inferring Additional Fields on Client
 

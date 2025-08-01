@@ -35,10 +35,8 @@ export default function RegisterOAuthClient() {
 			return;
 		}
 		const res = await client.oauth2.register({
-			// @ts-ignore
-			name,
-			icon: await convertImageToBase64(logo),
-			redirectURLs: [redirectUri],
+			client_name: name,
+			redirect_uris: [redirectUri],
 		});
 		setIsSubmitting(false);
 	};

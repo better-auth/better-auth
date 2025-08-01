@@ -532,19 +532,20 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
-			const account = await adapter.findOne<Account>({
-				model: "account",
-				where: [
-					{
-						value: accountId,
-						field: "accountId",
-					},
-					{
-						value: providerId,
-						field: "providerId",
-					},
-				],
-			});
+			// we need to find account first to avoid missing user if the email changed with the provider for the same account
+			const account = await adapter
+				.findMany<Account>({
+					model: "account",
+					where: [
+						{
+							value: accountId,
+							field: "accountId",
+						},
+					],
+				})
+				.then((accounts) => {
+					return accounts.find((a) => a.providerId === providerId);
+				});
 			if (account) {
 				const user = await adapter.findOne<User>({
 					model: "user",
@@ -561,6 +562,21 @@ export const createInternalAdapter = (
 						accounts: [account],
 					};
 				} else {
+					const user = await adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								value: email.toLowerCase(),
+								field: "email",
+							},
+						],
+					});
+					if (user) {
+						return {
+							user,
+							accounts: [account],
+						};
+					}
 					return null;
 				}
 			} else {
@@ -672,6 +688,41 @@ export const createInternalAdapter = (
 				undefined,
 				context,
 			);
+			if (secondaryStorage && user) {
+				const listRaw = await secondaryStorage.get(`active-sessions-${userId}`);
+				if (listRaw) {
+					const now = Date.now();
+					const list =
+						safeJSONParse<{ token: string; expiresAt: number }[]>(listRaw) ||
+						[];
+					const validSessions = list.filter((s) => s.expiresAt > now);
+					await Promise.all(
+						validSessions.map(async ({ token }) => {
+							const cached = await secondaryStorage.get(token);
+							if (!cached) return;
+							const parsed = safeJSONParse<{
+								session: Session;
+								user: User;
+							}>(cached);
+							if (!parsed) return;
+							const sessionTTL = Math.max(
+								Math.floor(
+									(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
+								),
+								0,
+							);
+							await secondaryStorage.set(
+								token,
+								JSON.stringify({
+									session: parsed.session,
+									user,
+								}),
+								sessionTTL,
+							);
+						}),
+					);
+				}
+			}
 			return user;
 		},
 		updateUserByEmail: async (
