@@ -532,22 +532,22 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
-			if (!accountId || !providerId || !email) {
-				return null;
-			}
 			const account = await adapter
 				.findMany<Account>({
 					model: "account",
 					where: [
 						{
-							value: `${accountId}`,
+							value: accountId,
 							field: "accountId",
 						},
 					],
 				})
 				.then((accounts) => {
-					return accounts.find((a) => a.providerId === providerId);
+					return accounts.find(
+						(a) => a.providerId === providerId && a.accountId === accountId,
+					);
 				});
+
 			if (account) {
 				const user = await adapter.findOne<User>({
 					model: "user",
