@@ -61,14 +61,6 @@ exports[`init > should match config 1`] = `
     },
   },
   "baseURL": "http://localhost:3000/api/auth",
-  "config": {
-    "clear": [Function],
-    "delete": [Function],
-    "get": [Function],
-    "getWithFallback": [Function],
-    "has": [Function],
-    "set": [Function],
-  },
   "createAuthCookie": [Function],
   "generateId": [Function],
   "internalAdapter": {
