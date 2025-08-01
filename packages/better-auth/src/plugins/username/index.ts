@@ -294,12 +294,6 @@ if (!isValidUsername) {
 		message: ERROR_CODES.INVALID_USERNAME,
 	});
 }
-					if (!(await validator(username))) {
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.INVALID_USERNAME,
-						});
-					}
-
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
