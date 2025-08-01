@@ -97,6 +97,10 @@ export const init = async (options: BetterAuthOptions) => {
 	const telemetry = await createTelemetry({ logger, config, options });
 	telemetry.report();
 
+	console.log({
+		verson: process.env.PACKAGE_VERSION ?? process.env.npm_package_version,
+	});
+
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
