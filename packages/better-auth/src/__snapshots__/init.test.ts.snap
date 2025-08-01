@@ -23,6 +23,7 @@ exports[`init > should match config 1`] = `
         "usePlural": undefined,
       },
       "debugLogs": false,
+      "isCreateAdapter": true,
       "type": "sqlite",
     },
     "update": [Function],
