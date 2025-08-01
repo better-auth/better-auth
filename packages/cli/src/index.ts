@@ -5,7 +5,6 @@ import { Command } from "commander";
 import { init } from "./commands/init";
 import { migrate } from "./commands/migrate";
 import { generate } from "./commands/generate";
-import { telemetryCommand } from "./commands/telemetry";
 import { generateSecret } from "./commands/secret";
 import { getPackageInfo } from "./utils/get-package-info";
 
@@ -29,7 +28,6 @@ async function main() {
 		.addCommand(migrate)
 		.addCommand(generate)
 		.addCommand(generateSecret)
-		.addCommand(telemetryCommand)
 		.version(packageInfo.version || "1.1.2")
 		.description("Better Auth CLI")
 		.action(() => program.help());
