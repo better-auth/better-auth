@@ -288,7 +288,12 @@ export const username = (options?: UsernameOptions) => {
 
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
-
+const isValidUsername = await validator(username)
+if (!isValidUsername) {
+	throw new APIError("BAD_REQUEST", {
+		message: ERROR_CODES.INVALID_USERNAME,
+	});
+}
 					if (!(await validator(username))) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
