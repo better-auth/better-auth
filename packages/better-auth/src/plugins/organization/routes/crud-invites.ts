@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { type InferOrganizationRolesFromOption } from "../schema";
+import { type InferOrganizationRolesFromOption, type Member } from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
@@ -183,7 +183,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 			const canInvite = hasPermission({
-				role: member.role,
+				role: member.role as string,
 				options: ctx.context.orgOptions,
 				permissions: {
 					invitation: ["create"],
@@ -252,7 +252,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							{
 								user: session.user,
 								organization,
-								member: member,
+								member: member as Member,
 							},
 							ctx.context,
 						)
@@ -344,7 +344,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					email: invitation.email.toLowerCase(),
 					organization: organization,
 					inviter: {
-						...member,
+						...(member as Member),
 						user: session.user,
 					},
 					//@ts-expect-error
@@ -646,7 +646,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			const canCancel = hasPermission({
-				role: member.role,
+				role: member.role as string,
 				options: ctx.context.orgOptions,
 				permissions: {
 					invitation: ["cancel"],

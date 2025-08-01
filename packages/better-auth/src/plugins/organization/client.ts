@@ -2,9 +2,9 @@ import { atom } from "nanostores";
 import type {
 	InferInvitation,
 	InferMember,
-	Invitation,
+	InferOrganization,
+	InferTeam,
 	Member,
-	Organization,
 	Team,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
@@ -90,14 +90,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 
 	type OrganizationReturn = CO["teams"] extends { enabled: true }
 		? {
-				members: InferMember<CO>[];
+				members: InferMember<CO, false>[];
 				invitations: InferInvitation<CO>[];
-				teams: Team[];
-			} & Organization
+				teams: InferTeam<CO, false>[];
+			} & InferOrganization<CO>
 		: {
-				members: InferMember<CO>[];
+				members: InferMember<CO, false>[];
 				invitations: InferInvitation<CO>[];
-			} & Organization;
+			} & InferOrganization<CO>;
 
 	type Schema = CO["schema"];
 	return {
@@ -123,7 +123,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		getActions: ($fetch) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
-				Organization: {} as Organization,
+				Organization: {} as InferOrganization<CO>,
 				Invitation: {} as InferInvitation<CO>,
 				Member: {} as InferMember<CO>,
 				Team: {} as Team,
@@ -151,7 +151,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const listOrganizations = useAuthQuery<Organization[]>(
+			const listOrganizations = useAuthQuery<InferOrganization<CO, false>[]>(
 				$listOrg,
 				"/organization/list",
 				$fetch,
@@ -161,16 +161,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 			const activeOrganization = useAuthQuery<
 				Prettify<
-					Organization & {
-						members: (Member & {
-							user: {
-								id: string;
-								name: string;
-								email: string;
-								image: string | undefined;
-							};
-						})[];
-						invitations: Invitation[];
+					InferOrganization<CO, false> & {
+						members: InferMember<CO>[];
+						invitations: InferInvitation<CO>[];
 					}
 				>
 			>(

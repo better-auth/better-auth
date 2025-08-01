@@ -11,8 +11,8 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferTeam,
 	Member,
-	Team,
 	TeamMember,
 } from "../schema";
 import { hasPermission } from "../has-permission";
@@ -407,7 +407,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				permissions: {
 					organization: ["update"],
 				},
-				role: member.role,
+				role: member.role as string,
 				options: ctx.context.orgOptions,
 			});
 			if (!canUpdateOrg) {
@@ -489,7 +489,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			const canDeleteOrg = hasPermission({
-				role: member.role,
+				role: member.role as string,
 				permissions: {
 					organization: ["delete"],
 				},
@@ -627,14 +627,14 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			}
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+						teams: InferTeam<O, false>[];
+					} & InferOrganization<O, false>
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -742,12 +742,12 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
+						members: InferMember<O, false>[];
 						invitations: InferInvitation<O>[];
-						teams: Team[];
+						teams: InferTeam<O, false>[];
 					} & InferOrganization<O>
 				: {
-						members: InferMember<O>[];
+						members: InferMember<O, false>[];
 						invitations: InferInvitation<O>[];
 					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);

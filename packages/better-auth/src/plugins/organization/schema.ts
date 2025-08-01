@@ -86,34 +86,42 @@ export type InferOrganizationRolesFromOption<
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
-export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
-	enabled: true;
-}
-	? {
-			id: string;
-			organizationId: string;
-			role: InferOrganizationRolesFromOption<O>;
-			createdAt: Date;
-			userId: string;
-			teamId?: string;
-			user: {
-				email: string;
-				name: string;
-				image?: string;
-			};
-		}
-	: {
-			id: string;
-			organizationId: string;
-			role: InferOrganizationRolesFromOption<O>;
-			createdAt: Date;
-			userId: string;
-			user: {
-				email: string;
-				name: string;
-				image?: string;
-			};
-		};
+export type InferMember<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	(O["teams"] extends {
+		enabled: true;
+	}
+		? {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				teamId?: string;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string;
+				};
+			}
+		: {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string;
+				};
+			}) &
+		InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>
+>;
 
 export type InferOrganization<
 	O extends OrganizationOptions,
@@ -123,11 +131,17 @@ export type InferOrganization<
 		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide>
 >;
 
-export type InferTeam<O extends OrganizationOptions> = Prettify<
-	Team & InferAdditionalFieldsFromPluginOptions<"team", O>
+export type InferTeam<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	Team & InferAdditionalFieldsFromPluginOptions<"team", O, isClientSide>
 >;
 
-export type InferInvitation<O extends OrganizationOptions> =
+export type InferInvitation<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
 	(O["teams"] extends {
 		enabled: true;
 	}
@@ -150,4 +164,5 @@ export type InferInvitation<O extends OrganizationOptions> =
 				inviterId: string;
 				expiresAt: Date;
 			}) &
-		InferAdditionalFieldsFromPluginOptions<"invitation", O, false>;
+		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
+>;
