@@ -5,7 +5,6 @@ import type {
 	InferOrganization,
 	InferTeam,
 	Member,
-	Team,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
 import { type AccessControl, type Role } from "../access";
