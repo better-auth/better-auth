@@ -1,5 +1,5 @@
 {
-	"name": "@example/svelte-kit",
+	"name": "@better-auth/svelte-kit-example",
 	"version": "0.0.1",
 	"private": true,
 	"scripts": {
