@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-chore: typo and unnecessary optional check
+chore: unnecessary optional check
