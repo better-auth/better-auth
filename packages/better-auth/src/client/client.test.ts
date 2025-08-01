@@ -121,12 +121,10 @@ describe("run time proxy", async () => {
 				},
 			},
 		});
-		const thenFn = (client as any).then;
-		expect(thenFn).toBe(undefined);
-		const catchFn = (client as any).catch;
-		expect(catchFn).toBe(undefined);
-		const finallyFn = (client as any).finally;
-		expect(finallyFn).toBe(undefined);
+		const proxy = client as any;
+		expect(proxy.then).toBe(undefined);
+		expect(proxy.catch).toBe(undefined);
+		expect(proxy.finally).toBe(undefined);
 	});
 });
 
