@@ -10,7 +10,7 @@ import { createHMAC } from "@better-auth/utils/hmac";
 // TODO implement widget redirect same as callback
 // TODO implement link with existing account
 // TODO docs texts: react examples, redirect/callback flows
-// TODO add tests: auth_date expiration, reject invalid hash
+// TODO add tests: reject invalid hash
 
 export type TelegramOptions = {
 	/**
