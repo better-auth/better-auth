@@ -25,23 +25,41 @@ const ChangelogPage = async () => {
 		}[]
 	>("https://api.github.com/repos/better-auth/better-auth/releases");
 
-	const messages = releases
-		?.filter((release) => !release.prerelease)
-		.map((release) => ({
-			tag: release.tag_name,
-			title: release.name,
-			content: getContent(release.body),
-			date: new Date(release.published_at).toLocaleDateString("en-US", {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-			}),
-			url: release.html_url,
-		}));
+	function extractVersion(title: string): string {
+		if (title.slice(2).includes("@")) {
+			return "v" + title.trim().slice(2).split("@")[1];
+		}
+		return title;
+	}
 
-	function getContent(content: string) {
+	const groupedReleases = new Map<string, any[]>();
+	function getPackageName(title: string): string {
+		const text = title.trim();
+		if (text.startsWith("@better-auth")) {
+			const packageName = text.split("@")[1].split("/")[1];
+			return packageName.charAt(0).toUpperCase() + packageName.slice(1);
+		}
+		return "Core";
+	}
+
+	function getContent(content: string, title: string) {
 		const lines = content.split("\n");
-		const newContext = lines.map((line) => {
+		let skipNextPatchChanges = false;
+		const packageName = getPackageName(title);
+		const newContext = lines.map((line, index) => {
+			if (skipNextPatchChanges) {
+				if (line.toLowerCase().includes("patch changes")) {
+					skipNextPatchChanges = false;
+					return "";
+				}
+				skipNextPatchChanges = false;
+			}
+
+			if (line.toLowerCase().includes("patch changes")) {
+				skipNextPatchChanges = true;
+				return `### ${packageName}`;
+			}
+
 			if (line.trim().startsWith("- ")) {
 				const mainContent = line.split(";")[0];
 				const context = line.split(";")[2];
@@ -61,7 +79,91 @@ const ChangelogPage = async () => {
 			}
 			return line;
 		});
-		return newContext.join("\n");
+		return newContext.filter((line) => line !== "").join("\n");
+	}
+
+	releases
+		?.filter((release) => !release.prerelease)
+		.forEach((release) => {
+			const version = extractVersion(release.name);
+			if (!groupedReleases.has(version)) {
+				groupedReleases.set(version, []);
+			}
+			groupedReleases.get(version)?.push({
+				tag: release.tag_name,
+				title: release.name,
+				content: getContent(release.body, release.name),
+				date: new Date(release.published_at).toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				}),
+				url: release.html_url,
+			});
+		});
+	const messages = Array.from(groupedReleases.entries())
+		.sort((a, b) => {
+			const [majorA, minorA, patchA = 0] = a[0]
+				.replace("v", "")
+				.split(".")
+				.map(Number);
+			const [majorB, minorB, patchB = 0] = b[0]
+				.replace("v", "")
+				.split(".")
+				.map(Number);
+			if (majorB !== majorA) return majorB - majorA;
+			if (minorB !== minorA) return minorB - minorA;
+			return patchB - patchA;
+		})
+		.map(([version, releases]) => {
+			const combinedContent = releases
+				.map((r) => (r.content.includes("No changes") ? "" : r.content))
+				.join("\n\n");
+			const latestDate = releases
+				.map((r) => new Date(r.date))
+				.sort((a, b) => b.getTime() - a.getTime())[0]
+				.toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				});
+			return {
+				tag: releases[0].tag.includes("@")
+					? "v" + releases[0].tag.slice(4).split("@")[1]
+					: releases[0].tag,
+				title: version,
+				content: combinedContent,
+				date: latestDate,
+				url: releases[0].url,
+			};
+		});
+	function cleanCommitMessage(message: string): string {
+		message = message.replace(/^[a-f0-9]{7}:\s*/, "");
+		const prefixes = [
+			"chore:",
+			"fix:",
+			"feat:",
+			"docs:",
+			"style:",
+			"refactor:",
+			"perf:",
+			"test:",
+			"build:",
+			"ci:",
+			"revert:",
+		];
+		for (const prefix of prefixes) {
+			if (message.toLowerCase().startsWith(prefix)) {
+				message = message.substring(prefix.length);
+			}
+		}
+
+		message = message.trim();
+		if (message) {
+			message = message.charAt(0).toUpperCase() + message.slice(1);
+		}
+
+		return message;
 	}
 
 	return (
@@ -139,6 +241,7 @@ const ChangelogPage = async () => {
 										</time>
 									</div>
 									<Link
+										className="-mt-2"
 										href={
 											props.children
 												?.toString()
@@ -169,14 +272,90 @@ const ChangelogPage = async () => {
 									<hr className="h-[1px] my-1 mb-2 bg-input" />
 								</h3>
 							),
-							p: (props) => <p className="my-0 ml-10 text-sm" {...props} />,
+							p: (props) => {
+								const children = props.children;
+								let text =
+									typeof children === "string"
+										? children
+										: Array.isArray(children) && typeof children[0] === "string"
+											? children[0]
+											: undefined;
+
+								const cleaned = text ? cleanCommitMessage(text) : children;
+
+								return (
+									<p className="my-0 ml-0 text-sm" {...props}>
+										{text ? cleaned : children}
+									</p>
+								);
+							},
 							ul: (props) => (
 								<ul
 									className="list-disc ml-10 text-[0.855rem] text-gray-600 dark:text-gray-300"
 									{...props}
 								/>
 							),
-							li: (props) => <li className="my-1" {...props} />,
+							li: (props) => {
+								const children = props.children;
+								let text =
+									typeof children === "string"
+										? children
+										: Array.isArray(children)
+											? children.map((child, idx) => {
+													if (typeof child === "string") {
+														const cleaned = cleanCommitMessage(child);
+														return <span key={idx}>{cleaned}</span>;
+													}
+													if (
+														child &&
+														typeof child === "object" &&
+														child.type === "code"
+													) {
+														return (
+															<code
+																key={idx}
+																className="px-0.5 py-0.5 rounded bg-transparent text-xs font-mono"
+															>
+																{child.props.children}
+															</code>
+														);
+													}
+													return child;
+												})
+											: typeof children === "string"
+												? cleanCommitMessage(children)
+												: children;
+
+								return (
+									<li className="my-1" {...props}>
+										{Array.isArray(children)
+											? children.map((child, idx) => {
+													if (typeof child === "string") {
+														const cleaned = cleanCommitMessage(child);
+														return <span key={idx}>{cleaned}</span>;
+													}
+													if (
+														child &&
+														typeof child === "object" &&
+														child.type === "code"
+													) {
+														return (
+															<code
+																key={idx}
+																className="px-1 py-0.5 rounded bg-muted/70 text-xs font-mono"
+															>
+																{child.props.children}
+															</code>
+														);
+													}
+													return child;
+												})
+											: typeof children === "string"
+												? cleanCommitMessage(children)
+												: children}
+									</li>
+								);
+							},
 							a: ({ className, ...props }: any) => (
 								<Link
 									target="_blank"
@@ -200,11 +379,11 @@ const ChangelogPage = async () => {
 							?.map((message) => {
 								return `
 ## ${message.title} date=${message.date}
-
-${message.content}
+${cleanCommitMessage(message.content.replace(";;;", "").trim())}
 								`;
 							})
-							.join("\n")}
+							.filter(Boolean)
+							.join("\n\n")}
 					</Markdown>
 				</div>
 			</div>
