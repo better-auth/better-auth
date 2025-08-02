@@ -7,10 +7,10 @@ import { setSessionCookie } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { createHMAC } from "@better-auth/utils/hmac";
 
-// TODO implement widget redirect
-// TODO implement link
-// TODO docs texts
-// TODO add tests
+// TODO implement widget redirect same as callback
+// TODO implement link with existing account
+// TODO docs texts: react examples, redirect/callback flows
+// TODO add tests: auth_date expiration, reject invalid hash
 
 export type TelegramOptions = {
 	/**
