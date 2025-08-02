@@ -108,7 +108,7 @@ export const telegram = (options: TelegramOptions) => {
 
 					const authDate = parseInt(auth_date.toString());
 					const currentTime = Math.floor(Date.now() / 1000);
-					const maxAge = 60 * 60; // 1 hour in seconds
+					const maxAge = 60 * 5; // 5 minutes in seconds
 
 					if (currentTime - authDate > maxAge) {
 						ctx.context.logger.error("Expired auth date", {
