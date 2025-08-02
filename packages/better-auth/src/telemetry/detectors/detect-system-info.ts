@@ -112,7 +112,6 @@ function isCI() {
 			env.CI_NAME || // Codeship and others
 			env.CONTINUOUS_INTEGRATION || // Travis CI, Cirrus CI
 			env.RUN_ID || // TaskCluster, dsari
-			exports.name ||
 			false)
 	);
 }
