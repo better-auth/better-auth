@@ -121,7 +121,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 					});
 				}
 				const canCreate = hasPermission({
-					role: member.role,
+					role: member.role as string,
 					options: ctx.context.orgOptions,
 					permissions: {
 						team: ["create"],
@@ -241,7 +241,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				}
 
 				const canRemove = hasPermission({
-					role: member.role,
+					role: member.role as string,
 					options: ctx.context.orgOptions,
 					permissions: {
 						team: ["delete"],
@@ -388,7 +388,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			const canUpdate = hasPermission({
-				role: member.role,
+				role: member.role as string,
 				options: ctx.context.orgOptions,
 				permissions: {
 					team: ["update"],

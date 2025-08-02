@@ -2,7 +2,11 @@ import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { InferOrganizationRolesFromOption, Member } from "../schema";
+import type {
+	InferMember,
+	InferOrganizationRolesFromOption,
+	Member,
+} from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
@@ -246,7 +250,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			let toBeRemovedMember: Member | null = null;
+			let toBeRemovedMember: InferMember<O, false> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
 				toBeRemovedMember = await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
@@ -262,7 +266,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const roles = toBeRemovedMember.role.split(",");
+			const roles = (toBeRemovedMember.role as string).split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwner = roles.includes(creatorRole);
 			if (isOwner) {
@@ -275,8 +279,8 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
 				});
-				const owners = members.filter((member: Member) => {
-					const roles = member.role.split(",");
+				const owners = members.filter((member) => {
+					const roles = (member.role as string).split(",");
 					return roles.includes(creatorRole);
 				});
 				if (owners.length <= 1) {
@@ -287,7 +291,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 			const canDeleteMember = hasPermission({
-				role: member.role,
+				role: member.role as string,
 				options: ctx.context.orgOptions,
 				permissions: {
 					member: ["delete"],
