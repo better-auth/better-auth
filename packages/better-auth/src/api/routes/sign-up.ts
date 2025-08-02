@@ -11,6 +11,7 @@ import type {
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
+import { a } from "vitest/dist/suite-dWqIFb_-.js";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -163,6 +164,18 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				rememberMe,
 				...additionalFields
 			} = body;
+
+			if (!name) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Name is required",
+				});
+			}
+
+			if (!password) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Password is required",
+				});
+			}
 			const isValidEmail = z.email().safeParse(email);
 
 			if (!isValidEmail.success) {

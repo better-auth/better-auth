@@ -688,8 +688,12 @@
     "@noble/hashes": "^1.8.0",
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0",
-    "better-call": "catalog:",
-    "defu": "^6.1.4",
+    "zod-to-json-schema": "^3.23.2"
+  },
+  "dependencies": {
+    "dns-query": "^0.11.2",
+    "@asteasolutions/zod-to-openapi": "^7.0.0",
+    "better-call": "^1.0.12",
     "jose": "^5.9.6",
     "kysely": "^0.28.1",
     "nanostores": "^0.11.3"

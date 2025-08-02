@@ -1,0 +1,32 @@
+---
+title: Custom Domains
+---
+
+# Custom Domains
+
+Better Auth allows you to use your own custom domains and subdomains for your organizations. This allows you to provide a more branded experience for your users.
+
+## Adding a Custom Domain
+
+To add a custom domain, follow these steps:
+
+1.  **Go to your organization's settings page.**
+2.  **Navigate to the "Domain" section.**
+3.  **Enter your custom domain and click "Add".**
+
+## Verifying Your Domain
+
+Once you've added your domain, you'll need to verify it to prove that you own it. To do this, you'll need to add a `TXT` record to your domain's DNS settings.
+
+1.  **You will be provided with a verification token.** This token is a unique string that you'll need to add to your DNS records.
+2.  **Create a new `TXT` record in your DNS provider's dashboard.**
+    *   **Host:** `_better-auth-verify`
+    *   **Value:** The verification token you were given.
+3.  **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
+4.  **Once the record has propagated, click the "Verify" button in your organization's settings.**
+
+If the verification is successful, your custom domain will be active and ready to use.
+
+## Removing a Custom Domain
+
+To remove a custom domain, simply click the "Remove" button in your organization's settings.
