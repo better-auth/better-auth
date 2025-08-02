@@ -8,7 +8,9 @@ import { createHash } from "@better-auth/utils/hash";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 // TODO implement widget redirect
+// TODO implement link
 // TODO docs texts
+// TODO add tests
 
 export type TelegramOptions = {
 	/**
