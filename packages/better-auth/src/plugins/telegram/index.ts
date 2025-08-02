@@ -2,11 +2,11 @@ import z from "zod/v4";
 import { createAuthEndpoint, type BetterAuthPlugin } from "..";
 import type { TelegramProfile } from "./types";
 import { APIError } from "better-call";
-import { createHash, createHmac } from "node:crypto";
 import type { Account, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
+import { createHash } from "@better-auth/utils/hash";
+import { createHMAC } from "@better-auth/utils/hmac";
 
-// TODO move createHash, createHmac to better-auth functions
 // TODO implement widget redirect
 // TODO docs texts
 
@@ -130,14 +130,14 @@ export const telegram = (options: TelegramOptions) => {
 					const dataCheckString = sortedFields.join("\n");
 
 					// create secret key by hashing the bot token with sha256
-					const secretKey = createHash("sha256")
-						.update(options.botToken)
-						.digest();
+					const secretKey = await createHash("SHA-256").digest(
+						options.botToken,
+					);
 
 					// create hmac-sha256 signature
-					const calculatedHash = createHmac("sha256", secretKey)
-						.update(dataCheckString)
-						.digest("hex");
+					const hmac = createHMAC("SHA-256", "hex");
+					const key = await hmac.importKey(secretKey, "sign");
+					const calculatedHash = await hmac.sign(key, dataCheckString);
 
 					// compare with received hash
 					if (calculatedHash !== hash) {
