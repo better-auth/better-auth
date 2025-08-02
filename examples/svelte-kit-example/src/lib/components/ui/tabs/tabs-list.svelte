@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { Tabs as TabsPrimitive } from "bits-ui";
 
 type $$Props = TabsPrimitive.ListProps;
