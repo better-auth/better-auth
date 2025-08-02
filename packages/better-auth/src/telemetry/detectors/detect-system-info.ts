@@ -102,16 +102,15 @@ function isCI() {
 	const env = process.env;
 
 	return (
-		env.CI !== "false" && // Bypass all checks if CI env is explicitly set to 'false'
-		(env.BUILD_ID || // Jenkins, Cloudbees
-			env.BUILD_NUMBER || // Jenkins, TeamCity
-			env.CI || // Travis CI, CircleCI, Cirrus CI, Gitlab CI, Appveyor, CodeShip, dsari, Cloudflare Pages/Workers
-			env.CI_APP_ID || // Appflow
-			env.CI_BUILD_ID || // Appflow
-			env.CI_BUILD_NUMBER || // Appflow
-			env.CI_NAME || // Codeship and others
-			env.CONTINUOUS_INTEGRATION || // Travis CI, Cirrus CI
-			env.RUN_ID || // TaskCluster, dsari
-			false)
+		env.CI !== "false" &&
+		("BUILD_ID" in env || // Jenkins, Cloudbees
+			"BUILD_NUMBER" in env || // Jenkins, TeamCity (fixed typo: extra space removed)
+			"CI" in env || // Travis CI, CircleCI, Cirrus CI, Gitlab CI, Appveyor, CodeShip, dsari, Cloudflare
+			"CI_APP_ID" in env || // Appflow
+			"CI_BUILD_ID" in env || // Appflow
+			"CI_BUILD_NUMBER" in env || // Appflow
+			"CI_NAME" in env || // Codeship and others
+			"CONTINUOUS_INTEGRATION" in env || // Travis CI, Cirrus CI
+			"RUN_ID" in env) // TaskCluster, dsari
 	);
 }
