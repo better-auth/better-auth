@@ -532,20 +532,24 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
-			// we need to find account first to avoid missing user if the email changed with the provider for the same account
 			const account = await adapter
 				.findMany<Account>({
 					model: "account",
-					where: [
-						{
-							value: accountId,
-							field: "accountId",
-						},
-					],
+					where: accountId
+						? [
+								{
+									value: accountId.toString(),
+									field: "accountId",
+								},
+							]
+						: undefined,
 				})
 				.then((accounts) => {
-					return accounts.find((a) => a.providerId === providerId);
+					return accounts.find(
+						(a) => a.providerId === providerId && a.accountId === accountId,
+					);
 				});
+
 			if (account) {
 				const user = await adapter.findOne<User>({
 					model: "user",
