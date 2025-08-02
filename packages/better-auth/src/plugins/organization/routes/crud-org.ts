@@ -724,7 +724,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			let organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				if (ctx.body.organizationSlug) {
-					organization = await adapter.findOrganizationBySlug(organizationId);
+					organization = await adapter.findOrganizationBySlug(ctx.body.organizationSlug);
 				}
 				if (!organization) {
 					throw new APIError("BAD_REQUEST", {
