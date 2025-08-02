@@ -57,7 +57,7 @@ export async function generateAction(opts: any) {
 		process.exit(0);
 	}
 	if (schema.append || schema.overwrite) {
-		let confirm = options.y;
+		let confirm = options.y || options.yes;
 		if (!confirm) {
 			const response = await prompts({
 				type: "confirm",
