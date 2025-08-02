@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Menubar as MenubarPrimitive } from "bits-ui";
 import { cn } from "$lib/utils.js";
+import Check from "svelte-radix/Check.svelte";
 
 type $$Props = MenubarPrimitive.CheckboxItemProps;
 let className: $$Props["class"] = undefined;

@@ -198,7 +198,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.string()
 						.meta({
 							description:
-								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+								'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
 						})
 						.default("/"),
 					/**
@@ -208,7 +208,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.string()
 						.meta({
 							description:
-								'Return URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+								'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
 						})
 						.optional(),
 					/**
@@ -328,8 +328,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						),
 					);
 				const activeSubscription = activeSubscriptions.find((sub) =>
-					subscriptionToUpdate?.stripeSubscriptionId
-						? sub.id === subscriptionToUpdate?.stripeSubscriptionId
+					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
+						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
+							sub.id === ctx.body.subscriptionId
 						: true,
 				);
 				const subscriptions = subscriptionToUpdate
@@ -624,7 +625,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.optional(),
 					returnUrl: z.string().meta({
 						description:
-							"Return URL to redirect back after successful subscription. Eg: 'https://example.com/success'",
+							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
 					}),
 				}),
 				use: [
