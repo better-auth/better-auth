@@ -69,10 +69,10 @@ export const telegram = (options: TelegramOptions) => {
 					method: "POST",
 					body: z.object({
 						id: z.number(),
-						first_name: z.string().nullable(),
-						last_name: z.string().nullable(),
-						username: z.string().nullable(),
-						photo_url: z.string().nullable(),
+						first_name: z.string().optional(),
+						last_name: z.string().optional(),
+						username: z.string().optional(),
+						photo_url: z.string().optional(),
 						auth_date: z.number(),
 						hash: z.string(),
 						rememberMe: z.boolean().optional(),
@@ -152,10 +152,10 @@ export const telegram = (options: TelegramOptions) => {
 
 					let profile: TelegramProfile = {
 						id: id,
-						first_name: first_name ?? undefined,
-						last_name: last_name ?? undefined,
-						username: username ?? undefined,
-						photo_url: photo_url ?? undefined,
+						first_name: first_name,
+						last_name: last_name,
+						username: username,
+						photo_url: photo_url,
 					};
 
 					let user: User | null = null;
