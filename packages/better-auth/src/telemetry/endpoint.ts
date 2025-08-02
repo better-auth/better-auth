@@ -9,7 +9,7 @@ type Logger = AuthContext["logger"];
 export const debugEndpoint =
 	(logger: Logger): TelemetryEndpoint =>
 	async (event) => {
-		logger.debug("telemetry event", event);
+		logger.info("telemetry event", JSON.stringify(event, null, 2));
 	};
 
 const TELEMETRY_ENDPOINT = "https://telemetry.better-auth.com/v1/track";
