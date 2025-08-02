@@ -17923,7 +17923,6 @@ packages:
   source-map@0.8.0-beta.0:
     resolution: {integrity: sha512-2ymg6oRBpebeZi9UUNsgQ89bhx01TcTkmNTGnNO88imTmbSgy4nfujrgVEFKWpMTEGA11EDkTt7mqObTPdigIA==}
     engines: {node: '>= 8'}
-    deprecated: The work that was done in this beta branch won't be included in future versions
 
   sourcemap-codec@1.4.8:
     resolution: {integrity: sha512-9NykojV5Uih4lgo5So5dtw+f0JgJX30KCNI8gwhz2J9A15wD0Ml6tjHKwf6fTSa6fAdVBdZeNOs9eJ71qCk8vA==}
@@ -30125,7 +30124,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.13.8
+      '@types/node': 20.17.57
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -32268,7 +32267,7 @@ snapshots:
 
   bun-types@1.2.19(@types/react@18.3.23):
     dependencies:
-      '@types/node': 22.13.8
+      '@types/node': 20.17.57
       '@types/react': 18.3.23
 
   bun-types@1.2.19(@types/react@19.1.6):
