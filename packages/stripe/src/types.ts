@@ -274,7 +274,8 @@ export interface StripeOptions {
 					| "upgrade-subscription"
 					| "list-subscription"
 					| "cancel-subscription"
-					| "restore-subscription";
+					| "restore-subscription"
+					| "billing-portal";
 			},
 			ctx: GenericEndpointContext,
 		) => Promise<boolean>;
