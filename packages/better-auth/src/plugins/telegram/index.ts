@@ -9,7 +9,6 @@ import { setSessionCookie } from "../../cookies";
 // TODO move createHash, createHmac to better-auth functions
 // TODO implement widget redirect
 // TODO docs texts
-// TODO prevent timing attacks
 
 export type TelegramOptions = {
 	/**
