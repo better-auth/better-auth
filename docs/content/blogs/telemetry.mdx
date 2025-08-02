@@ -32,22 +32,24 @@ We do not collect, store, or track any personally identifiable information (PII)
 
 You can disable telemetry collection in your auth config or by setting an environment variable.
 
-```ts title="auth.ts"
-export const auth = betterAuth({
-  // [!code highlight]
-  telemetry: { // [!code highlight]
-    enabled: false // [!code highlight]
-  } // [!code highlight]
-});
-```
+- Via your auth config.
 
-Via an environment variable.
+  ```ts title="auth.ts"
+  export const auth = betterAuth({
+    // [!code highlight]
+    telemetry: { // [!code highlight]
+      enabled: false // [!code highlight]
+    } // [!code highlight]
+  });
+  ```
 
-```env title=".env"
-# Enable telemetry
-BETTER_AUTH_TELEMETRY=1
+- Via an environment variable.
 
-# Disable telemetry
-BETTER_AUTH_TELEMETRY=0
-```
+  ```env title=".env"
+  # Enable telemetry
+  BETTER_AUTH_TELEMETRY=1
+
+  # Disable telemetry
+  BETTER_AUTH_TELEMETRY=0
+  ```
 
