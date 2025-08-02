@@ -109,6 +109,7 @@ export const telegram = (options: TelegramOptions) => {
 					const currentTime = Math.floor(Date.now() / 1000);
 					const maxAge = 60 * 5; // 5 minutes in seconds
 
+					// check if data is expired
 					if (currentTime - authDate > maxAge) {
 						ctx.context.logger.error("Expired auth date", {
 							telegramId: id,
@@ -118,6 +119,7 @@ export const telegram = (options: TelegramOptions) => {
 						});
 					}
 
+					// build data string
 					const sortedFields = Object.keys(dataFields)
 						.filter(
 							(key) => dataFields[key as keyof typeof dataFields] !== undefined,
@@ -126,7 +128,6 @@ export const telegram = (options: TelegramOptions) => {
 						.map(
 							(key) => `${key}=${dataFields[key as keyof typeof dataFields]}`,
 						);
-
 					const dataCheckString = sortedFields.join("\n");
 
 					// create secret key by hashing the bot token with sha256
@@ -250,8 +251,8 @@ export const telegram = (options: TelegramOptions) => {
 					await setSessionCookie(
 						ctx,
 						{
-						session,
-						user: user,
+							session,
+							user: user,
 						},
 						rememberMe === false,
 					);
