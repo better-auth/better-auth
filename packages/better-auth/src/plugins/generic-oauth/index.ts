@@ -45,7 +45,7 @@ export interface GenericOAuthConfig {
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -63,7 +63,6 @@ export interface GenericOAuthConfig {
 	responseType?: string;
 	/**
 	 * The response mode to use for the authorization code request.
-
 	 */
 	responseMode?: "query" | "form_post";
 	/**
@@ -108,6 +107,17 @@ export interface GenericOAuthConfig {
 				emailVerified?: boolean;
 				[key: string]: any;
 		  }>;
+
+	injectClientAssertion?: (args: {
+		params: Record<string, any>;
+	}) => Promise<
+		{
+			[key: string]: any;
+		} & {
+			client_assertion?: string;
+			client_assertion_type?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
+		}
+	>;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
@@ -209,7 +219,6 @@ async function getUserInfo(
 		...userInfo.data,
 	};
 }
-
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
@@ -230,7 +239,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							id: c.providerId,
 							options: {
 								clientId: c.clientId,
-								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
 							},
 							authorizationEndpoint: c.authorizationUrl!,
@@ -260,6 +268,23 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration. Token URL not found.",
 							});
 						}
+
+						let baseParams = {
+							client_id: c.clientId,
+							redirect_uri: c.redirectURI,
+							code: data.code,
+							code_verifier: data.codeVerifier,
+						};
+
+						const finalParams: {
+							[key: string]: any;
+						} & {
+							client_assertion?: string;
+							client_assertion_type?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
+						} = c.injectClientAssertion
+							? await c.injectClientAssertion({ params: baseParams })
+							: baseParams;
+
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
@@ -269,6 +294,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
+								clientAssertion: finalParams.client_assertion,
+								clientAssertionType: finalParams.client_assertion_type,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
@@ -631,6 +658,24 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+
+						let baseParams = {
+							client_id: provider.clientId,
+							redirect_uri: provider.redirectURI,
+							code: code,
+						};
+
+						const finalParams: {
+							[key: string]: any;
+						} & {
+							client_assertion?: string;
+							client_assertion_type?: `urn:ietf:params:oauth:client-assertion-type:${string}`;
+						} = provider.injectClientAssertion
+							? await provider.injectClientAssertion({
+									params: {},
+								})
+							: baseParams;
+
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
@@ -640,6 +685,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientId: provider.clientId,
 								clientSecret: provider.clientSecret,
 								redirectURI: provider.redirectURI,
+								clientAssertion: finalParams.client_assertion,
+								clientAssertionType: finalParams.client_assertion_type,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: provider.authentication,
