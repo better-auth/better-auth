@@ -75,6 +75,7 @@ export const telegram = (options: TelegramOptions) => {
 						photo_url: z.string().nullable(),
 						auth_date: z.number(),
 						hash: z.string(),
+						rememberMe: z.boolean().optional(),
 						callbackURL: z
 							.string({
 								error: "Callback URL to use as a redirect",
@@ -91,6 +92,7 @@ export const telegram = (options: TelegramOptions) => {
 						photo_url,
 						auth_date,
 						hash,
+						rememberMe,
 					} = ctx.body;
 
 					// create data-check-string by sorting all fields except hash
@@ -235,7 +237,7 @@ export const telegram = (options: TelegramOptions) => {
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
 						ctx,
-						true,
+						rememberMe === false,
 					);
 
 					if (!session) {
@@ -245,10 +247,14 @@ export const telegram = (options: TelegramOptions) => {
 						});
 					}
 
-					await setSessionCookie(ctx, {
+					await setSessionCookie(
+						ctx,
+						{
 						session,
 						user: user,
-					});
+						},
+						rememberMe === false,
+					);
 
 					return ctx.json({
 						redirect: !!ctx.body.callbackURL,
