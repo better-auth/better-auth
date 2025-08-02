@@ -193,7 +193,7 @@ export async function authorize(
 					redirectURI: query.redirect_uri,
 					scope: requestScope,
 					userId: session.user.id,
-					authTime: session.session.createdAt.getTime(),
+					authTime: new Date(session.session.createdAt).getTime(),
 					/**
 					 * If the prompt is set to `consent`, then we need
 					 * to require the user to consent to the scopes.
