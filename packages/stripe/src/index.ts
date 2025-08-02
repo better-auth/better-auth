@@ -221,6 +221,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								"Disable redirect after successful subscription. Eg: true",
 						})
 						.default(false),
+					trialDays: z
+						.number()
+						.int()
+						.positive()
+						.max(365)
+						.optional()
+						.meta({
+							description: 
+								"Number of free trial days to apply. Overrides plan default if provided."
+						}),
 				}),
 				use: [
 					sessionMiddleware,
@@ -433,7 +443,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				const freeTrial =
 					!alreadyHasTrial && plan.freeTrial
 						? {
-								trial_period_days: plan.freeTrial.days,
+								trial_period_days: ctx.body.trialDays ?? plan.freeTrial.days,
 							}
 						: undefined;
 
