@@ -76,6 +76,10 @@ export const usage = {
 				type: "date",
 				required: true,
 			},
+			updatedAt: {
+				type: "date",
+				required: true,
+			},
 		},
 	},
 } satisfies AuthPluginSchema;

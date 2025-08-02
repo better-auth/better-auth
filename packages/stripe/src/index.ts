@@ -1046,19 +1046,26 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					plan: z.string(),
 					eventName: z.string(),
 					value: z.number(),
-					userId: z.string(),
+					userId: z.string().optional(),
 				}),
 				// use: [sessionMiddleware],
 			},
 			async (ctx) => {
 				const { eventName, value, plan } = ctx.body;
+				const session = await getSessionFromCtx(ctx);
+				if (!session && (!ctx.body.userId || ctx.request)) {
+					throw ctx.error("BAD_REQUEST", {
+						message: "User not found",
+					});
+				}
+				const userId = session?.user.id || ctx.body.userId;
 				// const { user } = ctx.context.session;
 				const user: Customer | null = await ctx.context.adapter.findOne({
 					model: "user",
 					where: [
 						{
 							field: "id",
-							value: ctx.body.userId,
+							value: userId!,
 						},
 					],
 				});
@@ -1100,6 +1107,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					limit: 1,
 				});
 
+				// Date
+				const now = Date.now();
+
 				// Create new usage or aggregate
 				if (latestUsage.length == 0) {
 					// Create new usage
@@ -1109,7 +1119,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							stripeCustomerId: stripeCustomerId,
 							eventName: eventName,
 							value: value,
-							createdAt: Date.now(),
+							createdAt: now,
+							updatedAt: now,
 						},
 					});
 				} else {
@@ -1133,6 +1144,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								model: "usage",
 								update: {
 									value: latestUsage[0].value + value,
+									updatedAt: now,
 								},
 								where: [
 									{
@@ -1153,7 +1165,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									stripeCustomerId: stripeCustomerId,
 									eventName: eventName,
 									value: value,
-									createdAt: Date.now(),
+									createdAt: now,
+									updatedAt: now,
 								},
 							});
 						}
@@ -1166,7 +1179,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								stripeCustomerId: stripeCustomerId,
 								eventName: eventName,
 								value: value,
-								createdAt: Date.now(),
+								createdAt: now,
+								updatedAt: now,
 							},
 						});
 					}
@@ -1194,13 +1208,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					plan: z.string(),
+					// plan: z.string(),
 					eventName: z.string(),
+					date1: z.string(),
+					date2: z.string(),
 				}),
 				use: [sessionMiddleware],
 			},
 			async (ctx) => {
-				const { plan, eventName } = ctx.body;
+				const { eventName, date1, date2 } = ctx.body;
 				const { user } = ctx.context.session;
 				const stripeCustomerId = user.stripeCustomerId;
 				if (!stripeCustomerId) {
@@ -1210,21 +1226,25 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 
 				// Check if plan exists
-				const planInfo = await getPlanByName(options, plan);
-				if (!planInfo) {
-					throw ctx.error("BAD_REQUEST", {
-						message: "Plan not found",
-					});
-				}
-				// Check if event exists
-				if (planInfo.usageBased?.eventName != eventName) {
-					throw ctx.error("BAD_REQUEST", {
-						message: "Event not found for this plan",
-					});
-				}
+				// const planInfo = await getPlanByName(options, plan);
+				// if (!planInfo) {
+				// 	throw ctx.error("BAD_REQUEST", {
+				// 		message: "Plan not found",
+				// 	});
+				// }
+				// // Check if event exists
+				// if (planInfo.usageBased?.eventName != eventName) {
+				// 	throw ctx.error("BAD_REQUEST", {
+				// 		message: "Event not found for this plan",
+				// 	});
+				// }
 
-				// Get usage
-				const allUsageByUser: Usage[] = await ctx.context.adapter.findMany({
+				// Convert dates to epoch
+				const date1Epoch = new Date(date1).getTime();
+				const date2Epoch = new Date(date2).getTime();
+
+				// Get usage between date 1 and date 2
+				const usageBetweenDates: Usage[] = await ctx.context.adapter.findMany({
 					model: "usage",
 					where: [
 						{
@@ -1235,32 +1255,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							field: "eventName",
 							value: eventName,
 						},
+						{
+							field: "updatedAt",
+							operator: "gte",
+							value: date1Epoch,
+						},
+						{
+							field: "updatedAt",
+							operator: "lte",
+							value: date2Epoch,
+						},
 					],
-					sortBy: {
-						direction: "desc",
-						field: "createdAt",
-					},
-				});
-
-				// Get This Month's Usage
-				const usageThisMonth = allUsageByUser.filter((usage) => {
-					const date = new Date(usage.createdAt);
-					return (
-						date.getMonth() == new Date().getMonth() &&
-						date.getFullYear() == new Date().getFullYear()
-					);
-				});
-
-				// Get This Year's Usage
-				const usageThisYear = allUsageByUser.filter((usage) => {
-					const date = new Date(usage.createdAt);
-					return date.getFullYear() == new Date().getFullYear();
 				});
 
 				return ctx.json({
-					usageThisMonth: usageThisMonth,
-					usageThisYear: usageThisYear,
-					allUsageByUser: allUsageByUser,
+					usageBetweenDates: usageBetweenDates,
 				});
 			},
 		),

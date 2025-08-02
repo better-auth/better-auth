@@ -352,6 +352,7 @@ export interface Usage {
 	eventName: string;
 	value: number;
 	createdAt: Date;
+	updatedAt: Date;
 }
 
 export interface InputSubscription extends Omit<Subscription, "id"> {}
