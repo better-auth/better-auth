@@ -55,6 +55,7 @@ describe("organization", async (it) => {
 	});
 
 	let organizationId: string;
+	let organization2Id: string;
 	it("create organization", async () => {
 		const organization = await client.organization.create({
 			name: "test",
@@ -100,7 +101,6 @@ describe("organization", async (it) => {
 		expect(existingSlug.error?.status).toBe(400);
 		expect(existingSlug.error?.message).toBe("slug is taken");
 	});
-
 	it("should create organization directly in the server without cookie", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
@@ -116,11 +116,11 @@ describe("organization", async (it) => {
 			},
 		});
 
+		organization2Id = organization?.id as string;
 		expect(organization?.name).toBe("test2");
 		expect(organization?.members.length).toBe(1);
 		expect(organization?.members[0]?.role).toBe("owner");
 	});
-
 	it("should allow listing organizations", async () => {
 		const organizations = await client.organization.list({
 			fetchOptions: {
@@ -176,6 +176,23 @@ describe("organization", async (it) => {
 		});
 		expect((session.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
+		);
+	});
+	it("should allow activating organization by slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.setActive({
+			organizationSlug: "test2",
+			fetchOptions: {
+				headers,
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organization2Id,
 		);
 	});
 
@@ -1285,9 +1302,6 @@ describe("owner can update roles", async () => {
 		const member = await auth.api.getActiveMember({
 			headers: { cookie: adminCookie },
 		});
-
-		console.log({ member });
-
 		expect(member?.role).toBe("");
 	});
 });
