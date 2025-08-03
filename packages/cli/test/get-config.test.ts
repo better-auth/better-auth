@@ -464,7 +464,12 @@ describe("getConfig", async () => {
 			configPath: "apps/web/server/auth/auth.ts",
 		});
 
-		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+			database: expect.objectContaining({
+				// This proves the @shared/db alias was resolved correctly
+			}),
+		});
 	});
 
 	it("should handle missing referenced tsconfig files gracefully", async () => {
