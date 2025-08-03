@@ -16,6 +16,7 @@ import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
 import type { EndpointContext } from "better-call";
+import { generateId } from "../../utils/id";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -119,7 +120,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 				async (ctx) => {
 					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
 						options || {};
-					const id = ctx.context.generateId({ model: "user" });
+					const id = generateId();
 					const email = `temp-${id}@${emailDomainName}`;
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser(

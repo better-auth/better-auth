@@ -48,8 +48,14 @@ app.use(
 	}),
 );
 
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+	return auth.handler(c.req.raw);
+});
+
+serve(app);
 ```
 
+> **Important:** CORS middleware must be registered before your routes. This ensures that cross-origin requests are properly handled before they reach your authentication endpoints.
 
 ### Middleware
 
