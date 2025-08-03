@@ -194,3 +194,7 @@ android/
 .vinxi
 # Turborepo
 .turbo
+
+# direnv
+.envrc
+.direnv
