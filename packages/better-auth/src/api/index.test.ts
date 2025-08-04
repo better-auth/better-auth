@@ -12,7 +12,7 @@ describe("getEndpoints", () => {
 		} as any;
 
 		const middlewareFn = vi.fn().mockResolvedValue({});
-		
+
 		const testPlugin: BetterAuthPlugin = {
 			id: "test-plugin",
 			middlewares: [
