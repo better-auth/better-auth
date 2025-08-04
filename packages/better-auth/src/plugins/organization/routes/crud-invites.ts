@@ -329,7 +329,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					role: roles,
-					email: ctx.body.email.toLowerCase(),
+					email: ctx.context.normalizeEmail(ctx.body.email),
 					organizationId: organizationId,
 					teamIds,
 					...(additionalFields ? additionalFields : {}),
@@ -341,7 +341,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				{
 					id: invitation.id,
 					role: invitation.role as string,
-					email: invitation.email.toLowerCase(),
+					email: ctx.context.normalizeEmail(invitation.email),
 					organization: organization,
 					inviter: {
 						...member,
@@ -412,7 +412,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			if (
+				ctx.context.normalizeEmail(invitation.email) !==
+				ctx.context.normalizeEmail(session.user.email)
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -574,7 +577,10 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			if (
+				ctx.context.normalizeEmail(invitation.email) !==
+				ctx.context.normalizeEmail(session.user.email)
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -758,7 +764,10 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			if (
+				ctx.context.normalizeEmail(invitation.email) !==
+				ctx.context.normalizeEmail(session.user.email)
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,

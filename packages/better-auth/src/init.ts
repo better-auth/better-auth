@@ -91,6 +91,17 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
+	const normalizeEmail = (email: string) => {
+		if (options.advanced?.emailNormalization) {
+			const normalizedEmail = options.advanced.emailNormalization(email);
+			if (normalizedEmail) {
+				return normalizedEmail;
+			}
+			return email;
+		}
+		return email.toLowerCase();
+	};
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
@@ -142,6 +153,7 @@ export const init = async (options: BetterAuthOptions) => {
 			options,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
 			generateId: generateIdFunc,
+			normalizeEmail,
 		}),
 		createAuthCookie: createCookieGetter(options),
 		async runMigrations() {
@@ -154,6 +166,7 @@ export const init = async (options: BetterAuthOptions) => {
 			const { runMigrations } = await getMigrations(options);
 			await runMigrations();
 		},
+		normalizeEmail,
 	};
 	let { context } = runPluginInit(ctx);
 	return context;
@@ -218,6 +231,7 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
+	normalizeEmail: (email: string) => string;
 };
 
 function runPluginInit(ctx: AuthContext) {
@@ -248,9 +262,9 @@ function runPluginInit(ctx: AuthContext) {
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
+		...ctx,
 		options,
 		hooks: dbHooks.filter((u) => u !== undefined),
-		generateId: ctx.generateId,
 	});
 	context.options = options;
 	return { context };
