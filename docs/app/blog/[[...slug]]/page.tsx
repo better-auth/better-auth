@@ -23,7 +23,6 @@ import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "../_components/stat-field";
 import Image from "next/image";
 import { BlogPage } from "../_components/blog-list";
-import Telemetry from "@/components/mdx/telemetry";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -152,7 +151,6 @@ export default async function Page({
 							DatabaseTable,
 							Accordion,
 							Accordions,
-							Telemetry,
 						}}
 					/>
 				</DocsBody>
