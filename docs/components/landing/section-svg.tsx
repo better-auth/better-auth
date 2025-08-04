@@ -1,8 +1,4 @@
-const SectionSvg = ({
-	crossesOffset,
-}: {
-	crossesOffset: string;
-}) => {
+const SectionSvg = ({ crossesOffset }: { crossesOffset: string }) => {
 	return (
 		<>
 			<PlusSvg

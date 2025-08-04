@@ -15,7 +15,10 @@ import type { BetterAuthOptions } from "../../../../types";
 export const opts = ({
 	database,
 	isNumberIdTest,
-}: { database: BetterAuthOptions["database"]; isNumberIdTest: boolean }) =>
+}: {
+	database: BetterAuthOptions["database"];
+	isNumberIdTest: boolean;
+}) =>
 	({
 		database: database,
 		user: {
