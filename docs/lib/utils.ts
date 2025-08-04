@@ -6,7 +6,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function absoluteUrl(path: string) {
-	return `${process.env.NEXT_PUBLIC_APP_URL}${path}`;
+	const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+	return `${baseUrl}${path}`;
 }
 export function kFormatter(num: number) {
 	const absNum = Math.abs(num);
