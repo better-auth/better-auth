@@ -26,7 +26,8 @@ const adapterTests = {
 	FIND_MODEL_WITHOUT_ID: "find model without id",
 	FIND_MODEL_WITH_SELECT: "find model with select",
 	FIND_MODEL_WITH_MODIFIED_FIELD_NAME: "find model with modified field name",
-	FIND_MODEL_WITH_RENAMED_VERIFICATION_FIELD: "find model with renamed verification field",
+	FIND_MODEL_WITH_RENAMED_VERIFICATION_FIELD:
+		"find model with renamed verification field",
 	UPDATE_MODEL: "update model",
 	SHOULD_FIND_MANY: "should find many",
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
@@ -250,7 +251,7 @@ async function adapterTest(
 			onTestFailed(() => {
 				printDebugLogs();
 			});
-			
+
 			const adapter = await getAdapter(
 				Object.assign(
 					{
@@ -263,7 +264,7 @@ async function adapterTest(
 					internalOptions?.predefinedOptions,
 				),
 			);
-			const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); 
+			const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 			const verification = await adapter.create({
 				model: "verification",
 				data: {
@@ -272,7 +273,7 @@ async function adapterTest(
 					expiresAt,
 				},
 			});
-			const verificationExpiresAt = verification.expiresAt.getTime()
+			const verificationExpiresAt = verification.expiresAt.getTime();
 			expect(verificationExpiresAt).not.toBeNull();
 			const res = await adapter.findOne<{
 				identifier: string;
