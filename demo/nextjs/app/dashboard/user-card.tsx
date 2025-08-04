@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
 import {
@@ -657,7 +657,7 @@ function EditUserDialog() {
 		}
 	};
 	const [open, setOpen] = useState<boolean>(false);
-	const [isLoading, setIsLoading] = useState<boolean>(false);
+	const [isLoading, startTransition] = useTransition();
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
@@ -720,25 +720,27 @@ function EditUserDialog() {
 					<Button
 						disabled={isLoading}
 						onClick={async () => {
-							setIsLoading(true);
-							await client.updateUser({
-								image: image ? await convertImageToBase64(image) : undefined,
-								name: name ? name : undefined,
-								fetchOptions: {
-									onSuccess: () => {
-										toast.success("User updated successfully");
+							startTransition(async () => {
+								await client.updateUser({
+									image: image ? await convertImageToBase64(image) : undefined,
+									name: name ? name : undefined,
+									fetchOptions: {
+										onSuccess: () => {
+											toast.success("User updated successfully");
+										},
+										onError: (error) => {
+											toast.error(error.error.message);
+										},
 									},
-									onError: (error) => {
-										toast.error(error.error.message);
-									},
-								},
+								});
+								startTransition(() => {
+									setName("");
+									router.refresh();
+									setImage(null);
+									setImagePreview(null);
+									setOpen(false);
+								});
 							});
-							setName("");
-							router.refresh();
-							setImage(null);
-							setImagePreview(null);
-							setIsLoading(false);
-							setOpen(false);
 						}}
 					>
 						{isLoading ? (
