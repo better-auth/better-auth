@@ -1,0 +1,369 @@
+---
+title: Base
+description: Sign in with Base using Base Account SDK
+---
+
+The Base plugin provides "Sign in with Base" authentication using Base Account SDK and the SIWE (Sign in with Ethereum) standard. Users can authenticate using their Base wallet without passwords.
+
+<Callout>
+This plugin requires `@base-org/account` to be installed in your project for full functionality.
+</Callout>
+
+## Installation
+
+<Steps>
+<Step>
+### Install dependencies
+
+```bash
+npm install @base-org/account viem
+```
+</Step>
+
+<Step>
+### Add the plugin to your auth config
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { base } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    database: {
+        // your database config
+    },
+    plugins: [
+        base({
+            domain: "myapp.com", // your app domain
+            anonymous: true, // allow sign-in without email
+        })
+    ]
+})
+```
+</Step>
+
+<Step>
+### Add the client plugin
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { baseClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    baseURL: "http://localhost:3000",
+    plugins: [baseClient()]
+})
+```
+</Step>
+</Steps>
+
+## Usage
+
+### Visual Examples
+
+Here's how the official Base Sign In buttons look:
+
+<div className="flex flex-col gap-4 p-6 border rounded-lg bg-gray-50 dark:bg-gray-900">
+  <div className="space-y-2">
+    <p className="text-sm font-medium">Light Mode</p>
+    <div className="inline-flex">
+      {/* This would be the actual component in a real docs setup */}
+      <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer h-10">
+        <div className="w-4 h-4 bg-blue-600 rounded" style={{backgroundColor: '#0000FF'}}></div>
+        <span className="text-sm font-medium text-gray-900">Sign in with Base</span>
+      </div>
+    </div>
+  </div>
+  
+  <div className="space-y-2">
+    <p className="text-sm font-medium">Dark Mode</p>
+    <div className="inline-flex">
+      <div className="inline-flex items-center gap-2 px-4 py-2 bg-black border border-black rounded-lg hover:bg-black transition-colors cursor-pointer h-10">
+        <div className="w-4 h-4 bg-white rounded"></div>
+        <span className="text-sm font-medium text-white">Sign in with Base</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+### Basic Sign In
+
+```tsx
+import { authClient } from "./auth-client"
+
+async function handleSignInWithBase() {
+  try {
+    const result = await authClient.base.signInWithBase()
+    console.log("Signed in:", result)
+  } catch (error) {
+    console.error("Sign in failed:", error)
+  }
+}
+```
+
+### React Component Integration
+
+```tsx
+import { useState } from "react"
+import { SignInWithBaseButton } from "@base-org/account-ui/react"
+import { authClient } from "./auth-client"
+
+export function BaseSignInExample() {
+  const [loading, setLoading] = useState(false)
+
+  const handleSignIn = async () => {
+    setLoading(true)
+    try {
+      const result = await authClient.base.signInWithBase()
+      console.log("Authentication successful:", result)
+      // Handle successful authentication (redirect, update UI, etc.)
+    } catch (error) {
+      console.error("Authentication failed:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Official Base button - Light */}
+      <SignInWithBaseButton
+        colorScheme="light"
+        onClick={handleSignIn}
+        disabled={loading}
+      />
+
+      {/* Official Base button - Dark */}
+      <SignInWithBaseButton
+        colorScheme="dark"
+        onClick={handleSignIn}
+        disabled={loading}
+      />
+      
+      {/* Custom button - Light Mode */}
+      <button 
+        onClick={handleSignIn} 
+        disabled={loading}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+      >
+        <div className="w-4 h-4 rounded" style={{backgroundColor: '#0000FF'}}></div>
+        <span className="text-sm font-medium text-gray-900">
+          {loading ? "Connecting..." : "Sign in with Base"}
+        </span>
+      </button>
+
+      {/* Custom button - Dark Mode */}
+      <button 
+        onClick={handleSignIn} 
+        disabled={loading}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-black border border-black rounded-lg hover:bg-black transition-colors disabled:opacity-50"
+      >
+        <div className="w-4 h-4 bg-white rounded"></div>
+        <span className="text-sm font-medium text-white">
+          {loading ? "Connecting..." : "Sign in with Base"}
+        </span>
+      </button>
+    </div>
+  )
+}
+```
+
+### Using Official Base UI Component
+
+The official `SignInWithBaseButton` follows [Base Brand Guidelines](https://docs.base.org/base-account/guides/authenticate-users#add-the-base-sign-in-with-base-button) with proper branding:
+
+```tsx
+import { SignInWithBaseButton } from "@base-org/account-ui/react"
+import { authClient } from "./auth-client"
+
+export function BaseSignIn() {
+  return (
+    <div className="space-y-4">
+      {/* Light mode */}
+      <SignInWithBaseButton
+        colorScheme="light"
+        onClick={() => authClient.base.signInWithBase()}
+      />
+      
+      {/* Dark mode */}
+      <SignInWithBaseButton
+        colorScheme="dark"
+        onClick={() => authClient.base.signInWithBase()}
+      />
+    </div>
+  )
+}
+```
+
+#### Brand Compliance Features:
+
+✅ **Base Blue Square** (#0000FF on light, #FFFFFF on dark)  
+✅ **Proper Typography** - "Sign in with Base" text  
+✅ **Consistent Spacing** - 8pt padding between logo and text  
+✅ **Responsive Design** - Works across all devices  
+
+<Callout type="info">
+**Brand Guidelines:** Always use the official `SignInWithBaseButton` component to ensure consistency with Base branding standards. Custom buttons should maintain the same color ratios and spacing.
+</Callout>
+
+## Configuration
+
+### Server Options
+
+```ts
+interface BasePluginOptions {
+  /**
+   * Domain for SIWE message generation
+   * @default current domain
+   */
+  domain?: string
+  
+  /**
+   * Email domain for user creation (when anonymous is false)
+   * @default current domain  
+   */
+  emailDomainName?: string
+  
+  /**
+   * Allow anonymous sign-in without email
+   * @default true
+   */
+  anonymous?: boolean
+  
+  /**
+   * Custom nonce generator
+   * @default crypto.randomUUID
+   */
+  getNonce?: () => Promise<string>
+  
+  /**
+   * ENS/Basename lookup for user profile
+   */
+  ensLookup?: (args: { walletAddress: string }) => Promise<{
+    name?: string
+    avatar?: string
+  }>
+}
+```
+
+### Client Methods
+
+The Base client plugin provides the following methods:
+
+- `signInWithBase(options?)` - Main sign-in method
+- `getBaseProvider()` - Get Base Account SDK provider  
+- `isBaseAccountSupported()` - Check wallet compatibility
+
+## Advanced Usage
+
+### Custom Chain Support
+
+```ts
+// Support Base testnet or other chains
+const result = await authClient.base.signInWithBase({
+  chainId: 84532, // Base Sepolia testnet
+})
+```
+
+### ENS/Basename Integration
+
+```ts
+base({
+  ensLookup: async ({ walletAddress }) => {
+    // Custom ENS/Basename resolution
+    const name = await resolveBasename(walletAddress)
+    const avatar = await getBasenameAvatar(walletAddress)
+    return { name, avatar }
+  }
+})
+```
+
+### Error Handling
+
+```ts
+try {
+  await authClient.base.signInWithBase()
+} catch (error) {
+  if (error.message.includes("method_not_supported")) {
+    // Wallet doesn't support wallet_connect
+    // Plugin automatically falls back to eth_requestAccounts
+  }
+}
+```
+
+## How it Works
+
+The Base plugin builds on the SIWE (Sign in with Ethereum) standard:
+
+1. **Nonce Generation** - Server generates unique nonce for each request
+2. **Wallet Connect** - Uses Base Account SDK's `wallet_connect` method
+3. **Message Signing** - User signs SIWE message with their wallet
+4. **Server Verification** - Backend verifies signature using viem
+5. **Session Creation** - Creates better-auth session on success
+
+### Compatibility
+
+- ✅ **Base Mainnet** (chainId: 8453) - Primary support
+- ✅ **Base Testnet** (chainId: 84532) - Development
+- ✅ **EIP-1193 Wallets** - MetaMask, Coinbase Wallet, etc.
+- ✅ **Smart Wallets** - Including undeployed contracts (ERC-6492)
+- ✅ **Base Account SDK** - Full integration
+
+## Brand Guidelines
+
+When implementing Base authentication, please follow the [Base Brand Guidelines](https://docs.base.org/base-account/guides/authenticate-users#add-the-base-sign-in-with-base-button):
+
+- Use the official `SignInWithBaseButton` component when possible
+- Follow Base Blue (#0052FF) color scheme
+- Include the Base logo in custom implementations
+- Maintain consistent spacing and typography
+
+## Database Schema
+
+The Base plugin extends the SIWE plugin schema:
+
+```sql
+-- Wallet addresses table
+CREATE TABLE wallet_address (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  address TEXT NOT NULL,
+  chain_id INTEGER NOT NULL,
+  is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+);
+```
+
+## Security Considerations
+
+- **Domain Binding** - SIWE messages are bound to your app domain
+- **Nonce Management** - Each nonce can only be used once
+- **Signature Verification** - Uses viem with ERC-6492 support
+- **Session Security** - Leverages better-auth's secure session management
+
+## Troubleshooting
+
+### Common Issues
+
+**"Base Account SDK not found"**
+```bash
+npm install @base-org/account
+```
+
+**"method_not_supported" error**
+- The wallet doesn't support `wallet_connect`
+- Plugin automatically falls back to standard SIWE
+
+**"Invalid signature" error**
+- Check chain ID (8453 for Base Mainnet)
+- Ensure domain matches your app's domain
+
+### Debug Mode
+
+Enable debug logging in development:
+
+```ts
+base({
+  debug: process.env.NODE_ENV === "development"
+})
+```
