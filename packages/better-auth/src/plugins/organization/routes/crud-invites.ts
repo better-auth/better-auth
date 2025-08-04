@@ -419,6 +419,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			if (
+				ctx.context.orgOptions.requireEmailVerificationOnAcceptInvitation &&
+				!session.user.emailVerified
+			) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_INVITATION,
+				});
+			}
+
 			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
 			const membersCount = await adapter.countMembers({
 				organizationId: invitation.organizationId,
