@@ -420,12 +420,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (
-				ctx.context.orgOptions.requireEmailVerificationOnAcceptInvitation &&
+				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
 				!session.user.emailVerified
 			) {
 				throw new APIError("FORBIDDEN", {
 					message:
-						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_INVITATION,
+						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION,
 				});
 			}
 
@@ -588,6 +588,16 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				});
+			}
+
+			if (
+				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				!session.user.emailVerified
+			) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION,
 				});
 			}
 
