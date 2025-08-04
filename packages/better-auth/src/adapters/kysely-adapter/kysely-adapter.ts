@@ -93,6 +93,14 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				const { type = "sqlite" } = config || {};
 				let f = schema[model]?.fields[field];
 				if (!f) {
+					const foundField = Object.values(schema[model]?.fields || {}).find(
+						(f) => f.fieldName === field,
+					);
+					if (foundField) {
+						f = foundField;
+					}
+				}
+				if (!f) {
 					//@ts-expect-error - The model name can be a sanitized, thus using the custom model name, not one of the default ones.
 					f = Object.values(schema).find((f) => f.modelName === model)!;
 				}
