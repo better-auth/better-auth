@@ -733,12 +733,14 @@ function EditUserDialog() {
 										},
 									},
 								});
+								startTransition(() => {
+									setName("");
+									router.refresh();
+									setImage(null);
+									setImagePreview(null);
+									setOpen(false);
+								});
 							});
-							setName("");
-							router.refresh();
-							setImage(null);
-							setImagePreview(null);
-							setOpen(false);
 						}}
 					>
 						{isLoading ? (
