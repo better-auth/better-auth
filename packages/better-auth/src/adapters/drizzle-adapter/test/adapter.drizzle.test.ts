@@ -43,6 +43,11 @@ const createTestOptions = (pg: Pool, useNumberId = false) =>
 		session: {
 			modelName: "sessions",
 		},
+		verification: {
+			fields: {
+				expiresAt: "expires_at",
+			},
+		},
 		advanced: {
 			database: {
 				useNumberId,
