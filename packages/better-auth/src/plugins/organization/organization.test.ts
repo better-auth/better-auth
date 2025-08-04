@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
-import { organizationClient } from "./client";
+import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { APIError, type Prettify } from "better-call";
@@ -55,6 +55,7 @@ describe("organization", async (it) => {
 	});
 
 	let organizationId: string;
+	let organization2Id: string;
 	it("create organization", async () => {
 		const organization = await client.organization.create({
 			name: "test",
@@ -100,7 +101,6 @@ describe("organization", async (it) => {
 		expect(existingSlug.error?.status).toBe(400);
 		expect(existingSlug.error?.message).toBe("slug is taken");
 	});
-
 	it("should create organization directly in the server without cookie", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
@@ -116,11 +116,11 @@ describe("organization", async (it) => {
 			},
 		});
 
+		organization2Id = organization?.id as string;
 		expect(organization?.name).toBe("test2");
 		expect(organization?.members.length).toBe(1);
 		expect(organization?.members[0]?.role).toBe("owner");
 	});
-
 	it("should allow listing organizations", async () => {
 		const organizations = await client.organization.list({
 			fetchOptions: {
@@ -176,6 +176,23 @@ describe("organization", async (it) => {
 		});
 		expect((session.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
+		);
+	});
+	it("should allow activating organization by slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.setActive({
+			organizationSlug: "test2",
+			fetchOptions: {
+				headers,
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organization2Id,
 		);
 	});
 
@@ -1285,9 +1302,6 @@ describe("owner can update roles", async () => {
 		const member = await auth.api.getActiveMember({
 			headers: { cookie: adminCookie },
 		});
-
-		console.log({ member });
-
 		expect(member?.role).toBe("");
 	});
 });
@@ -1409,7 +1423,7 @@ describe("Additional Fields", async () => {
 	const client = createAuthClient({
 		plugins: [
 			organizationClient({
-				$inferAuth: {} as typeof auth,
+				schema: inferOrgAdditionalFields<typeof auth>(),
 				teams: { enabled: true },
 			}),
 		],
@@ -1421,7 +1435,22 @@ describe("Additional Fields", async () => {
 		},
 	});
 
-	it("Expect team endpoints to still be defined on authClient", async () => {
+	const client2 = createAuthClient({
+		plugins: [
+			organizationClient({
+				schema: inferOrgAdditionalFields<typeof auth>(),
+				teams: { enabled: true },
+			}),
+		],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("Expect team endpoints to still be defined", async () => {
 		const teams = client.organization.createTeam;
 		expect(teams).toBeDefined();
 		expectTypeOf<typeof teams>().not.toEqualTypeOf<undefined>();
@@ -1429,16 +1458,28 @@ describe("Additional Fields", async () => {
 
 	it("Should infer the organization schema", async () => {
 		const org = client.organization.create;
-		type Params = Parameters<typeof org>[0];
+		const org2 = client2.organization.create;
+		type Params = Omit<Parameters<typeof org>[0], "fetchOptions">;
+		type Params2 = Omit<Parameters<typeof org2>[0], "fetchOptions">;
 		expect(org).toBeDefined();
-		expectTypeOf<Omit<Params, "fetchOptions">>().toEqualTypeOf<{
+		expectTypeOf<Params>().toEqualTypeOf<{
 			name: string;
 			slug: string;
+			logo?: string | undefined;
+			userId?: string | undefined;
+			metadata?: Record<string, any> | undefined;
 			someRequiredField: string;
 			someOptionalField?: string | undefined;
-			metadata?: Record<string, any> | undefined;
-			userId?: string | undefined;
+			keepCurrentActiveOrganization?: boolean | undefined;
+		}>();
+		expectTypeOf<Params2>().toEqualTypeOf<{
+			name: string;
+			slug: string;
 			logo?: string | undefined;
+			userId?: string | undefined;
+			metadata?: Record<string, any> | undefined;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
 			keepCurrentActiveOrganization?: boolean | undefined;
 		}>();
 	});

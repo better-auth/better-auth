@@ -21,7 +21,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
-import type { JwtOptions } from "../jwt";
+import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
 import { mergeSchema } from "../../db";
 import { registerEndpoint } from "./register";
@@ -29,7 +29,7 @@ import { registerEndpoint } from "./register";
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
 		(plugin) => plugin.id === "jwt",
-	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
+	) as ReturnType<typeof jwt>;
 };
 
 /**
@@ -724,7 +724,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
-						auth_time: ctx.context.session?.session.createdAt.getTime(),
+						auth_time: ctx.context.session
+							? new Date(ctx.context.session.session.createdAt).getTime()
+							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,

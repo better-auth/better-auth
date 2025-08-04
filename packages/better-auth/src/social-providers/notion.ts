@@ -15,12 +15,6 @@ export interface NotionProfile {
 	person?: {
 		email?: string;
 	};
-	bot?: {
-		owner: {
-			type: "workspace" | "user";
-		};
-		workspace_name?: string;
-	};
 }
 
 export interface NotionOptions extends ProviderOptions<NotionProfile> {}
@@ -53,6 +47,7 @@ export const notion = (options: NotionOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint,
+				authentication: "basic",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -72,30 +67,36 @@ export const notion = (options: NotionOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<NotionProfile>(
-				"https://api.notion.com/v1/users/me",
-				{
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
-						"Notion-Version": "2022-06-28",
-					},
+			const { data: profile, error } = await betterFetch<{
+				bot: {
+					owner: {
+						user: NotionProfile;
+					};
+				};
+			}>("https://api.notion.com/v1/users/me", {
+				headers: {
+					Authorization: `Bearer ${token.accessToken}`,
+					"Notion-Version": "2022-06-28",
 				},
-			);
-			if (error) {
+			});
+			if (error || !profile) {
 				return null;
 			}
-
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userProfile = profile.bot?.owner?.user;
+			if (!userProfile) {
+				return null;
+			}
+			const userMap = await options.mapProfileToUser?.(userProfile);
 			return {
 				user: {
-					id: profile.id,
-					name: profile.name || "Notion User",
-					email: profile.person?.email || null,
-					image: profile.avatar_url,
-					emailVerified: !!profile.person?.email,
+					id: userProfile.id,
+					name: userProfile.name || "Notion User",
+					email: userProfile.person?.email || null,
+					image: userProfile.avatar_url,
+					emailVerified: !!userProfile.person?.email,
 					...userMap,
 				},
-				data: profile,
+				data: userProfile,
 			};
 		},
 		options,

@@ -35,7 +35,7 @@ function getRetryAfter(lastRequest: number, window: number) {
 }
 
 function createDBStorage(ctx: AuthContext) {
-	const model = ctx.options.rateLimit?.modelName || "rateLimit";
+	const model = "rateLimit";
 	const db = ctx.adapter;
 	return {
 		get: async (key: string) => {
@@ -55,7 +55,7 @@ function createDBStorage(ctx: AuthContext) {
 			try {
 				if (_update) {
 					await db.updateMany({
-						model: "rateLimit",
+						model,
 						where: [{ field: "key", value: key }],
 						update: {
 							count: value.count,
@@ -64,7 +64,7 @@ function createDBStorage(ctx: AuthContext) {
 					});
 				} else {
 					await db.create({
-						model: "rateLimit",
+						model,
 						data: {
 							key,
 							count: value.count,
@@ -121,7 +121,6 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	let max = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
-		console.warn("No IP address found for rate limiting");
 		return;
 	}
 	const key = ip + path;

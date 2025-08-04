@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { HTMLAttributes } from "svelte/elements";
 import { getEmblaContext } from "./context.js";
+import emblaCarouselSvelte from "embla-carousel-svelte";
 
 type $$Props = HTMLAttributes<HTMLDivElement>;
 
@@ -15,7 +16,7 @@ const { orientation, options, plugins, onInit } = getEmblaContext(
 <div
 	class="overflow-hidden"
 	use:emblaCarouselSvelte={{
-		options: {
+		options: 
 			container: "[data-embla-container]",
 			slides: "[data-embla-slide]",
 			...$options,

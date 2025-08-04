@@ -18,7 +18,6 @@ import {
 	onSubscriptionUpdated,
 } from "./hooks";
 import type {
-	Customer,
 	InputSubscription,
 	StripeOptions,
 	StripePlan,
@@ -199,7 +198,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.string()
 						.meta({
 							description:
-								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+								'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
 						})
 						.default("/"),
 					/**
@@ -209,7 +208,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.string()
 						.meta({
 							description:
-								'Return URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+								'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
 						})
 						.optional(),
 					/**
@@ -319,23 +318,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 
-				const activeSubscription = customerId
-					? await client.subscriptions
-							.list({
-								customer: customerId,
-								status: "active",
-							})
-							.then((res) =>
-								res.data.find(
-									(subscription) =>
-										subscription.id ===
-											subscriptionToUpdate?.stripeSubscriptionId ||
-										ctx.body.subscriptionId,
-								),
-							)
-							.catch((e) => null)
-					: null;
-
+				const activeSubscriptions = await client.subscriptions
+					.list({
+						customer: customerId,
+					})
+					.then((res) =>
+						res.data.filter(
+							(sub) => sub.status === "active" || sub.status === "trialing",
+						),
+					);
+				const activeSubscription = activeSubscriptions.find((sub) =>
+					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
+						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
+							sub.id === ctx.body.subscriptionId
+						: true,
+				);
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
 					: await ctx.context.adapter.findMany<Subscription>({
@@ -370,6 +367,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
 							flow_data: {
 								type: "subscription_update_confirm",
+								after_completion: {
+									type: "redirect",
+									redirect: {
+										return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+									},
+								},
 								subscription_update_confirm: {
 									subscription: activeSubscription.id,
 									items: [
@@ -396,52 +399,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				let subscription = existingSubscription;
-				if (!subscription) {
-					const incompleteSubscription = subscriptions.find(
-						(sub) => sub.status === "incomplete",
-					);
-
-					if (incompleteSubscription) {
-						await ctx.context.adapter.update({
-							model: "subscription",
-							update: {
-								...incompleteSubscription,
-								plan: plan.name.toLowerCase(),
-								seats: ctx.body.seats || 1,
-								stripeCustomerId: customerId,
-								status: "active",
-							},
-							where: [
-								{
-									field: "id",
-									value: incompleteSubscription.id,
-								},
-							],
-						});
-						subscription = {
-							...incompleteSubscription,
+				const subscription =
+					existingSubscription ||
+					(await ctx.context.adapter.create<InputSubscription, Subscription>({
+						model: "subscription",
+						data: {
 							plan: plan.name.toLowerCase(),
-							seats: ctx.body.seats || 1,
 							stripeCustomerId: customerId,
-						};
-					} else {
-						const newSubscription = await ctx.context.adapter.create<
-							InputSubscription,
-							Subscription
-						>({
-							model: "subscription",
-							data: {
-								plan: plan.name.toLowerCase(),
-								stripeCustomerId: customerId,
-								status: "incomplete",
-								referenceId,
-								seats: ctx.body.seats || 1,
-							},
-						});
-						subscription = newSubscription;
-					}
-				}
+							status: "incomplete",
+							referenceId,
+							seats: ctx.body.seats || 1,
+						},
+					}));
 
 				if (!subscription) {
 					ctx.context.logger.error("Subscription ID not found");
@@ -460,11 +429,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx,
 				);
 
-				const freeTrail = plan.freeTrial
-					? {
-							trial_period_days: plan.freeTrial.days,
-						}
-					: undefined;
+				const alreadyHasTrial = subscription.status === "trialing";
+				const freeTrial =
+					!alreadyHasTrial && plan.freeTrial
+						? {
+								trial_period_days: plan.freeTrial.days,
+							}
+						: undefined;
 
 				let priceIdToUse: string | undefined = undefined;
 				if (ctx.body.annual) {
@@ -514,7 +485,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 							subscription_data: {
-								...freeTrail,
+								...freeTrial,
 							},
 							mode: "subscription",
 							client_reference_id: referenceId,
@@ -654,7 +625,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.optional(),
 					returnUrl: z.string().meta({
 						description:
-							"Return URL to redirect back after successful subscription. Eg: 'https://example.com/success'",
+							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
 					}),
 				}),
 				use: [
@@ -1152,26 +1123,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												userId: user.id,
 											},
 										});
-										const customer = await ctx.context.adapter.update<Customer>(
-											{
-												model: "user",
-												update: {
-													stripeCustomerId: stripeCustomer.id,
-												},
-												where: [
-													{
-														field: "id",
-														value: user.id,
-													},
-												],
-											},
-										);
-										if (!customer) {
+										const updatedUser =
+											await ctx.context.internalAdapter.updateUser(user.id, {
+												stripeCustomerId: stripeCustomer.id,
+											});
+										if (!updatedUser) {
 											logger.error("#BETTER_AUTH: Failed to create  customer");
 										} else {
 											await options.onCustomerCreate?.(
 												{
-													customer,
 													stripeCustomer,
 													user,
 												},
