@@ -167,6 +167,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.optional(),
 					/**
+					 * Stripe customer id
+					 */
+					stripeCustomerId: z
+					.string()
+					.meta({
+					  description:
+						"The id of the Stripe customer to upgrade. Eg: 'cus_123'",
+					})
+					.optional(),
+				  	/**
 					 * Any additional data you want to store in your database
 					 * subscriptions
 					 */
@@ -272,7 +282,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				}
 
 				let customerId =
-					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
+					subscriptionToUpdate?.stripeCustomerId || ctx.body.stripeCustomerId || user.stripeCustomerId;
 
 				if (!customerId) {
 					try {

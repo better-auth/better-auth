@@ -42,6 +42,18 @@ export const subscriptions = {
 				type: "number",
 				required: false,
 			},
+			trialStart: {
+			  type: "date",
+			  required: false,
+			},
+			trialEnd: {
+			  type: "date",
+			  required: false,
+			},
+			updatedAt: {
+			  type: "date",
+			  required: false,
+			},
 		},
 	},
 } satisfies AuthPluginSchema;
