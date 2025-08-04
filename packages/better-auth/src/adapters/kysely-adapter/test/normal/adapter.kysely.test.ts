@@ -43,6 +43,11 @@ export const opts = ({
 				},
 			},
 		},
+		verification: {
+			fields: {
+				expiresAt: "expires_at",
+			},
+		},
 		session: {
 			modelName: "sessions",
 		},
