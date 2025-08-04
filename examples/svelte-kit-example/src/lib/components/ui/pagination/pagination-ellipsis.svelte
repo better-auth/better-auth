@@ -1,5 +1,6 @@
 <script lang="ts">
 import { cn } from "$lib/utils.js";
+import DotsHorizontal from "svelte-radix/DotsHorizontal.svelte";
 import type { HTMLAttributes } from "svelte/elements";
 
 type $$Props = HTMLAttributes<HTMLSpanElement>;
@@ -9,7 +10,8 @@ export { className as class };
 </script>
 
 <span
-	aria-hidden
+	role="presentation"
+	aria-hidden="true"
 	class={cn("flex h-9 w-9 items-center justify-center", className)}
 	{...$$restProps}
 >

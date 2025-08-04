@@ -1526,10 +1526,18 @@ Table Name: `invitation`
       type: "Date",
       description: "Timestamp of when the invitation expires"
     },
+  ]}
+  />
+
+If teams are enabled, you need to add the following fields to the invitation table:
+
+<DatabaseTable
+  fields={[
     {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the invitation was created"
+      name: "teamId",
+      type: "string",
+      description: "The ID of the team",
+      isOptional: true
     },
   ]}
   />
@@ -1696,7 +1704,7 @@ For inferring the additional fields, you can use the `inferOrgAdditionalFields` 
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
-import { inferOrgAdditionalFields, organizationClient } from "better-auth/plugins/organization/client"
+import { inferOrgAdditionalFields, organizationClient } from "better-auth/client/plugins";
 import type { auth } from "@/auth" // import the auth object type only
 
 const client = createAuthClient({

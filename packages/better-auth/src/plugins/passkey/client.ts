@@ -106,6 +106,9 @@ export const getPasskeyActions = (
 					...(opts?.authenticatorAttachment && {
 						authenticatorAttachment: opts.authenticatorAttachment,
 					}),
+					...(opts?.name && {
+						name: opts.name,
+					}),
 				},
 			},
 		);

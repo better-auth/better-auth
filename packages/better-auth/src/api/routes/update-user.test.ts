@@ -312,6 +312,22 @@ describe("updateUser", async () => {
 });
 
 describe("delete user", async () => {
+	it("should not delete user if deleteUser is disabled", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: false,
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+		console.log(res);
+	});
 	it("should delete the user with a fresh session", async () => {
 		const { auth, client, signInWithTestUser } = await getTestInstance({
 			user: {
