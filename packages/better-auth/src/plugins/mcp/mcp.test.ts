@@ -44,11 +44,11 @@ describe("mcp", async () => {
 
 	let server: Listener;
 	beforeAll(async () => {
-	beforeAll(async () => {
-		server = await listen(toNodeHandler(auth.handler), {
-			port: 3000,
+		beforeAll(async () => {
+			server = await listen(toNodeHandler(auth.handler), {
+				port: 3000,
+			});
 		});
-	});
 	});
 
 	afterAll(async () => {
@@ -123,7 +123,6 @@ describe("mcp", async () => {
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
 				accountLinking: {
-					trustedProviders: [providerId],
 					trustedProviders: [providerId],
 				},
 			},
@@ -332,7 +331,6 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
-				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "client_secret_basic",
 			},
 		});
@@ -367,7 +365,6 @@ describe("mcp", async () => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
-				redirect_uris: [redirectUri],
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "none",
 			},
@@ -444,7 +441,6 @@ describe("mcp", async () => {
 		const createdClient = await serverClient.$fetch("/mcp/register", {
 			method: "POST",
 			body: {
-				redirect_uris: [redirectUri],
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "client_secret_basic",
 			},
