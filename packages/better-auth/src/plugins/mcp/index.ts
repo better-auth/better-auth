@@ -570,7 +570,11 @@ export const mcp = (options: MCPOptions) => {
 					};
 
 					const additionalUserClaims = opts.getAdditionalUserInfoClaim
-						? await opts.getAdditionalUserInfoClaim(user, requestedScopes, client)
+						? await opts.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
 					const idToken = await new SignJWT({
