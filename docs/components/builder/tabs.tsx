@@ -9,11 +9,7 @@ type Tab = {
 	content?: string | React.ReactNode | any;
 };
 
-export const AuthTabs = ({
-	tabs: propTabs,
-}: {
-	tabs: Tab[];
-}) => {
+export const AuthTabs = ({ tabs: propTabs }: { tabs: Tab[] }) => {
 	const [active, setActive] = useState<Tab>(propTabs[0]);
 	const [tabs, setTabs] = useState<Tab[]>(propTabs);
 	const isActive = (tab: Tab) => {
