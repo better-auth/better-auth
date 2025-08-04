@@ -965,6 +965,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const client = await getClient(
 						accessToken.clientId,
 						ctx.context.adapter,
+						trustedClients,
 					);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
