@@ -115,11 +115,13 @@ export interface OIDCOptions {
 	 *
 	 * @param user - The user object.
 	 * @param scopes - The scopes that the client requested.
+	 * @param client - The client object.
 	 * @returns The user info claim.
 	 */
 	getAdditionalUserInfoClaim?: (
 		user: User & Record<string, any>,
 		scopes: string[],
+		client: Client,
 	) => Record<string, any> | Promise<Record<string, any>>;
 	/**
 	 * Trusted clients that are configured directly in the provider options.

@@ -32,7 +32,7 @@ describe("oidc", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
-				getAdditionalUserInfoClaim(user, scopes) {
+				getAdditionalUserInfoClaim(user, scopes, client) {
 					return {
 						custom: "custom value",
 						userId: user.id,
@@ -368,7 +368,7 @@ describe("oidc storage", async () => {
 					loginPage: "/login",
 					consentPage: "/oauth2/authorize",
 					requirePKCE: true,
-					getAdditionalUserInfoClaim(user, scopes) {
+					getAdditionalUserInfoClaim(user, scopes, client) {
 						return {
 							custom: "custom value",
 							userId: user.id,
@@ -523,7 +523,7 @@ describe("oidc-jwt", async () => {
 						loginPage: "/login",
 						consentPage: "/oauth2/authorize",
 						requirePKCE: true,
-						getAdditionalUserInfoClaim(user, scopes) {
+						getAdditionalUserInfoClaim(user, scopes, client) {
 							return {
 								custom: "custom value",
 								userId: user.id,
