@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
 	Settings,
@@ -11,6 +10,7 @@ import {
 	MonitorSmartphone,
 	CircleCheck,
 } from "lucide-react";
+import { Grid } from "../blocks/features";
 
 const telemetrySections = [
 	{
@@ -21,7 +21,7 @@ const telemetrySections = [
 	{
 		icon: Settings,
 		title: "Better Auth",
-		points: [{ label: "Auth version" }],
+		points: [{ label: "Better Auth version" }],
 	},
 	{
 		icon: Database,
@@ -77,24 +77,32 @@ const telemetrySections = [
 
 export default function Telemetry() {
 	return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-			{telemetrySections.map(({ icon: Icon, title, points }, index) => (
-				<Card key={index} className="rounded-2xl shadow-sm">
-					<CardHeader className="flex flex-row items-center gap-3 pb-2">
-						<div className="bg-muted p-2 rounded-xl">
-							<Icon className="w-5 h-5 text-muted-foreground" />
+		<div className="py-2">
+			<div className="mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-10 md:gap-2 max-w-7xl mx-auto">
+				{telemetrySections.map(({ icon: Icon, title, points }, i) => (
+					<div
+						key={title}
+						className="relative bg-gradient-to-b dark:from-neutral-900 from-neutral-100 dark:to-neutral-950 to-white px-6 py-4 overflow-hidden"
+					>
+						<Grid size={i * 5 + 10} />
+						<div className="relative z-0 flex items-center gap-3 mb-4">
+							<div className="bg-muted p-2 rounded-lg">
+								<Icon className="w-4 h-4 text-muted-foreground" />
+							</div>
+							<h3 className="text-base text-lg !m-0 font-semibold text-neutral-800 dark:text-white">
+								{title}
+							</h3>
 						</div>
-						<CardTitle className="text-base font-semibold">{title}</CardTitle>
-					</CardHeader>
-					<CardContent className="flex flex-wrap gap-2 pt-0 pb-4 px-4">
-						{points.map((point, i) => (
-							<Badge key={i} variant="outline">
-								{point.label}
-							</Badge>
-						))}
-					</CardContent>
-				</Card>
-			))}
+						<div className="flex flex-wrap gap-2 relative z-0">
+							{points.map((point, index) => (
+								<Badge key={index} variant="outline">
+									{point.label}
+								</Badge>
+							))}
+						</div>
+					</div>
+				))}
+			</div>
 		</div>
 	);
 }
