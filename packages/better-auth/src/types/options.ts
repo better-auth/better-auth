@@ -1046,4 +1046,15 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+	/**
+	 * Telemetry configuration
+	 */
+	telemetry?: {
+		/**
+		 * Enable telemetry collection
+		 *
+		 * @default true
+		 */
+		enabled?: boolean;
+	};
 };

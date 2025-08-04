@@ -339,6 +339,10 @@ exports[`init > should match config 1`] = `
       "order": 4,
     },
   },
+  "telemetry": {
+    "publish": [Function],
+    "report": [Function],
+  },
   "trustedOrigins": [
     "http://localhost:3000",
   ],
