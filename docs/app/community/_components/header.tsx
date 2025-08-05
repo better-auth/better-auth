@@ -1,5 +1,3 @@
-import { IconLink } from "@/app/changelogs/_components/changelog-layout";
-import { GitHubIcon, XIcon } from "@/app/changelogs/_components/icons";
 export default function CommunityHeader() {
 	return (
 		<div className="h-full flex flex-col justify-center items-center text-white">
