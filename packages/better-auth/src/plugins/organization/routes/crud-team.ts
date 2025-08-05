@@ -121,7 +121,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 					});
 				}
 				const canCreate = hasPermission({
-					role: member.role as string,
+					role: member.role,
 					options: ctx.context.orgOptions,
 					permissions: {
 						team: ["create"],

@@ -154,7 +154,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const createdMember = await adapter.createMember({
 				organizationId: orgId,
 				userId: user.id,
-				role: parseRoles(ctx.body.role as string | string[]),
+				role: parseRoles(ctx.body.role),
 				createdAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
 			});
@@ -241,25 +241,25 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = (await adapter.findMemberByOrgId({
+			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organizationId,
-			})) as Member;
+			});
 			if (!member) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			let toBeRemovedMember: Member | null = null;
+			let toBeRemovedMember: InferMember<O, false> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
-				toBeRemovedMember = (await adapter.findMemberByEmail({
+				toBeRemovedMember = await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
 					organizationId: organizationId,
-				})) as Member;
+				});
 			} else {
-				toBeRemovedMember = (await adapter.findMemberById(
+				toBeRemovedMember = await adapter.findMemberById(
 					ctx.body.memberIdOrEmail,
-				)) as Member;
+				);
 			}
 			if (!toBeRemovedMember) {
 				throw new APIError("BAD_REQUEST", {
@@ -276,9 +276,9 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 					});
 				}
-				const { members } = (await adapter.listMembers({
+				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
-				})) as { members: Member[] };
+				});
 				const owners = members.filter((member) => {
 					const roles = member.role.split(",");
 					return roles.includes(creatorRole);
@@ -318,7 +318,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
 			return ctx.json({
-				member: toBeRemovedMember as InferMember<O, false>,
+				member: toBeRemovedMember,
 			});
 		},
 	);
@@ -415,9 +415,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const roleToSet: string[] = Array.isArray(ctx.body.role)
-				? (ctx.body.role as string[])
+				? ctx.body.role
 				: ctx.body.role
-					? [ctx.body.role as string]
+					? [ctx.body.role]
 					: [];
 
 			const member = await adapter.findMemberByOrgId({
@@ -479,7 +479,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
-				parseRoles(ctx.body.role as string | string[]),
+				parseRoles(ctx.body.role),
 			);
 			if (!updatedMember) {
 				throw new APIError("BAD_REQUEST", {

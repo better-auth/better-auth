@@ -407,7 +407,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				permissions: {
 					organization: ["update"],
 				},
-				role: member.role as string,
+				role: member.role,
 				options: ctx.context.orgOptions,
 			});
 			if (!canUpdateOrg) {
@@ -489,7 +489,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			const canDeleteOrg = hasPermission({
-				role: member.role as string,
+				role: member.role,
 				permissions: {
 					organization: ["delete"],
 				},

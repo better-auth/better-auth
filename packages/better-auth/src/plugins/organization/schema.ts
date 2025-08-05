@@ -82,7 +82,11 @@ export type InferOrganizationZodRolesFromOption<
 
 export type InferOrganizationRolesFromOption<
 	O extends OrganizationOptions | undefined,
-> = O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+> = O extends { roles: any }
+	? keyof O["roles"] extends infer K extends string
+		? K
+		: "admin" | "member" | "owner"
+	: "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
