@@ -19,7 +19,7 @@
     "test": "turbo --filter \"./packages/*\" test",
     "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
-  "dependencies": {
+  "devDependencies": {
     "@biomejs/biome": "2.1.3",
     "@types/node": "^20.17.9",
     "bumpp": "^9.8.1",
@@ -29,7 +29,8 @@
     "taze": "^0.18.0",
     "tinyglobby": "^0.2.10",
     "turbo": "^2.3.3",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "pnpm": {
     "overrides": {

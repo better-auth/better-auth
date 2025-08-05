@@ -36,7 +36,6 @@
     "@types/fs-extra": "^11.0.4",
     "typescript": "catalog:",
     "unbuild": "catalog:",
-    "vitest": "^1.6.0",
     "zod": "^4.0.0"
   },
   "dependencies": {
