@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { Switch as SwitchPrimitive } from "bits-ui";
 
 type $$Props = SwitchPrimitive.Props;
