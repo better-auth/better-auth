@@ -13,7 +13,7 @@ export function getSessionAtom($fetch: BetterFetch) {
 		onSuccess: (ctx) => {
 			// todo: we should implement the full revalidation logic for async resources, like SWR or React Query
 			// revalidate the session signal after expiration
-			if ("session" in ctx.data && "expiresAt" in ctx.data.session) {
+			if (ctx.data.session && "expiresAt" in ctx.data.session) {
 				const expiresAt = new Date(ctx.data.session.expiresAt);
 				setTimeout(() => {
 					$signal.set(false);
