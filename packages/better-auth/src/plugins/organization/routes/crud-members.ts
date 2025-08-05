@@ -241,32 +241,32 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
+			const member = (await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organizationId,
-			});
+			})) as Member;
 			if (!member) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			let toBeRemovedMember: InferMember<O, false> | null = null;
+			let toBeRemovedMember: Member | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
-				toBeRemovedMember = await adapter.findMemberByEmail({
+				toBeRemovedMember = (await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
 					organizationId: organizationId,
-				});
+				})) as Member;
 			} else {
-				toBeRemovedMember = await adapter.findMemberById(
+				toBeRemovedMember = (await adapter.findMemberById(
 					ctx.body.memberIdOrEmail,
-				);
+				)) as Member;
 			}
 			if (!toBeRemovedMember) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const roles = (toBeRemovedMember.role as string).split(",");
+			const roles = toBeRemovedMember.role.split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwner = roles.includes(creatorRole);
 			if (isOwner) {
@@ -276,11 +276,11 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 					});
 				}
-				const { members } = await adapter.listMembers({
+				const { members } = (await adapter.listMembers({
 					organizationId: organizationId,
-				});
+				})) as { members: Member[] };
 				const owners = members.filter((member) => {
-					const roles = (member.role as string).split(",");
+					const roles = member.role.split(",");
 					return roles.includes(creatorRole);
 				});
 				if (owners.length <= 1) {
@@ -291,7 +291,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 			const canDeleteMember = hasPermission({
-				role: member.role as string,
+				role: member.role,
 				options: ctx.context.orgOptions,
 				permissions: {
 					member: ["delete"],
@@ -318,7 +318,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
 			return ctx.json({
-				member: toBeRemovedMember,
+				member: toBeRemovedMember as InferMember<O, false>,
 			});
 		},
 	);
