@@ -10,6 +10,9 @@ import { logger } from "../utils/logger";
 import { decodeJwt } from "jose";
 import { base64 } from "@better-auth/utils/base64";
 
+/**
+ * @see [Microsoft Identity Platform - Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)
+ */
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** Identifies the intended recipient of the token */
 	aud: string;
@@ -38,7 +41,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** Matches the parameter included in the original authorize request */
 	nonce: string;
 	/** User's profile picture */
-	picture?: string;
+	picture: string;
 	/** Immutable identifier for the user account */
 	oid: string;
 	/** Set of roles assigned to the user */
