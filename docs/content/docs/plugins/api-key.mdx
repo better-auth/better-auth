@@ -162,16 +162,17 @@ const permissions = { // Permissions to check are optional.
 }
 
 type verifyApiKey = {
-    /**
-     * The key to verify. 
-     */
-    key: string = "your_api_key_here"
-    /**
-     * The permissions to verify. Optional.
-     */
-    permissions?: Record<string, string[]>
+/**
+_ The key to verify.
+_/
+key: string = "your_api_key_here"
+/**
+_ The permissions to verify. Optional.
+_/
+permissions?: Record<string, string[]>
 }
-```
+
+````
 </APIMethod>
 
 
@@ -183,7 +184,7 @@ type Result = {
   error: { message: string; code: string } | null;
   key: Omit<ApiKey, "key"> | null;
 };
-```
+````
 
 ---
 
@@ -327,15 +328,9 @@ type Result = {
 
 ### List API keys
 
-<APIMethod
-  path="/api-key/list"
-  method="GET"
-  requireSession
->
-```ts
-type listApiKeys = {
-}
-```
+<APIMethod path="/api-key/list" method="GET" requireSession>
+  ```ts type listApiKeys = {}
+  ```
 </APIMethod>
 
 #### Result
@@ -358,10 +353,8 @@ This function will delete all API keys that have an expired expiration date.
   method="POST"
   isServerOnly
 >
-```ts
-type deleteAllExpiredApiKeys = {
-}
-```
+  ```ts type deleteAllExpiredApiKeys = {}
+  ```
 </APIMethod>
 
 <Callout>
@@ -387,7 +380,6 @@ Any time an endpoint in Better Auth is called that has a valid API key in the he
       ```
     </Tab>
 </Tabs>
-
 
 The default header key is `x-api-key`, but this can be changed by setting the `apiKeyHeaders` option in the plugin options.
 
@@ -510,8 +502,8 @@ export const auth = betterAuth({
         return apiKey;
       },
       customAPIKeyValidator: async ({ ctx, key }) => {
-        const res = await keyService.verify(key)
-        return res.valid
+        const res = await keyService.verify(key);
+        return res.valid;
       },
     }),
   ],
@@ -896,7 +888,7 @@ Table: `apiKey`
     {
       name: "userId",
       type: "string",
-      description: "The ID of the user who created the API key.",
+      description: "The ID of the user associated with the API key.",
       isForeignKey: true,
     },
     {
