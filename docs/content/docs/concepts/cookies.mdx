@@ -74,9 +74,8 @@ export const auth = betterAuth({
         },
     },
     trustedOrigins: [
-        'https://example.com',
-        'https://app1.example.com',
-        'https://app2.example.com',
+        'https://example.com', // Your root domain
+        'https://app.example.com', // the subdomain you want to share cookies with
     ],
 })
 ```
