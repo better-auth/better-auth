@@ -28,7 +28,7 @@ async function getGitHubStars() {
 		},
 	);
 	const json = await response.json();
-	const stars = parseInt(json.stargazers_count);
+	const stars = Number(json.stargazers_count);
 	return stars;
 }
 export default async function CommunityPage() {
@@ -73,7 +73,10 @@ export default async function CommunityPage() {
 						</div>
 					</div>
 					<div className="w-full md:mx-auto overflow-hidden">
-						<Stats npmDownloads={npmDownloads.downloads} githubStars={githubStars} />
+						<Stats
+							npmDownloads={npmDownloads.downloads}
+							githubStars={githubStars}
+						/>
 					</div>
 				</div>
 			</div>
