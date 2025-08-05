@@ -19,27 +19,21 @@ async function getNPMPackageDownloads() {
 	return npmStat;
 }
 async function getGitHubStars() {
-	try {
-		const response = await fetch(
-			"https://api.github.com/repos/better-auth/better-auth",
-			{
-				next: {
-					revalidate: 60,
-				},
+	const response = await fetch(
+		"https://api.github.com/repos/better-auth/better-auth",
+		{
+			next: {
+				revalidate: 60,
 			},
-		);
-		if (!response?.ok) {
-			return null;
-		}
-		const json = await response.json();
-		const stars = parseInt(json.stargazers_count).toLocaleString();
-		return stars;
-	} catch {
-		return null;
-	}
+		},
+	);
+	const json = await response.json();
+	const stars = parseInt(json.stargazers_count);
+	return stars;
 }
 export default async function CommunityPage() {
 	const npmDownloads = await getNPMPackageDownloads();
+	const githubStars = await getGitHubStars();
 	return (
 		<Section
 			id="hero"
@@ -50,7 +44,7 @@ export default async function CommunityPage() {
 		>
 			<div className="min-h-screen w-full bg-transparent">
 				<div className="overflow-hidden flex flex-col w-full bg-transparent/10 relative">
-					<div className="h-[45vh]">
+					<div className="h-[32vh]">
 						<CommunityHeader />
 					</div>
 					<div className="relative py-0">
@@ -78,7 +72,11 @@ export default async function CommunityPage() {
 						</div>
 					</div>
 					<div className="w-full md:mx-auto overflow-hidden">
-						<Stats npmDownloads={npmDownloads.downloads} />
+						{}
+						<Stats
+							npmDownloads={npmDownloads.downloads}
+							githubStars={githubStars}
+						/>
 					</div>
 				</div>
 			</div>
