@@ -19,17 +19,21 @@ async function getNPMPackageDownloads() {
 	return npmStat;
 }
 async function getGitHubStars() {
-	const response = await fetch(
-		"https://api.github.com/repos/better-auth/better-auth",
-		{
-			next: {
-				revalidate: 60,
+	try {
+		const response = await fetch(
+			"https://api.github.com/repos/better-auth/better-auth",
+			{
+				next: {
+					revalidate: 60,
+				},
 			},
-		},
-	);
-	const json = await response.json();
-	const stars = Number(json.stargazers_count);
-	return stars;
+		);
+		const json = await response.json();
+		const stars = Number(json.stargazers_count);
+		return stars;
+	} catch {
+		return NaN;
+	}
 }
 export default async function CommunityPage() {
 	const npmDownloads = await getNPMPackageDownloads();
