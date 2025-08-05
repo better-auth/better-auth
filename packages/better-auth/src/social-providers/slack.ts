@@ -37,7 +37,7 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 	/**
 	 * Optional Slack workspace ID to restrict sign in to a specific workspace
 	 */
-	team?: string;
+	team?: string | (() => string);
 }
 
 export const slack = (options: SlackOptions) => {
@@ -56,9 +56,12 @@ export const slack = (options: SlackOptions) => {
 			url.searchParams.set("client_id", options.clientId);
 
 			if (options.team) {
-				url.searchParams.set("team", options.team);
+				let teamValue = options.team;
+				if (typeof teamValue === "function") {
+					teamValue = teamValue();
+				}
+				url.searchParams.set("team", teamValue);
 			}
-
 			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
 			url.searchParams.set("state", state);
 			return url;
