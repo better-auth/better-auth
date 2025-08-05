@@ -378,9 +378,9 @@ const auth = betterAuth({
 
 The OIDC Provider plugin adds the following tables to the database:
 
-### oAuth Client
+### oAuth Application
 
-Table Name: `oauthClient`
+Table Name: `oauthApplication`
 
 <DatabaseTable
   fields={[
@@ -388,6 +388,12 @@ Table Name: `oauthClient`
       name: "id",
       type: "string",
       description: "Database ID of the oAuth client",
+      isPrimaryKey: true
+    },
+    {
+      name: "clientId", 
+      type: "string", 
+      description: "Unique identifier for each OAuth client. Field may be mapped to the id field to save an index.",
       isPrimaryKey: true
     },
     { 
@@ -400,13 +406,13 @@ Table Name: `oauthClient`
       name: "disabled",
       type: "boolean",
       description: "Indicates if the client is disabled",
-      isRequired: true
+      isOptional: true
     },
     {
       name: "scope",
       type: "string",
       description: "Space-separated list of scopes",
-      isRequired: true
+      isOptional: true
     },
     {
       name: "userId",
@@ -419,18 +425,20 @@ Table Name: `oauthClient`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the oAuth client was created"
+      description: "Timestamp of when the oAuth client was created",
+      isOptional: true
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the oAuth client was last updated"
+      description: "Timestamp of when the oAuth client was last updated",
+      isOptional: true
     },
     { 
       name: "name", 
       type: "string", 
       description: "Name of the oAuth client",
-      isRequired: true
+      isOptional: true
     },
     {
       name: "uri",
@@ -484,7 +492,7 @@ Table Name: `oauthClient`
       name: "redirectURLs",
       type: "string",
       description: "Comma-separated list of redirect URLs",
-      isRequired: true
+      isOptional: true
     },
     {
       name: "tokenEndpointAuthMethod",
@@ -508,13 +516,13 @@ Table Name: `oauthClient`
       name: "public",
       type: "string",
       description: "If the oAuth client is a public or confidential client",
-      isRequired: true
+      isOptional: true
     },
     { 
       name: "type",
       type: "string",
       description: "Type of oAuth client (e.g., web, mobile)",
-      isRequired: true
+      isOptional: true
     },
     { 
       name: "metadata",

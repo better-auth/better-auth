@@ -26,6 +26,10 @@ export const schema = {
 			userId: {
 				type: "string",
 				required: false,
+				references: {
+					model: "user",
+					field: "id",
+				},
 			},
 			createdAt: {
 				type: "date",
