@@ -18,6 +18,7 @@ describe("oauth2", async () => {
 	const { customFetchImpl, auth } = await getTestInstance({
 		plugins: [
 			genericOAuth({
+
 				config: [
 					{
 						providerId,
@@ -524,5 +525,82 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(nullSession.data).toBeNull();
+	});
+	it("should handle numeric accountId correctly", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "numeric-id@test.com",
+				name: "Numeric ID Test",
+				sub: 12345, // Numeric ID
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		let headers = new Headers();
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+		);
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts.length).toBe(1);
+		expect(accounts[0]).toMatchObject({
+			providerId,
+			accountId: "12345", // Should be stored as string
+			userId: session.data?.user.id,
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "numeric-id@test.com",
+				name: "Numeric ID Test",
+				sub: 12345, // Same numeric ID
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const signInRes2 = await authClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		const { headers: newHeaders2 } = await simulateOAuthFlow(
+			signInRes2.data?.url || "",
+			headers,
+		);
+
+		const session2 = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders2,
+			},
+		});
+		const accounts2 = await ctx.internalAdapter.findAccounts(
+			session2.data?.user.id!,
+		);
+		expect(accounts2.length).toBe(1); // Should still have only one account
+		expect(accounts2[0]).toMatchObject({
+			providerId,
+			accountId: "12345",
+			userId: session2.data?.user.id,
+		});
 	});
 });
