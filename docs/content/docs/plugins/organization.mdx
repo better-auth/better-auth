@@ -1526,10 +1526,18 @@ Table Name: `invitation`
       type: "Date",
       description: "Timestamp of when the invitation expires"
     },
+  ]}
+  />
+
+If teams are enabled, you need to add the following fields to the invitation table:
+
+<DatabaseTable
+  fields={[
     {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the invitation was created"
+      name: "teamId",
+      type: "string",
+      description: "The ID of the team",
+      isOptional: true
     },
   ]}
   />
