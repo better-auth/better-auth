@@ -3,9 +3,14 @@ import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { kFormatter } from "@/lib/utils";
-export default function Stats({ npmDownloads,
-	githubStars, }: { npmDownloads: number; githubStars: number }) {
-	return ( 
+export default function Stats({
+	npmDownloads,
+	githubStars,
+}: {
+	npmDownloads: number;
+	githubStars: number;
+}) {
+	return (
 		<div className="relative">
 			<div className="md:mx-auto w-full">
 				{/* Socials */}
