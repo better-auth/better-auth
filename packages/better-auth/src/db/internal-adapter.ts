@@ -541,13 +541,17 @@ export const createInternalAdapter = (
 					if (currentList) {
 						let list: { token: string; expiresAt: number }[] =
 							safeJSONParse(currentList) || [];
-						list = list.filter((s) => s.token !== token);
+						const now = Date.now();
+						list = list.filter((s) => s.expiresAt > now && s.token !== token);
 
 						if (list.length > 0) {
+							const lastExpiration = list.at(-1)?.expiresAt;
 							await secondaryStorage.set(
 								`active-sessions-${userId}`,
 								JSON.stringify(list),
-								sessionExpiration,
+								lastExpiration
+									? Math.max(Math.floor((lastExpiration - now) / 1000), 0)
+									: sessionExpiration,
 							);
 						} else {
 							await secondaryStorage.delete(`active-sessions-${userId}`);
