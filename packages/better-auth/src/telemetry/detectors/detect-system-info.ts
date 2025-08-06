@@ -79,7 +79,7 @@ function isWsl() {
 	}
 }
 
-let isInsiderContainerCached: boolean | undefined;
+let isInsideContainerCached: boolean | undefined;
 
 const hasContainerEnv = () => {
 	try {
@@ -91,11 +91,11 @@ const hasContainerEnv = () => {
 };
 
 function isInsideContainer() {
-	if (isInsiderContainerCached === undefined) {
-		isInsiderContainerCached = hasContainerEnv() || isDocker();
+	if (isInsideContainerCached === undefined) {
+		isInsideContainerCached = hasContainerEnv() || isDocker();
 	}
 
-	return isInsiderContainerCached;
+	return isInsideContainerCached;
 }
 
 function isCI() {
