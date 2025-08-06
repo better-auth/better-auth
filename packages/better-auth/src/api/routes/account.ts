@@ -304,7 +304,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					{
 						userId: session.user.id,
 						providerId: provider.id,
-						accountId: linkingUserInfo.user.id.toString(),
+						accountId: linkingUserInfo.user.id,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 						refreshToken: c.body.idToken.refreshToken,
