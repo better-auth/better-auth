@@ -449,10 +449,14 @@ export const createInternalAdapter = (
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
 				if (data) {
-					const { session } = JSON.parse(data) as {
+					const { session } = safeJSONParse<{
 						session: Session;
 						user: User;
-					};
+					}>(data) ?? {};
+					if (!session) {
+						// not possible, should log an error?
+						return;
+					}
 					const userId = session.userId;
 
 					const currentList = await secondaryStorage.get(
