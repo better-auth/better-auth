@@ -15,6 +15,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
+
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
 		schemaPrisma = await fs.readFile(
@@ -222,10 +223,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		}
 	});
 
+	const schemaChanged = schema.trim() !== schemaPrisma.trim();
+
 	return {
-		code: schema.trim() === schemaPrisma.trim() ? "" : schema,
+		code: schemaChanged ? schema : "",
 		fileName: filePath,
-		overwrite: true,
+		overwrite: schemaPrismaExist && schemaChanged,
 	};
 };
 
