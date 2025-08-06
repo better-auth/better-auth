@@ -44,7 +44,7 @@ export async function validateAuthorizationCode({
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
 		const encodedCredentials = base64.encode(
-			`${options.clientId}:${options.clientSecret}`,
+			`${options.clientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else if (options.clientSecret !== undefined) {

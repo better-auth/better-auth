@@ -30,7 +30,7 @@ export async function refreshAccessToken({
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
 		headers["authorization"] = base64.encode(
-			`${options.clientId}:${options.clientSecret}`,
+			`${options.clientId}:${options.clientSecret ?? ""}`,
 		);
 	} else {
 		body.set("client_id", options.clientId);
