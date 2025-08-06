@@ -17,13 +17,6 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId, type InternalLogger } from "../utils";
-import type {
-	Adapter,
-	AuthContext,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Where,
-} from "../types";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
