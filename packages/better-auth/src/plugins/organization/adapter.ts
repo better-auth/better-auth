@@ -600,6 +600,16 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 
 		deleteTeam: async (teamId: string) => {
+			await adapter.delete<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: teamId,
+					},
+				],
+			});
+
 			const team = await adapter.delete<Team>({
 				model: "team",
 				where: [
