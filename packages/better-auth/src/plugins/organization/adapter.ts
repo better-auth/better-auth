@@ -604,6 +604,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 
 		deleteTeam: async (teamId: string) => {
+			await adapter.deleteMany({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: teamId,
+					},
+				],
+			});
 			const team = await adapter.delete<InferTeam<O, false>>({
 				model: "team",
 				where: [
