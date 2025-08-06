@@ -1,5 +1,12 @@
 import { getDate } from "../utils/date";
 import { parseSessionOutput, parseUserOutput } from "./schema";
+import type {
+	Adapter,
+	AuthContext,
+	BetterAuthOptions,
+	GenericEndpointContext,
+	Where,
+} from "../types";
 import {
 	type Account,
 	type Session,
@@ -10,13 +17,6 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
-import type {
-	Adapter,
-	AuthContext,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Where,
-} from "../types";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -52,7 +52,7 @@ export const createInternalAdapter = (
 			const createdAccount = await createWithHooks(
 				{
 					...account,
-					userId: createdUser.id || user.id,
+					userId: createdUser!.id || user.id,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
@@ -85,10 +85,10 @@ export const createInternalAdapter = (
 			);
 			return createdUser as T & User;
 		},
-		createAccount: async <T>(
+		createAccount: async <T extends Record<string, any>>(
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account> &
-				Record<string, any>,
+				T,
 			context?: GenericEndpointContext,
 		) => {
 			const createdAccount = await createWithHooks(
@@ -101,6 +101,7 @@ export const createInternalAdapter = (
 				undefined,
 				context,
 			);
+			// fixme: `createWithHooks` could return null if the hook returns false from user side
 			return createdAccount as T & Account;
 		},
 		listSessions: async (userId: string) => {
