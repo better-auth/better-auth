@@ -609,8 +609,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-
-			await adapter.delete({
+			const team = await adapter.delete<Team>({
 				model: "team",
 				where: [
 					{
@@ -619,8 +618,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-
-			return teamId;
+			return team;
 		},
 
 		listTeams: async (organizationId: string) => {
@@ -682,7 +680,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return session as Session;
 		},
 
-		listTeamMembers: async (data: { teamId: string }) => {
+		listTeamMembers: async (data: {
+			teamId: string;
+		}) => {
 			const members = await adapter.findMany<TeamMember>({
 				model: "teamMember",
 				where: [
@@ -695,21 +695,27 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return members;
 		},
-		countTeamMembers: async (data: { teamId: string }) => {
+		countTeamMembers: async (data: {
+			teamId: string;
+		}) => {
 			const count = await adapter.count({
 				model: "teamMember",
 				where: [{ field: "teamId", value: data.teamId }],
 			});
 			return count;
 		},
-		countMembers: async (data: { organizationId: string }) => {
+		countMembers: async (data: {
+			organizationId: string;
+		}) => {
 			const count = await adapter.count({
 				model: "member",
 				where: [{ field: "organizationId", value: data.organizationId }],
 			});
 			return count;
 		},
-		listTeamsByUser: async (data: { userId: string }) => {
+		listTeamsByUser: async (data: {
+			userId: string;
+		}) => {
 			const members = await adapter.findMany<TeamMember>({
 				model: "teamMember",
 				where: [
@@ -734,7 +740,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return teams;
 		},
 
-		findTeamMember: async (data: { teamId: string; userId: string }) => {
+		findTeamMember: async (data: {
+			teamId: string;
+			userId: string;
+		}) => {
 			const member = await adapter.findOne<TeamMember>({
 				model: "teamMember",
 				where: [
@@ -782,7 +791,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 		},
 
-		removeTeamMember: async (data: { teamId: string; userId: string }) => {
+		removeTeamMember: async (data: {
+			teamId: string;
+			userId: string;
+		}) => {
 			await adapter.delete({
 				model: "teamMember",
 				where: [
@@ -888,7 +900,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
-		findPendingInvitations: async (data: { organizationId: string }) => {
+		findPendingInvitations: async (data: {
+			organizationId: string;
+		}) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
 				where: [
@@ -906,7 +920,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
-		listInvitations: async (data: { organizationId: string }) => {
+		listInvitations: async (data: {
+			organizationId: string;
+		}) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
 				where: [
