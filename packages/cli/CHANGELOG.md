@@ -1,5 +1,24 @@
 # @better-auth/cli
 
+## 1.3.5
+
+### Patch Changes
+
+- 2d8d053: fix: `--yes` option does not work on `@better-auth/cli generate`
+- Updated dependencies [1421360]
+- Updated dependencies [e5f3f31]
+- Updated dependencies [e4af253]
+- Updated dependencies [b27221b]
+- Updated dependencies [375fff5]
+- Updated dependencies [4833a4b]
+- Updated dependencies [7fa90f8]
+- Updated dependencies [60c92fa]
+- Updated dependencies [d1d593f]
+- Updated dependencies [29c0df5]
+- Updated dependencies [c726753]
+- Updated dependencies [978b285]
+  - better-auth@1.3.5
+
 ## 1.3.4
 
 ### Patch Changes
