@@ -16,7 +16,6 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin } from "../../types";
-import type { UserInfo } from "../../oauth2/types";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -735,7 +734,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 						account: {
 							providerId: provider.providerId,
-							accountId: String(userInfo.id),
+							accountId: mapUser.id ? String(mapUser.id) : String(userInfo.id),
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
