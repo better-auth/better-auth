@@ -16,7 +16,7 @@
     "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
     "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
-    "test": "vitest",
+    "test": "turbo --filter \"./packages/*\" test",
     "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
   "devDependencies": {
