@@ -118,7 +118,7 @@ export interface GenericOAuthConfig {
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	tokenUrlParams?: Record<string, string>;
+	tokenUrlParams?: Record<string, string | (() => Promise<string>)>;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
