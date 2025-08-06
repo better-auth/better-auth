@@ -21,7 +21,15 @@ interface TelemetryOptions {
 	options: BetterAuthOptions;
 }
 
-export async function createTelemetry({ logger, options }: TelemetryOptions) {
+export interface Telemetry {
+	publish: (event: string, payload: any) => Promise<void>;
+	report: () => Promise<void>;
+}
+
+export async function createTelemetry({
+	logger,
+	options,
+}: TelemetryOptions): Promise<Telemetry> {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 	const telemetryEndpoint = debugEnabled ? debugEndpoint(logger) : realEndpoint;
 
@@ -32,6 +40,16 @@ export async function createTelemetry({ logger, options }: TelemetryOptions) {
 		return envEnabled && telemetryEnabled;
 	};
 
+	const enabled = await isEnabled();
+
+	if (!enabled) {
+		const noOp = async () => {};
+		return {
+			publish: noOp,
+			report: noOp,
+		};
+	}
+
 	const anonymousId = await projectId(options.baseURL);
 
 	const publish = async (event: string, payload: any) => {
@@ -41,7 +59,6 @@ export async function createTelemetry({ logger, options }: TelemetryOptions) {
 			anonymousId,
 		});
 	};
-	const noOpPublish = async (_event: string, _payload: any) => {};
 
 	const report = async () => {
 		const payload = await awaitObject({
@@ -58,21 +75,9 @@ export async function createTelemetry({ logger, options }: TelemetryOptions) {
 
 		await publish("init", payload);
 	};
-	const noOpReport = async () => {};
 
-	const enabled = await isEnabled();
-
-	return Object.freeze(
-		enabled
-			? {
-					publish,
-					report,
-				}
-			: {
-					publish: noOpPublish,
-					report: noOpReport,
-				},
-	);
+	return {
+		publish,
+		report,
+	};
 }
-
-export type Telemetry = Awaited<ReturnType<typeof createTelemetry>>;

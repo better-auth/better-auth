@@ -114,4 +114,3 @@ function isCI() {
 			"RUN_ID" in env) // TaskCluster, dsari
 	);
 }
-
