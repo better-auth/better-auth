@@ -12,7 +12,7 @@ export const initIdField = ({
 	config: AdapterConfig;
 	options: BetterAuthOptions;
 	getDefaultModelName: (modelName: string) => string;
-}):IdField => {
+}): IdField => {
 	return ({
 		customModelName,
 		forceAllowId,
