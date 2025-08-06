@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
 	Check,
 	Copy,
@@ -50,11 +50,10 @@ export function useCopyButton(
 const cache = new Map<string, string>();
 
 export function LLMCopyButton() {
-	const [isLoading, setLoading] = useState(false);
+	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
-		setLoading(true);
-		const url = window.location.pathname + ".mdx";
-		try {
+		startTransition(async () => {
+			const url = window.location.pathname + ".mdx";
 			const cached = cache.get(url);
 
 			if (cached) {
@@ -71,9 +70,7 @@ export function LLMCopyButton() {
 					}),
 				]);
 			}
-		} finally {
-			setLoading(false);
-		}
+		});
 	});
 
 	return (
