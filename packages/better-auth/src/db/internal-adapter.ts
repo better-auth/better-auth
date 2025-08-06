@@ -101,7 +101,6 @@ export const createInternalAdapter = (
 				undefined,
 				context,
 			);
-			// fixme: `createWithHooks` could return null if the hook returns false from user side
 			return createdAccount as T & Account;
 		},
 		listSessions: async (userId: string) => {
