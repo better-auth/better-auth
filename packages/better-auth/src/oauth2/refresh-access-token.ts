@@ -34,7 +34,9 @@ export async function refreshAccessToken({
 		);
 	} else {
 		body.set("client_id", options.clientId);
-		body.set("client_secret", options.clientSecret);
+		if (options.clientSecret !== undefined) {
+			body.set("client_secret", options.clientSecret);
+		}
 	}
 
 	if (extraParams) {
