@@ -93,9 +93,7 @@ export const createAdapter =
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 		};
-
 		checkIfDatabaseSupportsNumberIds({ config, options });
-
 		const debugLog = initDebugLogs({ config, debugLogs });
 		const schema = getAuthTables(options);
 		const getDefaultModelName = initGetDefaultModelName({
@@ -301,7 +299,6 @@ export const createAdapter =
 					`${formatMethod("updateMany")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-
 				const updatedCount = await adapterInstance.updateMany({
 					model,
 					where,

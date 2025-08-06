@@ -70,7 +70,8 @@ export interface AdapterConfig {
 	/**
 	 * If the database doesn't support JSON columns, set this to `false`.
 	 *
-	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
+	 * Note: We do not fully support this yet, so
+	 * we will handle the translation between using `JSON` columns, and saving `string`s to the database.
 	 *
 	 * @default false
 	 */
@@ -78,7 +79,8 @@ export interface AdapterConfig {
 	/**
 	 * If the database doesn't support JSONB columns, set this to `false`.
 	 *
-	 * We will handle the translation between using `JSONB` columns, and saving `string`s to the database.
+	 * Note: We do not fully support this yet, so
+	 * we will handle the translation between using `JSONB` columns, and saving `string`s to the database.
 	 *
 	 * @default false
 	 */
@@ -107,7 +109,6 @@ export interface AdapterConfig {
 	 * @default false
 	 */
 	disableIdGeneration: boolean;
-
 	/**
 	 * If the database doesn't support numbers, set this to `false`.
 	 *
@@ -411,8 +412,4 @@ export type IdField = ({
 }: {
 	customModelName?: string;
 	forceAllowId?: boolean;
-}) => {
-	defaultValue?: (() => string | undefined) | undefined;
-	type: "string" | "number";
-	required: boolean;
-};
+}) => FieldAttribute

@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "../../types";
 import type { FieldAttribute } from "../../db";
 import { logger } from "../../utils";
-import type { AdapterConfig } from "./types";
+import type { AdapterConfig, IdField } from "./types";
 import { generateId as defaultGenerateId } from "../../utils";
 
 export const initIdField = ({
@@ -12,7 +12,7 @@ export const initIdField = ({
 	config: AdapterConfig;
 	options: BetterAuthOptions;
 	getDefaultModelName: (modelName: string) => string;
-}) => {
+}):IdField => {
 	return ({
 		customModelName,
 		forceAllowId,
