@@ -45,7 +45,7 @@ export interface OAuthProvider<
 		},
 	) => Promise<{
 		user: {
-			id: string;
+			id: string | number;
 			name?: string;
 			email?: string | null;
 			image?: string;

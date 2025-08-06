@@ -24,7 +24,8 @@ describe("magic link", async () => {
 					verificationEmail = data;
 				},
 			}),
-		],	});
+		],
+	});
 
 	const client = createAuthClient({
 		plugins: [magicLinkClient()],
@@ -38,7 +39,7 @@ describe("magic link", async () => {
 	it("should send magic link", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,
-		});	
+		});
 		expect(verificationEmail).toMatchObject({
 			email: testUser.email,
 			url: expect.stringContaining(
