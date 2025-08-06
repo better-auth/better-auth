@@ -1,5 +1,12 @@
 import { getDate } from "../utils/date";
 import { parseSessionOutput, parseUserOutput } from "./schema";
+import type {
+	Adapter,
+	AuthContext,
+	BetterAuthOptions,
+	GenericEndpointContext,
+	Where,
+} from "../types";
 import {
 	type Account,
 	type Session,
@@ -54,7 +61,7 @@ export const createInternalAdapter = (
 			const createdAccount = await createWithHooks(
 				{
 					...account,
-					userId: createdUser.id || user.id,
+					userId: createdUser!.id || user.id,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
@@ -87,10 +94,10 @@ export const createInternalAdapter = (
 			);
 			return createdUser as T & User;
 		},
-		createAccount: async <T>(
+		createAccount: async <T extends Record<string, any>>(
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account> &
-				Record<string, any>,
+				T,
 			context?: GenericEndpointContext,
 		) => {
 			const createdAccount = await createWithHooks(
