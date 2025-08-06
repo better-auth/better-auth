@@ -446,6 +446,37 @@ export const createInternalAdapter = (
 		},
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
+				// remove the session from the active sessions list
+				const data = await secondaryStorage.get(token);
+				if (data) {
+					const { session } = JSON.parse(data) as {
+						session: Session;
+						user: User;
+					};
+					const userId = session.userId;
+
+					const currentList = await secondaryStorage.get(
+						`active-sessions-${userId}`,
+					);
+					if (currentList) {
+						let list: { token: string; expiresAt: number }[] =
+							safeJSONParse(currentList) || [];
+						list = list.filter((s) => s.token !== token);
+
+						if (list.length > 0) {
+							await secondaryStorage.set(
+								`active-sessions-${userId}`,
+								JSON.stringify(list),
+								sessionExpiration,
+							);
+						} else {
+							await secondaryStorage.delete(`active-sessions-${userId}`);
+						}
+					} else {
+						// not possible, should log an error?
+					}
+				}
+
 				await secondaryStorage.delete(token);
 
 				if (
