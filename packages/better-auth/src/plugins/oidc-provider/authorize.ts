@@ -1,8 +1,9 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
-import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
+import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { generateRandomString } from "../../crypto";
+import { getClient } from "./index";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -96,26 +97,11 @@ export async function authorize(
 		);
 	}
 
-	const client = await ctx.context.adapter
-		.findOne<Record<string, any>>({
-			model: "oauthApplication",
-			where: [
-				{
-					field: "clientId",
-					value: ctx.query.client_id,
-				},
-			],
-		})
-		.then((res) => {
-			if (!res) {
-				return null;
-			}
-			return {
-				...res,
-				redirectURLs: res.redirectURLs.split(","),
-				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
-		});
+	const client = await getClient(
+		ctx.query.client_id,
+		ctx.context.adapter,
+		options.trustedClients || [],
+	);
 	if (!client) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -153,10 +139,7 @@ export async function authorize(
 	const requestScope =
 		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
 	const invalidScopes = requestScope.filter((scope) => {
-		const isInvalid =
-			!opts.scopes.includes(scope) ||
-			(scope === "offline_access" && query.prompt !== "consent");
-		return isInvalid;
+		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
 		return handleRedirect(
@@ -210,7 +193,7 @@ export async function authorize(
 					redirectURI: query.redirect_uri,
 					scope: requestScope,
 					userId: session.user.id,
-					authTime: session.session.createdAt.getTime(),
+					authTime: new Date(session.session.createdAt).getTime(),
 					/**
 					 * If the prompt is set to `consent`, then we need
 					 * to require the user to consent to the scopes.
@@ -249,6 +232,11 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
+		return handleRedirect(redirectURIWithCode.toString());
+	}
+
+	// Check if this is a trusted client that should skip consent
+	if (client.skipConsent) {
 		return handleRedirect(redirectURIWithCode.toString());
 	}
 

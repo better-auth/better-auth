@@ -5,11 +5,9 @@ description: Learn how to use a database with Better Auth.
 
 ## Adapters
 
-Better Auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/">Kysely</Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+Better Auth requires a database connection to store data. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
-You can pass a database connection to Better Auth by passing a supported database instance, a dialect instance or a Kysely instance in the database options.
-
-You can learn more about supported Kysely dialects in the [Other relational databases](/docs/adapters/other-relational-databases) documentation. Or if you're using an ORM, you can find our supported ORM adapters in that same category on the documentation sidebar.
+You can pass a database connection to Better Auth by passing a supported database instance in the database options. You can learn more about supported database adapters in the [Other relational databases](/docs/adapters/other-relational-databases) documentation.
 
 ## CLI
 
@@ -563,6 +561,30 @@ export const auth = betterAuth({
           return {
             data: user,
           };
+        },
+      },
+    },
+  },
+});
+```
+
+#### Using the Context Object
+
+The context object (`ctx`), passed as the second argument to the hook, contains useful information. For `update` hooks, this includes the current `session`, which you can use to access the logged-in user's details.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  databaseHooks: {
+    user: {
+      update: {
+        before: async (data, ctx) => {
+          // You can access the session from the context object.
+          if (ctx.context.session) {
+            console.log("User update initiated by:", ctx.context.session.userId);
+          }
+          return { data };
         },
       },
     },

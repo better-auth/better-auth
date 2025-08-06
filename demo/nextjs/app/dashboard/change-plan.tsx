@@ -19,7 +19,7 @@ function Component(props: {
 	currentPlan?: string;
 	isTrial?: boolean;
 }) {
-	const [selectedPlan, setSelectedPlan] = useState("starter");
+	const [selectedPlan, setSelectedPlan] = useState("plus");
 	const id = useId();
 	return (
 		<Dialog>
@@ -72,35 +72,35 @@ function Component(props: {
 					>
 						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
 							<RadioGroupItem
-								value="starter"
+								value="plus"
 								id={`${id}-1`}
 								aria-describedby={`${id}-1-description`}
 								className="order-1 after:absolute after:inset-0"
 							/>
 							<div className="grid grow gap-1">
-								<Label htmlFor={`${id}-1`}>Starter</Label>
+								<Label htmlFor={`${id}-1`}>Plus</Label>
 								<p
 									id={`${id}-1-description`}
 									className="text-xs text-muted-foreground"
 								>
-									$50/month
+									$20/month
 								</p>
 							</div>
 						</div>
 						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
 							<RadioGroupItem
-								value="professional"
+								value="pro"
 								id={`${id}-2`}
 								aria-describedby={`${id}-2-description`}
 								className="order-1 after:absolute after:inset-0"
 							/>
 							<div className="grid grow gap-1">
-								<Label htmlFor={`${id}-2`}>Professional</Label>
+								<Label htmlFor={`${id}-2`}>Pro</Label>
 								<p
 									id={`${id}-2-description`}
 									className="text-xs text-muted-foreground"
 								>
-									$99/month
+									$200/month
 								</p>
 							</div>
 						</div>
@@ -158,11 +158,11 @@ function Component(props: {
 								? props.isTrial
 									? "Upgrade"
 									: "Current Plan"
-								: selectedPlan === "starter"
+								: selectedPlan === "plus"
 									? !props.currentPlan
 										? "Upgrade"
 										: "Downgrade"
-									: selectedPlan === "professional"
+									: selectedPlan === "pro"
 										? "Upgrade"
 										: "Contact us"}
 						</Button>

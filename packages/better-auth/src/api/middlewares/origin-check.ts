@@ -32,6 +32,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			return false;
 		}
 		if (pattern.includes("*")) {
+			// For protocol-specific wildcards, match the full origin
+			if (pattern.includes("://")) {
+				return wildcardMatch(pattern)(getOrigin(url) || url);
+			}
+			// For host-only wildcards, match just the host
 			return wildcardMatch(pattern)(getHost(url));
 		}
 
@@ -92,6 +97,11 @@ export const originCheck = (
 				return false;
 			}
 			if (pattern.includes("*")) {
+				// For protocol-specific wildcards, match the full origin
+				if (pattern.includes("://")) {
+					return wildcardMatch(pattern)(getOrigin(url) || url);
+				}
+				// For host-only wildcards, match just the host
 				return wildcardMatch(pattern)(getHost(url));
 			}
 			const protocol = getProtocol(url);

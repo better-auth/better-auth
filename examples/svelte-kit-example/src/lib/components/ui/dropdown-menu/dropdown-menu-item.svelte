@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
 
 type $$Props = DropdownMenuPrimitive.ItemProps & {

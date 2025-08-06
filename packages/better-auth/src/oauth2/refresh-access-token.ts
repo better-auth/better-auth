@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens } from "./types";
 import type { ProviderOptions } from "./types";
-import { base64Url } from "@better-auth/utils/base64";
+import { base64 } from "@better-auth/utils/base64";
 
 export async function refreshAccessToken({
 	refreshToken,
@@ -26,11 +26,12 @@ export async function refreshAccessToken({
 
 	body.set("grant_type", grantType);
 	body.set("refresh_token", refreshToken);
+	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
+	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		const encodedCredentials = base64Url.encode(
+		headers["authorization"] = base64.encode(
 			`${options.clientId}:${options.clientSecret}`,
 		);
-		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);

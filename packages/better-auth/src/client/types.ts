@@ -95,7 +95,7 @@ export type InferClientAPI<O extends ClientOptions> = InferRoutes<
 	O
 >;
 
-export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
+export type InferActions<O extends ClientOptions> = (O["plugins"] extends Array<
 	infer Plugin
 >
 	? UnionToIntersection<
@@ -105,7 +105,22 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 					: {}
 				: {}
 		>
-	: {};
+	: {}) &
+	//infer routes from auth config
+	InferRoutes<
+		O["$InferAuth"] extends {
+			plugins: infer Plugins;
+		}
+			? Plugins extends Array<infer Plugin>
+				? Plugin extends {
+						endpoints: infer Endpoints;
+					}
+					? Endpoints
+					: {}
+				: {}
+			: {},
+		O
+	>;
 
 export type InferErrorCodes<O extends ClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
