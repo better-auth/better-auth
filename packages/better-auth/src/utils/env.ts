@@ -84,7 +84,7 @@ export function getEnvVar(key: string, fallback?: string): string | undefined {
 export function getBooleanEnvVar(key: string, fallback = true): boolean {
 	const value = getEnvVar(key);
 	if (value === undefined) return fallback;
-	return value !== "0" && value.toLowerCase() !== "false";
+	return value !== "0" && value.toLowerCase() !== "false" && value !== "";
 }
 
 /**
