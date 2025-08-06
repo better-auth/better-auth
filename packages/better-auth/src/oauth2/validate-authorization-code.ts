@@ -47,7 +47,9 @@ export async function validateAuthorizationCode({
 			`${options.clientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
-	} else if (options.clientSecret !== undefined) {
+	}
+
+	if (options.clientSecret) {
 		body.set("client_secret", options.clientSecret);
 	}
 
