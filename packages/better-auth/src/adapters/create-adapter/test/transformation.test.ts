@@ -84,7 +84,6 @@ const init = (config?: Partial<AdapterConfig>, options?: BetterAuthOptions) => {
 	};
 };
 
-
 const tests: {
 	config?: Partial<AdapterConfig>;
 	input: Partial<
@@ -100,7 +99,7 @@ const tests: {
 			any
 		>
 	>;
-    transformed: Record<string, any>
+	transformed: Record<string, any>;
 }[] = [
 	// Number Conversion
 	{
@@ -123,10 +122,10 @@ const tests: {
 		 * (This would in theory then be saved in DB)
 		 * Then the transformOuput would be provided with this data and should return the input.
 		 */
-        transformed: {
-            number: "1",
-            string: "1",
-        }
+		transformed: {
+			number: "1",
+			string: "1",
+		},
 	},
 	// Boolean Conversion
 	{
@@ -136,9 +135,9 @@ const tests: {
 		input: {
 			boolean: true,
 		},
-        transformed: {
-            boolean: 1,
-        }
+		transformed: {
+			boolean: 1,
+		},
 	},
 	{
 		config: {
@@ -147,9 +146,9 @@ const tests: {
 		input: {
 			boolean: false,
 		},
-        transformed: {
-            boolean: 0,
-        }
+		transformed: {
+			boolean: 0,
+		},
 	},
 	// If bool & num not supported, it would transform to strings
 	// We should make sure it convert backs correctly.
@@ -162,10 +161,10 @@ const tests: {
 			boolean: true,
 			number: 1,
 		},
-        transformed: {
-            boolean: "1",
-            number: "1",
-        }
+		transformed: {
+			boolean: "1",
+			number: "1",
+		},
 	},
 	// Date Conversion
 	{
@@ -175,9 +174,9 @@ const tests: {
 		input: {
 			date: new Date(),
 		},
-        transformed: {
-            date: new Date().toISOString(),
-        }
+		transformed: {
+			date: new Date().toISOString(),
+		},
 	},
 	// JSON Conversion
 	{
@@ -192,14 +191,14 @@ const tests: {
 				d: { hello: new Date() },
 			},
 		},
-        transformed: {
-            json: JSON.stringify({
-                a: 1,
-                b: "2",
-                c: true,
-                d: { hello: new Date().toISOString() },
-            }),
-        }
+		transformed: {
+			json: JSON.stringify({
+				a: 1,
+				b: "2",
+				c: true,
+				d: { hello: new Date().toISOString() },
+			}),
+		},
 	},
 	// JSONB Conversion
 	{
@@ -213,19 +212,19 @@ const tests: {
 				c: true,
 			},
 		},
-        transformed: {
-            jsonb: {
-                a: 1,
-                b: "2",
-                c: true,
-            },
-        }
+		transformed: {
+			jsonb: {
+				a: 1,
+				b: "2",
+				c: true,
+			},
+		},
 	},
-    // JSON & JSONB conversion
+	// JSON & JSONB conversion
 	{
 		config: {
 			supportsJSONB: false,
-            supportsJSON: false,
+			supportsJSON: false,
 		},
 		input: {
 			jsonb: {
@@ -234,13 +233,13 @@ const tests: {
 				c: true,
 			},
 		},
-        transformed: {
-            jsonb: JSON.stringify({
-                a: 1,
-                b: "2",
-                c: true,
-            }),
-        }
+		transformed: {
+			jsonb: JSON.stringify({
+				a: 1,
+				b: "2",
+				c: true,
+			}),
+		},
 	},
 	// Array Conversion
 	{
@@ -251,10 +250,10 @@ const tests: {
 			"number[]": [1, 2, 3],
 			"string[]": ["1", "2", "3"],
 		},
-        transformed: {
-            "number[]": JSON.stringify([1, 2, 3]),
-            "string[]": JSON.stringify(["1", "2", "3"]),
-        }
+		transformed: {
+			"number[]": JSON.stringify([1, 2, 3]),
+			"string[]": JSON.stringify(["1", "2", "3"]),
+		},
 	},
 ];
 
@@ -273,11 +272,11 @@ describe("Create-Adapter: transformInput & transformOutput", () => {
 	for (const test of tests) {
 		it(generateTestName(test), async () => {
 			const { transformOutput, transformInput } = init(test.config);
-            // Input -> transformed 
-            const transformed = await transformInput(test.input);
-            expect(transformed).toEqual(test.transformed);
-            // Transformed -> output
-            // Output should be equal to the input.
+			// Input -> transformed
+			const transformed = await transformInput(test.input);
+			expect(transformed).toEqual(test.transformed);
+			// Transformed -> output
+			// Output should be equal to the input.
 			const output = await transformOutput(transformed);
 			expect(output).toEqual(test.input);
 		});

@@ -416,4 +416,4 @@ export type IdField = ({
 }: {
 	customModelName?: string;
 	forceAllowId?: boolean;
-}) => FieldAttribute
+}) => FieldAttribute;
