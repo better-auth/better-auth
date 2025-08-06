@@ -40,6 +40,7 @@ describe("magic link", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,
 		});
+		console.log(verificationEmail);
 		expect(verificationEmail).toMatchObject({
 			email: testUser.email,
 			url: expect.stringContaining(
