@@ -95,7 +95,7 @@ function isInsideContainer() {
 		isInsiderContainerCached = hasContainerEnv() || isDocker();
 	}
 
-	return isInsideContainer;
+	return isInsiderContainerCached;
 }
 
 function isCI() {
