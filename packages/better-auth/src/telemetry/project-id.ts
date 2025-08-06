@@ -6,31 +6,32 @@ import { getNameFromLocalPackageJson } from "../utils/package-json";
 
 let projectIdCached: string | null = null;
 
-export async function projectId(baseUrl: string | undefined) {
+export async function projectId(baseUrl: string | undefined): Promise<string> {
 	if (projectIdCached) return projectIdCached;
 
 	const firstCommit = getFirstCommitHash();
 	if (firstCommit) {
-		const id = await hashToBase64(
+		projectIdCached = await hashToBase64(
 			baseUrl ? baseUrl + firstCommit : firstCommit,
 		);
-		return id;
+		return projectIdCached;
 	}
 
 	const projectName = await getNameFromLocalPackageJson();
 	if (projectName) {
-		const id = await hashToBase64(
+		projectIdCached = await hashToBase64(
 			baseUrl ? baseUrl + projectName : projectName,
 		);
-		return id;
+		return projectIdCached;
 	}
 
 	if (baseUrl) {
-		const id = await hashToBase64(baseUrl);
-		return id;
+		projectIdCached = await hashToBase64(baseUrl);
+		return projectIdCached;
 	}
 
-	return generateId(32);
+	projectIdCached = generateId(32);
+	return projectIdCached;
 }
 
 function getFirstCommitHash(): string | null {
