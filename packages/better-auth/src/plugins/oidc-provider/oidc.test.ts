@@ -25,6 +25,41 @@ import {
 } from "jose";
 import { jwtClient } from "../jwt/client";
 
+describe("oidc - init", async () => {
+	it("should fail without the jwt plugin", async ({ expect }) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					oidcProvider({
+						useJWTPlugin: true,
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should fail without the jwt plugin usesOidcProviderPlugin set", async ({
+		expect,
+	}) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt({
+						usesOauthProvider: undefined,
+					}),
+					oidcProvider({
+						useJWTPlugin: true,
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrow();
+	});
+});
+
 describe("oidc", async () => {
 	const {
 		auth: authorizationServer,
