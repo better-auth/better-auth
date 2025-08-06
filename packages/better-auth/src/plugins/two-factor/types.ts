@@ -53,3 +53,9 @@ export interface TwoFactorTable {
 	backupCodes: string;
 	enabled: boolean;
 }
+
+export interface DeviceTable {
+	deviceId: string;
+	maxAge: number;
+	userAgent: string | null | undefined;
+}

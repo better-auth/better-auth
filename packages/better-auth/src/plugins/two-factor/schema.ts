@@ -34,4 +34,24 @@ export const schema = {
 			},
 		},
 	},
+	device: {
+		fields: {
+			id: {
+				type: "string",
+				required: true,
+				returned: true,
+				unique: true,
+			},
+			userAgent: {
+				type: "string",
+				required: true,
+				returned: true,
+			},
+			maxAge: {
+				type: "string",
+				required: true,
+				returned: true,
+			},
+		},
+	},
 } satisfies AuthPluginSchema;
