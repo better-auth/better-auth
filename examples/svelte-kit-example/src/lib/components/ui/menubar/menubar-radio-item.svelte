@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Menubar as MenubarPrimitive } from "bits-ui";
 import { cn } from "$lib/utils.js";
+import DotFilled from "svelte-radix/DotFilled.svelte";
 
 type $$Props = MenubarPrimitive.RadioItemProps;
 type $$Events = MenubarPrimitive.RadioItemEvents;

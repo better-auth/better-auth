@@ -1,7 +1,11 @@
 <script lang="ts">
 import { Dialog as SheetPrimitive } from "bits-ui";
 import { fly } from "svelte/transition";
-import { type Side, sheetTransitions } from "./index.js";
+import { type Side, sheetTransitions, sheetVariants } from "./index.js";
+import { cn } from "$lib/utils";
+import Cross2 from "svelte-radix/Cross2.svelte";
+import SheetPortal from "./sheet-portal.svelte";
+import SheetOverlay from "./sheet-overlay.svelte";
 
 type $$Props = SheetPrimitive.ContentProps & {
 	side?: Side;
