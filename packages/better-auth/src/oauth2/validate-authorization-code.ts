@@ -23,7 +23,7 @@ export async function validateAuthorizationCode({
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
-	additionalParams?: Record<string, string | (() => Promise<string>)>;
+	additionalParams?: Record<string, string | (() => string | Promise<string>)>;
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
