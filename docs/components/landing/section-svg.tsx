@@ -1,10 +1,6 @@
 import { Plus } from "lucide-react";
 
-const SectionSvg = ({
-	crossesOffset,
-}: {
-	crossesOffset: string;
-}) => {
+const SectionSvg = ({ crossesOffset }: { crossesOffset: string }) => {
 	return (
 		<>
 			<Plus

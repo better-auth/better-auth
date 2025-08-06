@@ -31,6 +31,8 @@ export const ORGANIZATION_ERROR_CODES = {
 	INVITATION_NOT_FOUND: "Invitation not found",
 	YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION:
 		"You are not the recipient of the invitation",
+	EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION:
+		"Email verification required before accepting or rejecting invitation",
 	YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION:
 		"You are not allowed to cancel this invitation",
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:

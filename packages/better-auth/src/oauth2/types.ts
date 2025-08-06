@@ -45,7 +45,7 @@ export interface OAuthProvider<
 		},
 	) => Promise<{
 		user: {
-			id: string;
+			id: string | number;
 			name?: string;
 			email?: string | null;
 			image?: string;
@@ -85,7 +85,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client secret of your application
 	 */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * The scopes you want to request from the provider
 	 */
