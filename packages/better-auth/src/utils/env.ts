@@ -67,12 +67,12 @@ export function getEnvVar(key: string, fallback?: string): string | undefined {
 	// @ts-expect-error deno
 	if (typeof Deno !== "undefined") {
 		// @ts-expect-error deno
-		return Deno.env.get(key) || fallback;
+		return Deno.env.get(key) ?? fallback;
 	}
 
 	// Handle Bun
 	if (typeof Bun !== "undefined") {
-		return Bun.env[key] || fallback;
+		return Bun.env[key] ?? fallback;
 	}
 
 	return fallback;
