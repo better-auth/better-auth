@@ -16,7 +16,10 @@ export const initIdField = ({
 	return ({
 		customModelName,
 		forceAllowId,
-	}: { customModelName?: string; forceAllowId?: boolean }) => {
+	}: {
+		customModelName?: string;
+		forceAllowId?: boolean;
+	}) => {
 		const shouldGenerateId =
 			!config.disableIdGeneration &&
 			!options.advanced?.database?.useNumberId &&

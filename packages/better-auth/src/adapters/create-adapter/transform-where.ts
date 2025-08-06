@@ -22,16 +22,20 @@ export const initTransformWhere = ({
 	getFieldAttributes: ({
 		field,
 		model,
-	}: { field: string; model: string }) => FieldAttribute;
+	}: {
+		field: string;
+		model: string;
+	}) => FieldAttribute;
 	getFieldName: ({ field, model }: { field: string; model: string }) => string;
 	options: BetterAuthOptions;
 }) => {
 	return <W extends Where[] | undefined>({
 		model,
 		where,
-	}: { where: W; model: string }): W extends undefined
-		? undefined
-		: CleanedWhere[] => {
+	}: {
+		where: W;
+		model: string;
+	}): W extends undefined ? undefined : CleanedWhere[] => {
 		if (!where) return undefined as any;
 		const newMappedKeys = config.mapKeysTransformInput ?? {};
 
