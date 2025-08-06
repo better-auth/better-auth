@@ -597,6 +597,10 @@ export const organization = <O extends OrganizationOptions>(
 						teamId: {
 							type: "string",
 							required: true,
+							references: {
+								model: "team",
+								field: "id",
+							},
 							fieldName: options?.schema?.teamMember?.fields?.teamId,
 						},
 						userId: {
