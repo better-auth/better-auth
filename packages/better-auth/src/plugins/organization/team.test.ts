@@ -218,7 +218,7 @@ describe("team", async (it) => {
 			fetchOptions: { headers },
 		});
 		expect(teamsBeforeRemoval.data).toHaveLength(3);
-
+		console.log({ teamsBeforeRemoval });
 		const removeTeamResponse = await client.organization.removeTeam({
 			teamId,
 			organizationId,
