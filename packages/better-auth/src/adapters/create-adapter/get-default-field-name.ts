@@ -22,7 +22,10 @@ export const initGetDefaultFieldName = ({
 	const getDefaultFieldName = ({
 		field,
 		model: unsafe_model,
-	}: { model: string; field: string }) => {
+	}: {
+		model: string;
+		field: string;
+	}) => {
 		// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 		// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 		// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.

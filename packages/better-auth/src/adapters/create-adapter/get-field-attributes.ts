@@ -11,7 +11,10 @@ export const initGetFieldAttributes = ({
 	getDefaultFieldName: ({
 		model,
 		field,
-	}: { model: string; field: string }) => string;
+	}: {
+		model: string;
+		field: string;
+	}) => string;
 	schema: BetterAuthDbSchema;
 	idField: IdField;
 }) => {

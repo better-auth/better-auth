@@ -4,7 +4,10 @@ import type { AdapterConfig } from "./types";
 export const initDebugLogs = ({
 	config,
 	debugLogs,
-}: { config: AdapterConfig; debugLogs: any[] }) => {
+}: {
+	config: AdapterConfig;
+	debugLogs: any[];
+}) => {
 	return (...args: any[]) => {
 		if (config.debugLogs === true || typeof config.debugLogs === "object") {
 			// If we're running adapter tests, we'll keep debug logs in memory, then print them out if a test fails.

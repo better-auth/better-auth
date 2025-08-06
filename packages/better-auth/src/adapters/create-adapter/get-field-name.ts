@@ -9,7 +9,10 @@ export const initGetFieldName = ({
 	getDefaultFieldName: ({
 		model,
 		field,
-	}: { model: string; field: string }) => string;
+	}: {
+		model: string;
+		field: string;
+	}) => string;
 	schema: BetterAuthDbSchema;
 }) => {
 	/**
@@ -22,7 +25,10 @@ export const initGetFieldName = ({
 	function getFieldName({
 		model: model_name,
 		field: field_name,
-	}: { model: string; field: string }) {
+	}: {
+		model: string;
+		field: string;
+	}) {
 		const model = getDefaultModelName(model_name);
 		const field = getDefaultFieldName({ model, field: field_name });
 
