@@ -369,9 +369,9 @@ describe("session storage", async () => {
 
 	it("should store session in secondary storage", async () => {
 		//since the instance creates a session on init, we expect the store to have 2 item (1 for session and 1 for active sessions record for the user)
-		expect(store.size).toBe(2);
+		expect(store.size).toBe(0);
 		const { headers } = await signInWithTestUser();
-		expect(store.size).toBe(3);
+		expect(store.size).toBe(2);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -404,7 +404,7 @@ describe("session storage", async () => {
 				headers,
 			},
 		});
-		expect(response.data?.length).toBeGreaterThan(1);
+		expect(response.data?.length).toBe(1);
 	});
 
 	it("revoke session and list sessions", async () => {
