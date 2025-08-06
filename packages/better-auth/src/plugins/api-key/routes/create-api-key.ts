@@ -371,7 +371,11 @@ export function createApiKey({
 				});
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context)?.catch((error) => {
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: `Failed to delete expired API keys: ${error.message}`,
+				});
+			});
 
 			const key = await keyGenerator({
 				length: opts.defaultKeyLength,
