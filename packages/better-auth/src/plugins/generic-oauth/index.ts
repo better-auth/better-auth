@@ -45,7 +45,7 @@ export interface GenericOAuthConfig {
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
