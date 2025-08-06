@@ -525,4 +525,257 @@ describe("oauth2", async () => {
 		});
 		expect(nullSession.data).toBeNull();
 	});
+
+	it("should handle numeric account IDs correctly and prevent duplicate accounts", async () => {
+		const numericAccountId = 123456789;
+		const userEmail = "numeric-id-test@test.com";
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: userEmail,
+				name: "Numeric ID Test User",
+				sub: numericAccountId,
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "numeric-test",
+							discoveryUrl:
+								"http://localhost:8081/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const firstSignIn = await authClient.signIn.oauth2({
+			providerId: "numeric-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL: firstCallbackURL, headers: firstHeaders } =
+			await simulateOAuthFlow(
+				firstSignIn.data?.url || "",
+				new Headers(),
+				customFetchImpl,
+			);
+
+		expect(firstCallbackURL).toBe("http://localhost:3000/new_user");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: {
+				headers: firstHeaders,
+			},
+		});
+
+		expect(firstSession.data).not.toBeNull();
+		const userId = firstSession.data?.user.id!;
+
+		const ctx = await auth.$context;
+		const accountsAfterFirst = await ctx.internalAdapter.findAccounts(userId);
+		expect(accountsAfterFirst).toHaveLength(1);
+		expect(accountsAfterFirst[0]).toMatchObject({
+			providerId: "numeric-test",
+			accountId: String(numericAccountId),
+			userId: userId,
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: userEmail,
+				name: "Numeric ID Test User",
+				sub: numericAccountId,
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const secondSignIn = await authClient.signIn.oauth2({
+			providerId: "numeric-test",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		const { callbackURL: secondCallbackURL, headers: secondHeaders } =
+			await simulateOAuthFlow(
+				secondSignIn.data?.url || "",
+				new Headers(),
+				customFetchImpl,
+			);
+
+		expect(secondCallbackURL).toBe("http://localhost:3000/dashboard");
+
+		const secondSession = await authClient.getSession({
+			fetchOptions: {
+				headers: secondHeaders,
+			},
+		});
+
+		expect(secondSession.data).not.toBeNull();
+		expect(secondSession.data?.user.id).toBe(userId);
+
+		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
+		expect(accountsAfterSecond).toHaveLength(1);
+		expect(accountsAfterSecond[0].accountId).toBe(String(numericAccountId));
+	});
+
+	it("should handle custom getUserInfo returning numeric ID", async () => {
+		const numericId = 987654321;
+
+		const { customFetchImpl, auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "custom-numeric",
+							authorizationUrl: "http://localhost:8081/authorize",
+							tokenUrl: "http://localhost:8081/token",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							getUserInfo: async (_tokens) => {
+								return {
+									id: numericId,
+									email: "custom-numeric@test.com",
+									name: "Custom Numeric User",
+									emailVerified: true,
+									image: "https://test.com/avatar.png",
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "custom-numeric",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			new Headers(),
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+
+		expect(accounts[0].accountId).toBe(String(numericId));
+	});
+
+	it("should handle mapProfileToUser returning numeric ID", async () => {
+		const numericProfileId = 111222333;
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "map-profile-numeric@test.com",
+				name: "Map Profile Numeric User",
+				sub: "string-sub-id",
+				user_id: numericProfileId,
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "map-profile-numeric",
+							discoveryUrl:
+								"http://localhost:8081/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							mapProfileToUser: (profile) => {
+								return {
+									id: profile.user_id,
+									email: profile.email,
+									name: profile.name,
+									emailVerified: profile.email_verified,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "map-profile-numeric",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			new Headers(),
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+
+		expect(accounts[0].accountId).toBe(String(numericProfileId));
+	});
 });
