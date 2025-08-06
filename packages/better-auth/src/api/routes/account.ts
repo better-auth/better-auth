@@ -243,6 +243,13 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
+			if (typeof linkingUserInfo.user.id !== "string") {
+				c.context.logger.error("User ID is not a string", {
+					provider: c.body.provider,
+				});
+				linkingUserInfo.user.id = `${linkingUserInfo.user.id}`;
+			}
+
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
