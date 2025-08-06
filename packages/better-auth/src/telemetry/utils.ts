@@ -1,0 +1,36 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
+export async function readPackageJson(pkg: string) {
+	try {
+		const pkgJsonPath = path.join(
+			process.cwd(),
+			"node_modules",
+			pkg,
+			"package.json",
+		);
+		if (await fs.exists(pkgJsonPath)) {
+			const raw = await fs.readFile(pkgJsonPath, "utf-8");
+			const json = JSON.parse(raw);
+			return json.version as string;
+		}
+	} catch {}
+	return undefined;
+}
+
+export async function getVersionFromLocalPackageJson(pkg: string) {
+	try {
+		const raw = await fs.readFile(
+			path.join(process.cwd(), "package.json"),
+			"utf-8",
+		);
+		const json = JSON.parse(raw);
+		const allDeps = {
+			...json.dependencies,
+			...json.devDependencies,
+			...json.peerDependencies,
+		};
+		return allDeps[pkg] as string;
+	} catch {}
+	return undefined;
+}
