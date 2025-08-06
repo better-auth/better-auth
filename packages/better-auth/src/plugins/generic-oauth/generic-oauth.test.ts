@@ -10,7 +10,8 @@ import { parseSetCookieHeader } from "../../cookies";
 
 let server = new OAuth2Server();
 
-describe("oauth2", async () => {
+// each test suite relies on the same port, so we need to enable sequential execution
+describe.sequential("oauth2", async () => {
 	const providerId = "test";
 	const clientId = "test-client-id";
 	const clientSecret = "test-client-secret";
