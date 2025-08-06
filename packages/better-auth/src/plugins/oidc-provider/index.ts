@@ -754,7 +754,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
 					const payload = {
@@ -958,6 +962,18 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const client = await getClient(
+						accessToken.clientId,
+						ctx.context.adapter,
+						trustedClients,
+					);
+					if (!client) {
+						throw new APIError("UNAUTHORIZED", {
+							error_description: "client not found",
+							error: "invalid_token",
+						});
+					}
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						accessToken.userId,
 					);
@@ -986,7 +1002,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 					};
 					const userClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: baseUserClaims;
 					return ctx.json({
 						...baseUserClaims,

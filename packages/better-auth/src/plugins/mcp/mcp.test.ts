@@ -31,7 +31,7 @@ describe("mcp", async () => {
 						loginPage: "/login",
 						requirePKCE: true,
 
-						getAdditionalUserInfoClaim(user, scopes) {
+						getAdditionalUserInfoClaim(user, scopes, client) {
 							return {
 								custom: "custom value",
 								userId: user.id,
