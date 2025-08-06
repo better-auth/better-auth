@@ -9,7 +9,7 @@ import {
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId } from "../utils";
+import { generateId, type InternalLogger } from "../utils";
 import type {
 	Adapter,
 	AuthContext,
@@ -21,11 +21,13 @@ import type {
 export const createInternalAdapter = (
 	adapter: Adapter,
 	ctx: {
-		options: BetterAuthOptions;
+		options: Omit<BetterAuthOptions, "logger">;
+		logger: InternalLogger;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
 		generateId: AuthContext["generateId"];
 	},
 ) => {
+	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
@@ -455,7 +457,7 @@ export const createInternalAdapter = (
 							user: User;
 						}>(data) ?? {};
 					if (!session) {
-						// not possible, should log an error?
+						logger.error("Session not found in secondary storage");
 						return;
 					}
 					const userId = session.userId;
@@ -478,7 +480,7 @@ export const createInternalAdapter = (
 							await secondaryStorage.delete(`active-sessions-${userId}`);
 						}
 					} else {
-						// not possible, should log an error?
+						logger.error("Active sessions list not found in secondary storage");
 					}
 				}
 
