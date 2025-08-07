@@ -8,8 +8,11 @@ Read more [here.](https://www.sqlite.org/)
 
 ## Example Usage
 
-Make sure you have SQLite installed and configured.
-Then, you can connect it straight into Better Auth.
+Better Auth supports multiple SQLite drivers. Choose the one that best fits your environment:
+
+### Better-SQLite3 (Recommended)
+
+The most popular and stable SQLite driver for Node.js:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -18,6 +21,28 @@ import Database from "better-sqlite3";
 export const auth = betterAuth({
   database: new Database("database.sqlite"),
 });
+```
+
+### Node.js Built-in SQLite (Experimental)
+
+<Callout type="warning">
+  The `node:sqlite` module is still experimental and may change at any time. It requires Node.js 22.5.0 or later with the `--experimental-sqlite` flag.
+</Callout>
+
+Starting from Node.js 22.5.0, you can use the built-in SQLite module:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { DatabaseSync } from "node:sqlite";
+
+export const auth = betterAuth({
+  database: new DatabaseSync("database.sqlite"),
+});
+```
+
+To run your application with Node.js SQLite:
+```bash
+node your-app.js
 ```
 
 <Callout>
