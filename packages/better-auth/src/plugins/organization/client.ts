@@ -152,11 +152,26 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					const result = await $fetch("/organization/set-active", {
 						method: "POST",
 						body: data,
-						onSuccess: () => {
-							$store.notify("$activeOrgSignal");
-							$store.notify("$sessionSignal");
-						}
 					});
+					const sessionAtom = $store.atoms.session;
+					const currentSession = sessionAtom.get();
+					if (currentSession?.data) {
+						const updatedSession = {
+							...currentSession,
+							data: {
+								...currentSession.data,
+								session: {
+									...currentSession.data.session,
+									activeOrganizationId: data.organizationId
+								}
+							}
+						};
+
+						sessionAtom.set(updatedSession);
+					}
+
+					$store.notify("$activeOrgSignal");
+
 					return result;
 				},
 			},
