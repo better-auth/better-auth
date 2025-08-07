@@ -327,7 +327,7 @@ export const auth = betterAuth({
     plugins: [
         jwt({
           usesOAuthProvider: true,
-        }), // Make sure to add the JWT plugin before oidcProvider
+        }),
         oidcProvider({
             useJWTPlugin: true,
             loginPage: "/sign-in",
@@ -565,4 +565,4 @@ Table Name: `oauthConsent`
 
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[], client: Client) => Record<string, any>` - Function to get additional user info claims.
 
-**useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. If `true`, ensure the jwt plugin is defined **BEFORE** the oidcProvider plugin. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.
+**useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.
