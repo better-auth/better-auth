@@ -8,13 +8,18 @@ import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { parseSetCookieHeader } from "../../cookies";
 
-let server = new OAuth2Server();
-
-// each test suite relies on the same port, so we need to enable sequential execution
-describe.sequential("oauth2", async () => {
+describe("oauth2", async () => {
 	const providerId = "test";
 	const clientId = "test-client-id";
 	const clientSecret = "test-client-secret";
+	const server = new OAuth2Server();
+	await server.start();
+	const port = Number(server.issuer.url?.split(":")[2]!);
+	console.log("server started on port", port);
+
+	afterAll(async () => {
+		await server.stop();
+	});
 
 	const { customFetchImpl, auth } = await getTestInstance({
 		plugins: [
@@ -22,9 +27,7 @@ describe.sequential("oauth2", async () => {
 				config: [
 					{
 						providerId,
-						discoveryUrl:
-							server.issuer.url ||
-							"http://localhost:8081/.well-known/openid-configuration",
+						discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 						clientId: clientId,
 						clientSecret: clientSecret,
 						pkce: true,
@@ -49,15 +52,6 @@ describe.sequential("oauth2", async () => {
 			name: "OAuth2 Test",
 		});
 		await server.issuer.keys.generate("RS256");
-
-		server.issuer.on;
-		// Start the server
-		await server.start(8081, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8081
-	});
-
-	afterAll(async () => {
-		await server.stop().catch(() => {});
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
@@ -113,7 +107,7 @@ describe.sequential("oauth2", async () => {
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8081/authorize"),
+			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 		const { callbackURL } = await simulateOAuthFlow(
@@ -142,7 +136,7 @@ describe.sequential("oauth2", async () => {
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8081/authorize"),
+			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
@@ -247,8 +241,7 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "test2",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							redirectURI: "http://localhost:3000/api/auth/callback/test2",
@@ -272,7 +265,7 @@ describe.sequential("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		const headers = new Headers();
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
@@ -300,8 +293,7 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "test2",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -325,7 +317,7 @@ describe.sequential("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 		});
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		const headers = new Headers();
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
@@ -355,8 +347,7 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "test2",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -381,7 +372,7 @@ describe.sequential("oauth2", async () => {
 			errorCallbackURL: "http://localhost:3000/error",
 			requestSignUp: true,
 		});
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		const headers = new Headers();
 		const { callbackURL } = await simulateOAuthFlow(
 			res.data?.url || "",
@@ -407,8 +398,7 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "test3",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -433,7 +423,7 @@ describe.sequential("oauth2", async () => {
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 
-		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
 		const headers = new Headers();
 		await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
 
@@ -457,8 +447,7 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "test",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 						},
@@ -481,7 +470,7 @@ describe.sequential("oauth2", async () => {
 		});
 
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8081/authorize"),
+			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 
@@ -548,8 +537,7 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "numeric-test",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -648,8 +636,8 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "custom-numeric",
-							authorizationUrl: "http://localhost:8081/authorize",
-							tokenUrl: "http://localhost:8081/token",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -725,8 +713,7 @@ describe.sequential("oauth2", async () => {
 					config: [
 						{
 							providerId: "map-profile-numeric",
-							discoveryUrl:
-								"http://localhost:8081/.well-known/openid-configuration",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
