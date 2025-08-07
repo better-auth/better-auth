@@ -5,7 +5,7 @@ import process from "node:process";
 import type { SystemInfo } from "../types";
 
 export async function detectSystemInfo(): Promise<SystemInfo> {
-	const cpus = os.cpus() || [];
+	const cpus = os.cpus();
 
 	return {
 		// Software information
