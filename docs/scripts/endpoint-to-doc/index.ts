@@ -37,9 +37,12 @@ function clearImportCache() {
 	delete require.cache[require.resolve(resolved)];
 }
 
+console.log(`Watching: ${file}`);
+
 fs.watch(file, async () => {
 	isUsingSessionMiddleware = false;
 	playSound();
+	console.log(`Detected file change. Regenerating mdx.`);
 	const inputCode = fs.readFileSync(file, "utf-8");
 	if (inputCode.includes(".coerce"))
 		fs.writeFileSync(file, inputCode.replaceAll(".coerce", ""), "utf-8");
@@ -64,6 +67,8 @@ async function generateMDX() {
 		options.use.forEach((fn) => fn());
 	}
 
+	console.log(`function name:`, functionName);
+
 	let jsdoc = generateJSDoc({
 		path,
 		functionName,
@@ -75,11 +80,14 @@ async function generateMDX() {
 		functionName,
 		options,
 	)}\n\`\`\`\n</APIMethod>`;
+
+	console.log(`Generated in ${(Date.now() - start).toFixed(2)}ms!`);
 	fs.writeFileSync(
 		"./scripts/endpoint-to-doc/output.mdx",
 		`${APIMethodsHeader}\n\n${mdx}\n\n${JSDocHeader}\n\n${jsdoc}`,
 		"utf-8",
 	);
+	console.log(`Successfully updated \`output.mdx\`!`);
 }
 
 type CreateAuthEndpointProps = Parameters<typeof BAcreateAuthEndpoint>;
@@ -252,6 +260,7 @@ function getType(
 			`Something went wrong during "getType". value._def isn't defined.`,
 		);
 		console.error(`value:`);
+		console.log(value);
 		process.exit(1);
 	}
 	const _null: string[] = value?.isNullable() ? ["null"] : [];
@@ -387,6 +396,7 @@ function getType(
 
 		default: {
 			console.error(`Unknown Zod type: ${value._def.typeName}`);
+			console.log(value._def);
 			process.exit(1);
 		}
 	}
