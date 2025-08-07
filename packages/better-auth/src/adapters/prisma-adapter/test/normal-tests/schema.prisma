@@ -26,3 +26,12 @@ model Sessions {
     createdAt DateTime @default(now())
     updatedAt DateTime @default(now()) @updatedAt
 }
+
+model Verification {
+    id         String   @id @default(cuid())
+    identifier String
+    value      String
+    expires_at DateTime
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now()) @updatedAt
+}
