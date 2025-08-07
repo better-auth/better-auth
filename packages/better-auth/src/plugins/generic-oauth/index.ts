@@ -15,7 +15,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 import { generateState, parseState } from "../../oauth2/state";
-import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthPlugin, User } from "../../types";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -94,7 +94,7 @@ export interface GenericOAuthConfig {
 	 */
 	mapProfileToUser?: (
 		profile: Record<string, any>,
-	) => Partial<OAuth2UserInfo> | Promise<Partial<OAuth2UserInfo>>;
+	) => Partial<Partial<User>> | Promise<Partial<User>>;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
