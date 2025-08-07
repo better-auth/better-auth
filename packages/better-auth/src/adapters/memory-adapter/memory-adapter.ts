@@ -70,10 +70,11 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				create: async ({ model, data }) => {
 					if (options.advanced?.database?.useNumberId) {
 						// @ts-ignore
-						data.id = db[model].length + 1;
-					}
-					if (!db[model]) {
-						db[model] = [];
+						if (!db[model]) {
+							db[model] = [];
+						}
+						// @ts-ignore
+						data.id = (db[model]?.length ?? 0) + 1;
 					}
 					db[model].push(data);
 					return data;
