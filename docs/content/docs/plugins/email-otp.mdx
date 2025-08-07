@@ -54,9 +54,51 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
 
 ## Usage
 
+### Send an OTP
+
+Use the `sendVerificationOtp()` method to send an OTP to the user's email address.
+
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+```ts
+type sendVerificationOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+    /**
+     * Type of the OTP. `sign-in`, `email-verification`, or `forget-password`. 
+     */
+    type: "email-verification" | "sign-in" | "forget-password" = "sign-in"
+}
+```
+</APIMethod>
+
+### Check an OTP (optional)
+
+Use the `checkVerificationOtp()` method to check if an OTP is valid.
+
+<APIMethod path="/email-otp/check-verification-otp" method="POST">
+```ts
+type checkVerificationOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+    /**
+     * Type of the OTP. `sign-in`, `email-verification`, or `forget-password`. 
+     */
+    type: "email-verification" | "sign-in" | "forget-password" = "sign-in"
+    /**
+     * OTP sent to the email. 
+     */
+    otp: string = "123456"
+}
+```
+</APIMethod>
+
 ### Sign In with OTP
 
-To sign in with OTP, use the `sendVerificationOtp()` method to send a "sign-in" OTP email to the user.
+To sign in with OTP, use the `sendVerificationOtp()` method to send a "sign-in" OTP to the user's email address.
 
 <APIMethod path="/email-otp/send-verification-otp" method="POST">
 ```ts
@@ -96,7 +138,7 @@ If the user is not registered, they'll be automatically registered. If you want 
 
 ### Verify Email with OTP
 
-To verify the user's email address with OTP, use the `sendVerificationOtp()` method to send an "email-verification" OTP email to the user.
+To verify the user's email address with OTP, use the `sendVerificationOtp()` method to send an "email-verification" OTP to the user's email address.
 
 <APIMethod path="/email-otp/send-verification-otp" method="POST">
 ```ts
@@ -132,7 +174,7 @@ type verifyEmailOTP = {
 
 ### Reset Password with OTP
 
-To reset the user's password with OTP, use the `forgetPassword.emailOTP()` method to send a "forget-password" OTP email to the user.
+To reset the user's password with OTP, use the `forgetPassword.emailOTP()` method to send a "forget-password" OTP to the user's email address.
 
 <APIMethod path="/forget-password/email-otp" method="POST">
 ```ts
