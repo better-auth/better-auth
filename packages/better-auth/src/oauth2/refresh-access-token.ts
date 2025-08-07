@@ -12,7 +12,7 @@ export async function refreshAccessToken({
 	grantType = "refresh_token",
 }: {
 	refreshToken: string;
-	options: ProviderOptions;
+	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	extraParams?: Record<string, string>;
@@ -33,7 +33,7 @@ export async function refreshAccessToken({
 			`${options.clientId}:${options.clientSecret ?? ""}`,
 		);
 	} else {
-		body.set("client_id", options.clientId);
+		options.clientId && body.set("client_id", options.clientId);
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
