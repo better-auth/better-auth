@@ -531,11 +531,26 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 
-					const [otpValue, _attempts] = splitAtLastColon(
+					const [otpValue, attempts] = splitAtLastColon(
 						verificationValue.value,
 					);
+					const allowedAttempts = options?.allowedAttempts || 3;
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
+						});
+					}
 					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
 					if (!verified) {
+						await ctx.context.internalAdapter.updateVerificationValue(
+							verificationValue.id,
+							{
+								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+							},
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
