@@ -254,7 +254,6 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 			},
 		});
-
 	it("should verify email", async () => {
 		await auth.api.sendVerificationEmail({
 			body: {

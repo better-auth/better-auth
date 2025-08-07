@@ -34,7 +34,18 @@
   },
   "overrides": [
     {
-      "includes": ["**/examples/svelte-kit-example/**"],
+      "include": ["packages/better-auth/src/**"],
+      "ignore": ["packages/better-auth/src/utils/logger.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsoleLog": "error"
+          }
+        }
+      }
+    },
+    {
+      "include": ["**/examples/svelte-kit-example/**"],
       "linter": {
         "rules": {
           "correctness": {
@@ -44,7 +55,7 @@
       }
     },
     {
-      "includes": ["**/*.json"],
+      "include": ["**/*.json"],
       "formatter": {
         "indentStyle": "space",
         "indentWidth": 2
