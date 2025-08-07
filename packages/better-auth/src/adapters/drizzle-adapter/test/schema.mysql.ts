@@ -47,7 +47,8 @@ export const verification = mysqlTable("verification", {
 	id: varchar("id", { length: 255 }).primaryKey(),
 	identifier: varchar("identifier", { length: 255 }).notNull(),
 	value: varchar("value", { length: 255 }).notNull(),
-	expiresAt: datetime("expiresAt", { mode: "date" }).notNull(), // Use `date` mode
+	// renamed field to match options.verification.fields.expiresAt = "expires_at"
+	expires_at: datetime("expires_at", { mode: "date" }).notNull(), // Use `date` mode
 	createdAt: datetime("createdAt", { mode: "date" }).notNull(), // Use `date` mode
 	updatedAt: datetime("updatedAt", { mode: "date" }).notNull(), // Use `date` mode
 });

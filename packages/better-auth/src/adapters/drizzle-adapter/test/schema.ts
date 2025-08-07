@@ -58,7 +58,8 @@ export const verification = pgTable("verification", {
 	id: text("id").primaryKey(),
 	identifier: text("identifier").notNull(),
 	value: text("value").notNull(),
-	expiresAt: timestamp("expiresAt").notNull(),
+	// renamed field to match options.verification.fields.expiresAt = "expires_at"
+	expires_at: timestamp("expires_at").notNull(),
 	createdAt: timestamp("createdAt").notNull(),
 	updatedAt: timestamp("updatedAt").notNull(),
 });
