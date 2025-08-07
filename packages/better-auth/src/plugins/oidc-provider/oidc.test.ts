@@ -233,7 +233,7 @@ describe("oidc", async () => {
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
-		expect(redirectURI).toContain("/oauth2/authorize?client_id=");
+		expect(redirectURI).toContain("/oauth2/authorize?consent_code=");
 		const res = await serverClient.oauth2.consent(
 			{
 				accept: true,
