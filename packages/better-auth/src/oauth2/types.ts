@@ -12,6 +12,7 @@ export interface OAuth2Tokens {
 
 export interface OAuthProvider<
 	T extends Record<string, any> = Record<string, any>,
+	O extends Record<string, any> = ProviderOptions,
 > {
 	id: LiteralString;
 	createAuthorizationURL: (data: {
@@ -74,7 +75,10 @@ export interface OAuthProvider<
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
-	options?: ProviderOptions;
+	/**
+	 * Options for the provider
+	 */
+	options?: O;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
