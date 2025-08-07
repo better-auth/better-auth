@@ -162,9 +162,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 								...currentSession.data,
 								session: {
 									...currentSession.data.session,
-									activeOrganizationId: data.organizationId
-								}
-							}
+									activeOrganizationId: data.organizationId,
+								},
+							},
 						};
 
 						sessionAtom.set(updatedSession);
