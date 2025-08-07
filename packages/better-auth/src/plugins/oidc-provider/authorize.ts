@@ -272,9 +272,7 @@ export async function authorize(
 
 		// Pass the consent code as a URL parameter to support URL-based consent flows
 		// This enables both cookie-based and URL parameter-based implementations
-		const consentURI = `${options.consentPage}?consent_code=${code}&client_id=${
-			client.clientId
-		}&scope=${requestScope.join(" ")}`;
+		const consentURI = `${options.consentPage}?consent_code=${encodeURIComponent(code)}&client_id=${encodeURIComponent(client.clientId)}&scope=${encodeURIComponent(requestScope.join(" "))}`;
 
 		return handleRedirect(consentURI);
 	}

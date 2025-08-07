@@ -412,12 +412,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					// Clear the cookie if it was used (for security)
-					if (!ctx.body.consent_code) {
-						ctx.setCookie("oidc_consent_prompt", "", {
-							maxAge: 0,
-						});
-					}
+					// Clear the cookie
+					ctx.setCookie("oidc_consent_prompt", "", {
+						maxAge: 0,
+					});
+
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
 					if (!value.requireConsent) {
 						throw new APIError("UNAUTHORIZED", {
