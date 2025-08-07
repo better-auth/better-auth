@@ -1,12 +1,19 @@
 import * as z from "zod/v4";
-import { createAuthEndpoint, getSession } from "../../api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+	getSession,
+} from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 	InferSession,
 	InferUser,
+	Session,
+	User,
 } from "../../types";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 
 export const customSession = <
 	Returns extends Record<string, any>,
@@ -23,6 +30,21 @@ export const customSession = <
 ) => {
 	return {
 		id: "custom-session",
+		hooks: {
+			after: [
+				{
+					matcher: (ctx) => ctx.path === "/multi-session/list-device-sessions",
+					handler: createAuthMiddleware(async (ctx) => {
+						const response = await getEndpointResponse<[]>(ctx);
+						if (!response) return;
+						const newResponse = await Promise.all(
+							response.map(async (v) => await fn(v, ctx)),
+						);
+						return ctx.json(newResponse);
+					}),
+				},
+			],
+		},
 		endpoints: {
 			getSession: createAuthEndpoint(
 				"/get-session",
