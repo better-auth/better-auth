@@ -65,7 +65,7 @@ jobs:
               env:
                 TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
                 TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-              run: pnpm test -- -- --coverage.enabled true
+              run: pnpm test
 
             - name: Typecheck
               env:
