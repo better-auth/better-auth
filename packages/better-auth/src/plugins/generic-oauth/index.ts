@@ -648,26 +648,45 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: "Invalid OAuth configuration.",
 						});
 					}
-					const userInfo = (
-						provider.getUserInfo
-							? await provider.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl)
-					) as OAuth2UserInfo | null;
-					if (!userInfo) {
-						throw redirectOnError("user_info_is_missing");
-					}
-					const mapUser = provider.mapProfileToUser
-						? await provider.mapProfileToUser(userInfo)
-						: userInfo;
-					if (!mapUser?.email) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw redirectOnError("email_is_missing");
-					}
+					const userInfo: Omit<User, "createdAt" | "updatedAt"> =
+						await (async function handleUserInfo() {
+							const userInfo = (
+								provider.getUserInfo
+									? await provider.getUserInfo(tokens)
+									: await getUserInfo(tokens, finalUserInfoUrl)
+							) as OAuth2UserInfo | null;
+							if (!userInfo) {
+								throw redirectOnError("user_info_is_missing");
+							}
+							const mapUser = provider.mapProfileToUser
+								? await provider.mapProfileToUser(userInfo)
+								: userInfo;
+							const email = mapUser.email
+								? mapUser.email.toLowerCase()
+								: userInfo.email?.toLowerCase();
+							if (!email) {
+								ctx.context.logger.error("Unable to get user info", userInfo);
+								throw redirectOnError("email_is_missing");
+							}
+							const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
+							const name = mapUser.name ? mapUser.name : userInfo.name;
+							if (!name) {
+								ctx.context.logger.error("Unable to get user info", userInfo);
+								throw redirectOnError("name_is_missing");
+							}
+							return {
+								...userInfo,
+								...mapUser,
+								email,
+								id,
+								name,
+							};
+						})();
 					if (link) {
 						if (
 							ctx.context.options.account?.accountLinking
 								?.allowDifferentEmails !== true &&
-							link.email !== mapUser.email.toLowerCase()
+							link.email !== userInfo.email
 						) {
 							return redirectOnError("email_doesn't_match");
 						}
@@ -701,9 +720,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								await ctx.context.internalAdapter.createAccount({
 									userId: link.userId,
 									providerId: provider.providerId,
-									accountId: mapUser.id
-										? String(mapUser.id)
-										: String(userInfo.id),
+									accountId: userInfo.id,
 									accessToken: tokens.accessToken,
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
@@ -726,15 +743,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 
 					const result = await handleOAuthUserInfo(ctx, {
-						// @ts-expect-error userInfo and mapUser type mismatch to User
-						userInfo: {
-							...userInfo,
-							...mapUser,
-							id: mapUser.id ? String(mapUser.id) : String(userInfo.id),
-						},
+						userInfo,
 						account: {
 							providerId: provider.providerId,
-							accountId: mapUser.id ? String(mapUser.id) : String(userInfo.id),
+							accountId: userInfo.id,
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
