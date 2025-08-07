@@ -1,13 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getSchema } from "./get-schema";
 import type { BetterAuthOptions } from "../types";
-import Database from 'better-sqlite3'
+import { type Database } from "better-sqlite3";
+import DB from "better-sqlite3";
 
 describe("getSchema", () => {
-	const database = new Database(":memory:");
+	let database: Database;
+	beforeAll(() => {
+		database = new DB(":memory:");
+	});
+	afterAll(() => {
+		database.close();
+	});
 	it("should generate basic schema", () => {
 		const config: BetterAuthOptions = {
-			database
+			database,
 		};
 
 		const schema = getSchema(config);
