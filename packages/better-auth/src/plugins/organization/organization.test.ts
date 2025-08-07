@@ -315,7 +315,6 @@ describe("organization", async (it) => {
 		};
 		const { headers } = await signInWithTestUser();
 
-		// Invite the user
 		const invite = await client.organization.inviteMember({
 			organizationId,
 			email: user.email,
@@ -324,6 +323,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
+		if (!invite.data) throw new Error("Invitation not created");
 		expect(invite.data?.email).toBe(user.email);
 
 		const inviteAgain = await client.organization.inviteMember({
