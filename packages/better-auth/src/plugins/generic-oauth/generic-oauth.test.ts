@@ -766,4 +766,99 @@ describe("oauth2", async () => {
 
 		expect(accounts[0].accountId).toBe(String(numericProfileId));
 	});
+
+	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
+		const stravaUserId = 12345678;
+		const stravaProfile = {
+			id: stravaUserId,
+			firstname: "John",
+			lastname: "Doe",
+			profile: "https://example.com/strava-avatar.jpg",
+			email_verified: true,
+		};
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = stravaProfile;
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "strava",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							userInfoUrl: `http://localhost:${port}/userinfo`,
+							clientId: "STRAVA_CLIENT_ID",
+							clientSecret: "STRAVA_CLIENT_SECRET",
+							scopes: ["read", "activity:read_all"],
+							pkce: true,
+							mapProfileToUser: (profile) => {
+								const fullName = `${profile.firstname} ${profile.lastname}`;
+								return {
+									id: profile.id,
+									email: `${profile.id}@strava.local`,
+									name: fullName,
+									image: profile.profile,
+									emailVerified: true,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "strava",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
+		// we missed the `activity:read_all`
+		expect(signInRes.data?.url).toContain("scope=read+activity");
+
+		const { callbackURL, headers } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			new Headers(),
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(`${stravaUserId}@strava.local`);
+		expect(session.data?.user.name).toBe("John Doe");
+		expect(session.data?.user.image).toBe(
+			"https://example.com/strava-avatar.jpg",
+		);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+
+		expect(accounts[0]).toMatchObject({
+			providerId: "strava",
+			accountId: String(stravaUserId),
+			userId: session.data?.user.id,
+		});
+	});
 });
