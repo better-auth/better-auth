@@ -24,9 +24,7 @@ const cleanupDatabase = async (mysql: Pool, shouldDestroy = true) => {
 		await mysql.query("DROP DATABASE IF EXISTS better_auth");
 		await mysql.query("CREATE DATABASE better_auth");
 		await mysql.query("USE better_auth");
-	} catch (error) {
-		console.log(error);
-	}
+	} catch (error) {}
 	if (shouldDestroy) {
 		await mysql.end();
 	} else {

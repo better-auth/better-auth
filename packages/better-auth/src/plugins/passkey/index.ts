@@ -616,7 +616,6 @@ export const passkey = (options?: PasskeyOptions) => {
 							status: 200,
 						});
 					} catch (e) {
-						console.log(e);
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 						});

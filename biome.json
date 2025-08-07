@@ -13,6 +13,7 @@
       "suspicious": {
         "noImplicitAnyLet": "warn",
         "noDuplicateObjectKeys": "warn",
+        "noConsoleLog": "warn",
         "noTsIgnore": "error"
       },
       "performance": {

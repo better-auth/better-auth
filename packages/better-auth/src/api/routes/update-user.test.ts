@@ -400,7 +400,6 @@ describe("delete user", async () => {
 				headers,
 			},
 		});
-		console.log(res);
 	});
 	it("should delete the user with a fresh session", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({

@@ -606,7 +606,6 @@ export const createAdapter =
 						.filter((_, i) => i !== 1)
 						.join("\n")
 						.replace("Error:", "Create method with `id` being called at:");
-					console.log(stack);
 					//@ts-expect-error
 					unsafeData.id = undefined;
 				}
@@ -1029,8 +1028,6 @@ export const createAdapter =
 										},
 										[`\n${separator}`],
 									);
-
-								console.log(...log);
 							},
 						} satisfies AdapterTestDebugLogs,
 					}

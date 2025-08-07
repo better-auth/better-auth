@@ -474,7 +474,6 @@ const createMockSAMLIdP = (port: number) => {
 		new Promise<void>((resolve) => {
 			app.use(bodyParser.urlencoded({ extended: true }));
 			server = app.listen(port, () => {
-				console.log(`Mock SAML IdP running on port ${port}`);
 				resolve();
 			});
 		});
