@@ -26,10 +26,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					props.field === "id" &&
 					props.action === "create"
 				) {
-					if (!db[props.model]) {
-						db[props.model] = [];
-					}
-					return (db[props.model]?.length ?? 0) + 1;
+					return db[props.model].length + 1;
 				}
 				return props.data;
 			},
@@ -70,11 +67,10 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				create: async ({ model, data }) => {
 					if (options.advanced?.database?.useNumberId) {
 						// @ts-ignore
-						if (!db[model]) {
-							db[model] = [];
-						}
-						// @ts-ignore
-						data.id = (db[model]?.length ?? 0) + 1;
+						data.id = db[model].length + 1;
+					}
+					if (!db[model]) {
+						db[model] = [];
 					}
 					db[model].push(data);
 					return data;
@@ -108,7 +104,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 					return table;
 				},
 				count: async ({ model }) => {
-					return db[model]?.length ?? 0;
+					return db[model].length;
 				},
 				update: async ({ model, where, update }) => {
 					const res = convertWhereClause(where, model);
