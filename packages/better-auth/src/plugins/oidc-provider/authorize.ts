@@ -263,12 +263,16 @@ export async function authorize(
 	}
 
 	if (options?.consentPage) {
+		// Set cookie to support cookie-based consent flows
 		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
 			maxAge: 600,
 			path: "/",
 			sameSite: "lax",
 		});
-		const consentURI = `${options.consentPage}?client_id=${
+
+		// Pass the consent code as a URL parameter to support URL-based consent flows
+		// This enables both cookie-based and URL parameter-based implementations
+		const consentURI = `${options.consentPage}?consent_code=${code}&client_id=${
 			client.clientId
 		}&scope=${requestScope.join(" ")}`;
 
