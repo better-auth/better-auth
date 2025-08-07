@@ -20,6 +20,7 @@ export const stripeClient = <
 								enabled: true;
 								plans: [];
 							};
+							allowPromotionCodes: boolean;
 						}
 					: {
 							stripeClient: any;
