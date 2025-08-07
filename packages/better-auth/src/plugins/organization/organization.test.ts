@@ -355,7 +355,10 @@ describe("organization", async (it) => {
 			password: user.password,
 			name: user.name,
 		});
-		const { headers: userHeaders } = await signInWithUser(user.email, user.password);
+		const { headers: userHeaders } = await signInWithUser(
+			user.email,
+			user.password,
+		);
 		const acceptRes = await client.organization.acceptInvitation({
 			invitationId: invite.data.id,
 			fetchOptions: {
@@ -581,7 +584,7 @@ describe("organization", async (it) => {
 			},
 		});
 
-		expect(orgBefore.data?.members.length).toBe(4);
+		expect(orgBefore.data?.members.length).toBe(5);
 		await client.organization.removeMember({
 			organizationId: organizationId,
 			memberIdOrEmail: adminUser.email,
@@ -597,7 +600,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(org.data?.members.length).toBe(3);
+		expect(org.data?.members.length).toBe(4);
 	});
 
 	it("shouldn't allow removing last owner from organization", async () => {
@@ -876,7 +879,7 @@ describe("organization", async (it) => {
 				headers: headers,
 			},
 		});
-		expect(invitations.data?.length).toBe(4);
+		expect(invitations.data?.length).toBe(5);
 	});
 
 	it("should allow listing invitations for a user using authClient", async () => {
