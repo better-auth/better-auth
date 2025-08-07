@@ -271,8 +271,11 @@ export async function authorize(
 		});
 
 		// Pass the consent code as a URL parameter to support URL-based consent flows
-		// This enables both cookie-based and URL parameter-based implementations
-		const consentURI = `${options.consentPage}?consent_code=${encodeURIComponent(code)}&client_id=${encodeURIComponent(client.clientId)}&scope=${encodeURIComponent(requestScope.join(" "))}`;
+		const urlParams = new URLSearchParams();
+		urlParams.set("consent_code", code);
+		urlParams.set("client_id", client.clientId);
+		urlParams.set("scope", requestScope.join(" "));
+		const consentURI = `${options.consentPage}?${urlParams.toString()}`;
 
 		return handleRedirect(consentURI);
 	}
