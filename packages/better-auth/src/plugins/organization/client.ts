@@ -120,7 +120,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				schema: Schema;
 			}>
 		>,
-		getActions: ($fetch) => ({
+		getActions: ($fetch, $store) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
@@ -147,6 +147,17 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 						permissions: (data.permissions ?? data.permission) as any,
 					});
 					return isAuthorized;
+				},
+				setActive: async (data: { organizationId: string | null }) => {
+					const result = await $fetch("/organization/set-active", {
+						method: "POST",
+						body: data,
+						onSuccess: () => {
+							$store.notify("$activeOrgSignal");
+							$store.notify("$sessionSignal");
+						}
+					});
+					return result;
 				},
 			},
 		}),
