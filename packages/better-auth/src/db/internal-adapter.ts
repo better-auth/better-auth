@@ -1,5 +1,12 @@
 import { getDate } from "../utils/date";
 import { parseSessionOutput, parseUserOutput } from "./schema";
+import type {
+	Adapter,
+	AuthContext,
+	BetterAuthOptions,
+	GenericEndpointContext,
+	Where,
+} from "../types";
 import {
 	type Account,
 	type Session,
@@ -9,23 +16,18 @@ import {
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
-import { generateId } from "../utils";
-import type {
-	Adapter,
-	AuthContext,
-	BetterAuthOptions,
-	GenericEndpointContext,
-	Where,
-} from "../types";
+import { generateId, type InternalLogger } from "../utils";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
 	ctx: {
-		options: BetterAuthOptions;
+		options: Omit<BetterAuthOptions, "logger">;
+		logger: InternalLogger;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
 		generateId: AuthContext["generateId"];
 	},
 ) => {
+	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
@@ -52,7 +54,7 @@ export const createInternalAdapter = (
 			const createdAccount = await createWithHooks(
 				{
 					...account,
-					userId: createdUser.id || user.id,
+					userId: createdUser!.id || user.id,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
@@ -85,10 +87,10 @@ export const createInternalAdapter = (
 			);
 			return createdUser as T & User;
 		},
-		createAccount: async <T>(
+		createAccount: async <T extends Record<string, any>>(
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account> &
-				Record<string, any>,
+				T,
 			context?: GenericEndpointContext,
 		) => {
 			const createdAccount = await createWithHooks(
@@ -446,6 +448,42 @@ export const createInternalAdapter = (
 		},
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
+				// remove the session from the active sessions list
+				const data = await secondaryStorage.get(token);
+				if (data) {
+					const { session } =
+						safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(data) ?? {};
+					if (!session) {
+						logger.error("Session not found in secondary storage");
+						return;
+					}
+					const userId = session.userId;
+
+					const currentList = await secondaryStorage.get(
+						`active-sessions-${userId}`,
+					);
+					if (currentList) {
+						let list: { token: string; expiresAt: number }[] =
+							safeJSONParse(currentList) || [];
+						list = list.filter((s) => s.token !== token);
+
+						if (list.length > 0) {
+							await secondaryStorage.set(
+								`active-sessions-${userId}`,
+								JSON.stringify(list),
+								sessionExpiration,
+							);
+						} else {
+							await secondaryStorage.delete(`active-sessions-${userId}`);
+						}
+					} else {
+						logger.error("Active sessions list not found in secondary storage");
+					}
+				}
+
 				await secondaryStorage.delete(token);
 
 				if (

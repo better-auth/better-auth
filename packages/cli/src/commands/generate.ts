@@ -9,7 +9,7 @@ import prompts from "prompts";
 import fs from "fs/promises";
 import chalk from "chalk";
 import { getAdapter } from "better-auth/db";
-import { getGenerator } from "../generators";
+import { generateSchema } from "../generators";
 
 export async function generateAction(opts: any) {
 	const options = z
@@ -45,7 +45,7 @@ export async function generateAction(opts: any) {
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
-	const schema = await getGenerator({
+	const schema = await generateSchema({
 		adapter,
 		file: options.output,
 		options: config,
@@ -56,7 +56,7 @@ export async function generateAction(opts: any) {
 		logger.info("Your schema is already up to date.");
 		process.exit(0);
 	}
-	if (schema.append || schema.overwrite) {
+	if (schema.overwrite) {
 		let confirm = options.y || options.yes;
 		if (!confirm) {
 			const response = await prompts({
