@@ -87,6 +87,7 @@ export interface EmailOTPOptions {
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
@@ -212,8 +213,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				}
 				const email = ctx.body.email;
-				const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
 				if (!emailRegex.test(email)) {
 					throw ctx.error("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_EMAIL,
@@ -503,6 +502,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
+					if (!emailRegex.test(email)) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_EMAIL,
+						});
+					}
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
@@ -526,8 +530,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
-					const otp = ctx.body.otp;
-					if (verificationValue.value !== otp) {
+
+					const [otpValue, _attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_OTP,
 						});
@@ -603,7 +611,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_EMAIL,
