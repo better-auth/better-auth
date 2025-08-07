@@ -8,7 +8,7 @@ import {
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { getJwtPlugin, toExpJWT } from "./utils";
+import { getJwtPlugin, toExpJwt } from "./utils";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import type { JwtPluginOptions } from "./types";
@@ -37,7 +37,7 @@ export async function signJwtPayload(
 	// Exp safety checks
 	let exp = payload.exp;
 	const allowLargerExpTime = options?.jwt?.allowLongerExpTime;
-	const defaultExp = toExpJWT(
+	const defaultExp = toExpJwt(
 		options?.jwt?.expirationTime ?? "1h",
 		iat ?? nowSeconds,
 	);
@@ -64,7 +64,7 @@ export async function signJwtPayload(
 	const aud = payload.aud;
 	const defaultAud = options?.jwt?.audience ?? ctx.context.options.baseURL!;
 	const allowAudienceMismatch = options?.jwt?.allowAudienceMismatch;
-	if (!options?.usesOauthProvider && !allowAudienceMismatch && aud) {
+	if (!options?.usesOAuthProvider && !allowAudienceMismatch && aud) {
 		const allowedAudiences =
 			typeof defaultAud === "string" ? [defaultAud] : defaultAud;
 		if (typeof aud === "string" && !allowedAudiences.includes(aud)) {

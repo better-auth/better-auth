@@ -47,7 +47,7 @@ describe("oidc - init", async () => {
 			getTestInstance({
 				plugins: [
 					jwt({
-						usesOauthProvider: undefined,
+						usesOAuthProvider: undefined,
 					}),
 					oidcProvider({
 						useJWTPlugin: true,
@@ -575,7 +575,7 @@ describe("oidc-jwt", async () => {
 					...(useJwt
 						? [
 								jwt({
-									usesOauthProvider: true,
+									usesOAuthProvider: true,
 								}),
 							]
 						: []),

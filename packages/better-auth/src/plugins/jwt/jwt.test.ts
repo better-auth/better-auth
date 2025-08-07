@@ -331,7 +331,7 @@ describe("jwt - oidc plugin", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			jwt({
-				usesOauthProvider: true,
+				usesOAuthProvider: true,
 			}),
 		],
 		logger: {
@@ -384,7 +384,7 @@ describe("jwt - oidc plugin with remote url", async (it) => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			jwt({
-				usesOauthProvider: true,
+				usesOAuthProvider: true,
 				jwks: {
 					remoteUrl: "https://example.com",
 					keyPairConfig: {
@@ -413,7 +413,7 @@ describe("jwt - oidc plugin with remote url", async (it) => {
 			getTestInstance({
 				plugins: [
 					jwt({
-						usesOauthProvider: true,
+						usesOAuthProvider: true,
 						jwks: {
 							remoteUrl: "https://example.com",
 						},

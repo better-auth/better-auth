@@ -41,7 +41,7 @@ export interface JwtPluginOptions {
 	 *
 	 * Thus, only the /jwks endpoint is enabled.
 	 */
-	usesOauthProvider?: boolean;
+	usesOAuthProvider?: boolean;
 }
 
 export interface JwksOptions {
@@ -135,7 +135,7 @@ export interface JwtOptions {
 	/**
 	 * A function that is called to define the payload of the JWT
 	 *
-	 * @invalid usesOauthProvider = true
+	 * @invalid usesOAuthProvider = true
 	 */
 	definePayload?: (session: {
 		user: User & Record<string, any>;

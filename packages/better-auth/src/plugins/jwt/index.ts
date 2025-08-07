@@ -28,7 +28,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 
 	// Alg is required to be specified when using oidc plugin and remote url (needed in openid metadata)
 	if (
-		options?.usesOauthProvider &&
+		options?.usesOAuthProvider &&
 		options.jwks?.remoteUrl &&
 		!options.jwks?.keyPairConfig?.alg
 	) {
@@ -147,7 +147,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 		);
 	}
 
-	if (!options?.usesOauthProvider) {
+	if (!options?.usesOAuthProvider) {
 		endpoints.getToken = createAuthEndpoint(
 			"/token",
 			{
@@ -198,7 +198,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 		);
 	}
 
-	if (!options?.usesOauthProvider) {
+	if (!options?.usesOAuthProvider) {
 		if (!hooks.after) hooks.after = [];
 		hooks.after.push({
 			matcher(context: HookEndpointContext) {

@@ -230,10 +230,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 			// Check for jwt plugin registration
 			if (opts.useJWTPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
-				if (!jwtPlugin.options?.usesOauthProvider) {
+				if (!jwtPlugin.options?.usesOAuthProvider) {
 					throw new BetterAuthError(
 						"jwt_config",
-						"Must set jwt plugin usesOauthProvider to true",
+						"Must set jwt plugin usesOAuthProvider to true",
 					);
 				}
 			}

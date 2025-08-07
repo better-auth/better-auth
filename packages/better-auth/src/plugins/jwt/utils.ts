@@ -18,7 +18,7 @@ export const getJwtPlugin = (ctx: AuthContext): ReturnType<typeof jwt> => {
  * @param iat - the iat time to consolidate on
  * @returns
  */
-export function toExpJWT(
+export function toExpJwt(
 	expirationTime: number | Date | string,
 	iat: number,
 ): number {

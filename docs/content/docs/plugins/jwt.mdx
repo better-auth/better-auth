@@ -305,13 +305,13 @@ jwt({
 })
 ```
 
-### Oauth Provider Mode
+### OAuth Provider Mode
 
 If you are making your system an oAuth provider by using the OIDC or MCP plugins, you **MUST** set this parameter to disable the `/token` endpoint and the ability to obtain tokens via the `set-auth-jwt`.
 
 ```ts title="auth.ts"
 jwt({
-  usesOauthProvider: true,
+  usesOAuthProvider: true,
 })
 ```
 
@@ -333,7 +333,7 @@ NOTE: If you are also using the OIDC plugin, you **MUST** specify which algorith
 
 ```ts title="auth.ts"
 jwt({
-  usesOauthProvider: true,
+  usesOAuthProvider: true,
   jwks: {
     remoteUrl: "https://example.com/.well-known/jwks.json",
     keyPairConfig: {
