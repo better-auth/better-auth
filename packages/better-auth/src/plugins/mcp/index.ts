@@ -143,7 +143,7 @@ export const mcp = (options: MCPOptions) => {
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
 						ctx.context.session = session;
-						const response = await authorizeMCPOAuth(ctx, opts)
+						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
 					}),
 				},
