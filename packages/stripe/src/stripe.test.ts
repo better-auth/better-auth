@@ -561,6 +561,10 @@ describe("stripe", async () => {
 				stripeSubscription: expect.any(Object),
 				plan: expect.any(Object),
 			}),
+			expect.objectContaining({
+				context: expect.any(Object),
+				_flag: expect.any(String),
+			}),
 		);
 
 		const updateEvent = {
@@ -816,5 +820,64 @@ describe("stripe", async () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	it("should only call Stripe customers.create once for signup and upgrade", async () => {
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
+	});
+
+	it("should create billing portal session", async () => {
+		await authClient.signUp.email(
+			{
+				...testUser,
+				email: "billing-portal@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "billing-portal@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+		const billingPortalRes = await authClient.subscription.billingPortal({
+			returnUrl: "/dashboard",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(billingPortalRes.data?.redirect).toBe(true);
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: expect.any(String),
+			return_url: "http://localhost:3000/dashboard",
+		});
 	});
 });

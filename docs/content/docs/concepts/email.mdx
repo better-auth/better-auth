@@ -135,6 +135,27 @@ const auth = betterAuth({
 })
 ```
 
+### Callback after successful email verification
+
+You can run custom code immediately after a user verifies their email using the `afterEmailVerification` callback. This is useful for any side-effects you want to trigger, like granting access to special features or logging the event.
+
+The `afterEmailVerification` function runs automatically when a user's email is confirmed, receiving the `user` object and `request` details so you can perform actions for that specific user.
+
+Here's how you can set it up:
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+
+export const auth = betterAuth({
+    emailVerification: {
+        async afterEmailVerification(user, request) {
+            // Your custom logic here, e.g., grant access to premium features
+            console.log(`${user.email} has been successfully verified!`);
+        }
+    }
+})
+```
+
 ## Password Reset Email
 
 Password reset allows users to reset their password if they forget it. Better Auth provides a simple way to implement password reset functionality.

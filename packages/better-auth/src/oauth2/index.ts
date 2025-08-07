@@ -4,3 +4,4 @@ export * from "./refresh-access-token";
 export * from "./utils";
 export * from "./state";
 export * from "./types";
+export * from "./link-account";
