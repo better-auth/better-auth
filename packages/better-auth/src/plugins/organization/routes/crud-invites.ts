@@ -17,6 +17,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
+import { getDate } from "../../../utils/date";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -245,9 +246,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			if (alreadyInvited.length && ctx.body.resend) {
 				const existingInvitation = alreadyInvited[0];
 
-				// Update the invitation's expiration date
-				const expiresIn = 1000 * 60 * 60 * 48; // 48 hours (default)
-				const newExpiresAt = new Date(Date.now() + expiresIn);
+				// Update the invitation's expiration date using the same logic as createInvitation
+				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
+				const newExpiresAt = getDate(
+					ctx.context.orgOptions.invitationExpiresIn || defaultExpiration,
+					"sec",
+				);
 
 				await ctx.context.adapter.update({
 					model: "invitation",
