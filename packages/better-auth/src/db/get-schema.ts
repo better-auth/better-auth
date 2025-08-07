@@ -1,15 +1,31 @@
-import { getAuthTables, type FieldAttribute } from ".";
+import { getAuthTables, type FieldAttribute, type BetterAuthDbSchema } from ".";
 import type { BetterAuthOptions } from "../types";
+import { z } from "zod/v4";
+import { BetterAuthError } from "../error";
+
+export const $dbSchema = z.object({
+	id: z.string().optional(),
+	fields: z.record(
+		z.string(),
+		z.object({
+			type: z.string(),
+			fieldName: z.string().optional(),
+			references: z
+				.object({
+					model: z.string(),
+					field: z.string(),
+				})
+				.optional(),
+		}),
+	),
+	modelName: z.string(),
+	order: z.union([z.number(), z.literal(Infinity)]).optional(),
+	disableMigrations: z.boolean().optional(),
+});
 
 export function getSchema(config: BetterAuthOptions) {
 	const tables = getAuthTables(config);
-	let schema: Record<
-		string,
-		{
-			fields: Record<string, FieldAttribute>;
-			order: number;
-		}
-	> = {};
+	let schema: BetterAuthDbSchema = {};
 	for (const key in tables) {
 		const table = tables[key];
 		const fields = table.fields;
@@ -36,7 +52,12 @@ export function getSchema(config: BetterAuthOptions) {
 		schema[table.modelName] = {
 			fields: actualFields,
 			order: table.order || Infinity,
+			modelName: table.modelName,
 		};
+		const { error } = $dbSchema.safeParse(schema[table.modelName]);
+		if (error) {
+			throw new BetterAuthError(error.message || "Schema validation failed");
+		}
 	}
 	return schema;
 }
