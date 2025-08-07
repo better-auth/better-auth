@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import Link from "next/link";
@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 export default function SignIn() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
-	const [loading, setLoading] = useState(false);
+	const [loading, startTransition] = useTransition();
 	const [rememberMe, setRememberMe] = useState(false);
 	const router = useRouter();
 
@@ -83,16 +83,16 @@ export default function SignIn() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							setLoading(true);
-							await signIn.email(
-								{ email, password, rememberMe: rememberMe ? true : false },
-								{
-									onSuccess(context) {
-										router.push("/dashboard");
+							startTransition(async () => {
+								await signIn.email(
+									{ email, password, rememberMe },
+									{
+										onSuccess(context) {
+											router.push("/dashboard");
+										},
 									},
-								},
-							);
-							setLoading(false);
+								);
+							});
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}

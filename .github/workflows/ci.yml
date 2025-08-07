@@ -7,8 +7,7 @@ on:
           - synchronize
     push:
       branches:
-        - main
-        - 'v**'
+        - '*'
     merge_group: {}
 
 jobs:
