@@ -749,7 +749,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Sign in with email and OTP",
+							description: "Sign in with OTP",
 							responses: {
 								200: {
 									description: "Success",
