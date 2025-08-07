@@ -811,7 +811,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		listUserInvitations: async (email: string) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
-				where: [{ field: "email", value: email }],
+				where: [{ field: "email", value: email.toLowerCase() }],
 			});
 			return invitations;
 		},

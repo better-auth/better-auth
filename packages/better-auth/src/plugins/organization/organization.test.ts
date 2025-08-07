@@ -306,6 +306,89 @@ describe("organization", async (it) => {
 		expect(invite.data?.role).toBe("admin,member");
 	});
 
+	it("should not allow inviting a user twice regardless of email casing", async () => {
+		const rng = crypto.randomUUID();
+		const user = {
+			email: `${rng}@email.com`,
+			password: rng,
+			name: rng,
+		};
+		const { headers } = await signInWithTestUser();
+
+		// Invite the user
+		const invite = await client.organization.inviteMember({
+			organizationId,
+			email: user.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invite.data?.email).toBe(user.email);
+
+		const inviteAgain = await client.organization.inviteMember({
+			organizationId,
+			email: user.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteAgain.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+		);
+
+		const inviteAgainUpper = await client.organization.inviteMember({
+			organizationId,
+			email: user.email.toUpperCase(),
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteAgainUpper.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+		);
+
+		await client.signUp.email({
+			email: user.email,
+			password: user.password,
+			name: user.name,
+		});
+		const { headers: userHeaders } = await signInWithUser(user.email, user.password);
+		const acceptRes = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(acceptRes.data?.invitation.status).toBe("accepted");
+
+		const inviteMemberAgain = await client.organization.inviteMember({
+			organizationId,
+			email: user.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteMemberAgain.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+		);
+
+		const inviteMemberAgainUpper = await client.organization.inviteMember({
+			organizationId,
+			email: user.email.toUpperCase(),
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteMemberAgainUpper.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+		);
+	});
+
 	it("should allow getting a member", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.setActive({
@@ -864,6 +947,18 @@ describe("organization", async (it) => {
 		});
 
 		expect(invitations?.length).toBe(
+			orgInvitations.data.filter(
+				(x) => x.email === orgInvitations.data?.[0].email,
+			).length,
+		);
+
+		const invitationsUpper = await auth.api.listUserInvitations({
+			query: {
+				email: orgInvitations.data?.[0].email.toUpperCase(),
+			},
+		});
+
+		expect(invitationsUpper?.length).toBe(
 			orgInvitations.data.filter(
 				(x) => x.email === orgInvitations.data?.[0].email,
 			).length,
