@@ -139,7 +139,7 @@ export async function trustDevice({
 	if (trustedDeviceStrategy === "in-db") {
 		await trustDeviceInDb(ctx, session);
 	}
-	if (trustedDeviceStrategy === "in-db") {
+	if (trustedDeviceStrategy === "in-cookie") {
 		await trustDeviceInCookie(ctx, user, session);
 	}
 }
@@ -185,6 +185,7 @@ async function trustDeviceInCookie(
 			maxAge: DAYS_30,
 		},
 	);
+
 
 	await ctx.setSignedCookie(
 		trustDeviceCookie.name,
