@@ -54,7 +54,7 @@ export const isProduction = nodeENV === "production";
 export const isDevelopment = nodeENV === "dev" || nodeENV === "development";
 
 /** Detect if `NODE_ENV` environment variable is `test` */
-export const isTest = nodeENV === "test" || toBoolean(env.TEST);
+export const isTest = () => nodeENV === "test" || toBoolean(env.TEST);
 
 /**
  * Get environment variable with fallback

@@ -1,28 +1,24 @@
 import { ENV, getBooleanEnvVar } from "../utils/env";
-import { awaitObject } from "../utils/await-object";
-
 import { projectId } from "./project-id";
 import type { BetterAuthOptions } from "../types";
-
-import { detectRuntime } from "./detectors/detect-runtime";
+import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
 import { detectFramework } from "./detectors/detect-framework";
-import { detectProduction } from "./detectors/detect-production";
-import { detectAuthConfig } from "./detectors/detect-auth-config";
-import { detectBetterAuth } from "./detectors/detect-better-auth";
 import { detectSystemInfo } from "./detectors/detect-system-info";
-import { detectProjectInfo } from "./detectors/detect-project-info";
+import { detectPackageManager } from "./detectors/detect-project-info";
 import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryEvent } from "./types";
 import { logger } from "../utils";
+import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 
 export async function createTelemetry(options: BetterAuthOptions) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
 	const track = debugEnabled
-		? (event: TelemetryEvent) => {
-				logger.info("telemetry event", JSON.stringify(event, null, 2));
-			}
+		? (event: TelemetryEvent) =>
+				Promise.resolve(
+					logger.info("telemetry event", JSON.stringify(event, null, 2)),
+				)
 		: async (event: TelemetryEvent) =>
 				betterFetch(TELEMETRY_ENDPOINT, {
 					method: "POST",
@@ -39,38 +35,30 @@ export async function createTelemetry(options: BetterAuthOptions) {
 	};
 
 	const enabled = await isEnabled();
-
-	if (!enabled) {
-		const noOp = async () => {};
-		return {
-			publish: noOp,
-			init: noOp,
-		};
-	}
+	const noOp = async () => {};
 
 	const anonymousId = await projectId(options.baseURL);
 
-	const publish = async (event: string, payload: Record<string, any>) => {
-		return track({ event, payload, anonymousId });
+	const payload = {
+		config: getTelemetryAuthConfig(options),
+		runtime: detectRuntime(),
+		database: await detectDatabase(),
+		framework: await detectFramework(),
+		environment: detectEnvironment(),
+		systemInfo: detectSystemInfo(),
+		packageManager: detectPackageManager(),
 	};
-
-	const init = async () => {
-		const payload = await awaitObject({
-			betterAuth: detectBetterAuth(),
-			authConfig: detectAuthConfig(options),
-			runtime: detectRuntime(),
-			database: detectDatabase(),
-			framework: detectFramework(),
-			production: detectProduction(),
-			systemInfo: detectSystemInfo(),
-			projectInfo: detectProjectInfo(),
-		});
-
-		await publish("init", payload);
-	};
+	void track({ type: "init", payload, anonymousId });
 
 	return {
-		publish,
-		init,
+		publish: enabled
+			? async (event: TelemetryEvent) => {
+					await track({
+						type: event.type,
+						payload: event.payload,
+						anonymousId,
+					});
+				}
+			: noOp,
 	};
 }

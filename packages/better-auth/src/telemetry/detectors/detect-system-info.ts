@@ -1,26 +1,18 @@
-import fs from "node:fs";
-import os from "node:os";
-import process from "node:process";
+import fs from "fs";
+import os from "os";
+import process from "process";
+import { env } from "../../utils/env";
 
-import type { SystemInfo } from "../types";
-
-export async function detectSystemInfo(): Promise<SystemInfo> {
+export function detectSystemInfo() {
 	const cpus = os.cpus();
-
 	return {
-		// Software information
 		systemPlatform: os.platform(),
 		systemRelease: os.release(),
 		systemArchitecture: os.arch(),
-
-		// Machine information
 		cpuCount: cpus.length,
 		cpuModel: cpus.length ? cpus[0].model : null,
 		cpuSpeed: cpus.length ? cpus[0].speed : null,
 		memory: os.totalmem(),
-
-		// Environment information
-		isCI: isCI(),
 		isWSL: isWsl(),
 		isDocker: isDocker(),
 		isTTY: process.stdout.isTTY,
@@ -98,9 +90,7 @@ function isInsideContainer() {
 	return isInsideContainerCached;
 }
 
-function isCI() {
-	const env = process.env;
-
+export function isCI() {
 	return (
 		env.CI !== "false" &&
 		("BUILD_ID" in env || // Jenkins, Cloudbees

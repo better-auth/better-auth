@@ -1,4 +1,3 @@
-import type { DetectionInfo } from "../types";
 import {
 	readPackageJson,
 	getVersionFromLocalPackageJson,
@@ -18,7 +17,7 @@ const FRAMEWORKS: Record<string, string> = {
 	expo: "expo",
 };
 
-export async function detectFramework(): Promise<DetectionInfo | undefined> {
+export async function detectFramework() {
 	for (const [pkg, name] of Object.entries(FRAMEWORKS)) {
 		const version =
 			(await readPackageJson(pkg)) ||

@@ -1,6 +1,7 @@
-import type { DetectionInfo } from "../types";
+import { getEnvVar, isTest } from "../../utils/env";
+import { isCI } from "./detect-system-info";
 
-export async function detectRuntime(): Promise<DetectionInfo | undefined> {
+export function detectRuntime() {
 	// @ts-expect-error: TS doesn't know about Deno global
 	if (typeof Deno !== "undefined") {
 		// @ts-expect-error: TS doesn't know about Deno global
@@ -13,10 +14,15 @@ export async function detectRuntime(): Promise<DetectionInfo | undefined> {
 		return { name: "bun", version: bunVersion };
 	}
 
-	if (typeof process !== "undefined" && typeof process.versions === "object") {
-		const nodeVersion = process.versions.node ?? null;
-		return { name: "node", version: nodeVersion };
-	}
+	return { name: "node", version: process.versions.node ?? null };
+}
 
-	return undefined;
+export function detectEnvironment() {
+	return getEnvVar("NODE_ENV") === "production"
+		? "production"
+		: isCI()
+			? "ci"
+			: isTest()
+				? "test"
+				: "development";
 }

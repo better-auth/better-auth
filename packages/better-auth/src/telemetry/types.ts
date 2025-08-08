@@ -33,7 +33,7 @@ export interface ProjectInfo {
 }
 
 export interface TelemetryEvent {
-	event: string;
-	anonymousId: string;
+	type: "init" | "error" | "warning" | "info" | "debug";
+	anonymousId?: string;
 	payload: Record<string, any>;
 }
