@@ -8,6 +8,7 @@ import {
 	oneTapClient,
 	oidcClient,
 	genericOAuthClient,
+	deviceAuthorizationClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
 import { stripeClient } from "@better-auth/stripe/client";
@@ -34,6 +35,7 @@ export const client = createAuthClient({
 		stripeClient({
 			subscription: true,
 		}),
+		deviceAuthorizationClient(),
 	],
 	fetchOptions: {
 		onError(e) {
