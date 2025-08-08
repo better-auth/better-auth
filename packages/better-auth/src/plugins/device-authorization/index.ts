@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { APIError } from "better-call";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
@@ -102,6 +103,21 @@ const deviceCodeSchema: AuthPluginSchema = {
 };
 
 export { deviceAuthorizationClient } from "./client";
+
+const DEVICE_AUTHORIZATION_ERROR_CODES = {
+	INVALID_DEVICE_CODE: "Invalid device code",
+	EXPIRED_DEVICE_CODE: "Device code has expired",
+	EXPIRED_USER_CODE: "User code has expired",
+	AUTHORIZATION_PENDING: "Authorization pending",
+	ACCESS_DENIED: "Access denied",
+	INVALID_USER_CODE: "Invalid user code",
+	DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
+	POLLING_TOO_FREQUENTLY: "Polling too frequently",
+	USER_NOT_FOUND: "User not found",
+	FAILED_TO_CREATE_SESSION: "Failed to create session",
+	INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
+	AUTHENTICATION_REQUIRED: "Authentication required",
+} as const;
 
 export const deviceAuthorization = (
 	options: DeviceAuthorizationOptions = {},
@@ -334,15 +350,14 @@ export const deviceAuthorization = (
 					});
 
 					if (!deviceCodeRecord) {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
+							details: {
 								error: "invalid_grant",
-								error_description: "Invalid device code",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					// Check rate limiting
@@ -370,16 +385,16 @@ export const deviceAuthorization = (
 									pollingInterval: newInterval,
 								},
 							});
-							return ctx.json(
-								{
+							throw new APIError("BAD_REQUEST", {
+								message:
+									DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY,
+								details: {
 									error: "slow_down",
-									error_description: "Polling too frequently",
+									error_description:
+										DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY,
 									interval: newInterval,
 								},
-								{
-									status: 400,
-								},
-							);
+							});
 						}
 					}
 
@@ -407,27 +422,25 @@ export const deviceAuthorization = (
 								},
 							],
 						});
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE,
+							details: {
 								error: "expired_token",
-								error_description: "Device code has expired",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (deviceCodeRecord.status === "pending") {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING,
+							details: {
 								error: "authorization_pending",
-								error_description: "Authorization pending",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (deviceCodeRecord.status === "denied") {
@@ -440,15 +453,14 @@ export const deviceAuthorization = (
 								},
 							],
 						});
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
+							details: {
 								error: "access_denied",
-								error_description: "Access denied",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (
@@ -471,15 +483,14 @@ export const deviceAuthorization = (
 						);
 
 						if (!user) {
-							return ctx.json(
-								{
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message: DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND,
+								details: {
 									error: "server_error",
-									error_description: "User not found",
+									error_description:
+										DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND,
 								},
-								{
-									status: 500,
-								},
-							);
+							});
 						}
 
 						const session = await ctx.context.internalAdapter.createSession(
@@ -488,15 +499,15 @@ export const deviceAuthorization = (
 						);
 
 						if (!session) {
-							return ctx.json(
-								{
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message:
+									DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+								details: {
 									error: "server_error",
-									error_description: "Failed to create session",
+									error_description:
+										DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 								},
-								{
-									status: 500,
-								},
-							);
+							});
 						}
 
 						// Return OAuth 2.0 compliant token response
@@ -510,15 +521,15 @@ export const deviceAuthorization = (
 						});
 					}
 
-					return ctx.json(
-						{
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message:
+							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS,
+						details: {
 							error: "server_error",
-							error_description: "Invalid device code status",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS,
 						},
-						{
-							status: 500,
-						},
-					);
+					});
 				},
 			),
 			deviceVerify: createAuthEndpoint(
@@ -576,27 +587,25 @@ export const deviceAuthorization = (
 					});
 
 					if (!deviceCodeRecord) {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
+							details: {
 								error: "invalid_request",
-								error_description: "Invalid user code",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (deviceCodeRecord.expiresAt < new Date()) {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
+							details: {
 								error: "expired_token",
-								error_description: "User code has expired",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					return ctx.json({
@@ -642,15 +651,14 @@ export const deviceAuthorization = (
 					// Check if user is authenticated
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
-						return ctx.json(
-							{
+						throw new APIError("UNAUTHORIZED", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED,
+							details: {
 								error: "unauthorized",
-								error_description: "Authentication required",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED,
 							},
-							{
-								status: 401,
-							},
-						);
+						});
 					}
 
 					const { userCode } = ctx.body;
@@ -678,39 +686,37 @@ export const deviceAuthorization = (
 					});
 
 					if (!deviceCodeRecord) {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
+							details: {
 								error: "invalid_request",
-								error_description: "Invalid user code",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (deviceCodeRecord.expiresAt < new Date()) {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
+							details: {
 								error: "expired_token",
-								error_description: "User code has expired",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (deviceCodeRecord.status !== "pending") {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message:
+								DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
+							details: {
 								error: "invalid_request",
-								error_description: "Device code already processed",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					// Update device code with approved status and user ID
@@ -791,39 +797,37 @@ export const deviceAuthorization = (
 					});
 
 					if (!deviceCodeRecord) {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
+							details: {
 								error: "invalid_request",
-								error_description: "Invalid user code",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (deviceCodeRecord.expiresAt < new Date()) {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
+							details: {
 								error: "expired_token",
-								error_description: "User code has expired",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					if (deviceCodeRecord.status !== "pending") {
-						return ctx.json(
-							{
+						throw new APIError("BAD_REQUEST", {
+							message:
+								DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
+							details: {
 								error: "invalid_request",
-								error_description: "Device code already processed",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
 							},
-							{
-								status: 400,
-							},
-						);
+						});
 					}
 
 					// Update device code with denied status
@@ -846,13 +850,6 @@ export const deviceAuthorization = (
 				},
 			),
 		},
-		$ERROR_CODES: {
-			INVALID_DEVICE_CODE: "Invalid device code",
-			EXPIRED_DEVICE_CODE: "Device code has expired",
-			AUTHORIZATION_PENDING: "Authorization pending",
-			ACCESS_DENIED: "Access denied",
-			INVALID_USER_CODE: "Invalid user code",
-			DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
-		},
+		$ERROR_CODES: DEVICE_AUTHORIZATION_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
