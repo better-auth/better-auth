@@ -1,4 +1,4 @@
-import type * as z from "zod";
+import type * as z from "zod/v4";
 import type { Ref } from "vue";
 import { computed, ref, watch } from "vue";
 import { useFieldValue, useFormValues } from "vee-validate";

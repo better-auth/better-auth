@@ -4,7 +4,7 @@ import {
 	sessionMiddleware,
 	referenceMiddleware,
 } from "./index";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 export const restoreSubscription = createAuthEndpoint(
 	"/subscription/restore",
