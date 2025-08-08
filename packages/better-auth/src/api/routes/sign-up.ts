@@ -12,7 +12,7 @@ import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 import { getOrgAdapter } from "../../plugins/organization/adapter";
-import type { OrganizationOptions } from "../../plugins/organization/organization";
+import type { OrganizationOptions } from "../../plugins/organization/types";
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
