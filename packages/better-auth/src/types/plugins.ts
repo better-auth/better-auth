@@ -27,10 +27,16 @@ export type BetterAuthPlugin = {
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
-	init?: (ctx: AuthContext) => {
-		context?: DeepPartial<Omit<AuthContext, "options">>;
-		options?: Partial<BetterAuthOptions>;
-	} | void;
+	init?: (ctx: AuthContext) =>
+		| Promise<{
+				context?: DeepPartial<Omit<AuthContext, "options">>;
+				options?: Partial<BetterAuthOptions>;
+		  } | void>
+		| {
+				context?: DeepPartial<Omit<AuthContext, "options">>;
+				options?: Partial<BetterAuthOptions>;
+		  }
+		| void;
 	endpoints?: {
 		[key: string]: Endpoint;
 	};
