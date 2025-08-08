@@ -15,10 +15,7 @@ import { ArrowUpFromLine, CreditCard, RefreshCcw } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
-function Component(props: {
-	currentPlan?: string;
-	isTrial?: boolean;
-}) {
+function Component(props: { currentPlan?: string; isTrial?: boolean }) {
 	const [selectedPlan, setSelectedPlan] = useState("plus");
 	const id = useId();
 	return (

@@ -319,7 +319,10 @@ function getChildren(
 function TypeTable({
 	props,
 	isServer,
-}: { props: Property[]; isServer: boolean }) {
+}: {
+	props: Property[];
+	isServer: boolean;
+}) {
 	if (!isServer && !props.filter((x) => !x.isServerOnly).length) return null;
 	if (isServer && !props.filter((x) => !x.isClientOnly).length) return null;
 	if (!props.length) return null;

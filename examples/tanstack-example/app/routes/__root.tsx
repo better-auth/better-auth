@@ -1,5 +1,10 @@
-import { Link, createRootRoute, useRouter } from "@tanstack/react-router";
-import { Outlet, ScrollRestoration } from "@tanstack/react-router";
+import {
+	createRootRoute,
+	Link,
+	Outlet,
+	ScrollRestoration,
+	useRouter,
+} from "@tanstack/react-router";
 import { Body, Head, Html, Meta, Scripts } from "@tanstack/start";
 import type * as React from "react";
 import { useEffect, useState } from "react";
