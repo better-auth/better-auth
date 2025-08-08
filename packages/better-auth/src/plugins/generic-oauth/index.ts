@@ -158,6 +158,10 @@ interface GenericOAuthConfig_base {
 }
 
 interface GenericOAuthConfig_withDR extends GenericOAuthConfig_base {
+	/**
+	 * With dynamic registration, the client will automatically register with a provided
+	 * `registration_endpoint` and collect the `client_id` and `client_secret`.
+	 */
 	useDynamicRegistration: {
 		registration_endpoint: string;
 		/**
@@ -304,43 +308,67 @@ async function getClientIdAndSecret(
 	clientSecret: string | undefined;
 }> {
 	if ("useDynamicRegistration" in config) {
-		const registration = config.useDynamicRegistration;
+		const registrationConfig = config.useDynamicRegistration;
+		const client_uri =
+			registrationConfig.client_uri || ctx.baseURL
+				? new URL(ctx.baseURL).origin
+				: undefined;
+
+		const registration = await ctx.adapter.findOne<{
+			clientId: string;
+			clientSecret: string;
+			providerId: string;
+		}>({
+			model: "oauthRegistration",
+			where: [
+				{
+					field: "providerId",
+					value: config.providerId,
+				},
+			],
+		});
+
+		if (registration) {
+			return {
+				clientId: registration.clientId,
+				clientSecret: registration.clientSecret,
+			};
+		}
+
 		const body = {
-			client_name: registration.client_name || ctx.options.appName,
-			client_uri:
-				registration.client_uri || ctx.baseURL
-					? new URL(ctx.baseURL).origin
-					: undefined,
-			redirect_uris: registration.redirect_uris || [
+			client_name:
+				registrationConfig.client_name || ctx.options.appName || client_uri,
+			client_uri: client_uri,
+			redirect_uris: registrationConfig.redirect_uris || [
 				`${ctx.baseURL}/oauth2/callback/${config.providerId}`,
 			],
 			scope: config.scopes?.join(" ") || "openid profile email",
 			token_endpoint_auth_method:
-				registration.token_endpoint_auth_method || "client_secret_basic",
+				registrationConfig.token_endpoint_auth_method || "client_secret_basic",
 			response_types: config.responseType ? [config.responseType] : ["code"],
 			grant_types: ["authorization_code"],
-			contacts: registration.contacts || [],
-			tos_uri: registration.tos_uri,
-			policy_uri: registration.policy_uri,
-			jwks_uri: registration.jwks_uri,
-			jwks: registration.jwks,
-			logo_uri: registration.logo_uri,
+			contacts: registrationConfig.contacts || [],
+			tos_uri: registrationConfig.tos_uri,
+			policy_uri: registrationConfig.policy_uri,
+			jwks_uri: registrationConfig.jwks_uri,
+			jwks: registrationConfig.jwks,
+			logo_uri: registrationConfig.logo_uri,
 		};
+
 		const response = await betterFetch<{
 			client_id: string;
 			client_secret: string;
-		}>(registration.registration_endpoint, {
+		}>(registrationConfig.registration_endpoint, {
 			method: "POST",
 			body,
 		});
-		console.log(response);
-		//TODO: add DB checks & saves.
+
 		if (response.error) {
 			ctx.logger.error(
 				`[GenericOAuth] Failed to dynamically register client for provider ${config.providerId}`,
 				response.error,
 				{
-					endpoint: registration.registration_endpoint,
+					endpoint: registrationConfig.registration_endpoint,
 					body,
 				},
 			);
@@ -349,6 +377,32 @@ async function getClientIdAndSecret(
 				code: "FAILED_TO_REGISTER_CLIENT",
 			});
 		}
+
+		if (!response.data.client_id || !response.data.client_secret) {
+			ctx.logger.error(
+				`[GenericOAuth] Failed to dynamically register client for provider ${config.providerId}`,
+				response.error,
+				{
+					endpoint: registrationConfig.registration_endpoint,
+					body,
+				},
+			);
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"Failed to register client. No client_id or client_secret found from registration response.",
+				code: "FAILED_TO_REGISTER_CLIENT",
+			});
+		}
+
+		ctx.adapter.create({
+			model: "oauthRegistration",
+			data: {
+				providerId: config.providerId,
+				clientId: response.data.client_id,
+				clientSecret: response.data.client_secret,
+			},
+		});
+
 		return {
 			clientId: response.data.client_id,
 			clientSecret: response.data.client_secret,
@@ -369,116 +423,125 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 	} as const;
 	return {
 		id: "generic-oauth",
-		init: async (ctx) => {
-			const genericProviders = await Promise.all(
-				options.config.map(async (c) => {
-					let finalUserInfoUrl = c.userInfoUrl;
-					const { clientId, clientSecret } = await getClientIdAndSecret(c, ctx);
-					return {
-						id: c.providerId,
-						name: c.providerId,
-						createAuthorizationURL(data) {
-							return createAuthorizationURL({
-								id: c.providerId,
-								options: {
-									clientId: clientId,
-									clientSecret: clientSecret,
-									redirectURI: c.redirectURI,
-								},
-								authorizationEndpoint: c.authorizationUrl!,
-								state: data.state,
-								codeVerifier: c.pkce ? data.codeVerifier : undefined,
-								scopes: c.scopes || [],
-								redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+		init: (ctx) => {
+			const genericProviders = options.config.map((c) => {
+				let finalUserInfoUrl = c.userInfoUrl;
+				return {
+					id: c.providerId,
+					name: c.providerId,
+					async createAuthorizationURL(data) {
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
+						return createAuthorizationURL({
+							id: c.providerId,
+							options: {
+								clientId: clientId,
+								clientSecret: clientSecret,
+								redirectURI: c.redirectURI,
+							},
+							authorizationEndpoint: c.authorizationUrl!,
+							state: data.state,
+							codeVerifier: c.pkce ? data.codeVerifier : undefined,
+							scopes: c.scopes || [],
+							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+						});
+					},
+					async validateAuthorizationCode(data) {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+								userinfo_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+								headers: c.discoveryHeaders,
 							});
-						},
-						async validateAuthorizationCode(data) {
-							let finalTokenUrl = c.tokenUrl;
-							if (c.discoveryUrl) {
-								const discovery = await betterFetch<{
-									token_endpoint: string;
-									userinfo_endpoint: string;
-								}>(c.discoveryUrl, {
-									method: "GET",
-									headers: c.discoveryHeaders,
-								});
-								if (discovery.data) {
-									finalTokenUrl = discovery.data.token_endpoint;
-									finalUserInfoUrl = discovery.data.userinfo_endpoint;
-								}
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+								finalUserInfoUrl = discovery.data.userinfo_endpoint;
 							}
-							if (!finalTokenUrl) {
-								throw new APIError("BAD_REQUEST", {
-									message: "Invalid OAuth configuration. Token URL not found.",
-								});
-							}
-							return validateAuthorizationCode({
-								headers: c.authorizationHeaders,
-								code: data.code,
-								codeVerifier: data.codeVerifier,
-								redirectURI: data.redirectURI,
-								options: {
-									clientId: clientId,
-									clientSecret: clientSecret,
-									redirectURI: c.redirectURI,
-								},
-								tokenEndpoint: finalTokenUrl,
-								authentication: c.authentication,
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
 							});
-						},
-						async refreshAccessToken(
-							refreshToken: string,
-						): Promise<OAuth2Tokens> {
-							let finalTokenUrl = c.tokenUrl;
-							if (c.discoveryUrl) {
-								const discovery = await betterFetch<{
-									token_endpoint: string;
-								}>(c.discoveryUrl, {
-									method: "GET",
-									headers: c.discoveryHeaders,
-								});
-								if (discovery.data) {
-									finalTokenUrl = discovery.data.token_endpoint;
-								}
-							}
-							if (!finalTokenUrl) {
-								throw new APIError("BAD_REQUEST", {
-									message: "Invalid OAuth configuration. Token URL not found.",
-								});
-							}
-							return refreshAccessToken({
-								refreshToken,
-								options: {
-									clientId: clientId,
-									clientSecret: clientSecret,
-								},
-								authentication: c.authentication,
-								tokenEndpoint: finalTokenUrl,
+						}
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
+						return validateAuthorizationCode({
+							headers: c.authorizationHeaders,
+							code: data.code,
+							codeVerifier: data.codeVerifier,
+							redirectURI: data.redirectURI,
+							options: {
+								clientId: clientId,
+								clientSecret: clientSecret,
+								redirectURI: c.redirectURI,
+							},
+							tokenEndpoint: finalTokenUrl,
+							authentication: c.authentication,
+						});
+					},
+					async refreshAccessToken(
+						refreshToken: string,
+					): Promise<OAuth2Tokens> {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+								headers: c.discoveryHeaders,
 							});
-						},
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
+						return refreshAccessToken({
+							refreshToken,
+							options: {
+								clientId: clientId,
+								clientSecret: clientSecret,
+							},
+							authentication: c.authentication,
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
 
-						async getUserInfo(tokens) {
-							const userInfo = c.getUserInfo
-								? await c.getUserInfo(tokens)
-								: await getUserInfo(tokens, finalUserInfoUrl);
-							if (!userInfo) {
-								return null;
-							}
-							return {
-								user: {
-									id: userInfo?.id,
-									email: userInfo?.email,
-									emailVerified: userInfo?.emailVerified,
-									image: userInfo?.image,
-									name: userInfo?.name,
-									...c.mapProfileToUser?.(userInfo),
-								},
-								data: userInfo,
-							};
-						},
-					} as OAuthProvider;
-				}),
-			);
+					async getUserInfo(tokens) {
+						const userInfo = c.getUserInfo
+							? await c.getUserInfo(tokens)
+							: await getUserInfo(tokens, finalUserInfoUrl);
+						if (!userInfo) {
+							return null;
+						}
+						return {
+							user: {
+								id: userInfo?.id,
+								email: userInfo?.email,
+								emailVerified: userInfo?.emailVerified,
+								image: userInfo?.image,
+								name: userInfo?.name,
+								...c.mapProfileToUser?.(userInfo),
+							},
+							data: userInfo,
+						};
+					},
+				} as OAuthProvider;
+			});
 			return {
 				context: {
 					socialProviders: genericProviders.concat(ctx.socialProviders),
