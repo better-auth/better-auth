@@ -1,57 +1,62 @@
 import type { AuthPluginSchema } from "../../types";
 
-export const schema = {
-	user: {
-		fields: {
-			twoFactorEnabled: {
-				type: "boolean",
-				required: false,
-				defaultValue: false,
-				input: false,
-			},
-		},
-	},
-	twoFactor: {
-		fields: {
-			secret: {
-				type: "string",
-				required: true,
-				returned: false,
-			},
-			backupCodes: {
-				type: "string",
-				required: true,
-				returned: false,
-			},
-			userId: {
-				type: "string",
-				required: true,
-				returned: false,
-				references: {
-					model: "user",
-					field: "id",
+export const schema = (trustedDeviceStrategy: "in-db" | "in-cookie") =>
+	({
+		user: {
+			fields: {
+				twoFactorEnabled: {
+					type: "boolean",
+					required: false,
+					defaultValue: false,
+					input: false,
 				},
 			},
 		},
-	},
-	trustedDevice: {
-		fields: {
-			id: {
-				type: "string",
-				required: true,
-				returned: true,
-				unique: true,
-			},
-			userAgent: {
-				type: "string",
-				required: true,
-				returned: true,
-			},
-			maxAge: {
-				type: "string",
-				required: true,
-				returned: true,
+		twoFactor: {
+			fields: {
+				secret: {
+					type: "string",
+					required: true,
+					returned: false,
+				},
+				backupCodes: {
+					type: "string",
+					required: true,
+					returned: false,
+				},
+				userId: {
+					type: "string",
+					required: true,
+					returned: false,
+					references: {
+						model: "user",
+						field: "id",
+					},
+				},
 			},
 		},
-	},
-} satisfies AuthPluginSchema;
+		...(trustedDeviceStrategy === "in-db"
+			? {
+					trustedDevice: {
+						fields: {
+							id: {
+								type: "string",
+								required: true,
+								returned: true,
+								unique: true,
+							},
+							userAgent: {
+								type: "string",
+								required: true,
+								returned: true,
+							},
+							maxAge: {
+								type: "string",
+								required: true,
+								returned: true,
+							},
+						},
+					},
+				}
+			: {}),
+	}) satisfies AuthPluginSchema;

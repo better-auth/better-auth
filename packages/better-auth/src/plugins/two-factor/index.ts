@@ -342,7 +342,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 			],
 		},
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(schema(trustedDeviceStrategy), options?.schema),
 		rateLimit: [
 			{
 				pathMatcher(path) {
