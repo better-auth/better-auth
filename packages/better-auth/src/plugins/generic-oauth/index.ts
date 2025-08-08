@@ -172,17 +172,13 @@ interface GenericOAuthConfig_withDR extends GenericOAuthConfig_base {
 		 * A list of URLs which the client may redirect to after authorization.
 		 *
 		 * @default [`${baseURL}/oauth2/callback/${providerId}`]
+		 * @example ["https://example.com/api/auth/oauth2/callback/better-auth"]
 		 */
-		redirect_uris: string[];
+		redirect_uris?: string[];
 		/**
 		 * The Logo URI of the client.
 		 */
 		logo_uri?: string;
-		/**
-		 * The scope of the client.
-		 * @default "openid profile email"
-		 */
-		scope?: string;
 		/**
 		 * The token endpoint authentication method.
 		 * @default "client_secret_basic"
@@ -320,7 +316,7 @@ async function getClientIdAndSecret(
 				redirect_uris: registration.redirect_uris || [
 					`${ctx.baseURL}/oauth2/callback/${config.providerId}`,
 				],
-				scope: registration.scope || "openid profile email",
+				scope: config.scopes || "openid profile email",
 				token_endpoint_auth_method:
 					registration.token_endpoint_auth_method || "client_secret_basic",
 				contacts: registration.contacts || [],
