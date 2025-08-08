@@ -307,15 +307,18 @@ async function getClientIdAndSecret(
 		const registration = config.useDynamicRegistration;
 		const body = {
 			client_name: registration.client_name || ctx.options.appName,
-			client_uri: registration.client_uri || ctx.baseURL ? new URL(ctx.baseURL).origin : undefined,
+			client_uri:
+				registration.client_uri || ctx.baseURL
+					? new URL(ctx.baseURL).origin
+					: undefined,
 			redirect_uris: registration.redirect_uris || [
 				`${ctx.baseURL}/oauth2/callback/${config.providerId}`,
 			],
 			scope: config.scopes?.join(" ") || "openid profile email",
 			token_endpoint_auth_method:
 				registration.token_endpoint_auth_method || "client_secret_basic",
-			response_types: config.responseType || "code",
-			grant_types:  ["authorization_code"],
+			response_types: config.responseType ? [config.responseType] : ["code"],
+			grant_types: ["authorization_code"],
 			contacts: registration.contacts || [],
 			tos_uri: registration.tos_uri,
 			policy_uri: registration.policy_uri,
@@ -338,8 +341,8 @@ async function getClientIdAndSecret(
 				response.error,
 				{
 					endpoint: registration.registration_endpoint,
-					body
-				}
+					body,
+				},
 			);
 			throw new APIError("BAD_REQUEST", {
 				message: "Failed to register client",
