@@ -35,11 +35,25 @@
   "overrides": [
     {
       "include": ["packages/better-auth/src/**"],
-      "ignore": ["packages/better-auth/src/utils/logger.ts"],
       "linter": {
         "rules": {
           "suspicious": {
-            "noConsoleLog": "error"
+            "noConsole": {
+              "level": "error",
+              "options": {
+                "allow": ["warn", "error"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "include": ["packages/better-auth/src/utils/logger.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
           }
         }
       }
