@@ -10,8 +10,6 @@ import type {
 	GenericEndpointContext,
 	InferSession,
 	InferUser,
-	Session,
-	User,
 } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 

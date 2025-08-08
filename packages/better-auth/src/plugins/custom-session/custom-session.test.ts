@@ -6,12 +6,15 @@ import { createAuthClient } from "../../client";
 import { customSessionClient } from "./client";
 import type { BetterAuthOptions } from "../../types";
 import { adminClient } from "../admin/client";
+import { multiSession } from "../multi-session";
+import { multiSessionClient } from "../multi-session/client";
+import { parseSetCookieHeader } from "../../cookies";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
-		plugins: [admin()],
+		plugins: [admin(), multiSession()],
 	} satisfies BetterAuthOptions;
-	const { auth, signInWithTestUser, testUser, customFetchImpl } =
+	const { auth, signInWithTestUser, testUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			plugins: [
 				...options.plugins,
@@ -33,7 +36,11 @@ describe("Custom Session Plugin Tests", async () => {
 
 	const client = createAuthClient({
 		baseURL: "http://localhost:3000",
-		plugins: [customSessionClient<typeof auth>(), adminClient()],
+		plugins: [
+			customSessionClient<typeof auth>(),
+			adminClient(),
+			multiSessionClient(),
+		],
 		fetchOptions: { customFetchImpl },
 	});
 
@@ -47,7 +54,7 @@ describe("Custom Session Plugin Tests", async () => {
 
 	it("should return set cookie headers", async () => {
 		const { headers } = await signInWithTestUser();
-		await client.getSession({
+		const s = await client.getSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {
@@ -55,5 +62,31 @@ describe("Custom Session Plugin Tests", async () => {
 				},
 			},
 		});
+	});
+
+	it("should return the custom session for multi-session", async () => {
+		let headers = new Headers();
+		const testUser = {
+			email: "second-email@test.com",
+			password: "password",
+			name: "Name",
+		};
+
+		await client.signUp.email(
+			{
+				name: testUser.name,
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const sessions = await auth.api.listDeviceSessions({
+			headers,
+		});
+		const session = sessions[0]!;
+		//@ts-expect-error
+		expect(session.newData).toEqual({ message: "Hello, World!" });
 	});
 });
