@@ -151,6 +151,7 @@ async function trustDeviceInDb(ctx: GenericEndpointContext, session: Session) {
 		model: "device",
 		data: {
 			deviceId,
+			userId: session.userId,
 			maxAge: DAYS_30,
 			userAgent: session.userAgent,
 		},

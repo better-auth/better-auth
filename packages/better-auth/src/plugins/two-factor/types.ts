@@ -60,6 +60,7 @@ export interface TwoFactorTable {
 }
 
 export interface TrustedDeviceTable {
+	userId: string;
 	deviceId: string;
 	maxAge: number;
 	userAgent: string | null | undefined;
