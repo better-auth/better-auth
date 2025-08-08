@@ -59,7 +59,7 @@ export async function verifyTwoFactor(
 					user,
 				});
 				if (ctx.body.trustDevice) {
-					trustDevice({ ctx, user, session, trustedDeviceStrategy });
+					await trustDevice({ ctx, user, session, trustedDeviceStrategy });
 
 					// delete the dont remember me cookie
 					ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
