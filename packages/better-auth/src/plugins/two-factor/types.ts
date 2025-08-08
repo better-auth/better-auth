@@ -37,7 +37,7 @@ export interface TwoFactorOptions {
 	/**
 	 * Custom schema for the two factor plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<ReturnType<typeof schema>>;
 }
 
 export interface UserWithTwoFactor extends User {
