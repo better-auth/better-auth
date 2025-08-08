@@ -22,4 +22,6 @@ export const BASE_ERROR_CODES = {
 	SESSION_EXPIRED: "Session expired. Re-authenticate to perform this action.",
 	FAILED_TO_UNLINK_LAST_ACCOUNT: "You can't unlink your last account",
 	ACCOUNT_NOT_FOUND: "Account not found",
+	USER_ALREADY_HAS_PASSWORD:
+		"User already has a password. Provide that to delete the account.",
 };

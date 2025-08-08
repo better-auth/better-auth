@@ -10,14 +10,14 @@ Better Auth manages session using a traditional cookie-based session management.
 The session table stores the session data. The session table has the following fields:
 
 - `id`: The session token. Which is also used as the session cookie.
-- `userId`: The user id of the user.
+- `userId`: The user ID of the user.
 - `expiresAt`: The expiration date of the session.
 - `ipAddress`: The IP address of the user.
 - `userAgent`: The user agent of the user. It stores the user agent header from the request.
 
 ## Session Expiration
 
-The session expires after 7 days by default. But whenever the session is used, and the `updateAge` is reached the session expiration is updated to the current time plus the `expiresIn` value.
+The session expires after 7 days by default. But whenever the session is used and the `updateAge` is reached, the session expiration is updated to the current time plus the `expiresIn` value.
 
 You can change both the `expiresIn` and `updateAge` values by passing the `session` object to the `auth` configuration.
 
@@ -164,7 +164,7 @@ When cookie caching is enabled, the server can check session validity from the c
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"l
+import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
     session: {
@@ -187,7 +187,7 @@ const session = await authClient.getSession({ query: {
 or on the server
 
 ```ts title="server.ts"
-auth.api.getSession({
+await auth.api.getSession({
     query: {
         disableCookieCache: true,
     }, 
@@ -232,15 +232,15 @@ const authClient = createAuthClient({
     plugins: [customSessionClient<typeof auth>()],
 });
 
-const { data } = await authClient.useSession();
+const { data } = authClient.useSession();
 const { data: sessionData } = await authClient.getSession();
 // data.roles
 // data.user.newField
 ```
 
-**Some Caveats**: 
+### Caveats on Customizing Session Response
 
-- The passed `session` object to the callback does not infer fields added by plugins.  
+1. The passed `session` object to the callback does not infer fields added by plugins.  
 
 However, as a workaround, you can pull up your auth options and pass it to the plugin to infer the fields.
 
@@ -250,7 +250,7 @@ import { betterAuth, BetterAuthOptions } from "better-auth";
 const options = {
   //...config options
   plugins: [
-    //...plugins
+    //...plugins 
   ]
 } satisfies BetterAuthOptions;
 
@@ -269,5 +269,5 @@ export const auth = betterAuth({
 })
 ```
 
-- If you cannot use the `auth` instance as a type, inference will not work on the client.  
-- Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.
+2. When your server and client code are in separate projects or repositories, and you cannot import the `auth` instance as a type reference, type inference for custom session fields will not work on the client side.
+3. Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.

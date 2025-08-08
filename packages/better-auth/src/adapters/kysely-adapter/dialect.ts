@@ -41,7 +41,9 @@ function getDatabaseType(
 	if ("connect" in db) {
 		return "postgres";
 	}
-
+	if ("fileControl" in db) {
+		return "sqlite";
+	}
 	return null;
 }
 
@@ -91,6 +93,13 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	if ("connect" in db) {
 		dialect = new PostgresDialect({
 			pool: db,
+		});
+	}
+
+	if ("fileControl" in db) {
+		const { BunSqliteDialect } = await import("./bun-sqlite-dialect");
+		dialect = new BunSqliteDialect({
+			database: db,
 		});
 	}
 

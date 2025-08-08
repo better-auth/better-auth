@@ -62,15 +62,11 @@ export const myAdapter = (config: CustomAdapterConfig = {}) =>
       supportsJSON: false, // Whether the database supports JSON. (Default: false)
       supportsDates: true, // Whether the database supports dates. (Default: true)
       supportsBooleans: true, // Whether the database supports booleans. (Default: true)
-      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric ids. (Default: true)
+      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric IDs. (Default: true)
     },
     // ...
   });
 ```
-
-<Callout>
-Learn more about the `config` object [here](/docs/adapters/custom-adapter#config).
-</Callout>
 </Step>
 
 <Step>
@@ -106,7 +102,7 @@ export const myAdapter = (config: CustomAdapterConfig = {}) =>
 ```
 
 <Callout>
-Learn more about the `adapter` function [here](/docs/adapters/custom-adapter#adapter).
+Learn more about the `adapter` here [here](/docs/concepts/database#adapters).
 </Callout>
 </Step>
 
@@ -128,7 +124,7 @@ Before we get into the adapter function, let's go over the parameters that are a
 - `getDefaultFieldName`: The get default field name function.
 - `getFieldAttributes`: The get field attributes function.
 
-```ts title="Example" 
+```ts title="Example"
 adapter: ({
   options,
   schema,
@@ -156,23 +152,25 @@ The `create` method is used to create a new record in the database.
 
 <Callout>
 Note:
-In all cases, the `id` field is automatically generated inside of the `data` object unless the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better-Auth config.
+If the user has enabled the `useNumberId` option, or if `generateId` is `false` in the user's Better Auth config,
+then it's expected that the `id` is provided in the `data` object. Otherwise, the `id` will be automatically generated.
 
-In these cases, it's expected that the users database will handle the id generation.
-
+Additionally, it's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
+We handle `forceAllowId` internally, so you don't need to worry about it.
 </Callout>
 
 parameters:
 
 - `model`: The model/table name that new data will be inserted into.
 - `data`: The data to insert into the database.
+- `select`: An array of fields to return from the database.
 
 <Callout>
   Make sure to return the data that is inserted into the database.
 </Callout>
 
 ```ts title="Example"
-create: async ({ model, data }) => {
+create: async ({ model, data, select }) => {
   // Example of inserting data into the database.
   return await db.insert(model).values(data);
 };
@@ -366,9 +364,10 @@ describe("My Adapter Tests", async () => {
     // Run DB cleanup here...
   });
   const adapter = myAdapter({
-    debugLogs: { // If your adapter config allows passing in debug logs, then pass this here.
-			isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
-		}
+    debugLogs: {
+      // If your adapter config allows passing in debug logs, then pass this here.
+      isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
+    },
   });
 
   await runAdapterTest({
@@ -381,7 +380,7 @@ describe("My Adapter Tests", async () => {
 
 ### Numeric ID tests
 
-If your database supports numeric ids, then you should run this test as well:
+If your database supports numeric IDs, then you should run this test as well:
 
 ```ts title="my-adapter.number-id.test.ts"
 import { expect, test, describe } from "vitest";
@@ -393,9 +392,10 @@ describe("My Adapter Numeric ID Tests", async () => {
     // Run DB cleanup here...
   });
   const adapter = myAdapter({
-    debugLogs: { // If your adapter config allows passing in debug logs, then pass this here.
-			isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
-		}
+    debugLogs: {
+      // If your adapter config allows passing in debug logs, then pass this here.
+      isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
+    },
   });
 
   await runNumberIdAdapterTest({
@@ -415,149 +415,163 @@ We **highly recommend** going through and reading each provided option below, as
 ### Required Config
 
 ### `adapterId`
+
 A unique identifier for the adapter.
 
 ### `adapterName`
+
 The name of the adapter.
 
 ### Optional Config
 
 ### `supportsNumericIds`
-Whether the database supports numeric ids. If this is set to `false` and the users config has enabled `useNumberId`, then we will throw an error.
+
+Whether the database supports numeric IDs. If this is set to `false` and the user's config has enabled `useNumberId`, then we will throw an error.
 
 ### `supportsJSON`
+
 Whether the database supports JSON. If the database doesn't support JSON, we will use a `string` to save the JSON data.And when we retrieve the data, we will safely parse the `string` back into a JSON object.
 
 ### `supportsDates`
+
 Whether the database supports dates. If the database doesn't support dates, we will use a `string` to save the date. (ISO string) When we retrieve the data, we will safely parse the `string` back into a `Date` object.
 
 ### `supportsBooleans`
+
 Whether the database supports booleans. If the database doesn't support booleans, we will use a `0` or `1` to save the boolean value. When we retrieve the data, we will safely parse the `0` or `1` back into a boolean value.
 
 ### `usePlural`
+
 Whether the table names in the schema are plural. This is often defined by the user, and passed down through your custom adapter options. If you do not intend to allow the user to customize the table names, you can ignore this option, or set this to `false`.
 
-  ```ts title="Example"
-  const adapter = myAdapter({
-    // This value then gets passed into the `usePlural`
-    // option in the createAdapter `config` object.
-    usePlural: true,
-  });
-  ```
+```ts title="Example"
+const adapter = myAdapter({
+  // This value then gets passed into the `usePlural`
+  // option in the createAdapter `config` object.
+  usePlural: true,
+});
+```
 
 ### `debugLogs`
+
 Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `count`.
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
-  ```ts title="Example"
-  // Will log debug logs for all methods.
-  const adapter = myAdapter({
-    debugLogs: true,
-  });
-  ```
+```ts title="Example"
+// Will log debug logs for all methods.
+const adapter = myAdapter({
+  debugLogs: true,
+});
+```
 
-  ```ts title="Example"
-  // Will only log debug logs for the `create` and `update` methods.
-  const adapter = myAdapter({
-    debugLogs: {
-      create: true,
-      update: true,
-    },
-  });
-  ```
+```ts title="Example"
+// Will only log debug logs for the `create` and `update` methods.
+const adapter = myAdapter({
+  debugLogs: {
+    create: true,
+    update: true,
+  },
+});
+```
 
 ### `disableIdGeneration`
-Whether to disable id generation. If this is set to `true`, then the user's `generateId` option will be ignored.
+
+Whether to disable ID generation. If this is set to `true`, then the user's `generateId` option will be ignored.
 
 ### `customIdGenerator`
-If your database only supports a specific custom id generation, then you can use this option to generate your own IDs.
+
+If your database only supports a specific custom ID generation, then you can use this option to generate your own IDs.
 
 ### `mapKeysTransformInput`
+
 If your database uses a different key name for a given situation, you can use this option to map the keys. This is useful for databases that expect a different key name for a given situation.
-  For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+For example, MongoDB uses `_id` while in Better-Auth we use `id`.
 
-  Each key in the returned object represents the old key to replace.
-  The value represents the new key.
+Each key in the returned object represents the old key to replace.
+The value represents the new key.
 
-  This can be a partial object that only transforms some keys.
+This can be a partial object that only transforms some keys.
 
-  ```ts title="Example"
-  mapKeysTransformInput: () => {
-    return {
-      id: "_id", // We want to replace `id` to `_id` to save into MongoDB
-    };
-  },
-  ```
+```ts title="Example"
+mapKeysTransformInput: () => {
+  return {
+    id: "_id", // We want to replace `id` to `_id` to save into MongoDB
+  };
+},
+```
 
 ### `mapKeysTransformOutput`
+
 If your database uses a different key name for a given situation, you can use this option to map the keys. This is useful for databases that use a different key name for a given situation.
-  For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+For example, MongoDB uses `_id` while in Better-Auth we use `id`.
 
-  Each key in the returned object represents the old key to replace.
-  The value represents the new key.
+Each key in the returned object represents the old key to replace.
+The value represents the new key.
 
-  This can be a partial object that only transforms some keys.
+This can be a partial object that only transforms some keys.
 
-  ```ts title="Example"
-  mapKeysTransformOutput: () => {
-    return {
-      _id: "id", // We want to replace `_id` (from MongoDB) to `id` (for Better-Auth)
-    };
-  },
-  ```
+```ts title="Example"
+mapKeysTransformOutput: () => {
+  return {
+    _id: "id", // We want to replace `_id` (from MongoDB) to `id` (for Better-Auth)
+  };
+},
+```
 
 ### `customTransformInput`
+
 If you need to transform the input data before it is saved to the database, you can use this option to transform the data.
 
 <Callout type="warn">
   If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then
   the transformations will be applied before your `customTransformInput`
   function is called.
-  </Callout>
-  The `customTransformInput` function receives the following arguments:
+</Callout>
+The `customTransformInput` function receives the following arguments:
 
-  - `data`: The data to transform.
-  - `field`: The field that is being transformed.
-  - `fieldAttributes`: The field attributes of the field that is being transformed.
-  - `select`: The `select` values which the query expects to return.
-  - `model`: The model that is being transformed.
-  - `schema`: The schema that is being transformed.
-  - `options`: Better Auth options.
+- `data`: The data to transform.
+- `field`: The field that is being transformed.
+- `fieldAttributes`: The field attributes of the field that is being transformed.
+- `select`: The `select` values which the query expects to return.
+- `model`: The model that is being transformed.
+- `schema`: The schema that is being transformed.
+- `options`: Better Auth options.
 
-  The `customTransformInput` function runs at every key in the data object of a given action.
+The `customTransformInput` function runs at every key in the data object of a given action.
 
-  ```ts title="Example"
-  customTransformInput: ({ field, data }) => {
-    if (field === "id") {
-      return "123"; // Force the id to be "123"
-    }
+```ts title="Example"
+customTransformInput: ({ field, data }) => {
+  if (field === "id") {
+    return "123"; // Force the ID to be "123"
+  }
 
-    return data;
-  };
-  ```
+  return data;
+};
+```
 
 ### `customTransformOutput`
+
 If you need to transform the output data before it is returned to the user, you can use this option to transform the data. The `customTransformOutput` function is used to transform the output data.
-  Similar to the `customTransformInput` function, it runs at every key in the data object of a given action, but it runs after the data is retrieved from the database.
+Similar to the `customTransformInput` function, it runs at every key in the data object of a given action, but it runs after the data is retrieved from the database.
 
-  ```ts title="Example"
-  customTransformOutput: ({ field, data }) => {
-    if (field === "name") {
-      return "Bob"; // Force the name to be "Bob"
-    }
+```ts title="Example"
+customTransformOutput: ({ field, data }) => {
+  if (field === "name") {
+    return "Bob"; // Force the name to be "Bob"
+  }
 
-    return data;
-  };
-  ```
+  return data;
+};
+```
 
-  ```ts
-  const some_data = await adapter.create({
-    model: "user",
-    data: {
-      name: "John",
-    },
-  });
+```ts
+const some_data = await adapter.create({
+  model: "user",
+  data: {
+    name: "John",
+  },
+});
 
-  // The name will be "Bob"
-  console.log(some_data.name);
-  ```
+// The name will be "Bob"
+console.log(some_data.name);
+```

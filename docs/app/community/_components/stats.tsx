@@ -33,7 +33,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 							<div className="flex items-end  w-full gap-2 mt-4 text-gray-400">
 								<Link
 									className="w-full"
-									href="https://discord.gg/Mh3DaacaFs"
+									href="https://discord.gg/better-auth"
 									target="_blank"
 								>
 									<Button
@@ -52,7 +52,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 						<div className="flex pt-5 w-full dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
 							<div className="relative p-3">
 								<span className="text-[70px] tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
-									{parseInt(kFormatter(npmDownloads) as string)}k+
+									{kFormatter(npmDownloads) as string}
 								</span>
 							</div>
 							<div className="flex -p-8 items-end w-full gap-2 mt-4 text-gray-400">

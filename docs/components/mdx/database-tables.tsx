@@ -13,7 +13,7 @@ import {
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
-} from "../ui/tooltip";
+} from "../ui/tooltip-docs";
 
 interface Field {
 	name: string;

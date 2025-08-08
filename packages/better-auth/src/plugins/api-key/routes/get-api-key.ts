@@ -1,6 +1,6 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
-import { ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
@@ -24,7 +24,7 @@ export function getApiKey({
 		{
 			method: "GET",
 			query: z.object({
-				id: z.string({
+				id: z.string().meta({
 					description: "The id of the Api Key",
 				}),
 			}),
@@ -172,7 +172,7 @@ export function getApiKey({
 			const session = ctx.context.session;
 
 			let apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "id",

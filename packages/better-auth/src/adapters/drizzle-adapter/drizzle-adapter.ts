@@ -4,10 +4,13 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
+	gte,
 	inArray,
 	like,
 	lt,
 	lte,
+	ne,
 	or,
 	sql,
 	SQL,
@@ -41,6 +44,13 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	debugLogs?: AdapterDebugLogs;
+	/**
+	 * By default snake case is used for table and field names
+	 * when the CLI is used to generate the schema. If you want
+	 * to use camel case, set this to true.
+	 * @default false
+	 */
+	camelCase?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
@@ -171,6 +181,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 
 					if (w.operator === "lte") {
 						return [lte(schemaModel[field], w.value)];
+					}
+
+					if (w.operator === "ne") {
+						return [ne(schemaModel[field], w.value)];
+					}
+
+					if (w.operator === "gt") {
+						return [gt(schemaModel[field], w.value)];
+					}
+
+					if (w.operator === "gte") {
+						return [gte(schemaModel[field], w.value)];
 					}
 
 					return [eq(schemaModel[field], w.value)];

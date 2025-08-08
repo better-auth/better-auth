@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
 import {
@@ -77,6 +77,9 @@ export default function UserCard(props: {
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
+	const [activeSessions, setActiveSessions] = useState(props.activeSessions);
+	const removeActiveSession = (id: string) =>
+		setActiveSessions(activeSessions.filter((session) => session.id !== id));
 	const { data: subscription } = useQuery({
 		queryKey: ["subscriptions"],
 		initialData: props.subscription ? props.subscription : null,
@@ -89,6 +92,7 @@ export default function UserCard(props: {
 			return res.length ? res[0] : null;
 		},
 	});
+
 	return (
 		<Card>
 			<CardHeader>
@@ -138,11 +142,11 @@ export default function UserCard(props: {
 					<div className="flex items-center justify-between">
 						<div>
 							<SubscriptionTierLabel
-								tier={subscription?.plan?.toLowerCase() as "starter"}
+								tier={subscription?.plan?.toLowerCase() as "plus"}
 							/>
 						</div>
 						<Component
-							currentPlan={subscription?.plan?.toLowerCase() as "starter"}
+							currentPlan={subscription?.plan?.toLowerCase() as "plus"}
 							isTrial={subscription?.status === "trialing"}
 						/>
 					</div>
@@ -155,44 +159,44 @@ export default function UserCard(props: {
 							Please verify your email address. Check your inbox for the
 							verification email. If you haven't received the email, click the
 							button below to resend.
+							<Button
+								size="sm"
+								variant="secondary"
+								className="mt-2"
+								onClick={async () => {
+									await client.sendVerificationEmail(
+										{
+											email: session?.user.email || "",
+										},
+										{
+											onRequest(context) {
+												setEmailVerificationPending(true);
+											},
+											onError(context) {
+												toast.error(context.error.message);
+												setEmailVerificationPending(false);
+											},
+											onSuccess() {
+												toast.success("Verification email sent successfully");
+												setEmailVerificationPending(false);
+											},
+										},
+									);
+								}}
+							>
+								{emailVerificationPending ? (
+									<Loader2 size={15} className="animate-spin" />
+								) : (
+									"Resend Verification Email"
+								)}
+							</Button>
 						</AlertDescription>
-						<Button
-							size="sm"
-							variant="secondary"
-							className="mt-2"
-							onClick={async () => {
-								await client.sendVerificationEmail(
-									{
-										email: session?.user.email || "",
-									},
-									{
-										onRequest(context) {
-											setEmailVerificationPending(true);
-										},
-										onError(context) {
-											toast.error(context.error.message);
-											setEmailVerificationPending(false);
-										},
-										onSuccess() {
-											toast.success("Verification email sent successfully");
-											setEmailVerificationPending(false);
-										},
-									},
-								);
-							}}
-						>
-							{emailVerificationPending ? (
-								<Loader2 size={15} className="animate-spin" />
-							) : (
-								"Resend Verification Email"
-							)}
-						</Button>
 					</Alert>
 				)}
 
 				<div className="border-l-2 px-2 w-max gap-1 flex flex-col">
 					<p className="text-xs font-medium ">Active Sessions</p>
-					{props.activeSessions
+					{activeSessions
 						.filter((session) => session.userAgent)
 						.map((session) => {
 							return (
@@ -218,8 +222,10 @@ export default function UserCard(props: {
 													toast.error(res.error.message);
 												} else {
 													toast.success("Session terminated successfully");
+													removeActiveSession(session.id);
 												}
-												router.refresh();
+												if (session.id === props.session?.session.id)
+													router.refresh();
 												setIsTerminating(undefined);
 											}}
 										>
@@ -279,7 +285,9 @@ export default function UserCard(props: {
 											<div className="flex flex-col gap-2">
 												<PasswordInput
 													value={twoFaPassword}
-													onChange={(e) => setTwoFaPassword(e.target.value)}
+													onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+														setTwoFaPassword(e.target.value)
+													}
 													placeholder="Enter Password"
 												/>
 												<Button
@@ -354,7 +362,9 @@ export default function UserCard(props: {
 											</Label>
 											<Input
 												value={twoFaPassword}
-												onChange={(e) => setTwoFaPassword(e.target.value)}
+												onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+													setTwoFaPassword(e.target.value)
+												}
 												placeholder="Enter OTP"
 											/>
 										</div>
@@ -365,7 +375,9 @@ export default function UserCard(props: {
 												id="password"
 												placeholder="Password"
 												value={twoFaPassword}
-												onChange={(e) => setTwoFaPassword(e.target.value)}
+												onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+													setTwoFaPassword(e.target.value)
+												}
 											/>
 										</div>
 									)}
@@ -550,21 +562,27 @@ function ChangePassword() {
 					<PasswordInput
 						id="current-password"
 						value={currentPassword}
-						onChange={(e) => setCurrentPassword(e.target.value)}
+						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+							setCurrentPassword(e.target.value)
+						}
 						autoComplete="new-password"
 						placeholder="Password"
 					/>
 					<Label htmlFor="new-password">New Password</Label>
 					<PasswordInput
 						value={newPassword}
-						onChange={(e) => setNewPassword(e.target.value)}
+						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+							setNewPassword(e.target.value)
+						}
 						autoComplete="new-password"
 						placeholder="New Password"
 					/>
 					<Label htmlFor="password">Confirm Password</Label>
 					<PasswordInput
 						value={confirmPassword}
-						onChange={(e) => setConfirmPassword(e.target.value)}
+						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+							setConfirmPassword(e.target.value)
+						}
 						autoComplete="new-password"
 						placeholder="Confirm Password"
 					/>
@@ -639,7 +657,7 @@ function EditUserDialog() {
 		}
 	};
 	const [open, setOpen] = useState<boolean>(false);
-	const [isLoading, setIsLoading] = useState<boolean>(false);
+	const [isLoading, startTransition] = useTransition();
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
@@ -660,7 +678,7 @@ function EditUserDialog() {
 						type="name"
 						placeholder={data?.user.name}
 						required
-						onChange={(e) => {
+						onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
 							setName(e.target.value);
 						}}
 					/>
@@ -702,25 +720,27 @@ function EditUserDialog() {
 					<Button
 						disabled={isLoading}
 						onClick={async () => {
-							setIsLoading(true);
-							await client.updateUser({
-								image: image ? await convertImageToBase64(image) : undefined,
-								name: name ? name : undefined,
-								fetchOptions: {
-									onSuccess: () => {
-										toast.success("User updated successfully");
+							startTransition(async () => {
+								await client.updateUser({
+									image: image ? await convertImageToBase64(image) : undefined,
+									name: name ? name : undefined,
+									fetchOptions: {
+										onSuccess: () => {
+											toast.success("User updated successfully");
+										},
+										onError: (error) => {
+											toast.error(error.error.message);
+										},
 									},
-									onError: (error) => {
-										toast.error(error.error.message);
-									},
-								},
+								});
+								startTransition(() => {
+									setName("");
+									router.refresh();
+									setImage(null);
+									setImagePreview(null);
+									setOpen(false);
+								});
 							});
-							setName("");
-							router.refresh();
-							setImage(null);
-							setImagePreview(null);
-							setIsLoading(false);
-							setOpen(false);
 						}}
 					>
 						{isLoading ? (
@@ -778,7 +798,9 @@ function AddPasskey() {
 					<Input
 						id="passkey-name"
 						value={passkeyName}
-						onChange={(e) => setPasskeyName(e.target.value)}
+						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+							setPasskeyName(e.target.value)
+						}
 					/>
 				</div>
 				<DialogFooter>
@@ -900,7 +922,9 @@ function ListPasskeys() {
 							<Input
 								id="passkey-name"
 								value={passkeyName}
-								onChange={(e) => setPasskeyName(e.target.value)}
+								onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+									setPasskeyName(e.target.value)
+								}
 								placeholder="My Passkey"
 							/>
 						</div>

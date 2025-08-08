@@ -1,5 +1,5 @@
 import type { LiteralString } from "../../types/helper";
-import type { AuthortizeResponse, createAccessControl } from "./access";
+import type { AuthorizeResponse, createAccessControl } from "./access";
 
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =
 	T[number][];
@@ -22,6 +22,6 @@ export type AccessControl<TStatements extends Statements = Statements> =
 	ReturnType<typeof createAccessControl<TStatements>>;
 
 export type Role<TStatements extends Statements = Record<string, any>> = {
-	authorize: (request: any, connector?: "OR" | "AND") => AuthortizeResponse;
+	authorize: (request: any, connector?: "OR" | "AND") => AuthorizeResponse;
 	statements: TStatements;
 };

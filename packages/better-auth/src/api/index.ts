@@ -28,6 +28,10 @@ import {
 	deleteUserCallback,
 	unlinkAccount,
 	refreshToken,
+	getAccessToken,
+	accountInfo,
+	requestPasswordReset,
+	requestPasswordResetCallback,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -103,6 +107,8 @@ export function getEndpoints<
 		updateUser: updateUser<Option>(),
 		deleteUser,
 		forgetPasswordCallback,
+		requestPasswordReset,
+		requestPasswordResetCallback,
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
@@ -112,6 +118,8 @@ export function getEndpoints<
 		deleteUserCallback,
 		unlinkAccount,
 		refreshToken,
+		getAccessToken,
+		accountInfo,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -125,7 +133,6 @@ export function getEndpoints<
 		middlewares,
 	};
 }
-
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
 	options: Option,

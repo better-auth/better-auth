@@ -122,7 +122,7 @@ describe("init", async () => {
 		expect(ctx.options.emailAndPassword?.enabled).toBe(true);
 	});
 
-	it("should not allow plugins to set config values if theyre set in the main config", async () => {
+	it("should not allow plugins to set config values if they are set in the main config", async () => {
 		const ctx = await init({
 			database,
 			baseURL: "http://localhost:3000",
@@ -146,5 +146,55 @@ describe("init", async () => {
 			],
 		});
 		expect(ctx.options.emailAndPassword?.enabled).toBe(false);
+	});
+
+	it("should properly pass modfied context from one plugin to another", async () => {
+		const mockProvider = {
+			id: "test-oauth-provider",
+			name: "Test OAuth Provider",
+			createAuthorizationURL: vi.fn(),
+			validateAuthorizationCode: vi.fn(),
+			refreshAccessToken: vi.fn(),
+			getUserInfo: vi.fn(),
+		};
+
+		const ctx = await init({
+			database,
+			baseURL: "http://localhost:3000",
+			socialProviders: {
+				github: {
+					clientId: "test-github-id",
+					clientSecret: "test-github-secret",
+				},
+			},
+			plugins: [
+				{
+					id: "test-oauth-plugin",
+					init(ctx) {
+						return {
+							context: {
+								socialProviders: [mockProvider, ...ctx.socialProviders],
+							},
+						};
+					},
+				},
+				{
+					id: "test-oauth-plugin-2",
+					init(ctx) {
+						return {
+							context: ctx,
+						};
+					},
+				},
+			],
+		});
+		expect(ctx.socialProviders).toHaveLength(2);
+		const testProvider = ctx.socialProviders.find(
+			(p) => p.id === "test-oauth-provider",
+		);
+		expect(testProvider).toBeDefined();
+		expect(testProvider?.refreshAccessToken).toBeDefined();
+		const githubProvider = ctx.socialProviders.find((p) => p.id === "github");
+		expect(githubProvider).toBeDefined();
 	});
 });

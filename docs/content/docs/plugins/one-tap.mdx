@@ -14,12 +14,12 @@ Add the One Tap plugin to your auth configuration:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { oneTap } from "better-auth/plugins";
+import { oneTap } from "better-auth/plugins"; // [!code highlight]
 
 export const auth = betterAuth({
-  plugins: [
-    oneTap(), // Add the One Tap server plugin
-  ]
+    plugins: [ // [!code highlight]
+        oneTap(), // Add the One Tap server plugin  // [!code highlight]
+    ] // [!code highlight]
 });
 ```
 
@@ -32,7 +32,7 @@ Add the client plugin and specify where the user should be redirected after sign
 import { createAuthClient } from "better-auth/client";
 import { oneTapClient } from "better-auth/client/plugins";
 
-const authClient = createAuthClient({
+export const authClient = createAuthClient({
   plugins: [
     oneTapClient({
       clientId: "YOUR_CLIENT_ID",
@@ -70,7 +70,7 @@ By default, after a successful login the plugin will hard redirect the user to `
 Pass fetchOptions with an onSuccess callback to handle the login response without a page reload:
 
 ```ts
-authClient.oneTap({
+await authClient.oneTap({
   fetchOptions: {
     onSuccess: () => {
       // For example, use a router to navigate without a full reload:
@@ -85,7 +85,7 @@ authClient.oneTap({
 To perform a hard redirect to a different page after login, use the callbackURL option:
 
 ```ts
-authClient.oneTap({
+await authClient.oneTap({
   callbackURL: "/dashboard"
 });
 ```
@@ -97,7 +97,7 @@ If the user dismisses or skips the prompt, the plugin will retry showing the One
 If the maximum number of attempts is reached without a successful sign-in, you can use the onPromptNotification callback to be notified—allowing you to render an alternative UI (e.g., a traditional Google Sign-In button) so users can restart the process manually:
 
 ```ts
-authClient.oneTap({
+await authClient.oneTap({
   onPromptNotification: (notification) => {
     console.warn("Prompt was dismissed or skipped. Consider displaying an alternative sign-in option.", notification);
     // Render your alternative UI here
