@@ -1,5 +1,10 @@
 <script>
 import { writable } from "svelte/store";
+import { client } from "$lib/auth-client.js";
+import { Button } from "$lib/components/ui/button";
+import * as Card from "$lib/components/ui/card";
+import { Input } from "$lib/components/ui/input";
+import { Label } from "$lib/components/ui/label";
 
 const confirmPassword = writable("");
 const password = writable("");

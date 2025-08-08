@@ -4,7 +4,7 @@ import { username } from ".";
 import { usernameClient } from "./client";
 
 describe("username", async (it) => {
-	const { client, sessionSetter } = await getTestInstance(
+	const { client, sessionSetter, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
 				username({
@@ -70,7 +70,7 @@ describe("username", async (it) => {
 		expect(session?.user.username).toBe("new_username_2.1");
 	});
 
-	it("should fail on duplicate username", async () => {
+	it("should fail on duplicate username in sign-up", async () => {
 		const res = await client.signUp.email({
 			email: "new-email-2@gamil.com",
 			username: "New_username_2.1",
@@ -78,6 +78,45 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
+	});
+
+	it("should fail on duplicate username in update-user if user is different", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			email: "new-email-2@gamil.com",
+			username: "duplicate-username",
+			password: "new_password",
+			name: "new-name",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const { headers: testUserHeaders } = await signInWithTestUser();
+		const res = await client.updateUser({
+			username: "duplicate-username",
+			fetchOptions: {
+				headers: testUserHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(422);
+	});
+
+	it("should succeed on duplicate username in update-user if user is the same", async () => {
+		await client.updateUser({
+			username: "New_username_2.1",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("new_username_2.1");
 	});
 
 	it("should fail on invalid username", async () => {
@@ -107,6 +146,59 @@ describe("username", async (it) => {
 			email: "email-4@email.com",
 			username: "",
 			password: "new_password",
+			name: "new-name",
+		});
+		expect(res.error?.status).toBe(422);
+	});
+
+	it("should check if username is unavailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "new_username_2.1",
+		});
+		expect(res.data?.available).toEqual(false);
+	});
+
+	it("should check if username is available", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "new_username_2.2",
+		});
+		expect(res.data?.available).toEqual(true);
+	});
+});
+
+describe("username custom normalization", async (it) => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					minUsernameLength: 4,
+					usernameNormalization: (username) =>
+						username.replaceAll("0", "o").replaceAll("4", "a").toLowerCase(),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should sign up with username", async () => {
+		const res = await client.signUp.email({
+			email: "new-email@gamil.com",
+			username: "H4XX0R",
+			password: "new-password",
+			name: "new-name",
+		});
+		expect(res.error).toBeNull();
+	});
+
+	it("should fail on duplicate username", async () => {
+		const res = await client.signUp.email({
+			email: "new-email-2@gamil.com",
+			username: "haxxor",
+			password: "new-password",
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);

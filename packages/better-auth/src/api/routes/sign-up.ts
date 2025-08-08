@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
@@ -13,7 +13,6 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
 import { getOrgAdapter } from "../../plugins/organization/adapter";
 import type { OrganizationOptions } from "../../plugins/organization/organization";
-
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
@@ -26,7 +25,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
+						image?: string;
 						callbackURL?: string;
+						rememberMe?: boolean;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
@@ -49,10 +50,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 											type: "string",
 											description: "The password of the user",
 										},
+										image: {
+											type: "string",
+											description: "The profile image URL of the user",
+										},
 										callbackURL: {
 											type: "string",
 											description:
 												"The URL to use for email verification callback",
+										},
+										rememberMe: {
+											type: "boolean",
+											description:
+												"If this is false, the session will not be remembered. Default is `true`.",
 										},
 									},
 									required: ["name", "email", "password"],
@@ -141,12 +151,20 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			const body = ctx.body as any as User & {
 				password: string;
 				callbackURL?: string;
+				rememberMe?: boolean;
 			} & {
 				[key: string]: any;
 			};
-			const { name, email, password, image, callbackURL, ...additionalFields } =
-				body;
-			const isValidEmail = z.string().email().safeParse(email);
+			const {
+				name,
+				email,
+				password,
+				image,
+				callbackURL,
+				rememberMe,
+				...additionalFields
+			} = body;
+			const isValidEmail = z.email().safeParse(email);
 
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {

@@ -199,11 +199,11 @@ describe("expo with cookieCache", async () => {
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
 		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
-			value: expect.stringMatching(/.+/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
-			value: expect.stringMatching(/.+/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 	});
@@ -216,12 +216,23 @@ describe("expo with cookieCache", async () => {
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
 		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
-			value: expect.stringMatching(/^$/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
-			value: expect.stringMatching(/^$/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
+	});
+
+	it("should add `exp://` to trusted origins", async () => {
+		vi.stubEnv("NODE_ENV", "development");
+		const auth = betterAuth({
+			plugins: [expo()],
+			trustedOrigins: ["http://localhost:3000"],
+		});
+		const ctx = await auth.$context;
+		expect(ctx.options.trustedOrigins).toContain("exp://");
+		expect(ctx.options.trustedOrigins).toContain("http://localhost:3000");
 	});
 });

@@ -48,8 +48,14 @@ app.use(
 	}),
 );
 
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+	return auth.handler(c.req.raw);
+});
+
+serve(app);
 ```
 
+> **Important:** CORS middleware must be registered before your routes. This ensures that cross-origin requests are properly handled before they reach your authentication endpoints.
 
 ### Middleware
 
@@ -141,9 +147,11 @@ export const auth = createAuth({
   advanced: {
     cookies: {
       sessionToken: {
-        sameSite: "none",
-        secure: true,
-        partitioned: true // New browser standards will mandate this for foreign cookies
+        attributes: {
+          sameSite: "none",
+          secure: true,
+          partitioned: true // New browser standards will mandate this for foreign cookies
+        }
       }
     }
   }
