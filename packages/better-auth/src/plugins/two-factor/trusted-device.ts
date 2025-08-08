@@ -152,7 +152,7 @@ async function trustDeviceInDb(ctx: GenericEndpointContext, session: Session) {
 		data: {
 			deviceId,
 			userId: session.userId,
-			maxAge: DAYS_30,
+			expiresAt: Date.now() + DAYS_30,
 			userAgent: session.userAgent,
 		},
 	});

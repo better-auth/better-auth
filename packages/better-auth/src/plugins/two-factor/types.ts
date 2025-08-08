@@ -62,6 +62,6 @@ export interface TwoFactorTable {
 export interface TrustedDeviceTable {
 	userId: string;
 	deviceId: string;
-	maxAge: number;
+	expiresAt: number;
 	userAgent: string | null | undefined;
 }
