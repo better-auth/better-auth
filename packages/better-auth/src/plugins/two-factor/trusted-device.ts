@@ -51,7 +51,7 @@ async function isTrustedInDb(
 	trustedDeviceCookie: string,
 ): Promise<boolean> {
 	const device = await ctx.context.adapter.findOne<TrustedDeviceTable>({
-		model: "device",
+		model: "trustedDevice",
 		where: [
 			{
 				field: "id",
@@ -186,7 +186,6 @@ async function trustDeviceInCookie(
 		},
 	);
 
-
 	await ctx.setSignedCookie(
 		trustDeviceCookie.name,
 		`${token}!${session.token}`,
@@ -245,7 +244,22 @@ export const trustedDeviceDbEndpoints = {
 			},
 		},
 		async (ctx) => {
-			const trustedDeviceCookie = await getTrustedDeviceCookie(ctx);
+			const userId = ctx.context.session.user.id;
+
+			const devices = await ctx.context.adapter.findMany<{
+				deviceId: string;
+				userAgent: string;
+			}>({
+				model: "trustedDevice",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+
+			return devices;
 		},
 	),
 	/**
