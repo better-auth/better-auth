@@ -18,8 +18,8 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "better-auth/plugins/passkey";
-import { stripe } from "@better-auth/stripe";
-import { Stripe } from "stripe";
+// import { stripe } from "@better-auth/stripe";
+// import { Stripe } from "stripe";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -168,32 +168,32 @@ export const auth = betterAuth({
 				},
 			};
 		}),
-		stripe({
-			stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
-			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-			subscription: {
-				enabled: true,
-				allowReTrialsForDifferentPlans: true,
-				plans: [
-					{
-						name: "Plus",
-						priceId: PLUS_PRICE_ID.default,
-						annualDiscountPriceId: PLUS_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
-						},
-					},
-					{
-						name: "Pro",
-						priceId: PRO_PRICE_ID.default,
-						annualDiscountPriceId: PRO_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
-						},
-					},
-				],
-			},
-		}),
+		// stripe({
+		// 	stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
+		// 	stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+		// 	subscription: {
+		// 		enabled: true,
+		// 		allowReTrialsForDifferentPlans: true,
+		// 		plans: [
+		// 			{
+		// 				name: "Plus",
+		// 				priceId: PLUS_PRICE_ID.default,
+		// 				annualDiscountPriceId: PLUS_PRICE_ID.annual,
+		// 				freeTrial: {
+		// 					days: 7,
+		// 				},
+		// 			},
+		// 			{
+		// 				name: "Pro",
+		// 				priceId: PRO_PRICE_ID.default,
+		// 				annualDiscountPriceId: PRO_PRICE_ID.annual,
+		// 				freeTrial: {
+		// 					days: 7,
+		// 				},
+		// 			},
+		// 		],
+		// 	},
+		// }),
 	],
 	trustedOrigins: ["exp://"],
 	advanced: {

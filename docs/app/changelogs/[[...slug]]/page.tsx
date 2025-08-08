@@ -142,7 +142,9 @@ export async function generateMetadata({
 	}
 	const page = changelogs.getPage(slug);
 	if (page == null) notFound();
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
+	
+	// Provide fallback for baseUrl to prevent "Invalid URL" error
+	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL || "http://localhost:3000";
 	const url = new URL(`${baseUrl}/release-og/${slug.join("")}.png`);
 	const { title, description } = page.data;
 
