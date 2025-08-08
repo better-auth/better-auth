@@ -19,6 +19,41 @@ import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 
+describe("oidc - init", async () => {
+	it("should fail without the jwt plugin", async ({ expect }) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					oidcProvider({
+						useJWTPlugin: true,
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should fail without the jwt plugin usesOidcProviderPlugin set", async ({
+		expect,
+	}) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt({
+						usesOAuthProvider: undefined,
+					}),
+					oidcProvider({
+						useJWTPlugin: true,
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrow();
+	});
+});
+
 describe("oidc", async () => {
 	const {
 		auth: authorizationServer,
@@ -545,7 +580,13 @@ describe("oidc-jwt", async () => {
 						},
 						useJWTPlugin: useJwt,
 					}),
-					...(useJwt ? [jwt()] : []),
+					...(useJwt
+						? [
+								jwt({
+									usesOAuthProvider: true,
+								}),
+							]
+						: []),
 				],
 			});
 			const { headers } = await signInWithTestUser();
@@ -678,6 +719,7 @@ describe("oidc-jwt", async () => {
 			if (useJwt) {
 				const jwks = await authorizationServer.api.getJwks();
 				const jwkSet = createLocalJWKSet(jwks);
+
 				const checkSignature = await jwtVerify(
 					accessToken.data?.idToken!,
 					jwkSet,

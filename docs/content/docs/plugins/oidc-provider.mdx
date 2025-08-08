@@ -348,9 +348,11 @@ import { jwt } from "better-auth/plugins";
 
 export const auth = betterAuth({
     plugins: [
-        jwt(), // Make sure to add the JWT plugin
+        jwt({
+          usesOAuthProvider: true,
+        }),
         oidcProvider({
-            useJWTPlugin: true, // Enable JWT plugin integration
+            useJWTPlugin: true,
             loginPage: "/sign-in",
             // ... other options
         })
