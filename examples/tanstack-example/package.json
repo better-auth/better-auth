@@ -11,7 +11,7 @@
     "@biomejs/biome": "1.9.4",
     "@types/better-sqlite3": "^7.6.12",
     "@types/bun": "latest",
-    "@types/node": "^22.10.1",
+    "@types/node": "^24.2.0",
     "@types/react": "^18.3.14",
     "@types/react-dom": "^18.3.2",
     "autoprefixer": "^10.4.20",
