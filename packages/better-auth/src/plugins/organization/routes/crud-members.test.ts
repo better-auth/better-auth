@@ -4,9 +4,10 @@ import { organization } from "../organization";
 import { createAuthClient } from "../../../client";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import type { Member } from "../schema";
 
 describe("listMembers", async () => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+	const { auth, signInWithTestUser, cookieSetter, db } = await getTestInstance({
 		plugins: [organization()],
 	});
 	const ctx = await auth.$context;
@@ -210,5 +211,52 @@ describe("listMembers", async () => {
 		expect(members.error?.message).toBe(
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 		);
+	});
+
+	it("should return members when using client-side API format with all parameters", async () => {
+		await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const membersFromDB = await db.findMany<Member>({
+			model: "member",
+			where: [{ field: "organizationId", value: org.data?.id! }],
+			sortBy: {
+				field: "createdAt",
+				direction: "desc",
+			},
+		});
+
+		expect(membersFromDB.length).toBe(11);
+
+		const result = await client.organization.listMembers({
+			query: {
+				organizationId: org.data?.id,
+				limit: 100,
+				offset: 0,
+				sortBy: "createdAt",
+				sortDirection: "desc",
+				filterField: "createdAt",
+				filterOperator: "eq",
+				filterValue: membersFromDB.at(0)!.createdAt.toISOString(),
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(result.error).toBe(null);
+		expect(result.data!.members.at(0)).toStrictEqual({
+			...membersFromDB.at(0),
+			user: {
+				id: expect.any(String),
+				name: expect.any(String),
+				email: expect.any(String),
+				image: null,
+			},
+		});
 	});
 });
