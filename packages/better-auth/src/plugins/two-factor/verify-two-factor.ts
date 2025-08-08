@@ -1,13 +1,16 @@
 import { APIError } from "better-call";
-import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
+import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { setSessionCookie } from "../../cookies";
 import { getSessionFromCtx } from "../../api";
-import type { DeviceTable, UserWithTwoFactor } from "./types";
+import type { UserWithTwoFactor } from "./types";
 import type { GenericEndpointContext } from "../../types";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import { generateId } from "../../utils";
+import { trustDevice } from "./trusted-device";
 
-export async function verifyTwoFactor(ctx: GenericEndpointContext) {
+export async function verifyTwoFactor(
+	ctx: GenericEndpointContext,
+	trustedDeviceStrategy: "in-cookie" | "in-db",
+) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
 		const cookieName = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
@@ -56,30 +59,8 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					user,
 				});
 				if (ctx.body.trustDevice) {
-					const deviceId = generateId(32);
+					trustDevice({ ctx, user, session, trustedDeviceStrategy });
 
-					const device = await ctx.context.adapter.create<DeviceTable>({
-						model: "device",
-						data: {
-							deviceId,
-							maxAge: 30 * 24 * 60 * 60, // 30 days, it'll be refreshed on sign in requests
-							userAgent: session.userAgent,
-						},
-					});
-
-					const trustDeviceCookie = ctx.context.createAuthCookie(
-						TRUST_DEVICE_COOKIE_NAME,
-						{
-							maxAge: device.maxAge,
-						},
-					);
-
-					await ctx.setSignedCookie(
-						trustDeviceCookie.name,
-						deviceId,
-						ctx.context.secret,
-						trustDeviceCookie.attributes,
-					);
 					// delete the dont remember me cookie
 					ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
 						maxAge: 0,

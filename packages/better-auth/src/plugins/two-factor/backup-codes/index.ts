@@ -101,7 +101,10 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 	return null;
 }
 
-export const backupCode2fa = (options?: BackupCodeOptions) => {
+export const backupCode2fa = (
+	trustedDeviceStrategy: "in-cookie" | "in-db",
+	options?: BackupCodeOptions,
+) => {
 	const twoFactorTable = "twoFactor";
 
 	async function storeBackupCodes(
@@ -303,7 +306,10 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { session, valid } = await verifyTwoFactor(ctx);
+					const { session, valid } = await verifyTwoFactor(
+						ctx,
+						trustedDeviceStrategy,
+					);
 					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,

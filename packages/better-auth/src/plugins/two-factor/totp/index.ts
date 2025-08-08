@@ -41,7 +41,10 @@ export type TOTPOptions = {
 	disable?: boolean;
 };
 
-export const totp2fa = (options?: TOTPOptions) => {
+export const totp2fa = (
+	trustedDeviceStrategy: "in-cookie" | "in-db",
+	options?: TOTPOptions,
+) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,
@@ -228,7 +231,10 @@ export const totp2fa = (options?: TOTPOptions) => {
 					message: "totp isn't configured",
 				});
 			}
-			const { session, valid, invalid } = await verifyTwoFactor(ctx);
+			const { session, valid, invalid } = await verifyTwoFactor(
+				ctx,
+				trustedDeviceStrategy,
+			);
 			const user = session.user as UserWithTwoFactor;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
