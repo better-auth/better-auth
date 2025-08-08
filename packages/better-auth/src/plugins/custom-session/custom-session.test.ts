@@ -8,7 +8,6 @@ import type { BetterAuthOptions } from "../../types";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
 import { multiSessionClient } from "../multi-session/client";
-import { parseSetCookieHeader } from "../../cookies";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
