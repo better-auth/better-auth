@@ -305,27 +305,28 @@ async function getClientIdAndSecret(
 }> {
 	if ("useDynamicRegistration" in config) {
 		const registration = config.useDynamicRegistration;
+		const body = {
+			client_name: registration.client_name || ctx.options.appName,
+			client_uri: registration.client_uri || ctx.baseURL,
+			redirect_uris: registration.redirect_uris || [
+				`${ctx.baseURL}/oauth2/callback/${config.providerId}`,
+			],
+			scope: config.scopes || "openid profile email",
+			token_endpoint_auth_method:
+				registration.token_endpoint_auth_method || "client_secret_basic",
+			contacts: registration.contacts || [],
+			tos_uri: registration.tos_uri,
+			policy_uri: registration.policy_uri,
+			jwks_uri: registration.jwks_uri,
+			jwks: registration.jwks,
+			logo_uri: registration.logo_uri,
+		};
 		const response = await betterFetch<{
 			client_id: string;
 			client_secret: string;
 		}>(registration.registration_endpoint, {
 			method: "POST",
-			body: {
-				client_name: registration.client_name || ctx.options.appName,
-				client_uri: registration.client_uri || ctx.baseURL,
-				redirect_uris: registration.redirect_uris || [
-					`${ctx.baseURL}/oauth2/callback/${config.providerId}`,
-				],
-				scope: config.scopes || "openid profile email",
-				token_endpoint_auth_method:
-					registration.token_endpoint_auth_method || "client_secret_basic",
-				contacts: registration.contacts || [],
-				tos_uri: registration.tos_uri,
-				policy_uri: registration.policy_uri,
-				jwks_uri: registration.jwks_uri,
-				jwks: registration.jwks,
-				logo_uri: registration.logo_uri,
-			},
+			body,
 		});
 		console.log(response);
 		//TODO: add DB checks & saves.
@@ -333,6 +334,10 @@ async function getClientIdAndSecret(
 			ctx.logger.error(
 				`[GenericOAuth] Failed to dynamically register client for provider ${config.providerId}`,
 				response.error,
+				{
+					endpoint: registration.registration_endpoint,
+					body
+				}
 			);
 			throw new APIError("BAD_REQUEST", {
 				message: "Failed to register client",
