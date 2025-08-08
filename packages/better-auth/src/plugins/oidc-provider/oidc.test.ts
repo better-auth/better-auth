@@ -32,7 +32,7 @@ describe("oidc", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
-				getAdditionalUserInfoClaim(user, scopes) {
+				getAdditionalUserInfoClaim(user, scopes, client) {
 					return {
 						custom: "custom value",
 						userId: user.id,
@@ -233,7 +233,9 @@ describe("oidc", async () => {
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
-		expect(redirectURI).toContain("/oauth2/authorize?client_id=");
+		expect(redirectURI).toContain("/oauth2/authorize?");
+		expect(redirectURI).toContain("consent_code=");
+		expect(redirectURI).toContain("client_id=");
 		const res = await serverClient.oauth2.consent(
 			{
 				accept: true,
@@ -376,7 +378,7 @@ describe("oidc storage", async () => {
 					loginPage: "/login",
 					consentPage: "/oauth2/authorize",
 					requirePKCE: true,
-					getAdditionalUserInfoClaim(user, scopes) {
+					getAdditionalUserInfoClaim(user, scopes, client) {
 						return {
 							custom: "custom value",
 							userId: user.id,
@@ -535,7 +537,7 @@ describe("oidc-jwt", async () => {
 						loginPage: "/login",
 						consentPage: "/oauth2/authorize",
 						requirePKCE: true,
-						getAdditionalUserInfoClaim(user, scopes) {
+						getAdditionalUserInfoClaim(user, scopes, client) {
 							return {
 								custom: "custom value",
 								userId: user.id,

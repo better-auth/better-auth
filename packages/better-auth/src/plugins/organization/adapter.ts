@@ -72,7 +72,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "email",
-						value: data.email,
+						value: data.email.toLowerCase(),
 					},
 				],
 			});
@@ -600,6 +600,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 
 		deleteTeam: async (teamId: string) => {
+			await adapter.deleteMany({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: teamId,
+					},
+				],
+			});
 			const team = await adapter.delete<Team>({
 				model: "team",
 				where: [
@@ -802,7 +811,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		listUserInvitations: async (email: string) => {
 			const invitations = await adapter.findMany<InferInvitation<O>>({
 				model: "invitation",
-				where: [{ field: "email", value: email }],
+				where: [{ field: "email", value: email.toLowerCase() }],
 			});
 			return invitations;
 		},
@@ -861,7 +870,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "email",
-						value: data.email,
+						value: data.email.toLowerCase(),
 					},
 					{
 						field: "organizationId",

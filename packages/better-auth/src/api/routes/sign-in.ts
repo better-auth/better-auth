@@ -281,14 +281,14 @@ export const signInSocial = createAuthEndpoint(
 				userInfo: {
 					...userInfo.user,
 					email: userInfo.user.email,
-					id: userInfo.user.id,
+					id: String(userInfo.user.id),
 					name: userInfo.user.name || "",
 					image: userInfo.user.image,
 					emailVerified: userInfo.user.emailVerified || false,
 				},
 				account: {
 					providerId: provider.id,
-					accountId: userInfo.user.id,
+					accountId: String(userInfo.user.id),
 					accessToken: c.body.idToken.accessToken,
 				},
 				callbackURL: c.body.callbackURL,
