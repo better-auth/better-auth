@@ -20,6 +20,7 @@ const elRef = ref<HTMLElement>();
 
 onMounted(() => {
 	const selector = `.${BulletLegend.selectors.item}`;
+	// biome-ignore lint/nursery/noFloatingPromises: this is how vue is designed to work
 	nextTick(() => {
 		const elements = elRef.value?.querySelectorAll(selector);
 		const classes = buttonVariants({ variant: "ghost", size: "xs" }).split(" ");

@@ -29,4 +29,7 @@ async function main() {
 	program.parse();
 }
 
-main();
+main().catch((error) => {
+	console.error("Error running Better Auth CLI:", error);
+	process.exit(1);
+});
