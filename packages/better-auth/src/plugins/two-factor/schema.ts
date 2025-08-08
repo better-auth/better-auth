@@ -34,7 +34,7 @@ export const schema = {
 			},
 		},
 	},
-	device: {
+	trustedDevice: {
 		fields: {
 			id: {
 				type: "string",

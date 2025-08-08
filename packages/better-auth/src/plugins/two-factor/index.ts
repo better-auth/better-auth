@@ -7,9 +7,9 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
-import type { DeviceTable, TwoFactorOptions, UserWithTwoFactor } from "./types";
+import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
+import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -17,16 +17,20 @@ import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createOTP } from "@better-auth/utils/otp";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { isTrusted } from "./trusted-device";
 export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
+		trustDeviceTable: "trustedDevice",
 	};
 
 	const totp = totp2fa(options?.totpOptions);
 	const backupCode = backupCode2fa(options?.backupCodeOptions);
 	const otp = otp2fa(options?.otpOptions);
+
+	const trustedDeviceStrategy = options?.trustedDeviceStrategy ?? "in-cookie";
 
 	return {
 		id: "two-factor",
@@ -291,50 +295,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
-						// Check for trust device cookie
-						const trustDeviceCookieName = ctx.context.createAuthCookie(
-							TRUST_DEVICE_COOKIE_NAME,
-						);
-						const trustDeviceCookie = await ctx.getSignedCookie(
-							trustDeviceCookieName.name,
-							ctx.context.secret,
-						);
-						if (trustDeviceCookie) {
-							const deviceId = trustDeviceCookie;
 
-							const device = await ctx.context.adapter.findOne<DeviceTable>({
-								model: "device",
-								where: [
-									{
-										field: "id",
-										value: deviceId,
-									},
-								],
-							});
-
-							if (device) {
-								// Trust device cookie is valid, refresh it and skip 2FA
-								await ctx.context.adapter.update({
-									model: "device",
-									where: [
-										{
-											field: "id",
-											value: device.deviceId,
-										},
-									],
-									update: {
-										maxAge: 30 * 24 * 60 * 60, // 30 days, it'll be refreshed on sign in requests
-									},
-								});
-
-								await ctx.setSignedCookie(
-									trustDeviceCookieName.name,
-									device.deviceId,
-									ctx.context.secret,
-									trustDeviceCookieName.attributes,
-								);
-								return;
-							}
+						const trusted = await isTrusted({
+							ctx,
+							newSession: data,
+							trustedDeviceStrategy,
+						});
+						if (trusted) {
+							return;
 						}
 
 						/**
