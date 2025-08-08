@@ -27,18 +27,18 @@ export const useAuthQuery = <T>(
 		error: null | BetterFetchError;
 		isPending: boolean;
 		isRefetching: boolean;
-		refetch: () => void;
+		refetch: (queryParams?: { query?: Record<string, any> }) => void;
 	}>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
-		refetch: () => {
-			return fn();
+		refetch: (queryParams?: { query?: Record<string, any> }) => {
+			return fn(queryParams);
 		},
 	});
 
-	const fn = () => {
+	const fn = (queryParams?: { query?: Record<string, any> }) => {
 		const opts =
 			typeof options === "function"
 				? options({
@@ -50,6 +50,10 @@ export const useAuthQuery = <T>(
 
 		return $fetch<T>(path, {
 			...opts,
+			query: {
+				...opts?.query,
+				...queryParams?.query,
+			},
 			async onSuccess(context) {
 				value.set({
 					data: context.data,

@@ -87,7 +87,7 @@ export function createAuthClient<Option extends ClientOptions>(
 				data: Session;
 				isPending: boolean;
 				error: BetterFetchError | null;
-				refetch: () => void;
+				refetch: (queryParams?: { query?: Record<string, any> }) => void;
 			};
 			$Infer: {
 				Session: NonNullable<Session>;

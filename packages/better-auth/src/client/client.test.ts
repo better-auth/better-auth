@@ -306,4 +306,23 @@ describe("type", () => {
 			} | null>
 		>();
 	});
+	it("should support refetch with query parameters", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionReturn = ReturnType<typeof client.useSession>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: any;
+			isPending: boolean;
+			error: BetterFetchError | null;
+			refetch: (queryParams?: { query?: Record<string, any> }) => void;
+		}>();
+	});
 });
