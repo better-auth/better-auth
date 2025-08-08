@@ -25,6 +25,7 @@ export const createInternalAdapter = (
 		logger: InternalLogger;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
 		generateId: AuthContext["generateId"];
+		normalizeEmail: AuthContext["normalizeEmail"];
 	},
 ) => {
 	const logger = ctx.logger;
@@ -79,7 +80,7 @@ export const createInternalAdapter = (
 					updatedAt: new Date(),
 					emailVerified: false,
 					...user,
-					email: user.email?.toLowerCase(),
+					email: ctx.normalizeEmail(user.email),
 				},
 				"user",
 				undefined,
@@ -604,7 +605,7 @@ export const createInternalAdapter = (
 						model: "user",
 						where: [
 							{
-								value: email.toLowerCase(),
+								value: ctx.normalizeEmail(email),
 								field: "email",
 							},
 						],
@@ -622,7 +623,7 @@ export const createInternalAdapter = (
 					model: "user",
 					where: [
 						{
-							value: email.toLowerCase(),
+							value: ctx.normalizeEmail(email),
 							field: "email",
 						},
 					],
@@ -654,7 +655,7 @@ export const createInternalAdapter = (
 				model: "user",
 				where: [
 					{
-						value: email.toLowerCase(),
+						value: ctx.normalizeEmail(email),
 						field: "email",
 					},
 				],
@@ -773,7 +774,7 @@ export const createInternalAdapter = (
 				[
 					{
 						field: "email",
-						value: email.toLowerCase(),
+						value: ctx.normalizeEmail(email),
 					},
 				],
 				"user",

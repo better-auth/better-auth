@@ -706,6 +706,12 @@ export type BetterAuthOptions = {
 			 */
 			domain?: string;
 		};
+		/**
+		 * Email normalization configuration for user model
+		 *
+		 * @default (email) => email.toLowerCase()
+		 */
+		emailNormalization?: ((email: string) => string | false) | false;
 		/*
 		 * Allows you to change default cookie names and attributes
 		 *

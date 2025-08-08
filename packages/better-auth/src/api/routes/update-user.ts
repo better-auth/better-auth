@@ -701,7 +701,7 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
-		const newEmail = ctx.body.newEmail.toLowerCase();
+		const newEmail = ctx.context.normalizeEmail(ctx.body.newEmail);
 
 		if (newEmail === ctx.context.session.user.email) {
 			ctx.context.logger.error("Email is the same");

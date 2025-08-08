@@ -105,6 +105,7 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "newSession": null,
+  "normalizeEmail": [Function],
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
