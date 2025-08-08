@@ -141,7 +141,7 @@ function Home() {
 														}
 														setIsPendingTwoFa(true);
 														if (data?.user.twoFactorEnabled) {
-															const res = await twoFactor.disable({
+															const _res = await twoFactor.disable({
 																//@ts-ignore
 																password: twoFaPassword,
 																fetchOptions: {

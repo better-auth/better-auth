@@ -16,7 +16,6 @@ describe("SSO", async () => {
 		await server.issuer.keys.generate("RS256");
 		server.issuer.on;
 		await server.start(8080, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
 	});
 
 	afterAll(async () => {
@@ -199,7 +198,6 @@ describe("SSO disable implicit sign in", async () => {
 		await server.issuer.keys.generate("RS256");
 		server.issuer.on;
 		await server.start(8080, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
 	});
 
 	afterAll(async () => {
@@ -344,7 +342,6 @@ describe("provisioning", async (ctx) => {
 		await server.issuer.keys.generate("RS256");
 		server.issuer.on;
 		await server.start(8080, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
 	});
 
 	afterAll(async () => {

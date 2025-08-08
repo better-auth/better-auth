@@ -31,7 +31,32 @@
 	},
 	"overrides": [
 		{
-			"includes": ["**/examples/svelte-kit-example/**"],
+			"includes": ["packages/better-auth/src/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noConsole": {
+							"level": "error",
+							"options": {
+								"allow": ["warn", "error"]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/better-auth/src/utils/logger.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noConsole": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["examples/svelte-kit-example/**"],
 			"linter": {
 				"rules": {
 					"correctness": {

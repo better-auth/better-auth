@@ -74,7 +74,6 @@ describe("adapter test", async () => {
 	});
 	beforeAll(async () => {
 		setState("RUNNING");
-		console.log(`Now running Number ID Kysely adapter test...`);
 		await (await getMigrations(mysqlOptions)).runMigrations();
 		await (await getMigrations(sqliteOptions)).runMigrations();
 	});
@@ -152,9 +151,6 @@ describe("mssql", async () => {
 		await runMigrations();
 		return async () => {
 			await resetDB();
-			console.log(
-				`Normal Kysely adapter test finished. Now allowing number ID Kysely tests to run.`,
-			);
 			setState("IDLE");
 		};
 	});

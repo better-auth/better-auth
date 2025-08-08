@@ -61,7 +61,6 @@ export const auth = betterAuth({
 				subject: "Verify your email address",
 				html: `<a href="${url}">Verify your email address</a>`,
 			});
-			console.log(res, user.email);
 		},
 	},
 	account: {

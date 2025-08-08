@@ -61,7 +61,6 @@ export async function authorizeMCPOAuth(
 	}
 
 	const query = ctx.query as AuthorizationQuery;
-	console.log(query);
 	if (!query.client_id) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -96,7 +95,6 @@ export async function authorizeMCPOAuth(
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
-	console.log(client);
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}

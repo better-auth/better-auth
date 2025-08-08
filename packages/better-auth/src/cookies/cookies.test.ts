@@ -267,7 +267,6 @@ describe("getSessionCookie", async () => {
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
 		});
-		console.log(cache);
 		expect(cache).not.toBeNull();
 		expect(cache).toMatchObject({
 			user: {

@@ -152,7 +152,6 @@ describe("Social Providers", async (c) => {
 		await server.issuer.keys.generate("RS256");
 		server.issuer.on;
 		await server.start(port, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:${port}
 	});
 	afterAll(async () => {
 		await server.stop().catch(console.error);

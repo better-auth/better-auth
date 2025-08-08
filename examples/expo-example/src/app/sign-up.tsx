@@ -79,7 +79,6 @@ export default function SignUp() {
 									},
 								},
 							);
-							console.log(res);
 						}}
 					>
 						<Text>Sign Up</Text>

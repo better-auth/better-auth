@@ -19,7 +19,6 @@ export function RegisterForm() {
 		e.preventDefault();
 		const form = e.target as HTMLFormElement;
 		const data = new FormData(form);
-		console.log(data);
 		signUp.email(
 			{
 				name: data.get("name") as string,

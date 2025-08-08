@@ -76,7 +76,6 @@ describe("Number ID Adapter tests", async () => {
 				resolve(true);
 				return;
 			}
-			console.log(`Waiting for state to be IDLE...`);
 			fs.watch(stateFilePath, () => {
 				if (getState() === "IDLE") {
 					resolve(true);
@@ -84,7 +83,6 @@ describe("Number ID Adapter tests", async () => {
 				}
 			});
 		});
-		console.log(`Now running Number ID Kysely adapter test...`);
 		await (await getMigrations(mysqlOptions)).runMigrations();
 		await (await getMigrations(sqliteOptions)).runMigrations();
 	});

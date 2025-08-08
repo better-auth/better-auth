@@ -165,7 +165,6 @@ export async function GET(req: Request) {
 			},
 		);
 	} catch (err) {
-		console.log({ err });
 		return new Response("Failed to generate the OG image", { status: 500 });
 	}
 }
