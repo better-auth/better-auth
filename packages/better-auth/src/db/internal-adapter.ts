@@ -193,10 +193,6 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string, trxAdapter?: TransactionAdapter) => {
-			if (secondaryStorage) {
-				await secondaryStorage.delete(`active-sessions-${userId}`);
-			}
-
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await (trxAdapter || adapter).deleteMany({
 					model: "session",
