@@ -2,7 +2,11 @@ import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { InferOrganizationRolesFromOption, Member } from "../schema";
+import type {
+	InferMember,
+	InferOrganizationRolesFromOption,
+	Member,
+} from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
@@ -150,7 +154,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const createdMember = await adapter.createMember({
 				organizationId: orgId,
 				userId: user.id,
-				role: parseRoles(ctx.body.role as string | string[]),
+				role: parseRoles(ctx.body.role),
 				createdAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
 			});
@@ -246,7 +250,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			let toBeRemovedMember: Member | null = null;
+			let toBeRemovedMember: InferMember<O, false> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
 				toBeRemovedMember = await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
@@ -275,7 +279,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
 				});
-				const owners = members.filter((member: Member) => {
+				const owners = members.filter((member) => {
 					const roles = member.role.split(",");
 					return roles.includes(creatorRole);
 				});
@@ -411,9 +415,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const roleToSet: string[] = Array.isArray(ctx.body.role)
-				? (ctx.body.role as string[])
+				? ctx.body.role
 				: ctx.body.role
-					? [ctx.body.role as string]
+					? [ctx.body.role]
 					: [];
 
 			const member = await adapter.findMemberByOrgId({
@@ -475,7 +479,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
-				parseRoles(ctx.body.role as string | string[]),
+				parseRoles(ctx.body.role),
 			);
 			if (!updatedMember) {
 				throw new APIError("BAD_REQUEST", {
