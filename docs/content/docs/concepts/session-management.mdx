@@ -222,6 +222,11 @@ export const auth = betterAuth({
 
 This will add `roles` and `user.newField` to the session response.
 
+<Callout>
+    If you're using the [Multi Session Plugin](/docs/plugins/multi-session),
+    this will overwrite the response of the `listDeviceSessions` method.
+</Callout>
+
 **Infer on the Client**
 
 ```ts title="auth-client.ts"
