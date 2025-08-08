@@ -1,19 +1,15 @@
-import type { MiddlewareOptions, MiddlewareContext } from "better-call";
 import type { AuthContext } from "../../init";
 import { TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import type { TrustedDeviceTable } from "./types";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { generateId } from "../../utils";
 import type { GenericEndpointContext, Session, User } from "../../types";
+import { createAuthEndpoint } from "../../api/call";
+import { sessionMiddleware } from "../../api";
 
 const DAYS_30 = 30 * 24 * 60 * 60;
 
-async function getTrustedDeviceCookie(
-	ctx: MiddlewareContext<
-		MiddlewareOptions,
-		AuthContext & { returned?: unknown; responseHeaders?: Headers }
-	>,
-) {
+export async function getTrustedDeviceCookie(ctx: GenericEndpointContext) {
 	const trustDeviceCookieName = ctx.context.createAuthCookie(
 		TRUST_DEVICE_COOKIE_NAME,
 	);
@@ -30,10 +26,7 @@ export async function isTrusted({
 	newSession,
 	trustedDeviceStrategy,
 }: {
-	ctx: MiddlewareContext<
-		MiddlewareOptions,
-		AuthContext & { returned?: unknown; responseHeaders?: Headers }
-	>;
+	ctx: GenericEndpointContext;
 	newSession: NonNullable<AuthContext["newSession"]>;
 	trustedDeviceStrategy: "in-cookie" | "in-db";
 }): Promise<boolean> {
@@ -54,10 +47,7 @@ export async function isTrusted({
 }
 
 async function isTrustedInDb(
-	ctx: MiddlewareContext<
-		MiddlewareOptions,
-		AuthContext & { returned?: unknown; responseHeaders?: Headers }
-	>,
+	ctx: GenericEndpointContext,
 	trustedDeviceCookie: string,
 ): Promise<boolean> {
 	const device = await ctx.context.adapter.findOne<TrustedDeviceTable>({
@@ -102,10 +92,7 @@ async function isTrustedInDb(
 }
 
 async function isTrustedInCookie(
-	ctx: MiddlewareContext<
-		MiddlewareOptions,
-		AuthContext & { returned?: unknown; responseHeaders?: Headers }
-	>,
+	ctx: GenericEndpointContext,
 	trustedDeviceCookie: string,
 	newSession: NonNullable<AuthContext["newSession"]>,
 ): Promise<boolean> {
@@ -205,3 +192,105 @@ async function trustDeviceInCookie(
 		trustDeviceCookie.attributes,
 	);
 }
+
+export const trustedDeviceDbEndpoints = {
+	/**
+	 * ### Endpoint
+	 *
+	 * GET `/two-factor/trusted-devices/list`
+	 *
+	 * ### API Methods
+	 *
+	 * **server:**
+	 * `auth.api.listTrustedDevices`
+	 *
+	 * **client:**
+	 * `authClient.twoFactor.listTrustedDevices`
+	 */
+	listTrustedDevices: createAuthEndpoint(
+		"/two-factor/trusted-devices/list",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					summary: "List Trusted Devices",
+					description:
+						"Use this endpoint to list all the trusted devices the current user has.",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											deviceId: {
+												type: "string",
+												description: "Device ID",
+											},
+											userAgent: {
+												type: "string",
+												description: "The user agent of the device.",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const trustedDeviceCookie = await getTrustedDeviceCookie(ctx);
+		},
+	),
+	/**
+	 * ### Endpoint
+	 *
+	 * POST `/two-factor/trusted-devices/remove/:deviceId`
+	 *
+	 * ### API Methods
+	 *
+	 * **server:**
+	 * `auth.api.removeTrustedDevices`
+	 *
+	 * **client:**
+	 * `authClient.twoFactor.listTrustedDevices`
+	 */
+	removeTrustedDevices: createAuthEndpoint(
+		"/two-factor/trusted-devices/remove/:deviceId",
+		{
+			method: "POST",
+			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Remove a Trusted Devices",
+					description:
+						"Use this endpoint to disable the device with the give id from being trusted.",
+					responses: {
+						200: {
+							description: "Device removed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const deviceId = ctx.params.deviceId;
+		},
+	),
+};

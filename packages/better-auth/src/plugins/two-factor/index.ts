@@ -17,7 +17,7 @@ import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createOTP } from "@better-auth/utils/otp";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import { isTrusted } from "./trusted-device";
+import { isTrusted, trustedDeviceDbEndpoints } from "./trusted-device";
 export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
@@ -41,6 +41,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
+			...(trustedDeviceStrategy === "in-db" ? trustedDeviceDbEndpoints : {}),
 			/**
 			 * ### Endpoint
 			 *
