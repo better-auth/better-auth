@@ -149,7 +149,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							let type = getType(field, attr);
 							if (attr.defaultValue) {
-								if (typeof attr.defaultValue === "function") {
+								// If this is a timestamp with a default function that maps to `new Date()`
+								const isTimestampWithNewDate = attr.type === "date" && 
+									typeof attr.defaultValue === "function" && 
+									attr.defaultValue.toString().includes("new Date()");
+								
+								if (isTimestampWithNewDate) {
+									type += `.defaultNow()`;
+								} else if (typeof attr.defaultValue === "function") {
 									type += `.$defaultFn(${attr.defaultValue})`;
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
