@@ -27,7 +27,7 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
-import { createTelemetry, type Telemetry } from "./telemetry";
+import { createTelemetry } from "./telemetry";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -92,8 +92,8 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const telemetry = await createTelemetry({ logger, options });
-	void telemetry.report();
+	const { init: initTelemetry, publish } = await createTelemetry(options);
+	void initTelemetry();
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -158,7 +158,7 @@ export const init = async (options: BetterAuthOptions) => {
 			const { runMigrations } = await getMigrations(options);
 			await runMigrations();
 		},
-		telemetry,
+		publishTelemetry: publish,
 	};
 	let { context } = runPluginInit(ctx);
 	return context;
@@ -223,7 +223,10 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
-	telemetry: Telemetry;
+	publishTelemetry: (
+		event: string,
+		payload: Record<string, any>,
+	) => Promise<void>;
 };
 
 function runPluginInit(ctx: AuthContext) {

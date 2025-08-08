@@ -35,5 +35,5 @@ export interface ProjectInfo {
 export interface TelemetryEvent {
 	event: string;
 	anonymousId: string;
-	payload: any;
+	payload: Record<string, any>;
 }

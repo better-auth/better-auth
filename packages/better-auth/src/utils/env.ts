@@ -59,23 +59,26 @@ export const isTest = nodeENV === "test" || toBoolean(env.TEST);
 /**
  * Get environment variable with fallback
  */
-export function getEnvVar(key: string, fallback?: string): string | undefined {
+export function getEnvVar<Fallback extends string>(
+	key: string,
+	fallback?: Fallback,
+): Fallback extends string ? string : string | undefined {
 	if (typeof process !== "undefined" && process.env) {
-		return process.env[key] ?? fallback;
+		return process.env[key] ?? (fallback as any);
 	}
 
 	// @ts-expect-error deno
 	if (typeof Deno !== "undefined") {
 		// @ts-expect-error deno
-		return Deno.env.get(key) ?? fallback;
+		return Deno.env.get(key) ?? (fallback as string);
 	}
 
 	// Handle Bun
 	if (typeof Bun !== "undefined") {
-		return Bun.env[key] ?? fallback;
+		return Bun.env[key] ?? (fallback as string);
 	}
 
-	return fallback;
+	return fallback as any;
 }
 
 /**
@@ -108,5 +111,11 @@ export const ENV = {
 	},
 	get PACKAGE_VERSION() {
 		return getEnvVar("PACKAGE_VERSION", "0.0.0");
+	},
+	get BETTER_AUTH_TELEMETRY_ENDPOINT() {
+		return getEnvVar(
+			"BETTER_AUTH_TELEMETRY_ENDPOINT",
+			"https://telemetry.better-auth.com/v1/track",
+		);
 	},
 } as const;

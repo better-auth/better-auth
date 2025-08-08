@@ -1,9 +1,8 @@
-import { getBooleanEnvVar } from "../utils/env";
+import { ENV, getBooleanEnvVar } from "../utils/env";
 import { awaitObject } from "../utils/await-object";
 
 import { projectId } from "./project-id";
-import { realEndpoint, debugEndpoint } from "./endpoint";
-import type { AuthContext, BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "../types";
 
 import { detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
@@ -13,25 +12,24 @@ import { detectAuthConfig } from "./detectors/detect-auth-config";
 import { detectBetterAuth } from "./detectors/detect-better-auth";
 import { detectSystemInfo } from "./detectors/detect-system-info";
 import { detectProjectInfo } from "./detectors/detect-project-info";
+import { betterFetch } from "@better-fetch/fetch";
+import type { TelemetryEvent } from "./types";
+import { logger } from "../utils";
 
-type Logger = AuthContext["logger"];
-
-interface TelemetryOptions {
-	logger: Logger;
-	options: BetterAuthOptions;
-}
-
-export interface Telemetry {
-	publish: (event: string, payload: any) => Promise<void>;
-	report: () => Promise<void>;
-}
-
-export async function createTelemetry({
-	logger,
-	options,
-}: TelemetryOptions): Promise<Telemetry> {
+export async function createTelemetry(options: BetterAuthOptions) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
-	const telemetryEndpoint = debugEnabled ? debugEndpoint(logger) : realEndpoint;
+	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
+	const track = debugEnabled
+		? (event: TelemetryEvent) => {
+				logger.info("telemetry event", JSON.stringify(event, null, 2));
+			}
+		: async (event: TelemetryEvent) =>
+				betterFetch(TELEMETRY_ENDPOINT, {
+					method: "POST",
+					body: JSON.stringify(event),
+					headers: { "content-type": "application/json" },
+					retry: 5,
+				});
 
 	const isEnabled = async () => {
 		const telemetryEnabled = options.telemetry?.enabled ?? true;
@@ -46,25 +44,20 @@ export async function createTelemetry({
 		const noOp = async () => {};
 		return {
 			publish: noOp,
-			report: noOp,
+			init: noOp,
 		};
 	}
 
 	const anonymousId = await projectId(options.baseURL);
 
-	const publish = async (event: string, payload: any) => {
-		return telemetryEndpoint({
-			event,
-			payload,
-			anonymousId,
-		});
+	const publish = async (event: string, payload: Record<string, any>) => {
+		return track({ event, payload, anonymousId });
 	};
 
-	const report = async () => {
+	const init = async () => {
 		const payload = await awaitObject({
 			betterAuth: detectBetterAuth(),
 			authConfig: detectAuthConfig(options),
-
 			runtime: detectRuntime(),
 			database: detectDatabase(),
 			framework: detectFramework(),
@@ -78,6 +71,6 @@ export async function createTelemetry({
 
 	return {
 		publish,
-		report,
+		init,
 	};
 }
