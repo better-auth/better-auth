@@ -19,7 +19,8 @@ export function kFormatter(num: number) {
 	} else if (absNum >= 1000) {
 		return sign * parseFloat((absNum / 1000).toFixed(1)) + "K+";
 	}
-	return sign * absNum;
+	const result = (sign * absNum).toString();
+	return result;
 }
 
 export const baseUrl =
