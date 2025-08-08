@@ -1,5 +1,5 @@
 import type { createAuthEndpoint as BAcreateAuthEndpoint } from "better-auth/api";
-import { z } from "zod";
+import { z } from "zod/v4";
 import fs from "fs";
 import path from "path";
 

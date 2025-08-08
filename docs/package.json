@@ -69,7 +69,7 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
-    "zod": "^3.24.2"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.9",

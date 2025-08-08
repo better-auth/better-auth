@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { KJUR } from "jsrsasign";
 
 import { Button } from "@/components/ui/button";

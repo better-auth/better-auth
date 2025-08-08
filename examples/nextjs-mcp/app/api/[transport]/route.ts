@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { createMcpHandler } from "@vercel/mcp-adapter";
 import { withMcpAuth } from "better-auth/plugins";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 const handler = withMcpAuth(auth, (req, sesssion) => {
 	return createMcpHandler(
