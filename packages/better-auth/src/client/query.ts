@@ -4,6 +4,7 @@ import {
 	type BetterFetchOption,
 } from "@better-fetch/fetch";
 import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
+import type { SessionQueryParams } from "./types";
 
 // SSR detection
 const isServer = typeof window === "undefined";
@@ -27,18 +28,18 @@ export const useAuthQuery = <T>(
 		error: null | BetterFetchError;
 		isPending: boolean;
 		isRefetching: boolean;
-		refetch: (queryParams?: { query?: Record<string, any> }) => void;
+		refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 	}>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
-		refetch: (queryParams?: { query?: Record<string, any> }) => {
+		refetch: (queryParams?: { query?: SessionQueryParams }) => {
 			return fn(queryParams);
 		},
 	});
 
-	const fn = (queryParams?: { query?: Record<string, any> }) => {
+	const fn = (queryParams?: { query?: SessionQueryParams }) => {
 		const opts =
 			typeof options === "function"
 				? options({

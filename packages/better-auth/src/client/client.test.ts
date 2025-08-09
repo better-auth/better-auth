@@ -8,7 +8,7 @@ import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
 import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
-import type { Session } from "../types";
+import type { Session, SessionQueryParams } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { twoFactorClient } from "../plugins";
 import { organizationClient, passkeyClient } from "./plugins";
@@ -322,7 +322,7 @@ describe("type", () => {
 			data: any;
 			isPending: boolean;
 			error: BetterFetchError | null;
-			refetch: (queryParams?: { query?: Record<string, any> }) => void;
+			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 		}>();
 	});
 });
