@@ -22,6 +22,81 @@ function getErrorURL(
 	return formattedURL;
 }
 
+/**
+ * Check if a requested redirect URI matches any of the allowed URIs,
+ * supporting wildcard subdomains (e.g., https://*.superwall.dev)
+ */
+function isValidRedirectURI(
+	allowedURIs: string[],
+	requestedURI: string,
+): boolean {
+	return allowedURIs.some((allowedURI) => {
+		if (!allowedURI.includes("*")) {
+			// Exact match for non-wildcard URIs
+			return allowedURI === requestedURI;
+		}
+
+		// Handle wildcard matching
+		try {
+			const requestedURL = new URL(requestedURI);
+
+			// For wildcard URLs, we need to parse them manually
+			// Extract protocol, hostname pattern, port, pathname, and search
+			const wildcardMatch = allowedURI.match(
+				/^(https?:\/\/)([\w*.-]+)(:\d+)?(\/.*)?(\?.*)?$/,
+			);
+			if (!wildcardMatch) {
+				return false;
+			}
+
+			const [
+				,
+				allowedProtocol,
+				allowedHostPattern,
+				allowedPort = "",
+				allowedPath = "/",
+				allowedSearch = "",
+			] = wildcardMatch;
+
+			// Protocol must match exactly
+			if (allowedProtocol !== requestedURL.protocol + "//") {
+				return false;
+			}
+
+			// Port must match exactly
+			const requestedPort = requestedURL.port ? `:${requestedURL.port}` : "";
+			if (allowedPort !== requestedPort) {
+				return false;
+			}
+
+			// Path must match exactly
+			if (allowedPath !== requestedURL.pathname) {
+				return false;
+			}
+
+			// Search parameters must match exactly
+			if (allowedSearch !== requestedURL.search) {
+				return false;
+			}
+
+			const requestedHost = requestedURL.hostname;
+
+			if (allowedHostPattern.startsWith("*.")) {
+				const baseDomain = allowedHostPattern.slice(2);
+				return (
+					requestedHost.endsWith(baseDomain) &&
+					(requestedHost === baseDomain ||
+						requestedHost.endsWith("." + baseDomain))
+				);
+			} else {
+				return allowedHostPattern === requestedHost;
+			}
+		} catch (e) {
+			return false;
+		}
+	});
+}
+
 export async function authorize(
 	ctx: GenericEndpointContext,
 	options: OIDCOptions,
@@ -110,11 +185,12 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs.find(
-		(url) => url === ctx.query.redirect_uri,
-	);
 
-	if (!redirectURI || !query.redirect_uri) {
+	const isValidRedirect = query.redirect_uri
+		? isValidRedirectURI(client.redirectURLs, query.redirect_uri)
+		: false;
+
+	if (!isValidRedirect || !query.redirect_uri) {
 		/**
 		 * show UI error here warning the user that the redirect URI is invalid
 		 */
@@ -122,6 +198,7 @@ export async function authorize(
 			message: "Invalid redirect URI",
 		});
 	}
+
 	if (client.disabled) {
 		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
 		throw ctx.redirect(errorURL);
@@ -227,7 +304,7 @@ export async function authorize(
 		);
 	}
 
-	const redirectURIWithCode = new URL(redirectURI);
+	const redirectURIWithCode = new URL(query.redirect_uri);
 	redirectURIWithCode.searchParams.set("code", code);
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
