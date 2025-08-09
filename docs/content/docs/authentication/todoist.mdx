@@ -1,0 +1,101 @@
+---
+title: Todoist
+description: Todoist provider setup and usage.
+---
+
+<Steps>
+    <Step> 
+        ### Get your Todoist credentials
+        To use Todoist as a social provider, you need to get your Todoist OAuth credentials. You can get them by adding a new integration in settings [Todoist App Integration Settings](https://app.todoist.com/app/settings/integrations/app-management).
+
+        In the Todoist app settings, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/todoist` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/todoist`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+
+        <Callout>
+        Make sure your Todoist app has the appropriate scopes configured. For basic user authentication, the `data:read` scope is required to access user profile information.
+        </Callout>
+    </Step>
+
+  <Step>
+        ### Configure the provider
+        To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.todoist` in your auth configuration.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            socialProviders: {
+                todoist: { // [!code highlight]
+                    clientId: process.env.TODOIST_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.TODOIST_CLIENT_SECRET as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+    </Step>
+
+</Steps>
+
+## Usage
+
+### Sign In with Todoist
+
+To sign in with Todoist, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
+- `provider`: The provider to use. It should be set to `todoist`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+const authClient = createAuthClient();
+
+const signIn = async () => {
+  const data = await authClient.signIn.social({
+    provider: "todoist",
+  });
+};
+```
+
+### Todoist Scopes
+
+Todoist supports various scopes that determine what data your application can access:
+
+- **data:read**: Read-only access to user data (required for authentication)
+- **data:read_write**: Read and write access to user data
+- **task:add**: Permission to add new tasks
+- **data:delete**: Permission to delete user data
+- **project:delete**: Permission to delete projects
+
+You can specify additional scopes when configuring the provider:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  socialProviders: {
+    todoist: {
+      clientId: process.env.TODOIST_CLIENT_ID as string,
+      clientSecret: process.env.TODOIST_CLIENT_SECRET as string,
+      scope: ["data:read", "task:add"], // [!code highlight]
+    },
+  },
+});
+```
+
+### Requesting Additional Todoist Scopes
+
+If your application needs additional Todoist permissions after the user has already signed up, you can request them using the `linkSocial` method with additional scopes.
+
+```ts title="auth-client.ts"
+const requestTodoistAccess = async () => {
+    await authClient.linkSocial({
+        provider: "todoist",
+        // Additional scopes will be requested during the linking process
+    });
+};
+
+// Example usage in a React component
+return <button onClick={requestTodoistAccess}>Connect Todoist</button>;
+```
+
+<Callout>
+  After authentication, you can use the access token to interact with the
+  Todoist API to manage tasks, projects, and other user data based on the
+  granted scopes.
+</Callout>
