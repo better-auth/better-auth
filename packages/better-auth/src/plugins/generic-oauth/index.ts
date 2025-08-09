@@ -162,7 +162,10 @@ interface GenericOAuthConfig_withDR extends GenericOAuthConfig_base {
 	 * With dynamic registration, the client will automatically register with a provided
 	 * `registration_endpoint` and collect the `client_id` and `client_secret`.
 	 */
-	useDynamicRegistration: {
+	dynamicRegistration: {
+		/**
+		 * The registration endpoint to use for dynamic registration.
+		 */
 		registration_endpoint: string;
 		/**
 		 * Defaults to your app name defined in the root of the auth config.
@@ -307,8 +310,8 @@ async function getClientIdAndSecret(
 	clientId: string;
 	clientSecret: string | undefined;
 }> {
-	if ("useDynamicRegistration" in config) {
-		const registrationConfig = config.useDynamicRegistration;
+	if ("dynamicRegistration" in config) {
+		const registrationConfig = config.dynamicRegistration;
 		const client_uri =
 			registrationConfig.client_uri || ctx.baseURL
 				? new URL(ctx.baseURL).origin
@@ -394,7 +397,7 @@ async function getClientIdAndSecret(
 			});
 		}
 
-		ctx.adapter.create({
+		await ctx.adapter.create({
 			model: "oauthRegistration",
 			data: {
 				providerId: config.providerId,
