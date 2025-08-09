@@ -28,12 +28,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 
 	const trustedDeviceStrategy = options?.trustedDeviceStrategy ?? "in-cookie";
 
-	const totp = totp2fa(trustedDeviceStrategy, options?.totpOptions);
+	const totp = totp2fa(options?.totpOptions, trustedDeviceStrategy);
 	const backupCode = backupCode2fa(
-		trustedDeviceStrategy,
 		options?.backupCodeOptions,
+		trustedDeviceStrategy,
 	);
-	const otp = otp2fa(trustedDeviceStrategy, options?.otpOptions);
+	const otp = otp2fa(options?.otpOptions, trustedDeviceStrategy);
 
 	return {
 		id: "two-factor",

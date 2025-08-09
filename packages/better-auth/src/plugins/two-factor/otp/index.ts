@@ -72,8 +72,8 @@ export interface OTPOptions {
  * The otp adapter is created from the totp adapter.
  */
 export const otp2fa = (
-	trustedDeviceStrategy: "in-cookie" | "in-db",
 	options?: OTPOptions,
+	trustedDeviceStrategy: "in-cookie" | "in-db" = "in-cookie",
 ) => {
 	const opts = {
 		storeOTP: "plain",

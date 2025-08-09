@@ -102,8 +102,8 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 }
 
 export const backupCode2fa = (
-	trustedDeviceStrategy: "in-cookie" | "in-db",
 	options?: BackupCodeOptions,
+	trustedDeviceStrategy: "in-cookie" | "in-db" = "in-cookie",
 ) => {
 	const twoFactorTable = "twoFactor";
 

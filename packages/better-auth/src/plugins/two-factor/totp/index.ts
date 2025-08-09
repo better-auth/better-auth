@@ -42,8 +42,8 @@ export type TOTPOptions = {
 };
 
 export const totp2fa = (
-	trustedDeviceStrategy: "in-cookie" | "in-db",
 	options?: TOTPOptions,
+	trustedDeviceStrategy: "in-cookie" | "in-db" = "in-cookie",
 ) => {
 	const opts = {
 		...options,
