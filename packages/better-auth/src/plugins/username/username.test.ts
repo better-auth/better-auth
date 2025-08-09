@@ -164,6 +164,39 @@ describe("username", async (it) => {
 		});
 		expect(res.data?.available).toEqual(true);
 	});
+
+	it("should fail on too short username in isUsernameAvailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "new",
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
+	});
+
+	it("should fail on too long username in isUsernameAvailable", async () => {
+		const longUsername = "a".repeat(31); // More than maxUsernameLength (30)
+		const res = await client.isUsernameAvailable({
+			username: longUsername,
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_TOO_LONG");
+	});
+
+	it("should fail on invalid username in isUsernameAvailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "invalid username with spaces",
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+	});
+
+	it("should fail on empty username in isUsernameAvailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "",
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+	});
 });
 
 describe("username custom normalization", async (it) => {
@@ -202,5 +235,35 @@ describe("username custom normalization", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
+	});
+
+	it("should check if normalized username is unavailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "H4XX0R", // Should be normalized to "haxxor"
+		});
+		expect(res.data?.available).toEqual(false);
+	});
+
+	it("should check if normalized username is available", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "N3W_US3R", // Should be normalized to "new_user"
+		});
+		expect(res.data?.available).toEqual(true);
+	});
+
+	it("should fail on too short username in isUsernameAvailable with normalization", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "AB", // Too short even after normalization
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
+	});
+
+	it("should fail on invalid username in isUsernameAvailable with normalization", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "inv4lid us3rn4me", // Invalid characters (spaces)
+		});
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
 	});
 });
