@@ -232,11 +232,16 @@ export const trustedDeviceDbEndpoints = {
 										properties: {
 											deviceId: {
 												type: "string",
-												description: "Device ID",
+												description: "The device ID.",
 											},
 											userAgent: {
 												type: "string",
 												description: "The user agent of the device.",
+											},
+											expiresAt: {
+												type: "number",
+												description:
+													"The unix timestamp in seconds where this device will no longer be trusted.",
 											},
 										},
 									},
@@ -250,20 +255,26 @@ export const trustedDeviceDbEndpoints = {
 		async (ctx) => {
 			const userId = ctx.context.session.user.id;
 
-			const devices = await ctx.context.adapter.findMany<{
-				deviceId: string;
-				userAgent: string;
-			}>({
+			const devices = await ctx.context.adapter.findMany<TrustedDeviceTable>({
 				model: "trustedDevice",
 				where: [
 					{
 						field: "userId",
 						value: userId,
 					},
+					{
+						field: "expiresAt",
+						operator: "gte",
+						value: Date.now(),
+					},
 				],
 			});
 
-			return devices;
+			return devices.map((d) => ({
+				deviceId: d.deviceId,
+				userAgent: d.userAgent,
+				expiresAt: d.expiresAt,
+			}));
 		},
 	),
 	/**
