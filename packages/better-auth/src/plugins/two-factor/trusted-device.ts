@@ -1,11 +1,14 @@
-import type { AuthContext } from "../../init";
-import { TRUST_DEVICE_COOKIE_NAME } from "./constant";
-import type { TrustedDeviceStrategy, TrustedDeviceTable } from "./types";
+import z from "zod";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { generateId } from "../../utils";
+
+import type { AuthContext } from "../../init";
+import type { TrustedDeviceStrategy, TrustedDeviceTable } from "./types";
 import type { GenericEndpointContext, Session, User } from "../../types";
-import { createAuthEndpoint } from "../../api/call";
+
+import { generateId } from "../../utils";
 import { sessionMiddleware } from "../../api";
+import { createAuthEndpoint } from "../../api/call";
+import { TRUST_DEVICE_COOKIE_NAME } from "./constant";
 
 const DAYS_30 = 30 * 24 * 60 * 60;
 const TRUSTED_DEVICE_TABLE = "trustedDevice";
@@ -291,11 +294,16 @@ export const trustedDeviceDbEndpoints = {
 	 * **client:**
 	 * `authClient.twoFactor.trustedDevices.remove`
 	 */
-	removeTrustedDevices: createAuthEndpoint(
-		"/two-factor/trusted-devices/remove/:deviceId",
+	removeTrustedDevice: createAuthEndpoint(
+		"/two-factor/trusted-devices/remove",
 		{
 			method: "POST",
 			use: [sessionMiddleware],
+			body: z.object({
+				deviceId: z.string().meta({
+					description: `The device we want to remove.`,
+				}),
+			}),
 			metadata: {
 				openapi: {
 					summary: "Remove a Trusted Devices",
@@ -322,7 +330,7 @@ export const trustedDeviceDbEndpoints = {
 			},
 		},
 		async (ctx) => {
-			const deviceId = ctx.params.deviceId;
+			const deviceId = ctx.body.deviceId;
 			const userId = ctx.context.session.user.id;
 
 			await ctx.context.adapter.delete({
