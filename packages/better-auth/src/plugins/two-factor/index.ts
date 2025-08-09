@@ -1,23 +1,26 @@
-import { generateRandomString } from "../../crypto/random";
 import * as z from "zod/v4";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import { sessionMiddleware } from "../../api";
-import { symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types/plugins";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import { APIError } from "better-call";
+import { createOTP } from "@better-auth/utils/otp";
+
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
-import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME } from "./constant";
-import { validatePassword } from "../../utils/password";
-import { APIError } from "better-call";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
+import { mergeSchema } from "../../db/schema";
+import { sessionMiddleware } from "../../api";
+import { symmetricEncrypt } from "../../crypto";
+import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { createOTP } from "@better-auth/utils/otp";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { validatePassword } from "../../utils/password";
+import { generateRandomString } from "../../crypto/random";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { isTrusted, trustedDeviceDbEndpoints } from "./trusted-device";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+
+import type { BetterAuthPlugin } from "../../types/plugins";
+import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+
 export * from "./error-code";
 
 export const twoFactor = (options?: TwoFactorOptions) => {

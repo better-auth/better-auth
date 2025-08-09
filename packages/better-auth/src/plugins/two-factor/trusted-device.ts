@@ -1,4 +1,4 @@
-import z from "zod";
+import * as z from "zod/v4";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 import type { AuthContext } from "../../init";
