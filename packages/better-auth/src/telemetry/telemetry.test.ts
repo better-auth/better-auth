@@ -7,7 +7,7 @@ vi.mock("@better-fetch/fetch", () => ({
 }));
 
 vi.mock("./project-id", () => ({
-	projectId: vi.fn(async () => "anon-123"),
+	getProjectId: vi.fn(async () => "anon-123"),
 }));
 
 vi.mock("./detectors/detect-runtime", () => ({

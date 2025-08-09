@@ -1,7 +1,4 @@
-import {
-	readPackageJson,
-	getVersionFromLocalPackageJson,
-} from "../../utils/package-json";
+import { getPackageVersion } from "../../utils/package-json";
 
 const FRAMEWORKS: Record<string, string> = {
 	next: "next",
@@ -19,11 +16,8 @@ const FRAMEWORKS: Record<string, string> = {
 
 export async function detectFramework() {
 	for (const [pkg, name] of Object.entries(FRAMEWORKS)) {
-		const version =
-			(await readPackageJson(pkg)) ||
-			(await getVersionFromLocalPackageJson(pkg));
+		const version = await getPackageVersion(pkg);
 		if (version) return { name, version };
 	}
-
 	return undefined;
 }

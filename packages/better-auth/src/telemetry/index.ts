@@ -1,5 +1,5 @@
 import { ENV, getBooleanEnvVar } from "../utils/env";
-import { projectId } from "./project-id";
+import { getProjectId } from "./project-id";
 import type { BetterAuthOptions } from "../types";
 import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
 import { detectDatabase } from "./detectors/detect-database";
@@ -39,7 +39,7 @@ export async function createTelemetry(
 		return envEnabled && telemetryEnabled;
 	};
 
-	const anonymousId = await projectId(options.baseURL);
+	const anonymousId = await getProjectId(options.baseURL);
 
 	const payload = {
 		config: getTelemetryAuthConfig(options),

@@ -1,39 +1,60 @@
 import fs from "fs/promises";
 import path from "path";
 
-export async function readPackageJson(pkg: string) {
-	try {
-		const packageJson = await import(path.join(process.cwd(), "package.json"));
-		return packageJson;
-	} catch {}
-	return undefined;
-}
+let packageJSONCache: Record<string, any> | undefined;
 
-export async function getVersionFromLocalPackageJson(pkg: string) {
+async function readRootPackageJson(): Promise<Record<string, any> | undefined> {
+	if (packageJSONCache) return packageJSONCache;
 	try {
 		const raw = await fs.readFile(
 			path.join(process.cwd(), "package.json"),
 			"utf-8",
 		);
-		const json = JSON.parse(raw);
-		const allDeps = {
-			...json.dependencies,
-			...json.devDependencies,
-			...json.peerDependencies,
-		};
-		return allDeps[pkg] as string;
+		packageJSONCache = JSON.parse(raw);
+		return packageJSONCache;
 	} catch {}
 	return undefined;
+}
+
+export async function getPackageVersion(pkg: string) {
+	if (packageJSONCache) {
+		return (packageJSONCache.dependencies[pkg] ||
+			packageJSONCache.devDependencies[pkg] ||
+			packageJSONCache.peerDependencies[pkg]) as string | undefined;
+	}
+
+	try {
+		const pkgJsonPath = path.join(
+			process.cwd(),
+			"node_modules",
+			pkg,
+			"package.json",
+		);
+		const raw = await fs.readFile(pkgJsonPath, "utf-8");
+		const json = JSON.parse(raw);
+		const resolved =
+			(json.version as string) ||
+			(await getVersionFromLocalPackageJson(pkg)) ||
+			undefined;
+		return resolved;
+	} catch {}
+
+	const fromRoot = await getVersionFromLocalPackageJson(pkg);
+	return fromRoot;
+}
+
+async function getVersionFromLocalPackageJson(pkg: string) {
+	const json = await readRootPackageJson();
+	if (!json) return undefined;
+	const allDeps = {
+		...json.dependencies,
+		...json.devDependencies,
+		...json.peerDependencies,
+	} as Record<string, string | undefined>;
+	return allDeps[pkg];
 }
 
 export async function getNameFromLocalPackageJson() {
-	try {
-		const raw = await fs.readFile(
-			path.join(process.cwd(), "package.json"),
-			"utf-8",
-		);
-		const json = JSON.parse(raw);
-		return json.name as string;
-	} catch {}
-	return undefined;
+	const json = await readRootPackageJson();
+	return json?.name as string | undefined;
 }

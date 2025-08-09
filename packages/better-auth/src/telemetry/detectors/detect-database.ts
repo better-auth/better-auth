@@ -1,8 +1,5 @@
+import { getPackageVersion } from "../../utils/package-json";
 import type { DetectionInfo } from "../types";
-import {
-	readPackageJson,
-	getVersionFromLocalPackageJson,
-} from "../../utils/package-json";
 
 const DATABASES: Record<string, string> = {
 	pg: "postgresql",
@@ -18,11 +15,8 @@ const DATABASES: Record<string, string> = {
 
 export async function detectDatabase(): Promise<DetectionInfo | undefined> {
 	for (const [pkg, name] of Object.entries(DATABASES)) {
-		const version =
-			(await readPackageJson(pkg)) ||
-			(await getVersionFromLocalPackageJson(pkg));
+		const version = await getPackageVersion(pkg);
 		if (version) return { name, version };
 	}
-
 	return undefined;
 }

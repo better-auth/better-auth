@@ -6,7 +6,9 @@ import { getNameFromLocalPackageJson } from "../utils/package-json";
 
 let projectIdCached: string | null = null;
 
-export async function projectId(baseUrl: string | undefined): Promise<string> {
+export async function getProjectId(
+	baseUrl: string | undefined,
+): Promise<string> {
 	if (projectIdCached) return projectIdCached;
 
 	const firstCommit = getFirstCommitHash();
