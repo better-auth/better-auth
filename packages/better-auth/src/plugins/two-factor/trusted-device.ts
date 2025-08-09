@@ -64,6 +64,10 @@ async function isTrustedInDb(
 		return false;
 	}
 
+	if (device.expiresAt > Date.now()) {
+		return false;
+	}
+
 	await ctx.context.adapter.update({
 		model: "device",
 		where: [
