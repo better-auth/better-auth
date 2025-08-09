@@ -135,7 +135,7 @@ describe("two factor auth API", async () => {
 
 async function testTwoFactor(strategy: TrustedDeviceStrategy) {
 	let OTP = "";
-	const { testUser, customFetchImpl, sessionSetter, db, auth } =
+	const { testUser, customFetchImpl, sessionSetter, db, auth, cookieSetter } =
 		await getTestInstance({
 			secret: DEFAULT_SECRET,
 			plugins: [
@@ -452,14 +452,27 @@ async function testTwoFactor(strategy: TrustedDeviceStrategy) {
 			},
 		});
 
+		const signInHeaders = new Headers();
 		const signInRes = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
 				headers: newHeaders,
+				onSuccess: cookieSetter(signInHeaders),
 			},
 		});
 		expect(signInRes.data?.user).toBeDefined();
+
+		if (strategy === "in-db") {
+			const devices = await client.twoFactor.trustedDevices.list({
+				fetchOptions: {
+					headers: signInHeaders,
+				},
+			});
+
+			expect(devices.error).toBeNull();
+			expect(devices.data).toHaveLength(1);
+		}
 	});
 
 	it("should limit OTP verification attempts", async () => {

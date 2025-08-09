@@ -211,7 +211,7 @@ export const trustedDeviceDbEndpoints = {
 	 * `auth.api.listTrustedDevices`
 	 *
 	 * **client:**
-	 * `authClient.twoFactor.listTrustedDevices`
+	 * `authClient.twoFactor.trustedDevices.list`
 	 */
 	listTrustedDevices: createAuthEndpoint(
 		"/two-factor/trusted-devices/list",
@@ -265,7 +265,7 @@ export const trustedDeviceDbEndpoints = {
 					},
 					{
 						field: "expiresAt",
-						operator: "gte",
+						operator: "gt",
 						value: Date.now(),
 					},
 				],
@@ -289,7 +289,7 @@ export const trustedDeviceDbEndpoints = {
 	 * `auth.api.removeTrustedDevices`
 	 *
 	 * **client:**
-	 * `authClient.twoFactor.listTrustedDevices`
+	 * `authClient.twoFactor.trustedDevices.remove`
 	 */
 	removeTrustedDevices: createAuthEndpoint(
 		"/two-factor/trusted-devices/remove/:deviceId",
