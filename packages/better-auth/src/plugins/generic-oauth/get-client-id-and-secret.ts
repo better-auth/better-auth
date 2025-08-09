@@ -13,7 +13,7 @@ export async function getClientIdAndSecret(
 	if ("dynamicRegistration" in config) {
 		const registrationConfig = config.dynamicRegistration;
 		const client_uri =
-			registrationConfig.client_uri || ctx.baseURL
+			registrationConfig.clientUri || ctx.baseURL
 				? new URL(ctx.baseURL).origin
 				: undefined;
 
@@ -41,7 +41,7 @@ export async function getClientIdAndSecret(
 
 		// If no registration is found, we need to register the client.
 		const body = {
-			client_name: registrationConfig.client_name,
+			client_name: registrationConfig.clientName,
 			client_uri,
 			redirect_uris: [`${ctx.baseURL}/oauth2/callback/${config.providerId}`],
 			scope: config.scopes?.join(" ") || "openid profile email",
@@ -53,7 +53,7 @@ export async function getClientIdAndSecret(
 		const response = await betterFetch<{
 			client_id: string;
 			client_secret: string;
-		}>(registrationConfig.registration_endpoint, {
+		}>(registrationConfig.registrationEndpoint, {
 			method: "POST",
 			body,
 		});
@@ -64,7 +64,7 @@ export async function getClientIdAndSecret(
 				`[GenericOAuth] Failed to dynamically register client for provider ${config.providerId}`,
 				response.error,
 				{
-					endpoint: registrationConfig.registration_endpoint,
+					endpoint: registrationConfig.registrationEndpoint,
 					body,
 				},
 			);
@@ -78,7 +78,7 @@ export async function getClientIdAndSecret(
 				`[GenericOAuth] Failed to dynamically register client for provider ${config.providerId}`,
 				response.error,
 				{
-					endpoint: registrationConfig.registration_endpoint,
+					endpoint: registrationConfig.registrationEndpoint,
 					body,
 				},
 			);
