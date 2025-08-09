@@ -136,8 +136,8 @@ interface GenericOAuthConfig {
   authorizationUrl?: string;
   tokenUrl?: string;
   userInfoUrl?: string;
-  clientId: string;
-  clientSecret: string;
+  clientId: string; // Required, unless `dynamicRegistration` is used
+  clientSecret: string; // Required, unless `dynamicRegistration` is used
   scopes?: string[];
   redirectURI?: string;
   responseType?: string;
@@ -147,6 +147,26 @@ interface GenericOAuthConfig {
   getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
 }
 ```
+
+### Using Dynamic Registration
+
+If you want to use dynamic registration, you can define the `dynamicRegistration` property using following configuration values:
+
+```ts
+interface GenericOAuthConfig {
+  // other configurations...
+  dynamicRegistration: {
+    registration_endpoint: string; // The register endpoint to use for dynamic registration.
+    client_name: string; // The name you want to register the client with.
+    client_uri?: string; // A URL which represents the client.
+  }
+}
+```
+
+When using dynamic registration, the plugin will automatically register the client with the provider based on the provided configuration values
+in this property. This allows you to not have to manually register the client with the provider and let the plugin
+handle fetching the `clientId` and `clientSecret` for you.
+
 
 ### Other Provider Configurations
 
@@ -160,9 +180,11 @@ interface GenericOAuthConfig {
 
 **userInfoUrl**: (Optional) The endpoint to fetch user profile information. Not required if using `discoveryUrl`.
 
-**clientId**: The OAuth client ID issued by your provider.
+**clientId**: (Required, unless `dynamicRegistration` is used) The OAuth client ID issued by your provider.
 
-**clientSecret**: The OAuth client secret issued by your provider.
+**clientSecret**: (Required, unless `dynamicRegistration` is used) The OAuth client secret issued by your provider. 
+
+**dynamicRegistration**: (Required, unless `clientId` and `clientSecret` are provided) If true, the plugin will dynamically register the client with the provider based on provided configuration values in this property.
 
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
