@@ -168,51 +168,13 @@ interface GenericOAuthConfig_withDR extends GenericOAuthConfig_base {
 		 */
 		registration_endpoint: string;
 		/**
-		 * Defaults to your app name defined in the root of the auth config.
+		 * The name you want to register the client with.
 		 */
-		client_name?: string;
+		client_name: string;
 		/**
 		 * A URL which represents the client.
 		 */
 		client_uri?: string;
-		/**
-		 * A list of URLs which the client may redirect to after authorization.
-		 *
-		 * @default [`${baseURL}/oauth2/callback/${providerId}`]
-		 * @example ["https://example.com/api/auth/oauth2/callback/better-auth"]
-		 */
-		redirect_uris?: string[];
-		/**
-		 * The Logo URI of the client.
-		 */
-		logo_uri?: string;
-		/**
-		 * The token endpoint authentication method.
-		 * @default "client_secret_basic"
-		 */
-		token_endpoint_auth_method?: "client_secret_basic" | "client_secret_post";
-		/**
-		 * Contact information for the client.
-		 *
-		 * @example ["support@example.com"]
-		 */
-		contacts?: string[];
-		/**
-		 * The client's Terms of Service URL.
-		 */
-		tos_uri?: string;
-		/**
-		 * The client's Privacy Policy URL.
-		 */
-		policy_uri?: string;
-		/**
-		 * The client's JSON Web Key Set (JWKS) URI.
-		 */
-		jwks_uri?: string;
-		/**
-		 * The client's JWKS.
-		 */
-		jwks?: string;
 	};
 }
 interface GenericOAuthConfig_withoutDR extends GenericOAuthConfig_base {
@@ -339,23 +301,13 @@ async function getClientIdAndSecret(
 		}
 
 		const body = {
-			client_name:
-				registrationConfig.client_name || ctx.options.appName || client_uri,
-			client_uri: client_uri,
-			redirect_uris: registrationConfig.redirect_uris || [
-				`${ctx.baseURL}/oauth2/callback/${config.providerId}`,
-			],
+			client_name: registrationConfig.client_name,
+			client_uri,
+			redirect_uris: [`${ctx.baseURL}/oauth2/callback/${config.providerId}`],
 			scope: config.scopes?.join(" ") || "openid profile email",
-			token_endpoint_auth_method:
-				registrationConfig.token_endpoint_auth_method || "client_secret_basic",
-			response_types: config.responseType ? [config.responseType] : ["code"],
+			token_endpoint_auth_method: "client_secret_basic",
+			response_types: ["code"],
 			grant_types: ["authorization_code"],
-			contacts: registrationConfig.contacts || [],
-			tos_uri: registrationConfig.tos_uri,
-			policy_uri: registrationConfig.policy_uri,
-			jwks_uri: registrationConfig.jwks_uri,
-			jwks: registrationConfig.jwks,
-			logo_uri: registrationConfig.logo_uri,
 		};
 
 		const response = await betterFetch<{
