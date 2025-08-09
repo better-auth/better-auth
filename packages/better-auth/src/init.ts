@@ -156,7 +156,7 @@ export const init = async (options: BetterAuthOptions) => {
 			await runMigrations();
 		},
 	};
-	let { context } = await runPluginInit(ctx);
+	let { context } = runPluginInit(ctx);
 	return context;
 };
 
@@ -221,14 +221,14 @@ export type AuthContext = {
 	runMigrations: () => Promise<void>;
 };
 
-async function runPluginInit(ctx: AuthContext) {
+function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
 	const plugins = options.plugins || [];
 	let context: AuthContext = ctx;
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = await plugin.init(context);
+			const result = plugin.init(context);
 			if (typeof result === "object") {
 				if (result.options) {
 					const { databaseHooks, ...restOpts } = result.options;
