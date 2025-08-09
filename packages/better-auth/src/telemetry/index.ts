@@ -36,7 +36,9 @@ export async function createTelemetry(
 				? options.telemetry.enabled
 				: true;
 		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
-		return envEnabled && telemetryEnabled && !isTest();
+		return (
+			envEnabled && telemetryEnabled && (context?.skipTestCheck || !isTest())
+		);
 	};
 
 	const anonymousId = await getProjectId(options.baseURL);

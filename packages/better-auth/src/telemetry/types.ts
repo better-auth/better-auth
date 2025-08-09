@@ -42,4 +42,5 @@ export interface TelemetryContext {
 	customTrack?: (event: TelemetryEvent) => Promise<void>;
 	database?: string;
 	adapter?: string;
+	skipTestCheck?: boolean;
 }
