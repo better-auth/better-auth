@@ -73,7 +73,7 @@ async function isTrustedInDb(
 			},
 		],
 		update: {
-			maxAge: DAYS_30,
+			expiresAt: Date.now() + DAYS_30,
 		},
 	});
 
