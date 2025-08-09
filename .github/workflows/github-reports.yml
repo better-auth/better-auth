@@ -1,0 +1,21 @@
+name: GitHub Reports
+
+on:
+  schedule:
+    - cron: '0 10 * * 1' # Every Monday at 10AM UTC (6AM EST)
+  workflow_dispatch:
+
+jobs:
+  run:
+    if: github.repository_owner == 'better-auth'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: 'Test action'
+        run: bun run .github/actions/github-reports/index.ts
+        continue-on-error: true
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
