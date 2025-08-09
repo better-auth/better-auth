@@ -284,7 +284,7 @@ export const trustedDeviceDbEndpoints = {
 	/**
 	 * ### Endpoint
 	 *
-	 * POST `/two-factor/trusted-devices/remove/:deviceId`
+	 * POST `/two-factor/trusted-devices/remove/`
 	 *
 	 * ### API Methods
 	 *
