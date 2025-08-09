@@ -56,7 +56,7 @@ export const schema = (trustedDeviceStrategy: "in-db" | "in-cookie") =>
 								returned: true,
 							},
 							expiresAt: {
-								type: "string",
+								type: "number",
 								required: true,
 								returned: true,
 							},
