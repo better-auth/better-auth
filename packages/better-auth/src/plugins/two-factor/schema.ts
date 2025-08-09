@@ -49,7 +49,6 @@ export const schema = (trustedDeviceStrategy: "in-db" | "in-cookie") =>
 								type: "string",
 								required: true,
 								returned: false,
-								unique: true,
 							},
 							userAgent: {
 								type: "string",
