@@ -3,10 +3,10 @@ import type { OAuth2Tokens } from "../../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 
 /**
- * 
- * @param tokens 
- * @param finalUserInfoUrl 
- * @returns 
+ *
+ * @param tokens
+ * @param finalUserInfoUrl
+ * @returns
  */
 export async function getUserInfo(
 	tokens: OAuth2Tokens,
