@@ -33,7 +33,13 @@ export interface ProjectInfo {
 }
 
 export interface TelemetryEvent {
-	type: "init" | "error" | "warning" | "info" | "debug";
+	type: string;
 	anonymousId?: string;
 	payload: Record<string, any>;
+}
+
+export interface TelemetryContext {
+	customTrack?: (event: TelemetryEvent) => Promise<void>;
+	database?: string;
+	adapter?: string;
 }

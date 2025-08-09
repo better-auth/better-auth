@@ -1,8 +1,14 @@
 import type { SocialProviders } from "../../social-providers";
 import type { BetterAuthOptions } from "../../types";
+import type { TelemetryContext } from "../types";
 
-export function getTelemetryAuthConfig(options: BetterAuthOptions) {
+export function getTelemetryAuthConfig(
+	options: BetterAuthOptions,
+	context?: TelemetryContext,
+) {
 	return {
+		database: context?.database,
+		adapter: context?.adapter,
 		emailVerification: {
 			sendVerificationEmail: !!options.emailVerification?.sendVerificationEmail,
 			sendOnSignUp: !!options.emailVerification?.sendOnSignUp,

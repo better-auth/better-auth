@@ -7,18 +7,18 @@ import { detectFramework } from "./detectors/detect-framework";
 import { detectSystemInfo } from "./detectors/detect-system-info";
 import { detectPackageManager } from "./detectors/detect-project-info";
 import { betterFetch } from "@better-fetch/fetch";
-import type { TelemetryEvent } from "./types";
+import type { TelemetryContext, TelemetryEvent } from "./types";
 import { logger } from "../utils";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 
 export async function createTelemetry(
 	options: BetterAuthOptions,
-	customTrack?: (event: TelemetryEvent) => Promise<void>,
+	context?: TelemetryContext,
 ) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
 	const track =
-		customTrack ??
+		context?.customTrack ??
 		(debugEnabled
 			? async (event: TelemetryEvent) =>
 					Promise.resolve(

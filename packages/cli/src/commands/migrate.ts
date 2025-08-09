@@ -5,7 +5,7 @@ import path from "path";
 import yoctoSpinner from "yocto-spinner";
 import chalk from "chalk";
 import prompts from "prompts";
-import { logger } from "better-auth";
+import { logger, createTelemetry, getTelemetryAuthConfig } from "better-auth";
 import { getAdapter, getMigrations } from "better-auth/db";
 import { getConfig } from "../utils/get-config";
 
@@ -25,7 +25,7 @@ export async function migrateAction(opts: any) {
 		process.exit(1);
 	}
 
-	const config = await getConfig({
+    const config = await getConfig({
 		cwd,
 		configPath: options.config,
 	});
@@ -36,7 +36,7 @@ export async function migrateAction(opts: any) {
 		return;
 	}
 
-	const db = await getAdapter(config);
+    const db = await getAdapter(config);
 
 	if (!db) {
 		logger.error(
@@ -46,19 +46,52 @@ export async function migrateAction(opts: any) {
 	}
 
 	if (db.id !== "kysely") {
-		if (db.id === "prisma") {
+        if (db.id === "prisma") {
 			logger.error(
 				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
 			);
+            try {
+                const telemetry = await createTelemetry(config);
+                await telemetry.publish({
+                    type: "cli_migrate",
+                    payload: {
+                        outcome: "unsupported_adapter",
+                        adapter: "prisma",
+                        config: getTelemetryAuthConfig(config),
+                    },
+                });
+            } catch {}
 			process.exit(0);
 		}
-		if (db.id === "drizzle") {
+        if (db.id === "drizzle") {
 			logger.error(
 				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle’s migrate or push to apply it.",
 			);
+            try {
+                const telemetry = await createTelemetry(config);
+                await telemetry.publish({
+                    type: "cli_migrate",
+                    payload: {
+                        outcome: "unsupported_adapter",
+                        adapter: "drizzle",
+                        config: getTelemetryAuthConfig(config),
+                    },
+                });
+            } catch {}
 			process.exit(0);
 		}
 		logger.error("Migrate command isn't supported for this adapter.");
+        try {
+            const telemetry = await createTelemetry(config);
+            await telemetry.publish({
+                type: "cli_migrate",
+                payload: {
+                    outcome: "unsupported_adapter",
+                    adapter: db.id,
+                    config: getTelemetryAuthConfig(config),
+                },
+            });
+        } catch {}
 		process.exit(1);
 	}
 
@@ -66,9 +99,19 @@ export async function migrateAction(opts: any) {
 
 	const { toBeAdded, toBeCreated, runMigrations } = await getMigrations(config);
 
-	if (!toBeAdded.length && !toBeCreated.length) {
+    if (!toBeAdded.length && !toBeCreated.length) {
 		spinner.stop();
 		logger.info("🚀 No migrations needed.");
+        try {
+            const telemetry = await createTelemetry(config);
+            await telemetry.publish({
+                type: "cli_migrate",
+                payload: {
+                    outcome: "no_changes",
+                    config: getTelemetryAuthConfig(config),
+                },
+            });
+        } catch {}
 		process.exit(0);
 	}
 
@@ -101,15 +144,29 @@ export async function migrateAction(opts: any) {
 		migrate = response.migrate;
 	}
 
-	if (!migrate) {
+    if (!migrate) {
 		logger.info("Migration cancelled.");
+        try {
+            const telemetry = await createTelemetry(config);
+            await telemetry.publish({
+                type: "cli_migrate",
+                payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
+            });
+        } catch {}
 		process.exit(0);
 	}
 
 	spinner?.start("migrating...");
-	await runMigrations();
+    await runMigrations();
 	spinner.stop();
 	logger.info("🚀 migration was completed successfully!");
+    try {
+        const telemetry = await createTelemetry(config);
+        await telemetry.publish({
+            type: "cli_migrate",
+            payload: { outcome: "migrated", config: getTelemetryAuthConfig(config) },
+        });
+    } catch {}
 	process.exit(0);
 }
 

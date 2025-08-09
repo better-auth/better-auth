@@ -29,6 +29,7 @@ import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
 import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
+import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -93,7 +94,13 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const { publish } = await createTelemetry(options);
+	const { publish } = await createTelemetry(options, {
+		adapter: adapter.id,
+		database:
+			typeof options.database === "function"
+				? "adapter"
+				: getKyselyDatabaseType(options.database) || "unknown",
+	});
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",

@@ -69,7 +69,7 @@ describe("telemetry", () => {
 					},
 				},
 			},
-			track,
+			{ customTrack: track },
 		);
 		expect(event).toMatchObject({
 			type: "init",
@@ -258,7 +258,7 @@ describe("telemetry", () => {
 			{
 				baseURL: "http://localhost",
 			},
-			track,
+			{ customTrack: track },
 		);
 		expect(event).toBeUndefined();
 		expect(track).not.toBeCalled();
@@ -274,7 +274,7 @@ describe("telemetry", () => {
 				baseURL: "http://localhost",
 				telemetry: { enabled: false },
 			},
-			track,
+			{ customTrack: track },
 		);
 		expect(event).toBeUndefined();
 		expect(track).not.toBeCalled();
