@@ -1,4 +1,4 @@
-import { ENV, getBooleanEnvVar } from "../utils/env";
+import { ENV, getBooleanEnvVar, isTest } from "../utils/env";
 import { getProjectId } from "./project-id";
 import type { BetterAuthOptions } from "../types";
 import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
@@ -36,7 +36,7 @@ export async function createTelemetry(
 				? options.telemetry.enabled
 				: true;
 		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
-		return envEnabled && telemetryEnabled;
+		return envEnabled && telemetryEnabled && !isTest();
 	};
 
 	const anonymousId = await getProjectId(options.baseURL);
