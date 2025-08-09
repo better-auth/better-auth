@@ -36,6 +36,7 @@ export async function validateAuthorizationCode({
 	body.set("code", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
 	options.clientKey && body.set("client_key", options.clientKey);
+	// If the provider requires a device ID
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	// for resolving the issue with some oauth server.
@@ -47,8 +48,15 @@ export async function validateAuthorizationCode({
 			`${options.clientId}:${options.clientSecret}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
-	} else {
+	} else if (options.clientAssertion && options.clientAssertionType) {
+		body.set("client_assertion", options.clientAssertion);
+		body.set("client_assertion_type", options.clientAssertionType);
+	} else if (options.clientSecret) {
 		body.set("client_secret", options.clientSecret);
+	} else {
+		throw new Error(
+			"Either clientSecret or clientAssertion with clientAssertionType must be provided.",
+		);
 	}
 
 	for (const [key, value] of Object.entries(additionalParams)) {
