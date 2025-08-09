@@ -8,5 +8,11 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.1",
+    "@slack/web-api": "^7.9.3",
+    "slack-block-builder": "^2.8.0"
   }
 }
