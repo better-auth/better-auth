@@ -2,14 +2,14 @@ import { APIError } from "better-call";
 import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { setSessionCookie } from "../../cookies";
 import { getSessionFromCtx } from "../../api";
-import type { UserWithTwoFactor } from "./types";
+import type { TrustedDeviceStrategy, UserWithTwoFactor } from "./types";
 import type { GenericEndpointContext } from "../../types";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { trustDevice } from "./trusted-device";
 
 export async function verifyTwoFactor(
 	ctx: GenericEndpointContext,
-	trustedDeviceStrategy: "in-cookie" | "in-db",
+	trustedDeviceStrategy: TrustedDeviceStrategy,
 ) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {

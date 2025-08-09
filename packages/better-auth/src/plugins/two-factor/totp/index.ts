@@ -6,6 +6,7 @@ import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type {
+	TrustedDeviceStrategy,
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
@@ -43,7 +44,7 @@ export type TOTPOptions = {
 
 export const totp2fa = (
 	options?: TOTPOptions,
-	trustedDeviceStrategy: "in-cookie" | "in-db" = "in-cookie",
+	trustedDeviceStrategy: TrustedDeviceStrategy = "in-cookie",
 ) => {
 	const opts = {
 		...options,

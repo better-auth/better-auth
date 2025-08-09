@@ -1,6 +1,7 @@
 import type { AuthPluginSchema } from "../../types";
+import type { TrustedDeviceStrategy } from "./types";
 
-export const schema = (trustedDeviceStrategy: "in-db" | "in-cookie") =>
+export const schema = (trustedDeviceStrategy: TrustedDeviceStrategy) =>
 	({
 		user: {
 			fields: {

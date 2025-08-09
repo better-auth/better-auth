@@ -1,6 +1,6 @@
 import type { AuthContext } from "../../init";
 import { TRUST_DEVICE_COOKIE_NAME } from "./constant";
-import type { TrustedDeviceTable } from "./types";
+import type { TrustedDeviceStrategy, TrustedDeviceTable } from "./types";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { generateId } from "../../utils";
 import type { GenericEndpointContext, Session, User } from "../../types";
@@ -28,7 +28,7 @@ export async function isTrusted({
 }: {
 	ctx: GenericEndpointContext;
 	newSession: NonNullable<AuthContext["newSession"]>;
-	trustedDeviceStrategy: "in-cookie" | "in-db";
+	trustedDeviceStrategy: TrustedDeviceStrategy;
 }): Promise<boolean> {
 	const trustedDeviceCookie = await getTrustedDeviceCookie(ctx);
 	if (trustedDeviceCookie === null) {
@@ -138,7 +138,7 @@ export async function trustDevice({
 	ctx: GenericEndpointContext;
 	user: User;
 	session: Session;
-	trustedDeviceStrategy: "in-cookie" | "in-db";
+	trustedDeviceStrategy: TrustedDeviceStrategy;
 }) {
 	if (trustedDeviceStrategy === "in-db") {
 		await trustDeviceInDb(ctx, session);

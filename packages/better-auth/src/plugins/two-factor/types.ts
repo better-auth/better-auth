@@ -33,7 +33,7 @@ export interface TwoFactorOptions {
 	 * Where to store that a given device was marked as trusted.
 	 * @default "in-cookie"
 	 */
-	trustedDeviceStrategy?: "in-cookie" | "in-db";
+	trustedDeviceStrategy?: TrustedDeviceStrategy;
 	/**
 	 * Custom schema for the two factor plugin
 	 */
@@ -65,3 +65,5 @@ export interface TrustedDeviceTable {
 	expiresAt: number;
 	userAgent: string | null | undefined;
 }
+
+export type TrustedDeviceStrategy = "in-cookie" | "in-db";

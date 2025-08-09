@@ -4,6 +4,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import type {
+	TrustedDeviceStrategy,
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
@@ -103,7 +104,7 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 
 export const backupCode2fa = (
 	options?: BackupCodeOptions,
-	trustedDeviceStrategy: "in-cookie" | "in-db" = "in-cookie",
+	trustedDeviceStrategy: TrustedDeviceStrategy = "in-cookie",
 ) => {
 	const twoFactorTable = "twoFactor";
 
