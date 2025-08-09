@@ -3,16 +3,8 @@ import path from "path";
 
 export async function readPackageJson(pkg: string) {
 	try {
-		const pkgJsonPath = path.join(
-			process.cwd(),
-			"node_modules",
-			pkg,
-			"package.json",
-		);
-
-		const raw = await fs.readFile(pkgJsonPath, "utf-8");
-		const json = JSON.parse(raw);
-		return json.version as string;
+		const packageJson = await import(path.join(process.cwd(), "package.json"));
+		return packageJson;
 	} catch {}
 	return undefined;
 }

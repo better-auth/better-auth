@@ -11,31 +11,33 @@ import type { TelemetryEvent } from "./types";
 import { logger } from "../utils";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 
-export async function createTelemetry(options: BetterAuthOptions) {
+export async function createTelemetry(
+	options: BetterAuthOptions,
+	customTrack?: (event: TelemetryEvent) => Promise<void>,
+) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
-	const track = debugEnabled
-		? (event: TelemetryEvent) =>
-				Promise.resolve(
-					logger.info("telemetry event", JSON.stringify(event, null, 2)),
-				)
-		: async (event: TelemetryEvent) =>
-				betterFetch(TELEMETRY_ENDPOINT, {
-					method: "POST",
-					body: JSON.stringify(event),
-					headers: { "content-type": "application/json" },
-					retry: 5,
-				});
+	const track =
+		customTrack ??
+		(debugEnabled
+			? async (event: TelemetryEvent) =>
+					Promise.resolve(
+						logger.info("telemetry event", JSON.stringify(event, null, 2)),
+					)
+			: async (event: TelemetryEvent) =>
+					betterFetch(TELEMETRY_ENDPOINT, {
+						method: "POST",
+						body: event,
+					}));
 
 	const isEnabled = async () => {
-		const telemetryEnabled = options.telemetry?.enabled ?? true;
+		const telemetryEnabled =
+			options.telemetry?.enabled !== undefined
+				? options.telemetry.enabled
+				: true;
 		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
-
 		return envEnabled && telemetryEnabled;
 	};
-
-	const enabled = await isEnabled();
-	const noOp = async () => {};
 
 	const anonymousId = await projectId(options.baseURL);
 
@@ -48,17 +50,19 @@ export async function createTelemetry(options: BetterAuthOptions) {
 		systemInfo: detectSystemInfo(),
 		packageManager: detectPackageManager(),
 	};
-	void track({ type: "init", payload, anonymousId });
+	const enabled = await isEnabled();
+	if (enabled) {
+		void track({ type: "init", payload, anonymousId });
+	}
 
 	return {
-		publish: enabled
-			? async (event: TelemetryEvent) => {
-					await track({
-						type: event.type,
-						payload: event.payload,
-						anonymousId,
-					});
-				}
-			: noOp,
+		publish: async (event: TelemetryEvent) => {
+			if (!enabled) return;
+			await track({
+				type: event.type,
+				payload: event.payload,
+				anonymousId,
+			});
+		},
 	};
 }
