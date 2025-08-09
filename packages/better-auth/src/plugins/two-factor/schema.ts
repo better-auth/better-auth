@@ -39,7 +39,7 @@ export const schema = (trustedDeviceStrategy: "in-db" | "in-cookie") =>
 			? {
 					trustedDevice: {
 						fields: {
-							id: {
+							deviceId: {
 								type: "string",
 								required: true,
 								returned: true,
