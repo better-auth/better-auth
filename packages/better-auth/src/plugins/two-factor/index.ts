@@ -23,7 +23,7 @@ export * from "./error-code";
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
-		trustDeviceTable: "trustedDevice",
+		trustedDeviceTable: "trustedDevice",
 	};
 
 	const trustedDeviceStrategy = options?.trustedDeviceStrategy ?? "in-cookie";
@@ -41,7 +41,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
-			...(trustedDeviceStrategy === "in-db" ? trustedDeviceDbEndpoints : {}),
+			...(trustedDeviceStrategy === "in-db"
+				? trustedDeviceDbEndpoints(opts.trustedDeviceTable)
+				: {}),
 			/**
 			 * ### Endpoint
 			 *

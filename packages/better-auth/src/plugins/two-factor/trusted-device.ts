@@ -198,7 +198,7 @@ async function trustDeviceInCookie(
 	);
 }
 
-export const trustedDeviceDbEndpoints = {
+export const trustedDeviceDbEndpoints = (trustedDeviceTable: string) => ({
 	/**
 	 * ### Endpoint
 	 *
@@ -256,7 +256,7 @@ export const trustedDeviceDbEndpoints = {
 			const userId = ctx.context.session.user.id;
 
 			const devices = await ctx.context.adapter.findMany<TrustedDeviceTable>({
-				model: "trustedDevice",
+				model: trustedDeviceTable,
 				where: [
 					{
 						field: "userId",
@@ -325,7 +325,7 @@ export const trustedDeviceDbEndpoints = {
 			const userId = ctx.context.session.user.id;
 
 			await ctx.context.adapter.delete({
-				model: "trustedDevice",
+				model: trustedDeviceTable,
 				where: [
 					{
 						field: "userId",
@@ -341,4 +341,4 @@ export const trustedDeviceDbEndpoints = {
 			return { success: true };
 		},
 	),
-};
+});
