@@ -37,10 +37,9 @@ export const initGetDefaultFieldName = ({
 
 		let f = schema[model]?.fields[field];
 		if (!f) {
-			//@ts-expect-error
-			f = Object.values(schema[model]?.fields).find(
+			f = Object.values(schema[model]?.fields ?? {}).find(
 				(f) => f.fieldName === field,
-			);
+			)!;
 		}
 		if (!f) {
 			debugLog(`Field ${field} not found in model ${model}`);
