@@ -552,8 +552,8 @@ describe("oauth2", async () => {
 					config: [
 						{
 							dynamicRegistration: {
-								registration_endpoint: url,
-								client_name: "test",
+								registrationEndpoint: url,
+								clientName: "test",
 							},
 							authorizationUrl: `${origin}/api/auth/oauth2/authorize`,
 							tokenUrl: `${origin}/api/auth/oauth2/token`,

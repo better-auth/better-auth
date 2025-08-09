@@ -148,15 +148,15 @@ interface GenericOAuthConfigWithDR extends GenericOAuthConfigBase {
 		/**
 		 * The registration endpoint to use for dynamic registration.
 		 */
-		registration_endpoint: string;
+		registrationEndpoint: string;
 		/**
 		 * The name you want to register the client with.
 		 */
-		client_name: string;
+		clientName: string;
 		/**
 		 * A URL which represents the client.
 		 */
-		client_uri?: string;
+		clientUri?: string;
 	};
 }
 
