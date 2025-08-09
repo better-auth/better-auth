@@ -307,6 +307,23 @@ export const trustedDeviceDbEndpoints = {
 		},
 		async (ctx) => {
 			const deviceId = ctx.params.deviceId;
+			const userId = ctx.context.session.user.id;
+
+			await ctx.context.adapter.delete({
+				model: "trustedDevice",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+					{
+						field: "deviceId",
+						value: deviceId,
+					},
+				],
+			});
+
+			return { success: true };
 		},
 	),
 };
