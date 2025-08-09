@@ -41,9 +41,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
-			...(trustedDeviceStrategy === "in-db"
-				? trustedDeviceDbEndpoints(opts.trustedDeviceTable)
-				: {}),
+			...(trustedDeviceStrategy === "in-db" ? trustedDeviceDbEndpoints : {}),
 			/**
 			 * ### Endpoint
 			 *

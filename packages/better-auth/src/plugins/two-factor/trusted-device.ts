@@ -8,6 +8,7 @@ import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 
 const DAYS_30 = 30 * 24 * 60 * 60;
+const TRUSTED_DEVICE_TABLE = "trustedDevice";
 
 export async function getTrustedDeviceCookie(ctx: GenericEndpointContext) {
 	const trustDeviceCookieName = ctx.context.createAuthCookie(
@@ -54,7 +55,7 @@ async function isTrustedInDb(
 		model: "trustedDevice",
 		where: [
 			{
-				field: "id",
+				field: "deviceId",
 				value: trustedDeviceCookie,
 			},
 		],
@@ -64,12 +65,12 @@ async function isTrustedInDb(
 		return false;
 	}
 
-	if (device.expiresAt > Date.now()) {
+	if (Date.now() > device.expiresAt) {
 		return false;
 	}
 
 	await ctx.context.adapter.update({
-		model: "device",
+		model: TRUSTED_DEVICE_TABLE,
 		where: [
 			{
 				field: "id",
@@ -152,7 +153,7 @@ async function trustDeviceInDb(ctx: GenericEndpointContext, session: Session) {
 	const deviceId = generateId(32);
 
 	const device = await ctx.context.adapter.create<TrustedDeviceTable>({
-		model: "device",
+		model: TRUSTED_DEVICE_TABLE,
 		data: {
 			deviceId,
 			userId: session.userId,
@@ -198,7 +199,7 @@ async function trustDeviceInCookie(
 	);
 }
 
-export const trustedDeviceDbEndpoints = (trustedDeviceTable: string) => ({
+export const trustedDeviceDbEndpoints = {
 	/**
 	 * ### Endpoint
 	 *
@@ -256,7 +257,7 @@ export const trustedDeviceDbEndpoints = (trustedDeviceTable: string) => ({
 			const userId = ctx.context.session.user.id;
 
 			const devices = await ctx.context.adapter.findMany<TrustedDeviceTable>({
-				model: trustedDeviceTable,
+				model: TRUSTED_DEVICE_TABLE,
 				where: [
 					{
 						field: "userId",
@@ -325,7 +326,7 @@ export const trustedDeviceDbEndpoints = (trustedDeviceTable: string) => ({
 			const userId = ctx.context.session.user.id;
 
 			await ctx.context.adapter.delete({
-				model: trustedDeviceTable,
+				model: TRUSTED_DEVICE_TABLE,
 				where: [
 					{
 						field: "userId",
@@ -341,4 +342,4 @@ export const trustedDeviceDbEndpoints = (trustedDeviceTable: string) => ({
 			return { success: true };
 		},
 	),
-});
+};

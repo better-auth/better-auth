@@ -3,13 +3,137 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
+import type {
+	TrustedDeviceStrategy,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "./types";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { createOTP } from "@better-auth/utils/otp";
 
 describe("two factor", async () => {
+	await testTwoFactor("in-db");
+	await testTwoFactor("in-cookie");
+});
+
+describe("two factor auth API", async () => {
+	let OTP = "";
+	const sendOTP = vi.fn();
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP({ otp }) {
+						OTP = otp;
+						sendOTP(otp);
+					},
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+	let { headers } = await signInWithTestUser();
+
+	it("enable two factor", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: {
+				password: testUser.password,
+			},
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(res.headers);
+
+		const json = (await res.json()) as {
+			status: boolean;
+			backupCodes: string[];
+			totpURI: string;
+		};
+		expect(json.backupCodes.length).toBe(10);
+		expect(json.totpURI).toBeDefined();
+		const session = await auth.api.getSession({
+			headers,
+		});
+		expect(session?.user.twoFactorEnabled).toBe(true);
+	});
+
+	it("should get totp uri", async () => {
+		const res = await auth.api.getTOTPURI({
+			headers,
+			body: {
+				password: testUser.password,
+			},
+		});
+		expect(res.totpURI).toBeDefined();
+	});
+
+	it("should request second factor", async () => {
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		expect(signInRes).toBeInstanceOf(Response);
+		expect(signInRes.status).toBe(200);
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const twoFactorCookie = parsed.get("better-auth.two_factor");
+		expect(twoFactorCookie).toBeDefined();
+		const sessionToken = parsed.get("better-auth.session_token");
+		expect(sessionToken?.value).toBeFalsy();
+	});
+
+	it("should send otp", async () => {
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				trustDevice: false,
+			},
+		});
+		expect(OTP.length).toBe(6);
+		expect(sendOTP).toHaveBeenCalledWith(OTP);
+	});
+
+	it("should verify otp", async () => {
+		const res = await auth.api.verifyTwoFactorOTP({
+			headers,
+			body: {
+				code: OTP,
+			},
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Set-Cookie")).toBeDefined();
+		headers = convertSetCookieToCookie(res.headers);
+	});
+
+	it("should disable two factor", async () => {
+		const res = await auth.api.disableTwoFactor({
+			headers,
+			body: {
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(res.headers);
+		expect(res.status).toBe(200);
+		const session = await auth.api.getSession({
+			headers,
+		});
+		expect(session?.user.twoFactorEnabled).toBe(false);
+	});
+});
+
+async function testTwoFactor(strategy: TrustedDeviceStrategy) {
 	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
@@ -21,6 +145,7 @@ describe("two factor", async () => {
 							OTP = otp;
 						},
 					},
+					trustedDeviceStrategy: strategy,
 				}),
 			],
 		});
@@ -153,15 +278,11 @@ describe("two factor", async () => {
 					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
 						"cookie",
-						`better-auth.two_factor=${
-							parsed.get("better-auth.two_factor")?.value
-						}`,
+						`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
 					);
 					headers.append(
 						"cookie",
-						`better-auth.dont_remember=${
-							parsed.get("better-auth.dont_remember")?.value
-						}`,
+						`better-auth.dont_remember=${parsed.get("better-auth.dont_remember")?.value}`,
 					);
 				},
 			},
@@ -236,9 +357,7 @@ describe("two factor", async () => {
 					expect(token).toBe("");
 					headers.append(
 						"cookie",
-						`better-auth.two_factor=${
-							parsed.get("better-auth.two_factor")?.value
-						}`,
+						`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
 					);
 				},
 			},
@@ -295,9 +414,7 @@ describe("two factor", async () => {
 					);
 					headers.append(
 						"cookie",
-						`better-auth.two_factor=${
-							parsed.get("better-auth.two_factor")?.value
-						}`,
+						`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
 					);
 				},
 			},
@@ -312,9 +429,7 @@ describe("two factor", async () => {
 					);
 					headers.append(
 						"cookie",
-						`better-auth.otp.counter=${
-							parsed.get("better-auth.otp_counter")?.value
-						}`,
+						`better-auth.otp.counter=${parsed.get("better-auth.otp_counter")?.value}`,
 					);
 				},
 			},
@@ -331,9 +446,7 @@ describe("two factor", async () => {
 					);
 					newHeaders.set(
 						"cookie",
-						`better-auth.trust_device=${
-							parsed.get("better-auth.trust_device")?.value
-						}`,
+						`better-auth.trust_device=${parsed.get("better-auth.trust_device")?.value}`,
 					);
 				},
 			},
@@ -362,9 +475,7 @@ describe("two factor", async () => {
 					);
 					headers.append(
 						"cookie",
-						`better-auth.two_factor=${
-							parsed.get("better-auth.two_factor")?.value
-						}`,
+						`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
 					);
 				},
 			},
@@ -422,119 +533,4 @@ describe("two factor", async () => {
 		});
 		expect(signInRes.data?.user).toBeDefined();
 	});
-});
-
-describe("two factor auth API", async () => {
-	let OTP = "";
-	const sendOTP = vi.fn();
-	const { auth, signInWithTestUser, testUser } = await getTestInstance({
-		secret: DEFAULT_SECRET,
-		plugins: [
-			twoFactor({
-				otpOptions: {
-					sendOTP({ otp }) {
-						OTP = otp;
-						sendOTP(otp);
-					},
-				},
-				skipVerificationOnEnable: true,
-			}),
-		],
-	});
-	let { headers } = await signInWithTestUser();
-
-	it("enable two factor", async () => {
-		const res = await auth.api.enableTwoFactor({
-			body: {
-				password: testUser.password,
-			},
-			headers,
-			asResponse: true,
-		});
-		headers = convertSetCookieToCookie(res.headers);
-
-		const json = (await res.json()) as {
-			status: boolean;
-			backupCodes: string[];
-			totpURI: string;
-		};
-		expect(json.backupCodes.length).toBe(10);
-		expect(json.totpURI).toBeDefined();
-		const session = await auth.api.getSession({
-			headers,
-		});
-		expect(session?.user.twoFactorEnabled).toBe(true);
-	});
-
-	it("should get totp uri", async () => {
-		const res = await auth.api.getTOTPURI({
-			headers,
-			body: {
-				password: testUser.password,
-			},
-		});
-		expect(res.totpURI).toBeDefined();
-	});
-
-	it("should request second factor", async () => {
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
-			},
-			asResponse: true,
-		});
-
-		headers = convertSetCookieToCookie(signInRes.headers);
-
-		expect(signInRes).toBeInstanceOf(Response);
-		expect(signInRes.status).toBe(200);
-		const parsed = parseSetCookieHeader(
-			signInRes.headers.get("Set-Cookie") || "",
-		);
-		const twoFactorCookie = parsed.get("better-auth.two_factor");
-		expect(twoFactorCookie).toBeDefined();
-		const sessionToken = parsed.get("better-auth.session_token");
-		expect(sessionToken?.value).toBeFalsy();
-	});
-
-	it("should send otp", async () => {
-		await auth.api.sendTwoFactorOTP({
-			headers,
-			body: {
-				trustDevice: false,
-			},
-		});
-		expect(OTP.length).toBe(6);
-		expect(sendOTP).toHaveBeenCalledWith(OTP);
-	});
-
-	it("should verify otp", async () => {
-		const res = await auth.api.verifyTwoFactorOTP({
-			headers,
-			body: {
-				code: OTP,
-			},
-			asResponse: true,
-		});
-		expect(res.status).toBe(200);
-		expect(res.headers.get("Set-Cookie")).toBeDefined();
-		headers = convertSetCookieToCookie(res.headers);
-	});
-
-	it("should disable two factor", async () => {
-		const res = await auth.api.disableTwoFactor({
-			headers,
-			body: {
-				password: testUser.password,
-			},
-			asResponse: true,
-		});
-		headers = convertSetCookieToCookie(res.headers);
-		expect(res.status).toBe(200);
-		const session = await auth.api.getSession({
-			headers,
-		});
-		expect(session?.user.twoFactorEnabled).toBe(false);
-	});
-});
+}
