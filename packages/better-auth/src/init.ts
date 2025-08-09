@@ -144,6 +144,7 @@ export const init = async (options: BetterAuthOptions) => {
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
+			logger,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
 			generateId: generateIdFunc,
 		}),
@@ -255,6 +256,7 @@ function runPluginInit(ctx: AuthContext) {
 	dbHooks.push(options.databaseHooks);
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
+		logger: ctx.logger,
 		hooks: dbHooks.filter((u) => u !== undefined),
 		generateId: ctx.generateId,
 	});

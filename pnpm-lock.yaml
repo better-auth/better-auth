@@ -10,8 +10,8 @@ catalogs:
       specifier: ^1.1.18
       version: 1.1.18
     better-call:
-      specifier: ^1.0.12
-      version: 1.0.12
+      specifier: ^1.0.13
+      version: 1.0.13
     typescript:
       specifier: ^5.9.2
       version: 5.9.2
@@ -194,7 +194,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.12
+        version: 1.0.13
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
@@ -1478,7 +1478,7 @@ importers:
         version: 13.1.1
       better-call:
         specifier: 'catalog:'
-        version: 1.0.12
+        version: 1.0.13
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1678,7 +1678,7 @@ importers:
         version: 1.1.18
       better-call:
         specifier: 'catalog:'
-        version: 1.0.12
+        version: 1.0.13
       zod:
         specifier: ^4.0.0
         version: 4.0.5
@@ -1737,7 +1737,7 @@ importers:
         version: 5.0.3
       better-call:
         specifier: 'catalog:'
-        version: 1.0.12
+        version: 1.0.13
       zod:
         specifier: ^4.0.0
         version: 4.0.5
@@ -1753,7 +1753,7 @@ importers:
         version: 7.6.13
       better-call:
         specifier: 'catalog:'
-        version: 1.0.12
+        version: 1.0.13
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
@@ -10159,8 +10159,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.12:
-    resolution: {integrity: sha512-ssq5OfB9Ungv2M1WVrRnMBomB0qz1VKuhkY2WxjHaLtlsHoSe9EPolj1xf7xf8LY9o3vfk3Rx6rCWI4oVHeBRg==}
+  better-call@1.0.13:
+    resolution: {integrity: sha512-auqdP9lnNOli9tKpZIiv0nEIwmmyaD/RotM3Mucql+Ef88etoZi/t7Ph5LjlmZt/hiSahhNTt6YVnx6++rziXA==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -31701,7 +31701,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.12:
+  better-call@1.0.13:
     dependencies:
       '@better-fetch/fetch': 1.1.18
       rou3: 0.5.1
