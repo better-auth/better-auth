@@ -464,14 +464,33 @@ async function testTwoFactor(strategy: TrustedDeviceStrategy) {
 		expect(signInRes.data?.user).toBeDefined();
 
 		if (strategy === "in-db") {
-			const devices = await client.twoFactor.trustedDevices.list({
+			const listDevices = await client.twoFactor.trustedDevices.list({
 				fetchOptions: {
 					headers: signInHeaders,
 				},
 			});
 
-			expect(devices.error).toBeNull();
-			expect(devices.data).toHaveLength(1);
+			expect(listDevices.error).toBeNull();
+			expect(listDevices.data).toHaveLength(1);
+
+			const removedDevice = await client.twoFactor.trustedDevices.remove({
+				deviceId: listDevices.data?.at(0)?.deviceId!,
+				fetchOptions: {
+					headers: signInHeaders,
+				},
+			});
+
+			expect(removedDevice.error).toBeNull();
+			expect(removedDevice.data?.success).toBe(true);
+
+			const listDevices2 = await client.twoFactor.trustedDevices.list({
+				fetchOptions: {
+					headers: signInHeaders,
+				},
+			});
+
+			expect(listDevices2.error).toBeNull();
+			expect(listDevices2.data).toHaveLength(0);
 		}
 	});
 
