@@ -48,7 +48,7 @@ export async function postGitHubReport(
 
 		await input.slackClient.chat.postMessage({
 			blocks,
-		  text: config.renderTitle(data.items.length),
+			text: config.renderTitle(data.items.length),
 			channel: "#open-source",
 			icon_emoji: ":github:",
 			username: "GitHub Reports",
