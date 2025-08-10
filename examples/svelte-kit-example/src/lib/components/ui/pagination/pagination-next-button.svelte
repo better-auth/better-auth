@@ -1,5 +1,8 @@
 <script lang="ts">
 import { Pagination as PaginationPrimitive } from "bits-ui";
+import Button from "../button/button.svelte";
+import ChevronRight from "svelte-radix/ChevronRight.svelte";
+import { cn } from "$lib/utils";
 
 type $$Props = PaginationPrimitive.NextButtonProps;
 type $$Events = PaginationPrimitive.NextButtonEvents;

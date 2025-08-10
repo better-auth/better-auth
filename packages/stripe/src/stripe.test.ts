@@ -844,4 +844,40 @@ describe("stripe", async () => {
 
 		expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
 	});
+
+	it("should create billing portal session", async () => {
+		await authClient.signUp.email(
+			{
+				...testUser,
+				email: "billing-portal@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "billing-portal@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+		const billingPortalRes = await authClient.subscription.billingPortal({
+			returnUrl: "/dashboard",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(billingPortalRes.data?.redirect).toBe(true);
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: expect.any(String),
+			return_url: "http://localhost:3000/dashboard",
+		});
+	});
 });
