@@ -24,7 +24,6 @@ import { DividerText } from "@/components/divider-text";
 import { APIMethod } from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-import Telemetry from "@/components/mdx/telemetry";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -126,7 +125,6 @@ export default async function Page({
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
 						),
-						Telemetry,
 					}}
 				/>
 
