@@ -18,6 +18,18 @@ export async function getPlanByPriceId(
 	);
 }
 
+export async function getPlanByLookupKey(
+	options: StripeOptions,
+	lookupKey: string,
+) {
+	return await getPlans(options).then((res) =>
+		res?.find(
+			(plan) =>
+				plan.lookupKey === lookupKey || plan.annualDiscountLookupKey === lookupKey,
+		),
+	);
+}
+
 export async function getPlanByName(options: StripeOptions, name: string) {
 	return await getPlans(options).then((res) =>
 		res?.find((plan) => plan.name.toLowerCase() === name.toLowerCase()),
