@@ -25,7 +25,7 @@ export interface OrganizationOptions {
 	 */
 	allowUserToCreateOrganization?:
 		| boolean
-		| ((user: User) => Promise<boolean> | boolean);
+		| ((user: User & Record<string, any>) => Promise<boolean> | boolean);
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
@@ -253,7 +253,6 @@ export interface OrganizationOptions {
 				[key in string]: FieldAttribute;
 			};
 		};
-
 		team?: {
 			modelName?: string;
 			fields?: {
@@ -263,7 +262,6 @@ export interface OrganizationOptions {
 				[key in string]: FieldAttribute;
 			};
 		};
-
 		teamMember?: {
 			modelName?: string;
 			fields?: {

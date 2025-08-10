@@ -1,5 +1,7 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
+import DotFilled from "svelte-radix/DotFilled.svelte";
 
 type $$Props = ContextMenuPrimitive.RadioItemProps;
 type $$Events = ContextMenuPrimitive.RadioItemEvents;
@@ -28,6 +30,6 @@ export { className as class };
 		<ContextMenuPrimitive.RadioIndicator>
 			<DotFilled class="h-4 w-4 fill-current" />
 		</ContextMenuPrimitive.RadioIndicator>
-	</span>
+	</span	>
 	<slot />
 </ContextMenuPrimitive.RadioItem>

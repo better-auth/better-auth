@@ -244,6 +244,7 @@ describe("getSessionCookie", async () => {
 
 	it("should return cookie cache", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
 			session: {
 				cookieCache: {
 					enabled: true,
@@ -270,7 +271,6 @@ describe("getSessionCookie", async () => {
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
 		});
-
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
 		expect(cache?.session?.token).toEqual(expect.any(String));

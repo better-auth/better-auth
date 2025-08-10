@@ -22,6 +22,7 @@ import {
 	addMember,
 	getActiveMember,
 	leaveOrganization,
+	listMembers,
 	removeMember,
 	updateMemberRole,
 } from "./routes/crud-members";
@@ -369,7 +370,36 @@ export const organization = <O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
 		 */
 		leaveOrganization: leaveOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-members`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listMembers`
+		 *
+		 * **client:**
+		 * `authClient.organization.listMembers`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-members)
+		 */
 		listUserInvitations: listUserInvitations(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-members`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listMembers`
+		 *
+		 * **client:**
+		 * `authClient.organization.listMembers`
+		 */
+		listMembers: listMembers(options as O),
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
@@ -567,6 +597,10 @@ export const organization = <O extends OrganizationOptions>(
 						teamId: {
 							type: "string",
 							required: true,
+							references: {
+								model: "team",
+								field: "id",
+							},
 							fieldName: options?.schema?.teamMember?.fields?.teamId,
 						},
 						userId: {

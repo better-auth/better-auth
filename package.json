@@ -17,10 +17,12 @@
         "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
         "bump": "bumpp",
         "test": "turbo --filter \"./packages/*\" test",
-        "typecheck": "turbo --filter \"./packages/*\" typecheck"
+        "typecheck": "turbo --filter \"./packages/*\" typecheck",
+        "changelog:check": "changeset status"
     },
     "dependencies": {
         "@biomejs/biome": "1.7.3",
+        "@changesets/cli": "^2.29.5",
         "@types/node": "^20.17.9",
         "bumpp": "^9.8.1",
         "cross-env": "^7.0.3",
@@ -29,7 +31,7 @@
         "taze": "^0.18.0",
         "tinyglobby": "^0.2.10",
         "turbo": "^2.3.3",
-        "typescript": "5.6.1-rc"
+        "typescript": "catalog:"
     },
     "pnpm": {
         "overrides": {
