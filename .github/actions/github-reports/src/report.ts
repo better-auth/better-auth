@@ -63,12 +63,12 @@ export async function postGitHubReport(
 if (import.meta.main) {
 	const input = reportInputForDev();
 
-	// popular issues sorted by reactions
+	// popular prs sorted by reactions
 	postGitHubReport(input, {
 		search: {
 			order: "desc",
 			per_page: 5,
-			q: `-is:draft is:pr is:open created:>=${ninetyDaysAgo()}`,
+			q: `is:pr is:open created:>=${ninetyDaysAgo()}`,
 			sort: "reactions",
 		},
 		renderTitle: (count) =>
@@ -81,11 +81,37 @@ if (import.meta.main) {
 		search: {
 			order: "desc",
 			per_page: 5,
-			q: `-is:draft is:issue is:open created:>=${ninetyDaysAgo()}`,
+			q: `is:issue is:open created:>=${ninetyDaysAgo()}`,
 			sort: "reactions",
 		},
 		renderTitle: (count) =>
 			`:trophy: *Top ${count} Issues by Reactions in the Last 90 Days*`,
 		renderField: (pr) => `*:star: Reactions:* ${pr.reactions?.total_count}`,
+	});
+
+	// popular prs sorted by comments
+	postGitHubReport(input, {
+		search: {
+			order: "desc",
+			per_page: 5,
+			q: `is:pr is:open created:>=${ninetyDaysAgo()}`,
+			sort: "comments",
+		},
+		renderTitle: (count) =>
+			`:speech_balloon: *Top ${count} PRs by Comments in the Last 90 Days*`,
+		renderField: (issue) => `*:speech_balloon: Comments:* ${issue.comments}`,
+	});
+
+	// popular issues sorted by comments
+	postGitHubReport(input, {
+		search: {
+			order: "desc",
+			per_page: 5,
+			q: `is:issue is:open created:>=${ninetyDaysAgo()}`,
+			sort: "comments",
+		},
+		renderTitle: (count) =>
+			`:speech_balloon: *Top ${count} Issues by Comments in the Last 90 Days*`,
+		renderField: (issue) => `*:speech_balloon: Comments:* ${issue.comments}`,
 	});
 }
