@@ -636,3 +636,16 @@ export const auth = betterAuth({
 	disabledPaths: ["/sign-up/email", "/sign-in/email"],
 })
 ```
+
+## `telemetry`
+
+Enable or disable Better Auth's telemetry collection. (default: `true`)
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+  telemetry: {
+    enabled: false,
+  }
+})
+```

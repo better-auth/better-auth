@@ -158,6 +158,12 @@ export interface OrganizationOptions {
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean;
 	/**
+	 * Require email verification on accepting or rejecting an invitation
+	 *
+	 * @default false
+	 */
+	requireEmailVerificationOnInvitation?: boolean;
+	/**
 	 * Send an email with the
 	 * invitation link to the user.
 	 *

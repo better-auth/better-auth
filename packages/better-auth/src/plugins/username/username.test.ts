@@ -99,7 +99,7 @@ describe("username", async (it) => {
 				headers: testUserHeaders,
 			},
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 	});
 
 	it("should succeed on duplicate username in update-user if user is the same", async () => {
@@ -119,6 +119,28 @@ describe("username", async (it) => {
 		expect(session?.user.username).toBe("new_username_2.1");
 	});
 
+	it("should preserve both username and displayUsername when updating both", async () => {
+		const updateRes = await client.updateUser({
+			username: "priority_user",
+			displayUsername: "Priority Display Name",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(updateRes.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(session?.user.username).toBe("priority_user");
+		expect(session?.user.displayUsername).toBe("Priority Display Name");
+	});
+
 	it("should fail on invalid username", async () => {
 		const res = await client.signUp.email({
 			email: "email-4@email.com",
@@ -126,7 +148,7 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
 	});
 
@@ -137,7 +159,7 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
 	});
 
@@ -148,12 +170,12 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 	});
 
 	it("should check if username is unavailable", async () => {
 		const res = await client.isUsernameAvailable({
-			username: "new_username_2.1",
+			username: "priority_user",
 		});
 		expect(res.data?.available).toEqual(false);
 	});
@@ -163,6 +185,57 @@ describe("username", async (it) => {
 			username: "new_username_2.2",
 		});
 		expect(res.data?.available).toEqual(true);
+	});
+
+	it("should not normalize displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "display-test@email.com",
+				displayUsername: "Test Username",
+				password: "test-password",
+				name: "test-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(session?.user.username).toBe("test username");
+		expect(session?.user.displayUsername).toBe("Test Username");
+	});
+
+	it("should preserve both username and displayUsername when both are provided", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "both-fields@email.com",
+				username: "custom_user",
+				displayUsername: "Fancy Display Name",
+				password: "test-password",
+				name: "test-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(session?.user.username).toBe("custom_user");
+		expect(session?.user.displayUsername).toBe("Fancy Display Name");
 	});
 });
 
@@ -201,6 +274,171 @@ describe("username custom normalization", async (it) => {
 			password: "new-password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should normalize displayUsername", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					displayUsernameNormalization: (displayUsername) =>
+						displayUsername.toLowerCase(),
+				}),
+			],
+		});
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "new-email-3@gmail.com",
+				password: "new-password",
+				name: "new-name",
+				username: "test_username",
+				displayUsername: "Test Username",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session?.user.username).toBe("test_username");
+		expect(session?.user.displayUsername).toBe("test username");
+	});
+});
+
+describe("username with displayUsername validation", async (it) => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsernameValidator: (displayUsername) =>
+						/^[a-zA-Z0-9_-]+$/.test(displayUsername),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should accept valid displayUsername", async () => {
+		const res = await client.signUp.email({
+			email: "display-valid@email.com",
+			displayUsername: "Valid_Display-123",
+			password: "test-password",
+			name: "test-name",
+		});
+		expect(res.error).toBeNull();
+	});
+
+	it("should reject invalid displayUsername", async () => {
+		const res = await client.signUp.email({
+			email: "display-invalid@email.com",
+			displayUsername: "Invalid Display!",
+			password: "test-password",
+			name: "test-name",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("DISPLAY_USERNAME_IS_INVALID");
+	});
+
+	it("should update displayUsername with valid value", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "update-display@email.com",
+				displayUsername: "Initial_Name",
+				password: "test-password",
+				name: "test-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const sessionBefore = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(sessionBefore?.user.displayUsername).toBe("Initial_Name");
+		expect(sessionBefore?.user.username).toBe("initial_name");
+
+		const res = await client.updateUser({
+			displayUsername: "Updated_Name-123",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+		const sessionAfter = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(sessionAfter?.user.displayUsername).toBe("Updated_Name-123");
+		expect(sessionAfter?.user.username).toBe("updated_name-123");
+	});
+
+	it("should reject invalid displayUsername on update", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "update-invalid@email.com",
+				displayUsername: "Valid_Name",
+				password: "test-password",
+				name: "test-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			displayUsername: "Invalid Display!",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("DISPLAY_USERNAME_IS_INVALID");
+	});
+});
+
+describe("post normalization flow", async (it) => {
+	it("should set displayUsername to username if only username is provided", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validationOrder: {
+						username: "post-normalization",
+						displayUsername: "post-normalization",
+					},
+					usernameNormalization: (username) => {
+						return username.split(" ").join("_").toLowerCase();
+					},
+				}),
+			],
+		});
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "test-username@email.com",
+				username: "Test Username",
+				password: "test-password",
+				name: "test-name",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session?.user.username).toBe("test_username");
+		expect(session?.user.displayUsername).toBe("Test Username");
 	});
 });

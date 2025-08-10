@@ -1,3 +1,10 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { Laptop, Loader2, Phone, ShieldCheck, ShieldOff } from "lucide-react";
+import { useState } from "react";
+import QRCode from "react-qr-code";
+import { toast } from "sonner";
+import { UAParser } from "ua-parser-js";
+import { Button } from "~/components/ui/button";
 import {
 	Card,
 	CardContent,
@@ -5,11 +12,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "~/components/ui/card";
-
-import { twoFactor, useSession } from "~/lib/auth-client";
-import { UAParser } from "ua-parser-js";
-import { Laptop, Loader2, Phone, ShieldCheck, ShieldOff } from "lucide-react";
-import { useState } from "react";
 import {
 	Dialog,
 	DialogContent,
@@ -19,12 +21,9 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "~/components/ui/dialog";
-import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
-import { toast } from "sonner";
-import QRCode from "react-qr-code";
-import { createFileRoute } from "@tanstack/react-router";
+import { Label } from "~/components/ui/label";
+import { twoFactor, useSession } from "~/lib/auth-client";
 
 export const Route = createFileRoute("/")({
 	component: Home,
