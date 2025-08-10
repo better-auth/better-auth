@@ -37,7 +37,7 @@ import { getRequestEvent } from "$app/server";
 
 export const auth = betterAuth({
   // ... your config
-  plugins: [sveltekitCookies(getRequestEvent)],
+  plugins: [sveltekitCookies(getRequestEvent)], // make sure this is the last plugin in the array
 });
 ```
 
