@@ -1012,10 +1012,10 @@ describe("otp email should only be sent once for each sign up", async () => {
 	}
 
 	it("when sendVerificationOnSignUp is enabled", async () => {
-		testFunction(true);
+		await testFunction(true);
 	});
 
 	it("when sendVerificationOnSignUp is disabled", async () => {
-		testFunction(false);
+		await testFunction(false);
 	});
 });
