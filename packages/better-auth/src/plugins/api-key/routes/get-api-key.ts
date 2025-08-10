@@ -191,7 +191,11 @@ export function getApiKey({
 				});
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context)?.catch((error) => {
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: `Failed to delete expired API keys: ${error.message}`,
+				});
+			});
 
 			// convert metadata string back to object
 			apiKey.metadata = schema.apikey.fields.metadata.transform.output(

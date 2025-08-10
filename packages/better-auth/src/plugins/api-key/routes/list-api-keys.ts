@@ -1,4 +1,4 @@
-import { createAuthEndpoint, sessionMiddleware } from "../../../api";
+import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
@@ -174,7 +174,11 @@ export function listApiKeys({
 				],
 			});
 
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context)?.catch((error) => {
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: `Failed to delete expired API keys: ${error.message}`,
+				});
+			});
 			apiKeys = apiKeys.map((apiKey) => {
 				return {
 					...apiKey,

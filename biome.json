@@ -25,7 +25,8 @@
 				"noUnusedImports": "warn"
 			},
 			"nursery": {
-				"noMisusedPromises": "error"
+				"noMisusedPromises": "error",
+				"noFloatingPromises": "error"
 			}
 		}
 	},

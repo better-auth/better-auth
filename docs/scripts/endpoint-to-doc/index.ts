@@ -485,7 +485,7 @@ function pathToDotNotation(input: string): string {
 		.join(".");
 }
 
-async function playSound(name: string = "Ping") {
+function playSound(name: string = "Ping") {
 	const path = `/System/Library/Sounds/${name}.aiff`;
-	await Bun.$`afplay ${path}`;
+	void Bun.$`afplay ${path}`;
 }

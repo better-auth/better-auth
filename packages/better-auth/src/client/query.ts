@@ -102,10 +102,12 @@ export const useAuthQuery = <T>(
 				return;
 			}
 			if (isMounted) {
+				// biome-ignore lint/nursery/noFloatingPromises: find a way to handle this in the future
 				fn();
 			} else {
 				onMount(value, () => {
 					setTimeout(() => {
+						// biome-ignore lint/nursery/noFloatingPromises: find a way to handle this in the future
 						fn();
 					}, 0);
 					isMounted = true;
