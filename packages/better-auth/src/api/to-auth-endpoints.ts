@@ -19,7 +19,7 @@ type InternalContext = InputContext<string, any> &
 	};
 const defuReplaceArrays = createDefu((obj, key, value) => {
 	if (Array.isArray(obj[key]) && Array.isArray(value)) {
-		obj[key] = value; // Replace instead of concat
+		obj[key] = value;
 		return true;
 	}
 });

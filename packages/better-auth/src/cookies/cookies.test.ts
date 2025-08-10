@@ -269,14 +269,10 @@ describe("getSessionCookie", async () => {
 
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
-			cookiePrefix: "better-auth", // Add these explicitly
-			cookieName: "session_data",
 		});
 
-		console.log("Session cache:", cache); // ✅ Useful for debugging
-
 		expect(cache).not.toBeNull();
-		expect(cache?.user?.email).toEqual(testUser.email); // ✅ Explicit match
+		expect(cache?.user?.email).toEqual(testUser.email);
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
