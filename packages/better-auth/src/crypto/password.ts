@@ -30,7 +30,10 @@ export const hashPassword = async (password: string) => {
 export const verifyPassword = async ({
 	hash,
 	password,
-}: { hash: string; password: string }) => {
+}: {
+	hash: string;
+	password: string;
+}) => {
 	const [salt, key] = hash.split(":");
 	const targetKey = await generateKey(password, salt!);
 	return constantTimeEqual(targetKey, hexToBytes(key));

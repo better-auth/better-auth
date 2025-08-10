@@ -173,7 +173,6 @@ export type BetterAuthOptions = {
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
-
 		/**
 		 * Number of seconds the verification token is
 		 * valid for.
@@ -1046,4 +1045,15 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+	/**
+	 * Telemetry configuration
+	 */
+	telemetry?: {
+		/**
+		 * Enable telemetry collection
+		 *
+		 * @default true
+		 */
+		enabled?: boolean;
+	};
 };
