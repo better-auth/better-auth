@@ -281,7 +281,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 	// We shouldn't override the `sendVerificationEmail` function if they have enabled
 	// `sendVerificationOnSignUp` so that we don't send the verification email twice.
 	const shouldOverrideVerificationEmail =
-		opts.overrideDefaultEmailVerification && !opts.sendVerificationOnSignUp;
+		opts.overrideDefaultEmailVerification || opts.sendVerificationOnSignUp;
 
 	return {
 		id: "email-otp",
@@ -289,6 +289,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			return {
 				options: {
 					emailVerification: {
+						sendOnSignUp:
+							opts.sendVerificationOnSignUp ??
+							ctx.options.emailVerification?.sendOnSignUp,
 						...(shouldOverrideVerificationEmail
 							? {
 									async sendVerificationEmail(data, request) {
@@ -1031,47 +1034,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
-		},
-		hooks: {
-			after: [
-				{
-					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-up") &&
-							opts.sendVerificationOnSignUp
-						);
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const response = await getEndpointResponse<{
-							user: { email: string };
-						}>(ctx);
-						const email = response?.user.email;
-						if (email) {
-							const otp = opts.generateOTP(
-								{ email, type: ctx.body.type },
-								ctx.request,
-							);
-							let storedOTP = await storeOTP(ctx, otp);
-							await ctx.context.internalAdapter.createVerificationValue(
-								{
-									value: `${storedOTP}:0`,
-									identifier: `email-verification-otp-${email}`,
-									expiresAt: getDate(opts.expiresIn, "sec"),
-								},
-								ctx,
-							);
-							await options.sendVerificationOTP(
-								{
-									email,
-									otp,
-									type: "email-verification",
-								},
-								ctx.request,
-							);
-						}
-					}),
-				},
-			],
 		},
 		$ERROR_CODES: ERROR_CODES,
 		rateLimit: [
