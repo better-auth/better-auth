@@ -112,16 +112,6 @@ const data = await authClient.updateUser({
 })
 ```
 
-You can also update the display username:
-
-```ts title="auth-client.ts"
-const data = await authClient.updateUser({
-    displayUsername: "New_Display_Name" // username will be updated to "new_display_name"
-})
-```
-
-The same behavior rules apply for updates as described in the sign-up section above.
-
 ### Check if username is available
 
 To check if a username is available, you can use the `isUsernameAvailable` function provided by the client.
@@ -138,31 +128,9 @@ if(response.data?.available) {
 }
 ```
 
-
-## Schema
-
-The plugin requires 2 fields to be added to the user table:
-
-<DatabaseTable
-    fields={[
-        { 
-            name: "username", 
-            type: "string", 
-            description: "The username of the user",
-            isUnique: true
-        },
-        { 
-            name: "displayUsername", 
-            type: "string", 
-            description: "Non normalized username of the user",
-            isUnique: true
-        },
-    ]}
-/>
-
 ## Options
 
-**Min Username Length**
+### Min Username Length
 
 The minimum length of the username. Default is `3`.
 
@@ -179,7 +147,7 @@ const auth = betterAuth({
 })
 ```
 
-**Max Username Length**
+### Max Username Length
 
 The maximum length of the username. Default is `30`.
 
@@ -196,7 +164,7 @@ const auth = betterAuth({
 })
 ```
 
-**Username Validator**
+### Username Validator
 
 A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters, underscores, and dots.
 
@@ -218,7 +186,7 @@ const auth = betterAuth({
 })
 ```
 
-**Display Username Validator**
+### Display Username Validator
 
 A function that validates the display username. The function should return false if the display username is invalid. By default, no validation is applied to display username.
 
@@ -281,34 +249,6 @@ const auth = betterAuth({
 })
 ```
 
-
-### Complete Example
-
-Here's an example that combines different validation options:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { username } from "better-auth/plugins"
-
-const auth = betterAuth({
-    plugins: [
-        username({
-            minUsernameLength: 3,
-            maxUsernameLength: 20,
-            // username: only lowercase letters, numbers, underscores, hyphens
-            usernameValidator: (username) => /^[a-z0-9_-]+$/.test(username),
-            usernameNormalization: (username) => username.toLowerCase(),
-            // displayUsername: allow uppercase letters too
-            displayUsernameValidator: (displayUsername) => /^[a-zA-Z0-9_-]+$/.test(displayUsername)
-        })
-    ]
-})
-```
-
-This configuration ensures that:
-- `username` is stored in lowercase and contains only `a-z`, `0-9`, `_`, `-`
-- `displayUsername` preserves the original case and allows `A-Z`, `a-z`, `0-9`, `_`, `-`
-
 ### Validation Order
 
 By default, username and display username are validated before normalization. You can change this behavior by setting `validationOrder` to `post-normalization`.
@@ -328,3 +268,24 @@ const auth = betterAuth({
     ]
 })
 ```
+
+## Schema
+
+The plugin requires 2 fields to be added to the user table:
+
+<DatabaseTable
+    fields={[
+        { 
+            name: "username", 
+            type: "string", 
+            description: "The username of the user",
+            isUnique: true
+        },
+        { 
+            name: "displayUsername", 
+            type: "string", 
+            description: "Non normalized username of the user",
+            isUnique: true
+        },
+    ]}
+/>
