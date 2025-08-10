@@ -263,7 +263,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						})
-					: null;
+					: ctx.body.referenceId
+						? await ctx.context.adapter.findOne<Subscription>({
+								model: "subscription",
+								where: [
+									{
+										field: "referenceId",
+										value: ctx.body.referenceId,
+									},
+								],
+							})
+						: null;
 
 				if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 					throw new APIError("BAD_REQUEST", {
