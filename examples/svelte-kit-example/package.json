@@ -42,7 +42,7 @@
 		"sveltekit-superforms": "^2.21.1",
 		"tailwind-merge": "^2.5.5",
 		"tailwind-variants": "^0.2.1",
-		"vaul-svelte": "^0.3.2",
-		"zod": "^3.23.8"
+        "vaul-svelte": "^0.3.2",
+        "zod": "^4.0.0"
 	}
 }

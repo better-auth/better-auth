@@ -3,7 +3,7 @@ import {
 	defineConfig,
 	defineCollections,
 } from "fumadocs-mdx/config";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { remarkInstall } from "fumadocs-docgen";
 
 export const docs = defineDocs({
