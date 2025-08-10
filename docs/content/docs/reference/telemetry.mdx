@@ -25,24 +25,6 @@ We also collect anonymous telemetry from the CLI:
 - **CLI generate (`cli_generate`)**: outcome `generated | overwritten | appended | no_changes | aborted` plus redacted config.
 - **CLI migrate (`cli_migrate`)**: outcome `migrated | no_changes | aborted | unsupported_adapter` plus adapter id (when relevant) and redacted config.
 
-Example payload shape (values vary):
-
-```ts
-{
-  type: "init" | "cli_generate" | "cli_migrate",
-  anonymousId: "<anonymous-hash>",
-  payload: {
-    runtime: { name: "node", version: "20.x" },
-    environment: "development",
-    framework: { name: "next", version: "14.x" },
-    database: { name: "postgresql", version: "8.x" },
-    systemInfo: { platform: "darwin", cpuCount: 8, /* … */ },
-    packageManager: { name: "pnpm", version: "9.x" },
-    config: getTelemetryAuthConfig(/* your options */)
-  }
-}
-```
-
 You can audit telemetry locally by setting the `BETTER_AUTH_TELEMETRY_DEBUG=1` environment variable when running your project. In this debug mode, telemetry events are logged only to the console.
 
 ## How is my data protected?
