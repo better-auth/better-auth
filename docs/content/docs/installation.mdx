@@ -259,13 +259,6 @@ Create a new file or route in your framework's designated catch-all route handle
     import { building } from '$app/environment'
 
     export async function handle({ event, resolve }) {
-        // Optional: populate event.locals for server access
-        const session = await auth.api.getSession({ headers: event.request.headers });
-        if (session) {
-          event.locals.session = session.session;
-          event.locals.user = session.user;
-        }
-
         return svelteKitHandler({ event, resolve, auth, building });
     }
     ```
