@@ -6,9 +6,10 @@ import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { getSchema, type UsernameSchema } from "./schema";
+import { usernameSchema, type UsernameSchema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+
 export * from "./error-codes";
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema>;
@@ -288,7 +289,7 @@ export const username = (options?: UsernameOptions) => {
 				},
 			),
 		},
-		schema: mergeSchema(getSchema(normalizer), options?.schema),
+		schema: mergeSchema(usernameSchema, options?.schema),
 		hooks: {
 			before: [
 				{
