@@ -72,7 +72,7 @@ const data = await authClient.signUp.email({
 })
 ```
 
-You can also provide a `displayUsername` instead of or alongside `username`:
+You can also provide a `displayUsername`
 
 ```ts title="auth-client.ts"
 const data = await authClient.signUp.email({
@@ -80,12 +80,12 @@ const data = await authClient.signUp.email({
     name: "Test User",
     password: "password1234",
     username: "test",
-    displayUsername: "Test_User123" 
+    displayUsername: "Test User123" 
 })
 ```
 
 <Callout type="info">
-    If both `username` and `displayUsername` are provided, the `username` will be normalized and the `displayUsername` will be preserved as-is. If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
+    If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
 </Callout>
 
 ### Sign in
@@ -210,7 +210,7 @@ const auth = betterAuth({
 
 A function that normalizes the username, or `false` if you want to disable normalization.
 
-By default, usernames are case-insensitive, so "TestUser" and "testuser", for example, are considered the same username. The `username` field will contain the normalized (lower case) username, while `displayUsername` will contain the original `username`.
+By default, usernames are normalized to lowercase, so "TestUser" and "testuser", for example, are considered the same username. The `username` field will contain the normalized (lower case) username, while `displayUsername` will contain the original `username`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
