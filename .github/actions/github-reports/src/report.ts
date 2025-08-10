@@ -49,7 +49,7 @@ export async function postGitHubReport(
 		await input.slackClient.chat.postMessage({
 			blocks,
 			text: config.renderTitle(data.items.length),
-			channel: "#open-source",
+			channel: "#github-reports",
 			icon_emoji: ":github:",
 			username: "GitHub Reports",
 		});
@@ -58,60 +58,4 @@ export async function postGitHubReport(
 	} catch (error: any) {
 		setFailed(error);
 	}
-}
-
-if (import.meta.main) {
-	const input = reportInputForDev();
-
-	// popular prs sorted by reactions
-	postGitHubReport(input, {
-		search: {
-			order: "desc",
-			per_page: 5,
-			q: `is:pr is:open created:>=${ninetyDaysAgo()}`,
-			sort: "reactions",
-		},
-		renderTitle: (count) =>
-			`:trophy: *Top ${count} PRs by Reactions in the Last 90 Days*`,
-		renderField: (pr) => `*:star: Reactions:* ${pr.reactions?.total_count}`,
-	});
-
-	// popular issues sorted by reactions
-	postGitHubReport(input, {
-		search: {
-			order: "desc",
-			per_page: 5,
-			q: `is:issue is:open created:>=${ninetyDaysAgo()}`,
-			sort: "reactions",
-		},
-		renderTitle: (count) =>
-			`:trophy: *Top ${count} Issues by Reactions in the Last 90 Days*`,
-		renderField: (pr) => `*:star: Reactions:* ${pr.reactions?.total_count}`,
-	});
-
-	// popular prs sorted by comments
-	postGitHubReport(input, {
-		search: {
-			order: "desc",
-			per_page: 5,
-			q: `is:pr is:open created:>=${ninetyDaysAgo()}`,
-			sort: "comments",
-		},
-		renderTitle: (count) =>
-			`:speech_balloon: *Top ${count} PRs by Comments in the Last 90 Days*`,
-		renderField: (issue) => `*:speech_balloon: Comments:* ${issue.comments}`,
-	});
-
-	// popular issues sorted by comments
-	postGitHubReport(input, {
-		search: {
-			order: "desc",
-			per_page: 5,
-			q: `is:issue is:open created:>=${ninetyDaysAgo()}`,
-			sort: "comments",
-		},
-		renderTitle: (count) =>
-			`:speech_balloon: *Top ${count} Issues by Comments in the Last 90 Days*`,
-		renderField: (issue) => `*:speech_balloon: Comments:* ${issue.comments}`,
-	});
 }

@@ -1,6 +1,6 @@
 import { setFailed } from "@actions/core";
 import { WebClient } from "@slack/web-api";
-import { context, getOctokit } from "@actions/github";
+import { getOctokit } from "@actions/github";
 
 import type { ReportInput } from "./types.ts";
 
@@ -15,12 +15,12 @@ async function run() {
 		const input: ReportInput = {
 			octoClient: getOctokit(process.env.GITHUB_TOKEN),
 			slackClient: new WebClient(process.env.SLACK_TOKEN),
-			owner: context.repo.owner,
-			repo: context.repo.repo,
+			owner: "better-auth",
+			repo: "better-auth",
 		};
 
 		// popular prs sorted by reactions
-		postGitHubReport(input, {
+		await postGitHubReport(input, {
 			search: {
 				order: "desc",
 				per_page: 5,
@@ -33,7 +33,7 @@ async function run() {
 		});
 
 		// popular issues sorted by reactions
-		postGitHubReport(input, {
+		await postGitHubReport(input, {
 			search: {
 				order: "desc",
 				per_page: 5,
@@ -46,7 +46,7 @@ async function run() {
 		});
 
 		// popular prs sorted by comments
-		postGitHubReport(input, {
+		await postGitHubReport(input, {
 			search: {
 				order: "desc",
 				per_page: 5,
@@ -59,7 +59,7 @@ async function run() {
 		});
 
 		// popular issues sorted by comments
-		postGitHubReport(input, {
+		await postGitHubReport(input, {
 			search: {
 				order: "desc",
 				per_page: 5,
