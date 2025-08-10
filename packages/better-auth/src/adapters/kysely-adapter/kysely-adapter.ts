@@ -42,7 +42,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			disableIdGeneration: false,
 			supportsNumericIds: true,
 			supportsNumbers: true,
-			supportsArrays: config?.type === "postgres",
+			supportsArrays: false,
 		},
 		adapter: ({ getFieldName, schema }) => {
 			const withReturning = async (
