@@ -117,6 +117,39 @@ describe("before hook", async () => {
 				key: "value",
 			});
 		});
+		it("should replace existing array when hook provides another array", async () => {
+			const endpoints3 = {
+				body: createAuthEndpoint(
+					"/body-array-replace",
+					{ method: "POST" },
+					async (c) => c.body as any,
+				),
+			};
+
+			const authContext3 = init({
+				hooks: {
+					before: createAuthMiddleware(async (c) => {
+						if (c.path === "/body-array-replace") {
+							return {
+								context: {
+									body: {
+										tags: ["a"],
+									},
+								},
+							};
+						}
+					}),
+				},
+			});
+
+			const api3 = toAuthEndpoints(endpoints3 as any, authContext3);
+			const res3 = await api3.body({
+				body: {
+					tags: ["b", "c"],
+				},
+			});
+			expect(res3.tags).toEqual(["a"]);
+		});
 
 		it("should return hook set param", async () => {
 			const res = await authEndpoints.params();
