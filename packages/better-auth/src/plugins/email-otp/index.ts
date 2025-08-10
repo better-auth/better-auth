@@ -95,6 +95,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		storeOTP: "plain",
 		...options,
 	} satisfies EmailOTPOptions;
+
 	const ERROR_CODES = {
 		OTP_EXPIRED: "otp expired",
 		INVALID_OTP: "Invalid OTP",
@@ -277,13 +278,18 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		),
 	};
 
+	// We shouldn't override the `sendVerificationEmail` function if they have enabled
+	// `sendVerificationOnSignUp` so that we don't send the verification email twice.
+	const shouldOverrideVerificationEmail =
+		opts.overrideDefaultEmailVerification && !opts.sendVerificationOnSignUp;
+
 	return {
 		id: "email-otp",
 		init(ctx) {
 			return {
 				options: {
 					emailVerification: {
-						...(opts.overrideDefaultEmailVerification
+						...(shouldOverrideVerificationEmail
 							? {
 									async sendVerificationEmail(data, request) {
 										await endpoints.sendVerificationOTP({
