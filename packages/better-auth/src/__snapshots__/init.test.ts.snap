@@ -17,7 +17,7 @@ exports[`init > should match config 1`] = `
         "adapterName": "Kysely Adapter",
         "debugLogs": false,
         "disableIdGeneration": false,
-        "supportsArrays": true,
+        "supportsArrays": false,
         "supportsBooleans": false,
         "supportsDates": false,
         "supportsJSON": false,
