@@ -84,7 +84,6 @@ const init = (config?: Partial<AdapterConfig>, options?: BetterAuthOptions) => {
 	};
 };
 
-
 const testDate = new Date();
 const testDateString = testDate.toISOString();
 
