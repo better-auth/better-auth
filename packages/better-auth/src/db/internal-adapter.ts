@@ -628,7 +628,9 @@ export const createInternalAdapter = (
 					for (const session of sessions) {
 						await secondaryStorage.delete(session.token);
 					}
-					await secondaryStorage.delete(`active-sessions-${userIdOrSessionTokens}`);
+					await secondaryStorage.delete(
+						`active-sessions-${userIdOrSessionTokens}`,
+					);
 				} else {
 					for (const sessionToken of userIdOrSessionTokens) {
 						const session = await secondaryStorage.get(sessionToken);
@@ -643,7 +645,9 @@ export const createInternalAdapter = (
 							session: Session;
 							user: User;
 						};
-						await secondaryStorage.delete(`active-sessions-${parsedSession.user.id}`);
+						await secondaryStorage.delete(
+							`active-sessions-${parsedSession.user.id}`,
+						);
 					}
 				}
 
