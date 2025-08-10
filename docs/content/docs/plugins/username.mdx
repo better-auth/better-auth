@@ -72,6 +72,61 @@ const data = await authClient.signUp.email({
 })
 ```
 
+You can also provide a `displayUsername` instead of or alongside `username`:
+
+```ts title="auth-client.ts"
+const data = await authClient.signUp.email({
+    email: "email@domain.com",
+    name: "Test User",
+    password: "password1234",
+    displayUsername: "Test_User123" // Will generate username: "test_user123"
+})
+```
+
+#### Username and Display Username Behavior
+
+The plugin handles different combinations of `username` and `displayUsername` as follows:
+
+**1. Only `username` provided:**
+```ts
+// Input
+{ username: "john_doe" }
+
+// Result
+{
+  username: "john_doe",        // normalized
+  displayUsername: "john_doe"  // same as username
+}
+```
+
+**2. Only `displayUsername` provided:**
+```ts
+// Input
+{ displayUsername: "John_Doe" }
+
+// Result
+{
+  username: "john_doe",        // normalized from displayUsername
+  displayUsername: "John_Doe"  // preserved as-is
+}
+```
+
+**3. Both `username` and `displayUsername` provided:**
+```ts
+// Input
+{ username: "custom_user", displayUsername: "Custom User Display" }
+
+// Result
+{
+  username: "custom_user",           // normalized
+  displayUsername: "Custom User Display"  // preserved as-is
+}
+```
+
+<Callout type="info">
+The `username` field is always normalized (lowercase by default) and used for authentication, while `displayUsername` preserves the original formatting for display purposes.
+</Callout>
+
 ### Sign in
 
 To sign in a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
@@ -95,6 +150,16 @@ const data = await authClient.updateUser({
     username: "new-username"
 })
 ```
+
+You can also update the display username:
+
+```ts title="auth-client.ts"
+const data = await authClient.updateUser({
+    displayUsername: "New_Display_Name" // username will be updated to "new_display_name"
+})
+```
+
+The same behavior rules apply for updates as described in the sign-up section above.
 
 ### Check if username is available
 
@@ -192,6 +257,26 @@ const auth = betterAuth({
 })
 ```
 
+**Display Username Validator**
+
+A function that validates the display username. The function should return false if the display username is invalid. By default, no validation is applied to display username.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            displayUsernameValidator: (displayUsername) => {
+                // Allow only alphanumeric characters, underscores, and hyphens
+                return /^[a-zA-Z0-9_-]+$/.test(displayUsername)
+            }
+        })
+    ]
+})
+```
+
 ### Username Normalization
 
 A function that normalizes the username, or `false` if you want to disable normalization.
@@ -215,3 +300,30 @@ const auth = betterAuth({
     ]
 })
 ```
+
+### Complete Example
+
+Here's an example that combines different validation options:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            minUsernameLength: 3,
+            maxUsernameLength: 20,
+            // username: only lowercase letters, numbers, underscores, hyphens
+            usernameValidator: (username) => /^[a-z0-9_-]+$/.test(username),
+            usernameNormalization: (username) => username.toLowerCase(),
+            // displayUsername: allow uppercase letters too
+            displayUsernameValidator: (displayUsername) => /^[a-zA-Z0-9_-]+$/.test(displayUsername)
+        })
+    ]
+})
+```
+
+This configuration ensures that:
+- `username` is stored in lowercase and contains only `a-z`, `0-9`, `_`, `-`
+- `displayUsername` preserves the original case and allows `A-Z`, `a-z`, `0-9`, `_`, `-`

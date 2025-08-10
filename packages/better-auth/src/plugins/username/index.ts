@@ -31,6 +31,14 @@ export type UsernameOptions = {
 	 */
 	usernameValidator?: (username: string) => boolean | Promise<boolean>;
 	/**
+	 * A function to validate the display username
+	 *
+	 * By default, no validation is applied to display username
+	 */
+	displayUsernameValidator?: (
+		displayUsername: string,
+	) => boolean | Promise<boolean>;
+	/**
 	 * A function to normalize the username
 	 *
 	 * @default (username) => username.toLowerCase()
@@ -288,7 +296,7 @@ export const username = (options?: UsernameOptions) => {
 				},
 			),
 		},
-		schema: mergeSchema(getSchema(normalizer), options?.schema),
+		schema: mergeSchema(getSchema(), options?.schema),
 		hooks: {
 			before: [
 				{
@@ -346,6 +354,22 @@ export const username = (options?: UsernameOptions) => {
 								});
 							}
 						}
+
+						const displayUsername = ctx.body.displayUsername;
+						if (
+							displayUsername !== undefined &&
+							typeof displayUsername === "string"
+						) {
+							if (options?.displayUsernameValidator) {
+								const valid =
+									await options.displayUsernameValidator(displayUsername);
+								if (!valid) {
+									throw new APIError("UNPROCESSABLE_ENTITY", {
+										message: ERROR_CODES.INVALID_DISPLAY_USERNAME,
+									});
+								}
+							}
+						}
 					}),
 				},
 				{
@@ -356,6 +380,9 @@ export const username = (options?: UsernameOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (ctx.body.displayUsername) {
+							ctx.body.username ||= normalizer(ctx.body.displayUsername);
+						}
 						if (ctx.body.username) {
 							ctx.body.displayUsername ||= ctx.body.username;
 							ctx.body.username = normalizer(ctx.body.username);
