@@ -309,9 +309,9 @@ This configuration ensures that:
 - `username` is stored in lowercase and contains only `a-z`, `0-9`, `_`, `-`
 - `displayUsername` preserves the original case and allows `A-Z`, `a-z`, `0-9`, `_`, `-`
 
-### Post Normalization
+### Validation Order
 
-By default, the username is normalized after validation. You can disable this behavior by setting `validatePostNormalization` to `true`.
+By default, username and display username are validated before normalization. You can change this behavior by setting `validationOrder` to `post-normalization`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -320,7 +320,10 @@ import { username } from "better-auth/plugins"
 const auth = betterAuth({
     plugins: [
         username({
-            validatePostNormalization: true
+            validationOrder: {
+                username: "post-normalization",
+                displayUsername: "post-normalization",
+            }
         })
     ]
 })

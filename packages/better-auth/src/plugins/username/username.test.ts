@@ -415,7 +415,10 @@ describe("post normalization flow", async (it) => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				username({
-					validatePostNormalization: true,
+					validationOrder: {
+						username: "post-normalization",
+						displayUsername: "post-normalization",
+					},
 					usernameNormalization: (username) => {
 						return username.split(" ").join("_").toLowerCase();
 					},

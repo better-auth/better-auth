@@ -51,11 +51,24 @@ export type UsernameOptions = {
 	 */
 	displayUsernameNormalization?: ((displayUsername: string) => string) | false;
 	/**
-	 * Whether to validate the username after normalization
+	 * The order of validation
 	 *
-	 * @default true
+	 * @default { username: "pre-normalization", displayUsername: "pre-normalization" }
 	 */
-	validatePostNormalization?: boolean;
+	validationOrder?: {
+		/**
+		 * The order of username validation
+		 *
+		 * @default "pre-normalization"
+		 */
+		username?: "pre-normalization" | "post-normalization";
+		/**
+		 * The order of display username validation
+		 *
+		 * @default "pre-normalization"
+		 */
+		displayUsername?: "pre-normalization" | "post-normalization";
+	};
 };
 
 function defaultUsernameValidator(username: string) {
@@ -200,9 +213,10 @@ export const username = (options?: UsernameOptions) => {
 						});
 					}
 
-					const username = options?.validatePostNormalization
-						? normalizer(ctx.body.username)
-						: ctx.body.username;
+					const username =
+						options?.validationOrder?.username === "pre-normalization"
+							? normalizer(ctx.body.username)
+							: ctx.body.username;
 
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
@@ -393,7 +407,7 @@ export const username = (options?: UsernameOptions) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const username =
 							typeof ctx.body.username === "string" &&
-							options?.validatePostNormalization
+							options?.validationOrder?.username === "post-normalization"
 								? normalizer(ctx.body.username)
 								: ctx.body.username;
 
@@ -444,7 +458,12 @@ export const username = (options?: UsernameOptions) => {
 							}
 						}
 
-						const displayUsername = ctx.body.displayUsername;
+						const displayUsername =
+							typeof ctx.body.displayUsername === "string" &&
+							options?.validationOrder?.displayUsername === "post-normalization"
+								? displayUsernameNormalizer(ctx.body.displayUsername)
+								: ctx.body.displayUsername;
+
 						if (
 							displayUsername !== undefined &&
 							typeof displayUsername === "string"
