@@ -21,6 +21,7 @@ export async function postGitHubReport(
 		const { data } = await input.octoClient.rest.search.issuesAndPullRequests({
 			...config.search,
 			q,
+			advanced_search: true,
 		});
 
 		if (data.items.length === 0) {
