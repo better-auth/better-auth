@@ -51,18 +51,7 @@ All collected data is fully anonymous and only useful in aggregate. It cannot be
 
 - **No PII or secrets**: We do not collect emails, usernames, tokens, secrets, client IDs, client secrets, or database URLs.
 - **No full config**: We never send your full `betterAuth` configuration. Instead we send a reduced, redacted snapshot of non‑sensitive toggles and counts.
-- **Redaction by design**: See `getTelemetryAuthConfig` in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
-
-Specifically, `getTelemetryAuthConfig` includes non‑sensitive aspects such as:
-
-- **Feature toggles**: e.g., whether email/password is enabled, whether verification emails are sent, rate limit enabled.
-- **Numeric settings**: e.g., expiration durations, update windows, limits.
-- **Provider metadata**: provider ids and non‑secret options like `scope`, `prompt`, `disableImplicitSignUp` (never client IDs or secrets).
-- **Model/config structure hints**: model names and fields lists; cookie and session strategy flags; logger level; adapter/database kind. Values like cookie domains are only reported as booleans indicating presence, not actual domain strings.
-
-Review the implementation here in the package source:
-
-- `packages/better-auth/src/telemetry/detectors/detect-auth-config.ts` (function `getTelemetryAuthConfig`)
+- **Redaction by design**: See [detect-auth-config.ts](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/telemetry/detectors/detect-auth-config.ts) in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
 
 ## How can I disable it?
 
