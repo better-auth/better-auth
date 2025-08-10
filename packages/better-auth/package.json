@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.3.5-beta.5",
+  "version": "1.3.5-beta.6",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -733,6 +733,7 @@
     "solid-js": "^1.9.3",
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
+    "type-fest": "^4.41.0",
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vue": "^3.5.13",
