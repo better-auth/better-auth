@@ -4,7 +4,6 @@ import { context, getOctokit } from "@actions/github";
 import { WebClient } from "@slack/web-api";
 
 import type { ReportInput } from "./types.ts";
-import { popularPrs } from "./reports/popular-prs.ts";
 
 async function run() {
 	try {
