@@ -71,9 +71,9 @@ if (import.meta.main) {
 			q: `-is:draft is:pr is:open created:>=${ninetyDaysAgo()}`,
 			sort: "reactions",
 		},
-		renderField: (pr) => `*:star: Reactions:* ${pr.reactions?.total_count}`,
 		renderTitle: (count) =>
 			`:trophy: *Top ${count} PRs by Reactions in the Last 90 Days*`,
+		renderField: (pr) => `*:star: Reactions:* ${pr.reactions?.total_count}`,
 	});
 
 	// popular issues sorted by reactions
@@ -84,8 +84,8 @@ if (import.meta.main) {
 			q: `-is:draft is:issue is:open created:>=${ninetyDaysAgo()}`,
 			sort: "reactions",
 		},
-		renderField: (issue) => `*:speech_balloon: Comments:* ${issue.comments}`,
 		renderTitle: (count) =>
 			`:trophy: *Top ${count} Issues by Reactions in the Last 90 Days*`,
+		renderField: (pr) => `*:star: Reactions:* ${pr.reactions?.total_count}`,
 	});
 }
