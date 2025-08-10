@@ -232,6 +232,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
+				console.log({ fieldName, field });
 				const exec = db.schema
 					.alterTable(table.table)
 					.addColumn(fieldName, type, (col) => {
@@ -246,15 +247,14 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (field.unique) {
 							col = col.unique();
 						}
-						if (field.type === "date") {
-							if (
-								typeof field.defaultValue !== "undefined" &&
-								(dbType === "postgres" ||
-									dbType === "mysql" ||
-									dbType === "mssql")
-							) {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-							}
+						if (
+							field.type === "date" &&
+							typeof field.defaultValue === "function" &&
+							(dbType === "postgres" ||
+								dbType === "mysql" ||
+								dbType === "mssql")
+						) {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
 						return col;
 					});
@@ -299,15 +299,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 					if (field.unique) {
 						col = col.unique();
 					}
-					if (field.type === "date") {
-						if (
-							typeof field.defaultValue !== "undefined" &&
-							(dbType === "postgres" ||
-								dbType === "mysql" ||
-								dbType === "mssql")
-						) {
-							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-						}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 					}
 					return col;
 				});
