@@ -7,12 +7,8 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 		sendEmailVerificationOnSignUp: true,
-		async sendVerificationEmail() {
-			console.log("Send email to verify email address");
-		},
-		async sendResetPassword(url, user) {
-			console.log("Send email to reset password");
-		},
+		async sendVerificationEmail() {},
+		async sendResetPassword(url, user) {},
 	},
 	socialProviders: {
 		google: {

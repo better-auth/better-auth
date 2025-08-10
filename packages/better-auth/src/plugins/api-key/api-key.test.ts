@@ -1842,7 +1842,6 @@ describe("api-key", async () => {
 		);
 
 		if (!apiKey.data?.success) {
-			console.log(apiKey.error);
 		}
 
 		expect(apiKey).not.toBeNull();

@@ -52,7 +52,6 @@ describe("oauth2", async () => {
 		server.issuer.on;
 		// Start the server
 		await server.start(8081, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8081
 	});
 
 	afterAll(async () => {

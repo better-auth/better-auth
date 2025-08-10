@@ -44,12 +44,43 @@ Default: `/api/auth`
 
 ## `trustedOrigins`
 
-List of trusted origins.
+List of trusted origins. You can provide a static array of origins, a function that returns origins dynamically, or use wildcard patterns to match multiple domains.
+
+### Static Origins
+
+You can provide a static array of origins:
 
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	trustedOrigins: ["http://localhost:3000", "https://example.com"],
+})
+```
+
+### Dynamic Origins
+
+You can provide a function that returns origins dynamically:
+
+```ts
+export const auth = betterAuth({
+	trustedOrigins: async (request: Request) => {
+		// Return an array of trusted origins based on the request
+		return ["https://dynamic-origin.com"];
+	}
+})
+```
+
+### Wildcard Support
+
+You can use wildcard patterns in trusted origins:
+
+```ts
+export const auth = betterAuth({
+	trustedOrigins: [
+		"*.example.com",             // Trust all subdomains of example.com
+		"https://*.example.com",     // Trust only HTTPS subdomains
+		"http://*.dev.example.com"   // Trust HTTP subdomains of dev.example.com
+	]
 })
 ```
 

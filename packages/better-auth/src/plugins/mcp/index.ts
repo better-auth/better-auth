@@ -163,7 +163,6 @@ export const mcp = (options: MCPOptions) => {
 						const metadata = getMCPProviderMetadata(c, options);
 						return c.json(metadata);
 					} catch (e) {
-						console.log(e);
 						return c.json(null);
 					}
 				},

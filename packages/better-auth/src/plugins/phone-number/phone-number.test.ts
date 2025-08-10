@@ -302,7 +302,6 @@ describe("reset password flow attempts", async (it) => {
 		plugins: [
 			phoneNumber({
 				async sendOTP({ code }) {
-					console.log("sendOTP", code);
 					otp = code;
 				},
 				sendPasswordResetOTP(data, request) {
