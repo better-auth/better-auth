@@ -9,9 +9,39 @@ Telemetry data helps us understand how Better Auth is being used across differen
 
 ## What is being collected?
 
-The following are all the usage data points that get reported in Better Auth's telemetry event.
+The following data points may be reported. Everything is anonymous and intended for aggregate insights only.
 
-<Telemetry />
+- **Anonymous identifier**: A non-reversible hash derived from your project (first Git commit hash or `package.json` name and optionally `baseURL`). This lets us de‑duplicate events per project without knowing who you are.
+- **Runtime**: `{ name: "node" | "bun" | "deno", version }`.
+- **Environment**: one of `development`, `production`, `test`, or `ci`.
+- **Framework (if detected)**: `{ name, version }` for frameworks like Next.js, Nuxt, Remix, Astro, SvelteKit, etc.
+- **Database (if detected)**: `{ name, version }` for integrations like PostgreSQL, MySQL, SQLite, Prisma, Drizzle, MongoDB, etc.
+- **System info**: platform, OS release, architecture, CPU count/model/speed, total memory, and flags like `isDocker`, `isWSL`, `isTTY`.
+- **Package manager**: `{ name, version }` derived from the npm user agent.
+- **Redacted auth config snapshot**: A minimized, privacy‑preserving view of your `betterAuth` options produced by `getTelemetryAuthConfig`.
+
+We also collect anonymous telemetry from the CLI:
+
+- **CLI generate (`cli_generate`)**: outcome `generated | overwritten | appended | no_changes | aborted` plus redacted config.
+- **CLI migrate (`cli_migrate`)**: outcome `migrated | no_changes | aborted | unsupported_adapter` plus adapter id (when relevant) and redacted config.
+
+Example payload shape (values vary):
+
+```ts
+{
+  type: "init" | "cli_generate" | "cli_migrate",
+  anonymousId: "<anonymous-hash>",
+  payload: {
+    runtime: { name: "node", version: "20.x" },
+    environment: "development",
+    framework: { name: "next", version: "14.x" },
+    database: { name: "postgresql", version: "8.x" },
+    systemInfo: { platform: "darwin", cpuCount: 8, /* … */ },
+    packageManager: { name: "pnpm", version: "9.x" },
+    config: getTelemetryAuthConfig(/* your options */)
+  }
+}
+```
 
 You can audit telemetry locally by setting the `BETTER_AUTH_TELEMETRY_DEBUG=1` environment variable when running your project. In this debug mode, telemetry events are logged only to the console.
 
@@ -19,7 +49,20 @@ You can audit telemetry locally by setting the `BETTER_AUTH_TELEMETRY_DEBUG=1` e
 
 All collected data is fully anonymous and only useful in aggregate. It cannot be traced back to any individual source and is accessible only to a small group of core Better Auth maintainers to guide roadmap decisions.
 
-We do not collect, store, or track any personally identifiable information (PII). The telemetry data we collect will never be sold or monetized in any way.
+- **No PII or secrets**: We do not collect emails, usernames, tokens, secrets, client IDs, client secrets, or database URLs.
+- **No full config**: We never send your full `betterAuth` configuration. Instead we send a reduced, redacted snapshot of non‑sensitive toggles and counts.
+- **Redaction by design**: See `getTelemetryAuthConfig` in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
+
+Specifically, `getTelemetryAuthConfig` includes non‑sensitive aspects such as:
+
+- **Feature toggles**: e.g., whether email/password is enabled, whether verification emails are sent, rate limit enabled.
+- **Numeric settings**: e.g., expiration durations, update windows, limits.
+- **Provider metadata**: provider ids and non‑secret options like `scope`, `prompt`, `disableImplicitSignUp` (never client IDs or secrets).
+- **Model/config structure hints**: model names and fields lists; cookie and session strategy flags; logger level; adapter/database kind. Values like cookie domains are only reported as booleans indicating presence, not actual domain strings.
+
+Review the implementation here in the package source:
+
+- `packages/better-auth/src/telemetry/detectors/detect-auth-config.ts` (function `getTelemetryAuthConfig`)
 
 ## How can I disable it?
 
@@ -45,3 +88,10 @@ You can disable telemetry collection in your auth config or by setting an enviro
   # Disable telemetry
   BETTER_AUTH_TELEMETRY=0
   ```
+
+### When is telemetry sent?
+
+- On `betterAuth` initialization (`type: "init"`).
+- On CLI actions: `generate` and `migrate` as described above.
+
+Telemetry is disabled automatically in tests (`NODE_ENV=test`) unless explicitly overridden by internal tooling.

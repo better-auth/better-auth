@@ -1964,62 +1964,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/reference/resources",
 				icon: () => <Book className="w-4 h-4 text-current" />,
 			},
+
 			{
 				title: "Security",
 				href: "/docs/reference/security",
 				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
 			},
 			{
-				title: "FAQ",
-				href: "/docs/reference/faq",
-				icon: () => <CircleHelp className="w-4 h-4 text-current" />,
-			},
-			{
 				title: "Telemetry",
 				href: "/docs/reference/telemetry",
 				icon: () => <Binoculars className="w-4 h-4 text-current" />,
 			},
+			{
+				title: "FAQ",
+				href: "/docs/reference/faq",
+				icon: () => <CircleHelp className="w-4 h-4 text-current" />,
+			},
 		],
 	},
-	// {
-
-	// 	title: "Contribute",
-	// 	Icon: () => (
-	//
-	// 	),
-	// 	list: [
-	// 		{
-	// 			title: "Getting Started",
-	// 			href: "/docs/contribute/getting-started",
-	// 			icon: () => <BookOpenCheck className="text-current size-4" />,
-	// 		},
-	// 		{
-	// 			title: "Areas to Contribute",
-	// 			href: "/docs/contribute/areas-to-contribute",
-	// 			icon: () => <HandHelping className="w-4 h-4 text-current" />,
-	// 		},
-	// 		// {
-	// 		// 	title: "Database Adapters",
-	// 		// 	href: "/docs/contribute/database-adapters",
-	// 		// 	icon: () => <Plug className="w-4 h-4 text-current" />,
-	// 		// },
-	// 		{
-	// 			title: "Testing",
-	// 			href: "/docs/contribute/testing",
-	// 			icon: () => <FlaskConical className="w-4 h-4 text-current" />,
-	// 		},
-	// 		{
-	// 			title: "Documenting",
-	// 			href: "/docs/contribute/documenting",
-	// 			icon: () => <NotebookPen className="w-4 h-4 text-current" />,
-	// 		},
-	// 		{
-	// 			title: "Security Issues",
-	// 			href: "/docs/contribute/security-issues",
-	// 			icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
-	// 		},
-	// 	],
-	// },
 ];
 
 export const examples: Content[] = [
