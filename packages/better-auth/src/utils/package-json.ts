@@ -1,9 +1,9 @@
 import fs from "fs/promises";
 import path from "path";
+import type { PackageJson } from "type-fest";
+let packageJSONCache: PackageJson | undefined;
 
-let packageJSONCache: Record<string, any> | undefined;
-
-async function readRootPackageJson(): Promise<Record<string, any> | undefined> {
+async function readRootPackageJson() {
 	if (packageJSONCache) return packageJSONCache;
 	try {
 		const raw = await fs.readFile(
@@ -11,16 +11,16 @@ async function readRootPackageJson(): Promise<Record<string, any> | undefined> {
 			"utf-8",
 		);
 		packageJSONCache = JSON.parse(raw);
-		return packageJSONCache;
+		return packageJSONCache as PackageJson;
 	} catch {}
 	return undefined;
 }
 
 export async function getPackageVersion(pkg: string) {
 	if (packageJSONCache) {
-		return (packageJSONCache.dependencies[pkg] ||
-			packageJSONCache.devDependencies[pkg] ||
-			packageJSONCache.peerDependencies[pkg]) as string | undefined;
+		return (packageJSONCache.dependencies?.[pkg] ||
+			packageJSONCache.devDependencies?.[pkg] ||
+			packageJSONCache.peerDependencies?.[pkg]) as string | undefined;
 	}
 
 	try {

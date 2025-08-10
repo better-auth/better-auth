@@ -17,18 +17,24 @@ export async function createTelemetry(
 ) {
 	const debugEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
-	const track =
-		context?.customTrack ??
-		(debugEnabled
-			? async (event: TelemetryEvent) =>
-					Promise.resolve(
+	const track = async (event: TelemetryEvent) => {
+		try {
+			if (context?.customTrack) {
+				await context.customTrack(event);
+			} else {
+				if (debugEnabled) {
+					await Promise.resolve(
 						logger.info("telemetry event", JSON.stringify(event, null, 2)),
-					)
-			: async (event: TelemetryEvent) =>
-					betterFetch(TELEMETRY_ENDPOINT, {
+					);
+				} else {
+					await betterFetch(TELEMETRY_ENDPOINT, {
 						method: "POST",
 						body: event,
-					}));
+					});
+				}
+			}
+		} catch {}
+	};
 
 	const isEnabled = async () => {
 		const telemetryEnabled =

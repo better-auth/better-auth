@@ -279,4 +279,20 @@ describe("telemetry", () => {
 		expect(event).toBeUndefined();
 		expect(track).not.toBeCalled();
 	});
+
+	it("shouldn't fail cause track isn't being reached", async () => {
+		await expect(
+			createTelemetry(
+				{
+					baseURL: "http://localhost",
+				},
+				{
+					customTrack() {
+						throw new Error("test");
+					},
+					skipTestCheck: true,
+				},
+			),
+		).resolves.not.throw(Error);
+	});
 });
