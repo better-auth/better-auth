@@ -232,7 +232,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				console.log({ fieldName, field });
 				const exec = db.schema
 					.alterTable(table.table)
 					.addColumn(fieldName, type, (col) => {
