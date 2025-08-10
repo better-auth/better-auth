@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import type { HTMLAttributes } from "svelte/elements";
 
 type $$Props = HTMLAttributes<HTMLDivElement>;
@@ -12,4 +13,4 @@ export { className as class };
 	{...$$restProps}
 >
 	<slot />
-</div>
+</div>	

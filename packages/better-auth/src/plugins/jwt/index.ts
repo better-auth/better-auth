@@ -142,6 +142,7 @@ export async function generateExportedKeyPair(
 export const jwt = (options?: JwtOptions) => {
 	return {
 		id: "jwt",
+		options,
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				"/jwks",

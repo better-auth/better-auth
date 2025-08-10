@@ -238,9 +238,9 @@ const { data: sessionData } = await authClient.getSession();
 // data.user.newField
 ```
 
-**Some Caveats**: 
+### Caveats on Customizing Session Response
 
-- The passed `session` object to the callback does not infer fields added by plugins.  
+1. The passed `session` object to the callback does not infer fields added by plugins.  
 
 However, as a workaround, you can pull up your auth options and pass it to the plugin to infer the fields.
 
@@ -250,7 +250,7 @@ import { betterAuth, BetterAuthOptions } from "better-auth";
 const options = {
   //...config options
   plugins: [
-    //...plugins
+    //...plugins 
   ]
 } satisfies BetterAuthOptions;
 
@@ -269,5 +269,5 @@ export const auth = betterAuth({
 })
 ```
 
-- If you cannot use the `auth` instance as a type, inference will not work on the client.  
-- Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.
+2. When your server and client code are in separate projects or repositories, and you cannot import the `auth` instance as a type reference, type inference for custom session fields will not work on the client side.
+3. Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.

@@ -577,7 +577,9 @@ export const mcp = (options: MCPOptions) => {
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
-						auth_time: ctx.context.session?.session.createdAt.getTime(),
+						auth_time: ctx.context.session
+							? new Date(ctx.context.session.session.createdAt).getTime()
+							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,

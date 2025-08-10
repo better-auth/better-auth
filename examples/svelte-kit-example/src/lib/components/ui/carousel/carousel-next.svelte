@@ -5,6 +5,9 @@ import {
 	type Props,
 	type buttonVariants,
 } from "$lib/components/ui/button/index.js";
+import { cn } from "$lib/utils";
+import ArrowRight from "svelte-radix/ArrowRight.svelte";
+import Button from "../button/button.svelte";
 
 type $$Props = Props;
 

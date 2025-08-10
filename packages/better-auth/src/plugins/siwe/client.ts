@@ -1,11 +1,9 @@
-import type { BetterAuthClientPlugin } from "better-auth";
 import type { siwe } from ".";
-
-type SiwePlugin = typeof siwe;
+import type { BetterAuthClientPlugin } from "../../types";
 
 export const siweClient = () => {
 	return {
 		id: "siwe",
-		$InferServerPlugin: {} as ReturnType<SiwePlugin>,
+		$InferServerPlugin: {} as ReturnType<typeof siwe>,
 	} satisfies BetterAuthClientPlugin;
 };

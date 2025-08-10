@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import * as ResizablePrimitive from "paneforge";
 
 type $$Props = ResizablePrimitive.PaneGroupProps;

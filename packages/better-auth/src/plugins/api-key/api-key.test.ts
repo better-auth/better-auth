@@ -600,6 +600,72 @@ describe("api-key", async () => {
 		expect(apiKey.remaining).toEqual(remaining);
 	});
 
+	it("should create API Key with remaining explicitly set to null", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: null,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+	});
+
+	it("should create API Key with remaining explicitly set to null and refillAmount and refillInterval are also set", async () => {
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: null,
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
+	});
+
+	it("should create API Key with remaining explicitly set to 0 and refillAmount also set", async () => {
+		const remaining = 0;
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: remaining,
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBe(remaining);
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
+	});
+
+	it("should create API Key with remaining undefined and default value of null is respected with refillAmount and refillInterval provided", async () => {
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
+	});
+
 	it("should create API key with invalid metadata", async () => {
 		let result: { data: ApiKey | null; error: Err | null } = {
 			data: null,

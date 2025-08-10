@@ -50,7 +50,7 @@ interface ExpoClientOptions {
 
 interface StoredCookie {
 	value: string;
-	expires: Date | null;
+	expires: string | null;
 }
 
 export function getSetCookie(header: string, prevCookie?: string) {
@@ -59,14 +59,14 @@ export function getSetCookie(header: string, prevCookie?: string) {
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
-		const expires = expiresAt
-			? new Date(String(expiresAt))
-			: maxAge
-				? new Date(Date.now() + Number(maxAge))
+		const expires = maxAge
+			? new Date(Date.now() + Number(maxAge) * 1000)
+			: expiresAt
+				? new Date(String(expiresAt))
 				: null;
 		toSetCookie[key] = {
 			value: cookie["value"],
-			expires,
+			expires: expires ? expires.toISOString() : null,
 		};
 	});
 	if (prevCookie) {
@@ -89,7 +89,7 @@ export function getCookie(cookie: string) {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
 	} catch (e) {}
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
-		if (value.expires && value.expires < new Date()) {
+		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
 		}
 		return `${acc}; ${key}=${value.value}`;

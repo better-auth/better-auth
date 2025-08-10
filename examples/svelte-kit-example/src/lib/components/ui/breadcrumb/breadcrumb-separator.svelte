@@ -1,4 +1,6 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
+import ChevronRight from "svelte-radix/ChevronRight.svelte";
 import type { HTMLLiAttributes } from "svelte/elements";
 
 type $$Props = HTMLLiAttributes & {
@@ -18,6 +20,6 @@ export { className as class };
 	{...$$restProps}
 >
 	<slot>
-		<ChevronRight tabindex="-1" />
+		<ChevronRight />
 	</slot>
 </li>

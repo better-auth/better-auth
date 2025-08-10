@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Toggle as TogglePrimitive } from "bits-ui";
-import { type Size, type Variant } from "./index.js";
+import { toggleVariants, type Size, type Variant } from "./index.js";
+import { cn } from "$lib/utils";
 
 type $$Props = TogglePrimitive.Props & {
 	variant?: Variant;
@@ -8,7 +9,7 @@ type $$Props = TogglePrimitive.Props & {
 };
 type $$Events = TogglePrimitive.Events;
 
-let className: $$Props["class"] = undefined;
+let className: any = undefined;
 export let variant: $$Props["variant"] = "default";
 export let size: $$Props["size"] = "default";
 export let pressed: $$Props["pressed"] = undefined;

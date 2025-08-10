@@ -69,7 +69,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			| "upgrade-subscription"
 			| "list-subscription"
 			| "cancel-subscription"
-			| "restore-subscription",
+			| "restore-subscription"
+			| "billing-portal",
 	) =>
 		createAuthMiddleware(async (ctx) => {
 			const session = ctx.context.session;
@@ -198,7 +199,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.string()
 						.meta({
 							description:
-								'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+								'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
 						})
 						.default("/"),
 					/**
@@ -208,7 +209,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.string()
 						.meta({
 							description:
-								'Return URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+								'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
 						})
 						.optional(),
 					/**
@@ -625,7 +626,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.optional(),
 					returnUrl: z.string().meta({
 						description:
-							"Return URL to redirect back after successful subscription. Eg: 'https://example.com/success'",
+							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
 					}),
 				}),
 				use: [
@@ -1031,6 +1032,73 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 				throw ctx.redirect(getUrl(ctx, callbackURL));
+			},
+		),
+		createBillingPortal: createAuthEndpoint(
+			"/subscription/billing-portal",
+			{
+				method: "POST",
+				body: z.object({
+					referenceId: z.string().optional(),
+					returnUrl: z.string().default("/"),
+				}),
+				use: [
+					sessionMiddleware,
+					originCheck((ctx) => ctx.body.returnUrl),
+					referenceMiddleware("billing-portal"),
+				],
+			},
+			async (ctx) => {
+				const { user } = ctx.context.session;
+				const referenceId = ctx.body.referenceId || user.id;
+
+				let customerId = user.stripeCustomerId;
+
+				if (!customerId) {
+					const subscription = await ctx.context.adapter
+						.findMany<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: referenceId,
+								},
+							],
+						})
+						.then((subs) =>
+							subs.find(
+								(sub) => sub.status === "active" || sub.status === "trialing",
+							),
+						);
+
+					customerId = subscription?.stripeCustomerId;
+				}
+
+				if (!customerId) {
+					throw new APIError("BAD_REQUEST", {
+						message: "No Stripe customer found for this user",
+					});
+				}
+
+				try {
+					const { url } = await client.billingPortal.sessions.create({
+						customer: customerId,
+						return_url: getUrl(ctx, ctx.body.returnUrl),
+					});
+
+					return ctx.json({
+						url,
+						redirect: true,
+					});
+				} catch (error: any) {
+					ctx.context.logger.error(
+						"Error creating billing portal session",
+						error,
+					);
+					throw new APIError("BAD_REQUEST", {
+						message: error.message,
+					});
+				}
 			},
 		),
 	} as const;
