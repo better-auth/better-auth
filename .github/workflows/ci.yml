@@ -13,6 +13,9 @@ on:
 jobs:
     test:
         runs-on: ubuntu-latest
+        permissions:
+          contents: read
+          pull-requests: write
         steps:
             - uses: actions/checkout@v4
               with:
@@ -70,6 +73,9 @@ jobs:
                 TURBO_REMOTE_ONLY: true
               run: pnpm typecheck
 
+            - name: 'Report Coverage'
+              if: success() && github.event_name == 'pull_request'
+              uses:  davelosert/vitest-coverage-report-action@v2
+
             - name: Stop Docker Containers
               run: docker compose down
-            
