@@ -61,9 +61,14 @@ async function createTestAdapter(
 				usePlural: false,
 				debugLogs: false,
 				supportsJSON: true,
+				supportsJSONB: true,
 				supportsDates: true,
 				supportsBooleans: true,
-			},
+				supportsNumericIds: true,
+				disableIdGeneration: false,
+				supportsNumbers: true,
+				supportsArrays: true,
+			} satisfies AdapterConfig,
 			config,
 		),
 		adapter: (...args) => {
@@ -390,7 +395,7 @@ describe("Create Adapter Helper", async () => {
 								user: {
 									additionalFields: {
 										preferences: {
-											//@ts-expect-error - Not *technically* implemented yet, however the `createAdapter` helper already supports it.
+											//@ts-expect-error - Future proofing
 											type: "json",
 										},
 									},
@@ -957,7 +962,7 @@ describe("Create Adapter Helper", async () => {
 								user: {
 									additionalFields: {
 										preferences: {
-											//@ts-expect-error - Not *technically* implemented yet, however the `createAdapter` helper already supports it.
+											//@ts-expect-error - Future proofing
 											type: "json",
 										},
 									},
