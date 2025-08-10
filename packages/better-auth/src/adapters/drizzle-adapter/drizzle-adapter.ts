@@ -66,7 +66,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			supportsDates: true,
 			supportsNumbers: true,
 			supportsNumericIds: true,
-			supportsArrays: true,
+				supportsArrays: config.provider === "pg",
 			supportsBooleans: true,
 		},
 		adapter: ({ getFieldName, debugLog }) => {
