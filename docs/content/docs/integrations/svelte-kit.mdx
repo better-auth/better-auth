@@ -19,7 +19,7 @@ export async function handle({ event, resolve }) {
 }
 ```
 
-### Access session on the server (event.locals)
+### Populate session data in the event (`event.locals`)
 
 The `svelteKitHandler` does not automatically populate `event.locals.user` or `event.locals.session`. If you want to access the current session in your server code (e.g., in `+layout.server.ts`, actions, or endpoints), populate `event.locals` in your `handle` hook:
 
