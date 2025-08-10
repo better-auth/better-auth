@@ -127,6 +127,7 @@ exports[`init > should match config 1`] = `
     "hash": [Function],
     "verify": [Function],
   },
+  "publishTelemetry": [Function],
   "rateLimit": {
     "enabled": false,
     "max": 100,
@@ -338,10 +339,6 @@ exports[`init > should match config 1`] = `
       "modelName": "verification",
       "order": 4,
     },
-  },
-  "telemetry": {
-    "publish": [Function],
-    "report": [Function],
   },
   "trustedOrigins": [
     "http://localhost:3000",
