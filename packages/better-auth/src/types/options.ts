@@ -797,7 +797,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: User,
+					user: User & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -809,7 +809,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is created.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 			update?: {
 				/**
@@ -818,7 +821,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: Partial<User>,
+					user: Partial<User> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -830,7 +833,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is updated.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 		};
 		/**

@@ -99,7 +99,7 @@ describe("username", async (it) => {
 				headers: testUserHeaders,
 			},
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 	});
 
 	it("should succeed on duplicate username in update-user if user is the same", async () => {
@@ -148,7 +148,7 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
 	});
 
@@ -159,7 +159,7 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
 	});
 
@@ -170,7 +170,7 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 	});
 
 	it("should check if username is unavailable", async () => {
@@ -274,7 +274,34 @@ describe("username custom normalization", async (it) => {
 			password: "new-password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should normalize displayUsername", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					displayUsernameNormalization: (displayUsername) =>
+						displayUsername.toLowerCase(),
+				}),
+			],
+		});
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "new-email-3@gmail.com",
+				password: "new-password",
+				name: "new-name",
+				username: "test_username",
+				displayUsername: "Test Username",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session?.user.username).toBe("test_username");
+		expect(session?.user.displayUsername).toBe("test username");
 	});
 });
 
@@ -312,7 +339,7 @@ describe("username with displayUsername validation", async (it) => {
 			password: "test-password",
 			name: "test-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("DISPLAY_USERNAME_IS_INVALID");
 	});
 
@@ -378,7 +405,37 @@ describe("username with displayUsername validation", async (it) => {
 			},
 		});
 
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("DISPLAY_USERNAME_IS_INVALID");
+	});
+});
+
+describe("post normalization flow", async (it) => {
+	it("should set displayUsername to username if only username is provided", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validatePostNormalization: true,
+					usernameNormalization: (username) => {
+						return username.split(" ").join("_").toLowerCase();
+					},
+				}),
+			],
+		});
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "test-username@email.com",
+				username: "Test Username",
+				password: "test-password",
+				name: "test-name",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session?.user.username).toBe("test_username");
+		expect(session?.user.displayUsername).toBe("Test Username");
 	});
 });

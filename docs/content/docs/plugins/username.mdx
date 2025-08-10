@@ -3,7 +3,7 @@ title: Username
 description: Username plugin
 ---
 
-The username plugin wraps the email and password authenticator and adds username support. This allows users to sign in and sign up with their username instead of their email.
+The username plugin is a lightweight plugin that adds username support to the email and password authenticator. This allows users to sign in and sign up with their username instead of their email.
 
 ## Installation
 
@@ -79,52 +79,13 @@ const data = await authClient.signUp.email({
     email: "email@domain.com",
     name: "Test User",
     password: "password1234",
-    displayUsername: "Test_User123" // Will generate username: "test_user123"
+    username: "test",
+    displayUsername: "Test_User123" 
 })
 ```
 
-#### Username and Display Username Behavior
-
-The plugin handles different combinations of `username` and `displayUsername` as follows:
-
-**1. Only `username` provided:**
-```ts
-// Input
-{ username: "john_doe" }
-
-// Result
-{
-  username: "john_doe",        // normalized
-  displayUsername: "john_doe"  // same as username
-}
-```
-
-**2. Only `displayUsername` provided:**
-```ts
-// Input
-{ displayUsername: "John_Doe" }
-
-// Result
-{
-  username: "john_doe",        // normalized from displayUsername
-  displayUsername: "John_Doe"  // preserved as-is
-}
-```
-
-**3. Both `username` and `displayUsername` provided:**
-```ts
-// Input
-{ username: "custom_user", displayUsername: "Custom User Display" }
-
-// Result
-{
-  username: "custom_user",           // normalized
-  displayUsername: "Custom User Display"  // preserved as-is
-}
-```
-
 <Callout type="info">
-The `username` field is always normalized (lowercase by default) and used for authentication, while `displayUsername` preserves the original formatting for display purposes.
+    If both `username` and `displayUsername` are provided, the `username` will be normalized and the `displayUsername` will be preserved as-is. If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
 </Callout>
 
 ### Sign in
@@ -300,6 +261,26 @@ const auth = betterAuth({
     ]
 })
 ```
+
+### Display Username Normalization
+
+A function that normalizes the display username, or `false` to disable normalization.
+
+By default, display usernames are not normalized. When only `username` is provided during signup or update, the `displayUsername` will be set to match the original `username` value (before normalization). You can also explicitly set a `displayUsername` which will be preserved as-is. For custom normalization, provide a function that takes the display username as input and returns the normalized version.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            displayUsernameNormalization: (displayUsername) => displayUsername.toLowerCase(),
+        })
+    ]   
+})
+```
+
 
 ### Complete Example
 
