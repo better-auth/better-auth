@@ -1,7 +1,11 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { Command as CommandPrimitive } from "cmdk-sv";
+import MagnifyingGlass from "svelte-radix/MagnifyingGlass.svelte";
 
-type $$Props = CommandPrimitive.InputProps;
+type $$Props = CommandPrimitive.InputProps & {
+	class?: string | null | undefined;
+};
 
 let className: string | undefined | null = undefined;
 export { className as class };

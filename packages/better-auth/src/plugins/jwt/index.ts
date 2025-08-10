@@ -142,6 +142,7 @@ export async function generateExportedKeyPair(
 export const jwt = (options?: JwtOptions) => {
 	return {
 		id: "jwt",
+		options,
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				"/jwks",
@@ -361,3 +362,5 @@ export const jwt = (options?: JwtOptions) => {
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
+
+export { getJwtToken };

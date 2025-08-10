@@ -187,7 +187,6 @@ export interface StripeOptions {
 	 */
 	onCustomerCreate?: (
 		data: {
-			customer: Customer;
 			stripeCustomer: Stripe.Customer;
 			user: User;
 		},
@@ -275,7 +274,8 @@ export interface StripeOptions {
 					| "upgrade-subscription"
 					| "list-subscription"
 					| "cancel-subscription"
-					| "restore-subscription";
+					| "restore-subscription"
+					| "billing-portal";
 			},
 			ctx: GenericEndpointContext,
 		) => Promise<boolean>;
@@ -318,6 +318,11 @@ export interface StripeOptions {
 			enabled: boolean;
 		};
 	};
+	/**
+	 * A callback to run after a stripe event is received
+	 * @param event - Stripe Event
+	 * @returns
+	 */
 	onEvent?: (event: Stripe.Event) => Promise<void>;
 	/**
 	 * Schema for the stripe plugin
@@ -325,13 +330,4 @@ export interface StripeOptions {
 	schema?: InferOptionSchema<typeof subscriptions & typeof user>;
 }
 
-export interface Customer {
-	id: string;
-	stripeCustomerId?: string;
-	userId: string;
-	createdAt: Date;
-	updatedAt: Date;
-}
-
 export interface InputSubscription extends Omit<Subscription, "id"> {}
-export interface InputCustomer extends Omit<Customer, "id"> {}
