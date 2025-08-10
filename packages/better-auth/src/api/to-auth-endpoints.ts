@@ -9,19 +9,21 @@ import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import { createDefu } from "defu";
 
-const defuReplaceArray = createDefu((object: any, key: PropertyKey, value: any) => {
-    if (
-        object &&
-        typeof object === "object" &&
-        !Array.isArray(object) &&
-        Array.isArray((object as any)[key as any]) &&
-        Array.isArray(value)
-    ) {
-        (object as any)[key as any] = value;
-        return true;
-    }
-    return false;
-});
+const defuReplaceArray = createDefu(
+	(object: any, key: PropertyKey, value: any) => {
+		if (
+			object &&
+			typeof object === "object" &&
+			!Array.isArray(object) &&
+			Array.isArray((object as any)[key as any]) &&
+			Array.isArray(value)
+		) {
+			(object as any)[key as any] = value;
+			return true;
+		}
+		return false;
+	},
+);
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
@@ -83,8 +85,8 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 					headers.forEach((value, key) => {
 						(internalContext.headers as Headers).set(key, value);
 					});
-                }
-                internalContext = defuReplaceArray(rest, internalContext);
+				}
+				internalContext = defuReplaceArray(rest, internalContext);
 			} else if (before) {
 				/* Return before hook response if it's anything other than a context return */
 				return before;
@@ -168,7 +170,7 @@ async function runBeforeHooks(
 							modifiedContext.headers = headers;
 						}
 					}
-                    modifiedContext = defuReplaceArray(rest, modifiedContext);
+					modifiedContext = defuReplaceArray(rest, modifiedContext);
 					continue;
 				}
 				return result;
