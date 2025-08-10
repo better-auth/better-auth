@@ -84,6 +84,10 @@ const init = (config?: Partial<AdapterConfig>, options?: BetterAuthOptions) => {
 	};
 };
 
+
+const testDate = new Date();
+const testDateString = testDate.toISOString();
+
 const tests: {
 	config?: Partial<AdapterConfig>;
 	input: Partial<
@@ -172,10 +176,10 @@ const tests: {
 			supportsDates: false,
 		},
 		input: {
-			date: new Date(),
+			date: testDate,
 		},
 		transformed: {
-			date: new Date().toISOString(),
+			date: testDateString,
 		},
 	},
 	// JSON Conversion
@@ -188,7 +192,7 @@ const tests: {
 				a: 1,
 				b: "2",
 				c: true,
-				d: { hello: new Date() },
+				d: { hello: testDate },
 			},
 		},
 		transformed: {
@@ -196,7 +200,7 @@ const tests: {
 				a: 1,
 				b: "2",
 				c: true,
-				d: { hello: new Date().toISOString() },
+				d: { hello: testDateString },
 			}),
 		},
 	},

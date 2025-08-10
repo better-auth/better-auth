@@ -20,7 +20,9 @@ export const initTransformOutput = ({
 		if (!data) return null;
 		const newMappedKeys = config.mapKeysTransformOutput ?? {};
 		const transformedData: Record<string, any> = {};
-		const tableSchema = schema[unsafe_model].fields;
+
+		// Create a new object to avoid mutating the original schema.
+		const tableSchema = { ...schema[unsafe_model].fields };
 		const idKey = Object.entries(newMappedKeys).find(
 			([_, v]) => v === "id",
 		)?.[0];

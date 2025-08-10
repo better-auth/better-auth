@@ -25,7 +25,8 @@ export const initGetFieldAttributes = ({
 			model: model,
 		});
 
-		const fields = schema[defaultModelName].fields;
+		// Create a new object to avoid mutating the original schema.
+		const fields = { ...schema[defaultModelName].fields };
 		fields.id = idField({ customModelName: defaultModelName });
 		return fields[defaultFieldName];
 	};

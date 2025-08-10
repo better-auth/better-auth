@@ -30,7 +30,10 @@ export const initTransformInput = ({
 
 			throw err;
 		}
-		const fields = schema[unsafe_model].fields;
+
+		// Create a new object to avoid mutating the original schema.
+		const fields = { ...schema[unsafe_model].fields };
+
 		const newMappedKeys = config.mapKeysTransformInput ?? {};
 		if (
 			!config.disableIdGeneration &&
