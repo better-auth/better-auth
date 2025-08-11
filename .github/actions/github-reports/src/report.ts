@@ -1,7 +1,6 @@
 import type { ReportInput, ReportConfig } from "./types";
 
-import { reportInputForDev } from "./test";
-import { formattedDate, ninetyDaysAgo } from "./utils";
+import { formattedDate } from "./utils";
 
 import { info, setFailed } from "@actions/core";
 import { BlockCollection, Divider, Section } from "slack-block-builder";
