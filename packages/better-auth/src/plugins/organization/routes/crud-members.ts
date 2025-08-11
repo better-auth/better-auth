@@ -442,7 +442,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			const memberBelongsToOrganization =
-				toBeUpdatedMember.organizationId === organizationId
+				toBeUpdatedMember.organizationId === organizationId;
 
 			if (!memberBelongsToOrganization) {
 				throw new APIError("FORBIDDEN", {
