@@ -45,7 +45,7 @@ export interface GenericOAuthConfig {
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -713,7 +713,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								await ctx.context.internalAdapter.createAccount({
 									userId: link.userId,
 									providerId: provider.providerId,
-									accountId: userInfo.id,
+									accountId: mapUser.id ?? userInfo.id,
 									accessToken: tokens.accessToken,
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 									refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
