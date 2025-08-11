@@ -633,7 +633,16 @@ Disable specific auth paths.
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	disabledPaths: ["/sign-up/email", "/sign-in/email"],
+    // Supports exact paths and glob patterns
+    // Examples:
+    // - "/sign-in/*" disables all sign-in subpaths
+    // - "/oauth2/**" disables nested oauth2 paths at any depth
+    // - "/callback" disables only the exact path
+    disabledPaths: [
+        "/sign-up/email",
+        "/sign-in/*",
+        "/oauth2/**",
+    ],
 })
 ```
 
