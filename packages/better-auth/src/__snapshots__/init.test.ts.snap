@@ -127,6 +127,7 @@ exports[`init > should match config 1`] = `
     "hash": [Function],
     "verify": [Function],
   },
+  "publishTelemetry": [Function],
   "rateLimit": {
     "enabled": false,
     "max": 100,
