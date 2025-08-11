@@ -78,7 +78,7 @@ describe("mcp", async () => {
 				token_endpoint_auth_method: "none",
 			},
 			onResponse(context) {
-				console.log(context.response);
+				expect(context.response.status).toBe(201);
 			},
 		});
 
