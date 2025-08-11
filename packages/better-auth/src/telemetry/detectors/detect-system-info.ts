@@ -6,7 +6,8 @@ function getVendor() {
 
 	if (
 		hasAny("CF_PAGES", "CF_PAGES_URL", "CF_ACCOUNT_ID") ||
-		(typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers")
+		(typeof navigator !== "undefined" &&
+			navigator.userAgent === "Cloudflare-Workers")
 	) {
 		return "cloudflare";
 	}
@@ -110,6 +111,8 @@ export async function detectSystemInfo() {
 let isDockerCached: boolean | undefined;
 
 async function hasDockerEnv() {
+	if (getVendor() === "cloudflare") return false;
+
 	const { default: fs } = await import("fs");
 	try {
 		fs.statSync("/.dockerenv");
@@ -120,6 +123,7 @@ async function hasDockerEnv() {
 }
 
 async function hasDockerCGroup() {
+	if (getVendor() === "cloudflare") return false;
 	try {
 		const { default: fs } = await import("fs");
 		return fs.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
@@ -129,6 +133,8 @@ async function hasDockerCGroup() {
 }
 
 async function isDocker() {
+	if (getVendor() === "cloudflare") return false;
+
 	if (isDockerCached === undefined) {
 		isDockerCached = (await hasDockerEnv()) || (await hasDockerCGroup());
 	}
@@ -138,6 +144,7 @@ async function isDocker() {
 
 async function isWsl() {
 	try {
+		if (getVendor() === "cloudflare") return false;
 		if (process.platform !== "linux") {
 			return false;
 		}
@@ -165,6 +172,7 @@ async function isWsl() {
 let isInsideContainerCached: boolean | undefined;
 
 const hasContainerEnv = async () => {
+	if (getVendor() === "cloudflare") return false;
 	try {
 		const { default: fs } = await import("fs");
 		fs.statSync("/run/.containerenv");
