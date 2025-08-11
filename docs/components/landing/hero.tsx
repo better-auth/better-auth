@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
@@ -49,7 +49,7 @@ function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 
 export default function Hero() {
 	return (
-		<section className="max-h-[40rem] relative w-full flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] overflow-hidden px-8 md:min-h-[40rem]">
+		<section className="max-h-[40rem] relative w-full md:w-11/12 md:mx-auto flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] overflow-hidden md:min-h-[40rem]">
 			<Spotlight />
 			<div className="overflow-hidden bg-transparent md:px-10 dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem]">
 				<div className="lg:max-w-8xl mx-auto grid max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-12">
@@ -207,7 +207,7 @@ function CodePreview() {
 			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
 				<motion.div
 					animate={{ height: height > 0 ? height : undefined }}
-					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-stone-950/10 dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
+					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-black dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
 				>
 					<div ref={ref}>
 						<div className="absolute -top-px left-0 right-0 h-px" />
@@ -268,10 +268,10 @@ function CodePreview() {
 										{Array.from({
 											length: code.split("\n").length,
 										}).map((_, index) => (
-											<Fragment key={index}>
+											<div key={index}>
 												{(index + 1).toString().padStart(2, "0")}
 												<br />
-											</Fragment>
+											</div>
 										))}
 									</div>
 									<Highlight

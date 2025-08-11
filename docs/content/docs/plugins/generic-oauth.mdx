@@ -63,23 +63,63 @@ The Generic OAuth plugin provides endpoints for initiating the OAuth flow and ha
 
 To start the OAuth sign-in process:
 
-```ts title="sign-in.ts"
-const response = await authClient.signIn.oauth2({
-  providerId: "provider-id",
-  callbackURL: "/dashboard" // the path to redirect to after the user is authenticated
-});
+<APIMethod path="/sign-in/oauth2" method="POST">
+```ts
+type signInWithOAuth2 = {
+    /**
+     * The provider ID for the OAuth provider. 
+     */
+    providerId: string = "provider-id"
+    /**
+     * The URL to redirect to after sign in. 
+     */
+    callbackURL?: string = "/dashboard"
+    /**
+     * The URL to redirect to if an error occurs. 
+     */
+    errorCallbackURL?: string = "/error-page"
+    /**
+     * The URL to redirect to after login if the user is new. 
+     */
+    newUserCallbackURL?: string = "/welcome"
+    /**
+     * Disable redirect. 
+     */
+    disableRedirect?: boolean = false
+    /**
+     * Scopes to be passed to the provider authorization request. 
+     */
+    scopes?: string[] = ["my-scope"]
+    /**
+     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
+     */
+    requestSignUp?: boolean = false
+}
 ```
+</APIMethod>
 
 ### Linking OAuth Accounts
 
 To link an OAuth account to an existing user:
 
-```ts title="link-account.ts"
-const response = await authClient.oauth2.link({
-  providerId: "provider-id",
-  callbackURL: "/dashboard" // the path to redirect to after the account is linked
-});
+<APIMethod
+  path="/oauth2/link"
+  method="POST"
+  requireSession
+>
+```ts
+type oAuth2LinkAccount = {
+    /**
+     * The OAuth provider ID. 
+     */
+    providerId: string = "my-provider-id"
+    /**
+     * The URL to redirect to once the account linking was complete. 
+     */
+    callbackURL: string = "/successful-link"
+}
 ```
+</APIMethod>
 
 ### Handle OAuth Callback
 

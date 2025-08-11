@@ -88,12 +88,15 @@ export const createAdapter =
 		const getDefaultFieldName = ({
 			field,
 			model: unsafe_model,
-		}: { model: string; field: string }) => {
+		}: {
+			model: string;
+			field: string;
+		}) => {
 			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
 			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
 			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
-			if (field === "id") {
-				return field;
+			if (field === "id" || field === "_id") {
+				return "id";
 			}
 			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
 
@@ -159,11 +162,20 @@ export const createAdapter =
 		 * then we should return the model name ending with an `s`.
 		 */
 		const getModelName = (model: string) => {
-			return schema[getDefaultModelName(model)].modelName !== model
-				? schema[getDefaultModelName(model)].modelName
-				: config.usePlural
-					? `${model}s`
-					: model;
+			const defaultModelKey = getDefaultModelName(model);
+			const usePlural = config && config.usePlural;
+			const useCustomModelName =
+				schema &&
+				schema[defaultModelKey] &&
+				schema[defaultModelKey].modelName !== model;
+
+			if (useCustomModelName) {
+				return usePlural
+					? `${schema[defaultModelKey].modelName}s`
+					: schema[defaultModelKey].modelName;
+			}
+
+			return usePlural ? `${model}s` : model;
 		};
 		/**
 		 * Get the field name which is expected to be saved in the database based on the user's schema.
@@ -175,7 +187,10 @@ export const createAdapter =
 		function getFieldName({
 			model: model_name,
 			field: field_name,
-		}: { model: string; field: string }) {
+		}: {
+			model: string;
+			field: string;
+		}) {
 			const model = getDefaultModelName(model_name);
 			const field = getDefaultFieldName({ model, field: field_name });
 
@@ -242,7 +257,10 @@ export const createAdapter =
 		const idField = ({
 			customModelName,
 			forceAllowId,
-		}: { customModelName?: string; forceAllowId?: boolean }) => {
+		}: {
+			customModelName?: string;
+			forceAllowId?: boolean;
+		}) => {
 			const shouldGenerateId =
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId &&
@@ -282,7 +300,10 @@ export const createAdapter =
 		const getFieldAttributes = ({
 			model,
 			field,
-		}: { model: string; field: string }) => {
+		}: {
+			model: string;
+			field: string;
+		}) => {
 			const defaultModelName = getDefaultModelName(model);
 			const defaultFieldName = getDefaultFieldName({
 				field: field,
@@ -318,7 +339,10 @@ export const createAdapter =
 				!config.disableIdGeneration &&
 				!options.advanced?.database?.useNumberId
 			) {
-				fields.id = idField({ customModelName: unsafe_model, forceAllowId });
+				fields.id = idField({
+					customModelName: unsafe_model,
+					forceAllowId: forceAllowId && "id" in data,
+				});
 			}
 			for (const field in fields) {
 				const value = data[field];
@@ -470,10 +494,13 @@ export const createAdapter =
 		const transformWhereClause = <W extends Where[] | undefined>({
 			model,
 			where,
-		}: { where: W; model: string }): W extends undefined
-			? undefined
-			: CleanedWhere[] => {
+		}: {
+			where: W;
+			model: string;
+		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
+			const newMappedKeys = config.mapKeysTransformInput ?? {};
+
 			return where.map((w) => {
 				const {
 					field: unsafe_field,
@@ -492,11 +519,13 @@ export const createAdapter =
 					field: unsafe_field,
 					model,
 				});
+				const fieldName: string =
+					newMappedKeys[defaultFieldName] ||
+					getFieldName({
+						field: defaultFieldName,
+						model: defaultModelName,
+					});
 
-				const fieldName = getFieldName({
-					field: defaultFieldName,
-					model: defaultModelName,
-				});
 				const fieldAttr = getFieldAttributes({
 					field: defaultFieldName,
 					model: defaultModelName,

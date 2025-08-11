@@ -9,14 +9,14 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 
 ### Mount the handler
 
-We need to mount the handler to a TanStack API endpoint.
-Create a new file: `/app/routes/api/auth/$.ts`
+We need to mount the handler to a TanStack API endpoint/Server Route.
+Create a new file: `/src/routes/api/auth/$.ts`
 
-```ts title="routes/api/auth/$.ts"
+```ts title="src/routes/api/auth/$.ts"
 import { auth } from '@/lib/auth' // import your auth instance
-import { createAPIFileRoute } from '@tanstack/react-start/api'
+import { createServerFileRoute } from '@tanstack/react-start/server'
 
-export const APIRoute = createAPIFileRoute('/api/auth/$')({
+export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
   GET: ({ request }) => {
     return auth.handler(request)
   },
@@ -26,15 +26,18 @@ export const APIRoute = createAPIFileRoute('/api/auth/$')({
 })
 ```
 
-If you haven't defined an API Route yet, you can do so by creating a file: `/app/api.ts`
+If you haven't created your server route handler yet, you can do so by creating a file: `/src/server.ts`
 
-```ts title="app/api.ts"
+```ts title="src/server.ts"
 import {
-  createStartAPIHandler,
-  defaultAPIFileRouteHandler,
-} from '@tanstack/react-start/api'
+  createStartHandler,
+  defaultStreamHandler,
+} from '@tanstack/react-start/server'
+import { createRouter } from './router'
 
-export default createStartAPIHandler(defaultAPIFileRouteHandler)
+export default createStartHandler({
+  createRouter,
+})(defaultStreamHandler)
 ```
 
 ### Usage tips
@@ -42,7 +45,7 @@ export default createStartAPIHandler(defaultAPIFileRouteHandler)
 - We recommend using the client SDK or `authClient` to handle authentication, rather than server actions with `auth.api`.
 - When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `reactStartCookies` plugin to automatically handle this for you.
 
-```ts title="auth.ts"
+```ts title="src/lib/auth.ts"
 import { betterAuth } from "better-auth";
 import { reactStartCookies } from "better-auth/react-start";
 

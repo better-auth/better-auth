@@ -10,7 +10,7 @@ import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "text"],
+	string: ["character varying", "varchar", "text"],
 	number: [
 		"int4",
 		"integer",
@@ -46,7 +46,7 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["text", "varchar"],
+	string: ["varchar", "nvarchar"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
@@ -64,15 +64,17 @@ export function matchType(
 	fieldType: FieldType,
 	dbType: KyselyDatabaseType,
 ) {
+	function normalize(type: string) {
+		return type.toLowerCase().split("(")[0].trim();
+	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
-	const type = Array.isArray(fieldType)
+	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
 		: types[fieldType].map((t) => t.toLowerCase());
-	const matches = type.includes(columnDataType.toLowerCase());
-	return matches;
+	return expected.includes(normalize(columnDataType));
 }
 
 export async function getMigrations(config: BetterAuthOptions) {
@@ -180,7 +182,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 						? "varchar(255)"
 						: field.references
 							? "varchar(36)"
-							: "text",
+							: // mssql deprecated `text`, and the alternative is `varchar(max)`.
+								// Kysely type interface doesn't support `text`, so we set this to `varchar(8000)` as
+								// that's the max length for `varchar`
+								"varchar(8000)",
 			},
 			boolean: {
 				sqlite: "integer",

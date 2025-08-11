@@ -12,17 +12,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
-	const [loading, setLoading] = useState(false);
+	const [loading, startTransition] = useTransition();
 	const [rememberMe, setRememberMe] = useState(false);
+	const router = useRouter();
 
 	return (
 		<Card className="max-w-md rounded-none">
@@ -81,7 +83,16 @@ export default function SignIn() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							await signIn.email({ email, password });
+							startTransition(async () => {
+								await signIn.email(
+									{ email, password, rememberMe },
+									{
+										onSuccess(context) {
+											router.push("/dashboard");
+										},
+									},
+								);
+							});
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
@@ -178,15 +189,17 @@ export default function SignIn() {
 				</div>
 			</CardContent>
 			<CardFooter>
-				<div className="flex justify-center w-full border-t py-4">
+				<div className="flex justify-center w-full border-t pt-4">
 					<p className="text-center text-xs text-neutral-500">
-						Powered by{" "}
+						built with{" "}
 						<Link
 							href="https://better-auth.com"
 							className="underline"
 							target="_blank"
 						>
-							<span className="dark:text-orange-200/90">better-auth.</span>
+							<span className="dark:text-white/70 cursor-pointer">
+								better-auth.
+							</span>
 						</Link>
 					</p>
 				</div>

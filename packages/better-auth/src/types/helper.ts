@@ -1,5 +1,11 @@
-import type { Primitive } from "zod";
-
+export type Primitive =
+	| string
+	| number
+	| symbol
+	| bigint
+	| boolean
+	| null
+	| undefined;
 export type LiteralString = "" | (string & Record<never, never>);
 export type LiteralNumber = 0 | (number & Record<never, never>);
 

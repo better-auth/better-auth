@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { getCookies, getSessionCookie } from "../cookies";
+import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
 import type { BetterAuthOptions } from "../types/options";
 
 describe("cookies", async () => {
@@ -240,5 +240,85 @@ describe("getSessionCookie", async () => {
 			cookiePrefix: "test",
 		});
 		expect(cookies).not.toBeNull();
+	});
+
+	it("should return cookie cache", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	it("should return null if the cookie is invalid", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "wrong-secret",
+		});
+		expect(cache).toBeNull();
+	});
+
+	it("should throw an error if the secret is not provided", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		await expect(getCookieCache(request)).rejects.toThrow();
 	});
 });
