@@ -49,6 +49,7 @@
     "zod": "^3.25.0 || ^4.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/better-sqlite3": "^7.6.12",
     "better-call": "catalog:",
     "better-sqlite3": "^11.6.0",
