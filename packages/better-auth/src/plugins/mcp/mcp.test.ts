@@ -77,6 +77,9 @@ describe("mcp", async () => {
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
 			},
+			onResponse(context) {
+				console.log(context.response);
+			},
 		});
 
 		expect(createdClient.data).toMatchObject({
