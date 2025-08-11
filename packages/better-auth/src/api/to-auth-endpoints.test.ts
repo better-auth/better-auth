@@ -433,3 +433,23 @@ describe("disabled paths", async () => {
 		expect(error?.status).toBe(404);
 	});
 });
+
+describe("disabled paths with glob patterns", async () => {
+	const { client } = await getTestInstance({
+		disabledPaths: ["/sign-in/*", "/callback/**"],
+	});
+
+	it("should return 404 for single-level wildcard", async () => {
+		const { error } = await client.signIn.email({
+			email: "test@test.com",
+			password: "test",
+		});
+		expect(error?.status).toBe(404);
+	});
+	it("should return 404 for multi-level wildcard", async () => {
+		const { error } = await client.callback.oauth2({
+			provider: "google",
+		});
+		expect(error?.status).toBe(404);
+	});
+});
