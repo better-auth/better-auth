@@ -100,6 +100,12 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				headers: Headers;
 				response: any;
 			};
+
+			//if response object is returned we skip after hooks and post processing
+			if (result && result instanceof Response) {
+				return result;
+			}
+
 			internalContext.context.returned = result.response;
 			internalContext.context.responseHeaders = result.headers;
 
@@ -112,6 +118,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 			if (result.response instanceof APIError && !context?.asResponse) {
 				throw result.response;
 			}
+
 			const response = context?.asResponse
 				? toResponse(result.response, {
 						headers: result.headers,
