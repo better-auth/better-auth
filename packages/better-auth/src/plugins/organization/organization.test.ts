@@ -130,6 +130,31 @@ describe("organization", async (it) => {
 		expect(organizations.data?.length).toBe(2);
 	});
 
+	it("should not allow updating member role across organizations", async () => {
+		const { headers } = await signInWithTestUser();
+		const org2 = await client.organization.getFullOrganization({
+			query: {
+				organizationId: organization2Id,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const crossOrgMemberId = org2.data?.members[0].id as string;
+		const res = await client.organization.updateMemberRole({
+			organizationId,
+			memberId: crossOrgMemberId,
+			role: "admin",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+		);
+	});
+
 	it("should allow updating organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.update({

@@ -441,6 +441,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
+			if (toBeUpdatedMember.organizationId !== organizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				});
+			}
+
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 
 			const updatingMemberRoles = member.role.split(",");
