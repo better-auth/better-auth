@@ -179,10 +179,13 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				/**
 				 * If not provided, the active organization will be used
 				 */
-				organizationId: z.string().meta({
-					description:
-						'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
-				}),
+				organizationId: z
+					.string()
+					.meta({
+						description:
+							'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
+					})
+					.optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
