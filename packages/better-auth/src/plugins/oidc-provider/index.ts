@@ -319,11 +319,36 @@ export const oidcProvider = (options: OIDCOptions) => {
 					method: "POST",
 					body: z.object({
 						accept: z.boolean(),
+						consent_code: z.string().optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
-							description: "Handle OAuth2 consent",
+							description:
+								"Handle OAuth2 consent. Supports both URL parameter-based flows (consent_code in body) and cookie-based flows (signed cookie).",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												accept: {
+													type: "boolean",
+													description:
+														"Whether the user accepts or denies the consent request",
+												},
+												consent_code: {
+													type: "string",
+													description:
+														"The consent code from the authorization request. Optional if using cookie-based flow.",
+												},
+											},
+											required: ["accept"],
+										},
+									},
+								},
+							},
 							responses: {
 								"200": {
 									description: "Consent processed successfully",
@@ -349,18 +374,31 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const storedCode = await ctx.getSignedCookie(
-						"oidc_consent_prompt",
-						ctx.context.secret,
-					);
-					if (!storedCode) {
+					// Support both consent flow methods:
+					// 1. URL parameter-based: consent_code in request body (standard OAuth2 pattern)
+					// 2. Cookie-based: using signed cookie for stateful consent flows
+					let consentCode: string | null = ctx.body.consent_code || null;
+
+					if (!consentCode) {
+						// Check for cookie-based consent flow
+						consentCode = await ctx.getSignedCookie(
+							"oidc_consent_prompt",
+							ctx.context.secret,
+						);
+					}
+
+					if (!consentCode) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "No consent prompt found",
+							error_description:
+								"consent_code is required (either in body or cookie)",
 							error: "invalid_request",
 						});
 					}
+
 					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(storedCode);
+						await ctx.context.internalAdapter.findVerificationValue(
+							consentCode,
+						);
 					if (!verification) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Invalid code",
@@ -373,6 +411,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+
+					// Clear the cookie
+					ctx.setCookie("oidc_consent_prompt", "", {
+						maxAge: 0,
+					});
+
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
 					if (!value.requireConsent) {
 						throw new APIError("UNAUTHORIZED", {
@@ -754,7 +798,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
 					const payload = {
@@ -958,6 +1006,18 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const client = await getClient(
+						accessToken.clientId,
+						ctx.context.adapter,
+						trustedClients,
+					);
+					if (!client) {
+						throw new APIError("UNAUTHORIZED", {
+							error_description: "client not found",
+							error: "invalid_token",
+						});
+					}
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						accessToken.userId,
 					);
@@ -986,7 +1046,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 					};
 					const userClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: baseUserClaims;
 					return ctx.json({
 						...baseUserClaims,

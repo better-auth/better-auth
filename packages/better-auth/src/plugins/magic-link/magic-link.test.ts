@@ -32,7 +32,8 @@ describe("magic link", async () => {
 		fetchOptions: {
 			customFetchImpl,
 		},
-		baseURL: "http://localhost:3000/api/auth",
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
 	});
 
 	it("should send magic link", async () => {
