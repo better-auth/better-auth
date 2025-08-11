@@ -3,6 +3,8 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
 import { bearer } from "../bearer";
+import { splitAtLastColon } from "./utils";
+import { createAuthClient } from "../../client";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
@@ -299,33 +301,19 @@ describe("email-otp-verify", async () => {
 		},
 	);
 
-	it("should not create verification otp when disableSignUp and user not registered", async () => {
-		for (let param of [
-			{
-				email: "test-email@domain.com",
-				isNull: true,
-			},
-			{
-				email: testUser.email,
-				isNull: false,
-			},
-		]) {
-			await client.emailOtp.sendVerificationOtp({
-				email: param.email,
-				type: "email-verification",
-			});
-			const res = await auth.api.getVerificationOTP({
-				query: {
-					email: param.email,
-					type: "email-verification",
-				},
-			});
-			if (param.isNull) {
-				expect(res.otp).toBeNull();
-			} else {
-				expect(res.otp).not.toBeNull();
-			}
-		}
+	it("should return USER_NOT_FOUND error when disableSignUp and user not registered", async () => {
+		const response = await client.emailOtp.sendVerificationOtp({
+			email: "non-existent@domain.com",
+			type: "email-verification",
+		});
+
+		expect(response.error?.message).toBe("User not found");
+		// Existing user should still succeed
+		const successRes = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		expect(successRes.error).toBeFalsy();
 	});
 
 	it("should verify email with last otp", async () => {
@@ -481,5 +469,504 @@ describe("custom generate otpFn", async () => {
 			otp: "123456",
 		});
 		expect(res.data?.status).toBe(true);
+	});
+});
+
+describe("custom storeOTP", async () => {
+	// Testing hashed OTPs.
+	describe("hashed", async () => {
+		let sendVerificationOtpFn = async (data: {
+			email: string;
+			otp: string;
+			type: "sign-in" | "email-verification" | "forget-password";
+		}) => {};
+
+		function getTheSentOTP() {
+			let gotOtp: string | null = null;
+			let sub = (otp: string) => {};
+			sendVerificationOtpFn = async (data) => {
+				gotOtp = data.otp;
+				sub(data.otp);
+			};
+			return {
+				get: () =>
+					new Promise<string>((resolve) => {
+						if (gotOtp) {
+							resolve(gotOtp);
+						} else {
+							sub = (otp) => {
+								gotOtp = otp;
+								resolve(otp);
+							};
+						}
+					}),
+			};
+		}
+
+		const { client, testUser, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: async (d) => {
+							await sendVerificationOtpFn(d);
+						},
+						storeOTP: "hashed",
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+		const userEmail1 = `${crypto.randomUUID()}@email.com`;
+
+		let validOTP = "";
+
+		it("should create a hashed otp", async () => {
+			const { get } = getTheSentOTP();
+			await client.emailOtp.sendVerificationOtp({
+				email: userEmail1,
+				type: "sign-in",
+			});
+			const verificationValue =
+				await authCtx.internalAdapter.findVerificationValue(
+					`sign-in-otp-${userEmail1}`,
+				);
+
+			const storedOtp = verificationValue?.value || "";
+			const otp = await get();
+			validOTP = otp;
+			expect(storedOtp.length !== 0).toBe(true);
+			expect(splitAtLastColon(storedOtp)[0]).not.toBe(otp);
+			expect(storedOtp.endsWith(":0")).toBe(true);
+		});
+
+		it("should not be allowed to get otp if storeOTP is hashed", async () => {
+			try {
+				await auth.api.getVerificationOTP({
+					query: {
+						email: userEmail1,
+						type: "sign-in",
+					},
+				});
+			} catch (error: any) {
+				expect(error.statusCode).toBe(400);
+				expect(error.status).toBe("BAD_REQUEST");
+				expect(error.body.code).toBe(
+					"OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
+				);
+				return;
+			}
+			// Should not reach here given the above should throw and thus return.
+			expect(true).toBe(false);
+		});
+
+		it("should be able to sign in with normal otp", async () => {
+			const res = await client.signIn.emailOtp({
+				email: userEmail1,
+				otp: validOTP,
+			});
+			expect(res.data?.user.email).toBe(userEmail1);
+			expect(res.data?.token).toBeDefined();
+		});
+	});
+
+	// Testing encrypted OTPs.
+	describe("encrypted", async () => {
+		let sendVerificationOtpFn = async (data: {
+			email: string;
+			otp: string;
+			type: "sign-in" | "email-verification" | "forget-password";
+		}) => {};
+
+		function getTheSentOTP() {
+			let gotOtp: string | null = null;
+			let sub = (otp: string) => {};
+			sendVerificationOtpFn = async (data) => {
+				gotOtp = data.otp;
+				sub(data.otp);
+			};
+			return {
+				get: () =>
+					new Promise<string>((resolve) => {
+						if (gotOtp) {
+							resolve(gotOtp);
+						} else {
+							sub = (otp) => {
+								gotOtp = otp;
+								resolve(otp);
+							};
+						}
+					}),
+			};
+		}
+
+		const { client, testUser, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: async (d) => {
+							await sendVerificationOtpFn(d);
+						},
+						storeOTP: "encrypted",
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+		const userEmail1 = `${crypto.randomUUID()}@email.com`;
+
+		let encryptedOtp = "";
+		let validOTP = "";
+
+		it("should create an encrypted otp", async () => {
+			const { get } = getTheSentOTP();
+			await client.emailOtp.sendVerificationOtp({
+				email: userEmail1,
+				type: "sign-in",
+			});
+			const verificationValue =
+				await authCtx.internalAdapter.findVerificationValue(
+					`sign-in-otp-${userEmail1}`,
+				);
+
+			const storedOtp = verificationValue?.value || "";
+			const otp = await get();
+			expect(storedOtp.length !== 0).toBe(true);
+			expect(splitAtLastColon(storedOtp)[0]).not.toBe(otp);
+			expect(storedOtp.endsWith(":0")).toBe(true);
+			encryptedOtp = storedOtp;
+			validOTP = otp;
+		});
+
+		it("should be allowed to get otp if storeOTP is encrypted", async () => {
+			try {
+				const res = await auth.api.getVerificationOTP({
+					query: {
+						email: userEmail1,
+						type: "sign-in",
+					},
+				});
+				if (!res.otp) {
+					expect(true).toBe(false);
+					return;
+				}
+				expect(res.otp).toEqual(validOTP);
+				expect(res.otp.length).toBe(6);
+			} catch (error: any) {
+				expect(error).not.toBeDefined();
+			}
+		});
+
+		it("should be able to sign in with encrypted otp", async () => {
+			const res = await client.signIn.emailOtp({
+				email: userEmail1,
+				otp: validOTP,
+			});
+			expect(res.data?.user.email).toBe(userEmail1);
+			expect(res.data?.token).toBeDefined();
+		});
+	});
+
+	describe("custom encryptor", async () => {
+		let sendVerificationOtpFn = async (data: {
+			email: string;
+			otp: string;
+			type: "sign-in" | "email-verification" | "forget-password";
+		}) => {};
+
+		function getTheSentOTP() {
+			let gotOtp: string | null = null;
+			let sub = (otp: string) => {};
+			sendVerificationOtpFn = async (data) => {
+				gotOtp = data.otp;
+				sub(data.otp);
+			};
+			return {
+				get: () =>
+					new Promise<string>((resolve) => {
+						if (gotOtp) {
+							resolve(gotOtp);
+						} else {
+							sub = (otp) => {
+								gotOtp = otp;
+								resolve(otp);
+							};
+						}
+					}),
+			};
+		}
+
+		const { client, testUser, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: async (d) => {
+							await sendVerificationOtpFn(d);
+						},
+						storeOTP: {
+							encrypt: async (otp) => {
+								return otp + "encrypted";
+							},
+							decrypt: async (otp) => {
+								return otp.replace("encrypted", "");
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+
+		let validOTP = "";
+		let userEmail1 = `${crypto.randomUUID()}@email.com`;
+
+		it("should create a custom encryptor otp", async () => {
+			const { get } = getTheSentOTP();
+			await client.emailOtp.sendVerificationOtp({
+				email: userEmail1,
+				type: "sign-in",
+			});
+			const verificationValue =
+				await authCtx.internalAdapter.findVerificationValue(
+					`sign-in-otp-${userEmail1}`,
+				);
+			const storedOtp = verificationValue?.value || "";
+			const otp = await get();
+			expect(storedOtp.length !== 0).toBe(true);
+			expect(splitAtLastColon(storedOtp)[0]).not.toBe(otp);
+			expect(storedOtp.endsWith(":0")).toBe(true);
+			validOTP = otp;
+		});
+
+		it("should be allowed to get otp if storeOTP is custom encryptor", async () => {
+			try {
+				const res = await auth.api.getVerificationOTP({
+					query: {
+						email: userEmail1,
+						type: "sign-in",
+					},
+				});
+				if (!res.otp) {
+					expect(true).toBe(false);
+					return;
+				}
+				expect(res.otp).toEqual(validOTP);
+				expect(res.otp.length).toBe(6);
+			} catch (error: any) {
+				console.error(error);
+				expect(error).not.toBeDefined();
+			}
+		});
+
+		it("should be able to sign in with custom encryptor otp", async () => {
+			const res = await client.signIn.emailOtp({
+				email: userEmail1,
+				otp: validOTP,
+			});
+			expect(res.data?.user.email).toBe(userEmail1);
+			expect(res.data?.token).toBeDefined();
+		});
+	});
+
+	describe("custom hasher", async () => {
+		let sendVerificationOtpFn = async (data: {
+			email: string;
+			otp: string;
+			type: "sign-in" | "email-verification" | "forget-password";
+		}) => {};
+
+		function getTheSentOTP() {
+			let gotOtp: string | null = null;
+			let sub = (otp: string) => {};
+			sendVerificationOtpFn = async (data) => {
+				gotOtp = data.otp;
+				sub(data.otp);
+			};
+			return {
+				get: () =>
+					new Promise<string>((resolve) => {
+						if (gotOtp) {
+							resolve(gotOtp);
+						} else {
+							sub = (otp) => {
+								gotOtp = otp;
+								resolve(otp);
+							};
+						}
+					}),
+			};
+		}
+
+		const { client, testUser, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: async (d) => {
+							await sendVerificationOtpFn(d);
+						},
+						storeOTP: {
+							hash: async (otp) => {
+								return otp + "hashed";
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+
+		let validOTP = "";
+		let userEmail1 = `${crypto.randomUUID()}@email.com`;
+
+		it("should create a custom hasher otp", async () => {
+			const { get } = getTheSentOTP();
+			await client.emailOtp.sendVerificationOtp({
+				email: userEmail1,
+				type: "sign-in",
+			});
+			const verificationValue =
+				await authCtx.internalAdapter.findVerificationValue(
+					`sign-in-otp-${userEmail1}`,
+				);
+			const storedOtp = verificationValue?.value || "";
+			const otp = await get();
+			expect(storedOtp.length !== 0).toBe(true);
+			expect(splitAtLastColon(storedOtp)[0]).not.toBe(otp);
+			expect(storedOtp.endsWith(":0")).toBe(true);
+			validOTP = otp;
+		});
+
+		it("should be allowed to get otp if storeOTP is custom hasher", async () => {
+			try {
+				const result = await auth.api.getVerificationOTP({
+					query: {
+						email: userEmail1,
+						type: "sign-in",
+					},
+				});
+			} catch (error: any) {
+				expect(error.statusCode).toBe(400);
+				expect(error.status).toBe("BAD_REQUEST");
+				expect(error.body.code).toBe(
+					"OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
+				);
+				return;
+			}
+			// Should not reach here given the above should throw and thus return.
+			expect(true).toBe(false);
+		});
+
+		it("should be able to sign in with custom hasher otp", async () => {
+			const res = await client.signIn.emailOtp({
+				email: userEmail1,
+				otp: validOTP,
+			});
+			expect(res.data?.user.email).toBe(userEmail1);
+			expect(res.data?.token).toBeDefined();
+		});
+	});
+});
+
+describe("override default email verification", async () => {
+	let otp = "";
+	const { cookieSetter, customFetchImpl } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+		emailVerification: {
+			sendOnSignUp: true,
+		},
+		plugins: [
+			emailOTP({
+				async sendVerificationOTP(data, request) {
+					otp = data.otp;
+				},
+				overrideDefaultEmailVerification: true,
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [emailOTPClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const headers = new Headers();
+	it("should send verification email on sign up", async () => {
+		await client.signUp.email(
+			{
+				email: "test-otp-override@email.com",
+				password: "password",
+				name: "Test User",
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(otp.length).toBe(6);
+	});
+
+	it("should verify email with otp", async () => {
+		const res = await client.emailOtp.verifyEmail({
+			email: "test-otp-override@email.com",
+			otp,
+		});
+		expect(res.data?.status).toBe(true);
+		expect(res.data?.user.emailVerified).toBe(true);
+	});
+
+	it("should by default not override default email verification", async () => {
+		const sendVerificationOTP = vi.fn();
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				sendOnSignUp: true,
+				async sendVerificationEmail(data, request) {
+					sendVerificationOTP(data, request);
+				},
+			},
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP(data, request) {
+						//
+					},
+				}),
+			],
+		});
+		await client.signUp.email(
+			{
+				email: "test-otp-override@email.com",
+				password: "password",
+				name: "Test User",
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(sendVerificationOTP).toHaveBeenCalled();
 	});
 });

@@ -4,6 +4,14 @@ const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const config = {
+	async rewrites() {
+		return [
+			{
+				source: "/docs/:path*.mdx",
+				destination: "/llms.txt/:path*",
+			},
+		];
+	},
 	redirects: async () => {
 		return [
 			{

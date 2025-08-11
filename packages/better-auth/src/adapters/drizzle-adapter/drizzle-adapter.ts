@@ -44,6 +44,13 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	debugLogs?: AdapterDebugLogs;
+	/**
+	 * By default snake case is used for table and field names
+	 * when the CLI is used to generate the schema. If you want
+	 * to use camel case, set this to true.
+	 * @default false
+	 */
+	camelCase?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>

@@ -46,6 +46,28 @@ These custom rules ensure that sensitive operations are protected with stricter 
 
 ## Configuring Rate Limit
 
+### Connecting IP Address
+
+Rate limiting uses the connecting IP address to track the number of requests made by a user. The
+default header checked is `x-forwarded-for`, which is commonly used in production environments. If
+you are using a different header to track the user's IP address, you'll need to specify it.
+
+```ts title="auth.ts" 
+export const auth = betterAuth({
+    //...other options
+    advanced: {
+        ipAddress: {
+          ipAddressHeaders: ["cf-connecting-ip"], // Cloudflare specific header example
+      },
+    },
+    rateLimit: {
+        enabled: true,
+        window: 60, // time window in seconds
+        max: 100, // max requests in the window
+    },
+})
+```
+
 ### Rate Limit Window
 
 ```ts title="auth.ts"

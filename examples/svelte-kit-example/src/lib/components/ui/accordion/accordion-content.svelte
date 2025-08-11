@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "$lib/utils";
 import { Accordion as AccordionPrimitive } from "bits-ui";
 import { slide } from "svelte/transition";
 

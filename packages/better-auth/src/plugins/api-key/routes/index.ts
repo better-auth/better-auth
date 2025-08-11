@@ -23,6 +23,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "maximumNameLength"
 			| "disableKeyHashing"
 			| "minimumNameLength"
+			| "requireName"
 			| "enableMetadata"
 			| "disableSessionForAPIKeys"
 			| "startingCharactersConfig"
@@ -56,6 +57,11 @@ export function deleteAllExpiredApiKeys(
 					field: "expiresAt" satisfies keyof ApiKey,
 					operator: "lt",
 					value: new Date(),
+				},
+				{
+					field: "expiresAt",
+					operator: "ne",
+					value: null,
 				},
 			],
 		});
