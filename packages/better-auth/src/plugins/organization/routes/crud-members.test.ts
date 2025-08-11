@@ -212,3 +212,124 @@ describe("listMembers", async () => {
 		);
 	});
 });
+
+describe("updateMemberRole", async () => {
+	const { auth, signInWithTestUser, cookieSetter, customFetchImpl } =
+		await getTestInstance({
+			plugins: [organization()],
+		});
+
+	it("should update the member role", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "test",
+			slug: "test",
+			metadata: {
+				test: "test",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "test2@test.com",
+				name: "test",
+				password: "password",
+			},
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+		const updatedMember = await client.organization.updateMemberRole(
+			{
+				organizationId: org.data?.id as string,
+				memberId: member?.id as string,
+				role: "admin",
+			},
+			{
+				headers,
+			},
+		);
+		expect(updatedMember.data?.role).toBe("admin");
+	});
+
+	it("should not update the member role if the member updating is not a member	", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "test",
+			slug: "test",
+			metadata: {
+				test: "test",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "test3@test.com",
+				name: "test",
+				password: "password",
+			},
+		});
+		const newOrg = await client.organization.create(
+			{
+				name: "test2",
+				slug: "test2",
+				metadata: {
+					test: "test",
+				},
+			},
+			{
+				headers: new Headers({
+					authorization: `Bearer ${newUser.token}`,
+				}),
+			},
+		);
+		await auth.api.addMember({
+			body: {
+				organizationId: newOrg.data?.id as string,
+				userId: user.id,
+				role: "admin",
+			},
+		});
+		const updatedMember = await client.organization.updateMemberRole(
+			{
+				organizationId: newOrg.data?.id as string,
+				memberId: newOrg.data?.members[0]?.id as string,
+				role: "admin",
+			},
+			{
+				headers,
+			},
+		);
+		expect(updatedMember.error).toBeTruthy();
+		expect(updatedMember.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+		);
+	});
+});

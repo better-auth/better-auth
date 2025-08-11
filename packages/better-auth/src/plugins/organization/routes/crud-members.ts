@@ -441,6 +441,16 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
+			const memberBelongsToOrganization =
+				toBeUpdatedMember.organizationId === organizationId;
+
+			if (!memberBelongsToOrganization) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+				});
+			}
+
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 
 			const updatingMemberRoles = member.role.split(",");
