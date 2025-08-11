@@ -133,7 +133,13 @@ pnpm lint:fix
 
 2. Make your changes following the code style guidelines
 
-3. Test your changes locally:
+3. Build the package:
+   ```bash
+   # In packages/better-auth
+   pnpm build
+   ```
+
+4. Test your changes locally:
 
    **PNPM linking**
    ```bash
@@ -150,8 +156,6 @@ pnpm lint:fix
    If you run into a symlink issue, you can use the packing method instead:
    ```bash
    # In packages/better-auth
-   pnpm install
-   pnpm build
    pnpm pack
    ```
    
@@ -161,8 +165,8 @@ pnpm lint:fix
    pnpm install ../../packages/better-auth/better-auth-*.tgz
    ```
 
-4. Add tests for your changes
-5. Run the test suite:
+5. Add tests for your changes
+6. Run the test suite:
    ```bash
    # Run all tests
    pnpm test
@@ -170,13 +174,13 @@ pnpm lint:fix
    # Run tests for a specific package
    pnpm --filter "{packagename}" test
    ```
-6. Ensure all tests pass and the code is properly formatted
-7. If your change is either a bug fix or a feature in the following packages: `better-auth`, `@better-auth/cli`, `@better-auth/expo`,
+7. Ensure all tests pass and the code is properly formatted
+8. If your change is either a bug fix or a feature in the following packages: `better-auth`, `@better-auth/cli`, `@better-auth/expo`,
    `@better-auth/sso` or `@better-auth/stripe`. Run the following command to create a [changeset](https://github.com/changesets/changesets/tree/main?tab=readme-ov-file#how-do-we-do-that).
    ```
    pnpm changeset
    ```
-8. Commit your changes with a descriptive message following the [Conventional Commits](https://www.conventionalcommits.org/) format:
+9. Commit your changes with a descriptive message following the [Conventional Commits](https://www.conventionalcommits.org/) format:
    ```
    type(scope): description
    
@@ -184,8 +188,8 @@ pnpm lint:fix
    
    [optional footer(s)]
    ```
-9. Push your branch to your fork
-10. Open a pull request against the main branch
+10. Push your branch to your fork
+11. Open a pull request against the main branch
 
 ## Testing
 
