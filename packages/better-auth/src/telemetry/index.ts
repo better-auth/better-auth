@@ -55,7 +55,7 @@ export async function createTelemetry(
 		database: await detectDatabase(),
 		framework: await detectFramework(),
 		environment: detectEnvironment(),
-		systemInfo: detectSystemInfo(),
+		systemInfo: await detectSystemInfo(),
 		packageManager: detectPackageManager(),
 	};
 	const enabled = await isEnabled();
