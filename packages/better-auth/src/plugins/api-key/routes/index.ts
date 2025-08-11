@@ -75,9 +75,10 @@ export function createApiKeyRoutes({
 	opts,
 	schema,
 }: {
-	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
-		| Promise<string>
-		| string;
+	keyGenerator: (options: {
+		length: number;
+		prefix: string | undefined;
+	}) => Promise<string> | string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 }) {

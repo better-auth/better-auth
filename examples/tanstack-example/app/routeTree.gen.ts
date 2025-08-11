@@ -11,10 +11,10 @@
 // Import Routes
 
 import { Route as rootRoute } from "./routes/__root";
-import { Route as IndexImport } from "./routes/index";
-import { Route as AuthTwoFactorImport } from "./routes/auth/two-factor";
-import { Route as AuthSignupImport } from "./routes/auth/signup";
 import { Route as AuthSigninImport } from "./routes/auth/signin";
+import { Route as AuthSignupImport } from "./routes/auth/signup";
+import { Route as AuthTwoFactorImport } from "./routes/auth/two-factor";
+import { Route as IndexImport } from "./routes/index";
 
 // Create/Update Routes
 
