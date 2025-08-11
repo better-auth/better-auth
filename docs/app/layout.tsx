@@ -42,7 +42,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 					data-track-errors="true"
 					crossOrigin="anonymous"
 					strategy="afterInteractive"
-					defer
+					async
 				/>
 			</head>
 			<body
