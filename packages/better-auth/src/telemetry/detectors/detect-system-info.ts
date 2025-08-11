@@ -88,7 +88,7 @@ export async function detectSystemInfo() {
 			cpuSpeed: cpus.length ? cpus[0].speed : null,
 			memory: os.totalmem(),
 			isWSL: isWsl(),
-			isDocker: isDocker(),
+			isDocker: await isDocker(),
 			isTTY: process.stdout.isTTY,
 		};
 	} catch (e) {
