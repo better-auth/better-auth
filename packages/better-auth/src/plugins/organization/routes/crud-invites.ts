@@ -256,7 +256,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							},
 							ctx.context,
 						)
-					: ctx.context.orgOptions.invitationLimit ?? 100;
+					: (ctx.context.orgOptions.invitationLimit ?? 100);
 
 			const pendingInvitations = await adapter.findPendingInvitations({
 				organizationId: organizationId,
@@ -315,7 +315,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				"teamId" in ctx.body
 					? typeof ctx.body.teamId === "string"
 						? [ctx.body.teamId as string]
-						: (ctx.body.teamId as string[]) ?? []
+						: ((ctx.body.teamId as string[]) ?? [])
 					: [];
 
 			const {

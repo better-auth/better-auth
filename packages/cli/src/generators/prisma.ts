@@ -63,7 +63,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				isBigint,
 				isOptional,
 				type,
-			}: { type: FieldType; isOptional: boolean; isBigint: boolean }) {
+			}: {
+				type: FieldType;
+				isOptional: boolean;
+				isBigint: boolean;
+			}) {
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
 				}
