@@ -39,6 +39,10 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
 			get(target, prop: string) {
+				// Prevent the proxy from being treated as a thenable
+				if (prop === 'then') {
+					return undefined;
+				}
 				const fullPath = [...path, prop];
 				let current: any = routes;
 				for (const segment of fullPath) {

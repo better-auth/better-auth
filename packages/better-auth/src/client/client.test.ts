@@ -112,6 +112,28 @@ describe("run time proxy", async () => {
 		);
 		expect(called).toBe(true);
 	});
+
+	it("should not be treated as thenable (Issue #3657)", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Test that accessing 'then' property returns undefined
+		expect(client.then).toBeUndefined();
+
+		// Test that Promise.resolve doesn't treat it as thenable
+		const resolvedClient = await Promise.resolve(client);
+		expect(resolvedClient).toBe(client);
+
+		// Test that it can still be used normally for API calls
+		expect(typeof client.test).toBe("function");
+	});
 });
 
 describe("type", () => {
