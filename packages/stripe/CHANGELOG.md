@@ -1,5 +1,27 @@
 # @better-auth/stripe
 
+## 1.3.5
+
+### Patch Changes
+
+- 2ec8cad: should fallback to subscription id when it's present in the body
+- a536de9: Fix an issue where updating Stripe customer ID wasn't properly syncing with secondary storage during user creation
+- b527362: A new API endpoint to create Stripe billing portal sessions, allowing users to manage subscriptions, payment methods, and billing history
+- 91cae8a: chore: fix wrong cancelUrl and returnUrl descriptions
+- Updated dependencies [1421360]
+- Updated dependencies [e5f3f31]
+- Updated dependencies [e4af253]
+- Updated dependencies [b27221b]
+- Updated dependencies [375fff5]
+- Updated dependencies [4833a4b]
+- Updated dependencies [7fa90f8]
+- Updated dependencies [60c92fa]
+- Updated dependencies [d1d593f]
+- Updated dependencies [29c0df5]
+- Updated dependencies [c726753]
+- Updated dependencies [978b285]
+  - better-auth@1.3.5
+
 ## 1.3.4
 
 ### Patch Changes
