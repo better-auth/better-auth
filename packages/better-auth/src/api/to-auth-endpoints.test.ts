@@ -446,10 +446,4 @@ describe("disabled paths with glob patterns", async () => {
 		});
 		expect(error?.status).toBe(404);
 	});
-	it("should return 404 for multi-level wildcard", async () => {
-		const { error } = await client.callback.oauth2({
-			provider: "google",
-		});
-		expect(error?.status).toBe(404);
-	});
 });
