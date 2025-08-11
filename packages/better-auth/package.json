@@ -711,6 +711,7 @@
     "@prisma/client": "^5.22.0",
     "@tanstack/react-start": "^1.114.34",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/bun": "^1.2.20",
     "@types/keccak": "^3.0.5",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
