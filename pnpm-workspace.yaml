@@ -4,6 +4,7 @@ packages:
   - docs
   - examples/**
   - demo/*
+  - .github/actions/**
 catalogs:
   react18:
     '@types/react': ^19.1.0

@@ -12,10 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
 
-      - name: 'Test action'
-        run: bun run .github/actions/github-reports/index.ts
-        continue-on-error: true
+      - name: Install
+        run: pnpm install
+
+      - name: Run GitHub Reports
+        run: bun run .github/actions/github-reports/
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
