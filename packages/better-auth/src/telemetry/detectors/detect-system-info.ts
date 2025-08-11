@@ -87,7 +87,7 @@ export async function detectSystemInfo() {
 			cpuModel: cpus.length ? cpus[0].model : null,
 			cpuSpeed: cpus.length ? cpus[0].speed : null,
 			memory: os.totalmem(),
-			isWSL: isWsl(),
+			isWSL: await isWsl(),
 			isDocker: await isDocker(),
 			isTTY: process.stdout.isTTY,
 		};
