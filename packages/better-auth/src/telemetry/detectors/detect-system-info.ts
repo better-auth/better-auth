@@ -6,7 +6,7 @@ function getVendor() {
 
 	if (
 		hasAny("CF_PAGES", "CF_PAGES_URL", "CF_ACCOUNT_ID") ||
-		navigator.userAgent === "Cloudflare-Workers"
+		(typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers")
 	) {
 		return "cloudflare";
 	}
