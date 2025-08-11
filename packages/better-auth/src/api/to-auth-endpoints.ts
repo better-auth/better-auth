@@ -96,7 +96,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 			};
 
 			//if response object is returned we skip after hooks and post processing
-			if (result instanceof Response) {
+			if (result && result instanceof Response) {
 				return result;
 			}
 
