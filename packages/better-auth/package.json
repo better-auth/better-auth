@@ -709,6 +709,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/bun": "^1.2.20",
     "@tanstack/react-start": "^1.131.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/keccak": "^3.0.5",
