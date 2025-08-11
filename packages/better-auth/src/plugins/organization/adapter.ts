@@ -276,21 +276,21 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member;
 		},
-        updateMember: async (memberId: string, role: string) => {
-            const member = await adapter.update<InferMember<O>>({
-                model: "member",
-                where: [
-                    {
-                        field: "id",
-                        value: memberId,
-                    },
-                ],
-                update: {
-                    role,
-                },
-            });
-            return member;
-        },
+		updateMember: async (memberId: string, role: string) => {
+			const member = await adapter.update<InferMember<O>>({
+				model: "member",
+				where: [
+					{
+						field: "id",
+						value: memberId,
+					},
+				],
+				update: {
+					role,
+				},
+			});
+			return member;
+		},
 		deleteMember: async (memberId: string) => {
 			const member = await adapter.delete<InferMember<O>>({
 				model: "member",

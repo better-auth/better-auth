@@ -150,9 +150,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-		);
+		expect(res.error?.message).toBe(ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND);
 	});
 
 	it("should allow updating organization", async () => {
