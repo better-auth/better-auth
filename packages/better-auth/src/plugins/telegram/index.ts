@@ -17,11 +17,6 @@ export type TelegramOptions = {
 	 */
 	botToken: string;
 	/**
-	 * The email domain name for creating user accounts.
-	 * Defaults to the domain from your base URL
-	 */
-	emailDomainName?: string;
-	/**
 	 * Custom function to map the user profile to a User object.
 	 */
 	mapProfileToUser?: (profile: TelegramProfile) =>
@@ -192,8 +187,7 @@ export const telegram = (options: TelegramOptions) => {
 						});
 					}
 
-					const domain =
-						options.emailDomainName ?? getOriginHostname(ctx.context.baseURL);
+					const domain = getOriginHostname(ctx.context.baseURL);
 					const userMap = await options.mapProfileToUser?.(profile);
 					const userEmail =
 						userMap?.email ?? `telegram-${profile.id}@${domain}`;
@@ -395,8 +389,7 @@ export const telegram = (options: TelegramOptions) => {
 						});
 					}
 
-					const domain =
-						options.emailDomainName ?? getOriginHostname(ctx.context.baseURL);
+					const domain = getOriginHostname(ctx.context.baseURL);
 					const userMap = await options.mapProfileToUser?.(profile);
 					const userEmail =
 						userMap?.email ?? `telegram-${profile.id}@${domain}`;
