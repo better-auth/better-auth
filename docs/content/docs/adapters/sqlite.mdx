@@ -23,13 +23,18 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout>
+  For more information, read Kysely's documentation to the
+  [SqliteDialect](https://kysely-org.github.io/kysely-apidoc/classes/SqliteDialect.html).
+</Callout>
+
 ### Node.js Built-in SQLite (Experimental)
 
 <Callout type="warning">
   The `node:sqlite` module is still experimental and may change at any time. It requires Node.js 22.5.0 or later.
 </Callout>
 
-Starting from Node.js 22.5.0, you can use the built-in SQLite module:
+Starting from Node.js 22.5.0, you can use the built-in [SQLite](https://nodejs.org/api/sqlite.html) module:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -45,10 +50,17 @@ To run your application with Node.js SQLite:
 node your-app.js
 ```
 
-<Callout>
-  For more information, read Kysely's documentation to the
-  [SqliteDialect](https://kysely-org.github.io/kysely-apidoc/classes/SqliteDialect.html).
-</Callout>
+### Bun Built-in SQLite
+
+You can also use the built-in [SQLite](https://bun.com/docs/api/sqlite) module in Bun, which is similar to the Node.js version:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { Database } from "bun:sqlite";
+export const auth = betterAuth({
+  database: new Database("database.sqlite"),
+});
+```
 
 ## Schema generation & migration
 
