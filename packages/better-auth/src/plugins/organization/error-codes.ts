@@ -40,7 +40,7 @@ export const ORGANIZATION_ERROR_CODES = {
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:
 		"Inviter is no longer a member of the organization",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
-		"You are not allowed to invite user with this role",
+		"You are not allowed to invite a user with this role",
 	FAILED_TO_RETRIEVE_INVITATION: "Failed to retrieve invitation",
 	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS:
 		"You have reached the maximum number of teams",
