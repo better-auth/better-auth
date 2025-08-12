@@ -1334,7 +1334,7 @@ describe("owner can update roles", async () => {
 			body: {
 				organizationId: org.id,
 				memberId: addMemberRes.id,
-				role: ["custom"],
+				role: ["custom", "owner"],
 			},
 		});
 
@@ -1386,8 +1386,7 @@ describe("owner can update roles", async () => {
 		expect(permissionRes.error).toBeNull();
 	});
 
-	// TODO: We might not want to allow this.
-	it("allows an org owner to remove their own creator role", async () => {
+	it("allows an org owner to remove their own creator role if not sole owner", async () => {
 		await auth.api.updateMemberRole({
 			headers: { cookie: adminCookie },
 			body: {
@@ -1396,12 +1395,38 @@ describe("owner can update roles", async () => {
 				role: [],
 			},
 		});
-
-		const member = await auth.api.getActiveMember({
-			headers: { cookie: adminCookie },
-		});
-		expect(member?.role).toBe("");
 	});
+
+	it("should throw error if sole org owner tries to remove creator role"),
+		async () => {
+			const userEmail = "user@email.com";
+			const userPassword = "userpassword";
+
+			const signInRes = await auth.api.signInEmail({
+				returnHeaders: true,
+				body: {
+					email: userEmail,
+					password: userPassword,
+				},
+			});
+
+			const userCookie = signInRes.headers.getSetCookie()[0];
+
+			await auth.api
+				.updateMemberRole({
+					headers: { cookie: userCookie },
+					body: {
+						organizationId: org.id,
+						memberId: ownerId,
+						role: [],
+					},
+				})
+				.catch((e: APIError) => {
+					expect(e.message).toBe(
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
+					);
+				});
+		};
 });
 
 describe("types", async (it) => {

@@ -461,6 +461,8 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const isSettingCreatorRole = roleToSet.includes(creatorRole);
 
+			const memberIsUpdatingThemselves = member.id === toBeUpdatedMember.id;
+
 			if (
 				(isUpdatingCreator && !updaterIsCreator) ||
 				(isSettingCreatorRole && !updaterIsCreator)
@@ -469,6 +471,26 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
+			}
+
+			if (updaterIsCreator) {
+				const { members } = await adapter.listMembers({
+					organizationId: organizationId,
+				});
+				const owners = members.filter((member: Member) => {
+					const roles = member.role.split(",");
+					return roles.includes(creatorRole);
+				});
+				if (
+					owners.length <= 1 &&
+					!isSettingCreatorRole &&
+					memberIsUpdatingThemselves
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
+					});
+				}
 			}
 
 			const canUpdateMember = hasPermission({
