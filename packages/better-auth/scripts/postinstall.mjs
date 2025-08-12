@@ -1,5 +1,4 @@
 const isCI = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
-const isTTY = process.stdout && process.stdout.isTTY;
 const isDisabled =
 	String(process.env.BETTER_AUTH_SILENT_POSTINSTALL || "").toLowerCase() ===
 		"1" ||
@@ -23,7 +22,6 @@ You can also debug what would be sent by setting:
 Learn more in the docs: https://www.better-auth.com/docs/reference/telemetry\n\n`;
 
 try {
-	// eslint-disable-next-line no-console
 	console.log(message);
 } catch {
 	// ignore
