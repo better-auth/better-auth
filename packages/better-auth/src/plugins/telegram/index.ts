@@ -6,6 +6,7 @@ import type { Account, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { sessionMiddleware } from "../../api";
 
 // TODO implement link with existing account
 // TODO docs texts: react examples, redirect/callback flows
@@ -263,6 +264,160 @@ export const telegram = (options: TelegramOptions) => {
 							createdAt: user.createdAt,
 							updatedAt: user.updatedAt,
 						},
+					});
+				},
+			),
+			link: createAuthEndpoint(
+				"/telegram/link",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.number(),
+						first_name: z.string().optional(),
+						last_name: z.string().optional(),
+						username: z.string().optional(),
+						photo_url: z.string().optional(),
+						auth_date: z.number(),
+						hash: z.string(),
+						rememberMe: z.boolean().optional(),
+						callbackURL: z.string().optional(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const session = ctx.context.session;
+
+					const {
+						id,
+						first_name,
+						last_name,
+						username,
+						photo_url,
+						auth_date,
+						hash,
+						rememberMe,
+					} = ctx.body;
+
+					// create data-check-string by sorting all fields except hash
+					const dataFields = {
+						id: id,
+						first_name: first_name,
+						last_name: last_name,
+						username: username,
+						photo_url: photo_url,
+						auth_date: auth_date,
+					};
+
+					const authDate = parseInt(auth_date.toString());
+					const currentTime = Math.floor(Date.now() / 1000);
+					const maxAge = 60 * 5; // 5 minutes in seconds
+
+					// check if data is expired
+					if (currentTime - authDate > maxAge) {
+						ctx.context.logger.error("Expired auth date", {
+							telegramId: id,
+						});
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.EXPIRED_AUTH_DATE,
+						});
+					}
+
+					// build data string
+					const dataCheckString = buildTelegramHash(dataFields);
+
+					// create secret key by hashing the bot token with sha256
+					const secretKey = await createHash("SHA-256").digest(
+						options.botToken,
+					);
+
+					// create hmac-sha256 signature
+					const hmac = createHMAC("SHA-256", "hex");
+					const key = await hmac.importKey(secretKey, "sign");
+					const calculatedHash = await hmac.sign(key, dataCheckString);
+
+					// compare with received hash
+					if (calculatedHash !== hash) {
+						ctx.context.logger.error("Invalid hash", {
+							telegramId: id,
+						});
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.INVALID_DATA_OR_HASH,
+						});
+					}
+
+					let profile: TelegramProfile = {
+						id: id,
+						first_name: first_name,
+						last_name: last_name,
+						username: username,
+						photo_url: photo_url,
+					};
+
+					let user: User | null = null;
+
+					// look for existing accounts
+					const existingAccounts =
+						await ctx.context.internalAdapter.findAccounts(session.user.id);
+
+					// if the account is already connected, early return
+					const hasBeenLinked = existingAccounts.find(
+						(a) =>
+							a.providerId === profile.id.toString() &&
+							a.userId === session.user.id,
+					);
+					if (hasBeenLinked) {
+						return ctx.json({
+							redirect: false,
+							url: "", // this is for type inference
+							status: true,
+						});
+					}
+
+					// look for existing account by telegram id
+					const existingAccount: Account | null =
+						await ctx.context.adapter.findOne({
+							model: "account",
+							where: [
+								{
+									field: "providerId",
+									operator: "eq",
+									value: "telegram",
+								},
+								{
+									field: "accountId",
+									operator: "eq",
+									value: profile.id.toString(),
+								},
+							],
+						});
+
+					if (existingAccount) {
+						user = await ctx.context.adapter.findOne<User>({
+							model: "user",
+							where: [
+								{
+									field: "id",
+									operator: "eq",
+									value: existingAccount.userId,
+								},
+							],
+						});
+					}
+
+					// link account
+					await ctx.context.internalAdapter.linkAccount(
+						{
+							userId: session.user.id,
+							providerId: "telegram",
+							accountId: profile.id.toString(),
+						},
+						ctx,
+					);
+
+					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
+						url: ctx.body.callbackURL,
+						status: true,
 					});
 				},
 			),
