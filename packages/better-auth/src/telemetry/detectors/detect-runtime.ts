@@ -14,10 +14,10 @@ export function detectRuntime() {
 		return { name: "bun", version: bunVersion };
 	}
 
-    if (typeof process !== "undefined" && process?.versions?.node) {
-        return { name: "node", version: process.versions.node ?? null };
-    }
-    return { name: "edge", version: null };
+	if (typeof process !== "undefined" && process?.versions?.node) {
+		return { name: "node", version: process.versions.node ?? null };
+	}
+	return { name: "edge", version: null };
 }
 
 export function detectEnvironment() {
