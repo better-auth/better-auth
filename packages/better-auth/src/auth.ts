@@ -34,7 +34,10 @@ export const betterAuth = <O extends BetterAuthOptions>(
 		handler: async (request: Request) => {
 			const ctx = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
-			if (!ctx.options.baseURL || typeof (options as any).baseURL === "function") {
+			if (
+				!ctx.options.baseURL ||
+				typeof (options as any).baseURL === "function"
+			) {
 				let resolvedFromFn: string | undefined;
 				if (typeof (options as any).baseURL === "function") {
 					try {

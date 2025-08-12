@@ -10,7 +10,7 @@ export async function generateState(
 		userId: string;
 	},
 ) {
-    const callbackURL = c.body?.callbackURL || c.context.baseURL;
+	const callbackURL = c.body?.callbackURL || c.context.baseURL;
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
 			message: "callbackURL is required",

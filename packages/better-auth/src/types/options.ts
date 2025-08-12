@@ -31,24 +31,24 @@ export type BetterAuthOptions = {
 	 * @default "Better Auth"
 	 */
 	appName?: string;
-    /**
-     * Base URL for the Better Auth. This is typically the
-     * root URL where your application server is hosted.
-     *
-     * You can also provide a function to resolve the base URL dynamically
-     * per-request. The function receives the current `Request` and the
-     * auth context and may be async.
-     *
-     * If not explicitly set, the system will check the following
-     * environment variables via runtime resolution:
-     *
-     * process.env.BETTER_AUTH_URL
-     *
-     * If not set it will throw an error.
-     */
-    baseURL?:
-        | string
-        | ((request: Request, ctx: AuthContext) => string | Promise<string>);
+	/**
+	 * Base URL for the Better Auth. This is typically the
+	 * root URL where your application server is hosted.
+	 *
+	 * You can also provide a function to resolve the base URL dynamically
+	 * per-request. The function receives the current `Request` and the
+	 * auth context and may be async.
+	 *
+	 * If not explicitly set, the system will check the following
+	 * environment variables via runtime resolution:
+	 *
+	 * process.env.BETTER_AUTH_URL
+	 *
+	 * If not set it will throw an error.
+	 */
+	baseURL?:
+		| string
+		| ((request: Request, ctx: AuthContext) => string | Promise<string>);
 	/**
 	 * Base path for the Better Auth. This is typically
 	 * the path where the

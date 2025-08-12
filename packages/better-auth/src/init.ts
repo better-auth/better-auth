@@ -36,10 +36,10 @@ export const init = async (options: BetterAuthOptions) => {
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
-  const baseURL =
-    typeof options.baseURL === "string"
-      ? getBaseURL(options.baseURL, options.basePath)
-      : getBaseURL(undefined, options.basePath);
+	const baseURL =
+		typeof options.baseURL === "string"
+			? getBaseURL(options.baseURL, options.basePath)
+			: getBaseURL(undefined, options.basePath);
 
 	const secret =
 		options.secret ||
@@ -55,18 +55,18 @@ export const init = async (options: BetterAuthOptions) => {
 		}
 	}
 
-  options = {
-    ...options,
-    secret,
-    baseURL:
-      typeof options.baseURL === "function"
-        ? options.baseURL
-        : baseURL
-        ? new URL(baseURL).origin
-        : "",
-    basePath: options.basePath || "/api/auth",
-    plugins: plugins.concat(internalPlugins),
-  };
+	options = {
+		...options,
+		secret,
+		baseURL:
+			typeof options.baseURL === "function"
+				? options.baseURL
+				: baseURL
+					? new URL(baseURL).origin
+					: "",
+		basePath: options.basePath || "/api/auth",
+		plugins: plugins.concat(internalPlugins),
+	};
 
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
@@ -288,10 +288,10 @@ function getInternalPlugins(options: BetterAuthOptions) {
 }
 
 function getTrustedOrigins(options: BetterAuthOptions) {
-  const baseURL =
-    typeof options.baseURL === "string"
-      ? getBaseURL(options.baseURL, options.basePath)
-      : getBaseURL(undefined, options.basePath);
+	const baseURL =
+		typeof options.baseURL === "string"
+			? getBaseURL(options.baseURL, options.basePath)
+			: getBaseURL(undefined, options.basePath);
 	if (!baseURL) {
 		return [];
 	}

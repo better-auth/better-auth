@@ -275,7 +275,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
 						rpName: opts.rpName || ctx.context.appName,
-                        rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.baseURL),
 						userID,
 						userName: ctx.query?.name || session.user.email || session.user.id,
 						userDisplayName: session.user.email || session.user.id,
@@ -448,7 +448,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const options = await generateAuthenticationOptions({
-                        rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.baseURL),
 						userVerification: "preferred",
 						...(userPasskeys.length
 							? {
@@ -573,7 +573,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp,
 							expectedChallenge,
 							expectedOrigin: origin,
-                            expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.baseURL),
 							requireUserVerification: false,
 						});
 						const { verified, registrationInfo } = verification;
@@ -713,7 +713,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp as AuthenticationResponseJSON,
 							expectedChallenge,
 							expectedOrigin: origin,
-                            expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.baseURL),
 							credential: {
 								id: passkey.credentialID,
 								publicKey: base64.decode(passkey.publicKey),

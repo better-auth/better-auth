@@ -47,9 +47,9 @@ export async function createTelemetry(
 		);
 	};
 
-  const anonymousId = await getProjectId(
-    typeof options.baseURL === "string" ? options.baseURL : undefined,
-  );
+	const anonymousId = await getProjectId(
+		typeof options.baseURL === "string" ? options.baseURL : undefined,
+	);
 
 	const payload = {
 		config: getTelemetryAuthConfig(options),
