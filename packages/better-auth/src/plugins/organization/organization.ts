@@ -619,138 +619,139 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 				},
 			} satisfies AuthPluginSchema)
-		: ({} as AuthPluginSchema);
+		: {};
 
-	// Merge base schema with teamSchema only when teamSupport is enabled to avoid optional undefined keys
 	const schema = {
 		...teamSchema,
-		organization: {
-			modelName: options?.schema?.organization?.modelName,
-			fields: {
-				name: {
-					type: "string",
-					required: true,
-					sortable: true,
-					fieldName: options?.schema?.organization?.fields?.name,
+		...({
+			organization: {
+				modelName: options?.schema?.organization?.modelName,
+				fields: {
+					name: {
+						type: "string",
+						required: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.name,
+					},
+					slug: {
+						type: "string",
+						unique: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.slug,
+					},
+					logo: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.organization?.fields?.logo,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.organization?.fields?.createdAt,
+					},
+					metadata: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.organization?.fields?.metadata,
+					},
+					...(options?.schema?.organization?.additionalFields || {}),
 				},
-				slug: {
-					type: "string",
-					unique: true,
-					sortable: true,
-					fieldName: options?.schema?.organization?.fields?.slug,
-				},
-				logo: {
-					type: "string",
-					required: false,
-					fieldName: options?.schema?.organization?.fields?.logo,
-				},
-				createdAt: {
-					type: "date",
-					required: true,
-					fieldName: options?.schema?.organization?.fields?.createdAt,
-				},
-				metadata: {
-					type: "string",
-					required: false,
-					fieldName: options?.schema?.organization?.fields?.metadata,
-				},
-				...(options?.schema?.organization?.additionalFields || {}),
 			},
-		},
-		member: {
-			modelName: options?.schema?.member?.modelName,
-			fields: {
-				organizationId: {
-					type: "string",
-					required: true,
-					references: {
-						model: "organization",
-						field: "id",
+			member: {
+				modelName: options?.schema?.member?.modelName,
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
+						fieldName: options?.schema?.member?.fields?.organizationId,
 					},
-					fieldName: options?.schema?.member?.fields?.organizationId,
-				},
-				userId: {
-					type: "string",
-					required: true,
-					fieldName: options?.schema?.member?.fields?.userId,
-					references: {
-						model: "user",
-						field: "id",
+					userId: {
+						type: "string",
+						required: true,
+						fieldName: options?.schema?.member?.fields?.userId,
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
+					role: {
+						type: "string",
+						required: true,
+						sortable: true,
+						defaultValue: "member",
+						fieldName: options?.schema?.member?.fields?.role,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.member?.fields?.createdAt,
+					},
+					...(options?.schema?.member?.additionalFields || {}),
 				},
-				role: {
-					type: "string",
-					required: true,
-					sortable: true,
-					defaultValue: "member",
-					fieldName: options?.schema?.member?.fields?.role,
-				},
-				createdAt: {
-					type: "date",
-					required: true,
-					fieldName: options?.schema?.member?.fields?.createdAt,
-				},
-				...(options?.schema?.member?.additionalFields || {}),
 			},
-		},
-		invitation: {
-			modelName: options?.schema?.invitation?.modelName,
-			fields: {
-				organizationId: {
-					type: "string",
-					required: true,
-					references: {
-						model: "organization",
-						field: "id",
+			invitation: {
+				modelName: options?.schema?.invitation?.modelName,
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
+						fieldName: options?.schema?.invitation?.fields?.organizationId,
 					},
-					fieldName: options?.schema?.invitation?.fields?.organizationId,
-				},
-				email: {
-					type: "string",
-					required: true,
-					sortable: true,
-					fieldName: options?.schema?.invitation?.fields?.email,
-				},
-				role: {
-					type: "string",
-					required: false,
-					sortable: true,
-					fieldName: options?.schema?.invitation?.fields?.role,
-				},
-				...(teamSupport
-					? {
-							teamId: {
-								type: "string",
-								required: false,
-								sortable: true,
-								fieldName: options?.schema?.invitation?.fields?.teamId,
-							},
-						}
-					: {}),
-				status: {
-					type: "string",
-					required: true,
-					sortable: true,
-					defaultValue: "pending",
-					fieldName: options?.schema?.invitation?.fields?.status,
-				},
-				expiresAt: {
-					type: "date",
-					required: true,
-					fieldName: options?.schema?.invitation?.fields?.expiresAt,
-				},
-				inviterId: {
-					type: "string",
-					references: {
-						model: "user",
-						field: "id",
+					email: {
+						type: "string",
+						required: true,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.email,
 					},
-					fieldName: options?.schema?.invitation?.fields?.inviterId,
-					required: true,
+					role: {
+						type: "string",
+						required: false,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.role,
+					},
+					...(teamSupport
+						? {
+								teamId: {
+									type: "string",
+									required: false,
+									sortable: true,
+									fieldName: options?.schema?.invitation?.fields?.teamId,
+								},
+							}
+						: {}),
+					status: {
+						type: "string",
+						required: true,
+						sortable: true,
+						defaultValue: "pending",
+						fieldName: options?.schema?.invitation?.fields?.status,
+					},
+					expiresAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.invitation?.fields?.expiresAt,
+					},
+					inviterId: {
+						type: "string",
+						references: {
+							model: "user",
+							field: "id",
+						},
+						fieldName: options?.schema?.invitation?.fields?.inviterId,
+						required: true,
+					},
+					...(options?.schema?.invitation?.additionalFields || {}),
 				},
-				...(options?.schema?.invitation?.additionalFields || {}),
 			},
-		},
+		} satisfies AuthPluginSchema),
 	};
 
 	/**
