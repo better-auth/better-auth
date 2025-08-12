@@ -40,7 +40,8 @@ async function hasShownNoticeBefore(anonymousId: string) {
 		const json = JSON.parse(raw) as { seen?: string[] };
 		return Array.isArray(json.seen) && json.seen.includes(anonymousId);
 	} catch {
-		return false;
+		//if we can't read the file, we don't want to show the notice
+		return true;
 	}
 }
 
