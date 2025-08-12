@@ -26,8 +26,7 @@
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
-    "build:types": "tsc --project tsconfig.declarations.json",
-    "postinstall": "node ./scripts/postinstall.mjs",
+    "build:types": "tsc --project tsconfig.declarations.json", 
     "stub": "unbuild --stub",
     "pretest": "pnpm prisma:normal:push && pnpm prisma:number-id:push",
     "test": "vitest",
@@ -745,7 +744,6 @@
     "whatwg-url": "^14.2.0"
   },
   "files": [
-    "dist",
-    "scripts/postinstall.mjs"
+    "dist" 
   ]
 }
