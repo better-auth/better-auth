@@ -76,8 +76,9 @@ export async function detectSystemInfo() {
 	try {
 		//check if it's cloudflare
 		if (getVendor() === "cloudflare") return "cloudflare";
-
-		const { default: os } = await import("os");
+        const importRuntime = (m: string) =>
+            (Function("mm", "return import(mm)") as any)(m);
+        const { default: os } = await importRuntime("os");
 		const cpus = os.cpus();
 		return {
 			deploymentVendor: getVendor(),
@@ -112,8 +113,9 @@ let isDockerCached: boolean | undefined;
 
 async function hasDockerEnv() {
 	if (getVendor() === "cloudflare") return false;
-
-	const { default: fs } = await import("fs");
+    const importRuntime = (m: string) =>
+            (Function("mm", "return import(mm)") as any)(m);
+        const { default: fs } = await importRuntime("fs");
 	try {
 		fs.statSync("/.dockerenv");
 		return true;
@@ -125,7 +127,9 @@ async function hasDockerEnv() {
 async function hasDockerCGroup() {
 	if (getVendor() === "cloudflare") return false;
 	try {
-		const { default: fs } = await import("fs");
+        const importRuntime = (m: string) =>
+            (Function("mm", "return import(mm)") as any)(m);
+        const { default: fs } = await importRuntime("fs");
 		return fs.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
 	} catch {
 		return false;
@@ -148,8 +152,10 @@ async function isWsl() {
 		if (process.platform !== "linux") {
 			return false;
 		}
-		const { default: fs } = await import("fs");
-		const { default: os } = await import("os");
+        const importRuntime = (m: string) =>
+            (Function("mm", "return import(mm)") as any)(m);
+        const { default: fs } = await importRuntime("fs");
+        const { default: os } = await importRuntime("os");
 		if (os.release().toLowerCase().includes("microsoft")) {
 			if (await isInsideContainer()) {
 				return false;
@@ -174,7 +180,9 @@ let isInsideContainerCached: boolean | undefined;
 const hasContainerEnv = async () => {
 	if (getVendor() === "cloudflare") return false;
 	try {
-		const { default: fs } = await import("fs");
+        const importRuntime = (m: string) =>
+            (Function("mm", "return import(mm)") as any)(m);
+        const { default: fs } = await importRuntime("fs");
 		fs.statSync("/run/.containerenv");
 		return true;
 	} catch {
