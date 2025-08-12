@@ -13,21 +13,21 @@ import { getBaseURL } from "../utils/url";
 import { binary } from "@better-auth/utils/binary";
 
 export function createCookieGetter(options: BetterAuthOptions) {
-	const secure =
-		options.advanced?.useSecureCookies !== undefined
-			? options.advanced?.useSecureCookies
-			: options.baseURL !== undefined
-				? options.baseURL.startsWith("https://")
-					? true
-					: false
-				: isProduction;
+  const secure =
+    options.advanced?.useSecureCookies !== undefined
+      ? options.advanced?.useSecureCookies
+      : typeof options.baseURL === "string"
+        ? options.baseURL.startsWith("https://")
+        : isProduction;
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
-	const domain = crossSubdomainEnabled
-		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
-		: undefined;
+  const domain = crossSubdomainEnabled
+    ? options.advanced?.crossSubDomainCookies?.domain ||
+      (typeof options.baseURL === "string"
+        ? new URL(options.baseURL).hostname
+        : undefined)
+    : undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled",

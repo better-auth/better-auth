@@ -119,8 +119,55 @@ describe("init", async () => {
 				},
 			],
 		});
+
+ 
 		expect(ctx.options.emailAndPassword?.enabled).toBe(true);
 	});
+	 it("should resolve baseURL from function per-request and pass ctx", async () => {
+    const calls: Array<{ host: string; ctxBasePath: string }> = [];
+    const auth = betterAuth({
+      basePath: "/api/auth",
+      baseURL: async (req, ctx) => {
+        const url = new URL(req.url);
+		await new Promise(resolve => setTimeout(resolve, 100));
+		calls.push({ host: url.host, ctxBasePath: ctx.options.basePath || "" });
+		return 'http://localhost:3000'	
+      },
+    });
+    const client = createAuthClient({
+      baseURL: `http://dynamic-host.local/api/auth`,
+      fetchOptions: {
+        customFetchImpl: (u, i) => auth.handler(new Request(u, i)),
+      },
+    });
+    const ok = await client.$fetch("/ok");
+    expect(ok.data).toMatchObject({ ok: true });
+    expect(calls.length).toBe(1);
+    expect(calls[0].host).toBe("dynamic-host.local");
+    expect(calls[0].ctxBasePath).toBe("/api/auth");
+  });
+
+  it("should support async baseURL returning with path and normalize origin in options", async () => {
+    const auth = betterAuth({
+      basePath: "/custom",
+      baseURL: async (req , ctx) => {
+        const { origin } = new URL(req.url);
+		await new Promise(resolve => setTimeout(resolve, 100));
+		return `${origin}/custom`;
+      },
+    });
+    const client = createAuthClient({
+      baseURL: `http://with-path.local/custom`,
+      fetchOptions: {
+        customFetchImpl: (u, i) => auth.handler(new Request(u, i)),
+      },
+    });
+    await client.$fetch("/ok");
+    const ctx = await auth.$context;
+	console.log(ctx.options)
+    expect(ctx.baseURL).toBe("http://with-path.local/custom");
+    expect(ctx.options.baseURL).toBe("http://with-path.local");
+  });
 
 	it("should not allow plugins to set config values if they are set in the main config", async () => {
 		const ctx = await init({

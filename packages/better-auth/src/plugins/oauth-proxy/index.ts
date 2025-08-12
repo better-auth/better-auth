@@ -113,9 +113,9 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						ctx.context.logger.error(e);
 						return null;
 					});
-					const error =
-						ctx.context.options.onAPIError?.errorURL ||
-						`${ctx.context.options.baseURL}/api/auth/error`;
+                    const error =
+                        ctx.context.options.onAPIError?.errorURL ||
+                        `${ctx.context.baseURL}/api/auth/error`;
 					if (!decryptedCookies) {
 						throw ctx.redirect(
 							`${error}?error=OAuthProxy - Invalid cookies or secret`,
@@ -199,7 +199,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						}
 						const url = resolveCurrentURL(ctx);
 						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
-						if (productionURL === ctx.context.options.baseURL) {
+                        if (productionURL === new URL(ctx.context.baseURL).origin) {
 							return;
 						}
 						ctx.body.callbackURL = `${url.origin}${

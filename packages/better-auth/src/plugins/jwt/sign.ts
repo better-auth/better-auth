@@ -65,8 +65,8 @@ export async function getJwtToken(
 			kid: key.id,
 		})
 		.setIssuedAt()
-		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
-		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
+		.setIssuer(options?.jwt?.issuer ?? ctx.context.baseURL)
+		.setAudience(options?.jwt?.audience ?? ctx.context.baseURL)
 		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
 		.setSubject(
 			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??

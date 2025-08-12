@@ -34,11 +34,25 @@ export const betterAuth = <O extends BetterAuthOptions>(
 		handler: async (request: Request) => {
 			const ctx = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
-			if (!ctx.options.baseURL) {
-				const baseURL = getBaseURL(undefined, basePath, request);
+			if (!ctx.options.baseURL || typeof (options as any).baseURL === "function") {
+				let resolvedFromFn: string | undefined;
+				if (typeof (options as any).baseURL === "function") {
+					try {
+						resolvedFromFn = await (options as any).baseURL(request, ctx);
+					} catch (e) {
+						// fall through to other resolution strategies
+					}
+				}
+				const baseURL = getBaseURL(resolvedFromFn, basePath, request);
 				if (baseURL) {
 					ctx.baseURL = baseURL;
-					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+					const origin = getOrigin(ctx.baseURL);
+					if (!origin) {
+						throw new BetterAuthError(
+							"Could not get origin from resolved base URL.",
+						);
+					}
+					(ctx.options as any).baseURL = origin;
 				} else {
 					throw new BetterAuthError(
 						"Could not get base URL from request. Please provide a valid base URL.",
@@ -51,7 +65,7 @@ export const betterAuth = <O extends BetterAuthOptions>(
 						? options.trustedOrigins
 						: await options.trustedOrigins(request)
 					: []),
-				ctx.options.baseURL!,
+				new URL(ctx.baseURL).origin,
 			];
 			const { handler } = router(ctx, options);
 			return handler(request);

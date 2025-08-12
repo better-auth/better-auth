@@ -35,8 +35,8 @@ export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
-	const baseURL = ctx.context.baseURL;
+    const issuer = new URL(ctx.context.baseURL).origin;
+    const baseURL = ctx.context.baseURL;
 	if (!issuer || !baseURL) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error: "invalid_issuer",
@@ -904,8 +904,11 @@ export const withMcpAuth = <
 		sesssion: OAuthAccessToken,
 	) => Response | Promise<Response>,
 ) => {
-	return async (req: Request) => {
-		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
+  return async (req: Request) => {
+    const baseURL = getBaseURL(
+      typeof auth.options.baseURL === "string" ? auth.options.baseURL : undefined,
+      auth.options.basePath,
+    );
 		if (!baseURL && !isProduction) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}

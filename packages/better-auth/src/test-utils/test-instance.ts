@@ -234,10 +234,12 @@ export async function getTestInstance<
 
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL: getBaseURL(
-			options?.baseURL || "http://localhost:" + (config?.port || 3000),
-			options?.basePath || "/api/auth",
-		),
+    baseURL: getBaseURL(
+            typeof options?.baseURL === "string"
+                    ? options?.baseURL
+                    : "http://localhost:" + (config?.port || 3000),
+            options?.basePath || "/api/auth",
+    ),
 		fetchOptions: {
 			customFetchImpl,
 		},

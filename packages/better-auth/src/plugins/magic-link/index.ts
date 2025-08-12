@@ -335,8 +335,8 @@ export const magicLink = (options: MagicLinkopts) => {
 					const toRedirectTo = callbackURL?.startsWith("http")
 						? callbackURL
 						: callbackURL
-							? `${ctx.context.options.baseURL}${callbackURL}`
-							: ctx.context.options.baseURL;
+							? `${ctx.context.baseURL}${callbackURL}`
+							: ctx.context.baseURL;
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(
