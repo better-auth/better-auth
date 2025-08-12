@@ -10,6 +10,18 @@ import { createHMAC } from "@better-auth/utils/hmac";
 // TODO implement link with existing account
 // TODO docs texts: react examples, redirect/callback flows
 // TODO add tests: reject invalid hash
+// TODO add callback url to redirect
+
+const buildTelegramHash = (dataFields: object) => {
+	// build data string
+	const dataCheckString = Object.keys(dataFields)
+		.filter((key) => dataFields[key as keyof typeof dataFields] !== undefined)
+		.sort()
+		.map((key) => `${key}=${dataFields[key as keyof typeof dataFields]}`)
+		.join("\n");
+
+	return dataCheckString;
+};
 
 export type TelegramOptions = {
 	/**
@@ -116,15 +128,7 @@ export const telegram = (options: TelegramOptions) => {
 					}
 
 					// build data string
-					const sortedFields = Object.keys(dataFields)
-						.filter(
-							(key) => dataFields[key as keyof typeof dataFields] !== undefined,
-						)
-						.sort()
-						.map(
-							(key) => `${key}=${dataFields[key as keyof typeof dataFields]}`,
-						);
-					const dataCheckString = sortedFields.join("\n");
+					const dataCheckString = buildTelegramHash(dataFields);
 
 					// create secret key by hashing the bot token with sha256
 					const secretKey = await createHash("SHA-256").digest(
@@ -235,7 +239,6 @@ export const telegram = (options: TelegramOptions) => {
 						ctx,
 						rememberMe === false,
 					);
-
 					if (!session) {
 						ctx.context.logger.error("Failed to create session");
 						throw new APIError("UNAUTHORIZED", {
@@ -318,15 +321,7 @@ export const telegram = (options: TelegramOptions) => {
 					}
 
 					// build data string
-					const sortedFields = Object.keys(dataFields)
-						.filter(
-							(key) => dataFields[key as keyof typeof dataFields] !== undefined,
-						)
-						.sort()
-						.map(
-							(key) => `${key}=${dataFields[key as keyof typeof dataFields]}`,
-						);
-					const dataCheckString = sortedFields.join("\n");
+					const dataCheckString = buildTelegramHash(dataFields);
 
 					// create secret key by hashing the bot token with sha256
 					const secretKey = await createHash("SHA-256").digest(
@@ -436,7 +431,6 @@ export const telegram = (options: TelegramOptions) => {
 						user.id,
 						ctx,
 					);
-
 					if (!session) {
 						ctx.context.logger.error("Failed to create session");
 						throw new APIError("UNAUTHORIZED", {
