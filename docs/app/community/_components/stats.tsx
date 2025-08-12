@@ -40,6 +40,7 @@ export default function Stats({
 								<Link
 									className="w-full"
 									href="https://discord.gg/better-auth"
+									rel="noopener noreferrer"
 									target="_blank"
 								>
 									<Button
@@ -79,6 +80,7 @@ export default function Stats({
 								<Link
 									className="w-full"
 									href="https://reddit.com/r/better_auth"
+									rel="noopener noreferrer"
 									target="_blank"
 								>
 									<Button
@@ -118,6 +120,7 @@ export default function Stats({
 								<Link
 									className="w-full"
 									href="https://x.com/better_auth"
+									rel="noopener noreferrer"
 									target="_blank"
 								>
 									<Button
@@ -143,10 +146,11 @@ export default function Stats({
 									{kFormatter(npmDownloads)}
 								</span>
 							</div>
-							<div className="flex -p-8 items-end w-full gap-2 mt-4 text-gray-400">
+							<div className="flex items-end w-full gap-2 mt-4 text-gray-400">
 								<Link
 									className="w-full"
 									href="https://www.npmjs.com/package/better-auth"
+									rel="noopener noreferrer"
 									target="_blank"
 								>
 									<Button
@@ -188,6 +192,7 @@ export default function Stats({
 								<Link
 									className="w-full"
 									href="https://github.com/better-auth/better-auth"
+									rel="noopener noreferrer"
 									target="_blank"
 								>
 									<Button

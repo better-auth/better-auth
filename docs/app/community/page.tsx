@@ -32,7 +32,7 @@ async function getGitHubStars() {
 		const stars = Number(json.stargazers_count);
 		return stars;
 	} catch {
-		return NaN;
+		return 0;
 	}
 }
 export default async function CommunityPage() {
