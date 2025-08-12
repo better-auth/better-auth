@@ -8,6 +8,7 @@ import { vi } from "vitest";
 import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
+import { expect, describe, it, beforeEach } from "vitest";
 
 describe("stripe", async () => {
 	const mockStripe = {
