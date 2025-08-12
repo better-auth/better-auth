@@ -42,7 +42,7 @@ const ChangelogPage = async () => {
 	function getContent(content: string) {
 		const lines = content.split("\n");
 		const newContext = lines.map((line) => {
-			if (line.startsWith("- ")) {
+			if (line.trim().startsWith("- ")) {
 				const mainContent = line.split(";")[0];
 				const context = line.split(";")[2];
 				const mentions = context
@@ -65,13 +65,13 @@ const ChangelogPage = async () => {
 	}
 
 	return (
-		<div className="grid md:grid-cols-2 items-start">
+		<div className="grid items-start md:grid-cols-2">
 			<div className="bg-gradient-to-tr overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
-				<StarField className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" />
+				<StarField className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 				<Glow />
 
-				<div className="flex flex-col md:justify-center max-w-xl mx-auto h-full">
-					<h1 className="mt-14 font-sans font-semibold tracking-tighter text-5xl">
+				<div className="flex flex-col mx-auto max-w-xl h-full md:justify-center">
+					<h1 className="mt-14 font-sans text-5xl font-semibold tracking-tighter">
 						All of the changes made will be{" "}
 						<span className="">available here.</span>
 					</h1>
@@ -80,8 +80,8 @@ const ChangelogPage = async () => {
 						that provides a wide range of features to make authentication easier
 						and more secure.
 					</p>
-					<hr className="h-px bg-gray-300 mt-5" />
-					<div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300 gap-x-1 gap-y-3 sm:gap-x-2">
+					<hr className="mt-5 h-px bg-gray-300" />
+					<div className="flex flex-wrap gap-x-1 gap-y-3 mt-8 text-gray-600 dark:text-gray-300 sm:gap-x-2">
 						<IconLink
 							href="/docs"
 							icon={BookIcon}
@@ -111,10 +111,10 @@ const ChangelogPage = async () => {
 					</p>
 				</div>
 			</div>
-			<div className="px-4 relative md:px-8 pb-12 md:py-12">
+			<div className="relative px-4 pb-12 md:px-8 md:py-12">
 				<div className="absolute top-0 left-0 mb-2 w-2 h-full -translate-x-full bg-gradient-to-b from-black/10 dark:from-white/20 from-50% to-50% to-transparent bg-[length:100%_5px] bg-repeat-y"></div>
 
-				<div className="max-w-2xl relative">
+				<div className="relative max-w-2xl">
 					<Markdown
 						rehypePlugins={[[rehypeHighlight]]}
 						components={{
@@ -157,14 +157,14 @@ const ChangelogPage = async () => {
 									>
 										{props.children?.toString().split("date=")[0].trim()}
 									</Link>
-									<p className="text-xs font-normal opacity-60 hidden">
+									<p className="hidden text-xs font-normal opacity-60">
 										{props.children?.toString().includes("date=") &&
 											props.children?.toString().split("date=")[1]}
 									</p>
 								</h2>
 							),
 							h3: (props) => (
-								<h3 className="text-xl tracking-tighter py-1" {...props}>
+								<h3 className="py-1 text-xl tracking-tighter" {...props}>
 									{props.children?.toString()?.trim()}
 									<hr className="h-[1px] my-1 mb-2 bg-input" />
 								</h3>
@@ -189,7 +189,7 @@ const ChangelogPage = async () => {
 							),
 							img: (props) => (
 								<img
-									className="rounded-full w-6 h-6 border opacity-70 inline-block"
+									className="inline-block w-6 h-6 rounded-full border opacity-70"
 									{...props}
 									style={{ maxWidth: "100%" }}
 								/>
@@ -218,7 +218,7 @@ export function Glow() {
 	let id = useId();
 
 	return (
-		<div className="absolute inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
+		<div className="overflow-hidden absolute inset-0 bg-gradient-to-tr from-transparent -z-10 dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
 			<svg
 				className="absolute -bottom-48 left-[-40%] h-[80rem] w-[180%] lg:-right-40 lg:bottom-auto lg:left-auto lg:top-[-40%] lg:h-[180%] lg:w-[80rem]"
 				aria-hidden="true"
@@ -248,7 +248,7 @@ export function Glow() {
 					className="lg:hidden"
 				/>
 			</svg>
-			<div className="absolute inset-x-0 bottom-0 right-0 h-px dark:bg-white/5 mix-blend-overlay lg:left-auto lg:top-0 lg:h-auto lg:w-px" />
+			<div className="absolute inset-x-0 right-0 bottom-0 h-px mix-blend-overlay dark:bg-white/5 lg:left-auto lg:top-0 lg:h-auto lg:w-px" />
 		</div>
 	);
 }

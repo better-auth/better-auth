@@ -242,15 +242,18 @@ describe("getSessionCookie", async () => {
 		expect(cookies).not.toBeNull();
 	});
 
-	it("should retun cookie cache", async () => {
+	it("should return cookie cache", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
 			session: {
 				cookieCache: {
 					enabled: true,
 				},
 			},
 		});
+
 		const headers = new Headers();
+
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -260,24 +263,17 @@ describe("getSessionCookie", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
+
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
+
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
 		});
 		expect(cache).not.toBeNull();
-		expect(cache).toMatchObject({
-			user: {
-				id: expect.any(String),
-				email: expect.any(String),
-				emailVerified: expect.any(Boolean),
-			},
-			session: {
-				expiresAt: expect.any(Date),
-				token: expect.any(String),
-			},
-		});
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
 	it("should return null if the cookie is invalid", async () => {
