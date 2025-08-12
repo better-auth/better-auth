@@ -23,24 +23,42 @@ You can also debug what would be sent by setting:
 
 Learn more in the docs: https://www.better-auth.com/docs/reference/telemetry\n\n`;
 
+async function configFilePath() {
+	const path = await import("path");
+	const os = await import("os");
+	const baseDir =
+		process.platform === "win32"
+			? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
+			: path.join(os.homedir(), ".config");
+	const dir = path.join(baseDir, "better-auth");
+	const file = path.join(dir, "telemetry.json");
+
+	return { file, dir };
+}
+
 const shownNoticeInProcess = new Set<string>();
 
 async function hasShownNoticeBefore(anonymousId: string) {
 	try {
+		const { file } = await configFilePath();
+
 		const fs = await import("fs/promises");
-		const path = await import("path");
-		const os = await import("os");
-		const baseDir =
-			process.platform === "win32"
-				? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
-				: path.join(os.homedir(), ".config");
-		const dir = path.join(baseDir, "better-auth");
-		const file = path.join(dir, "telemetry.json");
 		const raw = await fs.readFile(file, "utf-8");
 		const json = JSON.parse(raw) as { seen?: string[] };
+
 		return Array.isArray(json.seen) && json.seen.includes(anonymousId);
-	} catch {
-		//if we can't read the file, we don't want to show the notice
+	} catch (err: unknown) {
+		if (
+			err &&
+			typeof err === "object" &&
+			"code" in err &&
+			(err as NodeJS.ErrnoException).code === "ENOENT"
+		) {
+			// if the file doesn't exist we know that the notice hasn't been shown before
+			return false;
+		}
+
+		// an unknown error happend
 		return true;
 	}
 }
@@ -48,21 +66,17 @@ async function hasShownNoticeBefore(anonymousId: string) {
 async function markNoticeShown(anonymousId: string) {
 	try {
 		const fs = await import("fs/promises");
-		const path = await import("path");
-		const os = await import("os");
-		const baseDir =
-			process.platform === "win32"
-				? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
-				: path.join(os.homedir(), ".config");
-		const dir = path.join(baseDir, "better-auth");
-		const file = path.join(dir, "telemetry.json");
+		const { file, dir } = await configFilePath();
+
 		await fs.mkdir(dir, { recursive: true });
 		let json: { seen: string[] } = { seen: [] };
+
 		try {
 			const raw = await fs.readFile(file, "utf-8");
 			const parsed = JSON.parse(raw) as { seen?: string[] };
 			json.seen = Array.isArray(parsed.seen) ? parsed.seen : [];
 		} catch {}
+
 		if (!json.seen.includes(anonymousId)) {
 			json.seen.push(anonymousId);
 		}
@@ -72,15 +86,19 @@ async function markNoticeShown(anonymousId: string) {
 
 async function maybeShowTelemetryNotice(anonymousId: string) {
 	if (shownNoticeInProcess.has(anonymousId)) return;
+
 	if (typeof process !== "undefined" && process.stdout && !process.stdout.isTTY)
 		return;
+
 	if (await hasShownNoticeBefore(anonymousId)) {
 		shownNoticeInProcess.add(anonymousId);
 		return;
 	}
+
 	try {
 		console.log(message);
 	} catch {}
+
 	shownNoticeInProcess.add(anonymousId);
 	await markNoticeShown(anonymousId);
 }
@@ -90,10 +108,13 @@ export async function createTelemetry(
 	context?: TelemetryContext,
 ) {
 	const debugEnabled =
-		options.telemetry?.debug || getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG");
+		options.telemetry?.debug ||
+		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
+
 	const disableNotice =
 		options.telemetry?.disableNotice ||
-		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DISABLE_NOTICE");
+		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DISABLE_NOTICE", false);
+
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
 	const track = async (event: TelemetryEvent) => {
 		try {
@@ -137,6 +158,7 @@ export async function createTelemetry(
 		packageManager: detectPackageManager(),
 	};
 	const enabled = await isEnabled();
+
 	if (enabled) {
 		if (!disableNotice) {
 			await maybeShowTelemetryNotice(anonymousId);
