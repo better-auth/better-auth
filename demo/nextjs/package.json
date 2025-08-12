@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/demo-nextjs",
+  "name": "@better-auth/demo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -103,9 +103,6 @@
     "postcss": "^8.4.49",
     "tailwindcss": "3.4.16",
     "typescript": "^5.7.2"
-  },
-  "resolutions": {
-    "@types/react": "^19.0.0"
   },
   "overrides": {
     "whatwg-url": "^14.0.0"
