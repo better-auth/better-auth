@@ -935,5 +935,5 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 		options: options as O,
-	} satisfies BetterAuthPlugin | undefined;
+	} satisfies BetterAuthPlugin;
 };
