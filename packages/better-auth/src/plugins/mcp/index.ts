@@ -846,7 +846,7 @@ export const mcp = (options: MCPOptions) => {
 							: {}),
 					};
 
-					return ctx.json(responseData, {
+					return new Response(JSON.stringify(responseData), {
 						status: 201,
 						headers: {
 							"Cache-Control": "no-store",
