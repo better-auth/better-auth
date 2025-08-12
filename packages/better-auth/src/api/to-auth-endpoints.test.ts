@@ -470,7 +470,7 @@ describe("disabled paths with glob patterns", async () => {
 		expect(error?.status).toBe(404);
 	});
 
-	it("should return 404 for double-level wildcard callback endpoints", async () => {
+	it("should return 404 for callback wildcard endpoints", async () => {
 		const callbackResponse = await client.$fetch("/callback/github", {
 			method: "GET",
 			query: {
