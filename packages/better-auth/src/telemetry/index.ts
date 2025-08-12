@@ -27,7 +27,7 @@ async function configFilePath() {
 	const path = await import("path");
 	const os = await import("os");
 	const baseDir =
-		(typeof process !== "undefined" && process.platform === "win32")
+		typeof process !== "undefined" && process.platform === "win32"
 			? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
 			: path.join(os.homedir(), ".config");
 	const dir = path.join(baseDir, "better-auth");
