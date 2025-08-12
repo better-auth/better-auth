@@ -83,12 +83,7 @@ export const telegram = (options: TelegramOptions) => {
 						auth_date: z.number(),
 						hash: z.string(),
 						rememberMe: z.boolean().optional(),
-						callbackURL: z
-							.string({
-								error:
-									"Callback URL to redirect to after the user has signed in",
-							})
-							.optional(),
+						callbackURL: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
