@@ -640,7 +640,25 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							},
 						}
 					: {}),
-			},
+			} as unknown as O["teams"] extends {
+				enabled: true;
+			}
+				? {
+						activeTeamId: {
+							type: "string";
+							required: false;
+						};
+						activeOrganizationId: {
+							type: "string";
+							required: false;
+						};
+					}
+				: {
+						activeOrganizationId: {
+							type: "string";
+							required: false;
+						};
+					},
 		},
 		organization: {
 			modelName: options?.schema?.organization?.modelName,
