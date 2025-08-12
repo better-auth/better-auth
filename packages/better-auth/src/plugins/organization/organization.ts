@@ -558,7 +558,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	};
 
 	// Build team schema in a way that never introduces undefined values when spreading
-	const teamSchema: AuthPluginSchema = teamSupport
+	const teamSchema = teamSupport
 		? ({
 				team: {
 					modelName: options?.schema?.team?.modelName,
@@ -622,44 +622,8 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		: ({} as AuthPluginSchema);
 
 	// Merge base schema with teamSchema only when teamSupport is enabled to avoid optional undefined keys
-	const schema: AuthPluginSchema = {
+	const schema = {
 		...teamSchema,
-		session: {
-			fields: {
-				activeOrganizationId: {
-					type: "string",
-					required: false,
-					fieldName: options?.schema?.session?.fields?.activeOrganizationId,
-				},
-				...(teamSupport
-					? {
-							activeTeamId: {
-								type: "string",
-								required: false,
-								fieldName: options?.schema?.session?.fields?.activeTeamId,
-							},
-						}
-					: {}),
-			} as unknown as O["teams"] extends {
-				enabled: true;
-			}
-				? {
-						activeTeamId: {
-							type: "string";
-							required: false;
-						};
-						activeOrganizationId: {
-							type: "string";
-							required: false;
-						};
-					}
-				: {
-						activeOrganizationId: {
-							type: "string";
-							required: false;
-						};
-					},
-		},
 		organization: {
 			modelName: options?.schema?.organization?.modelName,
 			fields: {
@@ -940,7 +904,45 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			),
 		},
-		schema,
+		schema: {
+			...(schema as AuthPluginSchema),
+			session: {
+				fields: {
+					activeOrganizationId: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
+					},
+					...(teamSupport
+						? {
+								activeTeamId: {
+									type: "string",
+									required: false,
+									fieldName: options?.schema?.session?.fields?.activeTeamId,
+								},
+							}
+						: {}),
+				} as unknown as O["teams"] extends {
+					enabled: true;
+				}
+					? {
+							activeTeamId: {
+								type: "string";
+								required: false;
+							};
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+							};
+						}
+					: {
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+							};
+						},
+			},
+		},
 		$Infer: {
 			Organization: {} as InferOrganization<O>,
 			Invitation: {} as InferInvitation<O>,
