@@ -436,7 +436,13 @@ describe("disabled paths", async () => {
 
 describe("disabled paths with glob patterns", async () => {
 	const { client } = await getTestInstance({
-		disabledPaths: ["/sign-in/*", "/callback/**"],
+		disabledPaths: ["/sign-in/*", "/callback/**", "/sign-up/*"],
+		socialProviders: {
+			github: {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret",
+			},
+		},
 	});
 
 	it("should return 404 for single-level wildcard", async () => {
@@ -445,5 +451,33 @@ describe("disabled paths with glob patterns", async () => {
 			password: "test",
 		});
 		expect(error?.status).toBe(404);
+	});
+
+	it("should return 404 for social sign-in endpoints", async () => {
+		const { error: socialError } = await client.signIn.social({
+			provider: "github",
+			callbackURL: "/dashboard",
+		});
+		expect(socialError?.status).toBe(404);
+	});
+
+	it("should return 404 for sign-up endpoints", async () => {
+		const { error } = await client.signUp.email({
+			email: "test@test.com",
+			password: "test123",
+			name: "Test User",
+		});
+		expect(error?.status).toBe(404);
+	});
+
+	it("should return 404 for double-level wildcard callback endpoints", async () => {
+		const callbackResponse = await client.$fetch("/callback/github", {
+			method: "GET",
+			query: {
+				code: "test-code",
+				state: "test-state",
+			},
+		});
+		expect(callbackResponse.error?.status).toBe(404);
 	});
 });
