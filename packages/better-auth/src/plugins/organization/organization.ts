@@ -78,7 +78,7 @@ export function parseRoles(roles: string | string[]): string {
  * ```
  */
 export const organization = <O extends OrganizationOptions>(
-	options?: O | undefined,
+	options?: OrganizationOptions & O,
 ) => {
 	let endpoints = {
 		/**
@@ -951,5 +951,5 @@ export const organization = <O extends OrganizationOptions>(
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 		options: options as O,
-	} satisfies BetterAuthPlugin | undefined;
+	} satisfies BetterAuthPlugin;
 };
