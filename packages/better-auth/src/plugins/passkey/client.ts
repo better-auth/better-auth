@@ -59,9 +59,8 @@ export const getPasskeyActions = (
 				...options,
 				method: "POST",
 			});
-			if (!verified.data) {
-				return verified;
-			}
+
+			return verified;
 		} catch (e) {
 			return {
 				data: null,
