@@ -145,6 +145,45 @@ describe("generate", async () => {
 		);
 	});
 
+	 it("should not include integer import for pg when no integer fields are used", async () => {
+    const result = await generateDrizzleSchema({
+      options: {
+        advanced: {
+          database: {
+            useNumberId: false
+          }
+        }
+      },
+      adapter: {
+        options: {
+          provider: "pg"
+        }
+      }
+    });
+
+    expect(result.code).not.toContain("integer");
+    expect(result.code).toContain("import { pgTable, text, timestamp, boolean }");
+  });
+
+  it("should include integer import for pg when useNumberId is true", async () => {
+    const result = await generateDrizzleSchema({
+      options: {
+        advanced: {
+          database: {
+            useNumberId: true
+          }
+        }
+      },
+      adapter: {
+        options: {
+          provider: "pg"
+        }
+      }
+    });
+
+    expect(result.code).toContain("integer");
+  });
+
 	it("should generate drizzle schema", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
