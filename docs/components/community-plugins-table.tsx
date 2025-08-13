@@ -323,6 +323,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/C-W-D-Harshit.png",
 		},
 	},
+	{
+		name: "better-auth-speckle",
+		url: "https://github.com/XingxinHE/better-auth-speckle",
+		description:
+			"A plugin for the Speckle System, supporting its non-standard oauth flow with sign-in and link account.",
+		author: {
+			name: "XingxinHE",
+			github: "XingxinHE",
+			avatar: "https://github.com/XingxinHE.png",
+		},
+	},
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);
