@@ -309,7 +309,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							},
 							ctx.context,
 						)
-					: ctx.context.orgOptions.invitationLimit ?? 100;
+					: (ctx.context.orgOptions.invitationLimit ?? 100);
 
 			const pendingInvitations = await adapter.findPendingInvitations({
 				organizationId: organizationId,
@@ -368,7 +368,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				"teamId" in ctx.body
 					? typeof ctx.body.teamId === "string"
 						? [ctx.body.teamId as string]
-						: (ctx.body.teamId as string[]) ?? []
+						: ((ctx.body.teamId as string[]) ?? [])
 					: [];
 
 			const {
@@ -469,6 +469,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				});
+			}
+
+			if (
+				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				!session.user.emailVerified
+			) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION,
 				});
 			}
 
@@ -631,6 +641,16 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				});
+			}
+
+			if (
+				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				!session.user.emailVerified
+			) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION,
 				});
 			}
 

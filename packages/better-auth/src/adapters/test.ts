@@ -56,8 +56,8 @@ const numberIdAdapterTests = {
 	SHOULD_INCREMENT_THE_ID_BY_1: "Should increment the id by 1",
 } as const;
 
-// @ts-ignore
-// biome-ignore lint/performance/noDelete: <explanation>
+// @ts-expect-error
+// biome-ignore lint/performance/noDelete: testing propose
 delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
 
 async function adapterTest(
