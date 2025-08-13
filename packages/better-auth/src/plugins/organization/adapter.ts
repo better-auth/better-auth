@@ -50,17 +50,22 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				data: {
 					...data.organization,
 					metadata: data.organization.metadata
-						? JSON.stringify(data.organization.metadata)
+						? (options?.stringifyOrganizationMetadata ?? true)
+							? JSON.stringify(data.organization.metadata)
+							: data.organization.metadata
 						: undefined,
 				},
 			});
 
 			return {
 				...organization,
-				metadata:
-					organization.metadata && typeof organization.metadata === "string"
+				metadata: organization.metadata
+					? typeof organization.metadata === "string"
 						? JSON.parse(organization.metadata)
-						: undefined,
+						: typeof organization.metadata === "object"
+							? organization.metadata
+							: undefined
+					: undefined,
 			} as typeof organization;
 		},
 		findMemberByEmail: async (data: {
@@ -319,7 +324,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					...data,
 					metadata:
 						typeof data.metadata === "object"
-							? JSON.stringify(data.metadata)
+							? (options?.stringifyOrganizationMetadata ?? true)
+								? JSON.stringify(data.metadata)
+								: data.metadata
 							: data.metadata,
 				},
 			});
@@ -329,7 +336,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return {
 				...organization,
 				metadata: organization.metadata
-					? parseJSON<Record<string, any>>(organization.metadata)
+					? typeof organization.metadata === "string"
+						? parseJSON<Record<string, any>>(organization.metadata)
+						: typeof organization.metadata === "object"
+							? organization.metadata
+							: undefined
 					: undefined,
 			};
 		},
