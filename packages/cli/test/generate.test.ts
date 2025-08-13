@@ -272,6 +272,23 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should throw for unsupported additionalFields type in migrations", async () => {
+		await expect(
+			generateMigrations({
+				file: "test.sql",
+				options: {
+					database: new Database(":memory:"),
+					user: {
+						additionalFields: {
+							is_subscribed: { type: "object" } as unknown as any,
+						} as any,
+					},
+				},
+				adapter: {} as any,
+			}),
+		).rejects.toThrow(/Unsupported field type/);
+	});
+
 	it("should add plugin to empty plugins array without leading comma", async () => {
 		const initialConfig = `export const auth = betterAuth({
 			plugins: []
@@ -576,5 +593,21 @@ describe("Enum field support in Drizzle schemas", () => {
 			} as BetterAuthOptions,
 		});
 		expect(schema.code).not.toContain("enum");
+	});
+	it("should throw for unsupported additionalFields type in migrations", async () => {
+		await expect(
+			generateMigrations({
+				file: "test.sql",
+				options: {
+					database: new Database(":memory:"),
+					user: {
+						additionalFields: {
+							is_subscribed: { type: "object" } as unknown as any,
+						} as any,
+					},
+				},
+				adapter: {} as any,
+			}),
+		).rejects.toThrow(/Unsupported field type/);
 	});
 });
