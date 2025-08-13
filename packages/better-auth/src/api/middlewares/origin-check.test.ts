@@ -3,7 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { createAuthEndpoint } from "../call";
 import { originCheck } from "./origin-check";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({

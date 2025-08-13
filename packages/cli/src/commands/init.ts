@@ -2,7 +2,7 @@ import { parse } from "dotenv";
 import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
 import fs from "fs/promises";
@@ -201,11 +201,7 @@ const defaultFormatOptions = {
 	tabWidth: 4,
 };
 
-const getDefaultAuthConfig = async ({
-	appName,
-}: {
-	appName?: string;
-}) =>
+const getDefaultAuthConfig = async ({ appName }: { appName?: string }) =>
 	await prettierFormat(
 		[
 			"import { betterAuth } from 'better-auth';",
