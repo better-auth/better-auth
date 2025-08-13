@@ -211,7 +211,32 @@ function generateImport({
 	);
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
-	imports.push(databaseType === "mysql" ? "int" : "integer");
+	if (databaseType === "mysql") {
+		imports.push("int");
+	} else if (databaseType === "pg") {
+		// Only include integer for PG if actually needed
+		const hasNonBigintNumber = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					(field.type === "number" || field.type === "number[]") &&
+					!field.bigint,
+			),
+		);
+		const hasFkToId = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) => field.references?.field === "id",
+			),
+		);
+		// handles the references field with useNumberId
+		const needsInteger =
+			hasNonBigintNumber ||
+			(options.advanced?.database?.useNumberId && hasFkToId);
+		if (needsInteger) {
+			imports.push("integer");
+		}
+	} else {
+		imports.push("integer");
+	}
 	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
 
 	return `import { ${imports
