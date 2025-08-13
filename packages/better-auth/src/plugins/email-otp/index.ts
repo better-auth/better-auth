@@ -465,7 +465,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string({}).meta({
+						email: z.string().meta({
 							description: "Email address the OTP was sent to",
 						}),
 						type: z.enum(types).meta({
