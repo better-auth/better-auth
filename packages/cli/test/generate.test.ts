@@ -166,7 +166,6 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		console.log(schema.code);
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
 	});
 

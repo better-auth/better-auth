@@ -19,7 +19,7 @@ import type { Prettify } from "../../types/helper";
 import { safeJSONParse } from "../../utils/json";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { base64 } from "@better-auth/utils/base64";
+import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -97,7 +97,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							};
 							signature: string;
 							expiresAt: number;
-						}>(binary.decode(base64.decode(sessionDataCookie)))
+						}>(binary.decode(base64Url.decode(sessionDataCookie)))
 					: null;
 
 				if (sessionDataPayload) {
