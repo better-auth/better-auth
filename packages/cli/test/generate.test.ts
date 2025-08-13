@@ -166,7 +166,6 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		console.log(schema.code);
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
 	});
 
@@ -210,5 +209,21 @@ describe("generate", async () => {
 			adapter: {} as any,
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
+	});
+	it("should throw for unsupported additionalFields type in migrations", async () => {
+		await expect(
+			generateMigrations({
+				file: "test.sql",
+				options: {
+					database: new Database(":memory:"),
+					user: {
+						additionalFields: {
+							is_subscribed: { type: "object" } as unknown as any,
+						} as any,
+					},
+				},
+				adapter: {} as any,
+			}),
+		).rejects.toThrow(/Unsupported field type/);
 	});
 });
