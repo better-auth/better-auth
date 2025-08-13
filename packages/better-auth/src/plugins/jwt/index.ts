@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin, HookEndpointContext } from "../../types";
+import type { BetterAuthPlugin } from "../../types";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import {
@@ -207,7 +207,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 		hooks: {
 			after: [
 				{
-					matcher(context: HookEndpointContext) {
+					matcher(context) {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -225,10 +225,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 									ctx.context.session!,
 								);
 							} else {
-								payload = {
-									...(ctx.context.session?.user ?? {}),
-									id: undefined, // id becomes sub in Sign Function
-								};
+								payload = ctx.context.session?.user ?? {};
 							}
 
 							if (!payload) return;
