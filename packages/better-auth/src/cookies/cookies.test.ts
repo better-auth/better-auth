@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import { parseSetCookieHeader } from "./cookie-utils";
 import type { BetterAuthOptions } from "../types/options";
 
 describe("cookies", async () => {
@@ -149,6 +150,16 @@ describe("cookie configuration", () => {
 		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
 		expect(cookies.sessionData.options.sameSite).toBe("lax");
 		expect(cookies.sessionData.options.domain).toBe("example.com");
+	});
+});
+
+describe("cookie-utils parseSetCookieHeader", () => {
+	it("handles Expires with commas and multiple cookies", () => {
+		const header =
+			"a=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, b=2; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
+		const map = parseSetCookieHeader(header);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
 	});
 });
 
