@@ -10,6 +10,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { TelemetryContext, TelemetryEvent } from "./types";
 import { logger } from "../utils";
 import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
+import { importRuntime } from "../utils/import-util";
 
 const message = `\n\n\x1b[36mBetter Auth\x1b[0m — Anonymous telemetry notice
 \nWe collect minimal, completely anonymous usage telemetry to help improve Better Auth.
@@ -24,16 +25,23 @@ You can also debug what would be sent by setting:
 Learn more in the docs: https://www.better-auth.com/docs/reference/telemetry\n\n`;
 
 async function configFilePath() {
-	const path = await import("path");
-	const os = await import("os");
-	const baseDir =
-		typeof process !== "undefined" && process.platform === "win32"
-			? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
-			: path.join(os.homedir(), ".config");
-	const dir = path.join(baseDir, "better-auth");
-	const file = path.join(dir, "telemetry.json");
+	try {
+		const path = await importRuntime<typeof import("path")>("path");
+		const os = await importRuntime<typeof import("os")>("os");
+		const baseDir =
+			typeof process !== "undefined" && process.platform === "win32"
+				? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
+				: path.join(os.homedir(), ".config");
+		const dir = path.join(baseDir, "better-auth");
+		const file = path.join(dir, "telemetry.json");
 
-	return { file, dir };
+		return { file, dir };
+	} catch {
+		return {
+			file: null,
+			dir: null,
+		};
+	}
 }
 
 const shownNoticeInProcess = new Set<string>();
@@ -42,7 +50,11 @@ async function hasShownNoticeBefore(anonymousId: string) {
 	try {
 		const { file } = await configFilePath();
 
-		const fs = await import("fs/promises");
+		if (!file) {
+			return true;
+		}
+
+		const fs = await importRuntime<typeof import("fs/promises")>("fs/promises");
 		const raw = await fs.readFile(file, "utf-8");
 		const json = JSON.parse(raw) as { seen?: string[] };
 
@@ -58,20 +70,21 @@ async function hasShownNoticeBefore(anonymousId: string) {
 			return false;
 		}
 
-		// an unknown error happend
+		// an unknown error happened
 		return true;
 	}
 }
 
 async function markNoticeShown(anonymousId: string) {
 	try {
-		const fs = await import("fs/promises");
+		const fs = await importRuntime<typeof import("fs/promises")>("fs/promises");
 		const { file, dir } = await configFilePath();
-
+		if (!file || !dir) return;
 		await fs.mkdir(dir, { recursive: true });
 		let json: { seen: string[] } = { seen: [] };
 
 		try {
+			if (!file) return;
 			const raw = await fs.readFile(file, "utf-8");
 			const parsed = JSON.parse(raw) as { seen?: string[] };
 			json.seen = Array.isArray(parsed.seen) ? parsed.seen : [];
