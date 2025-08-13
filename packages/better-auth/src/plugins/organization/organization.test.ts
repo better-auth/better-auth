@@ -623,6 +623,24 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(removedOwner.error?.status).toBe(400);
+
+		const res = await client.organization.updateMemberRole({
+			organizationId: organizationId,
+			role: ["owner", "admin"],
+			memberId: org.data?.members.find((m) => m.role === "owner")?.id!,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const removedMultipleRoleOwner = await client.organization.removeMember({
+			organizationId: org.data.id,
+			memberIdOrEmail: org.data?.members.find((m) => m.role === "owner")!.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(removedMultipleRoleOwner.error?.status).toBe(400);
 	});
 
 	it("should validate permissions", async () => {
