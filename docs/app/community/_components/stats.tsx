@@ -13,7 +13,7 @@ export default function Stats({
 	return (
 		<div className="relative">
 			<div className="md:mx-auto w-full">
-				<div className="border border-input rounded-none overflow-hidden border-l-0 border-r-0">
+				<div className="border border-b-0 rounded-none overflow-hidden border-l-0 border-r-0">
 					<div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-input">
 						<div className="flex pt-5 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
 							<div className="relative flex flex-col p-3">
