@@ -113,10 +113,11 @@ let isDockerCached: boolean | undefined;
 
 async function hasDockerEnv() {
 	if (getVendor() === "cloudflare") return false;
-	const importRuntime = (m: string) =>
-		(Function("mm", "return import(mm)") as any)(m);
-	const { default: fs } = await importRuntime("fs");
+  
 	try {
+	  const importRuntime = (m: string) =>
+		(Function("mm", "return import(mm)") as any)(m);
+	  const { default: fs } = await importRuntime("fs");
 		fs.statSync("/.dockerenv");
 		return true;
 	} catch {
