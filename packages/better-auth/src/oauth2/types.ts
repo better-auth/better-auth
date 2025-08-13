@@ -83,6 +83,10 @@ export interface OAuthProvider<
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
+	 * Whether the provider is enabled.
+	 */
+	enabled?: boolean;
+	/**
 	 * The client ID of your application
 	 */
 	clientId: string;
