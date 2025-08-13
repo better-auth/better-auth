@@ -36,6 +36,8 @@ export async function migrateAction(opts: any) {
 		return;
 	}
 
+	const telemetry = await createTelemetry(config);
+
 	const db = await getAdapter(config);
 
 	if (!db) {
@@ -51,7 +53,6 @@ export async function migrateAction(opts: any) {
 				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
 			);
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_migrate",
 					payload: {
@@ -68,7 +69,6 @@ export async function migrateAction(opts: any) {
 				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle’s migrate or push to apply it.",
 			);
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_migrate",
 					payload: {
@@ -82,7 +82,6 @@ export async function migrateAction(opts: any) {
 		}
 		logger.error("Migrate command isn't supported for this adapter.");
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_migrate",
 				payload: {
@@ -103,7 +102,7 @@ export async function migrateAction(opts: any) {
 		spinner.stop();
 		logger.info("🚀 No migrations needed.");
 		try {
-			const telemetry = await createTelemetry(config);
+			console.log("ok");
 			await telemetry.publish({
 				type: "cli_migrate",
 				payload: {
@@ -147,7 +146,6 @@ export async function migrateAction(opts: any) {
 	if (!migrate) {
 		logger.info("Migration cancelled.");
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_migrate",
 				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
@@ -161,7 +159,6 @@ export async function migrateAction(opts: any) {
 	spinner.stop();
 	logger.info("🚀 migration was completed successfully!");
 	try {
-		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
 			type: "cli_migrate",
 			payload: { outcome: "migrated", config: getTelemetryAuthConfig(config) },
