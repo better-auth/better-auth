@@ -1,15 +1,23 @@
-import fs from "fs/promises";
-import path from "path";
 import type { PackageJson } from "type-fest";
 let packageJSONCache: PackageJson | undefined;
 
 async function readRootPackageJson() {
 	if (packageJSONCache) return packageJSONCache;
 	try {
-		const raw = await fs.readFile(
-			path.join(process.cwd(), "package.json"),
-			"utf-8",
-		);
+		const cwd =
+			typeof process !== "undefined" && typeof process.cwd === "function"
+				? process.cwd()
+				: "";
+		if (!cwd) return undefined;
+		// Lazily import Node built-ins only when available (Node/Bun/Deno) and
+		// avoid static analyzer/bundler resolution by obfuscating module names
+		const importRuntime = (m: string) =>
+			(Function("mm", "return import(mm)") as any)(m);
+		const [{ default: fs }, { default: path }] = await Promise.all([
+			importRuntime("fs/promises"),
+			importRuntime("path"),
+		]);
+		const raw = await fs.readFile(path.join(cwd, "package.json"), "utf-8");
 		packageJSONCache = JSON.parse(raw);
 		return packageJSONCache as PackageJson;
 	} catch {}
@@ -24,12 +32,18 @@ export async function getPackageVersion(pkg: string) {
 	}
 
 	try {
-		const pkgJsonPath = path.join(
-			process.cwd(),
-			"node_modules",
-			pkg,
-			"package.json",
-		);
+		const cwd =
+			typeof process !== "undefined" && typeof process.cwd === "function"
+				? process.cwd()
+				: "";
+		if (!cwd) throw new Error("no-cwd");
+		const importRuntime = (m: string) =>
+			(Function("mm", "return import(mm)") as any)(m);
+		const [{ default: fs }, { default: path }] = await Promise.all([
+			importRuntime("fs/promises"),
+			importRuntime("path"),
+		]);
+		const pkgJsonPath = path.join(cwd, "node_modules", pkg, "package.json");
 		const raw = await fs.readFile(pkgJsonPath, "utf-8");
 		const json = JSON.parse(raw);
 		const resolved =
