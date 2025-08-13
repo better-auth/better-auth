@@ -38,6 +38,8 @@ export async function generateAction(opts: any) {
 		return;
 	}
 
+	const telemetry = await createTelemetry(config);
+
 	const adapter = await getAdapter(config).catch((e) => {
 		logger.error(e.message);
 		process.exit(1);
@@ -56,7 +58,6 @@ export async function generateAction(opts: any) {
 		logger.info("Your schema is already up to date.");
 		// telemetry: track generate attempted, no changes
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_generate",
 				payload: {
@@ -105,7 +106,6 @@ export async function generateAction(opts: any) {
 			);
 			// telemetry: track generate success overwrite/append
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_generate",
 					payload: {
@@ -119,7 +119,6 @@ export async function generateAction(opts: any) {
 			logger.error("Schema generation aborted.");
 			// telemetry: track generate aborted
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_generate",
 					payload: {
@@ -154,7 +153,6 @@ export async function generateAction(opts: any) {
 		logger.error("Schema generation aborted.");
 		// telemetry: track generate aborted before write
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_generate",
 				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
@@ -178,7 +176,6 @@ export async function generateAction(opts: any) {
 	logger.success(`🚀 Schema was generated successfully!`);
 	// telemetry: track generate success
 	try {
-		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
 			type: "cli_generate",
 			payload: { outcome: "generated", config: getTelemetryAuthConfig(config) },
