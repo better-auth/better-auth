@@ -280,25 +280,24 @@ export const emailOTP = (options: EmailOTPOptions) => {
 	return {
 		id: "email-otp",
 		init(ctx) {
+			if (!opts.overrideDefaultEmailVerification) {
+				return;
+			}
 			return {
 				options: {
 					emailVerification: {
-						...(opts.overrideDefaultEmailVerification
-							? {
-									async sendVerificationEmail(data, request) {
-										await endpoints.sendVerificationOTP({
-											//@ts-expect-error - we need to pass the context
-											context: ctx,
-											request: request,
-											body: {
-												email: data.user.email,
-												type: "email-verification",
-											},
-											ctx,
-										});
-									},
-								}
-							: {}),
+						async sendVerificationEmail(data, request) {
+							await endpoints.sendVerificationOTP({
+								//@ts-expect-error - we need to pass the context
+								context: ctx,
+								request: request,
+								body: {
+									email: data.user.email,
+									type: "email-verification",
+								},
+								ctx,
+							});
+						},
 					},
 				},
 			};
