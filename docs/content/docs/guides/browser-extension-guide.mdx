@@ -89,7 +89,7 @@ If you would like to view a completed example, you can check out the <Link href=
 
           If you must call an `authClient` method from a content script, you should call it in your
           [background script](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Background_scripts)
-          via [`sendMessage`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Runtime/sendMessage).
+          via [`sendMessage`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/sendMessage).
 
           For an even more robust approach, set a `customFetchImpl` value in your `authClient` options that will
           send the request to your background script, which will then forward it to the authentication server.
