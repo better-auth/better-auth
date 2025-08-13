@@ -138,7 +138,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 		let toBeAddedFields: Record<string, FieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
-			const column = table.columns.find((c) => c.name === fieldName);
+			const actualColumnName = field.fieldName || fieldName;
+			const column = table.columns.find((c) => c.name === actualColumnName);
 			if (!column) {
 				toBeAddedFields[fieldName] = field;
 				continue;
