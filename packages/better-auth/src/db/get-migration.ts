@@ -12,6 +12,7 @@ import type {
 	ColumnDataType,
 	CreateIndexBuilder,
 	CreateTableBuilder,
+	DropTableBuilder,
 	Kysely,
 	RawBuilder,
 } from "kysely";
@@ -138,6 +139,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 		process.exit(1);
 	}
 
+	const force = (config as unknown as { __force?: boolean }).__force === true;
+
 	// For PostgreSQL, detect and log the current schema being used
 	let currentSchema = "public";
 	if (dbType === "postgres") {
@@ -149,8 +152,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 		// Verify the schema exists
 		try {
 			const schemaCheck = await sql<{ schema_name: string }>`
-				SELECT schema_name 
-				FROM information_schema.schemata 
+				SELECT schema_name
+				FROM information_schema.schemata
 				WHERE schema_name = ${currentSchema}
 			`.execute(db);
 
@@ -176,8 +179,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 			const tablesInSchema = await sql<{
 				table_name: string;
 			}>`
-				SELECT table_name 
-				FROM information_schema.tables 
+				SELECT table_name
+				FROM information_schema.tables
 				WHERE table_schema = ${currentSchema}
 				AND table_type = 'BASE TABLE'
 			`.execute(db);
@@ -214,7 +217,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}[] = [];
 
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
-		const table = tableMetadata.find((t) => t.name === key);
+		const table = force ? undefined : tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
 			const tableData = {
@@ -272,6 +275,24 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
+	const dropMigrations: DropTableBuilder[] = [];
+	// when force is true, we need to drop the tables in the reverse order of creation
+	if (force) {
+		const schemaOrder: { name: string; order: number }[] = Object.entries(
+			betterAuthSchema,
+		).map(([name, data]) => ({ name, order: data.order || Infinity }));
+
+		const dropOrder = schemaOrder
+			.sort((a, b) => (a.order || Infinity) - (b.order || Infinity))
+			.reverse();
+
+		for (const { name } of dropOrder) {
+			const existsInDb = tableMetadata.find((t) => t.name === name);
+			if (existsInDb) {
+				dropMigrations.push(db.schema.dropTable(name).ifExists());
+			}
+		}
+	}
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
 	const useNumberId =
@@ -553,6 +574,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 
 	async function runMigrations() {
+		// Execute drops first when forcing
+		if (force) {
+			for (const drop of dropMigrations) {
+				await drop.execute();
+			}
+		}
 		for (const migration of migrations) {
 			await migration.execute();
 		}

@@ -20,6 +20,7 @@ export async function migrateAction(opts: any) {
 			config: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
+			force: z.boolean().optional(),
 		})
 		.parse(opts);
 
@@ -40,7 +41,11 @@ export async function migrateAction(opts: any) {
 		return;
 	}
 
-	const db = await getAdapter(config);
+	const fullConfig = options.force
+		? ({ ...config, __force: true } as any)
+		: config;
+
+	const db = await getAdapter(fullConfig);
 
 	if (!db) {
 		console.error(
@@ -101,7 +106,8 @@ export async function migrateAction(opts: any) {
 
 	const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
 
-	const { toBeAdded, toBeCreated, runMigrations } = await getMigrations(config);
+	const { toBeAdded, toBeCreated, runMigrations } =
+		await getMigrations(fullConfig);
 
 	if (!toBeAdded.length && !toBeCreated.length) {
 		spinner.stop();
@@ -187,6 +193,11 @@ export const migrate = new Command("migrate")
 	.option(
 		"-y, --yes",
 		"automatically accept and run migrations without prompting",
+		false,
+	)
+	.option(
+		"-f, --force",
+		"force running migrations by treating the target database as empty (which will drop all existing tables)",
 		false,
 	)
 	.option("--y", "(deprecated) same as --yes", false)
