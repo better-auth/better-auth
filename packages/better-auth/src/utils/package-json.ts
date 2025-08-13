@@ -1,11 +1,11 @@
-import fs from "fs/promises";
-import path from "path";
 import type { PackageJson } from "type-fest";
 let packageJSONCache: PackageJson | undefined;
 
 async function readRootPackageJson() {
 	if (packageJSONCache) return packageJSONCache;
 	try {
+		const fs = await import("fs/promises");
+		const path = await import("path");
 		const raw = await fs.readFile(
 			path.join(process.cwd(), "package.json"),
 			"utf-8",
@@ -24,6 +24,8 @@ export async function getPackageVersion(pkg: string) {
 	}
 
 	try {
+		const fs = await import("fs/promises");
+		const path = await import("path");
 		const pkgJsonPath = path.join(
 			process.cwd(),
 			"node_modules",
