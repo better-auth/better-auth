@@ -970,3 +970,52 @@ describe("override default email verification", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalled();
 	});
 });
+
+describe("otp email should only be sent once for each sign up", async () => {
+	async function testFunction(sendVerificationOnSignUp: boolean) {
+		let otp: string[] = [];
+
+		const { customFetchImpl } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP(data) {
+							otp.push(data.otp);
+						},
+						overrideDefaultEmailVerification: true,
+						sendVerificationOnSignUp,
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const client = createAuthClient({
+			plugins: [emailOTPClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		await client.signUp.email({
+			email: "test-otp-override@email.com",
+			password: "password",
+			name: "Test User",
+		});
+
+		expect(otp).toHaveLength(1);
+	}
+
+	it("when sendVerificationOnSignUp is enabled", async () => {
+		await testFunction(true);
+	});
+
+	it("when sendVerificationOnSignUp is disabled", async () => {
+		await testFunction(false);
+	});
+});
