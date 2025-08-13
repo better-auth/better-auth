@@ -102,7 +102,6 @@ export async function migrateAction(opts: any) {
 		spinner.stop();
 		logger.info("🚀 No migrations needed.");
 		try {
-			console.log("ok");
 			await telemetry.publish({
 				type: "cli_migrate",
 				payload: {
