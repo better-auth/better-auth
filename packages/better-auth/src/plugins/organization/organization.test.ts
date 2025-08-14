@@ -54,6 +54,49 @@ describe("organization", async (it) => {
 		},
 	});
 
+	it("applies boolean default false on create (additionalFields)", async () => {
+		const localDb = {
+			user: [],
+			session: [],
+			account: [],
+			organization: [] as Array<{ id: string; inactive?: boolean }>,
+			invitation: [],
+			member: [],
+			team: [],
+			teamMember: [],
+		};
+		const {
+			auth: auth2,
+			signInWithTestUser: signInWithTestUser2,
+		} = await getTestInstance({
+			database: memoryAdapter(localDb),
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								inactive: {
+									type: "boolean",
+									required: true,
+									input: false,
+									defaultValue: false,
+								},
+							},
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: h2 } = await signInWithTestUser2();
+		const org = await auth2.api.createOrganization({
+			body: { name: "acme", slug: "acme" },
+			headers: h2,
+		});
+		expect(org?.inactive).toBe(false);
+		expect(localDb.organization[0]?.inactive).toBe(false);
+	});
+
 	let organizationId: string;
 	let organization2Id: string;
 	it("create organization", async () => {
