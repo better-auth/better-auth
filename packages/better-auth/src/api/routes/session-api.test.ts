@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
@@ -342,6 +342,32 @@ describe("session", async () => {
 		});
 		expect(revokeRes.data?.status).toBe(true);
 	});
+
+	it("should return session headers", async () => {
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		const signInHeaders = new Headers();
+		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]);
+
+		const sessionResWithoutHeaders = await auth.api.getSession({
+			headers: signInHeaders,
+		});
+
+		const sessionResWithHeaders = await auth.api.getSession({
+			headers: signInHeaders,
+			returnHeaders: true,
+		});
+
+		expect(sessionResWithHeaders.headers).toBeDefined();
+		// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
+		expect(sessionResWithoutHeaders.headers).toBeUndefined();
+	});
 });
 
 describe("session storage", async () => {
@@ -574,31 +600,5 @@ describe("cookie cache", async () => {
 			},
 		});
 		expect(fn).toHaveBeenCalledTimes(5);
-	});
-
-	it("should return session headers", async () => {
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
-			},
-			returnHeaders: true,
-		});
-
-		const signInHeaders = new Headers();
-		signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]);
-
-		const sessionResWithoutHeaders = await auth.api.getSession({
-			headers: signInHeaders,
-		});
-
-		const sessionResWithHeaders = await auth.api.getSession({
-			headers: signInHeaders,
-			returnHeaders: true,
-		});
-
-		expect(sessionResWithHeaders.headers).toBeDefined();
-		// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
-		expect(sessionResWithoutHeaders.headers).toBeUndefined();
 	});
 });
