@@ -54,7 +54,7 @@ describe("organization", async (it) => {
 		},
 	});
 
-	it("applies boolean default false on create (additionalFields)", async () => {
+	it("applies boolean default value on create (additionalFields)", async () => {
 		const localDb = {
 			user: [],
 			session: [],
