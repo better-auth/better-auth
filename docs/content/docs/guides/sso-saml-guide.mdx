@@ -34,7 +34,7 @@ Here's a production-ready configuration example using Okta:
 
 ```typescript
 const ssoConfig = {
-  defaultSSO: {
+  defaultSSO: [{
     domain: "localhost:3000", // Your domain
     providerId: "sso",
     samlConfig: {
@@ -68,13 +68,50 @@ MIIDqjCCApKgAwIBAgIGAZhVGMeUMA0GCSqGSIb3DQEBCwUAMIGVMQswCQYDVQQGEwJVUzETMBEG
         </md:EntityDescriptor>`
       }
     }
-  }
+  }]
 }
 ```
 If you want to register a SAML endpoint (provider) like the one shown in our documentation, make sure to use the SSO plugin's registration API. This approach lets you manage SAML providers directly in your database and is recommended for production environments. For step-by-step instructions and required fields, see the [SSO Plugin Documentation](/docs/plugins/sso#register-a-saml-provider).
 
 
 For production environments, you should register the SSO provider using the API instead of using `defaultSSO`. See the [SSO Plugin Documentation](/docs/plugins/sso#register-a-saml-provider) for registration details.
+
+### Multiple Default SSO Providers
+
+The `defaultSSO` configuration now supports an array of providers, allowing you to configure multiple default SSO providers for different scenarios:
+
+```typescript
+const ssoConfig = {
+  defaultSSO: [
+    {
+      domain: "company.com",
+      providerId: "company-okta",
+      samlConfig: {
+        // Okta SAML configuration for company.com
+      }
+    },
+    {
+      domain: "partner.com", 
+      providerId: "partner-adfs",
+      samlConfig: {
+        // ADFS SAML configuration for partner.com
+      }
+    },
+    {
+      domain: "contractor.org",
+      providerId: "contractor-azure",
+      samlConfig: {
+        // Azure AD SAML configuration for contractor.org
+      }
+    }
+  ]
+}
+```
+
+**Provider Matching Logic:**
+- **Primary**: Uses `providerId` when explicitly provided in the sign-in request
+- **Fallback**: Uses `domain` matching based on the user's email domain
+- **Example**: A user with email `user@company.com` would automatically match the first provider above
 
 ## Testing with DummyIDP.com (IdP-Initiated Testing)
 
@@ -88,7 +125,7 @@ Here's a complete example using DummyIDP for development testing:
 const auth = betterAuth({
   plugins: [
     sso({
-      defaultSSO: {
+      defaultSSO: [{
         domain: "localhost:3000",
         providerId: "sso",
         samlConfig: {
@@ -143,7 +180,7 @@ jzGhYL6m9gFTm/8=
             </md:EntityDescriptor>`
           }
         }
-      }
+      }]
     })
   ]
 });
@@ -171,6 +208,37 @@ jzGhYL6m9gFTm/8=
    - Check that the user is properly authenticated
    - Verify user attributes are correctly mapped
    - Confirm the session is established
+
+### Using the Sign-In API
+
+With the array-based configuration, you can initiate SSO sign-in in multiple ways:
+
+**1. Using Provider ID (Recommended):**
+```typescript
+// Explicitly specify which provider to use
+await authClient.signIn.sso({
+  providerId: "company-okta",
+  callbackURL: "/dashboard"
+});
+```
+
+**2. Using Email Domain Matching:**
+```typescript
+// Automatically matches provider based on email domain
+await authClient.signIn.sso({
+  email: "user@company.com",
+  callbackURL: "/dashboard"
+});
+```
+
+**3. Using Domain Parameter:**
+```typescript
+// Explicitly specify domain for matching
+await authClient.signIn.sso({
+  domain: "partner.com",
+  callbackURL: "/dashboard"
+});
+```
 
 **Important Notes**:
  - DummyIDP should ONLY be used for development and testing

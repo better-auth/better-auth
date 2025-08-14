@@ -172,11 +172,11 @@ export interface SSOOptions {
 		}) => Promise<"member" | "admin">;
 	};
 	/**
-	 * Default SSO provider configuration for testing.
-	 * This provider will be used if no provider is found in the database.
+	 * Default SSO provider configurations for testing.
+	 * These providers will be used if no provider is found in the database.
 	 * This is useful for testing and development.
 	 */
-	defaultSSO?: {
+	defaultSSO?: Array<{
 		/**
 		 * The domain to match for this default provider.
 		 * This is only used to match incoming requests to this default provider.
@@ -194,7 +194,7 @@ export interface SSOOptions {
 		 * OIDC configuration
 		 */
 		oidcConfig?: OIDCConfig;
-	};
+	}>;
 	/**
 	 * Override user info with the provider info.
 	 * @default false
@@ -916,7 +916,7 @@ export const sso = (options?: SSOOptions) => {
 					const body = ctx.body;
 					let { email, organizationSlug, providerId, domain } = body;
 					if (
-						!options?.defaultSSO &&
+						!options?.defaultSSO?.length &&
 						!email &&
 						!organizationSlug &&
 						!domain &&
@@ -978,17 +978,28 @@ export const sso = (options?: SSOOptions) => {
 							};
 						});
 
-					if (!provider && options?.defaultSSO) {
-						provider = {
-							issuer:
-								options.defaultSSO.samlConfig?.issuer ||
-								options.defaultSSO.oidcConfig?.issuer ||
-								"",
-							providerId: options.defaultSSO.providerId,
-							userId: "default",
-							oidcConfig: options.defaultSSO.oidcConfig,
-							samlConfig: options.defaultSSO.samlConfig,
-						};
+					if (!provider && options?.defaultSSO?.length) {
+						// Find matching default SSO provider by providerId
+						const matchingDefault = providerId 
+							? options.defaultSSO.find(
+								(defaultProvider) => defaultProvider.providerId === providerId
+							)
+							: options.defaultSSO.find(
+								(defaultProvider) => defaultProvider.domain === domain
+							);
+						
+						if (matchingDefault) {
+							provider = {
+								issuer:
+									matchingDefault.samlConfig?.issuer ||
+									matchingDefault.oidcConfig?.issuer ||
+									"",
+								providerId: matchingDefault.providerId,
+								userId: "default",
+								oidcConfig: matchingDefault.oidcConfig,
+								samlConfig: matchingDefault.samlConfig,
+							};
+						}
 					}
 
 					if (!provider) {
@@ -1730,13 +1741,20 @@ export const sso = (options?: SSOOptions) => {
 					// If defaultSSO is configured, use it as the provider
 					let provider: SSOProvider | null = null;
 
-					if (options?.defaultSSO) {
-						provider = {
-							issuer: options.defaultSSO.samlConfig?.issuer || "",
-							providerId: options.defaultSSO.providerId,
-							userId: "default",
-							samlConfig: options.defaultSSO.samlConfig,
-						};
+					if (options?.defaultSSO?.length) {
+						// For ACS endpoint, we can use the first default provider or try to match by providerId
+						const matchingDefault = providerId 
+							? options.defaultSSO.find(defaultProvider => defaultProvider.providerId === providerId)
+							: options.defaultSSO[0]; // Use first default provider if no specific providerId
+						
+						if (matchingDefault) {
+							provider = {
+								issuer: matchingDefault.samlConfig?.issuer || "",
+								providerId: matchingDefault.providerId,
+								userId: "default",
+								samlConfig: matchingDefault.samlConfig,
+							};
+						}
 					} else {
 						provider = await ctx.context.adapter
 							.findOne<SSOProvider>({

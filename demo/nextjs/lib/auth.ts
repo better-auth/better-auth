@@ -195,7 +195,7 @@ export const auth = betterAuth({
 			},
 		}),
 		sso({
-			defaultSSO: {
+			defaultSSO: [{
 				domain: "http://localhost:3000",
 				providerId: "sso",
 				samlConfig: {
@@ -295,7 +295,7 @@ export const auth = betterAuth({
 					},
 					callbackUrl: "/dashboard",
 				},
-			},
+			}],
 		}),
 	],
 	trustedOrigins: ["exp://"],

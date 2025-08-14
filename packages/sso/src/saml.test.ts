@@ -494,6 +494,95 @@ const createMockSAMLIdP = (port: number) => {
 	return { start, stop, metadataUrl };
 };
 
+describe("SAML SSO with defaultSSO array", async () => {
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
+
+	const ssoOptions = {
+		defaultSSO: [{
+			domain: "localhost:8081",
+			providerId: "default-saml",
+			samlConfig: {
+				issuer: "http://localhost:8081",
+				entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+				cert: certificate,
+				callbackUrl: "http://localhost:8081/dashboard",
+				wantAssertionsSigned: false,
+				signatureAlgorithm: "sha256",
+				digestAlgorithm: "sha256",
+				idpMetadata: {
+					metadata: idpMetadata,
+				},
+				spMetadata: {
+					metadata: spMetadata,
+				},
+				identifierFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+			},
+		}],
+		provisionUser: vi
+			.fn()
+			.mockImplementation(async ({ user, userInfo, token, provider }) => {
+				return {
+					id: "provisioned-user-id",
+					email: userInfo.email,
+					name: userInfo.name,
+					attributes: userInfo.attributes,
+				};
+			}),
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	const ctx = await auth.$context;
+
+	const authClient = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [bearer(), ssoClient()],
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	beforeAll(async () => {
+		await mockIdP.start();
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	it("should use default SAML SSO provider from array when no provider found in database", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "default-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+	});
+});
+
 describe("SAML SSO", async () => {
 	const data = {
 		user: [],
