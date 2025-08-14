@@ -21,7 +21,6 @@ import { tiktok } from "./tiktok";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
-import { z } from "zod";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
 export const socialProviders = {
