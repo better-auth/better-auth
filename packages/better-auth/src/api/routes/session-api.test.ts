@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
@@ -365,6 +365,10 @@ describe("session", async () => {
 		});
 
 		expect(sessionResWithHeaders.headers).toBeDefined();
+		expectTypeOf({ headers: sessionResWithHeaders.headers }).toMatchObjectType<{
+			headers: Headers;
+		}>();
+
 		// @ts-expect-error: headers should not exist on sessionResWithoutHeaders
 		expect(sessionResWithoutHeaders.headers).toBeUndefined();
 	});
