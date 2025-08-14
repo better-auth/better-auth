@@ -279,7 +279,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				return c.json({
 					url: "", // this is for type inference
 					status: true,
-					redirect: !c.body.disableRedirect,
+					redirect: false,
 				});
 			}
 
@@ -340,7 +340,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			return c.json({
 				url: "", // this is for type inference
 				status: true,
-				redirect: !c.body.disableRedirect,
+				redirect: false,
 			});
 		}
 
