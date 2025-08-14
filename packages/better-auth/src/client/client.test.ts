@@ -245,6 +245,7 @@ describe("type", () => {
 				createdAt: Date;
 				updatedAt: Date;
 				image?: string | undefined | null;
+				lastOrgId?: string | undefined | null;
 				testField4: string;
 				testField?: string | undefined | null;
 				testField2?: number | undefined | null;
@@ -267,6 +268,7 @@ describe("type", () => {
 			updatedAt: Date;
 			image?: string | undefined | null;
 			twoFactorEnabled: boolean | undefined | null;
+			lastOrgId?: string | undefined | null;
 		}>();
 	});
 

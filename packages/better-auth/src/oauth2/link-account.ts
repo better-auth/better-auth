@@ -4,7 +4,8 @@ import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
 import { isDevelopment } from "../utils/env";
 import { setTokenUtil } from "./utils";
-
+import type { OrganizationOptions } from "../plugins/organization/organization";
+import { getOrgAdapter } from "../plugins/organization/adapter";
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	{
@@ -203,6 +204,31 @@ export async function handleOAuthUserInfo(
 			isRegister: false,
 		};
 	}
+	const orgOptions = c.context.options.plugins?.find(
+		(p) => p.id === "organization",
+	)?.options as OrganizationOptions;
+	if (orgOptions) {
+		const orgAdapter = getOrgAdapter(c.context, orgOptions);
+		const orgs = await orgAdapter.listOrganizations(user.id);
+		let activeOrganizationId: string | undefined;
+		if (user.lastOrgId) {
+			const lastOrg = orgs.find((o) => o.id === user.lastOrgId);
+			if (lastOrg) {
+				activeOrganizationId = lastOrg.id;
+			}
+		}
+		if (!activeOrganizationId && orgs.length > 0) {
+			activeOrganizationId = orgs[0].id;
+		}
+
+		if (activeOrganizationId) {
+			await orgAdapter.setActiveOrganization(
+				session.token,
+				activeOrganizationId,
+			);
+		}
+	}
+
 	return {
 		data: {
 			session,
