@@ -84,6 +84,18 @@ export interface EmailOTPOptions {
 	 * @default false
 	 */
 	overrideDefaultEmailVerification?: boolean;
+	/**
+	 * Rate limit configuration
+	 * 
+	 * @default {
+	 * 	window: 60,
+	 * 	max: 3,
+	 * }
+	 */
+	rateLimit?: {
+		window :number,
+		max :number
+	};
 }
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
@@ -1182,29 +1194,29 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				pathMatcher(path) {
 					return path === "/email-otp/send-verification-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/check-verification-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/verify-email";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/sign-in/email-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 		],
 	} satisfies BetterAuthPlugin;
