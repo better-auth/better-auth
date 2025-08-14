@@ -69,10 +69,10 @@ export async function decryptPrivateKey(
 	const decrypted = await subtle.decrypt(
 		{
 			name: "AES-GCM",
-			iv: ivBuffer,
+			iv: ivBuffer as BufferSource,
 		},
 		key,
-		ciphertext,
+		ciphertext as BufferSource,
 	);
 
 	const dec = new TextDecoder();

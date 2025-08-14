@@ -58,7 +58,7 @@ function SignInBox() {
 					type="email"
 					placeholder="m@example.com"
 					required
-					onChange={(e) => {
+					onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
 						setEmail(e.target.value);
 					}}
 					value={email}
@@ -77,7 +77,9 @@ function SignInBox() {
 				<PasswordInput
 					id="password"
 					value={password}
-					onChange={(e) => setPassword(e.target.value)}
+					onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+						setPassword(e.target.value)
+					}
 					autoComplete="password"
 					placeholder="Password"
 				/>

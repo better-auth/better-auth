@@ -31,6 +31,8 @@ export const ORGANIZATION_ERROR_CODES = {
 	INVITATION_NOT_FOUND: "Invitation not found",
 	YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION:
 		"You are not the recipient of the invitation",
+	EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION:
+		"Email verification required before accepting or rejecting invitation",
 	YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION:
 		"You are not allowed to cancel this invitation",
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:
@@ -51,5 +53,20 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to delete teams in this organization",
 	YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM:
 		"You are not allowed to update this team",
+	YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM:
+		"You are not allowed to delete this team",
 	INVITATION_LIMIT_REACHED: "Invitation limit reached",
+	TEAM_MEMBER_LIMIT_REACHED: "Team member limit reached",
+	USER_IS_NOT_A_MEMBER_OF_THE_TEAM: "User is not a member of the team",
+	YOU_CAN_NOT_ACCESS_THE_MEMBERS_OF_THIS_TEAM:
+		"You are not allowed to list the members of this team",
+	YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM: "You do not have an active team",
+	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER:
+		"You are not allowed to create a new member",
+	YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER:
+		"You are not allowed to remove a team member",
+	YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION:
+		"You are not allowed to access this organization as an owner",
+	YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
+		"You are not a member of this organization",
 } as const;

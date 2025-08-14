@@ -121,7 +121,7 @@ export async function GET(req: Request) {
 							style={{ fontFamily: "GeistMono", fontWeight: "normal" }}
 							tw="relative flex mt-10 text-xl uppercase font-bold gap-2 items-center"
 						>
-							{type === "documentaiton" ? (
+							{type === "documentation" ? (
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="1.2em"

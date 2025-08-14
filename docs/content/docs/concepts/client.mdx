@@ -305,7 +305,7 @@ const authClient = createAuthClient();
 
 type ErrorTypes = Partial<
 	Record<
-		keyof typeof client.$ERROR_CODES,
+		keyof typeof authClient.$ERROR_CODES,
 		{
 			en: string;
 			es: string;
@@ -334,7 +334,7 @@ const { error } = await authClient.signUp.email({
 	name: "User",
 });
 if(error?.code){
-    alert(getErrorMessage(error.code), "en");
+    alert(getErrorMessage(error.code, "en"));
 }
 ```
 

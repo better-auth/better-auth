@@ -61,19 +61,19 @@ export async function generateAuthConfig({
 			},
 		} satisfies CommonIndexConfig<{}>,
 	};
-	const common_indexs = {
+	const common_indexes = {
 		START_OF_PLUGINS:
 			_start_of_plugins_common_index.START_OF_PLUGINS satisfies CommonIndexConfig<{}>,
 		END_OF_PLUGINS: {
 			type: "manual",
 			getIndex: ({ content, additionalFields }) => {
-				const clsoingBracketIndex = findClosingBracket(
+				const closingBracketIndex = findClosingBracket(
 					content,
 					additionalFields.start_of_plugins,
 					"[",
 					"]",
 				);
-				return clsoingBracketIndex;
+				return closingBracketIndex;
 			},
 		} satisfies CommonIndexConfig<{ start_of_plugins: number }>,
 		START_OF_BETTERAUTH: {
@@ -94,7 +94,7 @@ export async function generateAuthConfig({
 		}): Promise<{ code: string; dependencies: string[]; envs: string[] }> => {
 			let start_of_plugins = getGroupInfo(
 				opts.config,
-				common_indexs.START_OF_PLUGINS,
+				common_indexes.START_OF_PLUGINS,
 				{},
 			);
 
@@ -107,7 +107,7 @@ export async function generateAuthConfig({
 			}
 			let end_of_plugins = getGroupInfo(
 				opts.config,
-				common_indexs.END_OF_PLUGINS,
+				common_indexes.END_OF_PLUGINS,
 				{ start_of_plugins: start_of_plugins.index },
 			);
 
@@ -228,7 +228,7 @@ export async function generateAuthConfig({
 				if (code_before_betterAuth) {
 					let start_of_betterauth = getGroupInfo(
 						opts.config,
-						common_indexs.START_OF_BETTERAUTH,
+						common_indexes.START_OF_BETTERAUTH,
 						{},
 					);
 					if (!start_of_betterauth) {
@@ -454,7 +454,7 @@ export async function generateAuthConfig({
 
 			let start_of_betterauth = getGroupInfo(
 				opts.config,
-				common_indexs.START_OF_BETTERAUTH,
+				common_indexes.START_OF_BETTERAUTH,
 				{},
 			);
 			if (!start_of_betterauth) {

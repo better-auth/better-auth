@@ -5,6 +5,7 @@ import { expo } from ".";
 import { expoClient } from "./client";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
+import { oAuthProxy } from "better-auth/plugins";
 
 vi.mock("expo-web-browser", async () => {
 	return {
@@ -59,7 +60,7 @@ function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
 				clientSecret: "test",
 			},
 		},
-		plugins: [expo()],
+		plugins: [expo(), oAuthProxy()],
 		trustedOrigins: ["better-auth://"],
 		...extraOpts,
 	});
@@ -126,6 +127,14 @@ describe("expo", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
+		const stateId = res?.url?.split("state=")[1].split("&")[0];
+		const ctx = await auth.$context;
+		if (!stateId) {
+			throw new Error("State ID not found");
+		}
+		const state = await ctx.internalAdapter.findVerificationValue(stateId);
+		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
+		expect(callbackURL).toBe("better-auth:///dashboard");
 		expect(res).toMatchObject({
 			url: expect.stringContaining("accounts.google"),
 		});
@@ -138,6 +147,13 @@ describe("expo", async () => {
 	it("should get cookies", async () => {
 		const c = client.getCookie();
 		expect(c).includes("better-auth.session_token");
+	});
+	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
+		const header =
+			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
+		const map = (await import("./client")).parseSetCookieHeader(header);
+		expect(map.get("better-auth.session_token")?.value).toBe("abc");
+		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
 	});
 });
 
@@ -190,11 +206,11 @@ describe("expo with cookieCache", async () => {
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
 		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
-			value: expect.stringMatching(/.+/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
-			value: expect.stringMatching(/.+/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 	});
@@ -207,12 +223,23 @@ describe("expo with cookieCache", async () => {
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
 		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
-			value: expect.stringMatching(/^$/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
 		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
-			value: expect.stringMatching(/^$/),
+			value: expect.any(String),
 			expires: expect.any(String),
 		});
+	});
+
+	it("should add `exp://` to trusted origins", async () => {
+		vi.stubEnv("NODE_ENV", "development");
+		const auth = betterAuth({
+			plugins: [expo()],
+			trustedOrigins: ["http://localhost:3000"],
+		});
+		const ctx = await auth.$context;
+		expect(ctx.options.trustedOrigins).toContain("exp://");
+		expect(ctx.options.trustedOrigins).toContain("http://localhost:3000");
 	});
 });

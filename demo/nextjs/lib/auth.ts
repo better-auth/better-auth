@@ -8,7 +8,6 @@ import {
 	oneTap,
 	oAuthProxy,
 	openAPI,
-	oidcProvider,
 	customSession,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
@@ -19,7 +18,6 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "better-auth/plugins/passkey";
-import { expo } from "@better-auth/expo";
 import { stripe } from "@better-auth/stripe";
 import { Stripe } from "stripe";
 
@@ -41,20 +39,19 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-const PROFESSION_PRICE_ID = {
-	default: "price_1QxWZ5LUjnrYIrml5Dnwnl0X",
-	annual: "price_1QxWZTLUjnrYIrmlyJYpwyhz",
+const PRO_PRICE_ID = {
+	default: "price_1RoxnRHmTADgihIt4y8c0lVE",
+	annual: "price_1RoxnoHmTADgihItzFvVP8KT",
 };
-const STARTER_PRICE_ID = {
-	default: "price_1QxWWtLUjnrYIrmleljPKszG",
-	annual: "price_1QxWYqLUjnrYIrmlonqPThVF",
+const PLUS_PRICE_ID = {
+	default: "price_1RoxnJHmTADgihIthZTLmrPn",
+	annual: "price_1Roxo5HmTADgihItEbJu5llL",
 };
-
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
-		dialect,
-		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
+		dialect: libsql,
+		type: "sqlite",
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
@@ -160,9 +157,7 @@ export const auth = betterAuth({
 		multiSession(),
 		oAuthProxy(),
 		nextCookies(),
-		oidcProvider({
-			loginPage: "/sign-in",
-		}),
+
 		oneTap(),
 		customSession(async (session) => {
 			return {
@@ -178,27 +173,33 @@ export const auth = betterAuth({
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
+				allowReTrialsForDifferentPlans: true,
 				plans: [
 					{
-						name: "Starter",
-						priceId: STARTER_PRICE_ID.default,
-						annualDiscountPriceId: STARTER_PRICE_ID.annual,
+						name: "Plus",
+						priceId: PLUS_PRICE_ID.default,
+						annualDiscountPriceId: PLUS_PRICE_ID.annual,
 						freeTrial: {
 							days: 7,
 						},
 					},
 					{
-						name: "Professional",
-						priceId: PROFESSION_PRICE_ID.default,
-						annualDiscountPriceId: PROFESSION_PRICE_ID.annual,
-					},
-					{
-						name: "Enterprise",
+						name: "Pro",
+						priceId: PRO_PRICE_ID.default,
+						annualDiscountPriceId: PRO_PRICE_ID.annual,
+						freeTrial: {
+							days: 7,
+						},
 					},
 				],
 			},
 		}),
-		expo(),
 	],
 	trustedOrigins: ["exp://"],
+	advanced: {
+		crossSubDomainCookies: {
+			enabled: process.env.NODE_ENV === "production",
+			domain: ".better-auth.com",
+		},
+	},
 });

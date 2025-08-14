@@ -16,7 +16,10 @@
 			]
 		},
 		"clean": {},
-		"format": {},
+		"format": {
+			"dependsOn": ["//#format"]
+		},
+		"//#format": {},
 		"lint": {},
 		"knip": {
 			"cache": true

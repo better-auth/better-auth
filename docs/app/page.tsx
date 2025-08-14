@@ -28,7 +28,7 @@ export default async function HomePage() {
 	const stars = await getGitHubStars();
 	return (
 		<main className="h-min mx-auto overflow-x-hidden">
-			<div className="w-full bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-black dark:to-zinc-950 border-b border-dashed border-zinc-200 dark:border-zinc-800">
+			<div className="w-full bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:via-black dark:to-zinc-950 border-b border-dashed border-zinc-200 dark:border-zinc-800">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="w-full h-full">
 						<div className="flex flex-col md:flex-row items-center justify-center h-12">

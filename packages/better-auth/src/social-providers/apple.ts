@@ -70,6 +70,7 @@ export interface AppleNonConformUser {
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	appBundleIdentifier?: string;
+	audience?: string;
 }
 
 export const apple = (options: AppleOptions) => {
@@ -89,6 +90,7 @@ export const apple = (options: AppleOptions) => {
 				state,
 				redirectURI,
 				responseMode: "form_post",
+				responseType: "code id_token",
 			});
 			return url;
 		},
@@ -115,7 +117,12 @@ export const apple = (options: AppleOptions) => {
 			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 				algorithms: [jwtAlg],
 				issuer: "https://appleid.apple.com",
-				audience: options.appBundleIdentifier || options.clientId,
+				audience:
+					options.audience && options.audience.length
+						? options.audience
+						: options.appBundleIdentifier
+							? options.appBundleIdentifier
+							: options.clientId,
 				maxTokenAge: "1h",
 			});
 			["email_verified", "is_private_email"].forEach((field) => {
@@ -155,12 +162,16 @@ export const apple = (options: AppleOptions) => {
 			const name = token.user
 				? `${token.user.name?.firstName} ${token.user.name?.lastName}`
 				: profile.name || profile.email;
+			const emailVerified =
+				typeof profile.email_verified === "boolean"
+					? profile.email_verified
+					: profile.email_verified === "true";
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.sub,
 					name: name,
-					emailVerified: false,
+					emailVerified: emailVerified,
 					email: profile.email,
 					...userMap,
 				},

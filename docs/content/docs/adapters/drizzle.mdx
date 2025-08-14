@@ -60,7 +60,15 @@ export const auth = betterAuth({
       ...schema,
       user: schema.users,
     },
-    //if all of them are just using plural form, you can just pass the option below
+  }),
+});
+```
+
+If all your tables are using plural form, you can just pass the `usePlural` option:
+```ts
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    ...
     usePlural: true,
   }),
 });

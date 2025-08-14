@@ -52,14 +52,14 @@ export interface OIDCOptions {
 	 *
 	 * When the server redirects the user to the consent page, it will include the
 	 * following query parameters:
-	 * authorization code.
+	 * - `consent_code` - The consent code to identify the authorization request.
 	 * - `client_id` - The ID of the client.
 	 * - `scope` - The requested scopes.
-	 * - `code` - The authorization code.
 	 *
-	 * once the user consents, you need to call the `/oauth2/consent` endpoint
-	 * with the code and `accept: true` to complete the authorization. Which will
-	 * then return the client to the `redirect_uri` with the authorization code.
+	 * Once the user consents, you need to call the `/oauth2/consent` endpoint
+	 * with `accept: true` and optionally the `consent_code` (if using URL parameter flow)
+	 * to complete the authorization. This will return the client to the `redirect_uri`
+	 * with the authorization code.
 	 *
 	 * @example
 	 * ```ts
@@ -86,7 +86,7 @@ export interface OIDCOptions {
 	 */
 	loginPage: string;
 	/**
-	 * Weather to require PKCE (proof key code exchange) or not
+	 * Whether to require PKCE (proof key code exchange) or not
 	 *
 	 * According to OAuth2.1 spec this should be required. But in any
 	 * case if you want to disable this you can use this options.
@@ -115,12 +115,46 @@ export interface OIDCOptions {
 	 *
 	 * @param user - The user object.
 	 * @param scopes - The scopes that the client requested.
+	 * @param client - The client object.
 	 * @returns The user info claim.
 	 */
 	getAdditionalUserInfoClaim?: (
 		user: User & Record<string, any>,
 		scopes: string[],
+		client: Client,
 	) => Record<string, any> | Promise<Record<string, any>>;
+	/**
+	 * Trusted clients that are configured directly in the provider options.
+	 * These clients bypass database lookups and can optionally skip consent screens.
+	 */
+	trustedClients?: Client[];
+	/**
+	 * Store the client secret in your database in a secure way
+	 * Note: This will not affect the client secret sent to the user, it will only affect the client secret stored in your database
+	 *
+	 * - "hashed" - The client secret is hashed using the `hash` function.
+	 * - "plain" - The client secret is stored in the database in plain text.
+	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
+	 * - { hash: (clientSecret: string) => Promise<string> } - A function that hashes the client secret.
+	 * - { encrypt: (clientSecret: string) => Promise<string>, decrypt: (clientSecret: string) => Promise<string> } - A function that encrypts and decrypts the client secret.
+	 *
+	 * @default "plain"
+	 */
+	storeClientSecret?:
+		| "hashed"
+		| "plain"
+		| "encrypted"
+		| { hash: (clientSecret: string) => Promise<string> }
+		| {
+				encrypt: (clientSecret: string) => Promise<string>;
+				decrypt: (clientSecret: string) => Promise<string>;
+		  };
+	/**
+	 * Whether to use the JWT plugin to sign the ID token.
+	 *
+	 * @default false
+	 */
+	useJWTPlugin?: boolean;
 }
 
 export interface AuthorizationQuery {
@@ -245,10 +279,11 @@ export interface Client {
 	 * Client Secret
 	 *
 	 * A secret for the client, if required by the authorization server.
+	 * Optional for public clients using PKCE.
 	 *
 	 * size 32
 	 */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * The client type
 	 *
@@ -257,8 +292,9 @@ export interface Client {
 	 * - web - A web application
 	 * - native - A mobile application
 	 * - user-agent-based - A user-agent-based application
+	 * - public - A public client (PKCE-enabled, no client_secret)
 	 */
-	type: "web" | "native" | "user-agent-based";
+	type: "web" | "native" | "user-agent-based" | "public";
 	/**
 	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
 	 * and path.
@@ -284,6 +320,11 @@ export interface Client {
 	 * Whether the client is disabled or not.
 	 */
 	disabled: boolean;
+	/**
+	 * Whether to skip the consent screen for this client.
+	 * Only applies to trusted clients.
+	 */
+	skipConsent?: boolean;
 }
 
 export interface TokenBody {
@@ -459,9 +500,13 @@ export interface OIDCMetadata {
 	/**
 	 * Supported grant types.
 	 *
-	 * only `authorization_code` is supported.
+	 * The first element MUST be "authorization_code"; additional grant types like
+	 * "refresh_token" can follow. Guarantees a non-empty array at the type level.
 	 */
-	grant_types_supported: ["authorization_code"];
+	grant_types_supported: [
+		"authorization_code",
+		...("authorization_code" | "refresh_token")[],
+	];
 	/**
 	 * acr_values supported.
 	 *
@@ -487,13 +532,8 @@ export interface OIDCMetadata {
 	subject_types_supported: ["public"];
 	/**
 	 * Supported ID token signing algorithms.
-	 *
-	 * only `RS256` and `none` are supported.
-	 *
-	 * @default
-	 * ["RS256", "none"]
 	 */
-	id_token_signing_alg_values_supported: ("RS256" | "none")[];
+	id_token_signing_alg_values_supported: string[];
 	/**
 	 * Supported token endpoint authentication methods.
 	 *
@@ -505,6 +545,7 @@ export interface OIDCMetadata {
 	token_endpoint_auth_methods_supported: [
 		"client_secret_basic",
 		"client_secret_post",
+		"none",
 	];
 	/**
 	 * Supported claims.
@@ -513,4 +554,12 @@ export interface OIDCMetadata {
 	 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "email", "email_verified", "name"]
 	 */
 	claims_supported: string[];
+	/**
+	 * Supported code challenge methods.
+	 *
+	 * only `S256` is supported.
+	 *
+	 * @default ["S256"]
+	 */
+	code_challenge_methods_supported: ["S256"];
 }

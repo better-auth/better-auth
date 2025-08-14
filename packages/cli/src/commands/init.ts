@@ -2,7 +2,7 @@ import { parse } from "dotenv";
 import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
 import fs from "fs/promises";
@@ -201,11 +201,7 @@ const defaultFormatOptions = {
 	tabWidth: 4,
 };
 
-const getDefaultAuthConfig = async ({
-	appName,
-}: {
-	appName?: string;
-}) =>
+const getDefaultAuthConfig = async ({ appName }: { appName?: string }) =>
 	await prettierFormat(
 		[
 			"import { betterAuth } from 'better-auth';",
@@ -352,6 +348,7 @@ const optionsSchema = z.object({
 	"skip-db": z.boolean().optional(),
 	"skip-plugins": z.boolean().optional(),
 	"package-manager": z.string().optional(),
+	tsconfig: z.string().optional(),
 });
 
 const outroText = `🥳 All Done, Happy Hacking!`;
@@ -402,7 +399,12 @@ export async function initAction(opts: any) {
 	// ===== tsconfig.json =====
 	let tsconfigInfo: Record<string, any>;
 	try {
-		tsconfigInfo = await getTsconfigInfo(cwd);
+		const tsconfigPath =
+			options.tsconfig !== undefined
+				? path.resolve(cwd, options.tsconfig)
+				: path.join(cwd, "tsconfig.json");
+
+		tsconfigInfo = await getTsconfigInfo(cwd, tsconfigPath);
 	} catch (error) {
 		log.error(`❌ Couldn't read your tsconfig.json file. (dir: ${cwd})`);
 		console.error(error);
@@ -1027,6 +1029,7 @@ export const init = new Command("init")
 		"--config <config>",
 		"The path to the auth configuration file. defaults to the first `auth.ts` file found.",
 	)
+	.option("--tsconfig <tsconfig>", "The path to the tsconfig file.")
 	.option("--skip-db", "Skip the database setup.")
 	.option("--skip-plugins", "Skip the plugins setup.")
 	.option(
@@ -1108,7 +1111,7 @@ async function updateEnvs({
 	 */
 	files: string[];
 	/**
-	 * Weather to comment the all of the envs or not
+	 * Whether to comment the all of the envs or not
 	 */
 	isCommented: boolean;
 }) {
