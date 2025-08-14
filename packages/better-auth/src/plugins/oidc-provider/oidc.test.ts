@@ -559,15 +559,7 @@ describe("oidc-jwt", async () => {
 						},
 						useJWTPlugin: useJwt,
 					}),
-					...(useJwt
-						? [
-								jwt({
-									jwt: {
-										allowAudienceMismatch: true,
-									},
-								}),
-							]
-						: []),
+					...(useJwt ? [jwt()] : []),
 				],
 			});
 			const { headers } = await signInWithTestUser();
@@ -700,7 +692,6 @@ describe("oidc-jwt", async () => {
 			if (useJwt) {
 				const jwks = await authorizationServer.api.getJwks();
 				const jwkSet = createLocalJWKSet(jwks);
-
 				const checkSignature = await jwtVerify(
 					accessToken.data?.idToken!,
 					jwkSet,

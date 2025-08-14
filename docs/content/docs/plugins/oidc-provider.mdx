@@ -330,11 +330,7 @@ export const auth = betterAuth({
         "/token",
     ],
     plugins: [
-        jwt({
-            jwt: {
-                allowAudienceMismatch: true,
-            },
-        }),
+        jwt(),
         oidcProvider({
             useJWTPlugin: true,
             loginPage: "/sign-in",

@@ -27,7 +27,6 @@ import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { signJwt } from "../jwt/sign";
 import { defaultClientSecretHasher } from "./utils";
-import { BetterAuthError } from "../../error";
 import { getJwtPlugin } from "../jwt/utils";
 
 /**
@@ -229,13 +228,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		init: (ctx) => {
 			// Check for jwt plugin registration
 			if (opts.useJWTPlugin) {
-				const jwtPlugin = getJwtPlugin(ctx);
-				if (!jwtPlugin.options?.jwt?.allowAudienceMismatch) {
-					throw new BetterAuthError(
-						"jwt_config",
-						"Must set jwt.allowedAudienceMismatch to true",
-					);
-				}
+				getJwtPlugin(ctx);
 			}
 		},
 		hooks: {
@@ -802,7 +795,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "internal_server_error",
 							});
 						}
-						idToken = await signJwt(ctx, payload);
+						idToken = await signJwt(ctx, payload, {
+							allowAudienceMismatch: true,
+						});
 						// If the JWT token is not enabled, create a key and use it to sign
 					} else {
 						idToken = await new SignJWT(payload)

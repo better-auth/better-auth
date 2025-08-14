@@ -307,13 +307,16 @@ jwt({
 
 ### OAuth Provider Mode
 
-If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint to prevent issuing JWT tokens without oAuth checks.
+If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `oauth2/userinfo`).
 
 ```ts title="auth.ts"
 betterAuth({
   disabledPaths: [
     "/token",
   ],
+  plugins: [jwt({
+    disableSettingJwtHeader: true,
+  })]
 })
 ```
 
@@ -335,14 +338,6 @@ jwt({
   }
 })
 ```
-
-### JWT Safety Options
-
-**allowLongerExpTime** @default false - Set true to allow signing tokens past `expirationTime`
-
-**allowIssuerMismatch** @default false - Set true to allow issuer to mismatch jwt plugin option setting
-
-**allowAudienceMismatch** @default false - Set true to allow audience to mismatch jwt plugin option setting
 
 ### Custom Signing
 

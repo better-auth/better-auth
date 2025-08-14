@@ -9,9 +9,8 @@ import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getJwtPlugin, toExpJwt } from "./utils";
-import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import type { JwtPluginOptions } from "./types";
+import type { JwtSignSafeguards, JwtPluginOptions } from "./types";
 
 /**
  * Signs a payload in jwt format.
@@ -26,6 +25,7 @@ export async function signJwtPayload(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
 	options?: JwtPluginOptions,
+	safeguards?: JwtSignSafeguards,
 ) {
 	// Iat strict checks
 	const nowSeconds = Math.floor(Date.now() / 1000);
@@ -36,7 +36,7 @@ export async function signJwtPayload(
 
 	// Exp safety checks
 	let exp = payload.exp;
-	const allowLargerExpTime = options?.jwt?.allowLongerExpTime;
+	const allowLargerExpTime = safeguards?.allowLongerExpTime;
 	const defaultExp = toExpJwt(
 		options?.jwt?.expirationTime ?? "1h",
 		iat ?? nowSeconds,
@@ -55,7 +55,7 @@ export async function signJwtPayload(
 	// Iss safety checks
 	const iss = payload.iss;
 	const defaultIss = options?.jwt?.issuer ?? ctx.context.options.baseURL!;
-	const allowIssuerMismatch = options?.jwt?.allowIssuerMismatch;
+	const allowIssuerMismatch = safeguards?.allowIssuerMismatch;
 	if (!allowIssuerMismatch && iss && iss !== defaultIss) {
 		throw new BetterAuthError(`iss ${iss} not allowed`);
 	}
@@ -63,7 +63,7 @@ export async function signJwtPayload(
 	// Aud safety checks (for non-oAuth mode, audience checking shall be performed in oAuth plugin instead)
 	const aud = payload.aud;
 	const defaultAud = options?.jwt?.audience ?? ctx.context.options.baseURL!;
-	const allowAudienceMismatch = options?.jwt?.allowAudienceMismatch;
+	const allowAudienceMismatch = safeguards?.allowAudienceMismatch;
 	if (!allowAudienceMismatch && aud) {
 		const allowedAudiences =
 			typeof defaultAud === "string" ? [defaultAud] : defaultAud;
@@ -100,7 +100,7 @@ export async function signJwtPayload(
 		key = await createJwkOnDb(ctx, options);
 	}
 
-	let privateWebKey = privateKeyEncryptionEnabled
+	const privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: JSON.parse(key.privateKey),
@@ -146,9 +146,10 @@ export async function signJwtPayload(
 export async function signJwt(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
+	safeguards?: JwtSignSafeguards,
 ) {
 	const options = getJwtPlugin(ctx.context).options;
-	return signJwtPayload(ctx, payload, options);
+	return signJwtPayload(ctx, payload, options, safeguards);
 }
 
 /**
@@ -203,7 +204,7 @@ export async function createJwkOnDb(
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 
-	let jwk: Partial<Jwk> = {
+	const jwk = {
 		publicKey: JSON.stringify({
 			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 			...publicWebKey,
@@ -220,7 +221,7 @@ export async function createJwkOnDb(
 	};
 
 	const adapter = getJwksAdapter(ctx.context.adapter);
-	const key = await adapter.createJwk(jwk as Jwk);
+	const key = await adapter.createJwk(jwk);
 
 	return key;
 }

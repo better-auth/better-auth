@@ -1,5 +1,5 @@
 import type { InferOptionSchema, Session, User } from "../../types";
-import { schema } from "./schema";
+import type { schema } from "./schema";
 import type { JWTPayload } from "jose";
 import type { Awaitable } from "../../types/helper";
 
@@ -117,6 +117,25 @@ export interface JwtOptions {
 	 */
 	expirationTime?: number | string | Date;
 	/**
+	 * A function that is called to define the payload of the JWT
+	 */
+	definePayload?: (session: {
+		user: User & Record<string, any>;
+		session: Session & Record<string, any>;
+	}) => Promise<Record<string, any>> | Record<string, any>;
+	/**
+	 * A function that is called to get the subject of the JWT
+	 *
+	 * @default session.user.id
+	 */
+	getSubject?: (session: {
+		user: User & Record<string, any>;
+		session: Session & Record<string, any>;
+	}) => Promise<string> | string;
+}
+
+export interface JwtSignSafeguards {
+	/**
 	 * Set true to allow signing tokens past `expirationTime`
 	 *
 	 * @default false
@@ -134,20 +153,4 @@ export interface JwtOptions {
 	 * @default false
 	 */
 	allowAudienceMismatch?: boolean;
-	/**
-	 * A function that is called to define the payload of the JWT
-	 */
-	definePayload?: (session: {
-		user: User & Record<string, any>;
-		session: Session & Record<string, any>;
-	}) => Promise<Record<string, any>> | Record<string, any>;
-	/**
-	 * A function that is called to get the subject of the JWT
-	 *
-	 * @default session.user.id
-	 */
-	getSubject?: (session: {
-		user: User & Record<string, any>;
-		session: Session & Record<string, any>;
-	}) => Promise<string> | string;
 }
