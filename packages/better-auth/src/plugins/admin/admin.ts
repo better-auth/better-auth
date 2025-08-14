@@ -1347,10 +1347,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					if (ctx.body.userId === ctx.context.session.user.id) {
 						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.YOU_CAN_NOT_REMOVE_YOURSELF,
+							message: ADMIN_ERROR_CODES.YOU_CANNOT_REMOVE_YOURSELF,
 						});
 					}
-					
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						ctx.body.userId,
 					);
