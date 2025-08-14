@@ -724,7 +724,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const accessTokenExpiresAt = new Date(exp * 1000);
 					const refreshTokenExpiresAt = new Date(
-						(iat + (opts.accessTokenExpiresIn ?? 3600)) * 1000,
+						(iat + (opts.refreshTokenExpiresIn ?? 604800)) * 1000,
 					);
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,

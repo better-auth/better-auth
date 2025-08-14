@@ -24,7 +24,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 		);
 	}
 
-	// Alg is required to be specified when using oidc plugin and remote url (needed in openid metadata)
+	// Alg is required to be specified when using remote url (needed in openid metadata)
 	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(
 			"jwks_config",
@@ -178,8 +178,8 @@ export const jwt = (options?: JwtPluginOptions) => {
 				async (ctx) => {
 					// Convert context into user payload
 					let payload: Record<string, any>;
-					if (options?.jwt?.definePayload) {
-						payload = await options?.jwt.definePayload(ctx.context.session!);
+					if (options?.jwt?.definePayload && ctx.context.session) {
+						payload = await options?.jwt.definePayload(ctx.context.session);
 					} else {
 						payload = ctx.context.session?.user ?? {};
 					}
