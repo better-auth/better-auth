@@ -388,7 +388,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("NOT_FOUND", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
@@ -468,7 +468,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			const organizationId = ctx.body.organizationId;
 			if (!organizationId) {
 				return ctx.json(null, {
-					status: 400,
+					status: 404,
 					body: {
 						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 					},
@@ -606,7 +606,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				membersLimit: ctx.query?.membersLimit,
 			});
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("NOT_FOUND", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
@@ -621,7 +621,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("NOT_FOUND", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
@@ -718,7 +718,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				const organization =
 					await adapter.findOrganizationBySlug(organizationSlug);
 				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
+					throw new APIError("NOT_FOUND", {
 						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 					});
 				}
@@ -726,7 +726,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			}
 
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("NOT_FOUND", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
@@ -745,7 +745,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 
 			let organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("NOT_FOUND", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
