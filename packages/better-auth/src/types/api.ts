@@ -32,10 +32,7 @@ export type InferSessionAPI<API> = API extends {
 			E extends Endpoint
 				? E["path"] extends "/get-session"
 					? {
-							getSession: <
-								R extends boolean,
-								H extends boolean = false,
-							>(context: {
+							getSession: <R extends boolean, H extends boolean>(context: {
 								headers: Headers;
 								query?: {
 									disableCookieCache?: boolean;
