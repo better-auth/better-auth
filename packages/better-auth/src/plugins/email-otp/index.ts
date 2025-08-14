@@ -1195,7 +1195,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					return path === "/email-otp/send-verification-otp";
 				},
 				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				max: opts.rateLimit?.max ?? 3,
 			},
 			{
 				pathMatcher(path) {
