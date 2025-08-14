@@ -91,7 +91,10 @@ export async function detectSystemInfo() {
 			memory: os.totalmem(),
 			isWSL: await isWsl(),
 			isDocker: await isDocker(),
-			isTTY: process.stdout.isTTY,
+			isTTY:
+				typeof process !== "undefined" && (process as any).stdout
+					? (process as any).stdout.isTTY
+					: null,
 		};
 	} catch (e) {
 		return {
@@ -150,7 +153,7 @@ async function isDocker() {
 async function isWsl() {
 	try {
 		if (getVendor() === "cloudflare") return false;
-		if (process.platform !== "linux") {
+		if (typeof process === "undefined" || process.platform !== "linux") {
 			return false;
 		}
 		const importRuntime = (m: string) =>
