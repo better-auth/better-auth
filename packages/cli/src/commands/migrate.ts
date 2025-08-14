@@ -25,6 +25,9 @@ export async function migrateAction(opts: any) {
 		process.exit(1);
 	}
 
+	// Mark as CLI execution before loading config.
+	// This prevents the telemetry report from running during initialization.
+	process.env.BETTER_AUTH_CALLED_FROM_CLI = "true";
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
@@ -36,8 +39,6 @@ export async function migrateAction(opts: any) {
 		return;
 	}
 
-	const telemetry = await createTelemetry(config);
-
 	const db = await getAdapter(config);
 
 	if (!db) {
@@ -46,6 +47,10 @@ export async function migrateAction(opts: any) {
 		);
 		process.exit(1);
 	}
+
+	// Unmark CLI execution before creating telemetry.
+	process.env.BETTER_AUTH_CALLED_FROM_CLI = "false";
+	const telemetry = await createTelemetry(config);
 
 	if (db.id !== "kysely") {
 		if (db.id === "prisma") {
