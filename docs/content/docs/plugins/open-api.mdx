@@ -63,9 +63,12 @@ console.log(openAPISchema)
 
 `disableDefaultReference` - If set to `true`, the default Open API reference UI by Scalar will be disabled. Default is `false`.
 
-## Integrating with Hono OpenAPI
+## Integration with Existing OpenAPI Schema
 
-<Callout>
+### Using Scalar with Multiple Sources
+
+If you're using Scalar for your API documentation, you can add Better Auth as an additional source alongside your main API:
+
 When using Hono with Scalar for OpenAPI documentation, you can integrate Better Auth by adding it as a source:
 
 ```ts
@@ -80,5 +83,4 @@ app.get("/docs", Scalar({
 ```
 
 This allows you to display both your application's API and Better Auth's authentication endpoints in a unified documentation interface.
-</Callout>
 
