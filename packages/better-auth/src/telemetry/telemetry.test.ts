@@ -295,4 +295,25 @@ describe("telemetry", () => {
 			),
 		).resolves.not.throw(Error);
 	});
+
+	it("initializes without Node built-ins in edge-like env (no process.cwd)", async () => {
+		const originalProcess = globalThis.process;
+		try {
+			// Simulate an edge runtime where process exists minimally but has no cwd
+			// so utils/package-json won't try to import fs/path
+			(globalThis as any).process = { env: {} } as any;
+			const track = vi.fn();
+			await expect(
+				createTelemetry(
+					{ baseURL: "https://example.com" },
+					{ customTrack: track, skipTestCheck: true },
+				),
+			).resolves.not.toThrow();
+			// Should still attempt to publish init event
+			expect(track).toHaveBeenCalled();
+		} finally {
+			// restore
+			(globalThis as any).process = originalProcess as any;
+		}
+	});
 });
