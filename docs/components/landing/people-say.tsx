@@ -180,7 +180,16 @@ holy sh** is it good, works so nice with typescript + drizzle`,
 		avatar: "/people-say/shreyas-mididddi.png",
 		social: <Icons.x />,
 	},
-];
+	{
+		name: "EGOIST",
+		profession: "Creator of tsup, ChatWise",
+		link: "https://x.com/localhost_5173/status/1951152679461278068",
+		description: "better-auth is great, I use it everywhere",
+		avatar: "/people-say/egoist.png",
+		social: <Icons.x />,
+	},
+].sort(() => Math.random() - 0.5);
+
 type TestimonialProps = (typeof testimonials)[number];
 const PeopleSay = ({
 	reverse = false,
