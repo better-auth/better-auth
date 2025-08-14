@@ -2,7 +2,7 @@
 import { env } from "../../utils/env";
 
 export function detectPackageManager() {
-    const userAgent = env.npm_config_user_agent;
+	const userAgent = env.npm_config_user_agent;
 	if (!userAgent) {
 		return undefined;
 	}
