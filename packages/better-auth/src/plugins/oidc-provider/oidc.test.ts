@@ -33,25 +33,6 @@ describe("oidc - init", async () => {
 			}),
 		).rejects.toThrow();
 	});
-
-	it("should fail without the jwt plugin usesOidcProviderPlugin set", async ({
-		expect,
-	}) => {
-		await expect(
-			getTestInstance({
-				plugins: [
-					jwt({
-						usesOAuthProvider: undefined,
-					}),
-					oidcProvider({
-						useJWTPlugin: true,
-						loginPage: "/login",
-						consentPage: "/consent",
-					}),
-				],
-			}),
-		).rejects.toThrow();
-	});
 });
 
 describe("oidc", async () => {
@@ -581,7 +562,9 @@ describe("oidc-jwt", async () => {
 					...(useJwt
 						? [
 								jwt({
-									usesOAuthProvider: true,
+									jwt: {
+										allowAudienceMismatch: true,
+									},
 								}),
 							]
 						: []),

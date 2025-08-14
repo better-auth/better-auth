@@ -327,11 +327,11 @@ describe("jwt - remote signing", async (it) => {
 	});
 });
 
-describe("jwt - oidc plugin", async (it) => {
+describe("jwt - disable setting jwt header", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			jwt({
-				usesOAuthProvider: true,
+				disableSettingJwtHeader: true,
 			}),
 		],
 		logger: {
@@ -362,29 +362,12 @@ describe("jwt - oidc plugin", async (it) => {
 		});
 		expect(token).toBeNull();
 	});
-
-	it("should disable /token", async () => {
-		const response = await client.$fetch<{
-			token: string;
-		}>("/token", {
-			headers,
-		});
-		expect(response.error?.status).toBe(404);
-	});
-
-	it("should enable /jwks", async () => {
-		const response = await client.$fetch<JSONWebKeySet>("/jwks");
-		const jwks = response?.data;
-		expect(jwks).toBeDefined();
-		expect(jwks?.keys.length).toBeGreaterThanOrEqual(1);
-	});
 });
 
-describe("jwt - oidc plugin with remote url", async (it) => {
+describe("jwt - remote url", async (it) => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			jwt({
-				usesOAuthProvider: true,
 				jwks: {
 					remoteUrl: "https://example.com",
 					keyPairConfig: {
@@ -413,7 +396,6 @@ describe("jwt - oidc plugin with remote url", async (it) => {
 			getTestInstance({
 				plugins: [
 					jwt({
-						usesOAuthProvider: true,
 						jwks: {
 							remoteUrl: "https://example.com",
 						},

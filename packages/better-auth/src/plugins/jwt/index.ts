@@ -25,11 +25,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 	}
 
 	// Alg is required to be specified when using oidc plugin and remote url (needed in openid metadata)
-	if (
-		options?.usesOAuthProvider &&
-		options.jwks?.remoteUrl &&
-		!options.jwks?.keyPairConfig?.alg
-	) {
+	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(
 			"jwks_config",
 			"must specify alg when using the oidc plugin and jwks.remoteUrl",
@@ -180,20 +176,12 @@ export const jwt = (options?: JwtPluginOptions) => {
 					},
 				},
 				async (ctx) => {
-					// Disables endpoint if using oAuth provider
-					if (options?.usesOAuthProvider) {
-						throw new APIError("NOT_FOUND");
-					}
-
 					// Convert context into user payload
 					let payload: Record<string, any>;
 					if (options?.jwt?.definePayload) {
 						payload = await options?.jwt.definePayload(ctx.context.session!);
 					} else {
-						payload = {
-							...(ctx.context.session?.user ?? {}),
-							id: undefined, // id becomes sub in Sign Function
-						};
+						payload = ctx.context.session?.user ?? {};
 					}
 
 					// Convert into JWT token
@@ -211,8 +199,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// Disables middleware if using oAuth provider
-						if (options?.usesOAuthProvider) {
+						if (options?.disableSettingJwtHeader) {
 							return;
 						}
 

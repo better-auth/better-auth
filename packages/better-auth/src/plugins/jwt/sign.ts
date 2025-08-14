@@ -64,7 +64,7 @@ export async function signJwtPayload(
 	const aud = payload.aud;
 	const defaultAud = options?.jwt?.audience ?? ctx.context.options.baseURL!;
 	const allowAudienceMismatch = options?.jwt?.allowAudienceMismatch;
-	if (!options?.usesOAuthProvider && !allowAudienceMismatch && aud) {
+	if (!allowAudienceMismatch && aud) {
 		const allowedAudiences =
 			typeof defaultAud === "string" ? [defaultAud] : defaultAud;
 		if (typeof aud === "string" && !allowedAudiences.includes(aud)) {

@@ -307,11 +307,13 @@ jwt({
 
 ### OAuth Provider Mode
 
-If you are making your system an oAuth provider by using the OIDC or MCP plugins, you **MUST** set this parameter to disable the `/token` endpoint and the ability to obtain tokens via the `set-auth-jwt`.
+If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint to prevent issuing JWT tokens without oAuth checks.
 
 ```ts title="auth.ts"
-jwt({
-  usesOAuthProvider: true,
+betterAuth({
+  disabledPaths: [
+    "/token",
+  ],
 })
 ```
 
@@ -321,25 +323,16 @@ Disables the `/jwks` endpoint and uses this endpoint in any discovery such as OI
 
 Useful if your JWKS are not managed at `/jwks` or if your jwks are signed with a certificate and placed on your CDN.
 
-```ts title="auth.ts"
-jwt({
-  jwks: {
-    remoteUrl: "https://example.com/.well-known/jwks.json",
-  }
-})
-```
-
-NOTE: If you are also using the OIDC plugin, you **MUST** specify which algorithm is used for signing as well.
+NOTE: you **MUST** specify which asymmetric algorithm is used for signing.
 
 ```ts title="auth.ts"
 jwt({
-  usesOAuthProvider: true,
   jwks: {
     remoteUrl: "https://example.com/.well-known/jwks.json",
     keyPairConfig: {
       alg: 'ES256',
     },
-  },
+  }
 })
 ```
 
@@ -366,6 +359,9 @@ Implementers:
 jwt({
   jwks: {
     remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'EdDSA',
+    },
   },
   jwt: {
     sign: async (jwtPayload: JWTPayload) => {
@@ -390,6 +386,9 @@ Useful if you are using a remote Key Management Service such as Google KMS, Amaz
 jwt({
   jwks: {
     remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
   },
   jwt: {
     sign: async (jwtPayload: JWTPayload) => {

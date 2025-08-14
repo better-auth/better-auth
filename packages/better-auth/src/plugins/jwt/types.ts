@@ -36,12 +36,14 @@ export interface JwtPluginOptions {
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 	/**
-	 * Disables /token endpoint and auth middleware
-	 * in favor of Oidc authentication strategy.
+	 * Disables setting JWTs through middleware.
 	 *
-	 * Thus, only the /jwks endpoint is enabled.
+	 * Recommended to set `true` when using an oAuth provider plugin
+	 * like OIDC or MCP where session payloads should not be signed.
+	 *
+	 * @default false
 	 */
-	usesOAuthProvider?: boolean;
+	disableSettingJwtHeader?: boolean;
 }
 
 export interface JwksOptions {
@@ -134,8 +136,6 @@ export interface JwtOptions {
 	allowAudienceMismatch?: boolean;
 	/**
 	 * A function that is called to define the payload of the JWT
-	 *
-	 * @invalid usesOAuthProvider = true
 	 */
 	definePayload?: (session: {
 		user: User & Record<string, any>;
