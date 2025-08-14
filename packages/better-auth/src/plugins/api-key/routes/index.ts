@@ -23,6 +23,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "maximumNameLength"
 			| "disableKeyHashing"
 			| "minimumNameLength"
+			| "requireName"
 			| "enableMetadata"
 			| "disableSessionForAPIKeys"
 			| "startingCharactersConfig"
@@ -57,6 +58,11 @@ export function deleteAllExpiredApiKeys(
 					operator: "lt",
 					value: new Date(),
 				},
+				{
+					field: "expiresAt",
+					operator: "ne",
+					value: null,
+				},
 			],
 		});
 	} catch (error) {
@@ -69,9 +75,10 @@ export function createApiKeyRoutes({
 	opts,
 	schema,
 }: {
-	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
-		| Promise<string>
-		| string;
+	keyGenerator: (options: {
+		length: number;
+		prefix: string | undefined;
+	}) => Promise<string> | string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 }) {

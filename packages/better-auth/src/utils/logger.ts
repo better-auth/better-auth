@@ -73,9 +73,11 @@ const formatMessage = (level: LogLevel, message: string): string => {
 	} ${message}`;
 };
 
-export const createLogger = (
-	options?: Logger,
-): Record<LogLevel, (...params: LogHandlerParams) => void> => {
+export type InternalLogger = {
+	[K in LogLevel]: (...params: LogHandlerParams) => void;
+};
+
+export const createLogger = (options?: Logger): InternalLogger => {
 	const enabled = options?.disabled !== true;
 	const logLevel = options?.level ?? "error";
 

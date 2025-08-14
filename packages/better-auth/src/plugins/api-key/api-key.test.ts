@@ -146,6 +146,37 @@ describe("api-key", async () => {
 		expect(apiKey.rateLimitEnabled).toBe(true);
 	});
 
+	it("should require name in API keys if configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						requireName: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		let err: any;
+		try {
+			const apiKeyResult = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+		} catch (error) {
+			err = error;
+		}
+		expect(err).toBeDefined();
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
+	});
+
 	it("should respect rateLimit configuration from plugin options", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance(
 			{
@@ -567,6 +598,72 @@ describe("api-key", async () => {
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.remaining).toEqual(remaining);
+	});
+
+	it("should create API Key with remaining explicitly set to null", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: null,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+	});
+
+	it("should create API Key with remaining explicitly set to null and refillAmount and refillInterval are also set", async () => {
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: null,
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
+	});
+
+	it("should create API Key with remaining explicitly set to 0 and refillAmount also set", async () => {
+		const remaining = 0;
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: remaining,
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBe(remaining);
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
+	});
+
+	it("should create API Key with remaining undefined and default value of null is respected with refillAmount and refillInterval provided", async () => {
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
 	});
 
 	it("should create API key with invalid metadata", async () => {

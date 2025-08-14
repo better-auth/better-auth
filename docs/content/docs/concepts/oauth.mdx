@@ -34,14 +34,14 @@ export const auth = betterAuth({
 To sign in with a social provider, you can use the `signIn.social` function with the `authClient` or `auth.api` for server-side usage.
 
 ```ts
+// client-side usage
 await authClient.signIn.social({
   provider: "google", // or any other provider id
 })
 ```
 
-server-side usage:
-
 ```ts
+// server-side usage
 await auth.api.signInSocial({
   body: {
     provider: "google", // or any other provider id
