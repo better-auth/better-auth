@@ -980,14 +980,15 @@ export const sso = (options?: SSOOptions) => {
 
 					if (!provider && options?.defaultSSO?.length) {
 						// Find matching default SSO provider by providerId
-						const matchingDefault = providerId 
+						const matchingDefault = providerId
 							? options.defaultSSO.find(
-								(defaultProvider) => defaultProvider.providerId === providerId
-							)
+									(defaultProvider) =>
+										defaultProvider.providerId === providerId,
+								)
 							: options.defaultSSO.find(
-								(defaultProvider) => defaultProvider.domain === domain
-							);
-						
+									(defaultProvider) => defaultProvider.domain === domain,
+								);
+
 						if (matchingDefault) {
 							provider = {
 								issuer:
@@ -1743,10 +1744,13 @@ export const sso = (options?: SSOOptions) => {
 
 					if (options?.defaultSSO?.length) {
 						// For ACS endpoint, we can use the first default provider or try to match by providerId
-						const matchingDefault = providerId 
-							? options.defaultSSO.find(defaultProvider => defaultProvider.providerId === providerId)
+						const matchingDefault = providerId
+							? options.defaultSSO.find(
+									(defaultProvider) =>
+										defaultProvider.providerId === providerId,
+								)
 							: options.defaultSSO[0]; // Use first default provider if no specific providerId
-						
+
 						if (matchingDefault) {
 							provider = {
 								issuer: matchingDefault.samlConfig?.issuer || "",

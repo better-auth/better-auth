@@ -195,13 +195,14 @@ export const auth = betterAuth({
 			},
 		}),
 		sso({
-			defaultSSO: [{
-				domain: "http://localhost:3000",
-				providerId: "sso",
-				samlConfig: {
-					issuer: "http://localhost:3001/api/sso/saml2/sp/metadata",
-					entryPoint: "http://localhost:3001/api/sso/saml2/sp/acs",
-					cert: `-----BEGIN CERTIFICATE-----
+			defaultSSO: [
+				{
+					domain: "http://localhost:3000",
+					providerId: "sso",
+					samlConfig: {
+						issuer: "http://localhost:3001/api/sso/saml2/sp/metadata",
+						entryPoint: "http://localhost:3001/api/sso/saml2/sp/acs",
+						cert: `-----BEGIN CERTIFICATE-----
 	  MIIDBzCCAe+gAwIBAgIUCLBK4f75EXEe4gyroYnVaqLoSp4wDQYJKoZIhvcNAQEL
 	  BQAwEzERMA8GA1UEAwwIZHVtbXlpZHAwHhcNMjQwNTEzMjE1NDE2WhcNMzQwNTEx
 	  MjE1NDE2WjATMREwDwYDVQQDDAhkdW1teWlkcDCCASIwDQYJKoZIhvcNAQEBBQAD
@@ -220,8 +221,8 @@ export const auth = betterAuth({
 	  vhr86IjznQXhfj3hql5lA3VbHW04ro37ROIkh2bShDq5dwJJHpYCGrF3MQv8S3m+
 	  jzGhYL6m9gFTm/8=
 	  -----END CERTIFICATE-----`,
-					spMetadata: {
-						metadata: `
+						spMetadata: {
+							metadata: `
 				  <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3000/api/sso/saml2/sp/metadata">
 		  <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
 			  <md:KeyDescriptor use="signing">
@@ -258,22 +259,22 @@ export const auth = betterAuth({
 		  </md:ContactPerson>
 		  </md:EntityDescriptor>
 		  `,
-					},
-					idpMetadata: {
-						entityURL:
-							"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
-						entityID:
-							"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
-						redirectURL:
-							"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
-						singleSignOnService: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-								Location:
-									"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
-							},
-						],
-						cert: `-----BEGIN CERTIFICATE-----
+						},
+						idpMetadata: {
+							entityURL:
+								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
+							entityID:
+								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
+							redirectURL:
+								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
+							singleSignOnService: [
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+									Location:
+										"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
+								},
+							],
+							cert: `-----BEGIN CERTIFICATE-----
 	  MIIDBzCCAe+gAwIBAgIUCLBK4f75EXEe4gyroYnVaqLoSp4wDQYJKoZIhvcNAQEL
 	  BQAwEzERMA8GA1UEAwwIZHVtbXlpZHAwHhcNMjQwNTEzMjE1NDE2WhcNMzQwNTEx
 	  MjE1NDE2WjATMREwDwYDVQQDDAhkdW1teWlkcDCCASIwDQYJKoZIhvcNAQEBBQAD
@@ -292,10 +293,11 @@ export const auth = betterAuth({
 	  vhr86IjznQXhfj3hql5lA3VbHW04ro37ROIkh2bShDq5dwJJHpYCGrF3MQv8S3m+
 	  jzGhYL6m9gFTm/8=
 	  -----END CERTIFICATE-----`,
+						},
+						callbackUrl: "/dashboard",
 					},
-					callbackUrl: "/dashboard",
 				},
-			}],
+			],
 		}),
 	],
 	trustedOrigins: ["exp://"],

@@ -507,26 +507,29 @@ describe("SAML SSO with defaultSSO array", async () => {
 	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
 
 	const ssoOptions = {
-		defaultSSO: [{
-			domain: "localhost:8081",
-			providerId: "default-saml",
-			samlConfig: {
-				issuer: "http://localhost:8081",
-				entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
-				cert: certificate,
-				callbackUrl: "http://localhost:8081/dashboard",
-				wantAssertionsSigned: false,
-				signatureAlgorithm: "sha256",
-				digestAlgorithm: "sha256",
-				idpMetadata: {
-					metadata: idpMetadata,
+		defaultSSO: [
+			{
+				domain: "localhost:8081",
+				providerId: "default-saml",
+				samlConfig: {
+					issuer: "http://localhost:8081",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 				},
-				spMetadata: {
-					metadata: spMetadata,
-				},
-				identifierFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 			},
-		}],
+		],
 		provisionUser: vi
 			.fn()
 			.mockImplementation(async ({ user, userInfo, token, provider }) => {

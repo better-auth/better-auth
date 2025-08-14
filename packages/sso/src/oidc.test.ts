@@ -199,29 +199,35 @@ describe("SSO", async () => {
 describe("SSO with defaultSSO array", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } =
 		await getTestInstanceMemory({
-			plugins: [sso({
-				defaultSSO: [{
-					domain: "localhost.com",
-					providerId: "default-test",
-					oidcConfig: {
-						issuer: "http://localhost:8080",
-						clientId: "test",
-						clientSecret: "test",
-						authorizationEndpoint: "http://localhost:8080/authorize",
-						tokenEndpoint: "http://localhost:8080/token",
-						jwksEndpoint: "http://localhost:8080/jwks",
-						discoveryEndpoint: "http://localhost:8080/.well-known/openid-configuration",
-						pkce: true,
-						mapping: {
-							id: "sub",
-							email: "email",
-							emailVerified: "email_verified",
-							name: "name",
-							image: "picture",
+			plugins: [
+				sso({
+					defaultSSO: [
+						{
+							domain: "localhost.com",
+							providerId: "default-test",
+							oidcConfig: {
+								issuer: "http://localhost:8080",
+								clientId: "test",
+								clientSecret: "test",
+								authorizationEndpoint: "http://localhost:8080/authorize",
+								tokenEndpoint: "http://localhost:8080/token",
+								jwksEndpoint: "http://localhost:8080/jwks",
+								discoveryEndpoint:
+									"http://localhost:8080/.well-known/openid-configuration",
+								pkce: true,
+								mapping: {
+									id: "sub",
+									email: "email",
+									emailVerified: "email_verified",
+									name: "name",
+									image: "picture",
+								},
+							},
 						},
-					},
-				}]
-			}), organization()],
+					],
+				}),
+				organization(),
+			],
 		});
 
 	it("should use default SSO provider from array when no provider found in database using providerId", async () => {
