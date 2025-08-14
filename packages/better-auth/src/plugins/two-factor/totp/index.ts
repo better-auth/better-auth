@@ -6,6 +6,7 @@ import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
 import { verifyTwoFactor } from "../verify-two-factor";
 import type {
+	TrustedDeviceStrategy,
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
@@ -41,7 +42,10 @@ export type TOTPOptions = {
 	disable?: boolean;
 };
 
-export const totp2fa = (options?: TOTPOptions) => {
+export const totp2fa = (
+	options?: TOTPOptions,
+	trustedDeviceStrategy: TrustedDeviceStrategy = "in-cookie",
+) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,
@@ -228,7 +232,10 @@ export const totp2fa = (options?: TOTPOptions) => {
 					message: "totp isn't configured",
 				});
 			}
-			const { session, valid, invalid } = await verifyTwoFactor(ctx);
+			const { session, valid, invalid } = await verifyTwoFactor(
+				ctx,
+				trustedDeviceStrategy,
+			);
 			const user = session.user as UserWithTwoFactor;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
