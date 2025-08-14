@@ -65,28 +65,26 @@ describe("organization", async (it) => {
 			team: [],
 			teamMember: [],
 		};
-		const {
-			auth: auth2,
-			signInWithTestUser: signInWithTestUser2,
-		} = await getTestInstance({
-			database: memoryAdapter(localDb),
-			plugins: [
-				organization({
-					schema: {
-						organization: {
-							additionalFields: {
-								inactive: {
-									type: "boolean",
-									required: true,
-									input: false,
-									defaultValue: false,
+		const { auth: auth2, signInWithTestUser: signInWithTestUser2 } =
+			await getTestInstance({
+				database: memoryAdapter(localDb),
+				plugins: [
+					organization({
+						schema: {
+							organization: {
+								additionalFields: {
+									inactive: {
+										type: "boolean",
+										required: true,
+										input: false,
+										defaultValue: false,
+									},
 								},
 							},
 						},
-					},
-				}),
-			],
-		});
+					}),
+				],
+			});
 
 		const { headers: h2 } = await signInWithTestUser2();
 		const org = await auth2.api.createOrganization({
