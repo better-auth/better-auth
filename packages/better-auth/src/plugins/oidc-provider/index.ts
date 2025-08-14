@@ -797,6 +797,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						idToken = await signJwt(ctx, payload, {
 							allowAudienceMismatch: true,
+							allowLongerExpTime: true,
 						});
 						// If the JWT token is not enabled, create a key and use it to sign
 					} else {

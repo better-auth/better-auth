@@ -38,7 +38,7 @@ export async function signJwtPayload(
 	let exp = payload.exp;
 	const allowLargerExpTime = safeguards?.allowLongerExpTime;
 	const defaultExp = toExpJwt(
-		options?.jwt?.expirationTime ?? "1h",
+		options?.jwt?.expirationTime ?? "15m",
 		iat ?? nowSeconds,
 	);
 	if (!allowLargerExpTime && exp && exp > defaultExp) {
