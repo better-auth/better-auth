@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@better-auth/stripe": "workspace:*",
+    "@better-auth/sso": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^3.9.1",
     "@libsql/client": "^0.12.0",
