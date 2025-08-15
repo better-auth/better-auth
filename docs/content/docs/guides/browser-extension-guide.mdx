@@ -213,8 +213,8 @@ If you would like to view a completed example, you can check out the <Link href=
 
 ## Usage Notes
 
-<Accordions>
-<Accordion title="Avoid Using authClient Directly in Content Scripts">
+### Avoid Using `authClient` Directly in Content Scripts
+
 Content scripts run in an isolated world and cannot directly communicate with your authentication server in the same way as background scripts or UI scripts. For security and stability, do not call authClient directly from a content script.
 
 For security and stability, **do not** call authClient directly from a content script.
@@ -239,9 +239,6 @@ chrome.runtime.sendMessage({ type: "getSession" }, (session) => {
   console.log("Session from background:", session) // [!code highlight]
 })
 ```
-</Accordion>
-</Accordions>
-
 
 ## Wrapping Up
 
