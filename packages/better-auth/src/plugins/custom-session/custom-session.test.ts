@@ -56,4 +56,44 @@ describe("Custom Session Plugin Tests", async () => {
 			},
 		});
 	});
+
+	it("should not create memory leaks with multiple plugin instances", async () => {
+		const initialMemory = process.memoryUsage();
+		
+		const pluginInstances = [];
+		const sessionCount = 100; 
+		
+		for (let i = 0; i < sessionCount; i++) {
+			const plugin = customSession(async ({ user, session }) => {
+				return {
+					user: {
+						...user,
+						testField: `test-${i}`,
+					},
+					session,
+					iteration: i,
+				};
+			});
+			pluginInstances.push(plugin);
+		}
+
+		// Force garbage collection if available (in test environment)
+		if (global.gc) {
+			global.gc();
+		}
+
+		const afterPluginCreation = process.memoryUsage();
+		
+		const memoryIncrease = afterPluginCreation.heapUsed - initialMemory.heapUsed;
+		const memoryIncreasePerPlugin = memoryIncrease / sessionCount;
+		// Each plugin instance should not use more than <5KB of memory
+		// (this is a reasonable threshold that indicates no major memory leak)
+		// Before the fix, this would be much higher due to zod schema recreation
+		expect(memoryIncreasePerPlugin).toBeLessThan(5 * 1024);
+		// Verify that plugins are still functional
+		expect(pluginInstances).toHaveLength(sessionCount);
+		expect(pluginInstances[0].id).toBe("custom-session");
+		expect(pluginInstances[sessionCount - 1].id).toBe("custom-session");
+	});
+
 });
