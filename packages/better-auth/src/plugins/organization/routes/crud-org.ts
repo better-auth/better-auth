@@ -461,10 +461,9 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
-				return ctx.json(null, {
-					status: 401,
-				});
+				throw new APIError("UNAUTHORIZED", { status: 401 });
 			}
+
 			const organizationId = ctx.body.organizationId;
 			if (!organizationId) {
 				return ctx.json(null, {
