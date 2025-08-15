@@ -20,7 +20,16 @@ export interface LinkedInProfile {
 	email_verified: boolean;
 }
 
-export interface LinkedInOptions extends ProviderOptions<LinkedInProfile> {}
+export interface LinkedInOptions extends ProviderOptions<LinkedInProfile> {
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
+}
 
 export const linkedin = (options: LinkedInOptions) => {
 	const authorizationEndpoint =

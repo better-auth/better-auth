@@ -15,7 +15,16 @@ export interface SpotifyProfile {
 	}[];
 }
 
-export interface SpotifyOptions extends ProviderOptions<SpotifyProfile> {}
+export interface SpotifyOptions extends ProviderOptions<SpotifyProfile> {
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
+}
 
 export const spotify = (options: SpotifyOptions) => {
 	return {

@@ -25,7 +25,16 @@ export interface KickProfile {
 	profile_picture: string;
 }
 
-export interface KickOptions extends ProviderOptions<KickProfile> {}
+export interface KickOptions extends ProviderOptions<KickProfile> {
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
+}
 
 export const kick = (options: KickOptions) => {
 	return {

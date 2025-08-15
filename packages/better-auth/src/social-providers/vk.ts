@@ -34,6 +34,14 @@ export const enum LANG {
 export interface VkOption extends ProviderOptions {
 	lang_id?: LANG;
 	scheme?: "light" | "dark";
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 
 export const vk = (options: VkOption) => {

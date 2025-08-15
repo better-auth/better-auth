@@ -53,6 +53,14 @@ export interface GitlabProfile extends Record<string, any> {
 
 export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
 	issuer?: string;
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 
 const cleanDoubleSlashes = (input: string = "") => {
