@@ -113,11 +113,6 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ctx.rateLimit.enabled) {
 		return;
 	}
-	
-	// Skip global rate limiting if flag is set (API key validation already handled it)
-	if (ctx.skipGlobalRateLimit) {
-		return;
-	}
 	const path = new URL(req.url).pathname.replace(
 		ctx.options.basePath || "/api/auth",
 		"",
