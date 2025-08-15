@@ -243,6 +243,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
+			const linkingUserId = String(linkingUserInfo.user.id);
+
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
@@ -257,9 +259,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			);
 
 			const hasBeenLinked = existingAccounts.find(
-				(a) =>
-					a.providerId === provider.id &&
-					a.accountId === linkingUserInfo.user.id,
+				(a) => a.providerId === provider.id && a.accountId === linkingUserId,
 			);
 
 			if (hasBeenLinked) {
@@ -297,7 +297,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					{
 						userId: session.user.id,
 						providerId: provider.id,
-						accountId: linkingUserInfo.user.id.toString(),
+						accountId: linkingUserId,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 						refreshToken: c.body.idToken.refreshToken,

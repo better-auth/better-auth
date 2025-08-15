@@ -117,7 +117,13 @@ export interface TiktokProfile extends Record<string, any> {
 	};
 }
 
-export interface TiktokOptions extends ProviderOptions {}
+export interface TiktokOptions
+	extends Omit<ProviderOptions, "clientId" | "clientSecret" | "clientKey"> {
+	// Client ID is not used in TikTok, we delete it from the options
+	clientId: never;
+	clientSecret: string;
+	clientKey: string;
+}
 
 export const tiktok = (options: TiktokOptions) => {
 	return {
@@ -152,7 +158,6 @@ export const tiktok = (options: TiktokOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientId: options.clientId,
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
@@ -196,5 +201,5 @@ export const tiktok = (options: TiktokOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<TiktokProfile>;
+	} satisfies OAuthProvider<TiktokProfile, TiktokOptions>;
 };

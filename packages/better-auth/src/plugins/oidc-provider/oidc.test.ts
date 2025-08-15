@@ -32,7 +32,7 @@ describe("oidc", async () => {
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
-				getAdditionalUserInfoClaim(user, scopes) {
+				getAdditionalUserInfoClaim(user, scopes, client) {
 					return {
 						custom: "custom value",
 						userId: user.id,
@@ -233,7 +233,9 @@ describe("oidc", async () => {
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
-		expect(redirectURI).toContain("/oauth2/authorize?client_id=");
+		expect(redirectURI).toContain("/oauth2/authorize?");
+		expect(redirectURI).toContain("consent_code=");
+		expect(redirectURI).toContain("client_id=");
 		const res = await serverClient.oauth2.consent(
 			{
 				accept: true,
@@ -345,17 +347,25 @@ describe("oidc", async () => {
 });
 
 describe("oidc storage", async () => {
+	let server: Listener;
+
+	afterEach(async () => {
+		if (server) {
+			await server.close();
+		}
+	});
+
 	test.each([
 		{
 			storeClientSecret: undefined,
 		},
 		{
-			storeClientSecret: "hashed" as const,
+			storeClientSecret: "hashed",
 		},
 		{
-			storeClientSecret: "encrypted" as const,
+			storeClientSecret: "encrypted",
 		},
-	])("OIDC base test", async ({ storeClientSecret }) => {
+	] as const)("OIDC base test", async ({ storeClientSecret }) => {
 		const {
 			auth: authorizationServer,
 			signInWithTestUser,
@@ -368,7 +378,7 @@ describe("oidc storage", async () => {
 					loginPage: "/login",
 					consentPage: "/oauth2/authorize",
 					requirePKCE: true,
-					getAdditionalUserInfoClaim(user, scopes) {
+					getAdditionalUserInfoClaim(user, scopes, client) {
 						return {
 							custom: "custom value",
 							userId: user.id,
@@ -389,7 +399,7 @@ describe("oidc storage", async () => {
 			},
 		});
 
-		let server = await listen(toNodeHandler(authorizationServer.handler), {
+		server = await listen(toNodeHandler(authorizationServer.handler), {
 			port: 3000,
 		});
 
@@ -496,15 +506,19 @@ describe("oidc storage", async () => {
 			},
 		});
 		expect(callbackURL).toContain("/dashboard");
-
-		afterEach(async () => {
-			await server.close();
-		});
 	});
 });
 
 describe("oidc-jwt", async () => {
 	let server: Listener | null = null;
+
+	afterEach(async () => {
+		if (server) {
+			await server.close();
+			server = null;
+		}
+	});
+
 	test.each([
 		{ useJwt: true, description: "with jwt plugin", expected: "EdDSA" },
 		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
@@ -523,7 +537,7 @@ describe("oidc-jwt", async () => {
 						loginPage: "/login",
 						consentPage: "/oauth2/authorize",
 						requirePKCE: true,
-						getAdditionalUserInfoClaim(user, scopes) {
+						getAdditionalUserInfoClaim(user, scopes, client) {
 							return {
 								custom: "custom value",
 								userId: user.id,
@@ -543,7 +557,6 @@ describe("oidc-jwt", async () => {
 					headers,
 				},
 			});
-			if (server) console.log("server is not null");
 			server = await listen(toNodeHandler(authorizationServer.handler), {
 				port: 3000,
 			});
@@ -681,13 +694,6 @@ describe("oidc-jwt", async () => {
 
 			// expect(checkSignature.payload).toBeDefined();
 			expect(decoded.alg).toBe(expected);
-
-			afterEach(async () => {
-				if (server) {
-					await server.close();
-					server = null;
-				}
-			});
 		},
 	);
 });

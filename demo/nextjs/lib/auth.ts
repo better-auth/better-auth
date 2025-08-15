@@ -301,4 +301,10 @@ export const auth = betterAuth({
 		}),
 	],
 	trustedOrigins: ["exp://"],
+	advanced: {
+		crossSubDomainCookies: {
+			enabled: process.env.NODE_ENV === "production",
+			domain: ".better-auth.com",
+		},
+	},
 });
