@@ -39,6 +39,13 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				_id: "id",
 			},
 			supportsNumericIds: false,
+			disableIdGeneration: false,
+			supportsJSON: true,
+			supportsJSONB: true,
+			supportsDates: true,
+			supportsNumbers: true,
+			supportsArrays: true,
+			supportsBooleans: true,
 			customTransformInput({
 				action,
 				data,
