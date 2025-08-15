@@ -232,6 +232,11 @@ export type AuthContext = {
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
+	/**
+	 * Flag to skip global rate limiting for the current request.
+	 * Used when API key validation has already handled rate limiting.
+	 */
+	skipGlobalRateLimit?: boolean;
 };
 
 function runPluginInit(ctx: AuthContext) {

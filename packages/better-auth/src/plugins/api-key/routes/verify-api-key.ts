@@ -181,6 +181,9 @@ export async function validateApiKey({
 		});
 	}
 
+	// Set flag to skip global rate limiting since API key validation handled it
+	ctx.context.skipGlobalRateLimit = true;
+
 	return newApiKey;
 }
 
