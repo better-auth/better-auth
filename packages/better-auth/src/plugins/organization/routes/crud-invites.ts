@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { type InferOrganizationRolesFromOption } from "../schema";
+import { type InferOrganizationRolesFromOption, type Member } from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
@@ -198,7 +198,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
-			const roles = parseRoles(ctx.body.role as string | string[]);
+			const roles = parseRoles(ctx.body.role);
 
 			if (
 				member.role !== creatorRole &&
@@ -252,7 +252,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							{
 								user: session.user,
 								organization,
-								member: member,
+								member: member as Member,
 							},
 							ctx.context,
 						)
@@ -340,14 +340,13 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			await ctx.context.orgOptions.sendInvitationEmail?.(
 				{
 					id: invitation.id,
-					role: invitation.role as string,
+					role: invitation.role,
 					email: invitation.email.toLowerCase(),
 					organization: organization,
 					inviter: {
-						...member,
+						...(member as Member),
 						user: session.user,
 					},
-					//@ts-expect-error
 					invitation,
 				},
 				ctx.request,
@@ -507,7 +506,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			const member = await adapter.createMember({
 				organizationId: invitation.organizationId,
 				userId: session.user.id,
-				role: invitation.role as string,
+				role: invitation.role,
 				createdAt: new Date(),
 			});
 
