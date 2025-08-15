@@ -89,7 +89,6 @@ describe("Custom Session Plugin Tests", async () => {
 		const memoryIncreasePerPlugin = memoryIncrease / sessionCount;
 		// Each plugin instance should not use more than <5KB of memory
 		// (this is a reasonable threshold that indicates no major memory leak)
-		// Before the fix, this would be much higher due to zod schema recreation
 		expect(memoryIncreasePerPlugin).toBeLessThan(5 * 1024);
 		// Verify that plugins are still functional
 		expect(pluginInstances).toHaveLength(sessionCount);
