@@ -37,15 +37,15 @@ export interface HuggingFaceProfile {
 
 export interface HuggingFaceOptions
 	extends ProviderOptions<HuggingFaceProfile> {
-		/**
-		 * The client ID of your application
-		 */
-		clientId: string;
-		/**
-		 * The client secret of your application
-		 */
-		clientSecret: string;
-	}
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
+}
 
 export const huggingface = (options: HuggingFaceOptions) => {
 	return {
