@@ -563,7 +563,7 @@ export const sso = (options?: SSOOptions) => {
 					const limit =
 						typeof options?.providersLimit === "function"
 							? await options.providersLimit(user)
-							: options?.providersLimit ?? 10;
+							: (options?.providersLimit ?? 10);
 
 					if (!limit) {
 						throw new APIError("FORBIDDEN", {
