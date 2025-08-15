@@ -161,20 +161,22 @@ export async function createTelemetry(
 		);
 	};
 
-	const anonymousId = await getProjectId(options.baseURL);
-
-	const payload = {
-		config: getTelemetryAuthConfig(options),
-		runtime: detectRuntime(),
-		database: await detectDatabase(),
-		framework: await detectFramework(),
-		environment: detectEnvironment(),
-		systemInfo: await detectSystemInfo(),
-		packageManager: detectPackageManager(),
-	};
 	const enabled = await isEnabled();
+	let anonymousId: string | undefined;
 
 	if (enabled) {
+		anonymousId = await getProjectId(options.baseURL);
+
+		const payload = {
+			config: getTelemetryAuthConfig(options),
+			runtime: detectRuntime(),
+			database: await detectDatabase(),
+			framework: await detectFramework(),
+			environment: detectEnvironment(),
+			systemInfo: await detectSystemInfo(),
+			packageManager: detectPackageManager(),
+		};
+
 		if (!disableNotice) {
 			await maybeShowTelemetryNotice(anonymousId);
 		}
@@ -184,6 +186,9 @@ export async function createTelemetry(
 	return {
 		publish: async (event: TelemetryEvent) => {
 			if (!enabled) return;
+			if (!anonymousId) {
+				anonymousId = await getProjectId(options.baseURL);
+			}
 			await track({
 				type: event.type,
 				payload: event.payload,
