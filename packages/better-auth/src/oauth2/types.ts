@@ -175,7 +175,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 		| "consent"
 		| "login"
 		| "none"
-		| "select_account+consent";
+		| "select_account consent";
 	/**
 	 * The response mode to use for the authorization code request
 	 */
