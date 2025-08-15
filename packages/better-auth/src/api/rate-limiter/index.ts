@@ -114,30 +114,9 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 		return;
 	}
 	
-	// Skip global rate limiting if flag is set (e.g., API key validation already handled it)
+	// Skip global rate limiting if flag is set (API key validation already handled it)
 	if (ctx.skipGlobalRateLimit) {
 		return;
-	}
-	
-	// Check if this request has API key headers - if so, skip global rate limiting
-	// since API key plugin will handle its own rate limiting
-	const apiKeyPlugin = ctx.options.plugins?.find(p => p.id === "api-key");
-	if (apiKeyPlugin) {
-		// Get API key headers configuration from the plugin
-		const apiKeyHeaders = (apiKeyPlugin as any).$apiKeyHeaders || "x-api-key";
-		
-		// Check if request contains API key headers
-		let hasApiKey = false;
-		if (Array.isArray(apiKeyHeaders)) {
-			hasApiKey = apiKeyHeaders.some(header => req.headers.get(header));
-		} else {
-			hasApiKey = !!req.headers.get(apiKeyHeaders);
-		}
-		
-		// Skip global rate limiting if API key is present
-		if (hasApiKey) {
-			return;
-		}
 	}
 	const path = new URL(req.url).pathname.replace(
 		ctx.options.basePath || "/api/auth",

@@ -335,7 +335,5 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
-		// Expose API key headers configuration for global rate limiter
-		$apiKeyHeaders: opts.apiKeyHeaders,
 	} satisfies BetterAuthPlugin;
 };
