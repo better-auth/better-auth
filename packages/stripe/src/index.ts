@@ -1113,6 +1113,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						isAction: false,
 					},
 					cloneRequest: true,
+					//don't parse the body
+					disableBody: true,
 				},
 				async (ctx) => {
 					if (!ctx.request?.body) {
