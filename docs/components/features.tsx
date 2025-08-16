@@ -15,7 +15,7 @@ import { TechStackDisplay } from "./display-techstack";
 import { Ripple } from "./ripple";
 import { GithubStat } from "./github-stat";
 import { cn } from "@/lib/utils";
-import { Testimonial } from "./landing/people-say";
+import { Testimonial } from "./landing/testimonials";
 const features = [
 	{
 		id: 1,
