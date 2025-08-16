@@ -5,7 +5,6 @@ import {
 	type BetterAuthPlugin,
 } from "..";
 import {
-	oidcProvider,
 	type Client,
 	type CodeVerificationValue,
 	type OAuthAccessToken,
@@ -100,12 +99,13 @@ export const mcp = (options: MCPOptions) => {
 			...(options.oidcConfig?.scopes || []),
 		],
 	};
+
 	const modelName = {
 		oauthClient: "oauthApplication",
 		oauthAccessToken: "oauthAccessToken",
 		oauthConsent: "oauthConsent",
 	};
-	const provider = oidcProvider(opts);
+
 	return {
 		id: "mcp",
 		hooks: {
