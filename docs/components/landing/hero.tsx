@@ -49,13 +49,13 @@ function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 
 export default function Hero() {
 	return (
-		<section className="max-h-[40rem] relative w-full md:w-11/12 md:mx-auto flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] overflow-hidden md:min-h-[40rem]">
+		<section className="max-h-[40rem] relative w-full flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] overflow-hidden md:min-h-[40rem]">
 			<Spotlight />
-			<div className="overflow-hidden bg-transparent md:px-10 dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem]">
-				<div className="lg:max-w-8xl mx-auto grid max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-12">
-					<div className="relative z-10 md:text-center lg:text-left">
+			<div className="overflow-hidden px-2 bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:w-10/12 mx-auto">
+				<div className="mx-auto grid lg:max-w-8xl xl:max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-0">
+					<div className="relative z-10 text-left mt-0 sm:mt-2 md:mt-8 lg:mt-0 md:text-center lg:text-left">
 						<div className="relative">
-							<div className="flex flex-col items-start gap-2">
+							<div className="flex flex-col items-center lg:items-start gap-2">
 								<div className="flex items-end gap-1 mt-2 ">
 									<div className="flex items-center gap-1">
 										<svg

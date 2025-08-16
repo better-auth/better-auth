@@ -152,6 +152,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				userId: user.id,
 				role: parseRoles(ctx.body.role as string | string[]),
 				createdAt: new Date(),
+				updatedAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
 			});
 
