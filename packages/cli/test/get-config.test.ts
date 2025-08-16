@@ -395,7 +395,6 @@ describe("getConfig", async () => {
 		await fs.mkdir(authPath, { recursive: true });
 		await fs.mkdir(libServerPath, { recursive: true });
 
-		// Create package.json to indicate SvelteKit project
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),
 			JSON.stringify({
@@ -406,7 +405,6 @@ describe("getConfig", async () => {
 			})
 		);
 
-		// Create a database file in $lib/server
 		await fs.writeFile(
 			path.join(libServerPath, "database.ts"),
 			`export const db = {
@@ -415,7 +413,6 @@ describe("getConfig", async () => {
 			};`
 		);
 
-		// Create auth.ts with $lib/server import
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import { betterAuth } from "better-auth";
