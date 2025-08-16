@@ -25,11 +25,18 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	 * @default ["id", "name", "email", "picture"]
 	 */
 	fields?: string[];
-
 	/**
 	 * The config id to use when undergoing oauth
 	 */
 	configId?: string;
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 
 export const facebook = (options: FacebookOptions) => {
@@ -113,7 +120,6 @@ export const facebook = (options: FacebookOptions) => {
 						refreshToken,
 						options: {
 							clientId: options.clientId,
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint:

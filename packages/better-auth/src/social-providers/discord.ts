@@ -75,6 +75,8 @@ export interface DiscordProfile extends Record<string, any> {
 
 export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
 	prompt?: "none" | "consent";
+	clientId: string;
+	clientSecret: string;
 }
 
 export const discord = (options: DiscordOptions) => {

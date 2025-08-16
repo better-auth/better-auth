@@ -17,7 +17,16 @@ export interface NotionProfile {
 	};
 }
 
-export interface NotionOptions extends ProviderOptions<NotionProfile> {}
+export interface NotionOptions extends ProviderOptions<NotionProfile> {
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
+}
 
 export const notion = (options: NotionOptions) => {
 	const tokenEndpoint = "https://api.notion.com/v1/oauth/token";

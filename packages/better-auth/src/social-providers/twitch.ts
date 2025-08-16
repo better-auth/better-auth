@@ -35,6 +35,14 @@ export interface TwitchProfile {
 
 export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	claims?: string[];
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 export const twitch = (options: TwitchOptions) => {
 	return {

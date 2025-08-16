@@ -20,6 +20,17 @@ export interface RobloxProfile extends Record<string, any> {
 }
 
 export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
+	/**
+	 * The prompt to use for the authorization code request
+	 */
 	prompt?:
 		| "none"
 		| "consent"
