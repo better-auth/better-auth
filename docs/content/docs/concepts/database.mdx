@@ -76,26 +76,124 @@ const redis = createClient();
 await redis.connect();
 
 export const auth = betterAuth({
-	// ... other options
-	secondaryStorage: {
-		get: async (key) => {
-			const value = await redis.get(key);
-			return value ? value : null;
-		},
-		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, value, { EX: ttl });
-			// or for ioredis:
-			// if (ttl) await redis.set(key, value, 'EX', ttl)
-			else await redis.set(key, value);
-		},
-		delete: async (key) => {
-			await redis.del(key);
-		}
-	}
+  // ... other options
+  secondaryStorage: {
+    get: async (key) => {
+      const value = await redis.get(key);
+      return value ? value : null;
+    },
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      // or for ioredis:
+      // if (ttl) await redis.set(key, value, 'EX', ttl)
+      else await redis.set(key, value);
+    },
+    delete: async (key) => {
+      await redis.del(key);
+    },
+  },
 });
 ```
 
 This implementation allows Better Auth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
+
+**Example: Upstash Redis Implementation**
+
+Here's an example using Upstash Redis. First, install the Upstash Redis client:
+
+```bash
+npm install @upstash/redis
+```
+
+Then, create a new Redis client:
+
+```typescript
+// src/lib/redis/index.ts
+
+import { Redis } from "@upstash/redis";
+
+export const redis = Redis.fromEnv();
+```
+
+Don't forget to set the `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` environment variables. Also, [see the Upstash documentation](https://upstash.com/docs/redis/howto/connectwithupstashredis) for more information on how to use Upstash Redis with Node.js.
+
+After that, we can create a secondary storage implementation:
+
+```typescript
+// src/lib/auth/adapters/redis-secondary-storage.ts
+
+import { SecondaryStorage } from "better-auth";
+import { redis } from "~/lib/redis";
+
+export const redisSecondaryStorage: SecondaryStorage = {
+  async get(key: string) {
+    try {
+      const value = await redis.get(key);
+
+      // Handle different return types from Redis
+      if (value === null || value === undefined) {
+        return null;
+      }
+
+      // If it's already a string, return it
+      if (typeof value === "string") {
+        return value;
+      }
+
+      // If it's an object, stringify it
+      if (typeof value === "object") {
+        return JSON.stringify(value);
+      }
+
+      // Convert to string for any other type
+      return String(value);
+    } catch (error) {
+      console.error("Redis get error:", error);
+      return null;
+    }
+  },
+
+  async set(key: string, value: string, ttl?: number) {
+    try {
+      // Ensure value is a string
+      const stringValue =
+        typeof value === "string" ? value : JSON.stringify(value);
+
+      if (ttl) {
+        // Set with TTL in seconds
+        await redis.setex(key, ttl, stringValue);
+      } else {
+        // Set without TTL
+        await redis.set(key, stringValue);
+      }
+    } catch (error) {
+      console.error("Redis set error:", error);
+      throw error;
+    }
+  },
+
+  async delete(key: string) {
+    try {
+      await redis.del(key);
+    } catch (error) {
+      console.error("Redis delete error:", error);
+      throw error;
+    }
+  },
+};
+```
+
+Finally, we can pass the implementation to the `betterAuth` function.
+
+```typescript
+import { betterAuth } from "better-auth";
+import { redisSecondaryStorage } from "~/lib/auth/adapters/redis-secondary-storage";
+
+export const auth = betterAuth({
+  // ... other options
+  secondaryStorage: redisSecondaryStorage,
+});
+```
 
 ## Core Schema
 
@@ -582,7 +680,10 @@ export const auth = betterAuth({
         before: async (data, ctx) => {
           // You can access the session from the context object.
           if (ctx.context.session) {
-            console.log("User update initiated by:", ctx.context.session.userId);
+            console.log(
+              "User update initiated by:",
+              ctx.context.session.userId
+            );
           }
           return { data };
         },
