@@ -44,6 +44,9 @@ export function getKyselyDatabaseType(
 	if ("fileControl" in db) {
 		return "sqlite";
 	}
+	if ("open" in db && "close" in db && "prepare" in db) {
+		return "sqlite";
+	}
 	return null;
 }
 
@@ -101,6 +104,29 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new BunSqliteDialect({
 			database: db,
 		});
+	}
+
+	if ("createSession" in db) {
+		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
+			undefined;
+		try {
+			({ DatabaseSync } = await import("node:sqlite"));
+		} catch (error: unknown) {
+			if (
+				error !== null &&
+				typeof error === "object" &&
+				"code" in error &&
+				error.code !== "ERR_UNKNOWN_BUILTIN_MODULE"
+			) {
+				throw error;
+			}
+		}
+		if (DatabaseSync && db instanceof DatabaseSync) {
+			const { NodeSqliteDialect } = await import("./node-sqlite-dialect");
+			dialect = new NodeSqliteDialect({
+				database: db,
+			});
+		}
 	}
 
 	return {
