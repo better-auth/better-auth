@@ -190,7 +190,9 @@ export async function generateMetadata({
 	}
 	const page = blogs.getPage(slug);
 	if (page == null) notFound();
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
+	
+	// Provide fallback for baseUrl to prevent "Invalid URL" error
+	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL || "http://localhost:3000";
 	const url = new URL(
 		`${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}${
 			page.data?.image
