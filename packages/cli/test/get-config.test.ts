@@ -388,4 +388,54 @@ describe("getConfig", async () => {
 			emailAndPassword: { enabled: true },
 		});
 	});
+
+	it("should resolve SvelteKit $lib/server imports correctly", async () => {
+		const authPath = path.join(tmpDir, "src");
+		const libServerPath = path.join(tmpDir, "src", "lib", "server");
+		await fs.mkdir(authPath, { recursive: true });
+		await fs.mkdir(libServerPath, { recursive: true });
+
+		// Create package.json to indicate SvelteKit project
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-sveltekit",
+				devDependencies: {
+					"@sveltejs/kit": "^2.0.0"
+				}
+			})
+		);
+
+		// Create a database file in $lib/server
+		await fs.writeFile(
+			path.join(libServerPath, "database.ts"),
+			`export const db = {
+				// Mock database client
+				connect: () => console.log('Connected to database')
+			};`
+		);
+
+		// Create auth.ts with $lib/server import
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+			 import { db } from "$lib/server/database";
+
+			 export const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					}
+			 })`
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "src/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+		});
+	});
 });
