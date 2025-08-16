@@ -368,3 +368,60 @@ describe("jwt", async (it) => {
 		}
 	}
 });
+
+describe("signJWT", async (it) => {
+	const { auth } = await getTestInstance({
+		plugins: [jwt()],
+		logger: {
+			level: "error",
+		},
+	});
+
+	it("should sign a JWT", async () => {
+		const jwt = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: 1000,
+					iat: 1000,
+					iss: "https://example.com",
+					aud: "https://example.com",
+					custom: "custom",
+				},
+			},
+		});
+		expect(jwt?.token).toBeDefined();
+	});
+
+	it("should be a valid JWT", async () => {
+		const jwt = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: 1000,
+					iat: 1000,
+					iss: "https://example.com",
+					aud: "https://example.com",
+					custom: "custom",
+				},
+			},
+		});
+		const jwks = await auth.api.getJwks();
+		const publicWebKey = await importJWK({
+			...jwks.keys[0],
+			alg: "EdDSA",
+		});
+		const decoded = await jwtVerify(jwt?.token!, publicWebKey);
+		expect(decoded).toMatchObject({
+			payload: {
+				iss: "https://example.com",
+				aud: "https://example.com",
+				sub: "123",
+				exp: expect.any(Number),
+				iat: expect.any(Number),
+				custom: "custom",
+			},
+			protectedHeader: { alg: "EdDSA", kid: jwks.keys[0].kid },
+		});
+	});
+});
