@@ -6,9 +6,12 @@ import fs from "fs";
  * @param aliases - The aliases object to populate
  * @param cwd - Current working directory (optional, defaults to process.cwd())
  */
-export function addSvelteKitEnvModules(aliases: Record<string, string>, cwd?: string) {
+export function addSvelteKitEnvModules(
+	aliases: Record<string, string>,
+	cwd?: string,
+) {
 	const workingDir = cwd || process.cwd();
-	
+
 	// Add SvelteKit environment modules
 	aliases["$env/dynamic/private"] = createDataUriModule(
 		createDynamicEnvModule(),
@@ -29,36 +32,37 @@ export function addSvelteKitEnvModules(aliases: Record<string, string>, cwd?: st
 
 function getSvelteKitPathAliases(cwd: string): Record<string, string> {
 	const aliases: Record<string, string> = {};
-	
+
 	const packageJsonPath = path.join(cwd, "package.json");
 	const svelteConfigPath = path.join(cwd, "svelte.config.js");
 	const svelteConfigTsPath = path.join(cwd, "svelte.config.ts");
-	
+
 	let isSvelteKitProject = false;
-	
+
 	if (fs.existsSync(packageJsonPath)) {
 		try {
 			const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
-			const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+			const deps = {
+				...packageJson.dependencies,
+				...packageJson.devDependencies,
+			};
 			isSvelteKitProject = !!deps["@sveltejs/kit"];
 		} catch {
 			// Ignore JSON parse errors
 		}
 	}
-	
+
 	if (!isSvelteKitProject) {
-		isSvelteKitProject = fs.existsSync(svelteConfigPath) || fs.existsSync(svelteConfigTsPath);
+		isSvelteKitProject =
+			fs.existsSync(svelteConfigPath) || fs.existsSync(svelteConfigTsPath);
 	}
-	
+
 	if (!isSvelteKitProject) {
 		return aliases;
 	}
-	
-	const libPaths = [
-		path.join(cwd, "src", "lib"),
-		path.join(cwd, "lib"),
-	];
-	
+
+	const libPaths = [path.join(cwd, "src", "lib"), path.join(cwd, "lib")];
+
 	for (const libPath of libPaths) {
 		if (fs.existsSync(libPath)) {
 			aliases["$lib"] = libPath;
@@ -75,10 +79,10 @@ function getSvelteKitPathAliases(cwd: string): Record<string, string> {
 	}
 	// Add simple stub for $app/server to prevent CLI errors
 	aliases["$app/server"] = createDataUriModule(createAppServerModule());
-	
+
 	const customAliases = getSvelteConfigAliases(cwd);
 	Object.assign(aliases, customAliases);
-	
+
 	return aliases;
 }
 // for custom aliases in svelte.config.js/ts
@@ -88,7 +92,7 @@ function getSvelteConfigAliases(cwd: string): Record<string, string> {
 		path.join(cwd, "svelte.config.js"),
 		path.join(cwd, "svelte.config.ts"),
 	];
-	
+
 	for (const configPath of configPaths) {
 		if (fs.existsSync(configPath)) {
 			try {
@@ -96,8 +100,10 @@ function getSvelteConfigAliases(cwd: string): Record<string, string> {
 				const aliasMatch = content.match(/alias\s*:\s*\{([^}]+)\}/);
 				if (aliasMatch && aliasMatch[1]) {
 					const aliasContent = aliasMatch[1];
-					const aliasMatches = aliasContent.matchAll(/['"`](\$[^'"`]+)['"`]\s*:\s*['"`]([^'"`]+)['"`]/g);
-					
+					const aliasMatches = aliasContent.matchAll(
+						/['"`](\$[^'"`]+)['"`]\s*:\s*['"`]([^'"`]+)['"`]/g,
+					);
+
 					for (const match of aliasMatches) {
 						const [, alias, target] = match;
 						if (alias && target) {
@@ -112,11 +118,9 @@ function getSvelteConfigAliases(cwd: string): Record<string, string> {
 			break;
 		}
 	}
-	
+
 	return aliases;
 }
-
-
 
 function createAppServerModule(): string {
 	return `
