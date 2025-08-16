@@ -27,6 +27,10 @@ export async function generateAction(opts: any) {
 		logger.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
+
+	// Mark as CLI execution before loading config.
+	// This prevents the telemetry report from running during initialization.
+	process.env.BETTER_AUTH_CALLED_FROM_CLI = "true";
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
@@ -43,6 +47,10 @@ export async function generateAction(opts: any) {
 		process.exit(1);
 	});
 
+	// Unmark CLI execution before creating telemetry.
+	process.env.BETTER_AUTH_CALLED_FROM_CLI = "false";
+	const telemetry = await createTelemetry(config);
+
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
 	const schema = await generateSchema({
@@ -56,7 +64,6 @@ export async function generateAction(opts: any) {
 		logger.info("Your schema is already up to date.");
 		// telemetry: track generate attempted, no changes
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_generate",
 				payload: {
@@ -105,7 +112,6 @@ export async function generateAction(opts: any) {
 			);
 			// telemetry: track generate success overwrite/append
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_generate",
 					payload: {
@@ -119,7 +125,6 @@ export async function generateAction(opts: any) {
 			logger.error("Schema generation aborted.");
 			// telemetry: track generate aborted
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_generate",
 					payload: {
@@ -154,7 +159,6 @@ export async function generateAction(opts: any) {
 		logger.error("Schema generation aborted.");
 		// telemetry: track generate aborted before write
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_generate",
 				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
@@ -178,7 +182,6 @@ export async function generateAction(opts: any) {
 	logger.success(`🚀 Schema was generated successfully!`);
 	// telemetry: track generate success
 	try {
-		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
 			type: "cli_generate",
 			payload: { outcome: "generated", config: getTelemetryAuthConfig(config) },
