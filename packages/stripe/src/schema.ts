@@ -57,19 +57,28 @@ export const user = {
 	},
 } satisfies AuthPluginSchema;
 
-export const getSchema = (options: StripeOptions) => {
+export const getSchema = (options: StripeOptions): AuthPluginSchema => {
+	let baseSchema;
+	
+	if (options.subscription?.enabled) {
+		baseSchema = {
+			...subscriptions,
+			...user,
+		} satisfies AuthPluginSchema;
+	} else {
+		baseSchema = {
+			...user,
+		};
+	}
+	
 	if (
 		options.schema &&
 		!options.subscription?.enabled &&
 		"subscription" in options.schema
 	) {
-		options.schema.subscription = undefined;
+		const { subscription, ...restSchema } = options.schema;
+		return mergeSchema(baseSchema, restSchema);
 	}
-	return mergeSchema(
-		{
-			...(options.subscription?.enabled ? subscriptions : {}),
-			...user,
-		},
-		options.schema,
-	);
+	
+	return mergeSchema(baseSchema, options.schema) satisfies AuthPluginSchema;
 };
