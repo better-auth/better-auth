@@ -400,9 +400,9 @@ describe("getConfig", async () => {
 			JSON.stringify({
 				name: "test-sveltekit",
 				devDependencies: {
-					"@sveltejs/kit": "^2.0.0"
-				}
-			})
+					"@sveltejs/kit": "^2.0.0",
+				},
+			}),
 		);
 
 		await fs.writeFile(
@@ -410,7 +410,7 @@ describe("getConfig", async () => {
 			`export const db = {
 				// Mock database client
 				connect: () => console.log('Connected to database')
-			};`
+			};`,
 		);
 
 		await fs.writeFile(
@@ -422,7 +422,7 @@ describe("getConfig", async () => {
 					emailAndPassword: {
 						enabled: true,
 					}
-			 })`
+			 })`,
 		);
 
 		const config = await getConfig({
