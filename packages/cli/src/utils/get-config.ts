@@ -55,7 +55,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 				result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
 			}
 		}
-		addSvelteKitEnvModules(result);
+		addSvelteKitEnvModules(result, cwd);
 		return result;
 	} catch (error) {
 		console.error(error);
