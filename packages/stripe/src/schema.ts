@@ -58,8 +58,8 @@ export const user = {
 } satisfies AuthPluginSchema;
 
 export const getSchema = (options: StripeOptions): AuthPluginSchema => {
-	let baseSchema;
-	
+	let baseSchema = {};
+
 	if (options.subscription?.enabled) {
 		baseSchema = {
 			...subscriptions,
@@ -70,7 +70,7 @@ export const getSchema = (options: StripeOptions): AuthPluginSchema => {
 			...user,
 		};
 	}
-	
+
 	if (
 		options.schema &&
 		!options.subscription?.enabled &&
@@ -79,6 +79,6 @@ export const getSchema = (options: StripeOptions): AuthPluginSchema => {
 		const { subscription, ...restSchema } = options.schema;
 		return mergeSchema(baseSchema, restSchema);
 	}
-	
+
 	return mergeSchema(baseSchema, options.schema) satisfies AuthPluginSchema;
 };
