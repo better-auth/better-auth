@@ -1,12 +1,12 @@
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
+import type { MakeOIDCPlugin } from "../index";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
-import { APIError, sessionMiddleware, createAuthEndpoint } from "../../../api";
 import { getClient } from "../utils/get-client";
+import { APIError, sessionMiddleware, createAuthEndpoint } from "../../../api";
 
 export const getOAuthClient = (
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOidcPlugin,
+	makePluginOpts: MakeOIDCPlugin,
 ) =>
 	createAuthEndpoint(
 		`/${makePluginOpts.pathPrefix}/client/:id`,

@@ -1,4 +1,4 @@
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
+import type { MakeOIDCPlugin } from "../index";
 import type { CodeVerificationValue, OAuthAccessToken } from "../types";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
@@ -11,13 +11,13 @@ import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { getJwtPlugin } from "../utils/get-jwt-plugin";
 import { generateRandomString } from "../../../crypto";
+import { setCORSHeaders } from "../utils/set-cors-headers";
 import { APIError, createAuthEndpoint } from "../../../api";
-import { setCORSHeaders } from "../authorize/set-cors-headers";
-import { verifyClientSecret } from "../utils/verify-stored-client-secret";
+import { verifyClientSecret } from "../utils/verify-client-secret";
 
 export const oAuth2token = (
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOidcPlugin,
+	makePluginOpts: MakeOIDCPlugin,
 ) =>
 	createAuthEndpoint(
 		`/${makePluginOpts.pathPrefix}/token`,

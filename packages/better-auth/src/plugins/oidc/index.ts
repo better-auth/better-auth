@@ -12,15 +12,15 @@ import { resolveOIDCOptions } from "./utils/resolve-oidc-options";
 import { getOpenIdConfig } from "./endpoints/get-openid-configuration";
 import { registerOAuthApplication } from "./endpoints/oauth2-register";
 
-export type MakeOidcPlugin = {
+export type MakeOIDCPlugin = {
 	id: string;
 	pathPrefix: string;
 	alwaysSkipConsent: boolean;
 	disableCors: boolean;
 };
 
-export const makeOidcPlugin =
-	(makePluginOpts: MakeOidcPlugin) => (options: OIDCOptions) => {
+export const makeOIDCPlugin =
+	(makePluginOpts: MakeOIDCPlugin) => (options: OIDCOptions) => {
 		const resolved = resolveOIDCOptions(options);
 
 		return {

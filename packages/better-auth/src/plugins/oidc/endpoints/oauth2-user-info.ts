@@ -1,5 +1,5 @@
+import type { MakeOIDCPlugin } from "../index";
 import type { OAuthAccessToken } from "../types";
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import { modelName } from "../schema";
@@ -8,7 +8,7 @@ import { APIError, createAuthEndpoint } from "../../../api";
 
 export const oAuth2userInfo = (
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOidcPlugin,
+	makePluginOpts: MakeOIDCPlugin,
 ) =>
 	createAuthEndpoint(
 		`/${makePluginOpts.pathPrefix}/userinfo`,

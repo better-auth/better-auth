@@ -1,17 +1,17 @@
 import type { Client } from "../types";
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
+import type { MakeOIDCPlugin } from "../index";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import * as z from "zod/v4";
 import { modelName } from "../schema";
 import { generateRandomString } from "../../../crypto";
-import { setCORSHeaders } from "../authorize/set-cors-headers";
+import { setCORSHeaders } from "../utils/set-cors-headers";
 import { storeClientSecret } from "../utils/store-client-secret";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 
 export const registerOAuthApplication = (
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOidcPlugin,
+	makePluginOpts: MakeOIDCPlugin,
 ) =>
 	createAuthEndpoint(
 		`/${makePluginOpts.pathPrefix}/register`,

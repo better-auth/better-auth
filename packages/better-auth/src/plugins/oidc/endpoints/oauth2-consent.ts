@@ -1,5 +1,5 @@
+import type { MakeOIDCPlugin } from "../index";
 import type { CodeVerificationValue } from "../types";
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import * as z from "zod/v4";
@@ -9,7 +9,7 @@ import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
 
 export const oAuthConsent = (
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOidcPlugin,
+	makePluginOpts: MakeOIDCPlugin,
 ) =>
 	createAuthEndpoint(
 		`/${makePluginOpts.pathPrefix}/consent`,

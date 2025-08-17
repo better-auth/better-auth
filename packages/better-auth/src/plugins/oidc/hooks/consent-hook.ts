@@ -1,13 +1,13 @@
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
+import type { MakeOIDCPlugin } from "../index";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
-import { makeAuthorize } from "../make-authorize";
+import { makeAuthorize } from "../authorize";
 import { createAuthMiddleware } from "../../../api";
 import { parseSetCookieHeader } from "../../../cookies";
 
 export const consentHook = (
 	opts: ResolvedOIDCOptions,
-	makePluginOpts: MakeOidcPlugin,
+	makePluginOpts: MakeOIDCPlugin,
 ) => [
 	{
 		matcher() {

@@ -1,4 +1,4 @@
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
+import type { MakeOIDCPlugin } from "../index";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import { createAuthEndpoint } from "../../../api";
@@ -6,7 +6,7 @@ import { resolveMetadata } from "../utils/resolve-metadata";
 
 export const getOpenIdConfig = (
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOidcPlugin,
+	makePluginOpts: MakeOIDCPlugin,
 ) =>
 	createAuthEndpoint(
 		"/.well-known/openid-configuration",

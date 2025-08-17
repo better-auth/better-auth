@@ -8,9 +8,8 @@ import {
 	test,
 } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { oidcProvider } from ".";
+import { oidcProvider, type Client } from ".";
 import { genericOAuth } from "../generic-oauth";
-import type { Client } from "./types";
 import { createAuthClient } from "../../client";
 import { oidcClient } from "./client";
 import { genericOAuthClient } from "../generic-oauth/client";
