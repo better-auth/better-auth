@@ -9,6 +9,7 @@ import { oAuth2userInfo } from "./endpoints/oauth2-user-info";
 import { oAuth2authorize } from "./endpoints/oauth2-authorize";
 import { resolveOIDCOptions } from "./utils/resolve-oidc-options";
 import { getOpenIdConfig } from "./endpoints/get-openid-configuration";
+import { registerOAuthApplication } from "./endpoints/oauth2-register";
 
 export type MakeOidcPlugin = {
 	id: string;
@@ -33,6 +34,10 @@ export const makeOidcPlugin =
 				oAuthConsent: oAuthConsent(resolved, makePluginOpts),
 				oAuth2token: oAuth2token(resolved, makePluginOpts),
 				oAuth2userInfo: oAuth2userInfo(resolved, makePluginOpts),
+				registerOAuthApplication: registerOAuthApplication(
+					resolved,
+					makePluginOpts,
+				),
 			},
 		} satisfies BetterAuthPlugin;
 	};
