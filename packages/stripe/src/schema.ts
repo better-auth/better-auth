@@ -77,8 +77,8 @@ export const getSchema = (options: StripeOptions) => {
 		"subscription" in options.schema
 	) {
 		const { subscription, ...restSchema } = options.schema;
-		return mergeSchema(baseSchema, restSchema) satisfies AuthPluginSchema;
+		return mergeSchema(baseSchema, restSchema);
 	}
 
-	return mergeSchema(baseSchema, options.schema) satisfies AuthPluginSchema;
+	return mergeSchema(baseSchema, options.schema);
 };
