@@ -1,5 +1,5 @@
-import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { base64Url } from "@better-auth/utils/base64";
 
 /**
  * Default client secret hasher using SHA-256

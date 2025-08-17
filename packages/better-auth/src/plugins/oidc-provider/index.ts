@@ -27,7 +27,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
 import type { jwt } from "../jwt";
-import { defaultClientSecretHasher } from "./utils";
+import { defaultClientSecretHasher } from "./utils/default-client-secret-hasher";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
