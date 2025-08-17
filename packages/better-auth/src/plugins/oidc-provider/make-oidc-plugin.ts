@@ -2,9 +2,9 @@ import type { OIDCOptions } from "./types";
 import type { BetterAuthPlugin } from "../../types";
 
 import { schema } from "./schema";
-import { makeOpts } from "./utils/make-opts";
 import { consentHook } from "./hooks/consent-hook";
 import { getOpenIdConfig } from "./endpoints/get-openid-configuration";
+import { resolveOIDCOptions } from "./utils/resolve-oidc-options";
 
 export type MakeOidcPlugin = {
 	id: string;
@@ -15,16 +15,16 @@ export type MakeOidcPlugin = {
 
 export const makeOidcPlugin =
 	(makePluginOpts: MakeOidcPlugin) => (options: OIDCOptions) => {
-		const opts = makeOpts(options);
+		const resolved = resolveOIDCOptions(options);
 
 		return {
 			id: makePluginOpts.id,
 			schema,
 			hooks: {
-				after: consentHook(opts, makePluginOpts),
+				after: consentHook(resolved, makePluginOpts),
 			},
 			endpoints: {
-				getOpenIdConfig: getOpenIdConfig(opts, makePluginOpts),
+				getOpenIdConfig: getOpenIdConfig(resolved, makePluginOpts),
 			},
 		} satisfies BetterAuthPlugin;
 	};

@@ -1,10 +1,11 @@
-import type { GenericEndpointContext } from "../../types";
-import type { AuthorizationQuery, OIDCOptions } from "./types";
+import type { GenericEndpointContext, User } from "../../types";
+import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
 
 import { getClient } from "./index";
 import { generateRandomString } from "../../crypto";
 import { APIError, getSessionFromCtx } from "../../api";
 import type { MakeOidcPlugin, makeOidcPlugin } from "./make-oidc-plugin";
+import type { ResolvedOIDCOptions } from "./utils/resolve-oidc-options";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${url.includes("?") ? "&" : "?"}error=${error}&error_description=${description}`;
@@ -39,7 +40,7 @@ function setCORSHeaders(ctx: GenericEndpointContext) {
 
 async function validateInputs(
 	ctx: GenericEndpointContext,
-	options: OIDCOptions,
+	options: ResolvedOIDCOptions,
 ) {
 	const handleRedirect = makeRedirectHandler(ctx);
 	const query = ctx.query as AuthorizationQuery;
@@ -112,25 +113,11 @@ async function validateInputs(
 		);
 	}
 
-	// Scopes validation
-	const opts = {
-		codeExpiresIn: 600,
-		defaultScope: "openid",
-		scopes: [
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-			...(options?.scopes || []),
-		],
-		...options,
-	};
-
 	const queryScope = query.scope?.split(" ").filter(Boolean);
-	const defaultScope = opts.defaultScope.split(" ");
+	const defaultScope = options.defaultScope.split(" ");
 	const requestScope = queryScope || defaultScope;
 
-	const invalidScopes = requestScope.filter((s) => !opts.scopes.includes(s));
+	const invalidScopes = requestScope.filter((s) => !options.scopes.includes(s));
 	if (invalidScopes.length) {
 		throw handleRedirect(
 			formatErrorURL(
@@ -172,7 +159,6 @@ async function validateInputs(
 		session,
 		client,
 		query,
-		opts,
 		requestScope,
 		redirectUri: query.redirect_uri,
 	};
@@ -180,9 +166,9 @@ async function validateInputs(
 
 async function handleConsentFlow(
 	ctx: GenericEndpointContext,
-	options: OIDCOptions,
-	session: any,
-	client: any,
+	options: ResolvedOIDCOptions,
+	user: User,
+	client: Client,
 	query: AuthorizationQuery,
 	requestScope: string[],
 	code: string,
@@ -206,7 +192,7 @@ async function handleConsentFlow(
 			model: "oauthConsent",
 			where: [
 				{ field: "clientId", value: client.clientId },
-				{ field: "userId", value: session.user.id },
+				{ field: "userId", value: user.id },
 			],
 		})
 		.then((res) => !!res?.consentGiven);
@@ -233,12 +219,7 @@ async function handleConsentFlow(
 		throw handleRedirect(consentURI);
 	}
 
-	const htmlFn = options?.getConsentHTML;
-	if (!htmlFn) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: "No consent page provided",
-		});
-	}
+	const htmlFn = options.getConsentHTML;
 
 	return new Response(
 		htmlFn({
@@ -255,7 +236,7 @@ async function handleConsentFlow(
 
 export const makeAuthorize =
 	(makePluginOpts: MakeOidcPlugin) =>
-	async (ctx: GenericEndpointContext, options: OIDCOptions) => {
+	async (ctx: GenericEndpointContext, options: ResolvedOIDCOptions) => {
 		if (makePluginOpts.disableCorsInAuthorize) {
 			setCORSHeaders(ctx);
 		}
@@ -263,12 +244,12 @@ export const makeAuthorize =
 		const handleRedirect = makeRedirectHandler(ctx);
 
 		// Validate everything upfront
-		const { session, client, query, opts, requestScope, redirectUri } =
+		const { session, client, query, requestScope, redirectUri } =
 			await validateInputs(ctx, options);
 
 		// Issue authorization code
 		const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-		const expiresAt = new Date(Date.now() + opts.codeExpiresIn * 1000);
+		const expiresAt = new Date(Date.now() + options.codeExpiresIn * 1000);
 
 		try {
 			await ctx.context.internalAdapter.createVerificationValue(
@@ -304,7 +285,7 @@ export const makeAuthorize =
 		return handleConsentFlow(
 			ctx,
 			options,
-			session,
+			session.user,
 			client,
 			query,
 			requestScope,

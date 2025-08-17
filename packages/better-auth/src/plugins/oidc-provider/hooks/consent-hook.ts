@@ -1,12 +1,12 @@
-import type { OIDCOptions } from "../types";
 import type { MakeOidcPlugin } from "../make-oidc-plugin";
+import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import { makeAuthorize } from "../make-authorize";
 import { createAuthMiddleware } from "../../../api";
 import { parseSetCookieHeader } from "../../../cookies";
 
 export const consentHook = (
-	opts: OIDCOptions,
+	opts: ResolvedOIDCOptions,
 	makePluginOpts: MakeOidcPlugin,
 ) => [
 	{
@@ -42,7 +42,8 @@ export const consentHook = (
 			ctx.query = JSON.parse(cookie);
 			ctx.query!.prompt = "consent";
 			ctx.context.session = session;
-			const response = await makeAuthorize(makePluginOpts)(ctx, opts);
+			const authorize = makeAuthorize(makePluginOpts);
+			const response = await authorize(ctx, opts);
 			return response;
 		}),
 	},
