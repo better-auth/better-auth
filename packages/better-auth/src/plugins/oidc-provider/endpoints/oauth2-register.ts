@@ -4,9 +4,10 @@ import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import * as z from "zod/v4";
 import { modelName } from "../schema";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { generateRandomString } from "../../../crypto";
+import { setCORSHeaders } from "../authorize/set-cors-headers";
 import { storeClientSecret } from "../utils/store-client-secret";
+import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 
 export const registerOAuthApplication = (
 	options: ResolvedOIDCOptions,
@@ -235,6 +236,10 @@ export const registerOAuthApplication = (
 			},
 		},
 		async (ctx) => {
+			if (makePluginOpts.disableCors) {
+				setCORSHeaders(ctx);
+			}
+
 			const body = ctx.body;
 			const session = await getSessionFromCtx(ctx);
 

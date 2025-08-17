@@ -11,7 +11,7 @@ import { createVerification } from "./authorize/create-verification";
 export const makeAuthorize =
 	(makePluginOpts: MakeOidcPlugin) =>
 	async (ctx: GenericEndpointContext, options: ResolvedOIDCOptions) => {
-		if (makePluginOpts.disableCorsInAuthorize) {
+		if (makePluginOpts.disableCors) {
 			setCORSHeaders(ctx);
 		}
 

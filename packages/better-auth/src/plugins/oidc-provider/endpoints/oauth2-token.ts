@@ -12,6 +12,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { getJwtPlugin } from "../utils/get-jwt-plugin";
 import { generateRandomString } from "../../../crypto";
 import { APIError, createAuthEndpoint } from "../../../api";
+import { setCORSHeaders } from "../authorize/set-cors-headers";
 import { verifyStoredClientSecret } from "../utils/verify-stored-client-secret";
 
 export const oAuth2token = (
@@ -28,6 +29,10 @@ export const oAuth2token = (
 			},
 		},
 		async (ctx) => {
+			if (makePluginOpts.disableCors) {
+				setCORSHeaders(ctx);
+			}
+
 			let { body } = ctx;
 			if (!body) {
 				throw new APIError("BAD_REQUEST", {

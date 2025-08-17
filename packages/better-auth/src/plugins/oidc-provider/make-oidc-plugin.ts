@@ -16,7 +16,7 @@ export type MakeOidcPlugin = {
 	id: string;
 	pathPrefix: string;
 	alwaysSkipConsent: boolean;
-	disableCorsInAuthorize: boolean;
+	disableCors: boolean;
 };
 
 export const makeOidcPlugin =
@@ -30,16 +30,16 @@ export const makeOidcPlugin =
 				after: consentHook(resolved, makePluginOpts),
 			},
 			endpoints: {
+				oAuth2token: oAuth2token(resolved, makePluginOpts),
+				oAuthConsent: oAuthConsent(resolved, makePluginOpts),
+				getOAuthClient: getOAuthClient(resolved, makePluginOpts),
+				oAuth2userInfo: oAuth2userInfo(resolved, makePluginOpts),
 				getOpenIdConfig: getOpenIdConfig(resolved, makePluginOpts),
 				oAuth2authorize: oAuth2authorize(resolved, makePluginOpts),
-				oAuthConsent: oAuthConsent(resolved, makePluginOpts),
-				oAuth2token: oAuth2token(resolved, makePluginOpts),
-				oAuth2userInfo: oAuth2userInfo(resolved, makePluginOpts),
 				registerOAuthApplication: registerOAuthApplication(
 					resolved,
 					makePluginOpts,
 				),
-				getOAuthClient: getOAuthClient(resolved, makePluginOpts),
 			},
 		} satisfies BetterAuthPlugin;
 	};
