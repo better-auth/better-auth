@@ -105,3 +105,9 @@ export const schema = {
 		},
 	},
 } satisfies AuthPluginSchema;
+
+export const modelName = {
+	oauthClient: "oauthApplication",
+	oauthAccessToken: "oauthAccessToken",
+	oauthConsent: "oauthConsent",
+};
