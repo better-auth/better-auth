@@ -1237,6 +1237,74 @@ describe("cancel pending invitations on re-invite", async () => {
 	});
 });
 
+describe("resend invitation should reuse existing", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("should reuse existing invitation when resend is true", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test10@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const originalInviteId = invite.data?.id;
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test10@test.com",
+				role: "member",
+				resend: true,
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.data?.status).toBe("pending");
+		// Should return the same invitation ID, not create a new one
+		expect(invite2.data?.id).toBe(originalInviteId);
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+		// Should still only have 1 pending invitation, not 2
+		expect(
+			listInvitations.data?.filter((invite) => invite.status === "pending")
+				.length,
+		).toBe(1);
+	});
+});
+
 describe("owner can update roles", async () => {
 	const statement = {
 		custom: ["custom"],
