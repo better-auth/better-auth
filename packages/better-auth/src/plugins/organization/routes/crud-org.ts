@@ -162,12 +162,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				...orgData
 			} = ctx.body;
 
-			let hookResponse:
-				| {
-						data: Record<string, any>;
-				  }
-				| undefined = undefined;
-
 			if (options.organizationCreation?.beforeCreate) {
 				const response = await options.organizationCreation.beforeCreate(
 					{
@@ -180,7 +174,10 @@ export const createOrganization = <O extends OrganizationOptions>(
 					ctx.request,
 				);
 				if (response && typeof response === "object" && "data" in response) {
-					hookResponse = response;
+					ctx.body = {
+						...ctx.body,
+						...response.data,
+					};
 				}
 			}
 
@@ -191,7 +188,10 @@ export const createOrganization = <O extends OrganizationOptions>(
 						user,
 					});
 				if (response && typeof response === "object" && "data" in response) {
-					hookResponse = response;
+					ctx.body = {
+						...ctx.body,
+						...response.data,
+					};
 				}
 			}
 
@@ -199,7 +199,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				organization: {
 					...orgData,
 					createdAt: new Date(),
-					...(hookResponse?.data || {}),
 				},
 			});
 
@@ -443,8 +442,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						member,
 					});
 				if (response && typeof response === "object" && "data" in response) {
-					// @ts-expect-error - we know that the data is valid
-					ctx.body.data = response.data;
+					ctx.body.data = {
+						...ctx.body.data,
+						...response.data,
+					};
 				}
 			}
 			const updatedOrg = await adapter.updateOrganization(
