@@ -4,6 +4,7 @@ import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { getClient } from "./index";
 import { generateRandomString } from "../../crypto";
 import { APIError, getSessionFromCtx } from "../../api";
+import type { MakeOidcPlugin, makeOidcPlugin } from "./make-oidc-plugin";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${url.includes("?") ? "&" : "?"}error=${error}&error_description=${description}`;
@@ -186,10 +187,11 @@ async function handleConsentFlow(
 	requestScope: string[],
 	code: string,
 	redirectURI: URL,
+	makePluginOpts: MakeOidcPlugin,
 ) {
 	const handleRedirect = makeRedirectHandler(ctx);
 
-	if (options.alwaysSkipConsent) {
+	if (makePluginOpts.alwaysSkipConsent) {
 		throw handleRedirect(redirectURI.toString());
 	}
 
@@ -251,63 +253,63 @@ async function handleConsentFlow(
 	);
 }
 
-export async function authorize(
-	ctx: GenericEndpointContext,
-	options: OIDCOptions,
-) {
-	if (options.disableCorsInAuthorize) {
-		setCORSHeaders(ctx);
-	}
+export const makeAuthorize =
+	(makePluginOpts: MakeOidcPlugin) =>
+	async (ctx: GenericEndpointContext, options: OIDCOptions) => {
+		if (makePluginOpts.disableCorsInAuthorize) {
+			setCORSHeaders(ctx);
+		}
 
-	const handleRedirect = makeRedirectHandler(ctx);
+		const handleRedirect = makeRedirectHandler(ctx);
 
-	// Validate everything upfront
-	const { session, client, query, opts, requestScope, redirectUri } =
-		await validateInputs(ctx, options);
+		// Validate everything upfront
+		const { session, client, query, opts, requestScope, redirectUri } =
+			await validateInputs(ctx, options);
 
-	// Issue authorization code
-	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const expiresAt = new Date(Date.now() + opts.codeExpiresIn * 1000);
+		// Issue authorization code
+		const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+		const expiresAt = new Date(Date.now() + opts.codeExpiresIn * 1000);
 
-	try {
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: JSON.stringify({
-					clientId: client.clientId,
-					redirectURI: query.redirect_uri,
-					scope: requestScope,
-					userId: session.user.id,
-					authTime: new Date(session.session.createdAt).getTime(),
-					requireConsent: query.prompt === "consent",
-					state: query.prompt === "consent" ? query.state : null,
-					codeChallenge: query.code_challenge,
-					codeChallengeMethod: query.code_challenge_method,
-					nonce: query.nonce,
-				}),
-				identifier: code,
-				expiresAt,
-			},
+		try {
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					value: JSON.stringify({
+						clientId: client.clientId,
+						redirectURI: query.redirect_uri,
+						scope: requestScope,
+						userId: session.user.id,
+						authTime: new Date(session.session.createdAt).getTime(),
+						requireConsent: query.prompt === "consent",
+						state: query.prompt === "consent" ? query.state : null,
+						codeChallenge: query.code_challenge,
+						codeChallengeMethod: query.code_challenge_method,
+						nonce: query.nonce,
+					}),
+					identifier: code,
+					expiresAt,
+				},
+				ctx,
+			);
+		} catch {
+			return handleRedirect(
+				formatErrorURL(redirectUri, "server_error", "Error processing request"),
+			);
+		}
+
+		// Build redirect URI with code
+		const redirectURI = new URL(redirectUri);
+		redirectURI.searchParams.set("code", code);
+		if (query.state) redirectURI.searchParams.set("state", query.state);
+
+		return handleConsentFlow(
 			ctx,
+			options,
+			session,
+			client,
+			query,
+			requestScope,
+			code,
+			redirectURI,
+			makePluginOpts,
 		);
-	} catch {
-		return handleRedirect(
-			formatErrorURL(redirectUri, "server_error", "Error processing request"),
-		);
-	}
-
-	// Build redirect URI with code
-	const redirectURI = new URL(redirectUri);
-	redirectURI.searchParams.set("code", code);
-	if (query.state) redirectURI.searchParams.set("state", query.state);
-
-	return handleConsentFlow(
-		ctx,
-		options,
-		session,
-		client,
-		query,
-		requestScope,
-		code,
-		redirectURI,
-	);
-}
+	};

@@ -155,9 +155,6 @@ export interface OIDCOptions {
 	 * @default false
 	 */
 	useJWTPlugin?: boolean;
-
-	alwaysSkipConsent: boolean;
-	disableCorsInAuthorize: boolean;
 }
 
 export interface AuthorizationQuery {

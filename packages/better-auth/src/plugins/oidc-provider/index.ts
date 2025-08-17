@@ -135,7 +135,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		oauthConsent: "oauthConsent",
 	};
 
-	const opts = {
+	const opts: OIDCOptions = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,

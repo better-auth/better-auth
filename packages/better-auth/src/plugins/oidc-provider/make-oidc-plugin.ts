@@ -1,14 +1,18 @@
+import type { OIDCOptions } from "./types";
 import type { BetterAuthPlugin } from "../../types";
 
 import { schema } from "./schema";
+import { makeAuthorize } from "./make-authorize";
 import { createAuthMiddleware } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 
-type MakeOidcPlugin = {
+export type MakeOidcPlugin = {
 	id: string;
+	alwaysSkipConsent: boolean;
+	disableCorsInAuthorize: boolean;
 };
 
-const consentHook = () => [
+const consentHook = (opts: OIDCOptions, makePluginOpts: MakeOidcPlugin) => [
 	{
 		matcher() {
 			return true;
@@ -42,20 +46,40 @@ const consentHook = () => [
 			ctx.query = JSON.parse(cookie);
 			ctx.query!.prompt = "consent";
 			ctx.context.session = session;
-			const response = await authorize(ctx, opts);
+			const response = await makeAuthorize(makePluginOpts)(ctx, opts);
 			return response;
 		}),
 	},
 ];
 
+const makeOpts = (options: OIDCOptions) => {
+	return {
+		codeExpiresIn: 600,
+		defaultScope: "openid",
+		accessTokenExpiresIn: 3600,
+		refreshTokenExpiresIn: 604800,
+		allowPlainCodeChallengeMethod: true,
+		storeClientSecret: "plain" as const,
+		...options,
+		scopes: [
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+			...(options?.scopes || []),
+		],
+	} satisfies OIDCOptions;
+};
+
 export const makeOidcPlugin =
-	({ id }: MakeOidcPlugin) =>
-	(opts: any) => {
+	(makePluginOpts: MakeOidcPlugin) => (options: OIDCOptions) => {
+		const opts = makeOpts(options);
+
 		return {
-			id,
+			id: makePluginOpts.id,
 			schema,
 			hooks: {
-				after: consentHook(),
+				after: consentHook(opts, makePluginOpts),
 			},
 		} satisfies BetterAuthPlugin;
 	};
