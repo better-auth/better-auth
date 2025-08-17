@@ -428,7 +428,12 @@ export interface OrganizationOptions {
 		 * ```
 		 */
 		afterUpdateOrganization?: (data: {
-			organization: Organization & Record<string, any>;
+			/**
+			 * Updated organization object
+			 *
+			 * This could be `null` if an adapter doesn't return updated organization.
+			 */
+			organization: (Organization & Record<string, any>) | null;
 			user: User & Record<string, any>;
 			member: Member & Record<string, any>;
 		}) => Promise<void>;

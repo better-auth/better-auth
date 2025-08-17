@@ -452,11 +452,6 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				organizationId,
 				ctx.body.data,
 			);
-			if (!updatedOrg) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
-			}
 			if (options.organizationHooks?.afterUpdateOrganization) {
 				await options.organizationHooks.afterUpdateOrganization({
 					organization: updatedOrg,
