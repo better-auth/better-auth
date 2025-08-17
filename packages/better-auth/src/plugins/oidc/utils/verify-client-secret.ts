@@ -2,9 +2,9 @@ import type { GenericEndpointContext } from "../../../types";
 import type { ResolvedOIDCOptions } from "./resolve-oidc-options";
 
 import { symmetricDecrypt } from "../../../crypto";
-import { defaultClientSecretHasher } from "./default-client-secret-hasher";
+import { hashClientSecret } from "./default-client-secret-hasher";
 
-export async function verifyStoredClientSecret(
+export async function verifyClientSecret(
 	ctx: GenericEndpointContext,
 	options: ResolvedOIDCOptions,
 	storedClientSecret: string,
@@ -19,7 +19,7 @@ export async function verifyStoredClientSecret(
 		);
 	}
 	if (options.storeClientSecret === "hashed") {
-		const hashedClientSecret = await defaultClientSecretHasher(clientSecret);
+		const hashedClientSecret = await hashClientSecret(clientSecret);
 		return hashedClientSecret === storedClientSecret;
 	}
 	if (

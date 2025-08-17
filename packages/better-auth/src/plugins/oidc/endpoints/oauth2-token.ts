@@ -13,7 +13,7 @@ import { getJwtPlugin } from "../utils/get-jwt-plugin";
 import { generateRandomString } from "../../../crypto";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { setCORSHeaders } from "../authorize/set-cors-headers";
-import { verifyStoredClientSecret } from "../utils/verify-stored-client-secret";
+import { verifyClientSecret } from "../utils/verify-stored-client-secret";
 
 export const oAuth2token = (
 	options: ResolvedOIDCOptions,
@@ -265,7 +265,7 @@ export const oAuth2token = (
 						error: "invalid_client",
 					});
 				}
-				const isValidSecret = await verifyStoredClientSecret(
+				const isValidSecret = await verifyClientSecret(
 					ctx,
 					options,
 					client.clientSecret,

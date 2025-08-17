@@ -27,7 +27,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
 import type { jwt } from "../jwt";
-import { defaultClientSecretHasher } from "./utils/default-client-secret-hasher";
+import { hashClientSecret } from "./utils/default-client-secret-hasher";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -168,7 +168,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 			});
 		}
 		if (opts.storeClientSecret === "hashed") {
-			return await defaultClientSecretHasher(clientSecret);
+			return await hashClientSecret(clientSecret);
 		}
 		if (
 			typeof opts.storeClientSecret === "object" &&
@@ -203,7 +203,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 			);
 		}
 		if (opts.storeClientSecret === "hashed") {
-			const hashedClientSecret = await defaultClientSecretHasher(clientSecret);
+			const hashedClientSecret = await hashClientSecret(clientSecret);
 			return hashedClientSecret === storedClientSecret;
 		}
 		if (
