@@ -184,6 +184,17 @@ export const createOrganization = <O extends OrganizationOptions>(
 				}
 			}
 
+			if (options.organizationHooks?.beforeCreateOrganization) {
+				const response =
+					await options.organizationHooks.beforeCreateOrganization({
+						organization: orgData,
+						user,
+					});
+				if (response && typeof response === "object" && "data" in response) {
+					hookResponse = response;
+				}
+			}
+
 			const organization = await adapter.createOrganization({
 				organization: {
 					...orgData,
@@ -239,6 +250,14 @@ export const createOrganization = <O extends OrganizationOptions>(
 					},
 					ctx.request,
 				);
+			}
+
+			if (options.organizationHooks?.afterCreateOrganization) {
+				await options.organizationHooks.afterCreateOrganization({
+					organization,
+					user,
+					member,
+				});
 			}
 
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
@@ -416,10 +435,34 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				});
 			}
+			if (options.organizationHooks?.beforeUpdateOrganization) {
+				const response =
+					await options.organizationHooks.beforeUpdateOrganization({
+						organization: ctx.body.data,
+						user: session.user,
+						member,
+					});
+				if (response && typeof response === "object" && "data" in response) {
+					// @ts-expect-error - we know that the data is valid
+					ctx.body.data = response.data;
+				}
+			}
 			const updatedOrg = await adapter.updateOrganization(
 				organizationId,
 				ctx.body.data,
 			);
+			if (!updatedOrg) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+			if (options.organizationHooks?.afterUpdateOrganization) {
+				await options.organizationHooks.afterUpdateOrganization({
+					organization: updatedOrg,
+					user: session.user,
+					member,
+				});
+			}
 			return ctx.json(updatedOrg);
 		},
 	);

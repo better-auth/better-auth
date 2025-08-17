@@ -314,12 +314,15 @@ export interface OrganizationOptions {
 			request?: Request,
 		) => Promise<void>;
 	};
+	/**
+	 * @deprecated Use `organizationHooks` instead
+	 */
 	organizationCreation?: {
 		disabled?: boolean;
 		beforeCreate?: (
 			data: {
 				organization: Omit<Organization, "id"> & Record<string, any>;
-				user: User;
+				user: User & Record<string, any>;
 			},
 			request?: Request,
 		) => Promise<void | {
@@ -329,10 +332,106 @@ export interface OrganizationOptions {
 			data: {
 				organization: Organization & Record<string, any>;
 				member: Member & Record<string, any>;
-				user: User;
+				user: User & Record<string, any>;
 			},
 			request?: Request,
 		) => Promise<void>;
+	};
+	/**
+	 * Hooks for organization
+	 */
+	organizationHooks?: {
+		/**
+		 * A callback that runs before the organization is created
+		 *
+		 * You can return a `data` object to override the default data.
+		 *
+		 * @example
+		 * ```ts
+		 * beforeCreateOrganization: async (data) => {
+		 * 	return {
+		 * 		data: {
+		 * 			...data.organization,
+		 * 		},
+		 * 	};
+		 * }
+		 * ```
+		 *
+		 * You can also throw `new APIError` to stop the organization creation.
+		 *
+		 * @example
+		 * ```ts
+		 * beforeCreateOrganization: async (data) => {
+		 * 	throw new APIError("BAD_REQUEST", {
+		 * 		message: "Organization creation is disabled",
+		 * 	});
+		 * }
+		 */
+		beforeCreateOrganization?: (data: {
+			organization: {
+				name?: string;
+				slug?: string;
+				logo?: string;
+				metadata?: Record<string, any>;
+				[key: string]: any;
+			};
+			user: User & Record<string, any>;
+		}) => Promise<void | {
+			data: Record<string, any>;
+		}>;
+		/**
+		 * A callback that runs after the organization is created
+		 */
+		afterCreateOrganization?: (data: {
+			organization: Organization & Record<string, any>;
+			member: Member & Record<string, any>;
+			user: User & Record<string, any>;
+		}) => Promise<void>;
+		/**
+		 * A callback that runs before the organization is updated
+		 *
+		 * You can return a `data` object to override the default data.
+		 *
+		 * @example
+		 * ```ts
+		 * beforeUpdateOrganization: async (data) => {
+		 * 	return { data: { ...data.organization } };
+		 * }
+		 */
+		beforeUpdateOrganization?: (data: {
+			organization: {
+				name?: string;
+				slug?: string;
+				logo?: string;
+				metadata?: Record<string, any>;
+				[key: string]: any;
+			};
+			user: User & Record<string, any>;
+			member: Member & Record<string, any>;
+		}) => Promise<void | {
+			data: {
+				name?: string;
+				slug?: string;
+				logo?: string;
+				metadata?: Record<string, any>;
+				[key: string]: any;
+			};
+		}>;
+		/**
+		 * A callback that runs after the organization is updated
+		 *
+		 * @example
+		 * ```ts
+		 * afterUpdateOrganization: async (data) => {
+		 * 	console.log(data.organization);
+		 * }
+		 * ```
+		 */
+		afterUpdateOrganization?: (data: {
+			organization: Organization & Record<string, any>;
+			user: User & Record<string, any>;
+			member: Member & Record<string, any>;
+		}) => Promise<void>;
 	};
 	/**
 	 * Automatically create an organization for the user on sign up.
