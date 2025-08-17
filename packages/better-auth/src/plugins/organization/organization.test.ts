@@ -1659,7 +1659,7 @@ describe("Additional Fields", async () => {
 			someRequiredField: string;
 			someOptionalField?: string | undefined;
 			metadata: any;
-		} | null>();
+		}>();
 	});
 
 	it("add member", async () => {
