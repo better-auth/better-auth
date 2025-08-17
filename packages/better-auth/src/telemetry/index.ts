@@ -113,6 +113,8 @@ export async function createTelemetry(
 
 	const disableNotice =
 		options.telemetry?.disableNotice ||
+		options.telemetry?.enabled === false ||
+		options.telemetry?.debug ||
 		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DISABLE_NOTICE", false);
 
 	const TELEMETRY_ENDPOINT = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
