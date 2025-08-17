@@ -42,8 +42,10 @@ export const consentHook = (
 			ctx.query = JSON.parse(cookie);
 			ctx.query!.prompt = "consent";
 			ctx.context.session = session;
+
 			const authorize = makeAuthorize(makePluginOpts);
 			const response = await authorize(ctx, opts);
+
 			return response;
 		}),
 	},

@@ -5,6 +5,7 @@ import { schema } from "./schema";
 import { consentHook } from "./hooks/consent-hook";
 import { getOpenIdConfig } from "./endpoints/get-openid-configuration";
 import { resolveOIDCOptions } from "./utils/resolve-oidc-options";
+import { oAuth2authorize } from "./endpoints/oauth2-authorize";
 
 export type MakeOidcPlugin = {
 	id: string;
@@ -25,6 +26,7 @@ export const makeOidcPlugin =
 			},
 			endpoints: {
 				getOpenIdConfig: getOpenIdConfig(resolved, makePluginOpts),
+				oAuth2authorize: oAuth2authorize(resolved, makePluginOpts)
 			},
 		} satisfies BetterAuthPlugin;
 	};
