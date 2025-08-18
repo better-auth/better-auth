@@ -61,7 +61,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 		},
-		adapter: ({ getFieldName, debugLog }) => {
+		context: {
+			db
+		},
+		adapter: ({ getFieldName, debugLog, getContext }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -251,14 +254,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
 					checkMissingFields(schemaModel, model, values);
-					const builder = db.insert(schemaModel).values(values);
+					const builder = getContext().db.insert(schemaModel).values(values);
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
 				async findOne({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const res = await db
+					const res = await getContext().db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
@@ -270,7 +273,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					const clause = where ? convertWhereClause(where, model) : [];
 
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
+					const builder = getContext().db
 						.select()
 						.from(schemaModel)
 						.limit(limit || 100)
@@ -287,7 +290,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
-					const res = await db
+					const res = await getContext().db
 						.select({ count: count() })
 						.from(schemaModel)
 						.where(...clause);
@@ -296,7 +299,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async update({ model, where, update: values }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db
+					const builder = getContext().db
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
@@ -305,7 +308,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async updateMany({ model, where, update: values }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db
+					const builder = getContext().db
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
@@ -314,14 +317,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async delete({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
+					const builder = getContext().db.delete(schemaModel).where(...clause);
 					return await builder;
 				},
 				async deleteMany({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
+					const builder = getContext().db.delete(schemaModel).where(...clause);
 					return await builder;
+				},
+				async transaction(callback) {
+					const ctx = getContext();
+					return ctx.db.transaction((db: DB) => {
+						return callback({
+							...ctx,
+							db
+						});
+					});
 				},
 				options: config,
 			};
