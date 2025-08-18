@@ -1,4 +1,4 @@
-import { ObjectId, type Db } from "mongodb";
+import { ObjectId, type MongoClient, type Db } from "mongodb";
 import type { BetterAuthOptions, Where } from "../../types";
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
@@ -15,6 +15,7 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	client?: MongoClient;
 }
 
 export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
@@ -88,6 +89,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				}
 				return data;
 			},
+		},
+		context: {
+			db,
 		},
 		adapter: ({ options, getFieldName, schema, getDefaultModelName }) => {
 			const customIdGen = getCustomIdGenerator(options);
@@ -285,6 +289,26 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					const clause = convertWhereClause({ where, model });
 					const res = await db.collection(model).deleteMany(clause);
 					return res.deletedCount;
+				},
+				async transaction(callback) {
+					const client = config?.client;
+					if (!client) {
+						return callback({
+							db,
+						});
+					}
+					const session = client.startSession();
+
+					try {
+						const res = await session.withTransaction(async () => {
+							return callback({
+								db,
+							});
+						});
+						return res;
+					} finally {
+						await session.endSession();
+					}
 				},
 			};
 		},
