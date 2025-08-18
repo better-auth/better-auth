@@ -1,62 +1,88 @@
-import * as z from "zod/v4";
+import { z } from "zod/v4";
 import { APIError } from "better-call";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
-import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import type { AuthPluginSchema } from "../../types/plugins";
 import type { FieldAttribute } from "../../db/field";
 import { getSessionFromCtx } from "../../api/routes/session";
+import { ms, type StringValue as MSStringValue } from "../../utils/time/ms";
+import { getRandomValues } from "@better-auth/utils";
 
-interface DeviceAuthorizationOptions {
-	/**
-	 * Time in seconds until the device code expires.
-	 * @default 1800 (30 minutes)
-	 */
-	expiresIn?: number;
-	/**
-	 * Time in seconds between polling attempts.
-	 * @default 5
-	 */
-	interval?: number;
-	/**
-	 * Length of the device code.
-	 * @default 8
-	 */
-	deviceCodeLength?: number;
-	/**
-	 * Length of the user code.
-	 * @default 6
-	 */
-	userCodeLength?: number;
-	/**
-	 * Character set for user code generation.
-	 * @default "A-Z0-9" (excluding similar looking characters)
-	 */
-	userCodeCharset?: string;
-	/**
-	 * Verification URI for the user to visit.
-	 */
-	verificationUri?: string;
-	/**
-	 * Function to generate a device code.
-	 */
-	generateDeviceCode?: () => Promise<string> | string;
-	/**
-	 * Function to generate a user code.
-	 */
-	generateUserCode?: () => Promise<string> | string;
-	/**
-	 * Whether to format user codes with hyphens for readability.
-	 * @default true
-	 */
-	formatUserCode?: boolean;
-	/**
-	 * Enable rate limiting for token polling.
-	 * @default true
-	 */
-	enableRateLimiting?: boolean;
-}
+const msStringValueSchema = z.custom<MSStringValue>(
+	(val) => {
+		try {
+			ms(val as MSStringValue);
+		} catch (e) {
+			return false;
+		}
+		return true;
+	},
+	{
+		message:
+			"Invalid time string format. Use formats like '30m', '5s', '1h', etc.",
+	},
+);
+
+export const $deviceAuthorizationOptionsSchema = z.object({
+	expiresIn: msStringValueSchema
+		.default("30m")
+		.describe(
+			"Time in seconds until the device code expires. Use formats like '30m', '5s', '1h', etc.",
+		),
+	interval: msStringValueSchema
+		.default("5s")
+		.describe(
+			"Time in seconds between polling attempts. Use formats like '30m', '5s', '1h', etc.",
+		),
+	deviceCodeLength: z
+		.number()
+		.int()
+		.positive()
+		.default(40)
+		.describe(
+			"Length of the device code to be generated. Default is 40 characters.",
+		),
+	userCodeLength: z
+		.number()
+		.int()
+		.positive()
+		.default(8)
+		.describe(
+			"Length of the user code to be generated. Default is 8 characters.",
+		),
+	generateDeviceCode: z
+		.custom<() => string | Promise<string>>(
+			(val) => typeof val === "function",
+			{
+				message:
+					"generateDeviceCode must be a function that returns a string or a promise that resolves to a string.",
+			},
+		)
+		.optional()
+		.describe(
+			"Function to generate a device code. If not provided, a default random string generator will be used.",
+		),
+	generateUserCode: z
+		.custom<() => string | Promise<string>>(
+			(val) => typeof val === "function",
+			{
+				message:
+					"generateUserCode must be a function that returns a string or a promise that resolves to a string.",
+			},
+		)
+		.optional()
+		.describe(
+			"Function to generate a user code. If not provided, a default random string generator will be used.",
+		),
+});
+
+/**
+ * @see {$deviceAuthorizationOptionsSchema}
+ */
+export type DeviceAuthorizationOptions = z.infer<
+	typeof $deviceAuthorizationOptionsSchema
+>;
 
 const deviceCodeSchema: AuthPluginSchema = {
 	deviceCode: {
@@ -119,45 +145,43 @@ const DEVICE_AUTHORIZATION_ERROR_CODES = {
 	AUTHENTICATION_REQUIRED: "Authentication required",
 } as const;
 
-export const deviceAuthorization = (
-	options: DeviceAuthorizationOptions = {},
-) => {
-	const opts = {
-		expiresIn: 1800,
-		interval: 5,
-		deviceCodeLength: 40,
-		userCodeLength: 8,
-		userCodeCharset: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", // Excluding similar looking characters
-		formatUserCode: true,
-		enableRateLimiting: true,
-		...options,
-	};
+const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+/**
+ * @internal
+ */
+const defaultGenerateDeviceCode = () => {
+	return generateRandomString(40, "a-z", "A-Z", "0-9");
+};
+
+/**
+ * @internal
+ */
+const defaultGenerateUserCode = (length: number) => {
+	const chars = new Uint8Array(length);
+	return Array.from(getRandomValues(chars))
+		.map((byte) => defaultCharset[byte % defaultCharset.length])
+		.join("");
+};
+
+export const deviceAuthorization = (
+	options: Partial<DeviceAuthorizationOptions> = {},
+) => {
+	const opts = $deviceAuthorizationOptionsSchema.parse(
+		options,
+	) as Required<DeviceAuthorizationOptions>;
 	const generateDeviceCode = async () => {
 		if (opts.generateDeviceCode) {
 			return opts.generateDeviceCode();
 		}
-		return generateRandomString(opts.deviceCodeLength, "a-z", "A-Z", "0-9");
+		return defaultGenerateDeviceCode();
 	};
 
 	const generateUserCode = async () => {
 		if (opts.generateUserCode) {
 			return opts.generateUserCode();
 		}
-		const chars = opts.userCodeCharset;
-		let code = "";
-		for (let i = 0; i < opts.userCodeLength; i++) {
-			code += chars[Math.floor(Math.random() * chars.length)];
-		}
-		return code;
-	};
-
-	const formatUserCode = (code: string) => {
-		// Format with hyphen for readability if enabled (e.g., "WDJB-MJHT")
-		if (opts.formatUserCode && code.length === 8) {
-			return `${code.slice(0, 4)}-${code.slice(4)}`;
-		}
-		return code;
+		return defaultGenerateUserCode(opts.userCodeLength);
 	};
 
 	return {
@@ -227,7 +251,8 @@ export const deviceAuthorization = (
 				async (ctx) => {
 					const deviceCode = await generateDeviceCode();
 					const userCode = await generateUserCode();
-					const expiresAt = new Date(Date.now() + opts.expiresIn * 1000);
+					const expiresIn = ms(opts.expiresIn || opts.expiresIn);
+					const expiresAt = new Date(Date.now() + expiresIn);
 
 					await ctx.context.adapter.create({
 						model: "deviceCode",
@@ -243,16 +268,21 @@ export const deviceAuthorization = (
 					});
 
 					const baseURL = new URL(ctx.context.baseURL);
-					const verification_uri =
-						opts.verificationUri || new URL("/device", baseURL).toString();
-					const formattedUserCode = formatUserCode(userCode);
-					const verification_uri_complete = `${verification_uri}?user_code=${formattedUserCode}`;
+					const verification_uri = new URL("/device", baseURL);
 
+					const verification_uri_complete = new URL(verification_uri);
+					verification_uri_complete.searchParams.set(
+						"user_code",
+						// should we support encodeURIComponent or custom formatting function here?
+						userCode,
+					);
+
+					// Refs: https://datatracker.ietf.org/doc/html/rfc8628#section-3.2
 					return ctx.json({
 						device_code: deviceCode,
-						user_code: formattedUserCode,
-						verification_uri,
-						verification_uri_complete,
+						user_code: userCode,
+						verification_uri: verification_uri.toString(),
+						verification_uri_complete: verification_uri_complete.toString(),
 						expires_in: opts.expiresIn,
 						interval: opts.interval,
 					});
@@ -358,44 +388,6 @@ export const deviceAuthorization = (
 									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
 							},
 						});
-					}
-
-					// Check rate limiting
-					if (opts.enableRateLimiting && deviceCodeRecord.lastPolledAt) {
-						const timeSinceLastPoll =
-							Date.now() - deviceCodeRecord.lastPolledAt.getTime();
-						const minInterval =
-							(deviceCodeRecord.pollingInterval || opts.interval) * 1000;
-
-						if (timeSinceLastPoll < minInterval) {
-							// Increase polling interval if polling too frequently
-							const newInterval = Math.min(
-								(deviceCodeRecord.pollingInterval || opts.interval) + 5,
-								600,
-							); // Max 10 minutes
-							await ctx.context.adapter.update({
-								model: "deviceCode",
-								where: [
-									{
-										field: "id",
-										value: deviceCodeRecord.id,
-									},
-								],
-								update: {
-									pollingInterval: newInterval,
-								},
-							});
-							throw new APIError("BAD_REQUEST", {
-								message:
-									DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY,
-								details: {
-									error: "slow_down",
-									error_description:
-										DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY,
-									interval: newInterval,
-								},
-							});
-						}
 					}
 
 					// Update last polled time
