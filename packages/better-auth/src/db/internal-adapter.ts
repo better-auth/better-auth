@@ -41,31 +41,33 @@ export const createInternalAdapter = (
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
-			const [createdUser, createdAccount] = await adapter.transaction(async () => {
-				const createdUser = await createWithHooks(
-					{
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-					},
-					"user",
-					undefined,
-					context,
-				);
-				const createdAccount = await createWithHooks(
-					{
-						...account,
-						userId: createdUser!.id || user.id,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-					"account",
-					undefined,
-					context,
-				);
+			const [createdUser, createdAccount] = await adapter.transaction(
+				async () => {
+					const createdUser = await createWithHooks(
+						{
+							createdAt: new Date(),
+							updatedAt: new Date(),
+							...user,
+						},
+						"user",
+						undefined,
+						context,
+					);
+					const createdAccount = await createWithHooks(
+						{
+							...account,
+							userId: createdUser!.id || user.id,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+						"account",
+						undefined,
+						context,
+					);
 
-				return [createdUser, createdAccount];
-			});
+					return [createdUser, createdAccount];
+				},
+			);
 			return {
 				user: createdUser,
 				account: createdAccount,
