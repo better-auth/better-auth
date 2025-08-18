@@ -17,7 +17,7 @@ export const withMcpAuth = <
 	auth: Auth,
 	handler: (
 		req: Request,
-		sesssion: OAuthAccessToken,
+		_: OAuthAccessToken,
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
