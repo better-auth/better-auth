@@ -114,6 +114,17 @@ export interface JwtOptions {
 			session: Session & Record<string, any>;
 		}) => Promise<string> | string;
 	};
+
+	/**
+	 * Disables setting JWTs through middleware.
+	 *
+	 * Recommended to set `true` when using an oAuth provider plugin
+	 * like OIDC or MCP where session payloads should not be signed.
+	 *
+	 * @default false
+	 */
+	disableSettingJwtHeader?: boolean;
+
 	/**
 	 * Custom schema for the admin plugin
 	 */
@@ -365,6 +376,10 @@ export const jwt = (options?: JwtOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (options?.disableSettingJwtHeader) {
+							return;
+						}
+
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
