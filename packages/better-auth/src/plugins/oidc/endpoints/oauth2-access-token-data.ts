@@ -4,7 +4,7 @@ import type { OAuthAccessToken } from "../types";
 import { modelName } from "../schema";
 import { createAuthEndpoint } from "../../../api";
 
-export const getAccessTokenData = (makePluginOpts: MakeOIDCPlugin) =>
+export const oAuth2AccessTokenData = (makePluginOpts: MakeOIDCPlugin) =>
 	createAuthEndpoint(
 		`/${makePluginOpts.pathPrefix}/get-access-token-data`,
 		{

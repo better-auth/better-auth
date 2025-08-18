@@ -7,7 +7,7 @@ import { modelName } from "../schema";
 import { generateRandomString } from "../../../crypto";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
 
-export const oAuthConsent = (
+export const oAuth2Consent = (
 	options: ResolvedOIDCOptions,
 	makePluginOpts: MakeOIDCPlugin,
 ) =>

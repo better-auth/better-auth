@@ -15,7 +15,7 @@ import { setCORSHeaders } from "../utils/set-cors-headers";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { verifyClientSecret } from "../utils/verify-client-secret";
 
-export const oAuth2token = (
+export const oAuth2Token = (
 	options: ResolvedOIDCOptions,
 	makePluginOpts: MakeOIDCPlugin,
 ) =>

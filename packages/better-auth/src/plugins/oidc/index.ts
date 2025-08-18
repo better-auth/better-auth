@@ -1,51 +1,43 @@
 import type { OIDCMetadata, OIDCOptions } from "./types";
-import type { BetterAuthPlugin } from "../../types";
 
 import { schema } from "./schema";
 import { consentHook } from "./hooks/consent-hook";
-import { oAuth2token } from "./endpoints/oauth2-token";
-import { oAuthConsent } from "./endpoints/oauth2-consent";
-import { oAuth2userInfo } from "./endpoints/oauth2-user-info";
-import { getOAuthClient } from "./endpoints/get-oauth-client";
+import { oAuth2Token } from "./endpoints/oauth2-token";
+import { oAuth2Client } from "./endpoints/oauth2-client";
+import { oAuth2Consent } from "./endpoints/oauth2-consent";
+import { oAuth2Register } from "./endpoints/oauth2-register";
+import { oAuth2UserInfo } from "./endpoints/oauth2-user-info";
 import { oAuth2authorize } from "./endpoints/oauth2-authorize";
 import { resolveOIDCOptions } from "./utils/resolve-oidc-options";
-import { getOpenIdConfig } from "./endpoints/get-openid-configuration";
-import { registerOAuthApplication } from "./endpoints/oauth2-register";
-import { getAccessTokenData } from "./endpoints/get-access-token-data";
+import { oAuth2OpenIdConfig } from "./endpoints/oauth2-openid-config";
+import { oAuth2AccessTokenData } from "./endpoints/oauth2-access-token-data";
 
 export type MakeOIDCPlugin = {
-	id: string;
 	pathPrefix: string;
 	disableCors: boolean;
 	alwaysSkipConsent: boolean;
 };
 
-export const makeOIDCPlugin =
-	(makePluginOpts: MakeOIDCPlugin) => (options: OIDCOptions) => {
-		const resolved = resolveOIDCOptions(options);
+export const makeOIDCPlugin = (
+	makePluginOpts: MakeOIDCPlugin,
+	options: OIDCOptions,
+) => {
+	const resolved = resolveOIDCOptions(options);
 
-		return {
-			id: makePluginOpts.id,
-			schema,
-			hooks: {
-				after: consentHook(resolved, makePluginOpts),
-			},
-			endpoints: {
-				oAuth2token: oAuth2token(resolved, makePluginOpts),
-				oAuthConsent: oAuthConsent(resolved, makePluginOpts),
-				getOAuthClient: getOAuthClient(resolved, makePluginOpts),
-				oAuth2userInfo: oAuth2userInfo(resolved, makePluginOpts),
-				getOpenIdConfig: getOpenIdConfig(resolved, makePluginOpts),
-				oAuth2authorize: oAuth2authorize(resolved, makePluginOpts),
-				registerOAuthApplication: registerOAuthApplication(
-					resolved,
-					makePluginOpts,
-				),
+	return {
+		schema,
+		consentHook: consentHook(resolved, makePluginOpts),
+		oAuth2Token: oAuth2Token(resolved, makePluginOpts),
+		oAuth2Client: oAuth2Client(resolved, makePluginOpts),
+		oAuth2Consent: oAuth2Consent(resolved, makePluginOpts),
+		oAuth2UserInfo: oAuth2UserInfo(resolved, makePluginOpts),
+		oAuth2Register: oAuth2Register(resolved, makePluginOpts),
+		oAuth2Authorize: oAuth2authorize(resolved, makePluginOpts),
+		oAuth2OpenIdConfig: oAuth2OpenIdConfig(resolved, makePluginOpts),
 
-				getAccessTokenData: getAccessTokenData(makePluginOpts),
-			},
-		} satisfies BetterAuthPlugin;
+		oAuth2AccessTokenData: oAuth2AccessTokenData(makePluginOpts),
 	};
+};
 
 export const makeOAuthDiscoveryMetadata =
 	(getOpenIdConfig: () => Promise<OIDCMetadata>) => async (_: Request) => {

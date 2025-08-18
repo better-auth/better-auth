@@ -4,7 +4,7 @@ import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 import { createAuthEndpoint } from "../../../api";
 import { resolveMetadata } from "../utils/resolve-metadata";
 
-export const getOpenIdConfig = (
+export const oAuth2OpenIdConfig = (
 	options: ResolvedOIDCOptions,
 	makePluginOpts: MakeOIDCPlugin,
 ) =>

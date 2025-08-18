@@ -1,4 +1,7 @@
-import { makeOIDCPlugin } from "../oidc";
+import type { BetterAuthPlugin } from "../../types";
+import type { OIDCMetadata, OIDCOptions } from "../oidc/types";
+
+import { makeOAuthDiscoveryMetadata, makeOIDCPlugin } from "../oidc";
 
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
@@ -8,11 +11,54 @@ import { makeOIDCPlugin } from "../oidc";
  * @param options - The options for the OIDC plugin.
  * @returns A Better Auth plugin.
  */
-export const oidcProvider = makeOIDCPlugin({
-	id: "oidc",
-	pathPrefix: "oauth2",
-	disableCors: false,
-	alwaysSkipConsent: false,
-});
+export const oidcProvider = (options: OIDCOptions) => {
+	const {
+		schema,
+		consentHook,
+		oAuth2Token,
+		oAuth2Client,
+		oAuth2Consent,
+		oAuth2UserInfo,
+		oAuth2Register,
+		oAuth2Authorize,
+		oAuth2OpenIdConfig,
+		oAuth2AccessTokenData,
+	} = makeOIDCPlugin(
+		{
+			pathPrefix: "oauth2",
+			disableCors: false,
+			alwaysSkipConsent: false,
+		},
+		options,
+	);
+
+	return {
+		id: "oidc",
+		schema,
+		hooks: {
+			after: consentHook,
+		},
+		endpoints: {
+			oAuth2Token,
+			oAuth2Client,
+			oAuth2Consent,
+			oAuth2UserInfo,
+			oAuth2Register,
+			oAuth2Authorize,
+			oAuth2OpenIdConfig,
+			oAuth2AccessTokenData,
+		},
+	} satisfies BetterAuthPlugin;
+};
+
+export const oAuth2DiscoveryMetadata = <
+	Auth extends {
+		api: {
+			oAuth2OpenIdConfig: (...args: any) => Promise<OIDCMetadata>;
+		};
+	},
+>(
+	auth: Auth,
+) => makeOAuthDiscoveryMetadata(() => auth.api.oAuth2OpenIdConfig());
 
 export type * from "../oidc/types";

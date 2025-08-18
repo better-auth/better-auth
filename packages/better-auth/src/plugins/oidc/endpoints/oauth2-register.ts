@@ -9,7 +9,7 @@ import { setCORSHeaders } from "../utils/set-cors-headers";
 import { storeClientSecret } from "../utils/store-client-secret";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 
-export const registerOAuthApplication = (
+export const oAuth2Register = (
 	options: ResolvedOIDCOptions,
 	makePluginOpts: MakeOIDCPlugin,
 ) =>

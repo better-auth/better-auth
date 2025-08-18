@@ -4,7 +4,7 @@ import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 import { getClient } from "../utils/get-client";
 import { APIError, sessionMiddleware, createAuthEndpoint } from "../../../api";
 
-export const getOAuthClient = (
+export const oAuth2Client = (
 	options: ResolvedOIDCOptions,
 	makePluginOpts: MakeOIDCPlugin,
 ) =>

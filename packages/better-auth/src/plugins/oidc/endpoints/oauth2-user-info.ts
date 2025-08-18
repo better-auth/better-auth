@@ -6,7 +6,7 @@ import { modelName } from "../schema";
 import { getClient } from "../utils/get-client";
 import { APIError, createAuthEndpoint } from "../../../api";
 
-export const oAuth2userInfo = (
+export const oAuth2UserInfo = (
 	options: ResolvedOIDCOptions,
 	makePluginOpts: MakeOIDCPlugin,
 ) =>

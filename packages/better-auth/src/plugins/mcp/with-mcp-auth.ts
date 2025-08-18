@@ -7,7 +7,9 @@ import type { OAuthAccessToken } from "../oidc/types";
 export const withMcpAuth = <
 	Auth extends {
 		api: {
-			getMcpSession: (...args: any) => Promise<OAuthAccessToken | null>;
+			mcpOAuth2AccessTokenData: (
+				...args: any
+			) => Promise<OAuthAccessToken | null>;
 		};
 		options: BetterAuthOptions;
 	},
@@ -23,7 +25,7 @@ export const withMcpAuth = <
 		if (!baseURL && !isProduction) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
-		const session = await auth.api.getMcpSession({
+		const session = await auth.api.mcpOAuth2AccessTokenData({
 			headers: req.headers,
 		});
 		const wwwAuthenticateValue = `Bearer resource_metadata=${baseURL}/api/auth/.well-known/oauth-authorization-server`;
