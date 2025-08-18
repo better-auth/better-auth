@@ -130,6 +130,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 														session: InferSessionFromClient<COpts>;
 													} | null
 												: NonNullable<Awaited<R>>,
+										// we should improve this type to support more specific error types
 										{
 											code?: string;
 											message?: string;

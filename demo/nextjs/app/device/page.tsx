@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { client } from "@/lib/auth-client";
+import { useParams, useRouter } from "next/navigation";
+import { client, useSession } from "@/lib/auth-client";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,10 @@ import { Loader2 } from "lucide-react";
 
 export default function DeviceAuthorizationPage() {
 	const router = useRouter();
-	const [userCode, setUserCode] = useState("");
+	const params = useParams();
+	const [userCode, setUserCode] = useState<string>(
+		typeof params.userCode === "string" ? params.userCode : "",
+	);
 	const [isPending, startTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
 

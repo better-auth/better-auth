@@ -196,8 +196,8 @@ export const auth = betterAuth({
 			},
 		}),
 		deviceAuthorization({
-			expiresIn: 300,
-			interval: 5,
+			expiresIn: "3min",
+			interval: "5s",
 		}),
 	],
 	trustedOrigins: ["exp://"],

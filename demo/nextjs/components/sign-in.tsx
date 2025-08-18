@@ -17,7 +17,7 @@ import { Loader2 } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
@@ -25,6 +25,7 @@ export default function SignIn() {
 	const [loading, startTransition] = useTransition();
 	const [rememberMe, setRememberMe] = useState(false);
 	const router = useRouter();
+	const params = useParams();
 
 	return (
 		<Card className="max-w-md rounded-none">
@@ -88,7 +89,11 @@ export default function SignIn() {
 									{ email, password, rememberMe },
 									{
 										onSuccess(context) {
-											router.push("/dashboard");
+											if (typeof params.callbackUrl === "string") {
+												router.push(params.callbackUrl);
+											} else {
+												router.push("/dashboard");
+											}
 										},
 									},
 								);

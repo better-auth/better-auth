@@ -4,12 +4,13 @@ import SignIn from "@/components/sign-in";
 import { SignUp } from "@/components/sign-up";
 import { Tabs } from "@/components/ui/tabs2";
 import { client } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
 export default function Page() {
 	const router = useRouter();
+	const params = useParams();
 	useEffect(() => {
 		client.oneTap({
 			fetchOptions: {
@@ -18,7 +19,11 @@ export default function Page() {
 				},
 				onSuccess: () => {
 					toast.success("Successfully signed in");
-					router.push("/dashboard");
+					if (typeof params.callbackUrl === "string") {
+						router.push(params.callbackUrl);
+					} else {
+						router.push("/dashboard");
+					}
 				},
 			},
 		});

@@ -201,6 +201,25 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 										},
 									},
 								},
+								400: {
+									description: "Error response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: {
+														type: "string",
+														enum: ["invalid_request", "invalid_client"],
+													},
+													error_description: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
@@ -208,7 +227,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				async (ctx) => {
 					const deviceCode = await generateDeviceCode();
 					const userCode = await generateUserCode();
-					const expiresIn = ms(opts.expiresIn || opts.expiresIn);
+					const expiresIn = ms(opts.expiresIn);
 					const expiresAt = new Date(Date.now() + expiresIn);
 
 					await ctx.context.adapter.create({

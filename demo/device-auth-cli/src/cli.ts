@@ -118,7 +118,8 @@ async function pollForToken(deviceCode: string, interval: number) {
 					resolve();
 					process.exit(0);
 				} else if (error) {
-					const code = error.code ? error.code : "unknown_error";
+					// @ts-expect-error
+					const code = error.error ? error.error : "unknown_error";
 
 					switch (code) {
 						case "authorization_pending":
