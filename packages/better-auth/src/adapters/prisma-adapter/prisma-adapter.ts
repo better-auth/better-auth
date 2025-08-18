@@ -39,6 +39,7 @@ interface PrismaClientInternal {
 		update: (data: any) => Promise<any>;
 		delete: (data: any) => Promise<any>;
 		[key: string]: any;
+		(...args: any): any;
 	};
 }
 
@@ -50,7 +51,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 		},
-		adapter: ({ getFieldName }) => {
+		context: {
+			db: prisma as PrismaClientInternal
+		},
+		adapter: ({ getFieldName, getContext }) => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (select?: string[], model?: string) => {
@@ -212,6 +216,15 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						where: whereClause,
 					});
 					return result ? (result.count as number) : 0;
+				},
+				async transaction(callback) {
+					const ctx = getContext();
+					return ctx.db.$transaction(async (tx: PrismaClientInternal) => {
+						return callback({
+							...ctx,
+							db: tx,
+						});
+					});
 				},
 				options: config,
 			};
