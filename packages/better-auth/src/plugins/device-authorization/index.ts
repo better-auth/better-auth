@@ -207,8 +207,7 @@ export const deviceAuthorization = (
 						openapi: {
 							description: `Request a device and user code
 
-Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)
-`,
+Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)`,
 							responses: {
 								200: {
 									description: "Success",
@@ -316,7 +315,9 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}),
 					metadata: {
 						openapi: {
-							description: "Exchange device code for access token",
+							description: `Exchange device code for access token
+
+Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#section-3.4)`,
 							responses: {
 								200: {
 									description: "Success",
