@@ -276,8 +276,8 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					const verification_uri_complete = new URL(verification_uri);
 					verification_uri_complete.searchParams.set(
 						"user_code",
-						// should we support encodeURIComponent or custom formatting function here?
-						userCode,
+						// should we support custom formatting function here?
+						encodeURIComponent(userCode),
 					);
 
 					return ctx.json(
