@@ -67,7 +67,7 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/debug@4.1.12)(@types/node@20.17.57)(happy-dom@15.11.7)(jiti@2.4.2)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.19.4)(yaml@2.8.0)
 
-  demo/device-authorization-cli:
+  demo/device-auth-cli:
     dependencies:
       better-auth:
         specifier: workspace:*

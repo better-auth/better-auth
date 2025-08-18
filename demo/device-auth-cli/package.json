@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/device-authorization-cli",
+  "name": "@better-auth/device-auth-cli",
   "bin": "src/cli.ts",
   "type": "module",
   "scripts": {
