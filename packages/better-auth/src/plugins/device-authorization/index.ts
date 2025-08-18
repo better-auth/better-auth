@@ -426,8 +426,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						});
 						throw new APIError("BAD_REQUEST", {
 							error: "access_denied",
-							error_description:
-								DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
+							error_description: DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
 						});
 					}
 
