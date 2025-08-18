@@ -537,6 +537,16 @@
         "types": "./dist/plugins/siwe/index.d.cts",
         "default": "./dist/plugins/siwe/index.cjs"
       }
+    },
+    "./plugins/device-authorization": {
+      "import": {
+        "types": "./dist/plugins/device-authorization/index.d.ts",
+        "default": "./dist/plugins/device-authorization/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/device-authorization/index.d.cts",
+        "default": "./dist/plugins/device-authorization/index.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -631,6 +641,9 @@
       "plugins/bearer": [
         "./dist/plugins/bearer/index.d.ts"
       ],
+      "plugins/custom-session": [
+        "./dist/plugins/custom-session/index.d.ts"
+      ],
       "plugins/email-otp": [
         "./dist/plugins/email-otp/index.d.ts"
       ],
@@ -678,6 +691,9 @@
       ],
       "plugins/siwe": [
         "./dist/plugins/siwe/index.d.ts"
+      ],
+      "plugins/device-authorization": [
+        "./dist/plugins/device-authorization/index.d.ts"
       ]
     }
   },
