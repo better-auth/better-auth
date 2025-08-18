@@ -19,6 +19,22 @@ import { toNodeHandler } from "../../integrations/node";
 import { jwt } from "../jwt";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 
+describe("oidc - init", async () => {
+	it("should fail without the jwt plugin", async ({ expect }) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					oidcProvider({
+						useJWTPlugin: true,
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+				],
+			}),
+		).rejects.toThrowError("jwt_config");
+	});
+});
+
 describe("oidc", async () => {
 	const {
 		auth: authorizationServer,

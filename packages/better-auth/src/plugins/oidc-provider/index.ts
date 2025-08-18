@@ -26,14 +26,8 @@ import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
-import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
-
-const getJwtPlugin = (ctx: GenericEndpointContext) => {
-	return ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "jwt",
-	) as ReturnType<typeof jwt>;
-};
+import { getJwtPlugin } from "../jwt/utils";
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -72,7 +66,9 @@ export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
 ): OIDCMetadata => {
-	const jwtPlugin = getJwtPlugin(ctx);
+	const jwtPlugin = options?.useJWTPlugin
+		? getJwtPlugin(ctx.context)
+		: undefined;
 	const issuer =
 		jwtPlugin && jwtPlugin.options?.jwt && jwtPlugin.options.jwt.issuer
 			? jwtPlugin.options.jwt.issuer
@@ -228,6 +224,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 	return {
 		id: "oidc",
+		options: opts,
+		init: (ctx) => {
+			if (opts.useJWTPlugin) {
+				// Check for jwt plugin registration
+				getJwtPlugin(ctx);
+			}
+		},
 		hooks: {
 			after: [
 				{
@@ -824,16 +827,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
 					if (options.useJWTPlugin) {
-						const jwtPlugin = getJwtPlugin(ctx);
-						if (!jwtPlugin) {
-							ctx.context.logger.error(
-								"OIDC: `useJWTPlugin` is enabled but the JWT plugin is not available. Make sure you have the JWT Plugin in your plugins array or set `useJWTPlugin` to false.",
-							);
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								error_description: "JWT plugin is not enabled",
-								error: "internal_server_error",
-							});
-						}
+						const jwtPlugin = getJwtPlugin(ctx.context);
 						idToken = await getJwtToken(
 							{
 								...ctx,
