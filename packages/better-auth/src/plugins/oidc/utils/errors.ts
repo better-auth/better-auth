@@ -4,8 +4,11 @@ export function formatErrorURL(
 	url: string,
 	error: string,
 	description: string,
-) {
-	return `${url.includes("?") ? "&" : "?"}error=${error}&error_description=${description}`;
+): string {
+	const u = new URL(url, "http://dummy.base");
+	u.searchParams.set("error", error);
+	u.searchParams.set("error_description", description);
+	return u.toString().replace("http://dummy.base", "");
 }
 
 export function getErrorURL(
