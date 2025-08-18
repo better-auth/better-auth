@@ -9,7 +9,7 @@ export const oAuth2OpenIdConfig = (
 	makePluginOpts: MakeOIDCPlugin,
 ) =>
 	createAuthEndpoint(
-		"/.well-known/openid-configuration",
+		`/${makePluginOpts.pathPrefix}/.well-known/openid-configuration`,
 		{
 			method: "GET",
 			metadata: {

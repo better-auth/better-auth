@@ -295,23 +295,27 @@ export const oAuth2Register = (
 				options.generateClientSecret?.() ||
 				generateRandomString(32, "a-z", "A-Z");
 
+			const clientType =
+				body.token_endpoint_auth_method === "none" ? "public" : "web";
+			const finalClientSecret = clientType === "public" ? "" : clientSecret;
+
 			const storedClientSecret = await storeClientSecret(
 				ctx,
 				options,
-				clientSecret,
+				finalClientSecret,
 			);
 
 			// Create the client with the existing schema
 			const client: Client = await ctx.context.adapter.create({
 				model: modelName.oauthClient,
 				data: {
+					type: clientType,
 					name: body.client_name,
 					icon: body.logo_uri,
 					metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 					clientId: clientId,
 					clientSecret: storedClientSecret,
 					redirectURLs: body.redirect_uris.join(","),
-					type: "web",
 					authenticationScheme:
 						body.token_endpoint_auth_method || "client_secret_basic",
 					disabled: false,
@@ -332,7 +336,6 @@ export const oAuth2Register = (
 							}
 						: {}),
 					client_id_issued_at: Math.floor(Date.now() / 1000),
-					client_secret_expires_at: 0, // 0 means it doesn't expire
 					redirect_uris: body.redirect_uris,
 					token_endpoint_auth_method:
 						body.token_endpoint_auth_method || "client_secret_basic",
@@ -353,7 +356,6 @@ export const oAuth2Register = (
 					metadata: body.metadata,
 				},
 				{
-					status: 201,
 					headers: {
 						"Cache-Control": "no-store",
 						Pragma: "no-cache",
