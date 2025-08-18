@@ -62,7 +62,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			debugLogs: config.debugLogs ?? false,
 		},
 		context: {
-			db
+			db,
 		},
 		adapter: ({ getFieldName, debugLog, getContext }) => {
 			function getSchema(model: string) {
@@ -261,8 +261,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async findOne({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const res = await getContext().db
-						.select()
+					const res = await getContext()
+						.db.select()
 						.from(schemaModel)
 						.where(...clause);
 					if (!res.length) return null;
@@ -273,8 +273,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					const clause = where ? convertWhereClause(where, model) : [];
 
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = getContext().db
-						.select()
+					const builder = getContext()
+						.db.select()
 						.from(schemaModel)
 						.limit(limit || 100)
 						.offset(offset || 0);
@@ -290,8 +290,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
-					const res = await getContext().db
-						.select({ count: count() })
+					const res = await getContext()
+						.db.select({ count: count() })
 						.from(schemaModel)
 						.where(...clause);
 					return res[0].count;
@@ -299,8 +299,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async update({ model, where, update: values }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = getContext().db
-						.update(schemaModel)
+					const builder = getContext()
+						.db.update(schemaModel)
 						.set(values)
 						.where(...clause);
 					return await withReturning(model, builder, values as any, where);
@@ -308,8 +308,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async updateMany({ model, where, update: values }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = getContext().db
-						.update(schemaModel)
+					const builder = getContext()
+						.db.update(schemaModel)
 						.set(values)
 						.where(...clause);
 					return await builder;
@@ -317,13 +317,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				async delete({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = getContext().db.delete(schemaModel).where(...clause);
+					const builder = getContext()
+						.db.delete(schemaModel)
+						.where(...clause);
 					return await builder;
 				},
 				async deleteMany({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = getContext().db.delete(schemaModel).where(...clause);
+					const builder = getContext()
+						.db.delete(schemaModel)
+						.where(...clause);
 					return await builder;
 				},
 				async transaction(callback) {
@@ -331,7 +335,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					return ctx.db.transaction((db: DB) => {
 						return callback({
 							...ctx,
-							db
+							db,
 						});
 					});
 				},

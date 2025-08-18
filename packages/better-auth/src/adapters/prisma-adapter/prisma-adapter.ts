@@ -52,7 +52,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 			debugLogs: config.debugLogs ?? false,
 		},
 		context: {
-			db: prisma as PrismaClientInternal
+			db: prisma as PrismaClientInternal,
 		},
 		adapter: ({ getFieldName, getContext }) => {
 			const db = prisma as PrismaClientInternal;

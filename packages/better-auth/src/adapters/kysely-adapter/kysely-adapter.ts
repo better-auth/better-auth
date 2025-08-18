@@ -1,12 +1,7 @@
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 import type { Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
-import type {
-	InsertQueryBuilder,
-	Kysely,
-	Transaction,
-	UpdateQueryBuilder,
-} from "kysely";
+import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
 interface KyselyAdapterConfig {
 	/**
@@ -45,7 +40,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			supportsJSON: false,
 		},
 		context: {
-			db
+			db,
 		},
 		adapter: ({ getFieldName, schema, getContext }) => {
 			const withReturning = async (
@@ -319,7 +314,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					return ctx.db.transaction().execute((db) => {
 						return callback({
 							...ctx,
-							db
+							db,
 						});
 					});
 				},

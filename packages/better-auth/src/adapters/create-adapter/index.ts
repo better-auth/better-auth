@@ -54,7 +54,7 @@ export const createAdapter =
 		config: cfg,
 	}: {
 		config: AdapterConfig;
-		context?: C
+		context?: C;
 		adapter: CreateCustomAdapter<C>;
 	}) =>
 	(options: BetterAuthOptions): Adapter => {
@@ -82,9 +82,9 @@ export const createAdapter =
 		const context = createAsyncContext<C>();
 		const getContext = () => {
 			const state = context.get();
-			
+
 			return (state ?? baseContext) as C extends AdapterContext ? C : undefined;
-		}
+		};
 
 		/**
 		 * This function helps us get the default field name from the schema defined by devs.
@@ -335,7 +335,7 @@ export const createAdapter =
 			getDefaultModelName,
 			getDefaultFieldName,
 			getFieldAttributes,
-			getContext
+			getContext,
 		});
 
 		const transformInput = async (
@@ -939,8 +939,8 @@ export const createAdapter =
 				return res;
 			},
 			transaction: async (cb) => {
-				const callback = (ctx: C) => ctx ? context.run(ctx, cb) : cb();
-				
+				const callback = (ctx: C) => (ctx ? context.run(ctx, cb) : cb());
+
 				if (adapterInstance.transaction && baseContext) {
 					return adapterInstance.transaction(callback);
 				}

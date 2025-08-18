@@ -68,7 +68,7 @@ export type Adapter = {
 	}) => Promise<number>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
-	transaction: <R>(callback: () => Promise<R>) => Promise<R>,
+	transaction: <R>(callback: () => Promise<R>) => Promise<R>;
 	/**
 	 *
 	 * @param options
