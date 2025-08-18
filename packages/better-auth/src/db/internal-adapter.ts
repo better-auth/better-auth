@@ -41,27 +41,31 @@ export const createInternalAdapter = (
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
-			const createdUser = await createWithHooks(
-				{
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					...user,
-				},
-				"user",
-				undefined,
-				context,
-			);
-			const createdAccount = await createWithHooks(
-				{
-					...account,
-					userId: createdUser!.id || user.id,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-				"account",
-				undefined,
-				context,
-			);
+			const [createdUser, createdAccount] = await adapter.transaction(async () => {
+				const createdUser = await createWithHooks(
+					{
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+					},
+					"user",
+					undefined,
+					context,
+				);
+				const createdAccount = await createWithHooks(
+					{
+						...account,
+						userId: createdUser!.id || user.id,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					"account",
+					undefined,
+					context,
+				);
+
+				return [createdUser, createdAccount];
+			});
 			return {
 				user: createdUser,
 				account: createdAccount,
@@ -189,23 +193,25 @@ export const createInternalAdapter = (
 				});
 			}
 
-			await adapter.deleteMany({
-				model: "account",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-			});
-			await adapter.delete({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: userId,
-					},
-				],
+			await adapter.transaction(async () => {
+				await adapter.deleteMany({
+					model: "account",
+					where: [
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+				});
+				await adapter.delete({
+					model: "user",
+					where: [
+						{
+							field: "id",
+							value: userId,
+						},
+					],
+				});
 			});
 		},
 		createSession: async (
