@@ -3,7 +3,7 @@ import type { AuthPluginSchema } from "../../types";
 
 export const makeSchema = ({ modelNames }: MakeOIDCPlugin) =>
 	({
-		oauthApplication: {
+		[modelNames.oauthClient]: {
 			modelName: modelNames.oauthClient,
 			fields: {
 				name: {
@@ -48,7 +48,7 @@ export const makeSchema = ({ modelNames }: MakeOIDCPlugin) =>
 				},
 			},
 		},
-		oauthAccessToken: {
+		[modelNames.oauthAccessToken]: {
 			modelName: modelNames.oauthAccessToken,
 			fields: {
 				accessToken: {
@@ -83,7 +83,7 @@ export const makeSchema = ({ modelNames }: MakeOIDCPlugin) =>
 				},
 			},
 		},
-		oauthConsent: {
+		[modelNames.oauthConsent]: {
 			modelName: modelNames.oauthConsent,
 			fields: {
 				clientId: {
@@ -106,4 +106,4 @@ export const makeSchema = ({ modelNames }: MakeOIDCPlugin) =>
 				},
 			},
 		},
-	}) satisfies AuthPluginSchema;
+	}) as AuthPluginSchema;

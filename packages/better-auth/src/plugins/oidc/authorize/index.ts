@@ -15,7 +15,11 @@ export const makeAuthorize =
 			setCORSHeaders(ctx);
 		}
 
-		const { session, client, query } = await resolveInputs(ctx, options);
+		const { session, client, query } = await resolveInputs(
+			ctx,
+			options,
+			makePluginOpts,
+		);
 		const verification = await createVerification(
 			ctx,
 			options,

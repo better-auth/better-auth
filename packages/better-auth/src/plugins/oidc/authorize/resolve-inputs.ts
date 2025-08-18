@@ -1,3 +1,4 @@
+import type { MakeOIDCPlugin } from "../index";
 import type { GenericEndpointContext } from "../../../types";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
@@ -9,9 +10,15 @@ import { resolveSession } from "./resolve-session";
 export async function resolveInputs(
 	ctx: GenericEndpointContext,
 	options: ResolvedOIDCOptions,
+	makePluginOpts: MakeOIDCPlugin,
 ) {
 	const query = resolveQuery(ctx, options);
-	const client = await resolveClient(ctx, query.clientId, options);
+	const client = await resolveClient(
+		ctx,
+		options,
+		makePluginOpts,
+		query.clientId,
+	);
 	const session = await resolveSession(ctx, options);
 
 	if (!client.redirectURLs.includes(query.redirectURI)) {

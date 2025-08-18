@@ -212,7 +212,12 @@ export const oAuth2Token = (
 				});
 			}
 
-			const client = await getClient(ctx, client_id.toString(), options);
+			const client = await getClient(
+				ctx,
+				options,
+				makePluginOpts,
+				client_id.toString(),
+			);
 			if (!client) {
 				throw new APIError("UNAUTHORIZED", {
 					error_description: "invalid client_id",
