@@ -1,22 +1,23 @@
 import {
+	it,
+	test,
+	expect,
+	describe,
 	afterAll,
 	afterEach,
 	beforeAll,
-	describe,
-	expect,
-	it,
-	test,
 } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { oidcProvider, type Client } from ".";
-import { genericOAuth } from "../generic-oauth";
-import { createAuthClient } from "../../client";
-import { oidcClient } from "./client";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { listen, type Listener } from "listhen";
-import { toNodeHandler } from "../../integrations/node";
-import { jwt } from "../jwt";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
+
+import { jwt } from "../jwt";
+import { oidcClient } from "./client";
+import { createAuthClient } from "../../client";
+import { genericOAuth } from "../generic-oauth";
+import { toNodeHandler } from "../../integrations/node";
+import { genericOAuthClient } from "../generic-oauth/client";
+import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("oidc", async () => {
 	const {

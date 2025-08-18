@@ -5,7 +5,7 @@ import { makeOAuthDiscoveryMetadata, makeOIDCPlugin } from "../oidc";
 
 export { withMcpAuth } from "./with-mcp-auth";
 
-export const oidcProvider = (options: OIDCOptions) => {
+export const mcp = (options: OIDCOptions) => {
 	const {
 		schema,
 		consentHook,

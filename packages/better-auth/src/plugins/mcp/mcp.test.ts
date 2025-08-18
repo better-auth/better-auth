@@ -1,13 +1,15 @@
-import { afterAll, describe, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import type { Client } from "../oidc/types";
+
 import { mcp } from ".";
-import { genericOAuth } from "../generic-oauth";
-import type { Client } from "../oidc-provider/types";
-import { createAuthClient } from "../../client";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { listen } from "listhen";
-import { toNodeHandler } from "../../integrations/node";
+import { afterAll, describe, it } from "vitest";
+
 import { jwt } from "../jwt";
+import { createAuthClient } from "../../client";
+import { genericOAuth } from "../generic-oauth";
+import { toNodeHandler } from "../../integrations/node";
+import { genericOAuthClient } from "../generic-oauth/client";
+import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("mcp", async () => {
 	// Start server on ephemeral port first to get available port
@@ -27,16 +29,13 @@ describe("mcp", async () => {
 			plugins: [
 				mcp({
 					loginPage: "/login",
-					oidcConfig: {
-						loginPage: "/login",
-						requirePKCE: true,
+					requirePKCE: true,
 
-						getAdditionalUserInfoClaim(user, scopes, client) {
-							return {
-								custom: "custom value",
-								userId: user.id,
-							};
-						},
+					getAdditionalUserInfoClaim(user, scopes, client) {
+						return {
+							custom: "custom value",
+							userId: user.id,
+						};
 					},
 				}),
 				jwt(),
