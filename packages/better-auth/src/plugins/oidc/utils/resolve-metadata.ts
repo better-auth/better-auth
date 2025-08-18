@@ -12,7 +12,10 @@ export const resolveMetadata = (
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 
-	const issuer = jwtPlugin?.options?.jwt?.issuer ?? ctx.context.options.baseURL ?? ctx.context.baseURL;
+	const issuer =
+		jwtPlugin?.options?.jwt?.issuer ??
+		ctx.context.options.baseURL ??
+		ctx.context.baseURL;
 
 	const baseURL = ctx.context.baseURL;
 	const supportedAlgs = options.useJWTPlugin

@@ -15,10 +15,7 @@ export const withMcpAuth = <
 	},
 >(
 	auth: Auth,
-	handler: (
-		req: Request,
-		_: OAuthAccessToken,
-	) => Response | Promise<Response>,
+	handler: (req: Request, _: OAuthAccessToken) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
 		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
