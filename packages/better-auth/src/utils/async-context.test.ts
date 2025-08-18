@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import { createAsyncContext } from "./async-context";
 
 describe("createAsyncContext", () => {
-	test("returns undefiend when no context is set", () => {
+	test("returns undefined when no context is set", () => {
 		const ctx = createAsyncContext<string>();
 		expect(ctx.get()).not.toBeDefined();
 	});
