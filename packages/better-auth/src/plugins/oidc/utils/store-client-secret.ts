@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "../../../types";
 import type { ResolvedOIDCOptions } from "./resolve-oidc-options";
 
 import { symmetricEncrypt } from "../../../crypto";
-import { hashClientSecret } from "./default-client-secret-hasher";
+import { hashClientSecret } from "./hash-client-secret";
 
 export async function storeClientSecret(
 	ctx: GenericEndpointContext,

@@ -1,15 +1,15 @@
-import type { MakeOidcPlugin } from "./make-oidc-plugin";
-import type { GenericEndpointContext } from "../../types";
-import type { ResolvedOIDCOptions } from "./utils/resolve-oidc-options";
+import type { MakeOIDCPlugin } from "../index";
+import type { GenericEndpointContext } from "../../../types";
+import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
-import { makeRedirectHandler } from "./utils/redirect";
-import { resolveInputs } from "./authorize/resolve-inputs";
-import { setCORSHeaders } from "./authorize/set-cors-headers";
-import { handleConsentFlow } from "./authorize/handle-consent-flow";
-import { createVerification } from "./authorize/create-verification";
+import { resolveInputs } from "./resolve-inputs";
+import { makeRedirectHandler } from "../utils/redirect";
+import { handleConsentFlow } from "./handle-consent-flow";
+import { createVerification } from "./create-verification";
+import { setCORSHeaders } from "../utils/set-cors-headers";
 
 export const makeAuthorize =
-	(makePluginOpts: MakeOidcPlugin) =>
+	(makePluginOpts: MakeOIDCPlugin) =>
 	async (ctx: GenericEndpointContext, options: ResolvedOIDCOptions) => {
 		if (makePluginOpts.disableCors) {
 			setCORSHeaders(ctx);
