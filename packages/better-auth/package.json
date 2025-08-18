@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.3.7-beta.1",
+  "version": "1.3.7-beta.3",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,7 @@
     "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
-    "build:types": "tsc --project tsconfig.declarations.json", 
+    "build:types": "tsc --project tsconfig.declarations.json",
     "stub": "unbuild --stub",
     "pretest": "pnpm prisma:normal:push && pnpm prisma:number-id:push",
     "test": "vitest",
@@ -744,6 +744,6 @@
     "whatwg-url": "^14.2.0"
   },
   "files": [
-    "dist" 
+    "dist"
   ]
 }
