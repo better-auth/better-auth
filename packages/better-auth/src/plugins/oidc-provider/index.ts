@@ -10,9 +10,9 @@ import { makeOIDCPlugin } from "../oidc";
  */
 export const oidcProvider = makeOIDCPlugin({
 	id: "oidc",
-	alwaysSkipConsent: false,
-	disableCors: false,
 	pathPrefix: "oauth2",
+	disableCors: false,
+	alwaysSkipConsent: false,
 });
 
 export type * from "../oidc/types";

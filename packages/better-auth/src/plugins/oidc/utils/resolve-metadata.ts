@@ -1,5 +1,5 @@
 import type { OIDCMetadata } from "../types";
-import type { MakeOidcPlugin } from "../make-oidc-plugin";
+import type { MakeOIDCPlugin } from "../index";
 import type { GenericEndpointContext } from "../../../types";
 import type { ResolvedOIDCOptions } from "./resolve-oidc-options";
 
@@ -8,7 +8,7 @@ import { getJwtPlugin } from "./get-jwt-plugin";
 export const resolveMetadata = (
 	ctx: GenericEndpointContext,
 	options: ResolvedOIDCOptions,
-	{ pathPrefix }: MakeOidcPlugin,
+	{ pathPrefix }: MakeOIDCPlugin,
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 
