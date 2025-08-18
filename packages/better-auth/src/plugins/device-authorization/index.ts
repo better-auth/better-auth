@@ -347,19 +347,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					});
 
 					if (!deviceCodeRecord) {
-						return ctx.json(
-							{
-								error: "invalid_grant",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
-							},
-							{
-								status: 400,
-								headers: {
-									"Cache-Control": "no-store",
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_grant",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
+						});
 					}
 
 					// Check for rate limiting
@@ -375,19 +367,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								: deviceCodeRecord.pollingInterval;
 
 						if (timeSinceLastPoll < minInterval) {
-							return ctx.json(
-								{
-									error: "slow_down",
-									error_description:
-										DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY,
-								},
-								{
-									status: 400,
-									headers: {
-										"Cache-Control": "no-store",
-									},
-								},
-							);
+							throw new APIError("BAD_REQUEST", {
+								error: "slow_down",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY,
+							});
 						}
 					}
 
@@ -415,35 +399,19 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								},
 							],
 						});
-						return ctx.json(
-							{
-								error: "expired_token",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE,
-							},
-							{
-								status: 400,
-								headers: {
-									"Cache-Control": "no-store",
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							error: "expired_token",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE,
+						});
 					}
 
 					if (deviceCodeRecord.status === "pending") {
-						return ctx.json(
-							{
-								error: "authorization_pending",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING,
-							},
-							{
-								status: 400,
-								headers: {
-									"Cache-Control": "no-store",
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							error: "authorization_pending",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING,
+						});
 					}
 
 					if (deviceCodeRecord.status === "denied") {
@@ -456,20 +424,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								},
 							],
 						});
-						return ctx.json(
-							{
-								error: "access_denied",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
-							},
-							{
-								status: 400,
-								headers: {
-									"Cache-Control": "no-store",
-									"Content-Type": "application/json;charset=UTF-8",
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							error: "access_denied",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
+						});
 					}
 
 					if (
@@ -492,19 +451,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						);
 
 						if (!user) {
-							return ctx.json(
-								{
-									error: "server_error",
-									error_description:
-										DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND,
-								},
-								{
-									status: 500,
-									headers: {
-										"Cache-Control": "no-store",
-									},
-								},
-							);
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error: "server_error",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND,
+							});
 						}
 
 						const session = await ctx.context.internalAdapter.createSession(
@@ -513,19 +464,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						);
 
 						if (!session) {
-							return ctx.json(
-								{
-									error: "server_error",
-									error_description:
-										DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-								},
-								{
-									status: 500,
-									headers: {
-										"Cache-Control": "no-store",
-									},
-								},
-							);
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error: "server_error",
+								error_description:
+									DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							});
 						}
 
 						// Return OAuth 2.0 compliant token response
@@ -547,19 +490,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						);
 					}
 
-					return ctx.json(
-						{
-							error: "server_error",
-							error_description:
-								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS,
-						},
-						{
-							status: 500,
-							headers: {
-								"Cache-Control": "no-store",
-							},
-						},
-					);
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						error: "server_error",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS,
+					});
 				},
 			),
 			deviceVerify: createAuthEndpoint(
@@ -608,23 +543,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 
 					if (!deviceCodeRecord) {
 						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
-							details: {
-								error: "invalid_request",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
-							},
+							error: "invalid_request",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
 						});
 					}
 
 					if (deviceCodeRecord.expiresAt < new Date()) {
 						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
-							details: {
-								error: "expired_token",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
-							},
+							error: "expired_token",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
 						});
 					}
 
@@ -672,12 +601,9 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED,
-							details: {
-								error: "unauthorized",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED,
-							},
+							error: "unauthorized",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED,
 						});
 					}
 
@@ -697,35 +623,25 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 
 					if (!deviceCodeRecord) {
 						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
-							details: {
-								error: "invalid_request",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
-							},
+							error: "invalid_request",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
 						});
 					}
 
 					if (deviceCodeRecord.expiresAt < new Date()) {
 						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
-							details: {
-								error: "expired_token",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
-							},
+							error: "expired_token",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
 						});
 					}
 
 					if (deviceCodeRecord.status !== "pending") {
 						throw new APIError("BAD_REQUEST", {
-							message:
+							error: "invalid_request",
+							error_description:
 								DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
-							details: {
-								error: "invalid_request",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
-							},
 						});
 					}
 
@@ -798,35 +714,25 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 
 					if (!deviceCodeRecord) {
 						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
-							details: {
-								error: "invalid_request",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
-							},
+							error: "invalid_request",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
 						});
 					}
 
 					if (deviceCodeRecord.expiresAt < new Date()) {
 						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
-							details: {
-								error: "expired_token",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
-							},
+							error: "expired_token",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE,
 						});
 					}
 
 					if (deviceCodeRecord.status !== "pending") {
 						throw new APIError("BAD_REQUEST", {
-							message:
+							error: "invalid_request",
+							error_description:
 								DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
-							details: {
-								error: "invalid_request",
-								error_description:
-									DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED,
-							},
 						});
 					}
 
