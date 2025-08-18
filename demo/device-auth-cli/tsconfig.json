@@ -1,7 +1,11 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      "better-auth": ["../../packages/better-auth/src"],
+      "better-auth/*": ["../../packages/better-auth/src/*"]
+    }
   },
   "include": ["src"]
 }

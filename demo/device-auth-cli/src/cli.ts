@@ -114,7 +114,14 @@ async function pollForToken(deviceCode: string, interval: number) {
 					console.log("");
 					console.log("✅ Authorization Successful!");
 					console.log("Access token received!");
-					console.log(`Token: ${data.access_token.substring(0, 20)}...`);
+					const { data: session } = await authClient.getSession({
+						fetchOptions: {
+							headers: {
+								Authorization: `Bearer ${data.access_token}`,
+							},
+						},
+					});
+					console.log(`Hello, ${session?.user?.name || "User"}!`);
 					resolve();
 					process.exit(0);
 				} else if (error) {
