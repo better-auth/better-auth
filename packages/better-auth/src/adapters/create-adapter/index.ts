@@ -976,7 +976,7 @@ export const createAdapter =
 						{ method: "transaction" },
 						`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
 						`${formatMethod("transaction")} ${formatAction("End")}`,
-						{ data: res }
+						{ data: res },
 					);
 
 					return res;
@@ -995,7 +995,7 @@ export const createAdapter =
 					{ method: "transaction" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
 					`${formatMethod("transaction")} ${formatAction("End")}`,
-					{ data: res }
+					{ data: res },
 				);
 
 				return res;
