@@ -93,7 +93,7 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		context: {
 			db,
 		},
-		adapter: ({ options, getFieldName, schema, getDefaultModelName }) => {
+		adapter: ({ options, getFieldName, schema, getDefaultModelName, getContext }) => {
 			const customIdGen = getCustomIdGenerator(options);
 
 			function serializeID({
@@ -233,19 +233,19 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 
 			return {
 				async create({ model, data: values }) {
-					const res = await db.collection(model).insertOne(values);
+					const res = await getContext().db.collection(model).insertOne(values);
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, where, select }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).findOne(clause);
+					const res = await getContext().db.collection(model).findOne(clause);
 					if (!res) return null;
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
 					const clause = where ? convertWhereClause({ where, model }) : {};
-					const cursor = db.collection(model).find(clause);
+					const cursor = getContext().db.collection(model).find(clause);
 					if (limit) cursor.limit(limit);
 					if (offset) cursor.skip(offset);
 					if (sortBy)
@@ -257,13 +257,13 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async count({ model }) {
-					const res = await db.collection(model).countDocuments();
+					const res = await getContext().db.collection(model).countDocuments();
 					return res;
 				},
 				async update({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await db.collection(model).findOneAndUpdate(
+					const res = await getContext().db.collection(model).findOneAndUpdate(
 						clause,
 						{ $set: values as any },
 						{
@@ -276,18 +276,18 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await db.collection(model).updateMany(clause, {
+					const res = await getContext().db.collection(model).updateMany(clause, {
 						$set: values as any,
 					});
 					return res.modifiedCount;
 				},
 				async delete({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					await db.collection(model).deleteOne(clause);
+					await getContext().db.collection(model).deleteOne(clause);
 				},
 				async deleteMany({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await db.collection(model).deleteMany(clause);
+					const res = await getContext().db.collection(model).deleteMany(clause);
 					return res.deletedCount;
 				},
 				async transaction(callback) {

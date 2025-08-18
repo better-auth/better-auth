@@ -55,8 +55,6 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 			db: prisma as PrismaClientInternal,
 		},
 		adapter: ({ getFieldName, getContext }) => {
-			const db = prisma as PrismaClientInternal;
-
 			const convertSelect = (select?: string[], model?: string) => {
 				if (!select || !model) return undefined;
 				return select.reduce((prev, cur) => {
@@ -125,37 +123,40 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 
 			return {
 				async create({ model, data: values, select }) {
-					if (!db[model]) {
+					const ctx = getContext();
+					if (!ctx.db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model].create({
+					return await ctx.db[model].create({
 						data: values,
 						select: convertSelect(select, model),
 					});
 				},
 				async findOne({ model, where, select }) {
+					const ctx = getContext();
 					const whereClause = convertWhereClause(model, where);
-					if (!db[model]) {
+					if (!ctx.db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model].findFirst({
+					return await ctx.db[model].findFirst({
 						where: whereClause,
 						select: convertSelect(select, model),
 					});
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
+					const ctx = getContext();
 					const whereClause = convertWhereClause(model, where);
-					if (!db[model]) {
+					if (!ctx.db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
 
-					return (await db[model].findMany({
+					return (await ctx.db[model].findMany({
 						where: whereClause,
 						take: limit || 100,
 						skip: offset || 0,
@@ -170,31 +171,33 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 					})) as any[];
 				},
 				async count({ model, where }) {
+					const ctx = getContext();
 					const whereClause = convertWhereClause(model, where);
-					if (!db[model]) {
+					if (!ctx.db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model].count({
+					return await ctx.db[model].count({
 						where: whereClause,
 					});
 				},
 				async update({ model, where, update }) {
-					if (!db[model]) {
+					const ctx = getContext();
+					if (!ctx.db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
 					const whereClause = convertWhereClause(model, where);
-					return await db[model].update({
+					return await ctx.db[model].update({
 						where: whereClause,
 						data: update,
 					});
 				},
 				async updateMany({ model, where, update }) {
 					const whereClause = convertWhereClause(model, where);
-					const result = await db[model].updateMany({
+					const result = await getContext().db[model].updateMany({
 						where: whereClause,
 						data: update,
 					});
@@ -203,7 +206,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 				async delete({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
 					try {
-						await db[model].delete({
+						await getContext().db[model].delete({
 							where: whereClause,
 						});
 					} catch (e) {
@@ -212,7 +215,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 				},
 				async deleteMany({ model, where }) {
 					const whereClause = convertWhereClause(model, where);
-					const result = await db[model].deleteMany({
+					const result = await getContext().db[model].deleteMany({
 						where: whereClause,
 					});
 					return result ? (result.count as number) : 0;

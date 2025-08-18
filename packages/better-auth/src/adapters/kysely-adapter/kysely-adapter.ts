@@ -62,8 +62,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 							? where[0].field
 							: "id";
 
+					const ctx = getContext();
 					if (!values.id && where.length === 0) {
-						res = await db
+						res = await ctx.db
 							.selectFrom(model)
 							.selectAll()
 							.orderBy(getFieldName({ model, field }), "desc")
@@ -73,7 +74,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					}
 
 					const value = values[field] || where[0].value;
-					res = await db
+					res = await ctx.db
 						.selectFrom(model)
 						.selectAll()
 						.orderBy(getFieldName({ model, field }), "desc")
@@ -192,13 +193,13 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 			}
 			return {
 				async create({ data, model }) {
-					const builder = db.insertInto(model).values(data);
+					const builder = getContext().db.insertInto(model).values(data);
 
 					return (await withReturning(data, builder, model, [])) as any;
 				},
 				async findOne({ model, where, select }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model).selectAll();
+					let query = getContext().db.selectFrom(model).selectAll();
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -211,7 +212,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model);
+					let query = getContext().db.selectFrom(model);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -249,7 +250,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				async update({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
 
-					let query = db.updateTable(model).set(values as any);
+					let query = getContext()
+						.db.updateTable(model)
+						.set(values as any);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -260,7 +263,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				async updateMany({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.updateTable(model).set(values as any);
+					let query = getContext()
+						.db.updateTable(model)
+						.set(values as any);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -272,10 +277,11 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				async count({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db
+					const ctx = getContext();
+					let query = ctx.db
 						.selectFrom(model)
 						// a temporal solution for counting other than "*" - see more - https://www.sqlite.org/quirks.html#double_quoted_string_literals_are_accepted
-						.select(db.fn.count("id").as("count"));
+						.select(ctx.db.fn.count("id").as("count"));
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -287,7 +293,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.deleteFrom(model);
+					let query = getContext().db.deleteFrom(model);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
