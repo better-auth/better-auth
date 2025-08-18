@@ -4,7 +4,6 @@ import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import * as z from "zod/v4";
 import { SignJWT } from "jose";
-import { modelName } from "../schema";
 import { getJwtToken } from "../../jwt/sign";
 import { getClient } from "../utils/get-client";
 import { base64 } from "@better-auth/utils/base64";
@@ -92,7 +91,7 @@ export const oAuth2Token = (
 					});
 				}
 				const token = await ctx.context.adapter.findOne<OAuthAccessToken>({
-					model: modelName.oauthAccessToken,
+					model: makePluginOpts.modelNames.oauthAccessToken,
 					where: [
 						{
 							field: "refreshToken",
@@ -127,7 +126,7 @@ export const oAuth2Token = (
 					Date.now() + options.refreshTokenExpiresIn * 1000,
 				);
 				await ctx.context.adapter.create({
-					model: modelName.oauthAccessToken,
+					model: makePluginOpts.modelNames.oauthAccessToken,
 					data: {
 						accessToken,
 						refreshToken: newRefreshToken,
@@ -303,7 +302,7 @@ export const oAuth2Token = (
 				Date.now() + options.refreshTokenExpiresIn * 1000,
 			);
 			await ctx.context.adapter.create({
-				model: modelName.oauthAccessToken,
+				model: makePluginOpts.modelNames.oauthAccessToken,
 				data: {
 					accessToken,
 					refreshToken,

@@ -3,7 +3,6 @@ import type { CodeVerificationValue } from "../types";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import * as z from "zod/v4";
-import { modelName } from "../schema";
 import { generateRandomString } from "../../../crypto";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
 
@@ -144,7 +143,7 @@ export const oAuth2Consent = (
 				},
 			);
 			await ctx.context.adapter.create({
-				model: modelName.oauthConsent,
+				model: makePluginOpts.modelNames.oauthConsent,
 				data: {
 					clientId: value.clientId,
 					userId: value.userId,

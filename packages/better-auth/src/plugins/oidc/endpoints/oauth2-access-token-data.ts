@@ -1,7 +1,6 @@
 import type { MakeOIDCPlugin } from "../index";
 import type { OAuthAccessToken } from "../types";
 
-import { modelName } from "../schema";
 import { createAuthEndpoint } from "../../../api";
 
 export const oAuth2AccessTokenData = (makePluginOpts: MakeOIDCPlugin) =>
@@ -21,7 +20,7 @@ export const oAuth2AccessTokenData = (makePluginOpts: MakeOIDCPlugin) =>
 			}
 			const accessTokenData = await c.context.adapter.findOne<OAuthAccessToken>(
 				{
-					model: modelName.oauthAccessToken,
+					model: makePluginOpts.modelNames.oauthAccessToken,
 					where: [
 						{
 							field: "accessToken",

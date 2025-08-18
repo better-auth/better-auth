@@ -1,6 +1,6 @@
-import type { OIDCMetadata, OIDCOptions } from "./types";
+import type { OIDCOptions } from "./types";
 
-import { schema } from "./schema";
+import { makeSchema } from "./schema";
 import { consentHook } from "./hooks/consent-hook";
 import { oAuth2Token } from "./endpoints/oauth2-token";
 import { oAuth2Client } from "./endpoints/oauth2-client";
@@ -16,6 +16,11 @@ export type MakeOIDCPlugin = {
 	pathPrefix: string;
 	disableCors: boolean;
 	alwaysSkipConsent: boolean;
+	modelNames: {
+		oauthClient: string;
+		oauthAccessToken: string;
+		oauthConsent: string;
+	};
 };
 
 export const makeOIDCPlugin = (
@@ -25,7 +30,7 @@ export const makeOIDCPlugin = (
 	const resolved = resolveOIDCOptions(options);
 
 	return {
-		schema,
+		schema: makeSchema(makePluginOpts),
 		consentHook: consentHook(resolved, makePluginOpts),
 		oAuth2Token: oAuth2Token(resolved, makePluginOpts),
 		oAuth2Client: oAuth2Client(resolved, makePluginOpts),

@@ -2,7 +2,6 @@ import type { MakeOIDCPlugin } from "../index";
 import type { OAuthAccessToken } from "../types";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
-import { modelName } from "../schema";
 import { getClient } from "../utils/get-client";
 import { APIError, createAuthEndpoint } from "../../../api";
 
@@ -95,7 +94,7 @@ export const oAuth2UserInfo = (
 			}
 			const token = authorization.replace("Bearer ", "");
 			const accessToken = await ctx.context.adapter.findOne<OAuthAccessToken>({
-				model: modelName.oauthAccessToken,
+				model: makePluginOpts.modelNames.oauthAccessToken,
 				where: [
 					{
 						field: "accessToken",

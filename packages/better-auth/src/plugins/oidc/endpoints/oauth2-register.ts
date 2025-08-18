@@ -3,7 +3,6 @@ import type { MakeOIDCPlugin } from "../index";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
 import * as z from "zod/v4";
-import { modelName } from "../schema";
 import { generateRandomString } from "../../../crypto";
 import { setCORSHeaders } from "../utils/set-cors-headers";
 import { storeClientSecret } from "../utils/store-client-secret";
@@ -307,7 +306,7 @@ export const oAuth2Register = (
 
 			// Create the client with the existing schema
 			const client: Client = await ctx.context.adapter.create({
-				model: modelName.oauthClient,
+				model: makePluginOpts.modelNames.oauthClient,
 				data: {
 					type: clientType,
 					name: body.client_name,

@@ -28,6 +28,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 			pathPrefix: "oauth2",
 			disableCors: false,
 			alwaysSkipConsent: false,
+			modelNames: {
+				oauthClient: "oauthApplication",
+				oauthAccessToken: "oauthAccesToken",
+				oauthConsent: "oauthConsent",
+			},
 		},
 		options,
 	);
