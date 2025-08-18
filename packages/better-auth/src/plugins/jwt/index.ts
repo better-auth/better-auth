@@ -9,6 +9,7 @@ import { getJwksAdapter } from "./adapter";
 import { getJwtToken, signJWT } from "./sign";
 import { exportJWK, generateKeyPair, type JWK, type JWTPayload } from "jose";
 import {
+	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	sessionMiddleware,
@@ -16,6 +17,7 @@ import {
 import { symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
 import z from "zod";
+import { BetterAuthError } from "../../error";
 
 type JWKOptions =
 	| {
@@ -45,6 +47,14 @@ type JWKOptions =
 
 export interface JwtOptions {
 	jwks?: {
+		/**
+		 * Disables the /jwks endpoint and uses this endpoint in discovery.
+		 *
+		 * Useful if jwks are not managed at /jwks or
+		 * if your jwks are signed with a certificate and placed on your CDN.
+		 */
+		remoteUrl?: string;
+
 		/**
 		 * Key pair configuration
 		 * @description A subset of the options available for the generateKeyPair function
@@ -114,6 +124,17 @@ export interface JwtOptions {
 			session: Session & Record<string, any>;
 		}) => Promise<string> | string;
 	};
+
+	/**
+	 * Disables setting JWTs through middleware.
+	 *
+	 * Recommended to set `true` when using an oAuth provider plugin
+	 * like OIDC or MCP where session payloads should not be signed.
+	 *
+	 * @default false
+	 */
+	disableSettingJwtHeader?: boolean;
+
 	/**
 	 * Custom schema for the admin plugin
 	 */
@@ -141,6 +162,14 @@ export async function generateExportedKeyPair(
 }
 
 export const jwt = (options?: JwtOptions) => {
+	// Alg is required to be specified when using remote url (needed in openid metadata)
+	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"must specify alg when using the oidc plugin and jwks.remoteUrl",
+		);
+	}
+
 	return {
 		id: "jwt",
 		options,
@@ -233,6 +262,11 @@ export const jwt = (options?: JwtOptions) => {
 					},
 				},
 				async (ctx) => {
+					// Disables endpoint if using remote url strategy
+					if (options?.jwks?.remoteUrl) {
+						throw new APIError("NOT_FOUND");
+					}
+
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
 					const keySets = await adapter.getAllKeys();
@@ -365,6 +399,10 @@ export const jwt = (options?: JwtOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (options?.disableSettingJwtHeader) {
+							return;
+						}
+
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
