@@ -25,10 +25,17 @@ export async function getClient(
 				return null;
 			}
 
+			let metadata = null;
+			try {
+				if (res.metadata) {
+					metadata = JSON.parse(res.metadata);
+				}
+			} catch {}
+
 			return {
 				...res,
 				redirectURLs: (res.redirectURLs ?? "").split(","),
-				metadata: res.metadata ? JSON.parse(res.metadata) : {},
+				metadata,
 			} as Client;
 		});
 
