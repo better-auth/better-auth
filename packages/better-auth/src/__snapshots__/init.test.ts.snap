@@ -25,6 +25,7 @@ exports[`init > should match config 1`] = `
       "debugLogs": false,
       "type": "sqlite",
     },
+    "transaction": [Function],
     "update": [Function],
     "updateMany": [Function],
   },
