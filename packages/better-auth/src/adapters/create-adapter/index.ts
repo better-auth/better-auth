@@ -256,6 +256,11 @@ export const createAdapter =
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
 							return;
+						} else if (
+							method === "transaction" &&
+							!config.debugLogs.transaction
+						) {
+							return;
 						}
 					}
 					logger.info(`[${config.adapterName}]`, ...args);
@@ -939,13 +944,61 @@ export const createAdapter =
 				return res;
 			},
 			transaction: async (cb) => {
-				const callback = (ctx: C) => (ctx ? context.run(ctx, cb) : cb());
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const callback = (ctx: C) => {
+					if (!ctx) {
+						debugLog(
+							{ method: "transaction" },
+							`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+							`${formatMethod("transaction")} ${formatAction("Execute Callback")}`,
+							`${formatAction("⚠︎ No transaction context found. Running callback with current context.")}`,
+						);
+						return cb();
+					}
+
+					debugLog(
+						{ method: "transaction" },
+						`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+						`${formatMethod("transaction")} ${formatAction("Execute Callback")}`,
+					);
+					return context.run(ctx, cb);
+				};
 
 				if (adapterInstance.transaction && baseContext) {
-					return adapterInstance.transaction(callback);
+					debugLog(
+						{ method: "transaction" },
+						`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+						`${formatMethod("transaction")} ${formatAction("Begin")}`,
+					);
+					const res = await adapterInstance.transaction(callback);
+					debugLog(
+						{ method: "transaction" },
+						`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+						`${formatMethod("transaction")} ${formatAction("End")}`,
+						{ data: res }
+					);
+
+					return res;
 				}
 
-				return cb();
+				debugLog(
+					{ method: "transaction" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
+					`${formatMethod("transaction")} ${formatAction("Begin")}`,
+					`${formatAction("⚠︎ This adapter doesn't support transactions. Running callback with current context.")}`,
+				);
+
+				const res = await cb();
+
+				debugLog(
+					{ method: "transaction" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
+					`${formatMethod("transaction")} ${formatAction("End")}`,
+					{ data: res }
+				);
+
+				return res;
 			},
 			createSchema: adapterInstance.createSchema
 				? async (_, file) => {

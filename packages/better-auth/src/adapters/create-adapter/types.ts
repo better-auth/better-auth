@@ -22,6 +22,7 @@ export type AdapterDebugLogs =
 			delete?: boolean;
 			deleteMany?: boolean;
 			count?: boolean;
+			transaction?: boolean;
 	  }
 	| {
 			/**
