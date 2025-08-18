@@ -11,12 +11,11 @@ export async function verifyClientSecret(
 	clientSecret: string,
 ): Promise<boolean> {
 	if (options.storeClientSecret === "encrypted") {
-		return (
-			(await symmetricDecrypt({
-				key: ctx.context.secret,
-				data: storedClientSecret,
-			})) === clientSecret
-		);
+		const decryptedClientSecret = await symmetricDecrypt({
+			key: ctx.context.secret,
+			data: storedClientSecret,
+		});
+		return decryptedClientSecret === clientSecret;
 	}
 	if (options.storeClientSecret === "hashed") {
 		const hashedClientSecret = await hashClientSecret(clientSecret);
