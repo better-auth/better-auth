@@ -39,9 +39,9 @@ export const makeOIDCPlugin = (
 	};
 };
 
-export const makeOAuthDiscoveryMetadata =
-	(getOpenIdConfig: () => Promise<OIDCMetadata>) => async (_: Request) => {
-		const res = await getOpenIdConfig();
+export const makeMetadataEndpoint =
+	(fn: () => Promise<any>) => async (_: Request) => {
+		const res = await fn();
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

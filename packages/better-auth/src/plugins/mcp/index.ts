@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "../../types";
 import type { OIDCMetadata, OIDCOptions } from "../oidc/types";
 
-import { makeOAuthDiscoveryMetadata, makeOIDCPlugin } from "../oidc";
+import { makeMetadataEndpoint, makeOIDCPlugin } from "../oidc";
 
 export { withMcpAuth } from "./with-mcp-auth";
 
@@ -45,7 +45,7 @@ export const mcp = (options: OIDCOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export const mcpOAuth2DiscoveryMetadata = <
+export const mcpOAuthAuthorizationConfig = <
 	Auth extends {
 		api: {
 			mcpOAuth2OpenIdConfig: (...args: any) => Promise<OIDCMetadata>;
@@ -53,6 +53,6 @@ export const mcpOAuth2DiscoveryMetadata = <
 	},
 >(
 	auth: Auth,
-) => makeOAuthDiscoveryMetadata(() => auth.api.mcpOAuth2OpenIdConfig());
+) => makeMetadataEndpoint(() => auth.api.mcpOAuth2OpenIdConfig());
 
 export type * from "../oidc/types";

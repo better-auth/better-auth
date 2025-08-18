@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "../../types";
 import type { OIDCMetadata, OIDCOptions } from "../oidc/types";
 
-import { makeOAuthDiscoveryMetadata, makeOIDCPlugin } from "../oidc";
+import { makeMetadataEndpoint, makeOIDCPlugin } from "../oidc";
 
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
@@ -51,7 +51,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export const oAuth2DiscoveryMetadata = <
+export const oAuth2OpenIdConfigEndpoint = <
 	Auth extends {
 		api: {
 			oAuth2OpenIdConfig: (...args: any) => Promise<OIDCMetadata>;
@@ -59,6 +59,6 @@ export const oAuth2DiscoveryMetadata = <
 	},
 >(
 	auth: Auth,
-) => makeOAuthDiscoveryMetadata(() => auth.api.oAuth2OpenIdConfig());
+) => makeMetadataEndpoint(() => auth.api.oAuth2OpenIdConfig());
 
 export type * from "../oidc/types";
