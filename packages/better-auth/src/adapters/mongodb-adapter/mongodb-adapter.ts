@@ -93,7 +93,13 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		context: {
 			db,
 		},
-		adapter: ({ options, getFieldName, schema, getDefaultModelName, getContext }) => {
+		adapter: ({
+			options,
+			getFieldName,
+			schema,
+			getDefaultModelName,
+			getContext,
+		}) => {
 			const customIdGen = getCustomIdGenerator(options);
 
 			function serializeID({
@@ -263,22 +269,26 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				async update({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await getContext().db.collection(model).findOneAndUpdate(
-						clause,
-						{ $set: values as any },
-						{
-							returnDocument: "after",
-						},
-					);
+					const res = await getContext()
+						.db.collection(model)
+						.findOneAndUpdate(
+							clause,
+							{ $set: values as any },
+							{
+								returnDocument: "after",
+							},
+						);
 					if (!res) return null;
 					return res as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await getContext().db.collection(model).updateMany(clause, {
-						$set: values as any,
-					});
+					const res = await getContext()
+						.db.collection(model)
+						.updateMany(clause, {
+							$set: values as any,
+						});
 					return res.modifiedCount;
 				},
 				async delete({ model, where }) {
@@ -287,7 +297,9 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				},
 				async deleteMany({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await getContext().db.collection(model).deleteMany(clause);
+					const res = await getContext()
+						.db.collection(model)
+						.deleteMany(clause);
 					return res.deletedCount;
 				},
 				async transaction(callback) {

@@ -71,7 +71,7 @@ export type Adapter = {
 	/**
 	 * Run a callback inside a transaction if supported by the adapter.
 	 * Falls back to a direct execution if transactions are not available.
-	 * 
+	 *
 	 * @param callback The async function to execute.
 	 * @returns A promise resolving to the callback's result.
 	 */
