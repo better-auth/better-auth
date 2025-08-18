@@ -4,10 +4,6 @@ import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 import { makeRedirectHandler } from "../utils/redirect";
 import { formatErrorURL, getErrorURL } from "../utils/errors";
 
-function isStringArray(value: unknown): value is string[] {
-	return Array.isArray(value) && value.every((v) => typeof v === "string");
-}
-
 export type ResolvedQuery = ReturnType<typeof resolveQuery>;
 
 export function resolveQuery(
@@ -47,10 +43,10 @@ export function resolveQuery(
 	}
 
 	let scope: string[];
-	if (!isStringArray(query?.scope)) {
-		scope = options.defaultScope.split(" ");
+	if (typeof query?.scope === "string") {
+		scope = query.scope.split(" ");
 	} else {
-		scope = query.scope;
+		scope = options.defaultScope.split(" ");
 	}
 
 	const invalidScopes = scope.filter((s) => !options.scopes.includes(s));
@@ -69,7 +65,7 @@ export function resolveQuery(
 		| { method: "s256"; challenge: string };
 
 	if (typeof query?.code_challenge === "string") {
-		if (query?.code_challenge_method === "s256") {
+		if (query?.code_challenge_method?.toLowerCase() === "s256") {
 			codeChallenge = { method: "s256", challenge: query.code_challenge };
 		} else if (query?.code_challenge_method === "plain") {
 			if (!options.allowPlainCodeChallengeMethod) {
