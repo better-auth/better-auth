@@ -1,5 +1,12 @@
 export type AsyncContext<T = any> = {
+	/**
+	 * Run a callback within a given context value.
+	 * Cleans up automatically after completion.
+	 */
 	run<R>(value: T, callback: () => Promise<R> | R): Promise<R>;
+	/**
+	 * Get the current context value, if any.
+	 */
 	get(): T | undefined;
 };
 

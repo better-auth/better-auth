@@ -68,6 +68,13 @@ export type Adapter = {
 	}) => Promise<number>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
+	/**
+	 * Run a callback inside a transaction if supported by the adapter.
+	 * Falls back to a direct execution if transactions are not available.
+	 * 
+	 * @param callback The async function to execute.
+	 * @returns A promise resolving to the callback's result.
+	 */
 	transaction: <R>(callback: () => Promise<R>) => Promise<R>;
 	/**
 	 *
