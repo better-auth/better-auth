@@ -205,7 +205,10 @@ export const deviceAuthorization = (
 					}),
 					metadata: {
 						openapi: {
-							description: "Request a device and user code",
+							description: `Request a device and user code
+
+Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)
+`,
 							responses: {
 								200: {
 									description: "Success",
@@ -277,15 +280,21 @@ export const deviceAuthorization = (
 						userCode,
 					);
 
-					// Refs: https://datatracker.ietf.org/doc/html/rfc8628#section-3.2
-					return ctx.json({
-						device_code: deviceCode,
-						user_code: userCode,
-						verification_uri: verification_uri.toString(),
-						verification_uri_complete: verification_uri_complete.toString(),
-						expires_in: opts.expiresIn,
-						interval: opts.interval,
-					});
+					return ctx.json(
+						{
+							device_code: deviceCode,
+							user_code: userCode,
+							verification_uri: verification_uri.toString(),
+							verification_uri_complete: verification_uri_complete.toString(),
+							expires_in: opts.expiresIn,
+							interval: opts.interval,
+						},
+						{
+							headers: {
+								"Cache-Control": "no-store",
+							},
+						},
+					);
 				},
 			),
 			deviceToken: createAuthEndpoint(
