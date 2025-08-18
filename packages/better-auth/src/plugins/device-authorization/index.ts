@@ -150,8 +150,8 @@ const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 /**
  * @internal
  */
-const defaultGenerateDeviceCode = () => {
-	return generateRandomString(40, "a-z", "A-Z", "0-9");
+const defaultGenerateDeviceCode = (length: number) => {
+	return generateRandomString(length, "a-z", "A-Z", "0-9");
 };
 
 /**
@@ -174,7 +174,7 @@ export const deviceAuthorization = (
 		if (opts.generateDeviceCode) {
 			return opts.generateDeviceCode();
 		}
-		return defaultGenerateDeviceCode();
+		return defaultGenerateDeviceCode(opts.deviceCodeLength);
 	};
 
 	const generateUserCode = async () => {
