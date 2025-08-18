@@ -1,8 +1,7 @@
 packages:
   - packages/**
-  - dev/**
   - docs
-  - examples/**
+  - integration-tests/**
   - demo/*
 catalogs:
   react18:

@@ -53,10 +53,7 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 }
 
 export const sveltekitCookies = (
-	getRequestEvent: () => RequestEvent<
-		Partial<Record<string, string>>,
-		string | null
-	>,
+	getRequestEvent: () => RequestEvent<any, any>,
 ) => {
 	return {
 		id: "sveltekit-cookies",
