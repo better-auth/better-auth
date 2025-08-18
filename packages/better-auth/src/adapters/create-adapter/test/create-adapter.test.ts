@@ -8,7 +8,6 @@ import type {
 } from "../types";
 import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
-import { createAsyncContext } from "../../../utils/async-context";
 
 /*
 
@@ -1799,28 +1798,28 @@ describe("Create Adapter Helper", async () => {
 						},
 						async transaction(callback) {
 							return callback({
-								inTransaction: true
-							})
-						}
+								inTransaction: true,
+							});
+						},
 					};
 				},
 			});
 
 			const outsideOp = adapter.create({
 				model: "user",
-				data: {}
+				data: {},
 			});
 
 			await adapter.transaction(async () => {
 				await adapter.create({
 					model: "user",
-					data: {}
+					data: {},
 				});
 				await new Promise((r) => setTimeout(r, 10));
 				await adapter.create({
 					model: "session",
-					data: {}
-				})
+					data: {},
+				});
 			});
 
 			await outsideOp;
