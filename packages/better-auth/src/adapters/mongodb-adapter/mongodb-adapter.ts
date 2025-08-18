@@ -1,4 +1,4 @@
-import { ObjectId, type MongoClient, type Db } from "mongodb";
+import { ObjectId, type MongoClient, type Db, ClientSession } from "mongodb";
 import type { BetterAuthOptions, Where } from "../../types";
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
@@ -15,10 +15,17 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
-	client?: MongoClient;
 }
 
-export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
+export const mongodbAdapter = (
+	db:
+		| Db
+		| {
+				client: MongoClient;
+				database: string;
+		  },
+	config?: MongoDBAdapterConfig,
+) => {
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator =
 			options.advanced?.database?.generateId || options.advanced?.generateId;
@@ -92,14 +99,32 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 		},
 		context: {
 			db,
+			session: undefined as ClientSession | undefined,
+			client: undefined as MongoClient | undefined,
 		},
 		adapter: ({
 			options,
 			getFieldName,
 			schema,
 			getDefaultModelName,
-			getContext,
+			getContext: _getContext,
 		}) => {
+			const getContext = () => {
+				const ctx = _getContext();
+
+				return {
+					...ctx,
+					...("client" in ctx.db && "database" in ctx.db
+						? {
+								db: ctx.db.client.db(ctx.db.database),
+								client: ctx.db.client,
+							}
+						: {
+								db: ctx.db,
+							}),
+				};
+			};
+
 			const customIdGen = getCustomIdGenerator(options);
 
 			function serializeID({
@@ -239,19 +264,28 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 
 			return {
 				async create({ model, data: values }) {
-					const res = await getContext().db.collection(model).insertOne(values);
+					const ctx = getContext();
+					const res = await ctx.db.collection(model).insertOne(values, {
+						session: ctx.session,
+					});
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, where, select }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await getContext().db.collection(model).findOne(clause);
+					const ctx = getContext();
+					const res = await ctx.db.collection(model).findOne(clause, {
+						session: ctx.session,
+					});
 					if (!res) return null;
 					return res as any;
 				},
 				async findMany({ model, where, limit, offset, sortBy }) {
 					const clause = where ? convertWhereClause({ where, model }) : {};
-					const cursor = getContext().db.collection(model).find(clause);
+					const ctx = getContext();
+					const cursor = ctx.db
+						.collection(model)
+						.find(clause, { session: ctx.session });
 					if (limit) cursor.limit(limit);
 					if (offset) cursor.skip(offset);
 					if (sortBy)
@@ -263,60 +297,74 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 					return res as any;
 				},
 				async count({ model }) {
-					const res = await getContext().db.collection(model).countDocuments();
+					const ctx = getContext();
+					const res = await ctx.db
+						.collection(model)
+						.countDocuments(undefined, { session: ctx.session });
 					return res;
 				},
 				async update({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await getContext()
-						.db.collection(model)
-						.findOneAndUpdate(
-							clause,
-							{ $set: values as any },
-							{
-								returnDocument: "after",
-							},
-						);
+					const ctx = getContext();
+					const res = await ctx.db.collection(model).findOneAndUpdate(
+						clause,
+						{ $set: values as any },
+						{
+							returnDocument: "after",
+							session: ctx.session,
+						},
+					);
 					if (!res) return null;
 					return res as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
 
-					const res = await getContext()
-						.db.collection(model)
-						.updateMany(clause, {
+					const ctx = getContext();
+					const res = await ctx.db.collection(model).updateMany(
+						clause,
+						{
 							$set: values as any,
-						});
+						},
+						{ session: ctx.session },
+					);
 					return res.modifiedCount;
 				},
 				async delete({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					await getContext().db.collection(model).deleteOne(clause);
+					const ctx = getContext();
+					await ctx.db
+						.collection(model)
+						.deleteOne(clause, { session: ctx.session });
 				},
 				async deleteMany({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					const res = await getContext()
-						.db.collection(model)
-						.deleteMany(clause);
+					const ctx = getContext();
+					const res = await ctx.db.collection(model).deleteMany(clause, {
+						session: ctx.session,
+					});
 					return res.deletedCount;
 				},
 				async transaction(callback) {
-					const client = config?.client;
-					if (!client) {
-						return callback({
-							db,
-						});
+					const ctx = getContext();
+					if (!ctx.client) {
+						return callback(ctx);
 					}
-					const session = client.startSession();
+					const session = ctx.client.startSession();
 
 					try {
-						const res = await session.withTransaction(async () => {
-							return callback({
-								db,
-							});
-						});
+						const res = await session.withTransaction(
+							async () => {
+								return callback({
+									...ctx,
+									session,
+								});
+							},
+							{
+								session: ctx.session,
+							},
+						);
 						return res;
 					} finally {
 						await session.endSession();
