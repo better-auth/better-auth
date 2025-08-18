@@ -1789,7 +1789,7 @@ describe("Create Adapter Helper", async () => {
 					return {
 						async create({ data, model }) {
 							const ctx = getContext();
-							if (ctx?.inTransaction) {
+							if (ctx.db.inTransaction) {
 								operations.push(`tx:create-${model}`);
 							} else {
 								operations.push(`outside:create-${model}`);
@@ -1798,7 +1798,9 @@ describe("Create Adapter Helper", async () => {
 						},
 						async transaction(callback) {
 							return callback({
-								inTransaction: true,
+								db: {
+									inTransaction: true,
+								}
 							});
 						},
 					};
