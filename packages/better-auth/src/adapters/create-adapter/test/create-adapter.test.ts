@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
+import { createAsyncContext } from "../../../utils/async-context";
 
 /*
 
@@ -1774,6 +1775,61 @@ describe("Create Adapter Helper", async () => {
 				});
 			});
 			expect(currentLevel).toEqual(2);
+		});
+
+		test("Should not affect operations outside transaction by rollback", async () => {
+			let operations: string[] = [];
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {
+						inTransaction: false,
+					},
+				},
+				adapter({ getContext }) {
+					return {
+						async create({ data, model }) {
+							const ctx = getContext();
+							if (ctx?.inTransaction) {
+								operations.push(`tx:create-${model}`);
+							} else {
+								operations.push(`outside:create-${model}`);
+							}
+							return data;
+						},
+						async transaction(callback) {
+							return callback({
+								inTransaction: true
+							})
+						}
+					};
+				},
+			});
+
+			const outsideOp = adapter.create({
+				model: "user",
+				data: {}
+			});
+
+			await adapter.transaction(async () => {
+				await adapter.create({
+					model: "user",
+					data: {}
+				});
+				await new Promise((r) => setTimeout(r, 10));
+				await adapter.create({
+					model: "session",
+					data: {}
+				})
+			});
+
+			await outsideOp;
+
+			expect(operations).toEqual([
+				"outside:create-user",
+				"tx:create-user",
+				"tx:create-session",
+			]);
 		});
 	});
 });
