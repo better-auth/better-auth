@@ -7,7 +7,7 @@ import { oAuth2Client } from "./endpoints/oauth2-client";
 import { oAuth2Consent } from "./endpoints/oauth2-consent";
 import { oAuth2Register } from "./endpoints/oauth2-register";
 import { oAuth2UserInfo } from "./endpoints/oauth2-user-info";
-import { oAuth2authorize } from "./endpoints/oauth2-authorize";
+import { oAuth2Authorize } from "./endpoints/oauth2-authorize";
 import { resolveOIDCOptions } from "./utils/resolve-oidc-options";
 import { oAuth2OpenIdConfig } from "./endpoints/oauth2-openid-config";
 import { oAuth2AccessTokenData } from "./endpoints/oauth2-access-token-data";
@@ -37,7 +37,7 @@ export const makeOIDCPlugin = (
 		oAuth2Consent: oAuth2Consent(resolved, makePluginOpts),
 		oAuth2UserInfo: oAuth2UserInfo(resolved, makePluginOpts),
 		oAuth2Register: oAuth2Register(resolved, makePluginOpts),
-		oAuth2Authorize: oAuth2authorize(resolved, makePluginOpts),
+		oAuth2Authorize: oAuth2Authorize(resolved, makePluginOpts),
 		oAuth2OpenIdConfig: oAuth2OpenIdConfig(resolved, makePluginOpts),
 
 		oAuth2AccessTokenData: oAuth2AccessTokenData(makePluginOpts),

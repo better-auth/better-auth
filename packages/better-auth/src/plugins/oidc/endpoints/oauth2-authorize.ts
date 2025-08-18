@@ -5,7 +5,7 @@ import * as z from "zod/v4";
 import { makeAuthorize } from "../authorize";
 import { createAuthEndpoint } from "../../../api";
 
-export const oAuth2authorize = (
+export const oAuth2Authorize = (
 	options: ResolvedOIDCOptions,
 	makePluginOpts: MakeOIDCPlugin,
 ) =>
