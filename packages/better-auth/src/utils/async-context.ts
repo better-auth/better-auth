@@ -16,38 +16,43 @@ export const createAsyncContext = <T>(): AsyncContext<T> => {
 	const store = new WeakMap<Key, T>();
 	const stack: Key[] = [];
 
+	let currentKey: Key | undefined;
+
 	const cleanup = (key: Key) => {
 		store.delete(key);
 		const index = stack.lastIndexOf(key);
 		if (index >= 0) {
 			stack.splice(index, 1);
 		}
+		if (currentKey === key) {
+			currentKey = stack[stack.length - 1];
+		}
 	};
 
 	return {
-		run: (value, callback) => {
+		run: <R>(value: T, callback: () => Promise<R> | R) => {
 			const key: Key = { id: Symbol() };
 			store.set(key, value);
 			stack.push(key);
+			const prevKey = currentKey;
+			currentKey = key;
 
+			let result: Promise<R>;
 			try {
-				const result = callback();
-				if (result instanceof Promise) {
-					return result.finally(() => cleanup(key));
-				}
-				return Promise.resolve(result).finally(() => cleanup(key));
+				result = Promise.resolve().then(callback);
 			} catch (error) {
 				cleanup(key);
+				currentKey = prevKey;
 				throw error;
 			}
-		},
-		get: () => {
-			if (!stack.length) {
-				return undefined;
-			}
 
-			const key = stack[stack.length - 1];
-			return store.get(key);
+			return result.finally(() => {
+				cleanup(key);
+				currentKey = prevKey;
+			});
+		},
+		get: (): T | undefined => {
+			return currentKey ? store.get(currentKey) : undefined;
 		},
 	};
 };
