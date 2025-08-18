@@ -1800,7 +1800,7 @@ describe("Create Adapter Helper", async () => {
 							return callback({
 								db: {
 									inTransaction: true,
-								}
+								},
 							});
 						},
 					};
