@@ -225,7 +225,12 @@ export interface AdapterConfig {
 	customIdGenerator?: (props: { model: string }) => string;
 }
 
-export type CreateCustomAdapter = ({
+export type AdapterContext = {
+	db: any;
+	[key: string]: any;
+};
+
+export type CreateCustomAdapter<C extends AdapterContext | undefined = any> = ({
 	options,
 	debugLog,
 	schema,
@@ -294,9 +299,11 @@ export type CreateCustomAdapter = ({
 		model: string;
 		field: string;
 	}) => FieldAttribute;
-}) => CustomAdapter;
 
-export interface CustomAdapter {
+	getContext: () => C extends AdapterContext ? C : undefined;
+}) => CustomAdapter<C>;
+
+export type CustomAdapter<C extends AdapterContext | undefined> = {
 	create: <T extends Record<string, any>>({
 		data,
 		model,
@@ -359,6 +366,7 @@ export interface CustomAdapter {
 		model: string;
 		where?: CleanedWhere[];
 	}) => Promise<number>;
+	transaction?: <R>(callback: (ctx: C) => Promise<R>) => Promise<R>;
 	createSchema?: (props: {
 		/**
 		 * The file the user may have passed in to the `generate` command as the expected schema file output path.
@@ -373,7 +381,13 @@ export interface CustomAdapter {
 	 * Your adapter's options.
 	 */
 	options?: Record<string, any> | undefined;
-}
+} & (C extends AdapterContext
+	? {
+			transaction: <R>(callback: (ctx: C) => Promise<R>) => Promise<R>;
+		}
+	: {
+			transaction?: <R>(callback: (ctx: C) => Promise<R>) => Promise<R>;
+		});
 
 export type CleanedWhere = Prettify<Required<Where>>;
 

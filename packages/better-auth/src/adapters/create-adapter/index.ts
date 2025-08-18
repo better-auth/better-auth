@@ -5,11 +5,13 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
 	AdapterConfig,
+	AdapterContext,
 	AdapterTestDebugLogs,
 	CleanedWhere,
 	CreateCustomAdapter,
 } from "./types";
 import type { FieldAttribute } from "../../db";
+import { createAsyncContext } from "../../utils/async-context";
 export * from "./types";
 
 let debugLogs: any[] = [];
@@ -46,12 +48,14 @@ const colors = {
 };
 
 export const createAdapter =
-	({
+	<C extends AdapterContext | undefined>({
 		adapter,
+		context: baseContext,
 		config: cfg,
 	}: {
 		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
+		context?: C
+		adapter: CreateCustomAdapter<C>;
 	}) =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
@@ -74,6 +78,13 @@ export const createAdapter =
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
+
+		const context = createAsyncContext<C>();
+		const getContext = () => {
+			const state = context.get();
+			
+			return (state ?? baseContext) as C extends AdapterContext ? C : undefined;
+		}
 
 		/**
 		 * This function helps us get the default field name from the schema defined by devs.
@@ -324,6 +335,7 @@ export const createAdapter =
 			getDefaultModelName,
 			getDefaultFieldName,
 			getFieldAttributes,
+			getContext
 		});
 
 		const transformInput = async (
@@ -925,6 +937,15 @@ export const createAdapter =
 					},
 				);
 				return res;
+			},
+			transaction: async (cb) => {
+				const callback = (ctx: C) => ctx ? context.run(ctx, cb) : cb();
+				
+				if (adapterInstance.transaction && baseContext) {
+					return adapterInstance.transaction(callback);
+				}
+
+				return cb();
 			},
 			createSchema: adapterInstance.createSchema
 				? async (_, file) => {
