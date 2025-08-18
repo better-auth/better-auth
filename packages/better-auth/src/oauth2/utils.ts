@@ -12,6 +12,43 @@ export async function generateCodeChallenge(codeVerifier: string) {
 	});
 }
 
+/**
+ * Filters out sensitive fields from OAuth response data before storing in the raw field.
+ * This helps prevent accidental exposure of client secrets or internal provider metadata.
+ */
+export function filterSensitiveFields(data: Record<string, any>): Record<string, any> {
+	const sensitiveFields = [
+		'client_secret',
+		'client_assertion',
+		'assertion',
+		'private_key',
+		'password',
+		'secret',
+		// Common internal fields that shouldn't be exposed
+		'_internal',
+		'_private',
+		'__meta',
+		// Some providers may include these
+		'device_secret',
+		'app_secret',
+	];
+
+	const filtered: Record<string, any> = {};
+	
+	for (const [key, value] of Object.entries(data)) {
+		const lowerKey = key.toLowerCase();
+		const isSensitive = sensitiveFields.some(field => 
+			lowerKey.includes(field.toLowerCase())
+		);
+		
+		if (!isSensitive) {
+			filtered[key] = value;
+		}
+	}
+	
+	return filtered;
+}
+
 export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 	return {
 		tokenType: data.token_type,
@@ -29,7 +66,7 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 				: data.scope
 			: [],
 		idToken: data.id_token,
-		raw: data,
+		raw: filterSensitiveFields(data),
 	};
 }
 
