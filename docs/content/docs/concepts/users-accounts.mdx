@@ -302,7 +302,7 @@ export const auth = betterAuth({
                         withEncryptedTokens.refreshToken = encryptedRefreshToken;
                     }
                     return {
-                        data: resultAccount
+                        data: withEncryptedTokens
                     }
                 },
             }
