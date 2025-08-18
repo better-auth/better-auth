@@ -3,11 +3,10 @@ import { APIError } from "better-call";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { generateRandomString } from "../../crypto";
-import type { AuthPluginSchema } from "../../types/plugins";
-import type { FieldAttribute } from "../../db/field";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { ms, type StringValue as MSStringValue } from "../../utils/time/ms";
 import { getRandomValues } from "@better-auth/utils";
+import { schema, type DeviceCode } from "./schema";
 
 const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {
@@ -84,50 +83,6 @@ export type DeviceAuthorizationOptions = z.infer<
 	typeof $deviceAuthorizationOptionsSchema
 >;
 
-const deviceCodeSchema: AuthPluginSchema = {
-	deviceCode: {
-		fields: {
-			deviceCode: {
-				type: "string",
-				required: true,
-			},
-			userCode: {
-				type: "string",
-				required: true,
-			},
-			userId: {
-				type: "string",
-				required: false,
-			},
-			expiresAt: {
-				type: "date",
-				required: true,
-			},
-			status: {
-				type: "string",
-				required: true,
-				defaultValue: "pending",
-			},
-			lastPolledAt: {
-				type: "date",
-				required: false,
-			},
-			pollingInterval: {
-				type: "number",
-				required: false,
-			},
-			clientId: {
-				type: "string",
-				required: false,
-			},
-			scope: {
-				type: "string",
-				required: false,
-			},
-		} satisfies Record<string, FieldAttribute>,
-	},
-};
-
 export { deviceAuthorizationClient } from "./client";
 
 const DEVICE_AUTHORIZATION_ERROR_CODES = {
@@ -186,7 +141,7 @@ export const deviceAuthorization = (
 
 	return {
 		id: "device-authorization",
-		schema: deviceCodeSchema,
+		schema,
 		endpoints: {
 			deviceCode: createAuthEndpoint(
 				"/device/code",
@@ -567,26 +522,16 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					const { user_code } = ctx.query;
 					const cleanUserCode = user_code.replace(/-/g, "");
 
-					const deviceCodeRecord = await ctx.context.adapter.findOne<{
-						id: string;
-						deviceCode: string;
-						userCode: string;
-						userId?: string;
-						expiresAt: Date;
-						status: string;
-						lastPolledAt?: Date;
-						pollingInterval?: number;
-						clientId?: string;
-						scope?: string;
-					}>({
-						model: "deviceCode",
-						where: [
-							{
-								field: "userCode",
-								value: cleanUserCode,
-							},
-						],
-					});
+					const deviceCodeRecord =
+						await ctx.context.adapter.findOne<DeviceCode>({
+							model: "deviceCode",
+							where: [
+								{
+									field: "userCode",
+									value: cleanUserCode,
+								},
+							],
+						});
 
 					if (!deviceCodeRecord) {
 						throw new APIError("BAD_REQUEST", {
@@ -666,26 +611,16 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					const { userCode } = ctx.body;
 					const cleanUserCode = userCode.replace(/-/g, "");
 
-					const deviceCodeRecord = await ctx.context.adapter.findOne<{
-						id: string;
-						deviceCode: string;
-						userCode: string;
-						userId?: string;
-						expiresAt: Date;
-						status: string;
-						lastPolledAt?: Date;
-						pollingInterval?: number;
-						clientId?: string;
-						scope?: string;
-					}>({
-						model: "deviceCode",
-						where: [
-							{
-								field: "userCode",
-								value: cleanUserCode,
-							},
-						],
-					});
+					const deviceCodeRecord =
+						await ctx.context.adapter.findOne<DeviceCode>({
+							model: "deviceCode",
+							where: [
+								{
+									field: "userCode",
+									value: cleanUserCode,
+								},
+							],
+						});
 
 					if (!deviceCodeRecord) {
 						throw new APIError("BAD_REQUEST", {
@@ -777,26 +712,16 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					const { userCode } = ctx.body;
 					const cleanUserCode = userCode.replace(/-/g, "");
 
-					const deviceCodeRecord = await ctx.context.adapter.findOne<{
-						id: string;
-						deviceCode: string;
-						userCode: string;
-						userId?: string;
-						expiresAt: Date;
-						status: string;
-						lastPolledAt?: Date;
-						pollingInterval?: number;
-						clientId?: string;
-						scope?: string;
-					}>({
-						model: "deviceCode",
-						where: [
-							{
-								field: "userCode",
-								value: cleanUserCode,
-							},
-						],
-					});
+					const deviceCodeRecord =
+						await ctx.context.adapter.findOne<DeviceCode>({
+							model: "deviceCode",
+							where: [
+								{
+									field: "userCode",
+									value: cleanUserCode,
+								},
+							],
+						});
 
 					if (!deviceCodeRecord) {
 						throw new APIError("BAD_REQUEST", {
