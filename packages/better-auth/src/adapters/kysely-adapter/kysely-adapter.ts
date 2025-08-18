@@ -1,7 +1,12 @@
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 import type { Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
-import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
+import type {
+	InsertQueryBuilder,
+	Kysely,
+	Transaction,
+	UpdateQueryBuilder,
+} from "kysely";
 
 interface KyselyAdapterConfig {
 	/**
@@ -39,7 +44,10 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					: true,
 			supportsJSON: false,
 		},
-		adapter: ({ getFieldName, schema }) => {
+		context: {
+			db
+		},
+		adapter: ({ getFieldName, schema, getContext }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -296,7 +304,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				async deleteMany({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.deleteFrom(model);
+					let query = getContext().db.deleteFrom(model);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -304,6 +312,16 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					return (await query.execute()).length;
+				},
+				async transaction(callback) {
+					const ctx = getContext();
+
+					return ctx.db.transaction().execute((db) => {
+						return callback({
+							...ctx,
+							db
+						});
+					});
 				},
 				options: config,
 			};
