@@ -240,8 +240,8 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							user_code: userCode,
 							verification_uri: verification_uri.toString(),
 							verification_uri_complete: verification_uri_complete.toString(),
-							expires_in: opts.expiresIn,
-							interval: opts.interval,
+							expires_in: Math.floor(expiresIn / 1000),
+							interval: Math.floor(ms(opts.interval) / 1000),
 						},
 						{
 							headers: {
@@ -306,9 +306,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 															"slow_down",
 															"expired_token",
 															"access_denied",
+															"invalid_request",
+															"invalid_grant",
 														],
 													},
-													errorDescription: {
+													error_description: {
 														type: "string",
 													},
 												},
@@ -345,14 +347,48 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					});
 
 					if (!deviceCodeRecord) {
-						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
-							details: {
+						return ctx.json(
+							{
 								error: "invalid_grant",
 								error_description:
 									DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
 							},
-						});
+							{
+								status: 400,
+								headers: {
+									"Cache-Control": "no-store",
+								},
+							},
+						);
+					}
+
+					// Check for rate limiting
+					if (
+						deviceCodeRecord.lastPolledAt &&
+						deviceCodeRecord.pollingInterval
+					) {
+						const timeSinceLastPoll =
+							Date.now() - new Date(deviceCodeRecord.lastPolledAt).getTime();
+						const minInterval =
+							typeof deviceCodeRecord.pollingInterval === "string"
+								? ms(deviceCodeRecord.pollingInterval as MSStringValue)
+								: deviceCodeRecord.pollingInterval;
+
+						if (timeSinceLastPoll < minInterval) {
+							return ctx.json(
+								{
+									error: "slow_down",
+									error_description:
+										DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY,
+								},
+								{
+									status: 400,
+									headers: {
+										"Cache-Control": "no-store",
+									},
+								},
+							);
+						}
 					}
 
 					// Update last polled time
@@ -379,25 +415,35 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								},
 							],
 						});
-						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE,
-							details: {
+						return ctx.json(
+							{
 								error: "expired_token",
 								error_description:
 									DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE,
 							},
-						});
+							{
+								status: 400,
+								headers: {
+									"Cache-Control": "no-store",
+								},
+							},
+						);
 					}
 
 					if (deviceCodeRecord.status === "pending") {
-						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING,
-							details: {
+						return ctx.json(
+							{
 								error: "authorization_pending",
 								error_description:
 									DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING,
 							},
-						});
+							{
+								status: 400,
+								headers: {
+									"Cache-Control": "no-store",
+								},
+							},
+						);
 					}
 
 					if (deviceCodeRecord.status === "denied") {
@@ -410,14 +456,20 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								},
 							],
 						});
-						throw new APIError("BAD_REQUEST", {
-							message: DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
-							details: {
+						return ctx.json(
+							{
 								error: "access_denied",
 								error_description:
 									DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED,
 							},
-						});
+							{
+								status: 400,
+								headers: {
+									"Cache-Control": "no-store",
+									"Content-Type": "application/json;charset=UTF-8",
+								},
+							},
+						);
 					}
 
 					if (
@@ -440,14 +492,19 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						);
 
 						if (!user) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND,
-								details: {
+							return ctx.json(
+								{
 									error: "server_error",
 									error_description:
 										DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND,
 								},
-							});
+								{
+									status: 500,
+									headers: {
+										"Cache-Control": "no-store",
+									},
+								},
+							);
 						}
 
 						const session = await ctx.context.internalAdapter.createSession(
@@ -456,37 +513,53 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						);
 
 						if (!session) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message:
-									DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-								details: {
+							return ctx.json(
+								{
 									error: "server_error",
 									error_description:
 										DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 								},
-							});
+								{
+									status: 500,
+									headers: {
+										"Cache-Control": "no-store",
+									},
+								},
+							);
 						}
 
 						// Return OAuth 2.0 compliant token response
-						return ctx.json({
-							access_token: session.token,
-							token_type: "Bearer",
-							expires_in: Math.floor(
-								(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
-							),
-							scope: deviceCodeRecord.scope || "",
-						});
+						return ctx.json(
+							{
+								access_token: session.token,
+								token_type: "Bearer",
+								expires_in: Math.floor(
+									(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+								),
+								scope: deviceCodeRecord.scope || "",
+							},
+							{
+								headers: {
+									"Cache-Control": "no-store",
+									Pragma: "no-cache",
+								},
+							},
+						);
 					}
 
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message:
-							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS,
-						details: {
+					return ctx.json(
+						{
 							error: "server_error",
 							error_description:
 								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS,
 						},
-					});
+						{
+							status: 500,
+							headers: {
+								"Cache-Control": "no-store",
+							},
+						},
+					);
 				},
 			),
 			deviceVerify: createAuthEndpoint(
