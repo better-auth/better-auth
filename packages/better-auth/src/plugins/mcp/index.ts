@@ -143,18 +143,7 @@ export const mcp = (options: MCPOptions) => {
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
 						ctx.context.session = session;
-						const response = await authorizeMCPOAuth(ctx, opts).catch((e) => {
-							if (e instanceof APIError) {
-								if (e.statusCode === 302) {
-									return ctx.json({
-										redirect: true,
-										//@ts-expect-error
-										url: e.headers.get("location"),
-									});
-								}
-							}
-							throw e;
-						});
+						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
 					}),
 				},
@@ -570,7 +559,11 @@ export const mcp = (options: MCPOptions) => {
 					};
 
 					const additionalUserClaims = opts.getAdditionalUserInfoClaim
-						? opts.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await opts.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
 					const idToken = await new SignJWT({
@@ -853,7 +846,7 @@ export const mcp = (options: MCPOptions) => {
 							: {}),
 					};
 
-					return ctx.json(responseData, {
+					return new Response(JSON.stringify(responseData), {
 						status: 201,
 						headers: {
 							"Cache-Control": "no-store",

@@ -52,14 +52,14 @@ export interface OIDCOptions {
 	 *
 	 * When the server redirects the user to the consent page, it will include the
 	 * following query parameters:
-	 * authorization code.
+	 * - `consent_code` - The consent code to identify the authorization request.
 	 * - `client_id` - The ID of the client.
 	 * - `scope` - The requested scopes.
-	 * - `code` - The authorization code.
 	 *
-	 * once the user consents, you need to call the `/oauth2/consent` endpoint
-	 * with the code and `accept: true` to complete the authorization. Which will
-	 * then return the client to the `redirect_uri` with the authorization code.
+	 * Once the user consents, you need to call the `/oauth2/consent` endpoint
+	 * with `accept: true` and optionally the `consent_code` (if using URL parameter flow)
+	 * to complete the authorization. This will return the client to the `redirect_uri`
+	 * with the authorization code.
 	 *
 	 * @example
 	 * ```ts
@@ -115,11 +115,13 @@ export interface OIDCOptions {
 	 *
 	 * @param user - The user object.
 	 * @param scopes - The scopes that the client requested.
+	 * @param client - The client object.
 	 * @returns The user info claim.
 	 */
 	getAdditionalUserInfoClaim?: (
 		user: User & Record<string, any>,
 		scopes: string[],
+		client: Client,
 	) => Record<string, any> | Promise<Record<string, any>>;
 	/**
 	 * Trusted clients that are configured directly in the provider options.

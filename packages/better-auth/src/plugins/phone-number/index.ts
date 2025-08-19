@@ -689,9 +689,10 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							ctx,
 						);
 					}
-
 					if (!user) {
-						return ctx.json(null);
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+						});
 					}
 
 					await options?.callbackOnVerification?.(
@@ -702,12 +703,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						},
 						ctx.request,
 					);
-
-					if (!user) {
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
-						});
-					}
 
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
