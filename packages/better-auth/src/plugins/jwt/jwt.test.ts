@@ -439,11 +439,8 @@ describe("jwt - remote signing", async (it) => {
 						},
 					}),
 				],
-				logger: {
-					level: "error",
-				},
 			}),
-		).toThrow();
+		).toThrowError("jwks_config");
 	});
 });
 
@@ -482,7 +479,7 @@ describe("jwt - remote url", async (it) => {
 					}),
 				],
 			}),
-		).toThrow();
+		).toThrowError("jwks_config");
 	});
 
 	it("should disable /jwks", async () => {
