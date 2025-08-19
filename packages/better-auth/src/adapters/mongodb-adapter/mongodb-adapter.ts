@@ -1,6 +1,10 @@
 import { ObjectId, type MongoClient, type Db, ClientSession } from "mongodb";
 import type { BetterAuthOptions, Where } from "../../types";
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
+import {
+	createAdapter,
+	type AdapterContext,
+	type AdapterDebugLogs,
+} from "../create-adapter";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -16,6 +20,17 @@ export interface MongoDBAdapterConfig {
 	 */
 	usePlural?: boolean;
 }
+
+type MongoDBAdapterContext = {
+	db:
+		| Db
+		| {
+				client: MongoClient;
+				database: string;
+		  };
+	client: MongoClient | undefined;
+	session: ClientSession | undefined;
+};
 
 export const mongodbAdapter = (
 	db:
@@ -34,7 +49,7 @@ export const mongodbAdapter = (
 		}
 		return undefined;
 	};
-	return createAdapter({
+	return createAdapter<MongoDBAdapterContext>({
 		config: {
 			adapterId: "mongodb-adapter",
 			adapterName: "MongoDB Adapter",
@@ -99,30 +114,24 @@ export const mongodbAdapter = (
 		},
 		context: {
 			db,
-			session: undefined as ClientSession | undefined,
-			client: undefined as MongoClient | undefined,
+			client: undefined,
+			session: undefined,
 		},
-		adapter: ({
-			options,
-			getFieldName,
-			schema,
-			getDefaultModelName,
-			getContext: _getContext,
-		}) => {
-			const getContext = () => {
-				const ctx = _getContext();
-
-				return {
-					...ctx,
-					...("client" in ctx.db && "database" in ctx.db
-						? {
-								db: ctx.db.client.db(ctx.db.database),
-								client: ctx.db.client,
-							}
-						: {
-								db: ctx.db,
-							}),
-				};
+		adapter: ({ options, getFieldName, schema, getDefaultModelName }) => {
+			const serializeContext = (
+				ctx: AdapterContext,
+			): Omit<MongoDBAdapterContext, "db"> & { db: Db } => {
+				return "client" in ctx.db && "database" in ctx.db
+					? {
+							db: ctx.db.client.db(ctx.db.database),
+							client: ctx.db.client,
+							session: ctx.session,
+						}
+					: {
+							db: ctx.db,
+							client: undefined,
+							session: undefined,
+						};
 			};
 
 			const customIdGen = getCustomIdGenerator(options);
@@ -263,26 +272,26 @@ export const mongodbAdapter = (
 			}
 
 			return {
-				async create({ model, data: values }) {
-					const ctx = getContext();
+				async create({ model, data: values }, context) {
+					const ctx = serializeContext(context);
 					const res = await ctx.db.collection(model).insertOne(values, {
 						session: ctx.session,
 					});
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
-				async findOne({ model, where, select }) {
+				async findOne({ model, where, select }, context) {
 					const clause = convertWhereClause({ where, model });
-					const ctx = getContext();
+					const ctx = serializeContext(context);
 					const res = await ctx.db.collection(model).findOne(clause, {
 						session: ctx.session,
 					});
 					if (!res) return null;
 					return res as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy }) {
+				async findMany({ model, where, limit, offset, sortBy }, context) {
 					const clause = where ? convertWhereClause({ where, model }) : {};
-					const ctx = getContext();
+					const ctx = serializeContext(context);
 					const cursor = ctx.db
 						.collection(model)
 						.find(clause, { session: ctx.session });
@@ -296,17 +305,17 @@ export const mongodbAdapter = (
 					const res = await cursor.toArray();
 					return res as any;
 				},
-				async count({ model }) {
-					const ctx = getContext();
+				async count({ model }, context) {
+					const ctx = serializeContext(context);
 					const res = await ctx.db
 						.collection(model)
 						.countDocuments(undefined, { session: ctx.session });
 					return res;
 				},
-				async update({ model, where, update: values }) {
+				async update({ model, where, update: values }, context) {
 					const clause = convertWhereClause({ where, model });
 
-					const ctx = getContext();
+					const ctx = serializeContext(context);
 					const res = await ctx.db.collection(model).findOneAndUpdate(
 						clause,
 						{ $set: values as any },
@@ -318,10 +327,10 @@ export const mongodbAdapter = (
 					if (!res) return null;
 					return res as any;
 				},
-				async updateMany({ model, where, update: values }) {
+				async updateMany({ model, where, update: values }, context) {
 					const clause = convertWhereClause({ where, model });
 
-					const ctx = getContext();
+					const ctx = serializeContext(context);
 					const res = await ctx.db.collection(model).updateMany(
 						clause,
 						{
@@ -331,23 +340,23 @@ export const mongodbAdapter = (
 					);
 					return res.modifiedCount;
 				},
-				async delete({ model, where }) {
+				async delete({ model, where }, context) {
 					const clause = convertWhereClause({ where, model });
-					const ctx = getContext();
+					const ctx = serializeContext(context);
 					await ctx.db
 						.collection(model)
 						.deleteOne(clause, { session: ctx.session });
 				},
-				async deleteMany({ model, where }) {
+				async deleteMany({ model, where }, context) {
 					const clause = convertWhereClause({ where, model });
-					const ctx = getContext();
+					const ctx = serializeContext(context);
 					const res = await ctx.db.collection(model).deleteMany(clause, {
 						session: ctx.session,
 					});
 					return res.deletedCount;
 				},
-				async transaction(callback) {
-					const ctx = getContext();
+				async transaction(callback, context) {
+					const ctx = serializeContext(context);
 					if (!ctx.client) {
 						return callback(ctx);
 					}
