@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
+import { createRandomStringGenerator } from "@better-auth/utils/random";
 
 /*
 
@@ -1569,7 +1570,7 @@ describe("Create Adapter Helper", async () => {
 			expect(ctx).toEqual({ db: { inTransaction: true } });
 		});
 
-		test("Should execute transaction callback without context when adapter doesn't support transactions", async () => {
+		test("Should execute transaction callback with current context when adapter doesn't support transactions", async () => {
 			let ctx: AdapterContext | undefined = undefined;
 
 			const adapter = await createTestAdapter({
@@ -1851,6 +1852,114 @@ describe("Create Adapter Helper", async () => {
 				"tx:create-user",
 				"tx:create-session",
 			]);
+		});
+
+		test("Should ensure isolation between concurrent transactions", async () => {
+			let operations: string[] = [];
+
+			const genId = createRandomStringGenerator("0-9", "A-Z", "a-z");
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+					txId: undefined,
+				},
+				adapter(args_0) {
+					return {
+						async create({ data, model }, ctx) {
+							operations.push(`${ctx.txId ?? 0}:${model}`);
+							return data;
+						},
+						async transaction(callback, ctx) {
+							const txId = genId(8);
+							return callback({
+								...ctx,
+								txId,
+							});
+						},
+					};
+				},
+			});
+
+			await Promise.all([
+				adapter.transaction(async (tx) => {
+					await adapter.create({ model: "user", data: {} }, tx);
+					await new Promise((r) => setTimeout(r, 30));
+					await adapter.create({ model: "session", data: {} }, tx);
+				}),
+				adapter.transaction(async (tx) => {
+					await adapter.create({ model: "user", data: {} }, tx);
+					await new Promise((r) => setTimeout(r, 30));
+					await adapter.create({ model: "session", data: {} }, tx);
+				}),
+			]);
+
+			const txIds = new Set(operations.map((op) => op.split(":")[0]));
+			expect(txIds.size).toBe(2);
+			expect(operations).toHaveLength(4);
+		});
+
+		test("Should return values correctly from transaction callback", async () => {
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+				},
+				adapter(args_0) {
+					return {
+						async transaction(callback, ctx) {
+							return callback(ctx);
+						},
+					};
+				},
+			});
+
+			const value = {
+				id: "12345",
+			};
+			const result = await adapter.transaction(async () => value);
+			expect(result).toEqual(value);
+		});
+
+		test("Should rollback nested transaction properly", async () => {
+			let operations: string[] = [];
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+					level: 0,
+				},
+				adapter(args_0) {
+					return {
+						async create({ data, model }, ctx) {
+							operations.push(`${ctx.level}:${model}`);
+							return data;
+						},
+						async transaction(callback, ctx) {
+							try {
+								return await callback({
+									...ctx,
+									level: ctx.level + 1,
+								});
+							} catch (err) {
+								operations = [];
+								throw err;
+							}
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.transaction(async (tx1) => {
+					await adapter.create({ model: "user", data: {} }, tx1);
+					await adapter.transaction(async (tx2) => {
+						await adapter.create({ model: "session", data: {} }, tx2);
+						throw new Error("Fail inner");
+					}, tx1);
+				}),
+			).rejects.toThrow("Fail inner");
+
+			expect(operations).toEqual([]);
 		});
 	});
 });
