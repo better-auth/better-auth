@@ -125,6 +125,7 @@ export const vk = (options: VkOption) => {
 					emailVerified: !!profile.user.email,
 					birthday: profile.user.birthday,
 					sex: profile.user.sex,
+					name: `${profile.user.first_name} ${profile.user.last_name}`,
 					...userMap,
 				},
 				data: profile,

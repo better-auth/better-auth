@@ -39,6 +39,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
 			get(target, prop: string) {
+				if (prop === "then" || prop === "catch" || prop === "finally") {
+					return undefined;
+				}
 				const fullPath = [...path, prop];
 				let current: any = routes;
 				for (const segment of fullPath) {
@@ -70,7 +73,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					...argFetchOptions,
 				} as BetterFetchOption;
 				const method = getMethod(routePath, knownPathMethods, arg);
-
 				return await client(routePath, {
 					...options,
 					body:

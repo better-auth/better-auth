@@ -4,7 +4,10 @@ import parseJSON from "../../client/parser";
 export const apiKeySchema = ({
 	timeWindow,
 	rateLimitMax,
-}: { timeWindow: number; rateLimitMax: number }) =>
+}: {
+	timeWindow: number;
+	rateLimitMax: number;
+}) =>
 	({
 		apikey: {
 			fields: {

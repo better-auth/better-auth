@@ -12,6 +12,7 @@ export interface OAuth2Tokens {
 
 export interface OAuthProvider<
 	T extends Record<string, any> = Record<string, any>,
+	O extends Record<string, any> = ProviderOptions,
 > {
 	id: LiteralString;
 	createAuthorizationURL: (data: {
@@ -45,7 +46,7 @@ export interface OAuthProvider<
 		},
 	) => Promise<{
 		user: {
-			id: string;
+			id: string | number;
 			name?: string;
 			email?: string | null;
 			image?: string;
@@ -74,7 +75,10 @@ export interface OAuthProvider<
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
-	options?: ProviderOptions;
+	/**
+	 * Options for the provider
+	 */
+	options?: O;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
@@ -85,7 +89,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client secret of your application
 	 */
-	clientSecret: string;
+	clientSecret?: string;
 	/**
 	 * The scopes you want to request from the provider
 	 */
@@ -171,7 +175,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 		| "consent"
 		| "login"
 		| "none"
-		| "select_account+consent";
+		| "select_account consent";
 	/**
 	 * The response mode to use for the authorization code request
 	 */
