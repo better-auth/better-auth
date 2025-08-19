@@ -26,12 +26,15 @@ let cacheAllRoles = new Map<
 	}
 >();
 
+type HasPermissionBaseInput = {
+	role: string;
+	options: OrganizationOptions;
+	allowCreatorAllPermissions?: boolean;
+} & PermissionExclusive;
+
 export const hasPermission = async (
 	input: {
-		role: string;
 		organizationId: string;
-		options: OrganizationOptions;
-		allowCreatorAllPermissions?: boolean;
 		/**
 		 * If true, will use the in-memory cache of the roles.
 		 * Keep in mind to use this in a stateless mindset, the purpose of this is to avoid unnecessary database calls when running multiple
@@ -40,7 +43,7 @@ export const hasPermission = async (
 		 * @default false
 		 */
 		useMemoryCache?: boolean;
-	} & PermissionExclusive,
+	} & HasPermissionBaseInput,
 	ctx: GenericEndpointContext,
 ) => {
 	let acRoles: {
@@ -103,11 +106,7 @@ export const hasPermission = async (
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` perameter or the `organizationId` perameter.
  */
 export const clientSideHasPermission = async (
-	input: {
-		role: string;
-		options: OrganizationOptions;
-		allowCreatorAllPermissions?: boolean;
-	} & PermissionExclusive,
+	input: HasPermissionBaseInput,
 ) => {
 	const acRoles: {
 		[x: string]: Role<any> | undefined;
@@ -117,11 +116,7 @@ export const clientSideHasPermission = async (
 };
 
 const hasPermissionFn = (
-	input: {
-		role: string;
-		options: OrganizationOptions;
-		allowCreatorAllPermissions?: boolean;
-	} & PermissionExclusive,
+	input: HasPermissionBaseInput,
 	acRoles: {
 		[x: string]: Role<any> | undefined;
 	},
