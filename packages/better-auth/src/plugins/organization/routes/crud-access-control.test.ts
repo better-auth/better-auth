@@ -619,8 +619,8 @@ describe("dynamic access control", async (it) => {
 				},
 				additionalFields: {
 					color: "#000000",
-                    //@ts-expect-error - intentionally invalid key
-                    someInvalidKey: "this would be ignored by zod"
+					//@ts-expect-error - intentionally invalid key
+					someInvalidKey: "this would be ignored by zod",
 				},
 			},
 			{
@@ -635,7 +635,7 @@ describe("dynamic access control", async (it) => {
 		});
 		expect(res).not.toBeNull();
 		expect(res.roleData.color).toBe("#111111");
-        //@ts-expect-error - intentionally invalid key
-        expect(res.roleData.someInvalidKey).toBeUndefined();
+		//@ts-expect-error - intentionally invalid key
+		expect(res.roleData.someInvalidKey).toBeUndefined();
 	});
 });

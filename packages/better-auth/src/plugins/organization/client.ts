@@ -55,7 +55,7 @@ interface OrganizationClientOptions {
 	};
 	dynamicAccessControl?: {
 		enabled: boolean;
-	}
+	};
 }
 
 export const organizationClient = <CO extends OrganizationClientOptions>(
@@ -127,7 +127,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				};
 				schema: Schema;
 				dynamicAccessControl: {
-					enabled: CO["dynamicAccessControl"] extends { enabled: true } ? true : false;
+					enabled: CO["dynamicAccessControl"] extends { enabled: true }
+						? true
+						: false;
 				};
 			}>
 		>,

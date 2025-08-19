@@ -28,7 +28,8 @@ const getAdditionalFields = <
 	options: O,
 	shouldBePartial: AllPartial = false as AllPartial,
 ) => {
-	let additionalFields = options?.schema?.organizationRole?.additionalFields || {};
+	let additionalFields =
+		options?.schema?.organizationRole?.additionalFields || {};
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
 			additionalFields[key].required = false;

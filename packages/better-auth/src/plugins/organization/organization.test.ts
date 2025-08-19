@@ -1047,7 +1047,6 @@ describe("access control", async (it) => {
 	);
 	if (!org.data) throw new Error("Organization not created");
 
-
 	it("should return success", async () => {
 		const canCreateProject = await checkRolePermission({
 			role: "admin",
@@ -1097,7 +1096,6 @@ describe("access control", async (it) => {
 		});
 		expect(res).toBe(false);
 	});
-
 });
 
 describe("invitation limit", async () => {

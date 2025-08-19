@@ -245,14 +245,17 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 
-				const canRemove = await hasPermission({
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						team: ["delete"],
+				const canRemove = await hasPermission(
+					{
+						role: member.role,
+						options: ctx.context.orgOptions,
+						permissions: {
+							team: ["delete"],
+						},
+						organizationId,
 					},
-					organizationId,
-				}, ctx);
+					ctx,
+				);
 
 				if (!canRemove) {
 					throw new APIError("FORBIDDEN", {
@@ -394,14 +397,17 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const canUpdate = await hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					team: ["update"],
+			const canUpdate = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						team: ["update"],
+					},
+					organizationId,
 				},
-				organizationId,
-			}, ctx);
+				ctx,
+			);
 
 			if (!canUpdate) {
 				throw new APIError("FORBIDDEN", {
@@ -844,14 +850,17 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canUpdateMember = await hasPermission({
-				role: currentMember.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["update"],
+			const canUpdateMember = await hasPermission(
+				{
+					role: currentMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["update"],
+					},
+					organizationId: session.session.activeOrganizationId,
 				},
-				organizationId: session.session.activeOrganizationId,
-			}, ctx);
+				ctx,
+			);
 
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
@@ -945,14 +954,17 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canDeleteMember = await hasPermission({
-				role: currentMember.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["delete"],
+			const canDeleteMember = await hasPermission(
+				{
+					role: currentMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["delete"],
+					},
+					organizationId: session.session.activeOrganizationId,
 				},
-				organizationId: session.session.activeOrganizationId,
-			}, ctx);
+				ctx,
+			);
 
 			if (!canDeleteMember) {
 				throw new APIError("FORBIDDEN", {
