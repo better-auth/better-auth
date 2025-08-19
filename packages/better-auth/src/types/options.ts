@@ -1058,7 +1058,7 @@ export type BetterAuthOptions = {
 		/**
 		 * Enable telemetry collection
 		 *
-		 * @default true
+		 * @default false
 		 */
 		enabled?: boolean;
 		/**

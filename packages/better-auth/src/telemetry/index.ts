@@ -154,10 +154,10 @@ export async function createTelemetry(
 		const telemetryEnabled =
 			options.telemetry?.enabled !== undefined
 				? options.telemetry.enabled
-				: true;
-		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", true);
+				: false;
+		const envEnabled = getBooleanEnvVar("BETTER_AUTH_TELEMETRY", false);
 		return (
-			envEnabled && telemetryEnabled && (context?.skipTestCheck || !isTest())
+			(envEnabled || telemetryEnabled) && (context?.skipTestCheck || !isTest())
 		);
 	};
 
