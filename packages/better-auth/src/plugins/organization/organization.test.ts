@@ -11,7 +11,7 @@ import type { OrganizationOptions } from "./types";
 import type { PrettifyDeep } from "../../types/helper";
 import type { InvitationStatus } from "./schema";
 import { admin } from "../admin";
-import { ownerAc } from "./access";
+import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { nextCookies } from "../../integrations/next-js";
 
 describe("organization", async (it) => {
@@ -973,18 +973,22 @@ describe("access control", async (it) => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
+		...defaultStatements,
 	});
 	const owner = ac.newRole({
 		project: ["create", "delete", "update", "read"],
 		sales: ["create", "read", "update", "delete"],
+		...ownerAc.statements,
 	});
 	const admin = ac.newRole({
 		project: ["create", "read"],
 		sales: ["create", "read"],
+		...adminAc.statements,
 	});
 	const member = ac.newRole({
 		project: ["read"],
 		sales: ["read"],
+		...memberAc.statements,
 	});
 	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
 		await getTestInstance({
@@ -996,13 +1000,14 @@ describe("access control", async (it) => {
 						member,
 						owner,
 					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
 				}),
 			],
 		});
 
-	const {
-		organization: { checkRolePermission, hasPermission, create },
-	} = createAuthClient({
+	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
 		plugins: [
 			organizationClient({
@@ -1012,14 +1017,20 @@ describe("access control", async (it) => {
 					member,
 					owner,
 				},
+				dynamicAccessControl: {
+					enabled: true,
+				},
 			}),
 		],
 		fetchOptions: {
 			customFetchImpl,
 		},
 	});
+	const {
+		organization: { checkRolePermission, hasPermission, create },
+	} = authClient;
 
-	const { headers } = await signInWithTestUser();
+	const { headers, user, session } = await signInWithTestUser();
 
 	const org = await create(
 		{
@@ -1034,9 +1045,11 @@ describe("access control", async (it) => {
 			headers,
 		},
 	);
+	if (!org.data) throw new Error("Organization not created");
+
 
 	it("should return success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["create"],
@@ -1045,7 +1058,7 @@ describe("access control", async (it) => {
 		expect(canCreateProject).toBe(true);
 
 		// To be removed when `permission` will be removed entirely
-		const canCreateProjectLegacy = checkRolePermission({
+		const canCreateProjectLegacy = await checkRolePermission({
 			role: "admin",
 			permission: {
 				project: ["create"],
@@ -1065,7 +1078,7 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["delete"],
@@ -1075,7 +1088,7 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		const res = checkRolePermission({
+		const res = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["read"],
@@ -1084,6 +1097,7 @@ describe("access control", async (it) => {
 		});
 		expect(res).toBe(false);
 	});
+
 });
 
 describe("invitation limit", async () => {

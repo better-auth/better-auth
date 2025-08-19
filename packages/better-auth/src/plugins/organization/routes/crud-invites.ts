@@ -186,13 +186,18 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const canInvite = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					invitation: ["create"],
+			const canInvite = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						invitation: ["create"],
+					},
+					organizationId,
 				},
-			});
+				ctx,
+			);
+
 			if (!canInvite) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -718,13 +723,18 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const canCancel = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					invitation: ["cancel"],
+			const canCancel = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						invitation: ["cancel"],
+					},
+					organizationId: invitation.organizationId,
 				},
-			});
+				ctx,
+			);
+
 			if (!canCancel) {
 				throw new APIError("FORBIDDEN", {
 					message:
