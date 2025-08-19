@@ -211,7 +211,10 @@ const tabs = [
 function SidebarTab({
 	group,
 	setGroup,
-}: { group: string; setGroup: (group: string) => void }) {
+}: {
+	group: string;
+	setGroup: (group: string) => void;
+}) {
 	const router = useRouter();
 	const selected = tabs.find((tab) => tab.value === group);
 

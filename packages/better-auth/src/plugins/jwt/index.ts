@@ -6,8 +6,8 @@ import type {
 } from "../../types";
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { getJwtToken } from "./sign";
-import { exportJWK, generateKeyPair, type JWK } from "jose";
+import { getJwtToken, signJWT } from "./sign";
+import { exportJWK, generateKeyPair, type JWK, type JWTPayload } from "jose";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -15,6 +15,7 @@ import {
 } from "../../api";
 import { symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
+import z from "zod";
 
 type JWKOptions =
 	| {
@@ -325,6 +326,35 @@ export const jwt = (options?: JwtOptions) => {
 					return ctx.json({
 						token: jwt,
 					});
+				},
+			),
+			signJWT: createAuthEndpoint(
+				"/sign-jwt",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as {
+								payload: JWTPayload;
+								overrideOptions?: JwtOptions;
+							},
+						},
+					},
+					body: z.object({
+						payload: z.record(z.string(), z.any()),
+						overrideOptions: z.record(z.string(), z.any()).optional(),
+					}),
+				},
+				async (c) => {
+					const jwt = await signJWT(c, {
+						options: {
+							...options,
+							...c.body.overrideOptions,
+						},
+						payload: c.body.payload,
+					});
+					return c.json({ token: jwt });
 				},
 			),
 		},
