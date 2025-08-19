@@ -990,12 +990,38 @@ export const createAdapter =
 				callback: (txCtx: AdapterContext) => Promise<R>,
 				ctx?: AdapterContext,
 			): Promise<R> => {
+				transactionId++;
+				let thisTransactionId = transactionId;
 				const context = getContext(ctx);
-				if (!adapterInstance.transaction || !context) {
-					return callback(undefined as any);
+				const supportsTransactions = !!(adapterInstance.transaction && context);
+
+				const debugSteps = supportsTransactions ? 2 : 3;
+				debugLog(
+					{ method: "transaction" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, debugSteps)}`,
+					`${formatMethod("transaction")} ${formatAction("Begin")}`,
+				);
+
+				let result: Promise<R>;
+				if (!supportsTransactions) {
+					debugLog(
+						{ method: "transaction" },
+						`${formatTransactionId(thisTransactionId)} ${formatStep(2, debugSteps)}`,
+						`${formatMethod("transaction")} ${formatAction("⚠︎ This adapter doesn't support transactions. Running callback with current context.")}`,
+					);
+					result = callback(undefined as any);
+				} else {
+					result = adapterInstance.transaction(callback, context);
 				}
 
-				return adapterInstance.transaction(callback, context);
+				debugLog(
+					{ method: "transaction" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(debugSteps, debugSteps)}`,
+					`${formatMethod("transaction")} ${formatAction("End")}`,
+					{ data: result },
+				);
+
+				return result;
 			},
 			createSchema: adapterInstance.createSchema
 				? async (_, file) => {
