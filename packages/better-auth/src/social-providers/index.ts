@@ -22,6 +22,7 @@ import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { line } from "./line";
 export const socialProviders = {
 	apple,
 	discord,
@@ -45,6 +46,7 @@ export const socialProviders = {
 	vk,
 	zoom,
 	notion,
+	line,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -90,5 +92,6 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./line";
 
 export type SocialProviderList = typeof socialProviderList;
