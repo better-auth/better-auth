@@ -1067,11 +1067,5 @@ export type BetterAuthOptions = {
 		 * @default false
 		 */
 		debug?: boolean;
-		/**
-		 * Disable telemetry notice
-		 *
-		 * @default false
-		 */
-		disableNotice?: boolean;
 	};
 };
