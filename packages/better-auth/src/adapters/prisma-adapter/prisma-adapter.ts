@@ -54,7 +54,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 		context: {
 			db: prisma as PrismaClientInternal,
 		},
-		adapter: ({ getFieldName, getContext }) => {
+		adapter: ({ getFieldName }) => {
 			const convertSelect = (select?: string[], model?: string) => {
 				if (!select || !model) return undefined;
 				return select.reduce((prev, cur) => {
@@ -122,8 +122,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 			};
 
 			return {
-				async create({ model, data: values, select }) {
-					const ctx = getContext();
+				async create({ model, data: values, select }, ctx) {
 					if (!ctx.db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -134,8 +133,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						select: convertSelect(select, model),
 					});
 				},
-				async findOne({ model, where, select }) {
-					const ctx = getContext();
+				async findOne({ model, where, select }, ctx) {
 					const whereClause = convertWhereClause(model, where);
 					if (!ctx.db[model]) {
 						throw new BetterAuthError(
@@ -147,8 +145,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						select: convertSelect(select, model),
 					});
 				},
-				async findMany({ model, where, limit, offset, sortBy }) {
-					const ctx = getContext();
+				async findMany({ model, where, limit, offset, sortBy }, ctx) {
 					const whereClause = convertWhereClause(model, where);
 					if (!ctx.db[model]) {
 						throw new BetterAuthError(
@@ -170,8 +167,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 							: {}),
 					})) as any[];
 				},
-				async count({ model, where }) {
-					const ctx = getContext();
+				async count({ model, where }, ctx) {
 					const whereClause = convertWhereClause(model, where);
 					if (!ctx.db[model]) {
 						throw new BetterAuthError(
@@ -182,8 +178,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						where: whereClause,
 					});
 				},
-				async update({ model, where, update }) {
-					const ctx = getContext();
+				async update({ model, where, update }, ctx) {
 					if (!ctx.db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -195,33 +190,32 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						data: update,
 					});
 				},
-				async updateMany({ model, where, update }) {
+				async updateMany({ model, where, update }, ctx) {
 					const whereClause = convertWhereClause(model, where);
-					const result = await getContext().db[model].updateMany({
+					const result = await ctx.db[model].updateMany({
 						where: whereClause,
 						data: update,
 					});
 					return result ? (result.count as number) : 0;
 				},
-				async delete({ model, where }) {
+				async delete({ model, where }, ctx) {
 					const whereClause = convertWhereClause(model, where);
 					try {
-						await getContext().db[model].delete({
+						await ctx.db[model].delete({
 							where: whereClause,
 						});
 					} catch (e) {
 						// If the record doesn't exist, we don't want to throw an error
 					}
 				},
-				async deleteMany({ model, where }) {
+				async deleteMany({ model, where }, ctx) {
 					const whereClause = convertWhereClause(model, where);
-					const result = await getContext().db[model].deleteMany({
+					const result = await ctx.db[model].deleteMany({
 						where: whereClause,
 					});
 					return result ? (result.count as number) : 0;
 				},
-				async transaction(callback) {
-					const ctx = getContext();
+				async transaction(callback, ctx) {
 					return ctx.db.$transaction(async (tx: PrismaClientInternal) => {
 						return callback({
 							...ctx,
