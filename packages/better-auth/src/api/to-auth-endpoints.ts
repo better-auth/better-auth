@@ -8,6 +8,7 @@ import {
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import { createDefu } from "defu";
+import { shouldPublishLog } from "../utils";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
@@ -53,7 +54,18 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				headers: context?.headers ? new Headers(context?.headers) : undefined,
 			};
 			const { beforeHooks, afterHooks } = getHooks(authContext);
-			const before = await runBeforeHooks(internalContext, beforeHooks);
+			const before = await runBeforeHooks(internalContext, beforeHooks).catch(
+				(error) => {
+					if (
+						error instanceof APIError &&
+						shouldPublishLog(authContext.logger.level, "debug")
+					) {
+						// inherit stack from errorWithStack if debug mode is enabled
+						error.stack = error.errorWithStack.stack;
+					}
+					throw error;
+				},
+			);
 			/**
 			 * If `before.context` is returned, it should
 			 * get merged with the original context
@@ -109,10 +121,29 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 			internalContext.context.returned = result.response;
 			internalContext.context.responseHeaders = result.headers;
 
-			const after = await runAfterHooks(internalContext, afterHooks);
+			const after = await runAfterHooks(internalContext, afterHooks).catch(
+				(error) => {
+					if (
+						error instanceof APIError &&
+						shouldPublishLog(authContext.logger.level, "debug")
+					) {
+						// inherit stack from errorWithStack if debug mode is enabled
+						error.stack = error.errorWithStack.stack;
+					}
+					throw error;
+				},
+			);
 
 			if (after.response) {
 				result.response = after.response;
+			}
+
+			if (
+				result.response instanceof APIError &&
+				shouldPublishLog(authContext.logger.level, "debug")
+			) {
+				// inherit stack from errorWithStack if debug mode is enabled
+				result.response.stack = result.response.errorWithStack.stack;
 			}
 
 			if (result.response instanceof APIError && !context?.asResponse) {
