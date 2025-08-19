@@ -1137,13 +1137,13 @@ export const authClient = createAuthClient({
 ```
 
 <Callout>
-  This will require you to run migrations to add the new `organizationAC` table to the database.
+  This will require you to run migrations to add the new `organizationRole` table to the database.
 </Callout>
 
 
 <Callout type="warn">
   The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran syncronously on the client side.
-  Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
+  Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
 </Callout>
 
 ### Creating a role
@@ -1155,8 +1155,8 @@ By default, only the `admin` and `owner` roles have this permission. You also ca
 current role in that organization can't already access.
 
 <Callout>
-  TIP: You can validate role names by using the `dynamicAccessControl.validateNewRole` option in the organization plugin config.
-  Learn more [here](#validatenewrole).
+  TIP: You can validate role names by using the `dynamicAccessControl.validateRoleName` option in the organization plugin config.
+  Learn more [here](#validaterolename).
 </Callout>
 
 
@@ -1170,7 +1170,7 @@ current role in that organization can't already access.
 // To use custom resources or permissions,
 // make sure they are defined in the `ac` instance of your organization config.
 const permission = {
-  projects: ["create", "update", "delete"]
+  project: ["create", "update", "delete"]
 }
 
 type createOrgRole = {
@@ -1452,7 +1452,7 @@ organization({
 ```
 
 <Callout>
-This is called before [`validateNewRole`](#validatenewrole) is called.
+This is called before [`validateRoleName`](#validaterolename) is called.
 </Callout>
 
 #### `maximumRolesPerOrganization`

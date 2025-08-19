@@ -4,7 +4,7 @@ import type { GenericEndpointContext } from "../../types";
 import type { Role } from "../access";
 import * as z from "zod/v4";
 import { APIError } from "../../api";
-import type { organizationRole } from "./schema";
+import type { OrganizationRole } from "./schema";
 
 type PermissionExclusive =
 	| {
@@ -19,9 +19,12 @@ type PermissionExclusive =
 			permission?: never;
 	  };
 
-let cacheAllRoles: {
-	[x: string]: Role<any> | undefined;
-} | null = null;
+let cacheAllRoles = new Map<
+	string,
+	{
+		[x: string]: Role<any> | undefined;
+	}
+>();
 
 export const hasPermission = async (
 	input: {
@@ -53,7 +56,7 @@ export const hasPermission = async (
 	) {
 		// Load roles from database
 		const roles = await ctx.context.adapter.findMany<
-			organizationRole & { permission: string }
+			OrganizationRole & { permission: string }
 		>({
 			model: "organizationRole",
 			where: [
@@ -89,9 +92,9 @@ export const hasPermission = async (
 	}
 
 	if (input.useMemoryCache) {
-		acRoles = cacheAllRoles || acRoles;
+		acRoles = cacheAllRoles.get(input.organizationId) || acRoles;
 	}
-	cacheAllRoles = acRoles;
+	cacheAllRoles.set(input.organizationId, acRoles);
 
 	return hasPermissionFn(input, acRoles);
 };

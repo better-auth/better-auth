@@ -3,7 +3,7 @@ import { APIError, createAuthEndpoint } from "../../../api";
 import type { OrganizationOptions } from "../types";
 import { orgSessionMiddleware } from "../call";
 import { hasPermission } from "../has-permission";
-import type { Member, organizationRole } from "../schema";
+import type { Member, OrganizationRole } from "../schema";
 import type { GenericEndpointContext, User, Where } from "../../../types";
 import type { AccessControl } from "../../access";
 import {
@@ -310,7 +310,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			// -----
 			// Create the new role and store it in the database.
 			const newRoleInDB = await ctx.context.adapter.create<
-				Omit<organizationRole, "permission"> & { permission: string }
+				Omit<OrganizationRole, "permission"> & { permission: string }
 			>({
 				model: "organizationRole",
 				data: {
@@ -327,7 +327,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			const data = {
 				...newRoleInDB,
 				permission,
-			} as organizationRole & ReturnAdditionalFields;
+			} as OrganizationRole & ReturnAdditionalFields;
 			return ctx.json({
 				success: true,
 				roleData: data,
@@ -497,7 +497,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				};
 			}
 			const existingRoleInDB =
-				await ctx.context.adapter.findOne<organizationRole>({
+				await ctx.context.adapter.findOne<OrganizationRole>({
 					model: "organizationRole",
 					where: [
 						{
@@ -667,7 +667,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 			// -----
 			// Get all roles in the organization
 			let roles = await ctx.context.adapter.findMany<
-				organizationRole & ReturnAdditionalFields
+				OrganizationRole & ReturnAdditionalFields
 			>({
 				model: "organizationRole",
 				where: [
@@ -836,7 +836,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					connector: "AND",
 				};
 			}
-			let role = await ctx.context.adapter.findOne<organizationRole>({
+			let role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -1041,7 +1041,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					connector: "AND",
 				};
 			}
-			let role = await ctx.context.adapter.findOne<organizationRole>({
+			let role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -1079,7 +1079,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				...additionalFields
 			} = ctx.body.data;
 
-			let updateData: Partial<organizationRole> = {
+			let updateData: Partial<OrganizationRole> = {
 				...additionalFields,
 			};
 
@@ -1148,7 +1148,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? { permission: JSON.stringify(updateData.permission) }
 					: {}),
 			};
-			await ctx.context.adapter.update<organizationRole>({
+			await ctx.context.adapter.update<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -1170,7 +1170,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					...role,
 					...update,
 					permission: updateData.permission || role.permission || null,
-				} as organizationRole & ReturnAdditionalFields,
+				} as OrganizationRole & ReturnAdditionalFields,
 			});
 		},
 	);
@@ -1345,7 +1345,7 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 	organizationId: string;
 	role: string;
 }) {
-	const existingRoleInDB = await ctx.context.adapter.findOne<organizationRole>({
+	const existingRoleInDB = await ctx.context.adapter.findOne<OrganizationRole>({
 		model: "organizationRole",
 		where: [
 			{

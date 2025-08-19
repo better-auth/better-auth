@@ -74,7 +74,7 @@ export type MemberInput = z.input<typeof memberSchema>;
 export type TeamMemberInput = z.input<typeof teamMemberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
-export type organizationRole = z.infer<typeof organizationRoleSchema>;
+export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 
 const defaultRoles = ["admin", "member", "owner"] as const;
 export const defaultRolesSchema = z.union([

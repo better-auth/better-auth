@@ -10,7 +10,7 @@ import type {
 	Invitation,
 	Member,
 	Organization,
-	organizationRole,
+	OrganizationRole,
 	Team,
 	TeamMember,
 } from "./schema";
@@ -74,7 +74,6 @@ export interface OrganizationOptions {
 		enabled?: boolean;
 		/**
 		 * Validate the name of the role. You can throw an error or return `false` to deny that role name.
-		 * This is call
 		 *
 		 * @param role - The role to validate.
 		 * @param organizationId - The organization id of the organization the role is being created in.
@@ -141,7 +140,7 @@ export interface OrganizationOptions {
 				session,
 				organizationId,
 			}: {
-				role: organizationRole;
+				role: OrganizationRole;
 				organizationId: string;
 				session: { session: Session; user: User };
 				member: Member;
@@ -164,7 +163,7 @@ export interface OrganizationOptions {
 				role,
 				organizationId,
 			}: {
-				role: organizationRole;
+				role: OrganizationRole;
 				organizationId: string;
 				session: { session: Session; user: User };
 				member: Member;
@@ -189,7 +188,7 @@ export interface OrganizationOptions {
 				roles,
 				session,
 			}: {
-				roles: organizationRole[];
+				roles: OrganizationRole[];
 				organizationId: string;
 				session: { session: Session; user: User };
 				member: Member;
@@ -214,7 +213,7 @@ export interface OrganizationOptions {
 				member,
 				session,
 			}: {
-				role: organizationRole;
+				role: OrganizationRole;
 				organizationId: string;
 				session: { session: Session; user: User };
 				member: Member;
@@ -462,7 +461,7 @@ export interface OrganizationOptions {
 		organizationRole?: {
 			modelName?: string;
 			fields?: {
-				[key in keyof Omit<organizationRole, "id">]?: string;
+				[key in keyof Omit<OrganizationRole, "id">]?: string;
 			};
 			additionalFields?: {
 				[key in string]: FieldAttribute;
