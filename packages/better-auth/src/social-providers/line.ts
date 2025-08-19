@@ -27,7 +27,8 @@ export interface LineUserInfo {
 	email?: string;
 }
 
-export interface LineOptions extends ProviderOptions<LineUserInfo | LineIdTokenPayload> {}
+export interface LineOptions
+	extends ProviderOptions<LineUserInfo | LineIdTokenPayload> {}
 
 /**
  * LINE Login v2.1
@@ -47,8 +48,16 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI, loginHint }) {
-			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile", "email"];
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			loginHint,
+		}) {
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
@@ -94,13 +103,16 @@ export const line = (options: LineOptions) => {
 			body.set("id_token", token);
 			body.set("client_id", options.clientId);
 			if (nonce) body.set("nonce", nonce);
-			const { data, error } = await betterFetch<LineIdTokenPayload>(verifyIdTokenEndpoint, {
-				method: "POST",
-				headers: {
-					"content-type": "application/x-www-form-urlencoded",
+			const { data, error } = await betterFetch<LineIdTokenPayload>(
+				verifyIdTokenEndpoint,
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+					body,
 				},
-				body,
-			});
+			);
 			if (error || !data) {
 				return false;
 			}
