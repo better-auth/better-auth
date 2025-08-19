@@ -122,10 +122,11 @@ export const createInternalAdapter = (
 				for (const session of validSessions) {
 					const sessionStringified = await secondaryStorage.get(session.token);
 					if (sessionStringified) {
-						const s =
-							typeof sessionStringified === "string"
-								? JSON.parse(sessionStringified)
-								: sessionStringified;
+						const s = safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(sessionStringified);
+						if (!s) return [];
 						const parsedSession = parseSessionOutput(ctx.options, {
 							...s.session,
 							expiresAt: new Date(s.session.expiresAt),
@@ -295,10 +296,11 @@ export const createInternalAdapter = (
 					return null;
 				}
 				if (sessionStringified) {
-					const s =
-						typeof sessionStringified === "string"
-							? JSON.parse(sessionStringified)
-							: sessionStringified;
+					const s = safeJSONParse<{
+						session: Session;
+						user: User;
+					}>(sessionStringified);
+					if (!s) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -360,10 +362,11 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
-						const s =
-							typeof sessionStringified === "string"
-								? JSON.parse(sessionStringified)
-								: sessionStringified;
+						const s = safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(sessionStringified);
+						if (!s) return [];
 						const session = {
 							session: {
 								...s.session,
@@ -435,14 +438,11 @@ export const createInternalAdapter = (
 								const currentSession = await secondaryStorage.get(sessionToken);
 								let updatedSession: Session | null = null;
 								if (currentSession) {
-									const parsedSession = (
-										typeof currentSession === "string"
-											? JSON.parse(currentSession)
-											: currentSession
-									) as {
+									const parsedSession = safeJSONParse<{
 										session: Session;
 										user: User;
-									};
+									}>(currentSession);
+									if (!parsedSession) return null;
 									updatedSession = {
 										...parsedSession.session,
 										...data,
