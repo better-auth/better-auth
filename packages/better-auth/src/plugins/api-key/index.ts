@@ -186,7 +186,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
 							});
 						}
-						
+
 						const session = {
 							user,
 							session: {
@@ -202,13 +202,12 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								expiresAt:
 									apiKey.expiresAt ||
 									getDate(
-										ctx.context.options.session?.expiresIn ||
-											60 * 60 * 24 * 7, // 7 days
+										ctx.context.options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 										"ms",
 									),
 							},
 						};
-						
+
 						// Always set the session context for API key authentication
 						ctx.context.session = session;
 

@@ -1892,7 +1892,7 @@ describe("api-key", async () => {
 			{ name: "test-auth-key" },
 			{ headers },
 		);
-		
+
 		if (!testApiKey) throw new Error("Failed to create API key");
 
 		const apiKeyHeaders = new Headers();
@@ -1909,7 +1909,7 @@ describe("api-key", async () => {
 	it("should set session context for all authenticated API key requests", async () => {
 		// This test verifies that ctx.context.session is properly set
 		// for all API key authenticated requests, not just /get-session
-		
+
 		// Create an API key using the main auth instance
 		const testApiKey = await auth.api.createApiKey({
 			body: {
@@ -1931,7 +1931,7 @@ describe("api-key", async () => {
 		const verifyResult = await auth.api.verifyApiKey({
 			body: { key: testApiKey.key },
 		});
-		
+
 		expect(verifyResult.valid).toBe(true);
 		expect(verifyResult.key).toBeDefined();
 	});
