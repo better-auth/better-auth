@@ -21,33 +21,35 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
+
+export const getSessionQuerySchema = z.optional(
+	z.object({
+		/**
+		 * If cookie cache is enabled, it will disable the cache
+		 * and fetch the session from the database
+		 */
+		disableCookieCache: z.coerce
+			.boolean()
+			.meta({
+				description: "Disable cookie cache and fetch session from database",
+			})
+			.optional(),
+		disableRefresh: z.coerce
+			.boolean()
+			.meta({
+				description:
+					"Disable session refresh. Useful for checking session status, without updating the session",
+			})
+			.optional(),
+	}),
+);
+
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/get-session",
 		{
 			method: "GET",
-			query: z.optional(
-				z.object({
-					/**
-					 * If cookie cache is enabled, it will disable the cache
-					 * and fetch the session from the database
-					 */
-					disableCookieCache: z.coerce
-						.boolean()
-						.meta({
-							description:
-								"Disable cookie cache and fetch session from database",
-						})
-						.optional(),
-					disableRefresh: z.coerce
-						.boolean()
-						.meta({
-							description:
-								"Disable session refresh. Useful for checking session status, without updating the session",
-						})
-						.optional(),
-				}),
-			),
+			query: getSessionQuerySchema,
 			requireHeaders: true,
 			metadata: {
 				openapi: {
