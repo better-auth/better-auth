@@ -425,7 +425,7 @@ describe("signJWT", async (it) => {
 		});
 	});
 
-	it.only("shouldn't let you sign from a client", async () => {
+	it("shouldn't let you sign from a client", async () => {
 		const client = createAuthClient({
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
@@ -436,7 +436,7 @@ describe("signJWT", async (it) => {
 				payload: { sub: "123" },
 			},
 		});
-		console.log(jwt);
+		expect(jwt.error?.status).toBe(404);
 	});
 });
 
