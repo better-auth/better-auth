@@ -1,3 +1,4 @@
+import type { AdapterContext } from "../adapters";
 import type {
 	Adapter,
 	BetterAuthOptions,
@@ -26,6 +27,7 @@ export function getWithHooks(
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
+		adapterContext?: AdapterContext,
 	) {
 		let actualData = data;
 		for (const hook of hooks || []) {
@@ -50,11 +52,14 @@ export function getWithHooks(
 			: null;
 		const created =
 			!customCreateFn || customCreateFn.executeMainFn
-				? await adapter.create<T>({
-						model,
-						data: actualData as any,
-						forceAllowId: true,
-					})
+				? await adapter.create<T>(
+						{
+							model,
+							data: actualData as any,
+							forceAllowId: true,
+						},
+						adapterContext,
+					)
 				: customCreated;
 
 		for (const hook of hooks || []) {
@@ -76,6 +81,7 @@ export function getWithHooks(
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
+		adapterContext?: AdapterContext,
 	) {
 		let actualData = data;
 
@@ -97,11 +103,14 @@ export function getWithHooks(
 
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
-				? await adapter.update<T>({
-						model,
-						update: actualData,
-						where,
-					})
+				? await adapter.update<T>(
+						{
+							model,
+							update: actualData,
+							where,
+						},
+						adapterContext,
+					)
 				: customUpdated;
 
 		for (const hook of hooks || []) {
@@ -122,6 +131,7 @@ export function getWithHooks(
 			executeMainFn?: boolean;
 		},
 		context?: GenericEndpointContext,
+		adapterContext?: AdapterContext,
 	) {
 		let actualData = data;
 
@@ -143,11 +153,14 @@ export function getWithHooks(
 
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
-				? await adapter.updateMany({
-						model,
-						update: actualData,
-						where,
-					})
+				? await adapter.updateMany(
+						{
+							model,
+							update: actualData,
+							where,
+						},
+						adapterContext,
+					)
 				: customUpdated;
 
 		for (const hook of hooks || []) {
