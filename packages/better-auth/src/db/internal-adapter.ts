@@ -122,7 +122,10 @@ export const createInternalAdapter = (
 				for (const session of validSessions) {
 					const sessionStringified = await secondaryStorage.get(session.token);
 					if (sessionStringified) {
-						const s = JSON.parse(sessionStringified);
+						const s =
+							typeof sessionStringified === "string"
+								? JSON.parse(sessionStringified)
+								: sessionStringified;
 						const parsedSession = parseSessionOutput(ctx.options, {
 							...s.session,
 							expiresAt: new Date(s.session.expiresAt),
@@ -292,7 +295,10 @@ export const createInternalAdapter = (
 					return null;
 				}
 				if (sessionStringified) {
-					const s = JSON.parse(sessionStringified);
+					const s =
+						typeof sessionStringified === "string"
+							? JSON.parse(sessionStringified)
+							: sessionStringified;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -354,7 +360,10 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
-						const s = JSON.parse(sessionStringified);
+						const s =
+							typeof sessionStringified === "string"
+								? JSON.parse(sessionStringified)
+								: sessionStringified;
 						const session = {
 							session: {
 								...s.session,
@@ -426,7 +435,11 @@ export const createInternalAdapter = (
 								const currentSession = await secondaryStorage.get(sessionToken);
 								let updatedSession: Session | null = null;
 								if (currentSession) {
-									const parsedSession = JSON.parse(currentSession) as {
+									const parsedSession = (
+										typeof currentSession === "string"
+											? JSON.parse(currentSession)
+											: currentSession
+									) as {
 										session: Session;
 										user: User;
 									};

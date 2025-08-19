@@ -424,4 +424,18 @@ describe("signJWT", async (it) => {
 			protectedHeader: { alg: "EdDSA", kid: jwks.keys[0].kid },
 		});
 	});
+
+	it.only("shouldn't let you sign from a client", async () => {
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+		});
+		const jwt = await client.$fetch("/sign-jwt", {
+			method: "POST",
+			body: {
+				payload: { sub: "123" },
+			},
+		});
+		console.log(jwt);
+	});
 });
