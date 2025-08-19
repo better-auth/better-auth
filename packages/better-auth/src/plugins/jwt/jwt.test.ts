@@ -424,6 +424,25 @@ describe("signJWT", async (it) => {
 			protectedHeader: { alg: "EdDSA", kid: jwks.keys[0].kid },
 		});
 	});
+
+	it("shouldn't let you sign from a client", async () => {
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+		const jwt = await client.$fetch("/sign-jwt", {
+			method: "POST",
+			body: {
+				payload: { sub: "123" },
+			},
+		});
+		expect(jwt.error?.status).toBe(404);
+	});
 });
 
 describe("jwt - remote url", async (it) => {
