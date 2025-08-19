@@ -8,8 +8,11 @@ export function constantTimeEqual(
 	const aBuffer = new Uint8Array(a);
 	const bBuffer = new Uint8Array(b);
 	let c = aBuffer.length ^ bBuffer.length;
-	for (let i = 0; i < aBuffer.length; i++) {
-		c |= aBuffer[i]! ^ bBuffer[i]!;
+	const length = Math.max(aBuffer.length, bBuffer.length);
+	for (let i = 0; i < length; i++) {
+		c |=
+			(i < aBuffer.length ? aBuffer[i] : 0) ^
+			(i < bBuffer.length ? bBuffer[i] : 0);
 	}
 	return c === 0;
 }
