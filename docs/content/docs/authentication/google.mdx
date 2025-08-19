@@ -123,7 +123,7 @@ This will trigger a new OAuth flow that requests the additional scopes. After co
 Google only issues a refresh token the first time a user consents to your app.
 If the user has already authorized your app, subsequent OAuth flows will only return an access token, not a refresh token.
 
-To always get a refresh token, you can set the `accessType` to `offline`, and `prompt` to `select_account consent` in the provider options.
+To always get a refresh token, you can set the `accessType` to `offline`, and `prompt` to `select_account+consent` in the provider options.
 
 ```ts
 socialProviders: {
@@ -131,7 +131,7 @@ socialProviders: {
         clientId: process.env.GOOGLE_CLIENT_ID as string,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
         accessType: "offline", // [!code highlight]
-        prompt: "select_account consent", // [!code highlight]
+        prompt: "select_account+consent", // [!code highlight]
     },
 }
 ```
