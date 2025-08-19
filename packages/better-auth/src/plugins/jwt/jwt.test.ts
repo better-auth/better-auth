@@ -429,6 +429,11 @@ describe("signJWT", async (it) => {
 		const client = createAuthClient({
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
 		});
 		const jwt = await client.$fetch("/sign-jwt", {
 			method: "POST",
