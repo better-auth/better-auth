@@ -3,7 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
 import { generateExportedKeyPair, jwt, type JwtOptions } from "./index";
-import { importJWK, jwtVerify } from "jose";
+import { importJWK, jwtVerify, type JSONWebKeySet } from "jose";
 
 type JWKOptions =
 	| {
@@ -423,5 +423,68 @@ describe("signJWT", async (it) => {
 			},
 			protectedHeader: { alg: "EdDSA", kid: jwks.keys[0].kid },
 		});
+	});
+
+	it("shouldn't let you sign from a client", async () => {
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+		const jwt = await client.$fetch("/sign-jwt", {
+			method: "POST",
+			body: {
+				payload: { sub: "123" },
+			},
+		});
+		expect(jwt.error?.status).toBe(404);
+	});
+});
+
+describe("jwt - remote url", async (it) => {
+	const { auth } = await getTestInstance({
+		plugins: [
+			jwt({
+				jwks: {
+					remoteUrl: "https://example.com",
+					keyPairConfig: {
+						alg: "ES256",
+					},
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [jwtClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("should require specifying the alg used", async () => {
+		expect(() =>
+			getTestInstance({
+				plugins: [
+					jwt({
+						jwks: {
+							remoteUrl: "https://example.com",
+						},
+					}),
+				],
+			}),
+		).toThrow();
+	});
+
+	it("should disable /jwks", async () => {
+		const response = await client.$fetch<JSONWebKeySet>("/jwks");
+		expect(response.error?.status).toBe(404);
 	});
 });

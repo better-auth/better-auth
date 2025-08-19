@@ -172,15 +172,6 @@ holy sh** is it good, works so nice with typescript + drizzle`,
 		social: <Icons.x />,
 	},
 	{
-		name: "Shreyas Mididoddi",
-		profession: "Senior Developer",
-		link: "https://x.com/Shreyassanthu77/status/1887544964881784927",
-		description:
-			"dang!! Didn't think I would but absolutely loving @better_auth",
-		avatar: "/people-say/shreyas-mididddi.png",
-		social: <Icons.x />,
-	},
-	{
 		name: "EGOIST",
 		profession: "Creator of tsup, ChatWise",
 		link: "https://x.com/localhost_5173/status/1951152679461278068",
@@ -191,7 +182,8 @@ holy sh** is it good, works so nice with typescript + drizzle`,
 ].sort(() => Math.random() - 0.5);
 
 type TestimonialProps = (typeof testimonials)[number];
-const PeopleSay = ({
+
+const TestimonialItem = ({
 	reverse = false,
 	testimonials,
 }: {
@@ -267,7 +259,7 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<PeopleSay
+					<TestimonialItem
 						reverse
 						testimonials={Array(15)
 							.fill(testimonials.slice(0, Math.floor(testimonials.length / 2)))
@@ -281,7 +273,7 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<PeopleSay
+					<TestimonialItem
 						testimonials={Array(15)
 							.fill(
 								testimonials.slice(
