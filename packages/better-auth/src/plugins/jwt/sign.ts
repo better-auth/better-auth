@@ -5,7 +5,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { generateExportedKeyPair, type JwtOptions } from ".";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { toExpJwt } from "./utils";
+import { toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
@@ -22,7 +22,7 @@ export async function signJWT(
 
 	// Exp
 	let exp = payload.exp;
-	const defaultExp = toExpJwt(
+	const defaultExp = toExpJWT(
 		options?.jwt?.expirationTime ?? "15m",
 		iat ?? nowSeconds,
 	);

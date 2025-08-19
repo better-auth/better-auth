@@ -9,7 +9,7 @@ import { base64 } from "@better-auth/utils/base64";
  * @param iat - the iat time to consolidate on
  * @returns
  */
-export function toExpJwt(
+export function toExpJWT(
 	expirationTime: number | Date | string,
 	iat: number,
 ): number {
