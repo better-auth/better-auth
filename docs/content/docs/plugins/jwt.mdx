@@ -111,6 +111,21 @@ In case a JWT with a different `kid` is received, it is recommended to fetch the
   }
 ```
 
+### OAuth Provider Mode
+
+If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `/oauth2/userinfo`).
+
+```ts title="auth.ts"
+betterAuth({
+  disabledPaths: [
+    "/token",
+  ],
+  plugins: [jwt({
+    disableSettingJwtHeader: true,
+  })]
+})
+```
+
 #### Example using jose with remote JWKS
 
 ```ts
@@ -171,6 +186,25 @@ async function validateToken(token: string) {
 // Usage example
 const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
 const payload = await validateToken(token)
+```
+
+### Remote JWKS Url
+
+Disables the `/jwks` endpoint and uses this endpoint in any discovery such as OIDC.
+
+Useful if your JWKS are not managed at `/jwks` or if your jwks are signed with a certificate and placed on your CDN.
+
+NOTE: you **MUST** specify which asymmetric algorithm is used for signing.
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  }
+})
 ```
 
 ## Schema

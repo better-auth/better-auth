@@ -33,19 +33,54 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function getPathAliases(cwd: string): Record<string, string> | null {
-	const tsConfigPath = path.join(cwd, "tsconfig.json");
-	if (!fs.existsSync(tsConfigPath)) {
-		return null;
+function resolveReferencePath(configDir: string, refPath: string): string {
+	const resolvedPath = path.resolve(configDir, refPath);
+
+	// If it ends with .json, treat as direct file reference
+	if (refPath.endsWith(".json")) {
+		return resolvedPath;
 	}
+
+	// If the exact path exists and is a file, use it
+	if (fs.existsSync(resolvedPath)) {
+		try {
+			const stats = fs.statSync(resolvedPath);
+			if (stats.isFile()) {
+				return resolvedPath;
+			}
+		} catch {
+			// Fall through to directory handling
+		}
+	}
+
+	// Otherwise, assume directory reference
+	return path.resolve(configDir, refPath, "tsconfig.json");
+}
+
+function getPathAliasesRecursive(
+	tsconfigPath: string,
+	visited = new Set<string>(),
+): Record<string, string> {
+	if (visited.has(tsconfigPath)) {
+		return {};
+	}
+	visited.add(tsconfigPath);
+
+	if (!fs.existsSync(tsconfigPath)) {
+		logger.warn(`Referenced tsconfig not found: ${tsconfigPath}`);
+		return {};
+	}
+
 	try {
-		const tsConfig = getTsconfigInfo(cwd);
+		const tsConfig = getTsconfigInfo(undefined, tsconfigPath);
 		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
 		const result: Record<string, string> = {};
+
+		const configDir = path.dirname(tsconfigPath);
 		const obj = Object.entries(paths) as [string, string[]][];
 		for (const [alias, aliasPaths] of obj) {
 			for (const aliasedPath of aliasPaths) {
-				const resolvedBaseUrl = path.join(cwd, baseUrl);
+				const resolvedBaseUrl = path.resolve(configDir, baseUrl);
 				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
 				const finalAliasedPath =
 					aliasedPath.slice(-1) === "*"
@@ -55,6 +90,33 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 				result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
 			}
 		}
+
+		if (tsConfig.references) {
+			for (const ref of tsConfig.references) {
+				const refPath = resolveReferencePath(configDir, ref.path);
+				const refAliases = getPathAliasesRecursive(refPath, visited);
+				for (const [alias, aliasPath] of Object.entries(refAliases)) {
+					if (!(alias in result)) {
+						result[alias] = aliasPath;
+					}
+				}
+			}
+		}
+
+		return result;
+	} catch (error) {
+		logger.warn(`Error parsing tsconfig at ${tsconfigPath}: ${error}`);
+		return {};
+	}
+}
+
+function getPathAliases(cwd: string): Record<string, string> | null {
+	const tsConfigPath = path.join(cwd, "tsconfig.json");
+	if (!fs.existsSync(tsConfigPath)) {
+		return null;
+	}
+	try {
+		const result = getPathAliasesRecursive(tsConfigPath);
 		addSvelteKitEnvModules(result);
 		return result;
 	} catch (error) {
