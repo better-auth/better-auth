@@ -148,6 +148,19 @@ export const linkSocialAccount = createAuthEndpoint(
 						"The URL to redirect to if there is an error during the link process",
 				})
 				.optional(),
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z
+				.boolean()
+				.meta({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -264,9 +277,9 @@ export const linkSocialAccount = createAuthEndpoint(
 
 			if (hasBeenLinked) {
 				return c.json({
-					redirect: false,
 					url: "", // this is for type inference
 					status: true,
+					redirect: false,
 				});
 			}
 
@@ -325,9 +338,9 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			return c.json({
-				redirect: false,
 				url: "", // this is for type inference
 				status: true,
+				redirect: false,
 			});
 		}
 
@@ -346,7 +359,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );

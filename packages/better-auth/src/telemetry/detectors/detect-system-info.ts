@@ -1,4 +1,5 @@
 import { env } from "../../utils/env";
+import { importRuntime } from "../../utils/import-util";
 
 function getVendor() {
 	const hasAny = (...keys: string[]) =>
@@ -76,8 +77,7 @@ export async function detectSystemInfo() {
 	try {
 		//check if it's cloudflare
 		if (getVendor() === "cloudflare") return "cloudflare";
-
-		const { default: os } = await import("os");
+		const os = await importRuntime<typeof import("os")>("os");
 		const cpus = os.cpus();
 		return {
 			deploymentVendor: getVendor(),
@@ -90,7 +90,10 @@ export async function detectSystemInfo() {
 			memory: os.totalmem(),
 			isWSL: await isWsl(),
 			isDocker: await isDocker(),
-			isTTY: process.stdout.isTTY,
+			isTTY:
+				typeof process !== "undefined" && (process as any).stdout
+					? (process as any).stdout.isTTY
+					: null,
 		};
 	} catch (e) {
 		return {
@@ -112,8 +115,9 @@ let isDockerCached: boolean | undefined;
 
 async function hasDockerEnv() {
 	if (getVendor() === "cloudflare") return false;
+
 	try {
-		const { default: fs } = await import("fs");
+		const fs = await importRuntime<typeof import("fs")>("fs");
 		fs.statSync("/.dockerenv");
 		return true;
 	} catch {
@@ -124,7 +128,7 @@ async function hasDockerEnv() {
 async function hasDockerCGroup() {
 	if (getVendor() === "cloudflare") return false;
 	try {
-		const { default: fs } = await import("fs");
+		const fs = await importRuntime<typeof import("fs")>("fs");
 		return fs.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
 	} catch {
 		return false;
@@ -144,11 +148,11 @@ async function isDocker() {
 async function isWsl() {
 	try {
 		if (getVendor() === "cloudflare") return false;
-		if (process.platform !== "linux") {
+		if (typeof process === "undefined" || process.platform !== "linux") {
 			return false;
 		}
-		const { default: fs } = await import("fs");
-		const { default: os } = await import("os");
+		const fs = await importRuntime<typeof import("fs")>("fs");
+		const os = await importRuntime<typeof import("os")>("os");
 		if (os.release().toLowerCase().includes("microsoft")) {
 			if (await isInsideContainer()) {
 				return false;
@@ -173,7 +177,7 @@ let isInsideContainerCached: boolean | undefined;
 const hasContainerEnv = async () => {
 	if (getVendor() === "cloudflare") return false;
 	try {
-		const { default: fs } = await import("fs");
+		const fs = await importRuntime<typeof import("fs")>("fs");
 		fs.statSync("/run/.containerenv");
 		return true;
 	} catch {
