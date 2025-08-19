@@ -70,63 +70,64 @@ async function createTestAdapter(
 			config,
 		),
 		context,
+		// @ts-ignore
 		adapter: (...args) => {
 			const x = adapter(...args) as Partial<ReturnType<CreateCustomAdapter>>;
 			return {
-				async create(data) {
+				async create(data, ctx) {
 					if (x.create) {
-						return await x.create(data);
+						return await x.create(data, ctx);
 					}
 					return data.data;
 				},
-				async update(data) {
+				async update(data, ctx) {
 					if (x.update) {
-						return await x.update(data);
+						return await x.update(data, ctx);
 					}
 					return data.update;
 				},
-				async updateMany(data) {
+				async updateMany(data, ctx) {
 					if (x.updateMany) {
-						return await x.updateMany(data);
+						return await x.updateMany(data, ctx);
 					}
 					return 0;
 				},
-				async count(data) {
+				async count(data, ctx) {
 					if (x.count) {
-						return await x.count(data);
+						return await x.count(data, ctx);
 					}
 					return 0;
 				},
-				async delete(data) {
+				async delete(data, ctx) {
 					if (x.delete) {
-						return await x.delete(data);
+						return await x.delete(data, ctx);
 					}
 					return;
 				},
-				async deleteMany(data) {
+				async deleteMany(data, ctx) {
 					if (x.deleteMany) {
-						return await x.deleteMany(data);
+						return await x.deleteMany(data, ctx);
 					}
 					return 0;
 				},
-				async findMany(data) {
+				async findMany(data, ctx) {
 					if (x.findMany) {
-						return await x.findMany(data);
+						return await x.findMany(data, ctx);
 					}
 					return [];
 				},
-				async findOne(data) {
+				async findOne(data, ctx) {
 					if (x.findOne) {
-						return await x.findOne(data);
+						return await x.findOne(data, ctx);
 					}
 					return null;
 				},
-				async transaction(callback) {
+				async transaction(callback, ctx) {
 					if (x.transaction) {
-						return await x.transaction(callback);
+						return await x.transaction(callback, ctx);
 					}
 
-					return null as any;
+					return callback(ctx);
 				},
 				options: x.options ?? {},
 			};
@@ -1543,14 +1544,15 @@ describe("Create Adapter Helper", async () => {
 						inTransaction: false,
 					},
 				},
-				adapter({ getContext }) {
+				adapter() {
 					return {
-						create: async ({ data }) => {
-							ctx = getContext();
+						create: async ({ data }, context) => {
+							ctx = context;
 							return data;
 						},
-						transaction: async (callback) => {
+						transaction: async (callback, ctx) => {
 							return callback({
+								...ctx,
 								db: {
 									inTransaction: true,
 								},
@@ -1560,8 +1562,8 @@ describe("Create Adapter Helper", async () => {
 				},
 			});
 
-			const res = await adapter.transaction(() => {
-				return adapter.create({ data: {}, model: "user" });
+			const res = await adapter.transaction((tx) => {
+				return adapter.create({ data: {}, model: "user" }, tx);
 			});
 
 			expect(ctx).toEqual({ db: { inTransaction: true } });
@@ -1576,35 +1578,40 @@ describe("Create Adapter Helper", async () => {
 						inTransaction: false,
 					},
 				},
-				adapter({ getContext }) {
+				adapter() {
 					return {
-						create: async ({ data }) => {
-							ctx = getContext();
+						create: async ({ data }, context) => {
+							ctx = context;
 							return data;
 						},
 					};
 				},
 			});
 
-			const res = await adapter.transaction(() => {
-				return adapter.create({ data: {}, model: "user" });
+			const res = await adapter.transaction((tx) => {
+				return adapter.create({ data: {}, model: "user" }, tx);
 			});
 
-			expect(ctx).not.toBeDefined();
+			expect(ctx).toEqual({
+				db: {
+					inTransaction: false,
+				},
+			});
 		});
 
 		test("Should execute transaction callback without context when no base context is defined", async () => {
 			let ctx: AdapterContext | undefined = undefined;
 
 			const adapter = await createTestAdapter({
-				adapter({ getContext }) {
+				adapter() {
 					return {
-						create: async ({ data }) => {
-							ctx = getContext();
+						create: async ({ data }, context) => {
+							ctx = context;
 							return data;
 						},
-						async transaction(callback) {
+						async transaction(callback, ctx) {
 							return await callback({
+								...ctx,
 								db: {
 									inTransaction: true,
 								},
@@ -1614,8 +1621,8 @@ describe("Create Adapter Helper", async () => {
 				},
 			});
 
-			const res = await adapter.transaction(() => {
-				return adapter.create({ data: {}, model: "user" });
+			const res = await adapter.transaction((tx) => {
+				return adapter.create({ data: {}, model: "user" }, tx);
 			});
 
 			expect(ctx).not.toBeDefined();
@@ -1630,9 +1637,10 @@ describe("Create Adapter Helper", async () => {
 				},
 				adapter(args_0) {
 					return {
-						transaction: async (callback) => {
+						transaction: async (callback, ctx) => {
 							try {
 								return await callback({
+									...ctx,
 									db: {
 										inTransaction: true,
 									},
@@ -1734,16 +1742,16 @@ describe("Create Adapter Helper", async () => {
 					db: {},
 					currentLevel,
 				},
-				adapter({ getContext }) {
+				adapter() {
 					return {
-						async create({ data }) {
-							currentLevel = getContext().currentLevel;
+						async create({ data }, ctx) {
+							currentLevel = ctx.currentLevel;
 							return data;
 						},
-						transaction: async (callback) => {
+						transaction: async (callback, ctx) => {
 							return await callback({
 								db: {},
-								currentLevel: currentLevel + 1,
+								currentLevel: ctx.currentLevel + 1,
 							});
 						},
 					};
@@ -1757,21 +1765,27 @@ describe("Create Adapter Helper", async () => {
 
 			expect(currentLevel).toEqual(0);
 
-			await adapter.transaction(async () => {
-				await adapter.create({
-					model: "user",
-					data: {},
-				});
+			await adapter.transaction(async (tx) => {
+				await adapter.create(
+					{
+						model: "user",
+						data: {},
+					},
+					tx,
+				);
 			});
 			expect(currentLevel).toEqual(1);
 
-			await adapter.transaction(async () => {
-				await adapter.transaction(async () => {
-					await adapter.create({
-						model: "user",
-						data: {},
-					});
-				});
+			await adapter.transaction(async (tx1) => {
+				await adapter.transaction(async (tx2) => {
+					await adapter.create(
+						{
+							model: "user",
+							data: {},
+						},
+						tx2,
+					);
+				}, tx1);
 			});
 			expect(currentLevel).toEqual(2);
 		});
@@ -1785,10 +1799,9 @@ describe("Create Adapter Helper", async () => {
 						inTransaction: false,
 					},
 				},
-				adapter({ getContext }) {
+				adapter() {
 					return {
-						async create({ data, model }) {
-							const ctx = getContext();
+						async create({ data, model }, ctx) {
 							if (ctx.db.inTransaction) {
 								operations.push(`tx:create-${model}`);
 							} else {
@@ -1796,8 +1809,9 @@ describe("Create Adapter Helper", async () => {
 							}
 							return data;
 						},
-						async transaction(callback) {
+						async transaction(callback, ctx) {
 							return callback({
+								...ctx,
 								db: {
 									inTransaction: true,
 								},
@@ -1812,16 +1826,22 @@ describe("Create Adapter Helper", async () => {
 				data: {},
 			});
 
-			await adapter.transaction(async () => {
-				await adapter.create({
-					model: "user",
-					data: {},
-				});
+			await adapter.transaction(async (tx) => {
+				await adapter.create(
+					{
+						model: "user",
+						data: {},
+					},
+					tx,
+				);
 				await new Promise((r) => setTimeout(r, 10));
-				await adapter.create({
-					model: "session",
-					data: {},
-				});
+				await adapter.create(
+					{
+						model: "session",
+						data: {},
+					},
+					tx,
+				);
 			});
 
 			await outsideOp;

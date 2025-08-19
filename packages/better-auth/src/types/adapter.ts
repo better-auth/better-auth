@@ -1,3 +1,4 @@
+import type { AdapterContext } from "../adapters";
 import type { BetterAuthOptions } from "./options";
 
 /**
@@ -25,49 +26,73 @@ export type Where = {
  */
 export type Adapter = {
 	id: string;
-	create: <T extends Record<string, any>, R = T>(data: {
-		model: string;
-		data: Omit<T, "id">;
-		select?: string[];
-		/**
-		 * By default, any `id` provided in `data` will be ignored.
-		 *
-		 * If you want to force the `id` to be the same as the `data.id`, set this to `true`.
-		 */
-		forceAllowId?: boolean;
-	}) => Promise<R>;
-	findOne: <T>(data: {
-		model: string;
-		where: Where[];
-		select?: string[];
-	}) => Promise<T | null>;
-	findMany: <T>(data: {
-		model: string;
-		where?: Where[];
-		limit?: number;
-		sortBy?: {
-			field: string;
-			direction: "asc" | "desc";
-		};
-		offset?: number;
-	}) => Promise<T[]>;
-	count: (data: { model: string; where?: Where[] }) => Promise<number>;
+	create: <T extends Record<string, any>, R = T>(
+		data: {
+			model: string;
+			data: Omit<T, "id">;
+			select?: string[];
+			/**
+			 * By default, any `id` provided in `data` will be ignored.
+			 *
+			 * If you want to force the `id` to be the same as the `data.id`, set this to `true`.
+			 */
+			forceAllowId?: boolean;
+		},
+		ctx?: AdapterContext,
+	) => Promise<R>;
+	findOne: <T>(
+		data: {
+			model: string;
+			where: Where[];
+			select?: string[];
+		},
+		ctx?: AdapterContext,
+	) => Promise<T | null>;
+	findMany: <T>(
+		data: {
+			model: string;
+			where?: Where[];
+			limit?: number;
+			sortBy?: {
+				field: string;
+				direction: "asc" | "desc";
+			};
+			offset?: number;
+		},
+		ctx?: AdapterContext,
+	) => Promise<T[]>;
+	count: (
+		data: { model: string; where?: Where[] },
+		ctx?: AdapterContext,
+	) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
 	 * if multiple where clauses are provided
 	 */
-	update: <T>(data: {
-		model: string;
-		where: Where[];
-		update: Record<string, any>;
-	}) => Promise<T | null>;
-	updateMany: (data: {
-		model: string;
-		where: Where[];
-		update: Record<string, any>;
-	}) => Promise<number>;
-	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
-	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
+	update: <T>(
+		data: {
+			model: string;
+			where: Where[];
+			update: Record<string, any>;
+		},
+		ctx?: AdapterContext,
+	) => Promise<T | null>;
+	updateMany: (
+		data: {
+			model: string;
+			where: Where[];
+			update: Record<string, any>;
+		},
+		ctx?: AdapterContext,
+	) => Promise<number>;
+	delete: <T>(
+		data: { model: string; where: Where[] },
+		ctx?: AdapterContext,
+	) => Promise<void>;
+	deleteMany: (
+		data: { model: string; where: Where[] },
+		ctx?: AdapterContext,
+	) => Promise<number>;
 	/**
 	 * Run a callback inside a transaction if supported by the adapter.
 	 * Falls back to a direct execution if transactions are not available.
@@ -75,7 +100,10 @@ export type Adapter = {
 	 * @param callback The async function to execute.
 	 * @returns A promise resolving to the callback's result.
 	 */
-	transaction: <R>(callback: () => Promise<R>) => Promise<R>;
+	transaction: <R>(
+		callback: (txCtx: AdapterContext) => Promise<R>,
+		ctx?: AdapterContext,
+	) => Promise<R>;
 	/**
 	 *
 	 * @param options

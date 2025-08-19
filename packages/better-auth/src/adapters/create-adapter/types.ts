@@ -300,74 +300,95 @@ export type CreateCustomAdapter<C extends AdapterContext | undefined = any> = ({
 		model: string;
 		field: string;
 	}) => FieldAttribute;
-
-	getContext: () => C extends AdapterContext ? C : undefined;
 }) => CustomAdapter<C>;
 
 export type CustomAdapter<C extends AdapterContext | undefined> = {
-	create: <T extends Record<string, any>>({
-		data,
-		model,
-		select,
-	}: {
-		model: string;
-		data: T;
-		select?: string[];
-	}) => Promise<T>;
-	update: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-		update: T;
-	}) => Promise<T | null>;
-	updateMany: (data: {
-		model: string;
-		where: CleanedWhere[];
-		update: Record<string, any>;
-	}) => Promise<number>;
-	findOne: <T>({
-		model,
-		where,
-		select,
-	}: {
-		model: string;
-		where: CleanedWhere[];
-		select?: string[];
-	}) => Promise<T | null>;
-	findMany: <T>({
-		model,
-		where,
-		limit,
-		sortBy,
-		offset,
-	}: {
-		model: string;
-		where?: CleanedWhere[];
-		limit: number;
-		sortBy?: { field: string; direction: "asc" | "desc" };
-		offset?: number;
-	}) => Promise<T[]>;
-	delete: ({
-		model,
-		where,
-	}: {
-		model: string;
-		where: CleanedWhere[];
-	}) => Promise<void>;
-	deleteMany: ({
-		model,
-		where,
-	}: {
-		model: string;
-		where: CleanedWhere[];
-	}) => Promise<number>;
-	count: ({
-		model,
-		where,
-	}: {
-		model: string;
-		where?: CleanedWhere[];
-	}) => Promise<number>;
-	transaction?: <R>(callback: (ctx: C) => Promise<R>) => Promise<R>;
+	create: <T extends Record<string, any>>(
+		{
+			data,
+			model,
+			select,
+		}: {
+			model: string;
+			data: T;
+			select?: string[];
+		},
+		ctx: C,
+	) => Promise<T>;
+	update: <T>(
+		data: {
+			model: string;
+			where: CleanedWhere[];
+			update: T;
+		},
+		ctx: C,
+	) => Promise<T | null>;
+	updateMany: (
+		data: {
+			model: string;
+			where: CleanedWhere[];
+			update: Record<string, any>;
+		},
+		ctx: C,
+	) => Promise<number>;
+	findOne: <T>(
+		{
+			model,
+			where,
+			select,
+		}: {
+			model: string;
+			where: CleanedWhere[];
+			select?: string[];
+		},
+		ctx: C,
+	) => Promise<T | null>;
+	findMany: <T>(
+		{
+			model,
+			where,
+			limit,
+			sortBy,
+			offset,
+		}: {
+			model: string;
+			where?: CleanedWhere[];
+			limit: number;
+			sortBy?: { field: string; direction: "asc" | "desc" };
+			offset?: number;
+		},
+		ctx: C,
+	) => Promise<T[]>;
+	delete: (
+		{
+			model,
+			where,
+		}: {
+			model: string;
+			where: CleanedWhere[];
+		},
+		ctx: C,
+	) => Promise<void>;
+	deleteMany: (
+		{
+			model,
+			where,
+		}: {
+			model: string;
+			where: CleanedWhere[];
+		},
+		ctx: C,
+	) => Promise<number>;
+	count: (
+		{
+			model,
+			where,
+		}: {
+			model: string;
+			where?: CleanedWhere[];
+		},
+		ctx: C,
+	) => Promise<number>;
 	createSchema?: (props: {
 		/**
 		 * The file the user may have passed in to the `generate` command as the expected schema file output path.
@@ -382,13 +403,19 @@ export type CustomAdapter<C extends AdapterContext | undefined> = {
 	 * Your adapter's options.
 	 */
 	options?: Record<string, any> | undefined;
-} & (C extends AdapterContext
-	? {
-			transaction: <R>(callback: (ctx: C) => Promise<R>) => Promise<R>;
-		}
-	: {
-			transaction?: <R>(callback: (ctx: C) => Promise<R>) => Promise<R>;
-		});
+} & InferCustomAdapterTransaction<C>;
+
+type InferCustomAdapterTransaction<C extends AdapterContext | undefined> =
+	C extends AdapterContext
+		? {
+				transaction: <R>(
+					callback: (txCtx: C) => Promise<R>,
+					ctx: C,
+				) => Promise<R>;
+			}
+		: {
+				transaction?: never;
+			};
 
 export type CleanedWhere = Prettify<Required<Where>>;
 
