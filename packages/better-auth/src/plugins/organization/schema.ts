@@ -35,7 +35,7 @@ export const invitationSchema = z.object({
 	email: z.string(),
 	role,
 	status: invitationStatus,
-	teamId: z.string().optional(),
+	teamId: z.string().nullish(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
 });
