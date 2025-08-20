@@ -1,0 +1,347 @@
+---
+title: NestJS Integration
+description: Integrate Better Auth with NestJS, supports both Express and Fastify, async module.
+---
+
+This guide will show you how to integrate Better Auth with [NestJS](https://nestjs.com/).
+
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+
+<Callout type="info">
+  This library is **community maintained**. If you encounter any issues, please
+  open them at
+  [nest-better-auth](https://github.com/buiducnhat/nest-better-auth).
+</Callout>
+
+## Installation
+
+Install the NestJS integration library:
+
+```package-install
+@buiducnhat/nest-better-auth
+```
+
+## Basic Setup For Express adapter
+
+### 1. Disable Body Parser
+
+Disable NestJS's built-in body parser to allow Better Auth to handle the raw request body:
+
+```ts title="main.ts"
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, // Required for Better Auth
+  });
+  await app.listen(process.env.PORT ?? 3000);
+}
+bootstrap();
+```
+
+<Callout type="info">
+  Due to [this
+  document](https://www.better-auth.com/docs/integrations/express#mount-the-handler):
+  Don’t use `express.json()` before the Better Auth handler. Use it only for
+  other routes, or the client API will get stuck on "pending". So, you need to
+  turn off the `bodyParser` option on `main.ts` file.
+</Callout>
+
+### 2. Setup AuthModule
+
+Import the `AuthModule` in your root module:
+
+```ts title="app.module.ts"
+import { AuthGuard, AuthModule } from "@buiducnhat/nest-better-auth";
+import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { betterAuth } from "better-auth";
+
+@Module({
+  imports: [
+    AuthModule.forRoot({
+      // Initialize the Better Auth instance
+      betterAuth: betterAuth({
+        basePath: "/auth",
+        secret: process.env.AUTH_SECRET,
+        emailAndPassword: {
+          enabled: true,
+        },
+        database: {
+          // Your database configuration
+        },
+      }),
+      options: {
+        routingProvider: "express", // default
+        jsonParser: true, // default
+      },
+    }),
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+<Callout type="info">
+  If you want to setup a dedicated `auth` instance, you can import it and pass
+  it directly to the `AuthModule.forRoot` function.
+</Callout>
+
+<Callout type="info">
+  `jsonParser` option is used because you already disabled it in `main.ts` file.
+  If you want to disable it totally, you can set it to `false`.
+</Callout>
+
+## Basic Setup For Fastify adapter
+
+### 1. Setup AuthModule
+
+Import the `AuthModule` in your root module:
+
+```ts title="app.module.ts"
+import { AuthGuard, AuthModule } from "@buiducnhat/nest-better-auth";
+import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { betterAuth } from "better-auth";
+
+@Module({
+  imports: [
+    AuthModule.forRoot({
+      // Initialize the Better Auth instance
+      betterAuth: betterAuth({
+        basePath: "/auth",
+        secret: process.env.AUTH_SECRET,
+        emailAndPassword: {
+          enabled: true,
+        },
+        database: {
+          // Your database configuration
+        },
+      }),
+      options: {
+        routingProvider: "fastify",
+      },
+    }),
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+<Callout type="info">
+  Same with **Express**, If you want to setup a dedicated `auth` instance, you
+  can import it and pass it directly to the `AuthModule.forRoot` function.
+</Callout>
+
+## Setup with Async Module
+
+For more complex setups, you can use async configuration with dependency injection. This is very useful when you want to use environment variables or from other modules/services like configuration, database instance, etc...
+
+```ts title="app.module.ts"
+import { AuthGuard, AuthModule } from "@buiducnhat/nest-better-auth";
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
+import { betterAuth } from "better-auth";
+
+@Module({
+  imports: [
+    ConfigModule.forRoot(),
+    AuthModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        betterAuth: betterAuth({
+          basePath: configService.get("AUTH_BASE_PATH", "/auth"),
+          secret: configService.get("AUTH_SECRET"),
+          emailAndPassword: {
+            enabled: true,
+          },
+          database: {
+            provider: configService.get("DB_PROVIDER"),
+            url: configService.get("DATABASE_URL"),
+          },
+        }),
+        options: {
+          routingProvider: configService.get("ROUTING_PROVIDER", "express"),
+        },
+      }),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+Config example:
+
+```ts title="config/configuration.ts"
+export default () => ({
+  betterAuth: {
+    basePath: process.env.AUTH_BASE_PATH || "/auth",
+    secret: process.env.AUTH_SECRET,
+    database: {
+      provider: process.env.DB_PROVIDER || "sqlite",
+      url: process.env.DATABASE_URL || "./database.db",
+    },
+  },
+});
+```
+
+## Use guards and decorators
+
+This library provides decorators @CurrentUser, @Session, @IsPublic, @User, @UserSession.
+
+### 1. Apply the guard
+
+The available guard is `AuthGuard`. You can apply it to your global, controller, method levels.
+
+```ts title="app.module.ts"
+import { AuthGuard, AuthModule } from "@buiducnhat/nest-better-auth";
+import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+
+@Module({
+  imports: [
+    AuthModule.forRoot({
+      // ...
+    }),
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+Or you can apply to the controller or method (local) level:
+
+```ts title="app.controller.ts"
+@Controller()
+@UseGuards(AuthGuard)
+export class AppController {
+  // ...
+
+  @Get("protected")
+  // Method (local) level
+  @UseGuards(AuthGuard)
+  protected() {
+    return { message: "This is a protected endpoint" };
+  }
+}
+```
+
+### 2. Use decorators
+
+This library provides decorators @CurrentUser, @Session, @IsPublic, @User, @UserSession.
+
+You can use them to protect your routes and get the user information.
+
+#### Example
+
+```ts title="app.controller.ts"
+import {
+  CurrentUser,
+  IsPublic,
+  Session,
+  User,
+  UserSession,
+} from "@buiducnhat/nest-better-auth";
+import { Body, Controller, Get, Post } from "@nestjs/common";
+
+@Controller()
+export class AppController {
+  // Public route - no authentication required
+  @IsPublic()
+  @Get("public")
+  getPublicData() {
+    return { message: "This is a public endpoint" };
+  }
+
+  // Protected route - authentication required
+  @Get("protected")
+  getProtectedData() {
+    return { message: "This is a protected endpoint" };
+  }
+
+  // Get current user information
+  @Get("me")
+  getCurrentUser(@CurrentUser() user: User) {
+    return user;
+  }
+
+  // Get full session information
+  @Get("session")
+  getSession(@Session() session: UserSession) {
+    return session;
+  }
+
+  // Protected POST route
+  @Post("user-action")
+  performUserAction(@CurrentUser() user: User, @Body() data: any) {
+    return {
+      user: user.id,
+      action: "performed",
+      data,
+    };
+  }
+}
+```
+
+## Use the better-auth instance
+
+You can use the better-auth instance to access the Better Auth API:
+
+```ts title="admin-users.controller.ts"
+import { auth } from "@/libs/auth";
+// Use can create a dedicated auth.ts like better-auth traditional way for using cli, and infer its type for fully support API
+import {
+  AuthGuard,
+  BETTER_AUTH_INSTANCE_TOKEN,
+  Session,
+  type UserSession,
+} from "@buiducnhat/nest-better-auth";
+import { Controller, Get, Inject, Req, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { fromNodeHeaders } from "better-auth/node";
+import type { Request } from "express";
+
+@ApiTags("Admin Users")
+@ApiBearerAuth()
+@Controller("admin/users")
+@UseGuards(AuthGuard)
+export class AdminUsersController {
+  constructor(
+    @Inject(BETTER_AUTH_INSTANCE_TOKEN)
+    private readonly authInstance: typeof auth
+  ) {}
+  // You can absolutely use the Auth type from better-auth
+  // import { Auth } from "better-auth";
+  // ...
+  // constructor(@Inject(BETTER_AUTH_INSTANCE_TOKEN) private readonly authInstance: Auth) {}
+
+  @Get("/")
+  getUsers(@Session() session: UserSession, @Req() req: Request) {
+    return this.authInstance.api.listUserAccounts({
+      headers: fromNodeHeaders(req.headers),
+    });
+  }
+}
+```
+
+## Full Documentation
+
+You can find the full documentation [here](https://github.com/buiducnhat/nest-better-auth).
