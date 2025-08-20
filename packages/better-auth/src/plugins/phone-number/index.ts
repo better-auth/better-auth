@@ -400,7 +400,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						}
 					}
 
-					const code = options.generateOTP
+					const code = options?.generateOTP
 						? options.generateOTP(opts.otpLength)
 						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue(

@@ -750,59 +750,7 @@ describe("custom generateOTP fallback behavior", async () => {
 		expect(capturedOtp).toMatch(/^\d{6}$/);
 	});
 
-	it("should use custom generateOTP for sign-in with requireVerification", async () => {
-		let capturedOtp = "";
-		const customOTPForSignIn = vi.fn(() => "SIGNIN123");
-
-		const { customFetchImpl } = await getTestInstance({
-			plugins: [
-				phoneNumber({
-					async sendOTP({ code }) {
-						capturedOtp = code;
-					},
-					generateOTP: customOTPForSignIn,
-					requireVerification: true,
-					signUpOnVerification: {
-						getTempEmail(phoneNumber) {
-							return `temp-${phoneNumber}`;
-						},
-					},
-				}),
-			],
-		});
-
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [phoneNumberClient()],
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
-
-		const testPhoneNumber = "+251911121320";
-		const testPassword = "password123";
-
-		// First register user with unverified phone
-		await client.phoneNumber.sendOtp({
-			phoneNumber: testPhoneNumber,
-		});
-		await client.phoneNumber.verify({
-			phoneNumber: testPhoneNumber,
-			code: "SIGNIN123",
-		});
-
-		// Set password for the user (this would normally be done during registration)
-		// For this test, we'll assume the user has a password set
-
-		// Reset the captured OTP
-		capturedOtp = "";
-		customOTPForSignIn.mockClear();
-
-		// Try to sign in - should trigger OTP generation since requireVerification is true
-		// and we need to simulate the user having an unverified phone number
-		// Note: This requires the user to exist with an unverified phone number
-		// which is a more complex setup, so we'll focus on the direct OTP generation test
-	});
+	it.todo("should use custom generateOTP for sign-in with requireVerification");
 });
 
 describe("custom generateOTP with deprecated sendForgetPasswordOTP", async () => {
