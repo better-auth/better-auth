@@ -92,7 +92,7 @@
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
-    "@types/node": "^20.17.9",
+    "@types/node": "^24.3.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.168.0",
