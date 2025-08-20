@@ -180,7 +180,7 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 		});
 	});
 
-	it("better-auth adapter integration", async () => {
+	describe("better-auth adapter integration", async () => {
 		const { DatabaseSync } = await import("node:sqlite");
 		const db = new DatabaseSync(":memory:");
 		const betterAuthKysely = new Kysely({
