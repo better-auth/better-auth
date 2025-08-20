@@ -93,7 +93,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				const { type = "sqlite" } = config || {};
 				let f = schema[model]?.fields[field];
 				if (!f) {
-					const schemaModel = Object.values(schema).find((f) => f.modelName === model);
+					const schemaModel = Object.values(schema).find(
+						(f) => f.modelName === model,
+					);
 					if (schemaModel) {
 						f = schemaModel.fields[field];
 						if (!f) {

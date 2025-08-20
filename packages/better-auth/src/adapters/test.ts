@@ -27,7 +27,8 @@ const adapterTests = {
 	FIND_MODEL_WITH_SELECT: "find model with select",
 	FIND_MODEL_WITH_MODIFIED_FIELD_NAME: "find model with modified field name",
 	FIND_MODEL_WITH_RENAMED_FIELD: "find model with renamed field",
-	FIND_MODEL_WITH_RENAMED_MODEL_AND_FIELD: "find model with renamed model and field",
+	FIND_MODEL_WITH_RENAMED_MODEL_AND_FIELD:
+		"find model with renamed model and field",
 	UPDATE_MODEL: "update model",
 	SHOULD_FIND_MANY: "should find many",
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
