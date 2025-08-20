@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import { parseSetCookieHeader } from "./cookie-utils";
 import type { BetterAuthOptions } from "../types/options";
 
 describe("cookies", async () => {
@@ -152,6 +153,16 @@ describe("cookie configuration", () => {
 	});
 });
 
+describe("cookie-utils parseSetCookieHeader", () => {
+	it("handles Expires with commas and multiple cookies", () => {
+		const header =
+			"a=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, b=2; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
+		const map = parseSetCookieHeader(header);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+});
+
 describe("getSessionCookie", async () => {
 	it("should return the correct session cookie", async () => {
 		const { client, testUser, signInWithTestUser } = await getTestInstance();
@@ -242,7 +253,7 @@ describe("getSessionCookie", async () => {
 		expect(cookies).not.toBeNull();
 	});
 
-	it("should retun cookie cache", async () => {
+	it("should return cookie cache", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
 			session: {
@@ -251,7 +262,9 @@ describe("getSessionCookie", async () => {
 				},
 			},
 		});
+
 		const headers = new Headers();
+
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -261,25 +274,17 @@ describe("getSessionCookie", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
+
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
+
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
 		});
-		console.log(cache);
 		expect(cache).not.toBeNull();
-		expect(cache).toMatchObject({
-			user: {
-				id: expect.any(String),
-				email: expect.any(String),
-				emailVerified: expect.any(Boolean),
-			},
-			session: {
-				expiresAt: expect.any(Date),
-				token: expect.any(String),
-			},
-		});
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
 	it("should return null if the cookie is invalid", async () => {

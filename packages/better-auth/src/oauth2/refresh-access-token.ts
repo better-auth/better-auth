@@ -12,7 +12,7 @@ export async function refreshAccessToken({
 	grantType = "refresh_token",
 }: {
 	refreshToken: string;
-	options: ProviderOptions;
+	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	extraParams?: Record<string, string>;
@@ -29,12 +29,18 @@ export async function refreshAccessToken({
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		headers["authorization"] = base64.encode(
-			`${options.clientId}:${options.clientSecret}`,
-		);
+		if (options.clientId) {
+			headers["authorization"] = base64.encode(
+				`${options.clientId}:${options.clientSecret ?? ""}`,
+			);
+		} else {
+			headers["authorization"] = base64.encode(`${options.clientSecret ?? ""}`);
+		}
 	} else {
-		body.set("client_id", options.clientId);
-		body.set("client_secret", options.clientSecret);
+		options.clientId && body.set("client_id", options.clientId);
+		if (options.clientSecret) {
+			body.set("client_secret", options.clientSecret);
+		}
 	}
 
 	if (extraParams) {
