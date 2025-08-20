@@ -101,6 +101,7 @@ exports[`init > should match config 1`] = `
     "debug": [Function],
     "error": [Function],
     "info": [Function],
+    "level": "error",
     "success": [Function],
     "warn": [Function],
   },
@@ -127,6 +128,7 @@ exports[`init > should match config 1`] = `
     "hash": [Function],
     "verify": [Function],
   },
+  "publishTelemetry": [Function],
   "rateLimit": {
     "enabled": false,
     "max": 100,

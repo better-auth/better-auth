@@ -584,6 +584,25 @@ type acceptInvitation = {
 ```
 </APIMethod>
 
+#### Email Verification Requirement
+
+If the `requireEmailVerificationOnInvitation` option is enabled in your organization configuration, users must verify their email address before they can accept invitations. This adds an extra security layer to ensure that only verified users can join your organization.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            requireEmailVerificationOnInvitation: true, // [!code highlight]
+            async sendInvitationEmail(data) {
+                // ... your email sending logic
+            }
+        })
+    ]
+})
+```
 
 ### Cancel Invitation
 
@@ -616,6 +635,10 @@ type rejectInvitation = {
 }
 ```
 </APIMethod>
+
+<Callout type="info">
+Like accepting invitations, rejecting invitations also requires email verification when the `requireEmailVerificationOnInvitation` option is enabled. Users with unverified emails will receive an error when attempting to reject invitations.
+</Callout>
 
 ### Get Invitation
 
@@ -1759,3 +1782,5 @@ await client.organization.create({
 **cancelPendingInvitationsOnReInvite**: `boolean` - Whether to cancel pending invitations if the user is already invited to the organization. By default, it's `false`.
 
 **invitationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of invitations allowed for a user. By default, it's `100`. You can set it to any number you want or a function that returns a boolean.
+
+**requireEmailVerificationOnInvitation**: `boolean` - Whether to require email verification before accepting or rejecting invitations. By default, it's `false`. When enabled, users must have verified their email address before they can accept or reject organization invitations.

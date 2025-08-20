@@ -112,6 +112,20 @@ describe("run time proxy", async () => {
 		);
 		expect(called).toBe(true);
 	});
+
+	it("should not expose a 'then', 'catch', 'finally' property on the proxy", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+		const proxy = (client as any).test;
+		expect(proxy.then).toBeUndefined();
+		expect(proxy.catch).toBeUndefined();
+		expect(proxy.finally).toBeUndefined();
+	});
 });
 
 describe("type", () => {
@@ -305,5 +319,23 @@ describe("type", () => {
 				};
 			} | null>
 		>();
+	});
+
+	it("should infer `error` schema correctly", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		const { error } = await client.test();
+		expectTypeOf(error!).toMatchObjectType<{
+			code: number;
+			message: string;
+			test: boolean;
+		}>();
 	});
 });
