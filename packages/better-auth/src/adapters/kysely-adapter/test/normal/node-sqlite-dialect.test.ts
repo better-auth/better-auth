@@ -187,58 +187,60 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 		});
 	});
 
-	describe("better-auth adapter integration", async () => {
-		const { DatabaseSync } = await import("node:sqlite");
-		const db = new DatabaseSync(":memory:");
-		const betterAuthKysely = new Kysely({
-			dialect: new NodeSqliteDialect({
-				database: db,
-			}),
-		});
+	describe.runIf(nodeSqliteSupported)(
+		"better-auth adapter integration",
+		async () => {
+			const { DatabaseSync } = await import("node:sqlite");
+			const db = new DatabaseSync(":memory:");
+			const betterAuthKysely = new Kysely({
+				dialect: new NodeSqliteDialect({
+					database: db,
+				}),
+			});
 
-		const opts: BetterAuthOptions = {
-			database: {
-				db: betterAuthKysely,
-				type: "sqlite",
-			},
-			user: {
-				fields: {
-					email: "email_address",
+			const opts: BetterAuthOptions = {
+				database: {
+					db: betterAuthKysely,
+					type: "sqlite",
 				},
-				additionalFields: {
-					test: {
-						type: "string",
-						defaultValue: "test",
+				user: {
+					fields: {
+						email: "email_address",
+					},
+					additionalFields: {
+						test: {
+							type: "string",
+							defaultValue: "test",
+						},
 					},
 				},
-			},
-			session: {
-				modelName: "sessions",
-			},
-		};
+				session: {
+					modelName: "sessions",
+				},
+			};
 
-		beforeAll(async () => {
-			const { runMigrations } = await getMigrations(opts);
-			await runMigrations();
-		});
+			beforeAll(async () => {
+				const { runMigrations } = await getMigrations(opts);
+				await runMigrations();
+			});
 
-		afterAll(async () => {
-			await betterAuthKysely.destroy();
-			db.close();
-		});
+			afterAll(async () => {
+				await betterAuthKysely.destroy();
+			});
 
-		const adapter = kyselyAdapter(betterAuthKysely, {
-			type: "sqlite",
-			debugLogs: {
-				isRunningAdapterTests: true,
-			},
-		});
+			const adapter = kyselyAdapter(betterAuthKysely, {
+				type: "sqlite",
+				debugLogs: {
+					isRunningAdapterTests: true,
+				},
+			});
 
-		await runAdapterTest({
-			getAdapter: async (customOptions = {}) => {
-				return adapter(merge(customOptions, opts));
-			},
-			testPrefix: "node-sqlite",
-		});
-	});
+			await runAdapterTest({
+				getAdapter: async (customOptions = {}) => {
+					return adapter(merge(customOptions, opts));
+				},
+				testPrefix: "node-sqlite",
+			});
+		},
+	);
 });
