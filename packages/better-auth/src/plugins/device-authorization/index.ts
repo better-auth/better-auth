@@ -158,6 +158,14 @@ export const deviceAuthorization = (
 							})
 							.optional(),
 					}),
+					error: z.object({
+						error: z.enum(["invalid_request", "invalid_client"]).meta({
+							description: "Error code",
+						}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
+						}),
+					}),
 					metadata: {
 						openapi: {
 							description: `Request a device and user code
@@ -285,6 +293,23 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						}),
 						client_id: z.string().meta({
 							description: "The client ID of the application",
+						}),
+					}),
+					error: z.object({
+						error: z
+							.enum([
+								"authorization_pending",
+								"slow_down",
+								"expired_token",
+								"access_denied",
+								"invalid_request",
+								"invalid_grant",
+							])
+							.meta({
+								description: "Error code",
+							}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
 						}),
 					}),
 					metadata: {
@@ -524,6 +549,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							description: "The user code to verify",
 						}),
 					}),
+					error: z.object({
+						error: z.enum(["invalid_request"]).meta({
+							description: "Error code",
+						}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
+						}),
+					}),
 					metadata: {
 						openapi: {
 							description: "Display device verification page",
@@ -588,6 +621,20 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					body: z.object({
 						userCode: z.string().meta({
 							description: "The user code to approve",
+						}),
+					}),
+					error: z.object({
+						error: z
+							.enum([
+								"invalid_request",
+								"expired_token",
+								"device_code_already_processed",
+							])
+							.meta({
+								description: "Error code",
+							}),
+						error_description: z.string().meta({
+							description: "Detailed error description",
 						}),
 					}),
 					requireHeaders: true,

@@ -54,10 +54,7 @@ async function startDeviceFlow() {
 		});
 
 		if (error) {
-			console.error(
-				"❌ Error:",
-				error.message || "Failed to request device code",
-			);
+			console.error("❌ Error:", error.error_description);
 			process.exit(1);
 		}
 
@@ -125,8 +122,7 @@ async function pollForToken(deviceCode: string, interval: number) {
 					resolve();
 					process.exit(0);
 				} else if (error) {
-					// @ts-expect-error
-					const code = error.error ? error.error : "unknown_error";
+					const code = error.error;
 
 					switch (code) {
 						case "authorization_pending":
@@ -149,10 +145,7 @@ async function pollForToken(deviceCode: string, interval: number) {
 							process.exit(1);
 							break;
 						default:
-							console.error(
-								"❌ Error:",
-								error.message || "Unknown error during polling",
-							);
+							console.error("❌ Error:", error.error_description);
 							resolve();
 							process.exit(1);
 					}
