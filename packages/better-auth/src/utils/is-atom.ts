@@ -5,6 +5,8 @@ export function isAtom(value: unknown): value is Atom<unknown> {
 		typeof value === "object" &&
 		value !== null &&
 		"get" in value &&
-		typeof (value as any).get === "function"
+		typeof (value as any).get === "function" &&
+		"lc" in value &&
+		typeof (value as any).lc === "number"
 	);
 }
