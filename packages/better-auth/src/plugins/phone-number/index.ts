@@ -244,9 +244,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					if (opts.requireVerification) {
 						if (!user.phoneNumberVerified) {
-              const otp = opts.generateOTP
-                ? opts.generateOTP(opts.otpLength)
-                : generateOTP(opts.otpLength);
+							const otp = opts.generateOTP
+								? opts.generateOTP(opts.otpLength)
+								: generateOTP(opts.otpLength);
 							await ctx.context.internalAdapter.createVerificationValue(
 								{
 									value: otp,
