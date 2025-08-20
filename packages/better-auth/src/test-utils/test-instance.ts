@@ -115,7 +115,7 @@ export async function getTestInstance<
 			...options?.advanced,
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	});
+	} as O extends undefined ? typeof opts : O & typeof opts);
 
 	const testUser = {
 		email: "test@test.com",
@@ -127,8 +127,8 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
+		//@ts-expect-error
 		await auth.api.signUpEmail({
-			//@ts-expect-error image is not compatible with the type
 			body: testUser,
 		});
 	}
