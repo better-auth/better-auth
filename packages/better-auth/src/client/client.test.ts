@@ -320,4 +320,22 @@ describe("type", () => {
 			} | null>
 		>();
 	});
+
+	it("should infer `error` schema correctly", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		const { error } = await client.test();
+		expectTypeOf(error!).toMatchObjectType<{
+			code: number;
+			message: string;
+			test: boolean;
+		}>();
+	});
 });
