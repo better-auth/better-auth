@@ -14,6 +14,7 @@ type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
 		asResponse?: boolean;
 		context: AuthContext & {
+			logger: AuthContext["logger"];
 			returned?: unknown;
 			responseHeaders?: Headers;
 		};
@@ -54,18 +55,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				headers: context?.headers ? new Headers(context?.headers) : undefined,
 			};
 			const { beforeHooks, afterHooks } = getHooks(authContext);
-			const before = await runBeforeHooks(internalContext, beforeHooks).catch(
-				(error) => {
-					if (
-						error instanceof APIError &&
-						shouldPublishLog(authContext.logger.level, "debug")
-					) {
-						// inherit stack from errorWithStack if debug mode is enabled
-						error.stack = error.errorWithStack.stack;
-					}
-					throw error;
-				},
-			);
+			const before = await runBeforeHooks(internalContext, beforeHooks);
 			/**
 			 * If `before.context` is returned, it should
 			 * get merged with the original context
@@ -121,18 +111,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 			internalContext.context.returned = result.response;
 			internalContext.context.responseHeaders = result.headers;
 
-			const after = await runAfterHooks(internalContext, afterHooks).catch(
-				(error) => {
-					if (
-						error instanceof APIError &&
-						shouldPublishLog(authContext.logger.level, "debug")
-					) {
-						// inherit stack from errorWithStack if debug mode is enabled
-						error.stack = error.errorWithStack.stack;
-					}
-					throw error;
-				},
-			);
+			const after = await runAfterHooks(internalContext, afterHooks);
 
 			if (after.response) {
 				result.response = after.response;
@@ -169,7 +148,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 }
 
 async function runBeforeHooks(
-	context: HookEndpointContext,
+	context: InternalContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
@@ -180,10 +159,21 @@ async function runBeforeHooks(
 	} = {};
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
-			const result = await hook.handler({
-				...context,
-				returnHeaders: false,
-			});
+			const result = await hook
+				.handler({
+					...context,
+					returnHeaders: false,
+				})
+				.catch((e: unknown) => {
+					if (
+						e instanceof APIError &&
+						shouldPublishLog(context.context.logger.level, "debug")
+					) {
+						// inherit stack from errorWithStack if debug mode is enabled
+						e.stack = e.errorWithStack.stack;
+					}
+					throw e;
+				});
 			if (result && typeof result === "object") {
 				if ("context" in result && typeof result.context === "object") {
 					const { headers, ...rest } = result.context as {
@@ -210,7 +200,7 @@ async function runBeforeHooks(
 }
 
 async function runAfterHooks(
-	context: HookEndpointContext,
+	context: InternalContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
@@ -220,6 +210,10 @@ async function runAfterHooks(
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
 				if (e instanceof APIError) {
+					if (shouldPublishLog(context.context.logger.level, "debug")) {
+						// inherit stack from errorWithStack if debug mode is enabled
+						e.stack = e.errorWithStack.stack;
+					}
 					return {
 						response: e,
 						headers: e.headers ? new Headers(e.headers) : null,
