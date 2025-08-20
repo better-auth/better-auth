@@ -27,6 +27,7 @@ const adapterTests = {
 	FIND_MODEL_WITH_SELECT: "find model with select",
 	FIND_MODEL_WITH_MODIFIED_FIELD_NAME: "find model with modified field name",
 	FIND_MODEL_WITH_RENAMED_FIELD: "find model with renamed field",
+	FIND_MODEL_WITH_RENAMED_MODEL_AND_FIELD: "find model with renamed model and field",
 	UPDATE_MODEL: "update model",
 	SHOULD_FIND_MANY: "should find many",
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
@@ -285,6 +286,55 @@ async function adapterTest(
 				],
 			});
 			expect(res).not.toBeNull();
+		},
+	);
+
+	test.skipIf(disabledTests?.FIND_MODEL_WITH_MODIFIED_FIELD_NAME)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.FIND_MODEL_WITH_RENAMED_MODEL_AND_FIELD
+		}`,
+		async ({ onTestFailed }) => {
+			resetDebugLogs();
+			onTestFailed(() => {
+				printDebugLogs();
+			});
+			const adapter = await getAdapter(
+				Object.assign(
+					{
+						verification: {
+							modelName: "auth_verification",
+							fields: {
+								expiresAt: "expires_at",
+							},
+						},
+					},
+					internalOptions?.predefinedOptions,
+				),
+			);
+			const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+			const verification = await adapter.create({
+				model: "verification",
+				data: {
+					identifier: "test@example.com",
+					value: "test-token",
+					expiresAt,
+				},
+			});
+			const res = await adapter.findOne<{
+				identifier: string;
+				value: string;
+				expiresAt: Date;
+			}>({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: "test@example.com",
+					},
+				],
+			});
+			expect(res).not.toBeNull();
+			expect(res?.expiresAt).toEqual(expiresAt);
 		},
 	);
 
