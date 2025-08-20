@@ -10,7 +10,7 @@ description: GitHub provider setup and usage.
 
         Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/github` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
-        Important: You MUST include the user.email scope in your Github app. See details below.
+        Important: You MUST include the user:email scope in your GitHub app. See details below.
     </Step>
 
   <Step>
@@ -65,3 +65,10 @@ That's all! Now you can copy the Client ID and Client Secret of your app!
 <Callout>
 If you get "email_not_found" error, it's because you selected a Github app & did not configure this part!
 </Callout>
+
+### Why don't I have a refresh token?
+
+Github doesn't issue refresh tokens for OAuth apps. For regular OAuth apps,
+GitHub issues access tokens that remain valid indefinitely unless the user revokes them,
+the app revokes them, or they go unused for a year.
+There's no need for a refresh token because the access token doesn't expire on a short interval like Google or Discord.

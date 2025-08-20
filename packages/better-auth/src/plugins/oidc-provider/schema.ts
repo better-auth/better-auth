@@ -21,6 +21,7 @@ export const schema = {
 			},
 			clientSecret: {
 				type: "string",
+				required: false,
 			},
 			redirectURLs: {
 				type: "string",

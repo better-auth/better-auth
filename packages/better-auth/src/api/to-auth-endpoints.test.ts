@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createAuthEndpoint, createAuthMiddleware } from "./call";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 import { init } from "../init";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError } from "better-call";
 import { getTestInstance } from "../test-utils/test-instance";
 
@@ -139,6 +139,39 @@ describe("before hook", async () => {
 				}),
 			});
 			expect(res).toMatchObject({ key: "value", name: "headers" });
+		});
+
+		it("should replace existing array when hook provides another array", async () => {
+			const endpoint = {
+				body: createAuthEndpoint(
+					"/body-array-replace",
+					{ method: "POST", body: z.object({ tags: z.array(z.string()) }) },
+					async (c) => c.body,
+				),
+			};
+			const authContext = init({
+				hooks: {
+					before: createAuthMiddleware(async (c) => {
+						if (c.path === "/body-array-replace") {
+							return {
+								context: {
+									body: {
+										tags: ["a"],
+									},
+								},
+							};
+						}
+					}),
+				},
+			});
+			const api = toAuthEndpoints(endpoint, authContext);
+
+			const res = await api.body({
+				body: {
+					tags: ["b", "c"],
+				},
+			});
+			expect(res.tags).toEqual(["a"]);
 		});
 	});
 

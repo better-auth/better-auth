@@ -163,10 +163,16 @@ export type BetterAuthOptions = {
 		 */
 		sendOnSignUp?: boolean;
 		/**
+		 * Send a verification email automatically
+		 * on sign in when the user's email is not verified
+		 *
+		 * @default false
+		 */
+		sendOnSignIn?: boolean;
+		/**
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
-
 		/**
 		 * Number of seconds the verification token is
 		 * valid for.
@@ -179,6 +185,12 @@ export type BetterAuthOptions = {
 		 * @param request the request object
 		 */
 		onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+		/**
+		 * A function that is called when a user's email is updated to verified
+		 * @param user the user that verified their email
+		 * @param request the request object
+		 */
+		afterEmailVerification?: (user: User, request?: Request) => Promise<void>;
 	};
 	/**
 	 * Email and password authentication
@@ -239,6 +251,14 @@ export type BetterAuthOptions = {
 		 * @default 1 hour (60 * 60)
 		 */
 		resetPasswordTokenExpiresIn?: number;
+		/**
+		 * A callback function that is triggered
+		 * when a user's password is changed successfully.
+		 */
+		onPasswordReset?: (
+			data: { user: User },
+			request?: Request,
+		) => Promise<void>;
 		/**
 		 * Password hashing and verification
 		 *
@@ -459,7 +479,13 @@ export type BetterAuthOptions = {
 		freshAge?: number;
 	};
 	account?: {
+		/**
+		 * The model name for the account. Defaults to "account".
+		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 		/**
 		 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
@@ -498,7 +524,27 @@ export type BetterAuthOptions = {
 			 * @default false
 			 */
 			allowUnlinkingAll?: boolean;
+			/**
+			 * If enabled (true), this will update the user information based on the newly linked account
+			 *
+			 * @default false
+			 */
+			updateUserInfoOnLink?: boolean;
 		};
+		/**
+		 * Encrypt OAuth tokens
+		 *
+		 * By default, OAuth tokens (access tokens, refresh tokens, ID tokens) are stored in plain text in the database.
+		 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
+		 * on external services.
+		 *
+		 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+		 * - Database breaches and unauthorized access to raw token data
+		 * - Internal threats from database administrators or compromised credentials
+		 * - Token exposure in database backups and logs
+		 * @default false
+		 */
+		encryptOAuthTokens?: boolean;
 	};
 	/**
 	 * Verification configuration
@@ -614,7 +660,7 @@ export type BetterAuthOptions = {
 			 *
 			 * Ip address is used for rate limiting and session tracking
 			 *
-			 * @example ["x-client-ip", "x-forwarded-for"]
+			 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 			 *
 			 * @default
 			 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
@@ -715,7 +761,7 @@ export type BetterAuthOptions = {
 				| ((options: {
 						model: LiteralUnion<Models, string>;
 						size?: number;
-				  }) => string)
+				  }) => string | false)
 				| false;
 		};
 		/**
@@ -751,7 +797,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: User,
+					user: User & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -763,7 +809,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is created.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 			update?: {
 				/**
@@ -772,7 +821,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					user: Partial<User>,
+					user: Partial<User> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -784,7 +833,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is updated.
 				 */
-				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
+				after?: (
+					user: User & Record<string, unknown>,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 		};
 		/**
@@ -798,7 +850,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Session,
+					session: Session & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -811,7 +863,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a session is created.
 				 */
 				after?: (
-					session: Session,
+					session: Session & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -825,7 +877,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					session: Partial<Session>,
+					session: Partial<Session> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -838,7 +890,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a session is updated.
 				 */
 				after?: (
-					session: Session,
+					session: Session & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -881,7 +933,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					account: Partial<Account>,
+					account: Partial<Account> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -894,7 +946,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a account is updated.
 				 */
 				after?: (
-					account: Account,
+					account: Account & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -910,7 +962,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Verification,
+					verification: Verification & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -923,7 +975,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a verification is created.
 				 */
 				after?: (
-					verification: Verification,
+					verification: Verification & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -934,7 +986,7 @@ export type BetterAuthOptions = {
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (
-					verification: Partial<Verification>,
+					verification: Partial<Verification> & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<
 					| boolean
@@ -947,7 +999,7 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a verification is updated.
 				 */
 				after?: (
-					verification: Verification,
+					verification: Verification & Record<string, unknown>,
 					context?: GenericEndpointContext,
 				) => Promise<void>;
 			};
@@ -999,4 +1051,27 @@ export type BetterAuthOptions = {
 	 * Paths you want to disable.
 	 */
 	disabledPaths?: string[];
+	/**
+	 * Telemetry configuration
+	 */
+	telemetry?: {
+		/**
+		 * Enable telemetry collection
+		 *
+		 * @default true
+		 */
+		enabled?: boolean;
+		/**
+		 * Enable debug mode
+		 *
+		 * @default false
+		 */
+		debug?: boolean;
+		/**
+		 * Disable telemetry notice
+		 *
+		 * @default false
+		 */
+		disableNotice?: boolean;
+	};
 };

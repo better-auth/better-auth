@@ -1,9 +1,15 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.2.9-beta.9",
+  "version": "1.3.7",
   "description": "",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/expo"
+  },
+  "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
     "build": "unbuild --clean",
@@ -32,9 +38,17 @@
       ]
     }
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "auth",
+    "expo",
+    "react-native",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
@@ -44,8 +58,7 @@
     "expo-linking": "~7.0.5",
     "expo-secure-store": "~14.0.1",
     "expo-web-browser": "~14.0.2",
-    "unbuild": "^3.5.0",
-    "vitest": "^1.6.0"
+    "unbuild": "^3.5.0"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"
@@ -53,7 +66,7 @@
   "dependencies": {
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
-    "zod": "^3.23.8"
+    "zod": "^4.0.0"
   },
   "files": [
     "dist"
