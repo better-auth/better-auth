@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+	describe,
+	it,
+	expect,
+	beforeAll,
+	afterAll,
+	afterEach,
+	beforeEach,
+} from "vitest";
 import { Kysely, sql } from "kysely";
 import { NodeSqliteDialect } from "../../node-sqlite-dialect";
 import { kyselyAdapter } from "../../kysely-adapter";
@@ -28,7 +36,6 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 
 	afterAll(async () => {
 		await kysely.destroy();
-		db.close();
 	});
 
 	describe("basic operations", () => {
