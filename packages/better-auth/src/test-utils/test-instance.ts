@@ -17,6 +17,15 @@ import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
 
+const cleanupSet = new Set<Function>();
+
+afterAll(async () => {
+	for (const cleanup of cleanupSet) {
+		await cleanup();
+		cleanupSet.delete(cleanup);
+	}
+});
+
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends ClientOptions,
@@ -161,12 +170,7 @@ export async function getTestInstance<
 
 		await fs.unlink(dbName);
 	};
-
-	try {
-		onTestFinished(cleanup);
-	} catch {
-		afterAll(cleanup);
-	}
+	cleanupSet.add(cleanup);
 
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {
