@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import { generateRandomString } from "../crypto/random";
-import { afterAll } from "vitest";
+import { afterAll, onTestFinished } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
@@ -16,6 +16,15 @@ import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
+
+const cleanupSet = new Set<Function>();
+
+afterAll(async () => {
+	for (const cleanup of cleanupSet) {
+		await cleanup();
+		cleanupSet.delete(cleanup);
+	}
+});
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -92,6 +101,9 @@ export async function getTestInstance<
 		advanced: {
 			cookies: {},
 		},
+		logger: {
+			level: "debug",
+		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
@@ -116,7 +128,7 @@ export async function getTestInstance<
 			return;
 		}
 		//@ts-expect-error
-		const res = await auth.api.signUpEmail({
+		await auth.api.signUpEmail({
 			body: testUser,
 		});
 	}
@@ -131,7 +143,7 @@ export async function getTestInstance<
 
 	await createTestUser();
 
-	afterAll(async () => {
+	const cleanup = async () => {
 		if (testWith === "mongodb") {
 			const db = await mongodbClient();
 			await db.dropDatabase();
@@ -157,7 +169,8 @@ export async function getTestInstance<
 		}
 
 		await fs.unlink(dbName);
-	});
+	};
+	cleanupSet.add(cleanup);
 
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {

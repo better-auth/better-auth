@@ -526,6 +526,16 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 					}
+
+					const now = Date.now();
+					const iat = Math.floor(now / 1000);
+					const exp = iat + (opts.accessTokenExpiresIn ?? 3600);
+
+					const accessTokenExpiresAt = new Date(exp * 1000);
+					const refreshTokenExpiresAt = new Date(
+						(iat + (opts.refreshTokenExpiresIn ?? 604800)) * 1000,
+					);
+
 					const {
 						grant_type,
 						code,
@@ -569,12 +579,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
-						const accessTokenExpiresAt = new Date(
-							Date.now() + opts.accessTokenExpiresIn * 1000,
-						);
-						const refreshTokenExpiresAt = new Date(
-							Date.now() + opts.refreshTokenExpiresIn * 1000,
-						);
+
 						await ctx.context.adapter.create({
 							model: modelName.oauthAccessToken,
 							data: {
@@ -585,8 +590,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 								clientId: client_id.toString(),
 								userId: token.userId,
 								scopes: token.scopes,
-								createdAt: new Date(),
-								updatedAt: new Date(),
+								createdAt: new Date(iat * 1000),
+								updatedAt: new Date(iat * 1000),
 							},
 						});
 						return ctx.json({
@@ -751,12 +756,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
-					const accessTokenExpiresAt = new Date(
-						Date.now() + opts.accessTokenExpiresIn * 1000,
-					);
-					const refreshTokenExpiresAt = new Date(
-						Date.now() + opts.refreshTokenExpiresIn * 1000,
-					);
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,
 						data: {
@@ -767,8 +766,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: client_id.toString(),
 							userId: value.userId,
 							scopes: requestedScopes.join(" "),
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: new Date(iat * 1000),
+							updatedAt: new Date(iat * 1000),
 						},
 					});
 					const user = await ctx.context.internalAdapter.findUserById(
@@ -842,12 +841,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 									session: {
 										session: {
 											id: generateRandomString(32, "a-z", "A-Z"),
-											createdAt: new Date(),
-											updatedAt: new Date(),
+											createdAt: new Date(iat * 1000),
+											updatedAt: new Date(iat * 1000),
 											userId: user.id,
-											expiresAt: new Date(
-												Date.now() + opts.accessTokenExpiresIn * 1000,
-											),
+											expiresAt: accessTokenExpiresAt,
 											token: accessToken,
 											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
 										},
@@ -872,8 +869,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					} else {
 						idToken = await new SignJWT(payload)
 							.setProtectedHeader({ alg: "HS256" })
-							.setIssuedAt()
-							.setExpirationTime(expirationTime)
+							.setIssuedAt(iat)
+							.setExpirationTime(accessTokenExpiresAt)
 							.sign(new TextEncoder().encode(client.clientSecret));
 					}
 
