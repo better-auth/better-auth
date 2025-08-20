@@ -42,6 +42,13 @@ export interface PhoneNumberOptions {
 		request?: Request,
 	) => Promise<void> | void;
 	/**
+	 * Generate OTP code if not provided default generateOTP function will be used
+	 *
+	 * @param otpLength
+	 * @returns
+	 */
+	generateOTP?: (otpLength: number) => string;
+	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
 	 * @param data - contains phone number and code
@@ -237,7 +244,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 					if (opts.requireVerification) {
 						if (!user.phoneNumberVerified) {
-							const otp = generateOTP(opts.otpLength);
+              const otp = opts.generateOTP
+                ? opts.generateOTP(opts.otpLength)
+                : generateOTP(opts.otpLength);
 							await ctx.context.internalAdapter.createVerificationValue(
 								{
 									value: otp,
@@ -391,7 +400,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						}
 					}
 
-					const code = generateOTP(opts.otpLength);
+					const code = options.generateOTP
+						? options.generateOTP(opts.otpLength)
+						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${code}:0`,
@@ -804,7 +815,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: "phone number isn't registered",
 						});
 					}
-					const code = generateOTP(opts.otpLength);
+					const code = options?.generateOTP
+						? options.generateOTP(opts.otpLength)
+						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${code}:0`,
@@ -874,7 +887,9 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							message: "phone number isn't registered",
 						});
 					}
-					const code = generateOTP(opts.otpLength);
+					const code = options?.generateOTP
+						? options.generateOTP(opts.otpLength)
+						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue(
 						{
 							value: `${code}:0`,
