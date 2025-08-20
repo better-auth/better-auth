@@ -15,7 +15,6 @@ describe("oauth2", async () => {
 	const server = new OAuth2Server();
 	await server.start();
 	const port = Number(server.issuer.url?.split(":")[2]!);
-	console.log("server started on port", port);
 
 	afterAll(async () => {
 		await server.stop();
