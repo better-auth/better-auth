@@ -26,16 +26,6 @@ export interface Store {
 	atoms: Record<string, WritableAtom<any>>;
 }
 
-export type AnyFunction = (...args: any[]) => any;
-
-export type DeepFunctionRecord = {
-	[key: string]: AnyFunction | DeepFunctionRecord;
-};
-
-export type DeepFunctionOrAtomRecord = {
-	[key: string]: AnyFunction | WritableAtom<any> | DeepFunctionOrAtomRecord;
-};
-
 export interface BetterAuthClientPlugin {
 	id: LiteralString;
 	/**
@@ -53,7 +43,7 @@ export interface BetterAuthClientPlugin {
 		 * better-auth client options
 		 */
 		options: ClientOptions | undefined,
-	) => DeepFunctionRecord;
+	) => Record<string, any>;
 	/**
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
