@@ -1,12 +1,4 @@
-import {
-	describe,
-	it,
-	expect,
-	beforeAll,
-	afterAll,
-	afterEach,
-	beforeEach,
-} from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Kysely, sql } from "kysely";
 import { NodeSqliteDialect } from "../../node-sqlite-dialect";
 import { kyselyAdapter } from "../../kysely-adapter";
@@ -23,6 +15,9 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 	let kysely: Kysely<any>;
 
 	beforeAll(async () => {
+		if (!nodeSqliteSupported) {
+			return;
+		}
 		const { DatabaseSync } = await import("node:sqlite");
 
 		db = new DatabaseSync(":memory:");
@@ -35,6 +30,9 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 	});
 
 	afterAll(async () => {
+		if (!nodeSqliteSupported) {
+			return;
+		}
 		await kysely.destroy();
 	});
 
@@ -187,60 +185,60 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 		});
 	});
 
-	describe.runIf(nodeSqliteSupported)(
-		"better-auth adapter integration",
-		async () => {
-			const { DatabaseSync } = await import("node:sqlite");
-			const db = new DatabaseSync(":memory:");
-			const betterAuthKysely = new Kysely({
-				dialect: new NodeSqliteDialect({
-					database: db,
-				}),
-			});
+	describe("better-auth adapter integration", async () => {
+		if (!nodeSqliteSupported) {
+			return;
+		}
+		const { DatabaseSync } = await import("node:sqlite");
+		const db = new DatabaseSync(":memory:");
+		const betterAuthKysely = new Kysely({
+			dialect: new NodeSqliteDialect({
+				database: db,
+			}),
+		});
 
-			const opts: BetterAuthOptions = {
-				database: {
-					db: betterAuthKysely,
-					type: "sqlite",
-				},
-				user: {
-					fields: {
-						email: "email_address",
-					},
-					additionalFields: {
-						test: {
-							type: "string",
-							defaultValue: "test",
-						},
-					},
-				},
-				session: {
-					modelName: "sessions",
-				},
-			};
-
-			beforeAll(async () => {
-				const { runMigrations } = await getMigrations(opts);
-				await runMigrations();
-			});
-
-			afterAll(async () => {
-				await betterAuthKysely.destroy();
-			});
-
-			const adapter = kyselyAdapter(betterAuthKysely, {
+		const opts: BetterAuthOptions = {
+			database: {
+				db: betterAuthKysely,
 				type: "sqlite",
-				debugLogs: {
-					isRunningAdapterTests: true,
+			},
+			user: {
+				fields: {
+					email: "email_address",
 				},
-			});
+				additionalFields: {
+					test: {
+						type: "string",
+						defaultValue: "test",
+					},
+				},
+			},
+			session: {
+				modelName: "sessions",
+			},
+		};
 
-			await runAdapterTest({
-				getAdapter: async (customOptions = {}) => {
-					return adapter(merge(customOptions, opts));
-				},
-				testPrefix: "node-sqlite",
-			});
-		},
-	);
+		beforeAll(async () => {
+			const { runMigrations } = await getMigrations(opts);
+			await runMigrations();
+		});
+
+		afterAll(async () => {
+			await betterAuthKysely.destroy();
+		});
+
+		const adapter = kyselyAdapter(betterAuthKysely, {
+			type: "sqlite",
+			debugLogs: {
+				isRunningAdapterTests: true,
+			},
+		});
+
+		await runAdapterTest({
+			getAdapter: async (customOptions = {}) => {
+				return adapter(merge(customOptions, opts));
+			},
+			testPrefix: "node-sqlite",
+		});
+	});
 });
