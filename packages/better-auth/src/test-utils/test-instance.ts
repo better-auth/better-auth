@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import { generateRandomString } from "../crypto/random";
-import { afterAll } from "vitest";
+import { afterAll, onTestFinished } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
@@ -92,6 +92,9 @@ export async function getTestInstance<
 		advanced: {
 			cookies: {},
 		},
+		logger: {
+			level: "debug",
+		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
@@ -103,7 +106,7 @@ export async function getTestInstance<
 			...options?.advanced,
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as O extends undefined ? typeof opts : O & typeof opts);
+	});
 
 	const testUser = {
 		email: "test@test.com",
@@ -115,8 +118,8 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
-		//@ts-expect-error
-		const res = await auth.api.signUpEmail({
+		await auth.api.signUpEmail({
+			//@ts-expect-error image is not compatible with the type
 			body: testUser,
 		});
 	}
@@ -131,7 +134,7 @@ export async function getTestInstance<
 
 	await createTestUser();
 
-	afterAll(async () => {
+	const cleanup = async () => {
 		if (testWith === "mongodb") {
 			const db = await mongodbClient();
 			await db.dropDatabase();
@@ -157,7 +160,13 @@ export async function getTestInstance<
 		}
 
 		await fs.unlink(dbName);
-	});
+	};
+
+	try {
+		onTestFinished(cleanup);
+	} catch {
+		afterAll(cleanup);
+	}
 
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {
