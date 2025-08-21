@@ -45,7 +45,7 @@ The Last Social Provider plugin remembers the last social login provider used by
 The plugin exposes an endpoint to retrieve the last provider a user used to sign in.
 
 ```ts title="auth.ts"
-const lastProvider = await client.lastUsedSocial(); // [!code highlight]
+const lastProvider = await authClient.lastUsedSocial(); // [!code highlight]
 
 if (lastProvider) {
   console.log("Last provider used:", lastProvider)
