@@ -1,4 +1,5 @@
 import {
+	Binoculars,
 	Book,
 	CircleHelp,
 	Database,
@@ -1851,6 +1852,26 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Auth0 Migration Guide",
+				href: "/docs/guides/auth0-migration-guide",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						id="Auth0-Icon--Streamline-Svg-Logos"
+						height="1em"
+						width="1em"
+					>
+						<path
+							fill="currentColor"
+							d="M19.631725 0.25H11.9998l2.35875 7.350325h7.631925L15.815775 11.9836l2.359425 7.392025c3.974525 -2.8953 5.273175 -7.2772 3.815975 -11.7753L19.631725 0.25ZM2.0091225 7.600325H9.64105L11.9998 0.25h-7.63125L2.0091225 7.600325c-1.4579 4.4981 -0.1585725 8.88 3.8159525 11.7753l2.35875 -7.392025L2.0091225 7.600325ZM5.825075 19.375625 11.9998 23.75l6.174725 -4.374375 -6.174725 -4.44685 -6.174725 4.44685Z"
+							stroke-width="0.25"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Create Your First Plugin",
 				href: "/docs/guides/your-first-plugin",
 				icon: () => (
@@ -1963,10 +1984,16 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/reference/resources",
 				icon: () => <Book className="w-4 h-4 text-current" />,
 			},
+
 			{
 				title: "Security",
 				href: "/docs/reference/security",
 				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Telemetry",
+				href: "/docs/reference/telemetry",
+				icon: () => <Binoculars className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "FAQ",
@@ -1975,45 +2002,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 		],
 	},
-	// {
-
-	// 	title: "Contribute",
-	// 	Icon: () => (
-	//
-	// 	),
-	// 	list: [
-	// 		{
-	// 			title: "Getting Started",
-	// 			href: "/docs/contribute/getting-started",
-	// 			icon: () => <BookOpenCheck className="text-current size-4" />,
-	// 		},
-	// 		{
-	// 			title: "Areas to Contribute",
-	// 			href: "/docs/contribute/areas-to-contribute",
-	// 			icon: () => <HandHelping className="w-4 h-4 text-current" />,
-	// 		},
-	// 		// {
-	// 		// 	title: "Database Adapters",
-	// 		// 	href: "/docs/contribute/database-adapters",
-	// 		// 	icon: () => <Plug className="w-4 h-4 text-current" />,
-	// 		// },
-	// 		{
-	// 			title: "Testing",
-	// 			href: "/docs/contribute/testing",
-	// 			icon: () => <FlaskConical className="w-4 h-4 text-current" />,
-	// 		},
-	// 		{
-	// 			title: "Documenting",
-	// 			href: "/docs/contribute/documenting",
-	// 			icon: () => <NotebookPen className="w-4 h-4 text-current" />,
-	// 		},
-	// 		{
-	// 			title: "Security Issues",
-	// 			href: "/docs/contribute/security-issues",
-	// 			icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
-	// 		},
-	// 	],
-	// },
 ];
 
 export const examples: Content[] = [

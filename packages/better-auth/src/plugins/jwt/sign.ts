@@ -1,4 +1,4 @@
-import { importJWK, SignJWT } from "jose";
+import { importJWK, SignJWT, type JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
@@ -6,10 +6,14 @@ import { generateExportedKeyPair, type JwtOptions } from ".";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
 
-export async function getJwtToken(
+export async function signJWT(
 	ctx: GenericEndpointContext,
-	options?: JwtOptions,
+	config: {
+		options?: JwtOptions;
+		payload: JWTPayload;
+	},
 ) {
+	const { options, payload } = config;
 	const adapter = getJwksAdapter(ctx.context.adapter);
 
 	let key = await adapter.getLatestKey();
@@ -49,29 +53,39 @@ export async function getJwtToken(
 				);
 			})
 		: key.privateKey;
+	const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
 
-	const privateKey = await importJWK(
-		JSON.parse(privateWebKey),
-		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-	);
+	const jwt = await new SignJWT({
+		iss: options?.jwt?.issuer ?? ctx.context.options.baseURL!,
+		aud: options?.jwt?.audience ?? ctx.context.options.baseURL!,
+		...payload,
+	})
+		.setIssuedAt()
+		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
+		.setProtectedHeader({
+			alg,
+			kid: key.id,
+		})
+		.sign(privateKey);
+	return jwt;
+}
 
+export async function getJwtToken(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions,
+) {
 	const payload = !options?.jwt?.definePayload
 		? ctx.context.session!.user
 		: await options?.jwt.definePayload(ctx.context.session!);
 
-	const jwt = await new SignJWT(payload)
-		.setProtectedHeader({
-			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-			kid: key.id,
-		})
-		.setIssuedAt()
-		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
-		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
-		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
-		.setSubject(
-			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
+	return await signJWT(ctx, {
+		options,
+		payload: {
+			...payload,
+			sub:
+				(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
 				ctx.context.session!.user.id,
-		)
-		.sign(privateKey);
-	return jwt;
+		},
+	});
 }

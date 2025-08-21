@@ -246,7 +246,7 @@ The UserInfo endpoint returns different claims based on the scopes that were gra
 - With `profile` scope: Returns name, picture, given_name, family_name
 - With `email` scope: Returns email and email_verified
 
-The `getAdditionalUserInfoClaim` function receives the user object and the requested scopes array, allowing you to conditionally include claims based on the scopes granted during authorization. These additional claims will be included in both the UserInfo endpoint response and the ID token.
+The `getAdditionalUserInfoClaim` function receives the user object, requested scopes array, and the client, allowing you to conditionally include claims based on the scopes granted during authorization. These additional claims will be included in both the UserInfo endpoint response and the ID token.
 
 ### Consent Screen
 
@@ -264,17 +264,40 @@ export const auth = betterAuth({
 })
 ```
 
-The plugin will redirect the user to the specified path with a `client_id` and `scope` query parameter. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
+The plugin will redirect the user to the specified path with `consent_code`, `client_id` and `scope` query parameters. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
 
 <Endpoint path="/oauth2/consent" method="POST" />
 
-```ts title="server.ts"
+The consent endpoint supports two methods for passing the consent code:
+
+**Method 1: URL Parameter**
+```ts title="consent-page.ts"
+// Get the consent code from the URL
+const params = new URLSearchParams(window.location.search);
+
+// Submit consent with the code in the request body
+const consentCode = params.get('consent_code');
+if (!consentCode) {
+	throw new Error('Consent code not found in URL parameters');
+}
+
 const res = await client.oauth2.consent({
 	accept: true, // or false to deny
+	consent_code: consentCode,
 });
 ```
 
-The `client_id` and other necessary information are stored in the browser cookie, so you don't need to pass them in the request. If they don't exist in the cookie, the consent method will return an error.
+**Method 2: Cookie-Based**
+```ts title="consent-page.ts"
+// The consent code is automatically stored in a signed cookie
+// Just submit the consent decision
+const res = await client.oauth2.consent({
+	accept: true, // or false to deny
+	// consent_code not needed when using cookie-based flow
+});
+```
+
+Both methods are fully supported. The URL parameter method works well with mobile apps and third-party contexts, while the cookie-based method provides a simpler implementation for web applications.
 
 ### Handling Login
 
@@ -561,6 +584,6 @@ Table Name: `oauthConsent`
 
 **trustedClients**: `(Client & { skipConsent?: boolean })[]` - Array of trusted clients that are configured directly in the provider options. These clients bypass database lookups and can optionally skip consent screens.
 
-**getAdditionalUserInfoClaim**: `(user: User, scopes: string[]) => Record<string, any>` - Function to get additional user info claims.
+**getAdditionalUserInfoClaim**: `(user: User, scopes: string[], client: Client) => Record<string, any>` - Function to get additional user info claims.
 
 **useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.
