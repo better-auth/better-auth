@@ -166,15 +166,28 @@ export async function getConfig({
 				auth: {
 					options: BetterAuthOptions;
 				};
-				default?: {
-					options: BetterAuthOptions;
-				};
+				default?: BetterAuthOptions;
+				options?: BetterAuthOptions;
 			}>({
 				configFile: resolvedPath,
 				dotenv: true,
 				jitiOptions: jitiOptions(cwd),
 			});
-			if (!config.auth && !config.default) {
+			console.log("Config", config);
+			if (config.auth?.options) {
+				configFile = config.auth.options;
+			} else if (config.default) {
+				if (typeof config.default === "object" && config.default !== null) {
+					if ("options" in config.default && config.default.options) {
+						configFile = config.default.options;
+						console.log("Config", config);
+					}
+				}
+			} else if (config.options) {
+				configFile = config.options;
+			}
+
+			if (!configFile) {
 				if (shouldThrowOnError) {
 					throw new Error(
 						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
@@ -185,7 +198,6 @@ export async function getConfig({
 				);
 				process.exit(1);
 			}
-			configFile = config.auth?.options || config.default?.options || null;
 		}
 
 		if (!configFile) {
@@ -195,17 +207,27 @@ export async function getConfig({
 						auth: {
 							options: BetterAuthOptions;
 						};
-						default?: {
-							options: BetterAuthOptions;
-						};
+						default?: BetterAuthOptions;
+						options?: BetterAuthOptions;
 					}>({
 						configFile: possiblePath,
 						jitiOptions: jitiOptions(cwd),
 					});
 					const hasConfig = Object.keys(config).length > 0;
 					if (hasConfig) {
-						configFile =
-							config.auth?.options || config.default?.options || null;
+						if (config.auth?.options) {
+							configFile = config.auth.options;
+						} else if (config.default) {
+							if (
+								typeof config.default === "object" &&
+								config.default !== null
+							) {
+								if ("options" in config.default && config.default.options) {
+									configFile = config.default.options;
+								}
+							}
+						}
+
 						if (!configFile) {
 							if (shouldThrowOnError) {
 								throw new Error(

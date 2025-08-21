@@ -762,4 +762,32 @@ describe("getConfig", async () => {
 			emailAndPassword: { enabled: true },
 		});
 	});
+
+	it("should handle default export auth configuration", async () => {
+		const authPath = path.join(tmpDir, "src", "lib", "server");
+		await fs.mkdir(authPath, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from 'better-auth';
+
+const authInstance = betterAuth({
+	emailAndPassword: {
+		enabled: true
+	}
+});
+
+export default authInstance;`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "src/lib/server/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+		});
+	});
 });
