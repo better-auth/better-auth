@@ -27,13 +27,15 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
+import { createTelemetry } from "./telemetry";
+import type { TelemetryEvent } from "./telemetry/types";
+import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
-
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	const secret =
@@ -57,6 +59,7 @@ export const init = async (options: BetterAuthOptions) => {
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
 	};
+
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
@@ -91,7 +94,15 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const ctx: AuthContext = {
+	const { publish } = await createTelemetry(options, {
+		adapter: adapter.id,
+		database:
+			typeof options.database === "function"
+				? "adapter"
+				: getKyselyDatabaseType(options.database) || "unknown",
+	});
+
+	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -120,7 +131,7 @@ export const init = async (options: BetterAuthOptions) => {
 				(options.secondaryStorage ? "secondary-storage" : "memory"),
 		},
 		authCookies: cookies,
-		logger: logger,
+		logger,
 		generateId: generateIdFunc,
 		session: null,
 		secondaryStorage: options.secondaryStorage,
@@ -140,6 +151,7 @@ export const init = async (options: BetterAuthOptions) => {
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
+			logger,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
 			generateId: generateIdFunc,
 		}),
@@ -154,6 +166,7 @@ export const init = async (options: BetterAuthOptions) => {
 			const { runMigrations } = await getMigrations(options);
 			await runMigrations();
 		},
+		publishTelemetry: publish,
 	};
 	let { context } = runPluginInit(ctx);
 	return context;
@@ -218,6 +231,7 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 	runMigrations: () => Promise<void>;
+	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
 
 function runPluginInit(ctx: AuthContext) {
@@ -249,6 +263,7 @@ function runPluginInit(ctx: AuthContext) {
 	dbHooks.push(options.databaseHooks);
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
+		logger: ctx.logger,
 		hooks: dbHooks.filter((u) => u !== undefined),
 		generateId: ctx.generateId,
 	});

@@ -20,11 +20,7 @@ import { Session } from "@/lib/auth-types";
 import { client, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
-export default function AccountSwitcher({
-	sessions,
-}: {
-	sessions: Session[];
-}) {
+export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
 	const { data: currentUser } = useSession();
 	const [open, setOpen] = useState(false);
 	const router = useRouter();

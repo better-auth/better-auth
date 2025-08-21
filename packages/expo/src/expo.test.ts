@@ -148,6 +148,13 @@ describe("expo", async () => {
 		const c = client.getCookie();
 		expect(c).includes("better-auth.session_token");
 	});
+	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
+		const header =
+			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
+		const map = (await import("./client")).parseSetCookieHeader(header);
+		expect(map.get("better-auth.session_token")?.value).toBe("abc");
+		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
+	});
 });
 
 describe("expo with cookieCache", async () => {

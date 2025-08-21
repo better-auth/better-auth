@@ -1,4 +1,5 @@
 import type { AuthContext, RateLimit } from "../../types";
+import { safeJSONParse } from "../../utils/json";
 import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
 
@@ -87,8 +88,8 @@ export function getRateLimitStorage(ctx: AuthContext) {
 	if (ctx.rateLimit.storage === "secondary-storage") {
 		return {
 			get: async (key: string) => {
-				const stringified = await ctx.options.secondaryStorage?.get(key);
-				return stringified ? (JSON.parse(stringified) as RateLimit) : undefined;
+				const data = await ctx.options.secondaryStorage?.get(key);
+				return data ? safeJSONParse<RateLimit>(data) : undefined;
 			},
 			set: async (key: string, value: RateLimit) => {
 				await ctx.options.secondaryStorage?.set?.(key, JSON.stringify(value));
