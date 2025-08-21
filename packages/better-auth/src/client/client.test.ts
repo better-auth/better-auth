@@ -4,6 +4,7 @@ import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createVueClient } from "./vue";
 import { createAuthClient as createSvelteClient } from "./svelte";
+import { createAuthClient as createVanillaClient } from "./vanilla";
 import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
 import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
@@ -12,8 +13,15 @@ import type { Session } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { twoFactorClient } from "../plugins";
 import { organizationClient, passkeyClient } from "./plugins";
+import { isProxy } from "node:util/types";
 
 describe("run time proxy", async () => {
+	it("atom in proxy should not be proxy", async () => {
+		const client = createVanillaClient();
+		const atom = client.$store.atoms.session;
+		expect(isProxy(atom)).toBe(false);
+	});
+
 	it("proxy api should be called", async () => {
 		let apiCalled = false;
 		const client = createSolidClient({
