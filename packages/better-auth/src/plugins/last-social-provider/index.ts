@@ -36,6 +36,7 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 										"application/json": {
 											schema: {
 												type: "string",
+												nullable: true,
 												description: "Social Provider ID",
 											},
 										},
@@ -46,6 +47,7 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 					},
 				},
 				async (c) => {
+					c.context.socialProviders.map(x => x.id)
 					const providerId = c.getCookie(opts.cookieName);
 
 					if (!providerId) {
