@@ -4,6 +4,11 @@ const _envShim = Object.create(null);
 
 export type EnvObject = Record<string, string | undefined>;
 
+console.log('globalThis', globalThis);
+console.log('globalThis.process', globalThis.process);
+console.log('globalThis.process.env', globalThis.process.env);
+console.log('globalThis.process.env.BETTER_AUTH_SECRET', globalThis.process.env.BETTER_AUTH_SECRET);
+
 const _getEnv = (useShim?: boolean) =>
 	globalThis.process?.env ||
 	//@ts-expect-error
