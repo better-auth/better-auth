@@ -35,7 +35,7 @@ export async function refreshAccessToken({
 				base64.encode(`${options.clientId}:${options.clientSecret ?? ""}`);
 		} else {
 			headers["authorization"] =
-				"Basic " + base64.encode(`${options.clientSecret ?? ""}`);
+				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
 		}
 	} else {
 		options.clientId && body.set("client_id", options.clientId);
