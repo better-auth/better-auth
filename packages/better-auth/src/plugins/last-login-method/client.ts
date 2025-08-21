@@ -3,7 +3,7 @@ import type { BetterAuthClientPlugin } from "../../types";
 
 export const lastSocialProviderClient = () => {
 	return {
-		id: "last-social-provider",
+		id: "last-login-method",
 		$InferServerPlugin: {} as ReturnType<typeof lastSocialProvider>,
 	} satisfies BetterAuthClientPlugin;
 };

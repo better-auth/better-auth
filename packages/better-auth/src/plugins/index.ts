@@ -24,4 +24,4 @@ export * from "./haveibeenpwned";
 export * from "./one-time-token";
 export * from "./mcp";
 export * from "./siwe";
-export * from "./last-social-provider";
+export * from "./last-login-method";

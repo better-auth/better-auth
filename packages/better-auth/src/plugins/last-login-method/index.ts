@@ -17,7 +17,7 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 	};
 
 	return {
-		id: "last-social-provider",
+		id: "last-login-method",
 		endpoints: {
 			lastUsedSocial: createAuthEndpoint(
 				"/last-used-social",
