@@ -33,7 +33,7 @@ export default function DeviceAuthorizationPage() {
 				});
 
 				if (response.data) {
-					router.push(`/device/approve?userCode=${finalCode}`);
+					router.push(`/device/approve?user_code=${finalCode}`);
 				}
 			} catch (err: any) {
 				setError(
