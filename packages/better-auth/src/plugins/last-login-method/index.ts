@@ -1,6 +1,6 @@
 import type {
-	LastSocialProviderOptions,
-	RealizedLastSocialProviderOptions,
+	LastLoginMethodOptions,
+	RealizedLastLoginMethodOptions,
 } from "./types";
 import type { BetterAuthPlugin } from "../../types/plugins";
 
@@ -9,8 +9,8 @@ import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 export * from "./types";
 export * from "./client";
 
-export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
-	const opts: RealizedLastSocialProviderOptions = {
+export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
+	const opts: RealizedLastLoginMethodOptions = {
 		cookieName: options?.cookieName ?? "better-auth.last_used_social",
 		maxAge: options?.maxAge ?? 432000,
 		trustedProviderIds: options?.trustedProviderIds ?? [],

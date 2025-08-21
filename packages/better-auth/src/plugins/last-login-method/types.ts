@@ -1,4 +1,4 @@
-export type LastSocialProviderOptions = {
+export type LastLoginMethodOptions = {
 	/**
 	 * The name of the last used social provider cookie.
 	 *
@@ -25,5 +25,5 @@ export type LastSocialProviderOptions = {
 	trustedProviderIds?: string[];
 };
 
-export type RealizedLastSocialProviderOptions =
-	Required<LastSocialProviderOptions>;
+export type RealizedLastLoginMethodOptions =
+	Required<LastLoginMethodOptions>;

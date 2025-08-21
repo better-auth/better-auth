@@ -9,7 +9,7 @@ import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
 import { getMigrations } from "../db";
-import { lastSocialProvider, lastSocialProviderClient } from "../plugins";
+import { lastLoginMethod, lastLoginMethodClient } from "../plugins";
 
 let server = new OAuth2Server();
 let port = 8005;
@@ -143,12 +143,12 @@ describe("Social Providers", async (c) => {
 					clientSecret: "test",
 				},
 			},
-			plugins: [lastSocialProvider()],
+			plugins: [lastLoginMethod()],
 		},
 		{
 			disableTestUser: true,
 			clientOptions: {
-				plugins: [lastSocialProviderClient()],
+				plugins: [lastLoginMethodClient()],
 			},
 		},
 	);
