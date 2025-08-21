@@ -11,7 +11,9 @@
   },
   "turbo": {
     "pipeline": {
-      "build": { "dependsOn": [] }
+      "build": {
+        "dependsOn": []
+      }
     }
   },
   "dependencies": {
