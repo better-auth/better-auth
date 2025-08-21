@@ -182,7 +182,7 @@ export const deviceAuthorization = (
 				{
 					method: "POST",
 					body: z.object({
-						clientId: z.string().meta({
+						client_id: z.string().meta({
 							description: "The client ID of the application",
 						}),
 						scope: z
@@ -268,7 +268,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				},
 				async (ctx) => {
 					if (opts.validateClient) {
-						const isValid = await opts.validateClient(ctx.body.clientId);
+						const isValid = await opts.validateClient(ctx.body.client_id);
 						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_client",
@@ -278,7 +278,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}
 
 					if (opts.onDeviceAuthRequest) {
-						await opts.onDeviceAuthRequest(ctx.body.clientId, ctx.body.scope);
+						await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
 					}
 
 					const deviceCode = await generateDeviceCode();
@@ -294,7 +294,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							expiresAt,
 							status: "pending",
 							pollingInterval: opts.interval,
-							clientId: ctx.body.clientId,
+							clientId: ctx.body.client_id,
 							scope: ctx.body.scope,
 						},
 					});
@@ -331,15 +331,15 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				{
 					method: "POST",
 					body: z.object({
-						grantType: z
+						grant_type: z
 							.literal("urn:ietf:params:oauth:grant-type:device_code")
 							.meta({
 								description: "The grant type for device flow",
 							}),
-						deviceCode: z.string().meta({
+						device_code: z.string().meta({
 							description: "The device verification code",
 						}),
-						clientId: z.string().meta({
+						client_id: z.string().meta({
 							description: "The client ID of the application",
 						}),
 					}),
@@ -415,10 +415,10 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					const { deviceCode, clientId } = ctx.body;
+					const { device_code, client_id } = ctx.body;
 
 					if (opts.validateClient) {
-						const isValid = await opts.validateClient(clientId);
+						const isValid = await opts.validateClient(client_id);
 						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_grant",
@@ -443,7 +443,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						where: [
 							{
 								field: "deviceCode",
-								value: deviceCode,
+								value: device_code,
 							},
 						],
 					});
@@ -458,7 +458,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 
 					if (
 						deviceCodeRecord.clientId &&
-						deviceCodeRecord.clientId !== clientId
+						deviceCodeRecord.clientId !== client_id
 					) {
 						throw new APIError("BAD_REQUEST", {
 							error: "invalid_grant",

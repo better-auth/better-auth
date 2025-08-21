@@ -112,7 +112,7 @@ type deviceCode = {
     /**
      * The OAuth client identifier
      */
-    clientId: string;
+    client_id: string;
     /**
      * Space-separated list of requested scopes (optional)
      */
@@ -124,7 +124,7 @@ type deviceCode = {
 Example usage:
 ```ts
 const response = await authClient.device.code({
-  clientId: "your-client-id",
+  client_id: "your-client-id",
   scope: "openid profile email",
 });
 
@@ -155,15 +155,15 @@ type deviceToken = {
     /**
      * Must be "urn:ietf:params:oauth:grant-type:device_code"
      */
-    grantType: string;
+    grant_type: string;
     /**
      * The device code from the initial request
      */
-    deviceCode: string;
+    device_code: string;
     /**
      * The OAuth client identifier
      */
-    clientId: string;
+    client_id: string;
 }
 ```
 </APIMethod>
@@ -173,9 +173,9 @@ Example polling implementation:
 const pollForToken = async () => {
   try {
     const { data } = await authClient.device.token({
-      grantType: "urn:ietf:params:oauth:grant-type:device_code",
-      deviceCode: device_code,
-      clientId: "your-client-id",
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      device_code,
+      client_id: "your-client-id",
     });
     
     if (data?.access_token) {
@@ -427,7 +427,7 @@ async function authenticateCLI() {
   try {
     // Request device code
     const { data, error } = await authClient.device.code({
-      clientId: "demo-cli",
+      client_id: "demo-cli",
       scope: "openid profile email",
     });
     
@@ -472,9 +472,9 @@ async function pollForToken(deviceCode: string, interval: number) {
     const poll = async () => {
       try {
         const { data, error } = await authClient.device.token({
-          grantType: "urn:ietf:params:oauth:grant-type:device_code",
-          deviceCode: deviceCode,
-          clientId: "demo-cli",
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+          device_code: deviceCode,
+          client_id: "demo-cli",
         });
         
         if (data?.access_token) {

@@ -51,7 +51,7 @@ describe("client validation", async () => {
 		await expect(
 			auth.api.deviceCode({
 				body: {
-					clientId: "invalid-client",
+					client_id: "invalid-client",
 				},
 			}),
 		).rejects.toMatchObject({
@@ -65,25 +65,25 @@ describe("client validation", async () => {
 	it("should accept valid client in device code request", async () => {
 		const response = await auth.api.deviceCode({
 			body: {
-				clientId: "valid-client-1",
+				client_id: "valid-client-1",
 			},
 		});
 		expect(response.device_code).toBeDefined();
 	});
 
 	it("should reject invalid client in token request", async () => {
-		const { device_code: deviceCode } = await auth.api.deviceCode({
+		const { device_code } = await auth.api.deviceCode({
 			body: {
-				clientId: "valid-client-1",
+				client_id: "valid-client-1",
 			},
 		});
 
 		await expect(
 			auth.api.deviceToken({
 				body: {
-					grantType: "urn:ietf:params:oauth:grant-type:device_code",
-					deviceCode,
-					clientId: "invalid-client",
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "invalid-client",
 				},
 			}),
 		).rejects.toMatchObject({
@@ -95,18 +95,18 @@ describe("client validation", async () => {
 	});
 
 	it("should reject mismatched client_id in token request", async () => {
-		const { device_code: deviceCode } = await auth.api.deviceCode({
+		const { device_code } = await auth.api.deviceCode({
 			body: {
-				clientId: "valid-client-1",
+				client_id: "valid-client-1",
 			},
 		});
 
 		await expect(
 			auth.api.deviceToken({
 				body: {
-					grantType: "urn:ietf:params:oauth:grant-type:device_code",
-					deviceCode,
-					clientId: "valid-client-2",
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "valid-client-2",
 				},
 			}),
 		).rejects.toMatchObject({
@@ -140,7 +140,7 @@ describe("device authorization flow", async () => {
 		it("should generate device and user codes", async () => {
 			const response = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
@@ -157,7 +157,7 @@ describe("device authorization flow", async () => {
 		it("should support custom client ID and scope", async () => {
 			const response = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 					scope: "read write",
 				},
 			});
@@ -169,18 +169,18 @@ describe("device authorization flow", async () => {
 
 	describe("device token polling", () => {
 		it("should return authorization_pending when not approved", async () => {
-			const { device_code: deviceCode } = await auth.api.deviceCode({
+			const { device_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
 			await expect(
 				auth.api.deviceToken({
 					body: {
-						grantType: "urn:ietf:params:oauth:grant-type:device_code",
-						deviceCode: deviceCode,
-						clientId: "test-client",
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code: device_code,
+						client_id: "test-client",
 					},
 				}),
 			).rejects.toMatchObject({
@@ -192,9 +192,9 @@ describe("device authorization flow", async () => {
 		});
 
 		it("should return expired_token for expired device codes", async () => {
-			const { device_code: deviceCode } = await auth.api.deviceCode({
+			const { device_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
@@ -205,9 +205,9 @@ describe("device authorization flow", async () => {
 			await expect(
 				auth.api.deviceToken({
 					body: {
-						grantType: "urn:ietf:params:oauth:grant-type:device_code",
-						deviceCode: deviceCode,
-						clientId: "test-client",
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code: device_code,
+						client_id: "test-client",
 					},
 				}),
 			).rejects.toMatchObject({
@@ -224,9 +224,9 @@ describe("device authorization flow", async () => {
 			await expect(
 				auth.api.deviceToken({
 					body: {
-						grantType: "urn:ietf:params:oauth:grant-type:device_code",
-						deviceCode: "invalid-code",
-						clientId: "test-client",
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code: "invalid-code",
+						client_id: "test-client",
 					},
 				}),
 			).rejects.toMatchObject({
@@ -242,7 +242,7 @@ describe("device authorization flow", async () => {
 		it("should verify valid user code", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
@@ -278,7 +278,7 @@ describe("device authorization flow", async () => {
 			// Request device code
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
@@ -294,9 +294,9 @@ describe("device authorization flow", async () => {
 			// Poll for token should now succeed
 			const tokenResponse = await auth.api.deviceToken({
 				body: {
-					grantType: "urn:ietf:params:oauth:grant-type:device_code",
-					deviceCode: device_code,
-					clientId: "test-client",
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code: device_code,
+					client_id: "test-client",
 				},
 			});
 			// Check OAuth 2.0 compliant response
@@ -312,7 +312,7 @@ describe("device authorization flow", async () => {
 		it("should deny device authorization", async () => {
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
@@ -327,9 +327,9 @@ describe("device authorization flow", async () => {
 			await expect(
 				auth.api.deviceToken({
 					body: {
-						grantType: "urn:ietf:params:oauth:grant-type:device_code",
-						deviceCode: device_code,
-						clientId: "test-client",
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code: device_code,
+						client_id: "test-client",
 					},
 				}),
 			).rejects.toMatchObject({
@@ -343,7 +343,7 @@ describe("device authorization flow", async () => {
 		it("should require authentication for approval", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
@@ -361,18 +361,18 @@ describe("device authorization flow", async () => {
 		});
 
 		it("should enforce rate limiting with slow_down error", async () => {
-			const { device_code: deviceCode } = await auth.api.deviceCode({
+			const { device_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 
 			await auth.api
 				.deviceToken({
 					body: {
-						grantType: "urn:ietf:params:oauth:grant-type:device_code",
-						deviceCode: deviceCode,
-						clientId: "test-client",
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code: device_code,
+						client_id: "test-client",
 					},
 				})
 				.catch(
@@ -383,9 +383,9 @@ describe("device authorization flow", async () => {
 			await expect(
 				auth.api.deviceToken({
 					body: {
-						grantType: "urn:ietf:params:oauth:grant-type:device_code",
-						deviceCode: deviceCode,
-						clientId: "test-client",
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code: device_code,
+						client_id: "test-client",
 					},
 				}),
 			).rejects.toMatchObject({
@@ -405,7 +405,7 @@ describe("device authorization flow", async () => {
 			// Request and approve device
 			const { user_code: userCode } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 			await auth.api.deviceApprove({
@@ -429,7 +429,7 @@ describe("device authorization flow", async () => {
 		it("should handle user code without dashes", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 				},
 			});
 			const cleanUserCode = user_code.replace(/-/g, "");
@@ -445,7 +445,7 @@ describe("device authorization flow", async () => {
 
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
-					clientId: "test-client",
+					client_id: "test-client",
 					scope: "read write profile",
 				},
 			});
@@ -457,9 +457,9 @@ describe("device authorization flow", async () => {
 
 			const tokenResponse = await auth.api.deviceToken({
 				body: {
-					grantType: "urn:ietf:params:oauth:grant-type:device_code",
-					deviceCode: device_code,
-					clientId: "test-client",
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code: device_code,
+					client_id: "test-client",
 				},
 			});
 			expect("scope" in tokenResponse && tokenResponse.scope).toBe(
@@ -485,7 +485,7 @@ describe("device authorization with custom options", async () => {
 
 		const response = await auth.api.deviceCode({
 			body: {
-				clientId: "test-client",
+				client_id: "test-client",
 			},
 		});
 		expect(response.device_code).toBe(customDeviceCode);
@@ -503,7 +503,7 @@ describe("device authorization with custom options", async () => {
 
 		const response = await auth.api.deviceCode({
 			body: {
-				clientId: "test-client",
+				client_id: "test-client",
 			},
 		});
 		expect(response.expires_in).toBe(60);
