@@ -9,6 +9,7 @@ import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
 import { getMigrations } from "../db";
+import { lastSocialProvider, lastSocialProviderClient } from "../plugins";
 
 let server = new OAuth2Server();
 let port = 8005;
@@ -142,9 +143,13 @@ describe("Social Providers", async (c) => {
 					clientSecret: "test",
 				},
 			},
+			plugins: [lastSocialProvider()],
 		},
 		{
 			disableTestUser: true,
+			clientOptions: {
+				plugins: [lastSocialProviderClient()],
+			},
 		},
 	);
 
@@ -211,6 +216,12 @@ describe("Social Providers", async (c) => {
 			});
 			return tokens;
 		}
+
+		it("returns null when no social provider has been used", async () => {
+			const lastSocial = await client.lastUsedSocial();
+			expect(lastSocial.data).toBe(null);
+		});
+
 		it("should be able to add social providers", async () => {
 			const signInRes = await client.signIn.social({
 				provider: "google",
@@ -224,6 +235,7 @@ describe("Social Providers", async (c) => {
 			state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 		});
 
+		let signInHeaders = new Headers();
 		it("should be able to sign in with social providers", async () => {
 			await client.$fetch("/callback/google", {
 				query: {
@@ -240,8 +252,17 @@ describe("Social Providers", async (c) => {
 						context.response.headers.get("set-cookie") || "",
 					);
 					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+					cookieSetter(signInHeaders)(context);
 				},
 			});
+		});
+
+		it("records the last used social provider", async () => {
+			const provider = await client.lastUsedSocial(
+				{},
+				{ headers: signInHeaders },
+			);
+			expect(provider.data).toBe("google");
 		});
 
 		it("Should use callback URL if the user is already registered", async () => {

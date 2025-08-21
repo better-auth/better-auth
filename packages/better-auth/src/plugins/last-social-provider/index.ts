@@ -2,7 +2,6 @@ import type {
 	LastSocialProviderOptions,
 	RealizedLastSocialProviderOptions,
 } from "./types";
-import type { SocialProvider } from "../../social-providers";
 import type { BetterAuthPlugin } from "../../types/plugins";
 
 import { createAuthEndpoint, createAuthMiddleware } from "../../api";
@@ -23,6 +22,7 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 				"/last-used-social",
 				{
 					method: "GET",
+					requireHeaders: true,
 					metadata: {
 						openapi: {
 							description:
@@ -52,7 +52,7 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 						return null;
 					}
 
-					return providerId as SocialProvider;
+					return providerId;
 				},
 			),
 		},
@@ -64,7 +64,11 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
-						const providerId = ctx.path.split("/").at(-1);
+						if (!ctx.request?.url) return null;
+
+						const path = new URL(ctx.request?.url).pathname;
+						const providerId = path.split("/").at(-1);
+
 						if (!providerId) return;
 
 						ctx.setCookie(opts.cookieName, providerId, {
