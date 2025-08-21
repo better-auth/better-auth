@@ -25,7 +25,7 @@ export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 		| "consent"
 		| "login"
 		| "select_account"
-		| "select_account+consent";
+		| "select_account consent";
 }
 
 export const roblox = (options: RobloxOptions) => {
@@ -43,7 +43,7 @@ export const roblox = (options: RobloxOptions) => {
 					options.clientId
 				}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
-				)}&state=${state}&prompt=${options.prompt || "select_account+consent"}`,
+				)}&state=${state}&prompt=${options.prompt || "select_account consent"}`,
 			);
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

@@ -17,6 +17,15 @@ import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
 
+const cleanupSet = new Set<Function>();
+
+afterAll(async () => {
+	for (const cleanup of cleanupSet) {
+		await cleanup();
+		cleanupSet.delete(cleanup);
+	}
+});
+
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends ClientOptions,
@@ -92,6 +101,9 @@ export async function getTestInstance<
 		advanced: {
 			cookies: {},
 		},
+		logger: {
+			level: "debug",
+		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
@@ -116,7 +128,7 @@ export async function getTestInstance<
 			return;
 		}
 		//@ts-expect-error
-		const res = await auth.api.signUpEmail({
+		await auth.api.signUpEmail({
 			body: testUser,
 		});
 	}
@@ -131,7 +143,7 @@ export async function getTestInstance<
 
 	await createTestUser();
 
-	afterAll(async () => {
+	const cleanup = async () => {
 		if (testWith === "mongodb") {
 			const db = await mongodbClient();
 			await db.dropDatabase();
@@ -157,7 +169,8 @@ export async function getTestInstance<
 		}
 
 		await fs.unlink(dbName);
-	});
+	};
+	cleanupSet.add(cleanup);
 
 	async function signInWithTestUser() {
 		if (config?.disableTestUser) {
