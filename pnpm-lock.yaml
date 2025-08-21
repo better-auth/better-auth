@@ -70,7 +70,7 @@ importers:
   demo/nextjs:
     dependencies:
       '@better-auth/stripe':
-        specifier: workspace:*
+        specifier: workspace:1.3.8-beta.2
         version: link:../../packages/stripe
       '@better-fetch/fetch':
         specifier: 'catalog:'
@@ -190,7 +190,7 @@ importers:
         specifier: ^7.6.12
         version: 7.6.13
       better-auth:
-        specifier: workspace:*
+        specifier: workspace:1.3.8-beta.2
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
