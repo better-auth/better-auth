@@ -58,6 +58,15 @@ const baseURL: string | undefined =
 				: undefined
 		: undefined;
 
+const cookieDomain: string | undefined =
+	process.env.VERCEL === "1"
+		? process.env.VERCEL_ENV === "production"
+			? ".better-auth.com"
+			: process.env.VERCEL_ENV === "preview"
+				? `.${process.env.VERCEL_URL}`
+				: undefined
+		: undefined;
+
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	baseURL,
@@ -219,7 +228,7 @@ export const auth = betterAuth({
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: process.env.NODE_ENV === "production",
-			domain: ".better-auth.com",
+			domain: cookieDomain,
 		},
 	},
 });
