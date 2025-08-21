@@ -88,7 +88,10 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 
 				{
 					matcher: (context) => {
-						return context.path.startsWith("/sign-in/email");
+						return (
+							context.path.startsWith("/sign-in/email") ||
+							context.path.startsWith("/sign-up/email")
+						);
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
