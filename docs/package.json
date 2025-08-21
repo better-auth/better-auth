@@ -9,6 +9,11 @@
     "postinstall": "fumadocs-mdx",
     "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts"
   },
+  "turbo": {
+    "pipeline": {
+      "build": { "dependsOn": [] }
+    }
+  },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "^1.2.3",

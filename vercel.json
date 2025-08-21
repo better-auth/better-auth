@@ -1,4 +1,4 @@
 {
   "version": 2,
-  "buildCommand": "bash -lc 'turbo run build --filter=./docs... --filter=./demo...'"
+  "buildCommand": "pnpm turbo run build --filter=@better-auth/demo --filter=@better-auth/docs"
 }
