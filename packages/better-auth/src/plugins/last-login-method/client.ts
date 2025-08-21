@@ -1,4 +1,4 @@
-import { lastLoginMethod } from ".";
+import type { lastLoginMethod } from ".";
 import type { BetterAuthClientPlugin } from "../../types";
 
 export const lastLoginMethodClient = () => {
