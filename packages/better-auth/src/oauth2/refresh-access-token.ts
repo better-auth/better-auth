@@ -30,11 +30,12 @@ export async function refreshAccessToken({
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
 		if (options.clientId) {
-			headers["authorization"] = base64.encode(
-				`${options.clientId}:${options.clientSecret ?? ""}`,
-			);
+			headers["authorization"] =
+				"Basic " +
+				base64.encode(`${options.clientId}:${options.clientSecret ?? ""}`);
 		} else {
-			headers["authorization"] = base64.encode(`${options.clientSecret ?? ""}`);
+			headers["authorization"] =
+				"Basic " + base64.encode(`${options.clientSecret ?? ""}`);
 		}
 	} else {
 		options.clientId && body.set("client_id", options.clientId);
