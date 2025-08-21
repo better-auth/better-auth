@@ -60,7 +60,7 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 			after: [
 				{
 					matcher: (context) => {
-						return context.path === "/callback/:providerId";
+						return context.path === "/callback/:id";
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
