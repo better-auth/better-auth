@@ -19,6 +19,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { getCallbackURL } from "@/lib/shared";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
@@ -91,7 +92,7 @@ export default function SignIn() {
 									{
 										onSuccess(context) {
 											toast.success("Successfully signed in");
-											router.push(params.get("callbackUrl") || "/dashboard");
+											router.push(getCallbackURL(params));
 										},
 									},
 								);

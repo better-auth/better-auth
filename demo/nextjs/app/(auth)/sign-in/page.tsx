@@ -7,6 +7,7 @@ import { client } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { getCallbackURL } from "@/lib/shared";
 
 export default function Page() {
 	const router = useRouter();
@@ -19,7 +20,7 @@ export default function Page() {
 				},
 				onSuccess: () => {
 					toast.success("Successfully signed in");
-					router.push(params.get("callbackUrl") || "/dashboard");
+					router.push(getCallbackURL(params));
 				},
 			},
 		});
