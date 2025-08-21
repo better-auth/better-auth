@@ -1,0 +1,93 @@
+---
+title: Last Social Provider
+description: Last Social Provider Plugin
+---
+
+The Last Social Provider plugin remembers the last social login provider used by the user (e.g., Google, GitHub, etc.). This allows you to provide a better user experience, such as pre-selecting the provider on the next login attempt.
+
+## Installation
+
+<Steps>
+<Step>
+  ### Add plugin to the server
+
+  ```ts title="auth.ts"
+  import { betterAuth } from "better-auth"
+  import { lastSocialProvider } from "better-auth/plugins"
+
+  export const auth = betterAuth({
+      plugins: [ // [!code highlight]
+          lastSocialProvider() // [!code highlight]
+      ] // [!code highlight]
+  })
+  ```
+</Step>
+<Step>
+  ### Add the client plugin
+
+  ```ts title="auth-client.ts"
+  import { createAuthClient } from "better-auth/client"
+  import { lastSocialProviderClient } from "better-auth/client/plugins"
+
+  export const authClient = createAuthClient({
+      plugins: [ // [!code highlight]
+          lastSocialProviderClient() // [!code highlight]
+      ] // [!code highlight]
+  })
+  ```
+</Step>
+</Steps>
+
+## Usage
+
+### Get the last used social provider
+
+The plugin exposes an endpoint to retrieve the last provider a user used to sign in.
+
+```ts title="auth.ts"
+const lastProvider = await client.lastUsedSocial(); // [!code highlight]
+
+if (lastProvider) {
+  console.log("Last provider used:", lastProvider)
+} else {
+  console.log("No provider stored")
+}
+```
+
+This returns the provider ID (e.g., "google", "github", "facebook"), or null if no provider has been stored.
+
+## Options
+
+### `cookieName`
+
+The name of the cookie used to store the last social provider. Default is `better-auth.last_used_social`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastSocialProvider } from "better-auth/plugins"
+
+const auth = betterAuth({
+  plugins: [
+    lastSocialProvider({
+      cookieName: "myapp.last_provider" // [!code highlight]
+    })
+  ]
+})
+```
+
+### `maxAge`
+
+The duration (in seconds) that the cookie remains valid. Default is `432000 (5 days)`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastSocialProvider } from "better-auth/plugins"
+
+const auth = betterAuth({
+  plugins: [
+    lastSocialProvider({
+      maxAge: 60 * 60 * 24 * 30 // 30 days // [!code highlight]
+    })
+  ]
+})
+```
