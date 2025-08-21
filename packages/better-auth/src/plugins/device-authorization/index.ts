@@ -104,9 +104,20 @@ export const $deviceAuthorizationOptionsSchema = z.object({
 /**
  * @see {$deviceAuthorizationOptionsSchema}
  */
-export type DeviceAuthorizationOptions = z.infer<
-	typeof $deviceAuthorizationOptionsSchema
->;
+export type DeviceAuthorizationOptions = {
+	expiresIn: MSStringValue;
+	interval: MSStringValue;
+	deviceCodeLength: number;
+	userCodeLength: number;
+	generateDeviceCode?: () => string | Promise<string>;
+	generateUserCode?: () => string | Promise<string>;
+	validateClient?: (clientId: string) => boolean | Promise<boolean>;
+	onDeviceAuthRequest?: (
+		clientId: string,
+		scope: string | undefined,
+	) => void | Promise<void>;
+	schema?: InferOptionSchema<typeof schema>;
+};
 
 export { deviceAuthorizationClient } from "./client";
 
@@ -147,9 +158,7 @@ const defaultGenerateUserCode = (length: number) => {
 export const deviceAuthorization = (
 	options: Partial<DeviceAuthorizationOptions> = {},
 ) => {
-	const opts = $deviceAuthorizationOptionsSchema.parse(
-		options,
-	) as Required<DeviceAuthorizationOptions>;
+	const opts = $deviceAuthorizationOptionsSchema.parse(options);
 	const generateDeviceCode = async () => {
 		if (opts.generateDeviceCode) {
 			return opts.generateDeviceCode();
