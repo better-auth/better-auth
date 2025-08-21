@@ -148,14 +148,14 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 
 				{
 					matcher: (context) => {
-						return context.path === "/sign-in/anonymous";
+						return context.path === "/sign-in/phone-number";
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
 						const hasNewSession = !!ctx.context.newSession;
 						if (!hasNewSession) return;
 
-						ctx.setCookie(opts.cookieName, "anonymous", {
+						ctx.setCookie(opts.cookieName, "phone-number", {
 							httpOnly: true,
 							maxAge: opts.maxAge,
 						});

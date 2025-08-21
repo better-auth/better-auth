@@ -4,6 +4,7 @@ import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
 import { bearer } from "../bearer";
+import { lastLoginMethod, lastLoginMethodClient } from "../last-login-method";
 
 describe("phone-number", async (it) => {
 	let otp = "";
@@ -106,30 +107,32 @@ describe("phone-number", async (it) => {
 describe("phone auth flow", async () => {
 	let otp = "";
 
-	const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					otp = code;
-				},
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { customFetchImpl, sessionSetter, auth, cookieSetter } =
+		await getTestInstance({
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
 					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+				bearer(),
+				lastLoginMethod(),
+			],
+			user: {
+				changeEmail: {
+					enabled: true,
 				},
-			}),
-			bearer(),
-		],
-		user: {
-			changeEmail: {
-				enabled: true,
 			},
-		},
-	});
+		});
 
 	const client = createAuthClient({
 		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
+		plugins: [phoneNumberClient(), lastLoginMethodClient()],
 		fetchOptions: {
 			customFetchImpl,
 		},
@@ -197,11 +200,25 @@ describe("phone auth flow", async () => {
 	});
 
 	it("should sign in with phone number and password", async () => {
-		const res = await client.signIn.phoneNumber({
-			phoneNumber: "+251911121314",
-			password: "password",
-		});
+		const signInHeaders = new Headers();
+		const res = await client.signIn.phoneNumber(
+			{
+				phoneNumber: "+251911121314",
+				password: "password",
+			},
+			{
+				onSuccess(context) {
+					cookieSetter(signInHeaders)(context);
+				},
+			},
+		);
 		expect(res.data?.token).toBeDefined();
+
+		const lastUsedLogin = await client.lastUsedLoginMethod(
+			{},
+			{ headers: signInHeaders },
+		);
+		expect(lastUsedLogin.data).toBe("phone-number");
 	});
 
 	it("should sign in with new email", async () => {
