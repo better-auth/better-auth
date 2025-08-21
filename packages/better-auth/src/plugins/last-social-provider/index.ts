@@ -13,6 +13,7 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 	const opts: RealizedLastSocialProviderOptions = {
 		cookieName: options?.cookieName ?? "better-auth.last_used_social",
 		maxAge: options?.maxAge ?? 432000,
+		trustedProviderIds: options?.trustedProviderIds ?? [],
 	};
 
 	return {
@@ -47,7 +48,6 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 					},
 				},
 				async (c) => {
-					c.context.socialProviders.map(x => x.id)
 					const providerId = c.getCookie(opts.cookieName);
 
 					if (!providerId) {
@@ -72,6 +72,13 @@ export const lastSocialProvider = (options?: LastSocialProviderOptions) => {
 						const providerId = path.split("/").at(-1);
 
 						if (!providerId) return;
+
+						const providers = ctx.context.socialProviders
+							.map((x) => x.id.toLowerCase())
+							.concat(opts.trustedProviderIds.map((x) => x.toLowerCase()));
+						const isProvider = providers.includes(providerId.toLowerCase());
+
+						if (!isProvider) return;
 
 						ctx.setCookie(opts.cookieName, providerId, {
 							httpOnly: true,

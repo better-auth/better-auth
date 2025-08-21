@@ -13,6 +13,16 @@ export type LastSocialProviderOptions = {
 	 * @default 432000
 	 */
 	maxAge?: number;
+	/**
+	 * A list of trusted social provider IDs.
+	 *
+	 * Used alongside the enabled social providers. The plugin will only track
+	 * and return a last-used provider if its ID is present in either the enabled
+	 * social providers or this trusted list.
+	 *
+	 * @default []
+	 */
+	trustedProviderIds?: string[];
 };
 
 export type RealizedLastSocialProviderOptions =
