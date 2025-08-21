@@ -5,7 +5,7 @@ import {
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
-import { type Stripe as StripeType } from "stripe"; 
+import { type Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
 import {
 	sessionMiddleware,
@@ -1040,9 +1040,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					locale: z.custom<StripeType.Checkout.Session.Locale>((localization) => {
-						return typeof localization === "string"
-					}).optional(),
+					locale: z
+						.custom<StripeType.Checkout.Session.Locale>((localization) => {
+							return typeof localization === "string";
+						})
+						.optional(),
 					referenceId: z.string().optional(),
 					returnUrl: z.string().default("/"),
 				}),
