@@ -60,7 +60,7 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 			after: [
 				{
 					matcher: (context) => {
-						return context.path.startsWith("/callback");
+						return context.path === "/callback/:providerId";
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
@@ -87,9 +87,29 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 
 				{
 					matcher: (context) => {
+						return context.path === "/oauth2/callback/:providerId";
+					},
+
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!ctx.request?.url) return null;
+
+						const path = new URL(ctx.request?.url).pathname;
+						const providerId = path.split("/").at(-1);
+
+						if (!providerId) return;
+
+						ctx.setCookie(opts.cookieName, providerId, {
+							httpOnly: true,
+							maxAge: opts.maxAge,
+						});
+					}),
+				},
+
+				{
+					matcher: (context) => {
 						return (
-							context.path.startsWith("/sign-in/email") ||
-							context.path.startsWith("/sign-up/email")
+							context.path === "/sign-in/email" ||
+							context.path === "/sign-up/email"
 						);
 					},
 
@@ -106,7 +126,7 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 
 				{
 					matcher: (context) => {
-						return context.path.startsWith("/verify-email");
+						return context.path === "/verify-email";
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {

@@ -7,6 +7,7 @@ import { genericOAuthClient } from "./client";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { parseSetCookieHeader } from "../../cookies";
+import { lastLoginMethod, lastLoginMethodClient } from "../last-login-method";
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -20,7 +21,7 @@ describe("oauth2", async () => {
 		await server.stop();
 	});
 
-	const { customFetchImpl, auth } = await getTestInstance({
+	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 		plugins: [
 			genericOAuth({
 				config: [
@@ -33,11 +34,12 @@ describe("oauth2", async () => {
 					},
 				],
 			}),
+			lastLoginMethod(),
 		],
 	});
 
 	const authClient = createAuthClient({
-		plugins: [genericOAuthClient()],
+		plugins: [genericOAuthClient(), lastLoginMethodClient()],
 		baseURL: "http://localhost:3000",
 		fetchOptions: {
 			customFetchImpl,
@@ -88,10 +90,7 @@ describe("oauth2", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
-				newHeaders.set(
-					"cookie",
-					context.response.headers.get("Set-Cookie") || "",
-				);
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
@@ -109,11 +108,18 @@ describe("oauth2", async () => {
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
-		const { callbackURL } = await simulateOAuthFlow(
+		const { callbackURL, headers: signInHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
 			headers,
 		);
+
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+
+		const lastUsedLogin = await authClient.lastUsedLoginMethod(
+			{},
+			{ headers: signInHeaders },
+		);
+		expect(lastUsedLogin.data).toBe("test");
 	});
 
 	it("should redirect to the provider and handle the response for a new user", async () => {
