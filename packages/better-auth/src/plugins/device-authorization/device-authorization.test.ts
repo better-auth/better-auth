@@ -276,7 +276,7 @@ describe("device authorization flow", async () => {
 			const { headers } = await signInWithTestUser();
 
 			// Request device code
-			const { deviceCode, user_code } = await auth.api.deviceCode({
+			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
 					clientId: "test-client",
 				},
@@ -295,7 +295,7 @@ describe("device authorization flow", async () => {
 			const tokenResponse = await auth.api.deviceToken({
 				body: {
 					grantType: "urn:ietf:params:oauth:grant-type:device_code",
-					deviceCode: deviceCode,
+					deviceCode: device_code,
 					clientId: "test-client",
 				},
 			});
@@ -310,7 +310,7 @@ describe("device authorization flow", async () => {
 		});
 
 		it("should deny device authorization", async () => {
-			const { deviceCode, user_code } = await auth.api.deviceCode({
+			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
 					clientId: "test-client",
 				},
@@ -328,7 +328,7 @@ describe("device authorization flow", async () => {
 				auth.api.deviceToken({
 					body: {
 						grantType: "urn:ietf:params:oauth:grant-type:device_code",
-						deviceCode: deviceCode,
+						deviceCode: device_code,
 						clientId: "test-client",
 					},
 				}),
@@ -443,7 +443,7 @@ describe("device authorization flow", async () => {
 		it("should store and use scope from device code request", async () => {
 			const { headers } = await signInWithTestUser();
 
-			const { deviceCode, user_code } = await auth.api.deviceCode({
+			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
 					clientId: "test-client",
 					scope: "read write profile",
@@ -458,7 +458,7 @@ describe("device authorization flow", async () => {
 			const tokenResponse = await auth.api.deviceToken({
 				body: {
 					grantType: "urn:ietf:params:oauth:grant-type:device_code",
-					deviceCode: deviceCode,
+					deviceCode: device_code,
 					clientId: "test-client",
 				},
 			});
