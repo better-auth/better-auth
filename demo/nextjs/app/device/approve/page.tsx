@@ -13,7 +13,8 @@ export default function DeviceApprovalPage() {
 	const searchParams = useSearchParams();
 	const userCode = searchParams.get("user_code");
 	const { data: session } = useSession();
-	const [isPending, startTransition] = useTransition();
+	const [isApprovePending, startApproveTransition] = useTransition();
+	const [isDenyPending, startDenyTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
 
 	const handleApprove = () => {
@@ -21,7 +22,7 @@ export default function DeviceApprovalPage() {
 
 		setError(null);
 
-		startTransition(async () => {
+		startApproveTransition(async () => {
 			try {
 				await client.device.approve({
 					userCode,
@@ -38,7 +39,7 @@ export default function DeviceApprovalPage() {
 
 		setError(null);
 
-		startTransition(async () => {
+		startDenyTransition(async () => {
 			try {
 				await client.device.deny({
 					userCode,
@@ -87,9 +88,9 @@ export default function DeviceApprovalPage() {
 								onClick={handleDeny}
 								variant="outline"
 								className="flex-1"
-								disabled={isPending}
+								disabled={isDenyPending}
 							>
-								{isPending ? (
+								{isApprovePending ? (
 									<Loader2 className="h-4 w-4 animate-spin" />
 								) : (
 									<>
@@ -101,9 +102,9 @@ export default function DeviceApprovalPage() {
 							<Button
 								onClick={handleApprove}
 								className="flex-1"
-								disabled={isPending}
+								disabled={isApprovePending}
 							>
-								{isPending ? (
+								{isApprovePending ? (
 									<Loader2 className="h-4 w-4 animate-spin" />
 								) : (
 									<>

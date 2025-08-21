@@ -145,6 +145,12 @@ export async function loginAction(opts: any) {
 					"\n📝 Note: This was a demo authentication for testing purposes.",
 				),
 			);
+
+			console.log(
+				chalk.blue(
+					"\nFor more information, visit: https://better-auth.com/docs/plugins/device-authorization",
+				),
+			);
 		}
 	} catch (err) {
 		spinner.stop();
