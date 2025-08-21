@@ -9,6 +9,7 @@ import {
 	oAuthProxy,
 	openAPI,
 	customSession,
+	deviceAuthorization,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -197,6 +198,10 @@ export const auth = betterAuth({
 					},
 				],
 			},
+		}),
+		deviceAuthorization({
+			expiresIn: "3min",
+			interval: "5s",
 		}),
 	],
 	trustedOrigins: ["exp://"],
