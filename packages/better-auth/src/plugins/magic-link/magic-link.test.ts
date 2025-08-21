@@ -4,6 +4,7 @@ import { magicLink } from ".";
 import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
+import { lastLoginMethod, lastLoginMethodClient } from "../last-login-method";
 
 type VerificationEmail = {
 	email: string;
@@ -17,18 +18,20 @@ describe("magic link", async () => {
 		token: "",
 		url: "",
 	};
-	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
-		plugins: [
-			magicLink({
-				async sendMagicLink(data) {
-					verificationEmail = data;
-				},
-			}),
-		],
-	});
+	const { customFetchImpl, testUser, sessionSetter, cookieSetter } =
+		await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+				lastLoginMethod(),
+			],
+		});
 
 	const client = createAuthClient({
-		plugins: [magicLinkClient()],
+		plugins: [magicLinkClient(), lastLoginMethodClient()],
 		fetchOptions: {
 			customFetchImpl,
 		},
@@ -54,12 +57,15 @@ describe("magic link", async () => {
 				token: new URL(verificationEmail.url).searchParams.get("token") || "",
 			},
 			fetchOptions: {
-				onSuccess: sessionSetter(headers),
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(response.data?.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
+
+		const lastUsedMethod = await client.lastUsedLoginMethod({}, { headers });
+		expect(lastUsedMethod.data).toBe("magic-link");
 	});
 
 	it("shouldn't verify magic link with the same token", async () => {
