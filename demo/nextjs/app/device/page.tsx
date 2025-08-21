@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { client } from "@/lib/auth-client";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,10 +12,9 @@ import { Loader2 } from "lucide-react";
 
 export default function DeviceAuthorizationPage() {
 	const router = useRouter();
-	const params = useParams();
-	const [userCode, setUserCode] = useState<string>(
-		typeof params.userCode === "string" ? params.userCode : "",
-	);
+	const params = useSearchParams();
+	const user_code = params.get("user_code");
+	const [userCode, setUserCode] = useState<string>(user_code ? user_code : "");
 	const [isPending, startTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
 
@@ -25,16 +24,16 @@ export default function DeviceAuthorizationPage() {
 
 		startTransition(async () => {
 			try {
+				const finalCode = userCode.trim().replaceAll(/-/g, "").toUpperCase();
 				// Get the device authorization status
 				const response = await client.device({
 					query: {
-						user_code: userCode.toUpperCase(),
+						user_code: finalCode,
 					},
 				});
 
 				if (response.data) {
-					// Redirect to approval page with the device info
-					router.push(`/device/approve?userCode=${userCode.toUpperCase()}`);
+					router.push(`/device/approve?userCode=${finalCode}`);
 				}
 			} catch (err: any) {
 				setError(

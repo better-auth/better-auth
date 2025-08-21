@@ -74,6 +74,29 @@ export const $deviceAuthorizationOptionsSchema = z.object({
 		.describe(
 			"Function to generate a user code. If not provided, a default random string generator will be used.",
 		),
+	validateClient: z
+		.custom<(clientId: string) => boolean | Promise<boolean>>(
+			(val) => typeof val === "function",
+			{
+				message:
+					"validateClient must be a function that returns a boolean or a promise that resolves to a boolean.",
+			},
+		)
+		.optional()
+		.describe(
+			"Function to validate the client ID. If not provided, no validation will be performed.",
+		),
+	onDeviceAuthRequest: z
+		.custom<
+			(clientId: string, scope: string | undefined) => void | Promise<void>
+		>((val) => typeof val === "function", {
+			message:
+				"onDeviceAuthRequest must be a function that returns void or a promise that resolves to void.",
+		})
+		.optional()
+		.describe(
+			"Function to handle device authorization requests. If not provided, no additional actions will be taken.",
+		),
 });
 
 /**
@@ -233,6 +256,20 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
+					if (opts.validateClient) {
+						const isValid = await opts.validateClient(ctx.body.client_id);
+						if (!isValid) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_client",
+								error_description: "Invalid client ID",
+							});
+						}
+					}
+
+					if (opts.onDeviceAuthRequest) {
+						await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
+					}
+
 					const deviceCode = await generateDeviceCode();
 					const userCode = await generateUserCode();
 					const expiresIn = ms(opts.expiresIn);
@@ -367,7 +404,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					const { device_code } = ctx.body;
+					const { device_code, client_id } = ctx.body;
+
+					if (opts.validateClient) {
+						const isValid = await opts.validateClient(client_id);
+						if (!isValid) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_grant",
+								error_description: "Invalid client ID",
+							});
+						}
+					}
 
 					const deviceCodeRecord = await ctx.context.adapter.findOne<{
 						id: string;
@@ -395,6 +442,16 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							error: "invalid_grant",
 							error_description:
 								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE,
+						});
+					}
+
+					if (
+						deviceCodeRecord.clientId &&
+						deviceCodeRecord.clientId !== client_id
+					) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_grant",
+							error_description: "Client ID mismatch",
 						});
 					}
 

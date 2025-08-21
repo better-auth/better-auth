@@ -105,6 +105,11 @@ async function pollForToken(deviceCode: string, interval: number) {
 					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
 					device_code: deviceCode,
 					client_id: clientId,
+					fetchOptions: {
+						headers: {
+							"user-agent": `Better Auth Device Authorization CLI v1.0`,
+						},
+					},
 				});
 
 				if (data?.access_token) {

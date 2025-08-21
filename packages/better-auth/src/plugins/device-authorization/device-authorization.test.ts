@@ -34,6 +34,90 @@ describe("device authorization plugin input validation", () => {
 	});
 });
 
+describe("client validation", async () => {
+	const validClients = ["valid-client-1", "valid-client-2"];
+
+	const { auth } = await getTestInstance({
+		plugins: [
+			deviceAuthorization({
+				validateClient: async (clientId) => {
+					return validClients.includes(clientId);
+				},
+			}),
+		],
+	});
+
+	it("should reject invalid client in device code request", async () => {
+		await expect(
+			auth.api.deviceCode({
+				body: {
+					client_id: "invalid-client",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "Invalid client ID",
+			},
+		});
+	});
+
+	it("should accept valid client in device code request", async () => {
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "valid-client-1",
+			},
+		});
+		expect(response.device_code).toBeDefined();
+	});
+
+	it("should reject invalid client in token request", async () => {
+		const { device_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "valid-client-1",
+			},
+		});
+
+		await expect(
+			auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "invalid-client",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_grant",
+				error_description: "Invalid client ID",
+			},
+		});
+	});
+
+	it("should reject mismatched client_id in token request", async () => {
+		const { device_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "valid-client-1",
+			},
+		});
+
+		await expect(
+			auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "valid-client-2",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_grant",
+				error_description: "Client ID mismatch",
+			},
+		});
+	});
+});
+
 describe("device authorization flow", async () => {
 	const { auth, client, sessionSetter, signInWithTestUser } =
 		await getTestInstance(
