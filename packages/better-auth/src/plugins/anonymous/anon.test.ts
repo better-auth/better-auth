@@ -7,6 +7,7 @@ import type { GoogleProfile } from "../../social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
 import { signJWT } from "../../crypto/jwt";
+import { lastLoginMethod, lastLoginMethodClient } from "../last-login-method";
 
 vi.mock("../../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
@@ -45,7 +46,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { customFetchImpl, auth, sessionSetter, testUser } =
+	const { customFetchImpl, auth, sessionSetter, testUser, cookieSetter } =
 		await getTestInstance({
 			plugins: [
 				anonymous({
@@ -60,6 +61,7 @@ describe("anonymous", async () => {
 						},
 					},
 				}),
+				lastLoginMethod(),
 			],
 			socialProviders: {
 				google: {
@@ -70,7 +72,7 @@ describe("anonymous", async () => {
 		});
 	const headers = new Headers();
 	const client = createAuthClient({
-		plugins: [anonymousClient()],
+		plugins: [anonymousClient(), lastLoginMethodClient()],
 		fetchOptions: {
 			customFetchImpl,
 		},
@@ -80,7 +82,7 @@ describe("anonymous", async () => {
 	it("should sign in anonymously", async () => {
 		await client.signIn.anonymous({
 			fetchOptions: {
-				onSuccess: sessionSetter(headers),
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		const session = await client.getSession({
