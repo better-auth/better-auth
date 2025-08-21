@@ -27,5 +27,4 @@ export type LastLoginMethodOptions = {
 	trustedProviderIds?: string[];
 };
 
-export type RealizedLastLoginMethodOptions =
-	Required<LastLoginMethodOptions>;
+export type RealizedLastLoginMethodOptions = Required<LastLoginMethodOptions>;

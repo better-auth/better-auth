@@ -31,8 +31,7 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 							operationId: "lastUsedLoginMethod",
 							responses: {
 								"200": {
-									description:
-										"Success - Returns the last used login method",
+									description: "Success - Returns the last used login method",
 									content: {
 										"application/json": {
 											schema: {
@@ -62,12 +61,13 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 			after: [
 				{
 					matcher: (context) => {
-						return context.path.startsWith("/callback");
+						return !!!context.headers?.get("set-cookie");
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
 						if (!ctx.request?.url) return null;
 
+						// /api/auth/callback/:providerId/
 						const path = new URL(ctx.request?.url).pathname;
 						const providerId = path.split("/").at(-1);
 
