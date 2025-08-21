@@ -15,32 +15,6 @@ export default function DeviceApprovalPage() {
 	const { data: session } = useSession();
 	const [isPending, startTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
-	const [deviceInfo, setDeviceInfo] = useState<any>(null);
-
-	useEffect(() => {
-		if (!userCode) {
-			router.push("/device");
-			return;
-		}
-
-		// Fetch device info
-		const fetchDeviceInfo = async () => {
-			try {
-				const response = await client.device({
-					query: {
-						user_code: userCode,
-					},
-				});
-				if (response.data) {
-					setDeviceInfo(response.data);
-				}
-			} catch (err) {
-				setError("Invalid or expired code");
-			}
-		};
-
-		fetchDeviceInfo();
-	}, [userCode, router]);
 
 	const handleApprove = () => {
 		if (!userCode) return;
@@ -96,13 +70,6 @@ export default function DeviceApprovalPage() {
 							<p className="text-sm font-medium">Device Code</p>
 							<p className="font-mono text-lg">{userCode}</p>
 						</div>
-
-						{deviceInfo && (
-							<div className="rounded-lg bg-muted p-4">
-								<p className="text-sm font-medium">Client</p>
-								<p>{deviceInfo.clientId}</p>
-							</div>
-						)}
 
 						<div className="rounded-lg bg-muted p-4">
 							<p className="text-sm font-medium">Signed in as</p>
