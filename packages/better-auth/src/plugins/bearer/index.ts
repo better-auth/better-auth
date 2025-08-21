@@ -33,7 +33,11 @@ export const bearer = (options?: BearerOptions) => {
 				},
 				async (ctx) => {
 					const cookieString = ctx.headers.get("cookie");
-					if (!cookieString) return null;
+					if (!cookieString) {
+						return ctx.json({
+							success: false,
+						});
+					}
 					const cookies = cookieString.split("; ");
 					const foundBearerToken = cookies.find((cookie) =>
 						cookie.startsWith("bearer-token="),
@@ -46,7 +50,7 @@ export const bearer = (options?: BearerOptions) => {
 						ctx.setHeader("set-auth-token", sessionToken);
 						ctx.setHeader(
 							"set-cookie",
-							`bearer-token=; Path=/; HttpOnly; SameSite=Strict`,
+							`bearer-token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
 						);
 						return ctx.json({
 							success: true,
