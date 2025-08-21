@@ -113,6 +113,10 @@ export const auth = betterAuth({
 			clientId: process.env.TWITTER_CLIENT_ID || "",
 			clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
 		},
+		paypal: {
+			clientId: process.env.PAYPAL_CLIENT_ID || "",
+			clientSecret: process.env.PAYPAL_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
