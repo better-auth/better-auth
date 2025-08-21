@@ -38,7 +38,9 @@ export const bearer = (options?: BearerOptions) => {
 							success: false,
 						});
 					}
-					const cookies = cookieString.split(";").map(cookie => cookie.trim());
+					const cookies = cookieString
+						.split(";")
+						.map((cookie) => cookie.trim());
 					const foundBearerToken = cookies.find((cookie) =>
 						cookie.startsWith("bearer-token="),
 					);
