@@ -47,7 +47,7 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 
 ```typescript
 interface SecondaryStorage {
-  get: (key: string) => Promise<string | null>;
+  get: (key: string) => Promise<unknown>; 
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -79,8 +79,7 @@ export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: {
 		get: async (key) => {
-			const value = await redis.get(key);
-			return value ? value : null;
+			return await redis.get(key);
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });

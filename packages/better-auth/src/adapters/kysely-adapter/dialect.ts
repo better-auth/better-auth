@@ -8,14 +8,14 @@ import {
 import type { BetterAuthOptions } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 
-function getDatabaseType(
+export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],
 ): KyselyDatabaseType | null {
 	if (!db) {
 		return null;
 	}
 	if ("dialect" in db) {
-		return getDatabaseType(db.dialect as Dialect);
+		return getKyselyDatabaseType(db.dialect as Dialect);
 	}
 	if ("createDriver" in db) {
 		if (db instanceof SqliteDialect) {
@@ -42,6 +42,9 @@ function getDatabaseType(
 		return "postgres";
 	}
 	if ("fileControl" in db) {
+		return "sqlite";
+	}
+	if ("open" in db && "close" in db && "prepare" in db) {
 		return "sqlite";
 	}
 	return null;
@@ -73,7 +76,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	let dialect: Dialect | undefined = undefined;
 
-	const databaseType = getDatabaseType(db);
+	const databaseType = getKyselyDatabaseType(db);
 
 	if ("createDriver" in db) {
 		dialect = db;
@@ -101,6 +104,29 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new BunSqliteDialect({
 			database: db,
 		});
+	}
+
+	if ("createSession" in db) {
+		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
+			undefined;
+		try {
+			({ DatabaseSync } = await import("node:sqlite"));
+		} catch (error: unknown) {
+			if (
+				error !== null &&
+				typeof error === "object" &&
+				"code" in error &&
+				error.code !== "ERR_UNKNOWN_BUILTIN_MODULE"
+			) {
+				throw error;
+			}
+		}
+		if (DatabaseSync && db instanceof DatabaseSync) {
+			const { NodeSqliteDialect } = await import("./node-sqlite-dialect");
+			dialect = new NodeSqliteDialect({
+				database: db,
+			});
+		}
 	}
 
 	return {

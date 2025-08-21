@@ -75,6 +75,8 @@ const formatMessage = (level: LogLevel, message: string): string => {
 
 export type InternalLogger = {
 	[K in LogLevel]: (...params: LogHandlerParams) => void;
+} & {
+	get level(): LogLevel;
 };
 
 export const createLogger = (options?: Logger): InternalLogger => {
@@ -106,13 +108,20 @@ export const createLogger = (options?: Logger): InternalLogger => {
 		options.log(level === "success" ? "info" : level, message, ...args);
 	};
 
-	return Object.fromEntries(
+	const logger = Object.fromEntries(
 		levels.map((level) => [
 			level,
 			(...[message, ...args]: LogHandlerParams) =>
 				LogFunc(level, message, args),
 		]),
 	) as Record<LogLevel, (...params: LogHandlerParams) => void>;
+
+	return {
+		...logger,
+		get level() {
+			return logLevel;
+		},
+	};
 };
 
 export const logger = createLogger();

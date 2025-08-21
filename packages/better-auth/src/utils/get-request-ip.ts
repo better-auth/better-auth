@@ -9,7 +9,7 @@ export function getIp(
 		return null;
 	}
 
-	if (isTest) {
+	if (isTest()) {
 		return "127.0.0.1"; // Use a fixed IP for test environments
 	}
 

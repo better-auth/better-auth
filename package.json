@@ -20,8 +20,8 @@
     "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.1.3",
-    "@types/node": "^20.17.9",
+    "@biomejs/biome": "2.2.0",
+    "@types/node": "^24.3.0",
     "bumpp": "^9.8.1",
     "cross-env": "^7.0.3",
     "dotenv-cli": "^7.4.4",

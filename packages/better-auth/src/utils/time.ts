@@ -1,5 +1,12 @@
 type TimeFormat = "ms" | "s" | "m" | "h" | "d" | "w" | "y";
 type Time = `${number}${TimeFormat}`;
+const JOSE_REGEX =
+	/^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)(?: (ago|from now))?$/i;
+const JOSE_MINUTE = 60;
+const JOSE_HOUR = JOSE_MINUTE * 60;
+const JOSE_DAY = JOSE_HOUR * 24;
+const JOSE_WEEK = JOSE_DAY * 7;
+const JOSE_YEAR = JOSE_DAY * 365.25;
 
 interface TimeObject {
 	t: Time;
@@ -150,4 +157,66 @@ export const parseTime = (time: Time): TimeObject => {
 	const match = time.match(/^(\d+)(ms|s|m|h|d|w|y)$/);
 	if (!match) throw new Error("Invalid time format");
 	return createTime(parseInt(match[1]), match[2] as TimeFormat);
+};
+
+/**
+ * Converts string into seconds using the same method as jose package
+ *
+ * See https://github.com/panva/jose/blob/main/src/lib/secs.ts
+ */
+export const joseSecs = (str: string): number => {
+	const matched = JOSE_REGEX.exec(str);
+
+	if (!matched || (matched[4] && matched[1])) {
+		throw new TypeError("Invalid time period format");
+	}
+
+	const value = parseFloat(matched[2]);
+	const unit = matched[3].toLowerCase();
+
+	let numericDate: number;
+
+	switch (unit) {
+		case "sec":
+		case "secs":
+		case "second":
+		case "seconds":
+		case "s":
+			numericDate = Math.round(value);
+			break;
+		case "minute":
+		case "minutes":
+		case "min":
+		case "mins":
+		case "m":
+			numericDate = Math.round(value * JOSE_MINUTE);
+			break;
+		case "hour":
+		case "hours":
+		case "hr":
+		case "hrs":
+		case "h":
+			numericDate = Math.round(value * JOSE_HOUR);
+			break;
+		case "day":
+		case "days":
+		case "d":
+			numericDate = Math.round(value * JOSE_DAY);
+			break;
+		case "week":
+		case "weeks":
+		case "w":
+			numericDate = Math.round(value * JOSE_WEEK);
+			break;
+		// years matched
+		default:
+			numericDate = Math.round(value * JOSE_YEAR);
+			break;
+	}
+
+	if (matched[1] === "-" || matched[4] === "ago") {
+		return -numericDate;
+	}
+
+	return numericDate;
 };

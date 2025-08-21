@@ -36,7 +36,7 @@ npm install @dodopayments/better-auth dodopayments better-auth zod
   </Step>
   <Step title="Configure environment variables">
     Add these to your `.env` file:
-```env
+```txt
 DODO_PAYMENTS_API_KEY=your_api_key_here
 DODO_PAYMENTS_WEBHOOK_SECRET=your_webhook_secret_here
 ```
@@ -172,7 +172,7 @@ const { data: payments, error } = await authClient.dodopayments.customer.payment
 <Steps>
   <Step title="Generate and set webhook secret">
     Generate a webhook secret for your endpoint URL (e.g., `https://your-domain.com/api/auth/dodopayments/webhooks`) in the Dodo Payments Dashboard and set it in your .env file:
-```env
+```txt
 DODO_PAYMENTS_WEBHOOK_SECRET=your_webhook_secret_here
 ```
   </Step>

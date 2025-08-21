@@ -45,12 +45,10 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Provide environment information
-      description: Please collect the following information and paste the results. 
+      label: System info
+      description: Output of `npx envinfo --system --browsers`
       render: bash
-      placeholder: |
-        - OS: [e.g. Windows 10]
-        - Browser [e.g. chrome, safari]
+      placeholder: System and browsers
     validations:
       required: true
   - type: dropdown

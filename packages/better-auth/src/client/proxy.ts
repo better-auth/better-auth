@@ -2,6 +2,7 @@ import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import type { Atom, PreinitializedWritableAtom } from "nanostores";
 import type { ProxyRequest } from "./path-to-object";
 import type { BetterAuthClientPlugin } from "./types";
+import { isAtom } from "../utils/is-atom";
 
 function getMethod(
 	path: string,
@@ -39,6 +40,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
 			get(target, prop: string) {
+				if (prop === "then" || prop === "catch" || prop === "finally") {
+					return undefined;
+				}
 				const fullPath = [...path, prop];
 				let current: any = routes;
 				for (const segment of fullPath) {
@@ -50,6 +54,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					}
 				}
 				if (typeof current === "function") {
+					return current;
+				}
+				if (isAtom(current)) {
 					return current;
 				}
 				return createProxy(fullPath);

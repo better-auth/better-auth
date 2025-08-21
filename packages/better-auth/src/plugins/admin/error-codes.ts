@@ -1,6 +1,6 @@
 export const ADMIN_ERROR_CODES = {
 	FAILED_TO_CREATE_USER: "Failed to create user",
-	USER_ALREADY_EXISTS: "User already exists",
+	USER_ALREADY_EXISTS: "User already exists. Use another email.",
 	YOU_CANNOT_BAN_YOURSELF: "You cannot ban yourself",
 	YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE:
 		"You are not allowed to change users role",
@@ -19,4 +19,5 @@ export const ADMIN_ERROR_CODES = {
 	BANNED_USER: "You have been banned from this application",
 	NO_DATA_TO_UPDATE: "No data to update",
 	YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS: "You are not allowed to update users",
+	YOU_CANNOT_REMOVE_YOURSELF: "You cannot remove yourself",
 } as const;

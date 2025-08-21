@@ -1887,6 +1887,55 @@ describe("api-key", async () => {
 		expect(apiKey.permissions).toEqual(permissions);
 	});
 
+	it("should authenticate with API key for endpoints other than /get-session", async () => {
+		const { data: testApiKey } = await client.apiKey.create(
+			{ name: "test-auth-key" },
+			{ headers },
+		);
+
+		if (!testApiKey) throw new Error("Failed to create API key");
+
+		const apiKeyHeaders = new Headers();
+		apiKeyHeaders.set("x-api-key", testApiKey.key);
+
+		const listResult = await client.apiKey.list({}, { headers: apiKeyHeaders });
+		expect(listResult.data).toBeDefined();
+		expect(listResult.error).toBeNull();
+		expect(Array.isArray(listResult.data)).toBe(true);
+
+		await client.apiKey.delete({ keyId: testApiKey.id }, { headers });
+	});
+
+	it("should set session context for all authenticated API key requests", async () => {
+		// This test verifies that ctx.context.session is properly set
+		// for all API key authenticated requests, not just /get-session
+
+		// Create an API key using the main auth instance
+		const testApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				name: "session-context-test",
+			},
+		});
+
+		const apiKeyHeaders = new Headers();
+		apiKeyHeaders.set("x-api-key", testApiKey.key);
+
+		const listResult = await auth.api.listApiKeys({
+			headers: apiKeyHeaders,
+		});
+
+		expect(listResult).toBeDefined();
+		expect(Array.isArray(listResult)).toBe(true);
+
+		const verifyResult = await auth.api.verifyApiKey({
+			body: { key: testApiKey.key },
+		});
+
+		expect(verifyResult.valid).toBe(true);
+		expect(verifyResult.key).toBeDefined();
+	});
+
 	it("should have permissions as an object from getApiKey", async () => {
 		const permissions = {
 			files: ["read", "write"],
