@@ -9,6 +9,7 @@ import {
 	oAuthProxy,
 	openAPI,
 	customSession,
+	deviceAuthorization,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -112,6 +113,10 @@ export const auth = betterAuth({
 			clientId: process.env.TWITTER_CLIENT_ID || "",
 			clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
 		},
+		paypal: {
+			clientId: process.env.PAYPAL_CLIENT_ID || "",
+			clientSecret: process.env.PAYPAL_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
@@ -193,6 +198,10 @@ export const auth = betterAuth({
 					},
 				],
 			},
+		}),
+		deviceAuthorization({
+			expiresIn: "3min",
+			interval: "5s",
 		}),
 	],
 	trustedOrigins: ["exp://"],
