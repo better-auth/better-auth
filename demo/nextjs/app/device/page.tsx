@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { client, useSession } from "@/lib/auth-client";
+import { client } from "@/lib/auth-client";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

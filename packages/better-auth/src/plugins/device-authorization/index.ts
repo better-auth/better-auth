@@ -564,9 +564,21 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								200: {
 									description: "Verification page HTML",
 									content: {
-										"text/html": {
+										"application/json": {
 											schema: {
-												type: "string",
+												type: "object",
+												properties: {
+													user_code: {
+														type: "string",
+														description: "The user code to verify",
+													},
+													status: {
+														type: "string",
+														enum: ["pending", "approved", "denied"],
+														description:
+															"Current status of the device authorization",
+													},
+												},
 											},
 										},
 									},
@@ -662,7 +674,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					// Check if user is authenticated
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -673,7 +684,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}
 
 					const { userCode } = ctx.body;
-					const cleanUserCode = userCode.replace(/-/g, "");
 
 					const deviceCodeRecord =
 						await ctx.context.adapter.findOne<DeviceCode>({
@@ -681,7 +691,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							where: [
 								{
 									field: "userCode",
-									value: cleanUserCode,
+									value: userCode,
 								},
 							],
 						});
