@@ -1,5 +1,4 @@
 {
   "version": 2,
-  "buildCommand": "bash -lc 'turbo run build --filter=./docs... --filter=./demo...'",
-
+  "buildCommand": "bash -lc 'turbo run build --filter=./docs... --filter=./demo...'"
 }
