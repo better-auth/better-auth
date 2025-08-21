@@ -1,12 +1,13 @@
 import { z } from "zod/v4";
 import { APIError } from "better-call";
 import { createAuthEndpoint } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
 import { generateRandomString } from "../../crypto";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { ms, type StringValue as MSStringValue } from "../../utils/time/ms";
 import { getRandomValues } from "@better-auth/utils";
 import { schema, type DeviceCode } from "./schema";
+import { mergeSchema } from "../../db";
 
 const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {
@@ -97,6 +98,7 @@ export const $deviceAuthorizationOptionsSchema = z.object({
 		.describe(
 			"Function to handle device authorization requests. If not provided, no additional actions will be taken.",
 		),
+	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
 });
 
 /**
@@ -164,7 +166,7 @@ export const deviceAuthorization = (
 
 	return {
 		id: "device-authorization",
-		schema,
+		schema: mergeSchema(schema, options?.schema),
 		endpoints: {
 			deviceCode: createAuthEndpoint(
 				"/device/code",
