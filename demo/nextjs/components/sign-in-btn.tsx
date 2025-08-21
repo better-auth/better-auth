@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
 export async function SignInButton() {
+	// @ts-ignore
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	});
