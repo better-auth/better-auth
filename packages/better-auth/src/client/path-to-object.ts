@@ -2,7 +2,7 @@ import type {
 	BetterFetchOption,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { InputContext, Endpoint } from "better-call";
+import type { InputContext, Endpoint, StandardSchemaV1 } from "better-call";
 import type {
 	HasRequiredKeys,
 	Prettify,
@@ -130,10 +130,15 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 														session: InferSessionFromClient<COpts>;
 													} | null
 												: NonNullable<Awaited<R>>,
-										{
-											code?: string;
-											message?: string;
-										},
+										T["options"]["error"] extends StandardSchemaV1
+											? // InferOutput
+												NonNullable<
+													T["options"]["error"]["~standard"]["types"]
+												>["output"]
+											: {
+													code?: string;
+													message?: string;
+												},
 										FetchOptions["throw"] extends true
 											? true
 											: COpts["fetchOptions"] extends { throw: true }
