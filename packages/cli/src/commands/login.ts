@@ -27,7 +27,18 @@ export async function loginAction(opts: any) {
 	const serverUrl = options.serverUrl || DEMO_URL;
 	const clientId = options.clientId || CLIENT_ID;
 
-	intro(chalk.bold("🔐 Better Auth CLI Login"));
+	intro(chalk.bold("🔐 Better Auth CLI Login (Demo)"));
+
+	console.log(
+		chalk.yellow(
+			"⚠️  This is a demo feature for testing device authorization flow.",
+		),
+	);
+	console.log(
+		chalk.gray(
+			"   It connects to the Better Auth demo server for testing purposes.\n",
+		),
+	);
 
 	// Check if already logged in
 	const existingToken = await getStoredToken();
@@ -125,7 +136,13 @@ export async function loginAction(opts: any) {
 
 			outro(
 				chalk.green(
-					`✅ Successfully logged in as ${session?.user?.name || session?.user?.email || "User"}!`,
+					`✅ Demo login successful! Logged in as ${session?.user?.name || session?.user?.email || "User"}`,
+				),
+			);
+
+			console.log(
+				chalk.gray(
+					"\n📝 Note: This was a demo authentication for testing purposes.",
 				),
 			);
 		}
@@ -245,7 +262,9 @@ async function getStoredToken(): Promise<any> {
 }
 
 export const login = new Command("login")
-	.description("Log in to Better Auth demo using device authorization")
+	.description(
+		"Demo: Test device authorization flow with Better Auth demo server",
+	)
 	.option("--server-url <url>", "The Better Auth server URL", DEMO_URL)
 	.option("--client-id <id>", "The OAuth client ID", CLIENT_ID)
 	.action(loginAction);
