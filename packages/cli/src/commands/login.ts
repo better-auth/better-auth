@@ -66,7 +66,7 @@ export async function loginAction(opts: any) {
 	try {
 		// Request device code
 		const { data, error } = await authClient.device.code({
-			client_id: clientId,
+			clientId,
 			scope: "openid profile email",
 		});
 
@@ -176,9 +176,9 @@ async function pollForToken(
 
 			try {
 				const { data, error } = await authClient.device.token({
-					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-					device_code: deviceCode,
-					client_id: clientId,
+					grantType: "urn:ietf:params:oauth:grant-type:device_code",
+					deviceCode: deviceCode,
+					clientId: clientId,
 					fetchOptions: {
 						headers: {
 							"user-agent": `Better Auth CLI`,
