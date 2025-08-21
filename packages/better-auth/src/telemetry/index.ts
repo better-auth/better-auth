@@ -52,9 +52,8 @@ export async function createTelemetry(
 
 	const enabled = await isEnabled();
 	let anonymousId: string | undefined;
-
 	if (enabled) {
-		anonymousId = await getProjectId(options.baseURL);
+		anonymousId = await getProjectId(options.baseURL as string);
 
 		const payload = {
 			config: getTelemetryAuthConfig(options),
@@ -73,7 +72,7 @@ export async function createTelemetry(
 		publish: async (event: TelemetryEvent) => {
 			if (!enabled) return;
 			if (!anonymousId) {
-				anonymousId = await getProjectId(options.baseURL);
+				anonymousId = await getProjectId(options.baseURL as string);
 			}
 			await track({
 				type: event.type,
