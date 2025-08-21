@@ -22,6 +22,15 @@ export const auth = betterAuth({
 });
 ```
 
+And in your auth client as well:
+
+```ts title="auth-client.ts"
+import { bearerClient } from "better-auth/client/plugins";
+export const authClient = createAuthClient({
+    plugins: [bearerClient()]
+});
+```
+
 ## How to Use Bearer Tokens
 
 ### 1. Obtain the Bearer Token
@@ -56,7 +65,6 @@ export const authClient = createAuthClient({
     }
 });
 ```
-
 
 You may want to clear the token based on the response status code or other conditions:
 
