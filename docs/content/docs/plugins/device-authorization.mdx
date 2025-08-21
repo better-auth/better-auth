@@ -7,6 +7,24 @@ description: OAuth 2.0 Device Authorization Grant for limited-input devices
 
 The Device Authorization plugin implements the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), enabling authentication for devices with limited input capabilities such as smart TVs, CLI applications, IoT devices, and gaming consoles.
 
+## Try It Out
+
+You can test the device authorization flow right now using the Better Auth CLI:
+
+```bash
+npx @better-auth/cli login
+```
+
+This will demonstrate the complete device authorization flow by:
+1. Requesting a device code from the Better Auth demo server
+2. Displaying a user code for you to enter
+3. Opening your browser to the verification page
+4. Polling for authorization completion
+
+<Callout type="info">
+  The CLI login command is a demo feature that connects to the Better Auth demo server to showcase the device authorization flow in action.
+</Callout>
+
 ## Installation
 
 <Steps>
