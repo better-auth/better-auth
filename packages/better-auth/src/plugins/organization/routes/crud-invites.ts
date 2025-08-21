@@ -576,37 +576,35 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			if (ctx.context.orgOptions.onInvitationAccepted) {
-					const organization = await adapter.findOrganizationById(
-						invitation.organizationId,
-					);
+				const organization = await adapter.findOrganizationById(
+					invitation.organizationId,
+				);
 
-					const inviterMember = await adapter.findMemberByOrgId({
-						userId: invitation.inviterId,
-						organizationId: invitation.organizationId,
-					});
+				const inviterMember = await adapter.findMemberByOrgId({
+					userId: invitation.inviterId,
+					organizationId: invitation.organizationId,
+				});
 
-					const inviterUser = await ctx.context.internalAdapter.findUserById(
-						invitation.inviterId,
-					);
-					if (organization && inviterMember && inviterUser) {
-						await ctx.context.orgOptions.onInvitationAccepted(
-							{
-								id: invitation.id,
-								role: invitation.role as string,
-								organization: organization,
-								invitation: invitation as unknown as Invitation,
-								inviter: {
-									...inviterMember,
-									user: inviterUser,
-								},
-								acceptedUser: session.user,
+				const inviterUser = await ctx.context.internalAdapter.findUserById(
+					invitation.inviterId,
+				);
+				if (organization && inviterMember && inviterUser) {
+					await ctx.context.orgOptions.onInvitationAccepted(
+						{
+							id: invitation.id,
+							role: invitation.role as string,
+							organization: organization,
+							invitation: invitation as unknown as Invitation,
+							inviter: {
+								...inviterMember,
+								user: inviterUser,
 							},
-							ctx.request,
-						);
-					}
+							acceptedUser: session.user,
+						},
+						ctx.request,
+					);
+				}
 			}
-
-			
 
 			return ctx.json({
 				invitation: acceptedI,

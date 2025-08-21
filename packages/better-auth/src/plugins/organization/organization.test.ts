@@ -297,7 +297,7 @@ describe("organization", async (it) => {
 	});
 	it("should call onInvitationAccepted callback when invitation is accepted", async () => {
 		onInvitationAccepted.mockClear();
-		
+
 		const testOrg = await client.organization.create({
 			name: "Test Org for Callback",
 			slug: `test-org-callback-${Math.random().toString(36).substring(7)}`,
@@ -380,7 +380,7 @@ describe("organization", async (it) => {
 					name: newUser.name,
 				}),
 			}),
-			expect.any(Object) 
+			expect.any(Object),
 		);
 	});
 	it("should create invitation with multiple roles", async () => {
@@ -1959,5 +1959,3 @@ describe("Additional Fields", async () => {
 		expect(row.teamRequiredField).toBe("hey4");
 	});
 });
-
-
