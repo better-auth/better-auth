@@ -64,6 +64,9 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
+						const hasNewSession = !!ctx.context.newSession;
+						if (!hasNewSession) return;
+
 						if (!ctx.request?.url) return null;
 
 						const path = new URL(ctx.request?.url).pathname;
@@ -91,6 +94,9 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 					},
 
 					handler: createAuthMiddleware(async (ctx) => {
+						const hasNewSession = !!ctx.context.newSession;
+						if (!hasNewSession) return;
+
 						if (!ctx.request?.url) return null;
 
 						const path = new URL(ctx.request?.url).pathname;
