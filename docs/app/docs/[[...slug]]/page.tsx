@@ -180,7 +180,9 @@ export async function generateMetadata({
 	const { slug } = await params;
 	const page = source.getPage(slug);
 	if (page == null) notFound();
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
+	
+	// Provide fallback for baseUrl to prevent "Invalid URL" error
+	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL || "http://localhost:3000";
 	const url = new URL(`${baseUrl}/api/og`);
 	const { title, description } = page.data;
 	const pageSlug = page.file.path;
