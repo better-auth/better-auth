@@ -38,7 +38,7 @@ export const bearer = (options?: BearerOptions) => {
 							success: false,
 						});
 					}
-					const cookies = cookieString.split("; ");
+					const cookies = cookieString.split(";").map(cookie => cookie.trim());
 					const foundBearerToken = cookies.find((cookie) =>
 						cookie.startsWith("bearer-token="),
 					);
@@ -46,8 +46,19 @@ export const bearer = (options?: BearerOptions) => {
 						cookie.startsWith(ctx.context.authCookies.sessionToken.name),
 					);
 					if (foundBearerToken && foundSessionToken) {
-						const sessionToken = foundSessionToken.split("=")[1];
-						ctx.setHeader("set-auth-token", sessionToken);
+						const setCookie = foundSessionToken.split("=")[1];
+						const parsedCookies = parseSetCookieHeader(setCookie);
+						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const sessionCookie = parsedCookies.get(cookieName);
+						if (
+							!sessionCookie ||
+							!sessionCookie.value ||
+							sessionCookie["max-age"] === 0
+						) {
+							return;
+						}
+						const token = sessionCookie.value;
+						ctx.setHeader("set-auth-token", token);
 						ctx.setHeader(
 							"set-cookie",
 							`bearer-token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
@@ -165,7 +176,7 @@ export const bearer = (options?: BearerOptions) => {
 							// set a temporary cookie that will be used to get the bearer token
 							ctx.setHeader(
 								"set-cookie",
-								`bearer-token=true; Path=/; SameSite=Strict`,
+								`bearer-token=true; Path=/; SameSite=Strict; Secure`,
 							);
 						}
 						ctx.setHeader("set-auth-token", token);
