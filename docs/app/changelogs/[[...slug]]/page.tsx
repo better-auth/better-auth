@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { changelogs } from "@/lib/source";
 import { notFound } from "next/navigation";
 import { absoluteUrl, formatDate } from "@/lib/utils";
