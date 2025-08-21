@@ -11,7 +11,7 @@ import { Loader2, Check, X } from "lucide-react";
 export default function DeviceApprovalPage() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const userCode = searchParams.get("userCode");
+	const userCode = searchParams.get("user_code");
 	const { data: session } = useSession();
 	const [isPending, startTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
