@@ -101,6 +101,22 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 						});
 					}),
 				},
+
+				{
+					matcher: (context) => {
+						return context.path.startsWith("/verify-email");
+					},
+
+					handler: createAuthMiddleware(async (ctx) => {
+						const hasNewSession = !!ctx.context.newSession;
+						if (!hasNewSession) return;
+
+						ctx.setCookie(opts.cookieName, "email-password", {
+							httpOnly: true,
+							maxAge: opts.maxAge,
+						});
+					}),
+				},
 			],
 		},
 	} satisfies BetterAuthPlugin;
