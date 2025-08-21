@@ -49,7 +49,7 @@ export async function createTelemetry(
 			(envEnabled || telemetryEnabled) && (context?.skipTestCheck || !isTest())
 		);
 	};
-  
+
 	const enabled = await isEnabled();
 	let anonymousId: string | undefined;
 
