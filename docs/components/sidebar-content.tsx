@@ -1477,6 +1477,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/plugins/bearer",
 			},
 			{
+				title: "Device Authorization",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2zM4 6h16v10H4z"
+						/>
+					</svg>
+				),
+				href: "/docs/plugins/device-authorization",
+				isNew: true,
+			},
+			{
 				title: "Captcha",
 				href: "/docs/plugins/captcha",
 				icon: () => (

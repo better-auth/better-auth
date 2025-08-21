@@ -606,6 +606,74 @@ describe("siwe", async (it) => {
 		expect(usersWithTestAddress.length).toBe(1); // Only one user should have this address
 	});
 
+	it("should support custom schema with mergeSchema", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				logger: {
+					level: "debug",
+				},
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ message, signature }) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+						schema: {
+							walletAddress: {
+								modelName: "wallet_address",
+								fields: {
+									userId: "user_id",
+									address: "wallet_address",
+									chainId: "chain_id",
+									isPrimary: "is_primary",
+									createdAt: "created_at",
+								},
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClient()] } },
+		);
+
+		const testAddress = "0x000000000000000000000000000000000000dEaD";
+		const testChainId = 1;
+
+		// Create account with custom schema
+		await client.siwe.nonce({
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
+		const result = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
+		expect(result.error).toBeNull();
+		expect(result.data?.success).toBe(true);
+		const context = await auth.$context;
+
+		const walletAddresses: any[] = await context.adapter.findMany({
+			model: "walletAddress",
+			where: [
+				{ field: "address", operator: "eq", value: testAddress },
+				{ field: "chainId", operator: "eq", value: testChainId },
+			],
+		});
+		expect(walletAddresses.length).toBe(1);
+		expect(walletAddresses[0]?.address).toBe(testAddress);
+		expect(walletAddresses[0]?.chainId).toBe(testChainId);
+		expect(walletAddresses[0]?.isPrimary).toBe(true);
+		expect(walletAddresses[0]?.userId).toBeDefined();
+		expect(walletAddresses[0]?.createdAt).toBeDefined();
+	});
+
 	it("should allow same address on different chains for same user", async () => {
 		const { client, auth } = await getTestInstance(
 			{

@@ -96,6 +96,7 @@ export default defineBuildConfig({
 		"./src/plugins/bearer/index.ts",
 		"./src/plugins/captcha/index.ts",
 		"./src/plugins/custom-session/index.ts",
+		"./src/plugins/device-authorization/index.ts",
 		"./src/plugins/email-otp/index.ts",
 		"./src/plugins/generic-oauth/index.ts",
 		"./src/plugins/jwt/index.ts",
