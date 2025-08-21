@@ -1,7 +1,7 @@
 import { serializeSignedCookie } from "better-call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { parseSetCookieHeader } from "../../cookies";
-import { createAuthMiddleware } from "../../api";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 interface BearerOptions {
@@ -21,6 +21,43 @@ interface BearerOptions {
 export const bearer = (options?: BearerOptions) => {
 	return {
 		id: "bearer",
+		endpoints: {
+			getBearerToken: createAuthEndpoint(
+				"/get-bearer-token",
+				{
+					method: "GET",
+					metadata: {
+						client: false,
+					},
+					requireHeaders: true,
+				},
+				async (ctx) => {
+					const cookieString = ctx.headers.get("cookie");
+					if (!cookieString) return null;
+					const cookies = cookieString.split("; ");
+					const foundBearerToken = cookies.find((cookie) =>
+						cookie.startsWith("bearer-token="),
+					);
+					const foundSessionToken = cookies.find((cookie) =>
+						cookie.startsWith(ctx.context.authCookies.sessionToken.name),
+					);
+					if (foundBearerToken && foundSessionToken) {
+						const sessionToken = foundSessionToken.split("=")[1];
+						ctx.setHeader("set-auth-token", sessionToken);
+						ctx.setHeader(
+							"set-cookie",
+							`bearer-token=; Path=/; HttpOnly; SameSite=Strict`,
+						);
+						return ctx.json({
+							success: true,
+						});
+					}
+					return ctx.json({
+						success: false,
+					});
+				},
+			),
+		},
 		hooks: {
 			before: [
 				{
@@ -114,6 +151,19 @@ export const bearer = (options?: BearerOptions) => {
 								.filter(Boolean),
 						);
 						headersSet.add("set-auth-token");
+						const location =
+							ctx.context.responseHeaders?.get("location") ||
+							ctx.context.responseHeaders?.get("Location");
+						// If location exists, it likely means the authClient isn't able to pick up the bearer token.
+						// We will store a "bearer-token" cookie so that when the authClient loads it can hit the
+						// `/get-bearer-token` endpoint and check for it, then delete it and return the bearer token.
+						if (location) {
+							// set a temporary cookie that will be used to get the bearer token
+							ctx.setHeader(
+								"set-cookie",
+								`bearer-token=true; Path=/; SameSite=Strict`,
+							);
+						}
 						ctx.setHeader("set-auth-token", token);
 						ctx.setHeader(
 							"Access-Control-Expose-Headers",
