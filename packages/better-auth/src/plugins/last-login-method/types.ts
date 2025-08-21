@@ -13,18 +13,6 @@ export type LastLoginMethodOptions = {
 	 * @default 432000
 	 */
 	maxAge?: number;
-	/**
-	 * Defines which OAuth providers are considered valid login methods.
-	 *
-	 * A provider is only treated as valid if its ID is included here or it is
-	 * one of the enabled social providers.
-	 *
-	 * Useful when you want to remember/login with a provider that isn’t
-	 * explicitly enabled on the server but should still be trusted.
-	 *
-	 * @default []
-	 */
-	trustedProviderIds?: string[];
 };
 
 export type RealizedLastLoginMethodOptions = Required<LastLoginMethodOptions>;

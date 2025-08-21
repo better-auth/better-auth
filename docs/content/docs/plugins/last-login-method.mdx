@@ -91,20 +91,3 @@ const auth = betterAuth({
   ]
 })
 ```
-
-### `trustedProviderIds`
-
-Used alongside the enabled social providers. The plugin will only track and return a last-used provider if its ID is present in either the enabled providers or this trusted list. (Default: `[]`)
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { lastSocialProvider } from "better-auth/plugins"
-
-const auth = betterAuth({
-  plugins: [
-    lastSocialProvider({
-      trustedProviderIds: ["google", "github"] // [!code highlight]
-    })
-  ]
-})
-```

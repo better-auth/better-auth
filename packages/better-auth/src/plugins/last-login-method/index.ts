@@ -13,7 +13,6 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 	const opts: RealizedLastLoginMethodOptions = {
 		cookieName: options?.cookieName ?? "better-auth.last_used_login_method",
 		maxAge: options?.maxAge ?? 432000,
-		trustedProviderIds: options?.trustedProviderIds ?? [],
 	};
 
 	return {
@@ -72,9 +71,9 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 
 						if (!providerId) return;
 
-						const providers = ctx.context.socialProviders
-							.map((x) => x.id.toLowerCase())
-							.concat(opts.trustedProviderIds.map((x) => x.toLowerCase()));
+						const providers = ctx.context.socialProviders.map((x) =>
+							x.id.toLowerCase(),
+						);
 						const isProvider = providers.includes(providerId.toLowerCase());
 
 						if (!isProvider) return;
