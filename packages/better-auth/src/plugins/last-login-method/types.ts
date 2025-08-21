@@ -2,7 +2,7 @@ export type LastLoginMethodOptions = {
 	/**
 	 * The name of the last used social provider cookie.
 	 *
-	 * @default "better-auth.last_used_social"
+	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string;
 	/**
@@ -14,11 +14,13 @@ export type LastLoginMethodOptions = {
 	 */
 	maxAge?: number;
 	/**
-	 * A list of trusted social provider IDs.
+	 * Defines which OAuth providers are considered valid login methods.
 	 *
-	 * Used alongside the enabled social providers. The plugin will only track
-	 * and return a last-used provider if its ID is present in either the enabled
-	 * social providers or this trusted list.
+	 * A provider is only treated as valid if its ID is included here or it is
+	 * one of the enabled social providers.
+	 *
+	 * Useful when you want to remember/login with a provider that isn’t
+	 * explicitly enabled on the server but should still be trusted.
 	 *
 	 * @default []
 	 */

@@ -218,8 +218,8 @@ describe("Social Providers", async (c) => {
 		}
 
 		it("returns null when no social provider has been used", async () => {
-			const lastSocial = await client.lastUsedSocial();
-			expect(lastSocial.data).toBe(null);
+			const lastLoginMethod = await client.lastUsedLoginMethod();
+			expect(lastLoginMethod.data).toBe(null);
 		});
 
 		it("should be able to add social providers", async () => {
@@ -258,11 +258,11 @@ describe("Social Providers", async (c) => {
 		});
 
 		it("records the last used social provider", async () => {
-			const provider = await client.lastUsedSocial(
+			const lastLoginMethod = await client.lastUsedLoginMethod(
 				{},
 				{ headers: signInHeaders },
 			);
-			expect(provider.data).toBe("google");
+			expect(lastLoginMethod.data).toBe("google");
 		});
 
 		it("Should use callback URL if the user is already registered", async () => {

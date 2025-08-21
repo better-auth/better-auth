@@ -11,7 +11,7 @@ export * from "./client";
 
 export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 	const opts: RealizedLastLoginMethodOptions = {
-		cookieName: options?.cookieName ?? "better-auth.last_used_social",
+		cookieName: options?.cookieName ?? "better-auth.last_used_login_method",
 		maxAge: options?.maxAge ?? 432000,
 		trustedProviderIds: options?.trustedProviderIds ?? [],
 	};
@@ -19,26 +19,26 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 	return {
 		id: "last-login-method",
 		endpoints: {
-			lastUsedSocial: createAuthEndpoint(
-				"/last-used-social",
+			lastUsedLoginMethod: createAuthEndpoint(
+				"/last-used-login-method",
 				{
 					method: "GET",
 					requireHeaders: true,
 					metadata: {
 						openapi: {
 							description:
-								"Get the last social provider the user used to sign in.",
-							operationId: "lastUsedSocialProvider",
+								"Get the last used login method the user used to sign in.",
+							operationId: "lastUsedLoginMethod",
 							responses: {
 								"200": {
 									description:
-										"Success - Returns the provider ID of the last social provider",
+										"Success - Returns the last used login method",
 									content: {
 										"application/json": {
 											schema: {
 												type: "string",
 												nullable: true,
-												description: "Social Provider ID",
+												description: "Login Method",
 											},
 										},
 									},
@@ -48,13 +48,13 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 					},
 				},
 				async (c) => {
-					const providerId = c.getCookie(opts.cookieName);
+					const loginMethod = c.getCookie(opts.cookieName);
 
-					if (!providerId) {
+					if (!loginMethod) {
 						return null;
 					}
 
-					return providerId;
+					return loginMethod;
 				},
 			),
 		},
