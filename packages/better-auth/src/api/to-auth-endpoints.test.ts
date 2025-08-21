@@ -479,6 +479,8 @@ describe("disabled paths with glob patterns", async () => {
 			},
 		});
 		expect(callbackResponse.error?.status).toBe(404);
+	});
+});
 describe("debug mode stack trace", () => {
 	it("should preserve stack trace when logger is in debug mode and APIError is thrown", async () => {
 		const endpoints = {
