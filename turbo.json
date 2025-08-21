@@ -7,7 +7,8 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/*"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
         "TURSO_DATABASE_URL",
         "TURSO_AUTH_TOKEN",
