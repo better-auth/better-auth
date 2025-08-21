@@ -38,6 +38,16 @@ export const init = async (options: BetterAuthOptions) => {
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
+	console.log("DEBUG: Initializing Better Auth with options:", options);
+	console.log("DEBUG: ENVIRONMENT:", {
+		BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
+		BETTER_AUTH_TRUSTED_ORIGINS: env.BETTER_AUTH_TRUSTED_ORIGINS,
+		AUTH_SECRET: env.AUTH_SECRET,
+		isProduction,
+		isDevelopment: !isProduction && !env.TEST,
+		isTest: env.TEST,
+	});
+
 	const secret =
 		options.secret ||
 		env.BETTER_AUTH_SECRET ||
