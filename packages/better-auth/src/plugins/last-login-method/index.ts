@@ -79,13 +79,17 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 			after: [
 				makeSignInHook("/callback/:id", (ctx) => {
 					if (!ctx.request?.url) return null;
-					const providerId = new URL(ctx.request.url).pathname.split("/").at(-1);
+					const providerId = new URL(ctx.request.url).pathname
+						.split("/")
+						.at(-1);
 					if (!providerId) return null;
 
 					const providers = ctx.context.socialProviders.map((x) =>
 						x.id.toLowerCase(),
 					);
-					return providers.includes(providerId.toLowerCase()) ? providerId : null;
+					return providers.includes(providerId.toLowerCase())
+						? providerId
+						: null;
 				}),
 
 				makeSignInHook("/oauth2/callback/:providerId", (ctx) => {
