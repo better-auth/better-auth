@@ -452,8 +452,8 @@ importers:
         specifier: 2.1.0
         version: 2.1.0
       fumadocs-mdx:
-        specifier: 11.8.0
-        version: 11.8.0(acorn@8.15.0)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react@19.1.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0))
+        specifier: 11.5.6
+        version: 11.5.6(acorn@8.15.0)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))
       fumadocs-typescript:
         specifier: ^4.0.6
         version: 4.0.6(@types/react@19.1.6)(typescript@5.9.2)
@@ -8583,23 +8583,15 @@ packages:
   fumadocs-docgen@2.1.0:
     resolution: {integrity: sha512-OX1JKA3dqIuUxwpt66i6GyT2ZiYT937dvTR3vuHtUi9zx9Nft03h9Z2aLuVcdTaH5WmLdGvZUTYHPyYa9xeHrw==}
 
-  fumadocs-mdx@11.8.0:
-    resolution: {integrity: sha512-svbJBgkvLHG3GX2tG+TxiMPDnvE2QDHCIT2wgcYf+flWoDIMgh8ZWTvv4r5/BpU+svYeEd6sKFq3sEjlgDM4ag==}
+  fumadocs-mdx@11.5.6:
+    resolution: {integrity: sha512-XhzfR7WsI4qO9EdmRZQc/mRxMkSY2HQ7Fg2fv7ia4R3LN0Km7X8KSEry9lU2c0XmSHcospniW5o1FFgsAq4+mQ==}
     hasBin: true
     peerDependencies:
-      '@fumadocs/mdx-remote': ^1.4.0
+      '@fumadocs/mdx-remote': ^1.2.0
       fumadocs-core: ^14.0.0 || ^15.0.0
-      next: ^15.3.0
-      react: '*'
-      vite: 6.x.x || 7.x.x
+      next: 14.x.x || 15.x.x
     peerDependenciesMeta:
       '@fumadocs/mdx-remote':
-        optional: true
-      next:
-        optional: true
-      react:
-        optional: true
-      vite:
         optional: true
 
   fumadocs-typescript@4.0.6:
@@ -9847,10 +9839,6 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
-
-  lru-cache@11.1.0:
-    resolution: {integrity: sha512-QIXZUBJUx+2zHUdQujWejBkcD9+cs94tLn0+YL8UrCh+D5sCXZ4c7LaEH48pNwRY3MLDgqUFyhlCyjJPf1WP0A==}
-    engines: {node: 20 || >=22}
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
@@ -12580,9 +12568,6 @@ packages:
 
   tinyexec@0.3.2:
     resolution: {integrity: sha512-KQQR9yN7R5+OSwaK0XQoj22pwHoTlgYqmUscPYoknOoWCWfj/5/ABTMRi69FrKU5ffPVh5QcFikpWJI/P1ocHA==}
-
-  tinyexec@1.0.1:
-    resolution: {integrity: sha512-5uC6DDlmeqiOwCPmK9jMSdOuZTh8bU39Ys6yidB+UTt5hfZUPGAypSgFRiEp+jbi9qH40BLDvy85jIU88wKSqw==}
 
   tinyglobby@0.2.14:
     resolution: {integrity: sha512-tX5e7OM1HnYr2+a2C/4V0htOcSQcoSTH9KgJnVvNm5zm/cyEWKJ7j7YutsH9CxMdtOkkLFy2AHrMci9IM8IPZQ==}
@@ -16187,7 +16172,7 @@ snapshots:
       unixify: 1.0.0
       urlpattern-polyfill: 8.0.2
       yargs: 17.7.2
-      zod: 3.25.42
+      zod: 3.25.76
     transitivePeerDependencies:
       - encoding
       - rollup
@@ -18561,7 +18546,7 @@ snapshots:
       recast: 0.23.11
       source-map: 0.7.6
       tsx: 4.19.4
-      zod: 3.25.42
+      zod: 3.25.76
     transitivePeerDependencies:
       - supports-color
 
@@ -18580,7 +18565,7 @@ snapshots:
       babel-dead-code-elimination: 1.0.10
       chokidar: 3.6.0
       unplugin: 2.3.5
-      zod: 3.25.42
+      zod: 3.25.76
     optionalDependencies:
       '@tanstack/react-router': 1.131.3(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       vite: 6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0)
@@ -20014,9 +19999,9 @@ snapshots:
     dependencies:
       run-applescript: 7.0.0
 
-  bundle-require@5.1.0(esbuild@0.25.5):
+  bundle-require@5.1.0(esbuild@0.25.9):
     dependencies:
-      esbuild: 0.25.5
+      esbuild: 0.25.9
       load-tsconfig: 0.2.5
 
   bytes@3.1.2: {}
@@ -22130,25 +22115,20 @@ snapshots:
       unist-util-visit: 5.0.0
       zod: 3.25.76
 
-  fumadocs-mdx@11.8.0(acorn@8.15.0)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react@19.1.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0)):
+  fumadocs-mdx@11.5.6(acorn@8.15.0)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1)):
     dependencies:
       '@mdx-js/mdx': 3.1.0(acorn@8.15.0)
       '@standard-schema/spec': 1.0.0
       chokidar: 4.0.3
+      cross-spawn: 7.0.6
       esbuild: 0.25.9
       estree-util-value-to-estree: 3.4.0
+      fast-glob: 3.3.3
       fumadocs-core: 15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      js-yaml: 4.1.0
-      lru-cache: 11.1.0
-      picocolors: 1.1.1
-      tinyexec: 1.0.1
-      tinyglobby: 0.2.14
-      unist-util-visit: 5.0.0
-      zod: 4.0.17
-    optionalDependencies:
+      gray-matter: 4.0.3
       next: 15.5.0(@babel/core@7.28.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1)
-      react: 19.1.1
-      vite: 6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0)
+      unist-util-visit: 5.0.0
+      zod: 3.25.76
     transitivePeerDependencies:
       - acorn
       - supports-color
@@ -22669,9 +22649,9 @@ snapshots:
 
   importx@0.5.2:
     dependencies:
-      bundle-require: 5.1.0(esbuild@0.25.5)
+      bundle-require: 5.1.0(esbuild@0.25.9)
       debug: 4.4.1
-      esbuild: 0.25.5
+      esbuild: 0.25.9
       jiti: 2.4.2
       pathe: 2.0.3
       tsx: 4.19.4
@@ -23534,8 +23514,6 @@ snapshots:
       highlight.js: 11.11.1
 
   lru-cache@10.4.3: {}
-
-  lru-cache@11.1.0: {}
 
   lru-cache@5.1.1:
     dependencies:
@@ -24565,7 +24543,7 @@ snapshots:
       defu: 6.1.4
       destr: 2.0.5
       dot-prop: 9.0.0
-      esbuild: 0.25.5
+      esbuild: 0.25.9
       escape-string-regexp: 5.0.0
       etag: 1.8.1
       exsolve: 1.0.7
@@ -27130,8 +27108,6 @@ snapshots:
 
   tinyexec@0.3.2: {}
 
-  tinyexec@1.0.1: {}
-
   tinyglobby@0.2.14:
     dependencies:
       fdir: 6.4.5(picomatch@4.0.2)
@@ -27200,7 +27176,7 @@ snapshots:
 
   tsx@4.19.4:
     dependencies:
-      esbuild: 0.25.5
+      esbuild: 0.25.9
       get-tsconfig: 4.10.1
     optionalDependencies:
       fsevents: 2.3.3
