@@ -5,7 +5,12 @@ import type {
 	User,
 	Verification,
 } from "../../types";
-import type { SchemaClient, OAuthOptions, VerificationValue } from "./types";
+import type {
+	SchemaClient,
+	OAuthOptions,
+	VerificationValue,
+	OAuthSession,
+} from "./types";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
@@ -280,31 +285,28 @@ async function createUserTokens(
 	const refreshTokenExpiresAt = refreshToken
 		? new Date((iat + (opts.refreshTokenExpiresIn ?? 2592000)) * 1000)
 		: undefined;
-	const session: (Omit<Session, "token"> & { token?: string }) | null =
-		_session?.sessionToken
-			? await ctx.context.internalAdapter.updateSession(
-					_session.sessionToken,
-					{
-						token: refreshToken, // New refresh token after each use
-						updatedAt: now,
-						expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-					},
-					ctx,
-				)
-			: await ctx.context.internalAdapter.createSession(
-					user.id,
-					ctx,
-					undefined,
-					{
-						clientId: client.clientId,
-						scopes: scopes.join(","),
-						token: refreshToken,
-						createdAt: now,
-						updatedAt: now,
-						expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
-					},
-					true,
-				);
+	const session: OAuthSession | null = _session?.sessionToken
+		? await ctx.context.adapter.update({
+				model: "session",
+				where: [{ field: "refresh", value: _session.sessionToken }],
+				update: {
+					refresh: refreshToken,
+					updatedAt: now,
+					expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
+				},
+			})
+		: await ctx.context.adapter.create({
+				model: "session",
+				data: {
+					userId: user.id,
+					clientId: client.clientId,
+					scopes: scopes.join(","),
+					refresh: refreshToken,
+					createdAt: now,
+					updatedAt: now,
+					expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
+				},
+			});
 
 	if (!session) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -314,8 +316,8 @@ async function createUserTokens(
 	}
 
 	// Ensure no refresh data is used
-	if (session?.token) {
-		session.token = undefined;
+	if (session?.refresh) {
+		session.refresh = undefined;
 	}
 
 	// Check requested audience if sent as the resource parameter
@@ -859,14 +861,37 @@ async function handleRefreshTokenGrant(
 	}
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
-	const session = await ctx.context.internalAdapter.findSession(
-		decodedRefresh.token,
-	);
-	const scopes = (session?.session.scopes as string)?.split(",");
+	const session = await ctx.context.adapter.findOne<OAuthSession>({
+		model: "session",
+		where: [{ field: "refresh", value: decodedRefresh.token }],
+	});
+
+	// Check session
+	if (!session) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "session not found",
+			error: "invalid_session",
+		});
+	}
+	if (session.clientId !== client_id?.toString()) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid client_id",
+			error: "invalid_client",
+		});
+	}
+	if (session.expiresAt < new Date()) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "refresh token expired",
+			error: "invalid_session",
+		});
+	}
+
+	// Check session scopes
+	const scopes = session?.scopes?.split(",") ?? [];
 	const requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
 		for (const requestedScope of requestedScopes) {
-			if (!scopes.includes(requestedScope)) {
+			if (!scopes?.includes(requestedScope)) {
 				throw new APIError("NOT_ACCEPTABLE", {
 					message: `unable to issue scope ${requestedScope}`,
 				});
@@ -882,36 +907,17 @@ async function handleRefreshTokenGrant(
 		requestedScopes ?? scopes,
 	);
 
-	// Check token
-	if (!session) {
+	const user = await ctx.context.internalAdapter.findUserById(session.userId);
+	if (!user) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid refresh token",
-			error: "invalid_grant",
-		});
-	}
-	if (session.session.clientId !== client_id?.toString()) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid client_id",
-			error: "invalid_client",
-		});
-	}
-	if (session.session.expiresAt < new Date()) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "refresh token expired",
-			error: "invalid_grant",
+			error_description: "user not found",
+			error: "invalid_session",
 		});
 	}
 
 	// Generate new tokens
-	return createUserTokens(
-		ctx,
-		opts,
-		client,
-		requestedScopes ?? scopes,
-		session.user,
-		{
-			// sessionId: decodedRefresh.sessionId, // TODO: Update by sessionId
-			sessionToken: decodedRefresh.token,
-		},
-	);
+	return createUserTokens(ctx, opts, client, requestedScopes ?? scopes, user, {
+		// sessionId: decodedRefresh.sessionId, // TODO: Update by sessionId
+		sessionToken: decodedRefresh.token,
+	});
 }
