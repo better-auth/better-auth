@@ -16,6 +16,7 @@ import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
 import { bearer } from "../plugins";
+import { bearerClient } from "../client/plugins";
 
 const cleanupSet = new Set<Function>();
 
@@ -247,6 +248,7 @@ export async function getTestInstance<
 
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
+		plugins: [...(config?.clientOptions?.plugins || []), bearerClient()],
 		baseURL: getBaseURL(
 			options?.baseURL || "http://localhost:" + (config?.port || 3000),
 			options?.basePath || "/api/auth",

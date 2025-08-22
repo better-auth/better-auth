@@ -25,7 +25,7 @@ interface BearerOptions {
  * Converts bearer token to session cookie
  */
 export const bearer = (options?: BearerOptions) => {
-	const cookieName = options?.cookieName || "bearer-token-confirmation";
+	const bearerConfirmationCookieName = options?.cookieName || "bearer-token-confirmation";
 	return {
 		id: "bearer",
 		endpoints: {
@@ -49,7 +49,7 @@ export const bearer = (options?: BearerOptions) => {
 						.split(";")
 						.map((cookie) => cookie.trim());
 					const foundBearerToken = cookies.find((cookie) =>
-						cookie.startsWith(`${cookieName}=`),
+						cookie.startsWith(`${bearerConfirmationCookieName}=`),
 					);
 					const foundSessionToken = cookies.find((cookie) =>
 						cookie.startsWith(ctx.context.authCookies.sessionToken.name),
@@ -70,7 +70,7 @@ export const bearer = (options?: BearerOptions) => {
 						ctx.setHeader("set-auth-token", token);
 						ctx.setHeader(
 							"set-cookie",
-							`${cookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
+							`${bearerConfirmationCookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
 						);
 						return ctx.json({
 							success: true,
@@ -185,7 +185,7 @@ export const bearer = (options?: BearerOptions) => {
 							// set a temporary cookie that will be used to get the bearer token
 							ctx.setHeader(
 								"set-cookie",
-								`${cookieName}=true; Path=/; SameSite=Strict; Secure`,
+								`${bearerConfirmationCookieName}=true; Path=/; SameSite=Strict; Secure`,
 							);
 						}
 						ctx.setHeader("set-auth-token", token);
