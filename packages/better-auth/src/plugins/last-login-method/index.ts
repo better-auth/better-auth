@@ -241,6 +241,22 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 						});
 					}),
 				},
+
+				{
+					matcher: (context) => {
+						return context.path === "/siwe/verify";
+					},
+
+					handler: createAuthMiddleware(async (ctx) => {
+						const hasNewSession = !!ctx.context.newSession;
+						if (!hasNewSession) return;
+
+						ctx.setCookie(opts.cookieName, "siwe", {
+							httpOnly: true,
+							maxAge: opts.maxAge,
+						});
+					}),
+				},
 			],
 		},
 	} satisfies BetterAuthPlugin;
