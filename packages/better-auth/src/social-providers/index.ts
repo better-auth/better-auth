@@ -3,6 +3,7 @@ import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
+import { figma } from "./figma";
 import { github } from "./github";
 import { google } from "./google";
 import { kick } from "./kick";
@@ -27,6 +28,7 @@ export const socialProviders = {
 	apple,
 	discord,
 	facebook,
+	figma,
 	github,
 	microsoft,
 	google,
@@ -72,6 +74,7 @@ export * from "./apple";
 export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
+export * from "./figma";
 export * from "./github";
 export * from "./linear";
 export * from "./linkedin";
