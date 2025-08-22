@@ -13,12 +13,19 @@ interface BearerOptions {
 	 * @default false
 	 */
 	requireSignature?: boolean;
+	/**
+	 * Custom cookie name for the temporary bearer token confirmation cookie.
+	 *
+	 * @default "bearer-token-confirmation"
+	 */
+	cookieName?: string;
 }
 
 /**
  * Converts bearer token to session cookie
  */
 export const bearer = (options?: BearerOptions) => {
+	const cookieName = options?.cookieName || "bearer-token-confirmation";
 	return {
 		id: "bearer",
 		endpoints: {
@@ -42,7 +49,7 @@ export const bearer = (options?: BearerOptions) => {
 						.split(";")
 						.map((cookie) => cookie.trim());
 					const foundBearerToken = cookies.find((cookie) =>
-						cookie.startsWith("bearer-token="),
+						cookie.startsWith(`${cookieName}=`),
 					);
 					const foundSessionToken = cookies.find((cookie) =>
 						cookie.startsWith(ctx.context.authCookies.sessionToken.name),
@@ -63,7 +70,7 @@ export const bearer = (options?: BearerOptions) => {
 						ctx.setHeader("set-auth-token", token);
 						ctx.setHeader(
 							"set-cookie",
-							`bearer-token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
+							`${cookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
 						);
 						return ctx.json({
 							success: true,
@@ -172,13 +179,13 @@ export const bearer = (options?: BearerOptions) => {
 							ctx.context.responseHeaders?.get("location") ||
 							ctx.context.responseHeaders?.get("Location");
 						// If location exists, it likely means the authClient isn't able to pick up the bearer token.
-						// We will store a "bearer-token" cookie so that when the authClient loads it can hit the
+						// We will store a "bearer-token-confirmation" cookie so that when the authClient loads it can hit the
 						// `/get-bearer-token` endpoint and check for it, then delete it and return the bearer token.
 						if (location) {
 							// set a temporary cookie that will be used to get the bearer token
 							ctx.setHeader(
 								"set-cookie",
-								`bearer-token=true; Path=/; SameSite=Strict; Secure`,
+								`${cookieName}=true; Path=/; SameSite=Strict; Secure`,
 							);
 						}
 						ctx.setHeader("set-auth-token", token);

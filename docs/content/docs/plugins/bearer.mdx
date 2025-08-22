@@ -145,3 +145,6 @@ export async function handler(req, res) {
 ## Options
 
 **requireSignature** (boolean): Require the token to be signed. Default: `false`.
+
+**cookieName** (string): Custom cookie name for the temporary bearer token confirmation cookie. Default: `"bearer-token-confirmation"`.
+(For more information, [read here](https://github.com/better-auth/better-auth/pull/4123))
