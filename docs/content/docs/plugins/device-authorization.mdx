@@ -123,23 +123,15 @@ type deviceCode = {
 
 Example usage:
 ```ts
-const response = await authClient.device.code({
+const { data } = await authClient.device.code({
   client_id: "your-client-id",
   scope: "openid profile email",
 });
 
-// Returns:
-// {
-//   device_code: string,      // Device verification code
-//   user_code: string,        // User-friendly code (e.g., "ABCD1234")
-//   verification_uri: string, // URL for user verification
-//   verification_uri_complete?: string, // URL with embedded user code
-//   expires_in: number,       // Seconds until expiration
-//   interval: number          // Minimum polling interval in seconds
-// }
-
-console.log(`Please visit: ${response.verification_uri}`);
-console.log(`And enter code: ${response.user_code}`);
+if (data) {
+  console.log(`Please visit: ${data.verification_uri}`);
+  console.log(`And enter code: ${data.user_code}`);
+}
 ```
 
 ### Polling for Token
