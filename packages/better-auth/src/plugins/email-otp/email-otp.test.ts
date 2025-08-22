@@ -5,11 +5,12 @@ import { emailOTPClient } from "./client";
 import { bearer } from "../bearer";
 import { splitAtLastColon } from "./utils";
 import { createAuthClient } from "../../client";
+import { lastLoginMethod, lastLoginMethodClient } from "../last-login-method";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
 	let otp = "";
-	const { client, testUser, auth } = await getTestInstance(
+	const { client, testUser, auth, cookieSetter } = await getTestInstance(
 		{
 			plugins: [
 				bearer(),
@@ -20,6 +21,7 @@ describe("email-otp", async () => {
 					},
 					sendVerificationOnSignUp: true,
 				}),
+				lastLoginMethod(),
 			],
 			emailVerification: {
 				autoSignInAfterVerification: true,
@@ -27,7 +29,7 @@ describe("email-otp", async () => {
 		},
 		{
 			clientOptions: {
-				plugins: [emailOTPClient()],
+				plugins: [emailOTPClient(), lastLoginMethodClient()],
 			},
 		},
 	);
@@ -59,6 +61,8 @@ describe("email-otp", async () => {
 		expect(res.data?.success).toBe(true);
 		expect(otp.length).toBe(6);
 		expect(otpFn).toHaveBeenCalledWith(testUser.email, otp, "sign-in");
+
+		const signInHeaders = new Headers();
 		const verifiedUser = await client.signIn.emailOtp(
 			{
 				email: testUser.email,
@@ -68,10 +72,17 @@ describe("email-otp", async () => {
 				onSuccess: (ctx) => {
 					const header = ctx.response.headers.get("set-cookie");
 					expect(header).toContain("better-auth.session_token");
+					cookieSetter(signInHeaders)(ctx);
 				},
 			},
 		);
 		expect(verifiedUser.data?.token).toBeDefined();
+
+		const lastUsedLogin = await client.lastUsedLoginMethod(
+			{},
+			{ headers: signInHeaders },
+		);
+		expect(lastUsedLogin.data).toBe("email-otp");
 	});
 
 	it("should sign-up with otp", async () => {
