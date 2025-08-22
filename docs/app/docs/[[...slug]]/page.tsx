@@ -14,7 +14,7 @@ import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
-import { createTypeTable } from "fumadocs-typescript/ui";
+import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Card, Cards } from "fumadocs-ui/components/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -24,8 +24,6 @@ import { DividerText } from "@/components/divider-text";
 import { APIMethod } from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-
-const { AutoTypeTable } = createTypeTable();
 
 export default async function Page({
 	params,

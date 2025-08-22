@@ -398,8 +398,8 @@ describe("signJWT", async (it) => {
 			body: {
 				payload: {
 					sub: "123",
-					exp: 1000,
-					iat: 1000,
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
 					iss: "https://example.com",
 					aud: "https://example.com",
 					custom: "custom",
@@ -445,6 +445,24 @@ describe("signJWT", async (it) => {
 	});
 });
 
+describe("jwt - remote signing", async (it) => {
+	it("should fail if sign is defined and remoteUrl is not", async () => {
+		expect(() =>
+			getTestInstance({
+				plugins: [
+					jwt({
+						jwt: {
+							sign: () => {
+								return "123";
+							},
+						},
+					}),
+				],
+			}),
+		).toThrowError("jwks_config");
+	});
+});
+
 describe("jwt - remote url", async (it) => {
 	const { auth } = await getTestInstance({
 		plugins: [
@@ -480,7 +498,7 @@ describe("jwt - remote url", async (it) => {
 					}),
 				],
 			}),
-		).toThrow();
+		).toThrowError("jwks_config");
 	});
 
 	it("should disable /jwks", async () => {

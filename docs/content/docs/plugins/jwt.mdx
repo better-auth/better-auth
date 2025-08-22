@@ -207,6 +207,74 @@ jwt({
 })
 ```
 
+### Custom Signing
+
+This is an advanced feature. Configuration outside of this plugin **MUST** be provided.
+
+Implementers:
+- `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
+- If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
+- When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
+
+#### Localized Signing
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'EdDSA',
+    },
+  },
+  jwt: {
+    sign: async (jwtPayload: JWTPayload) => {
+      // this is pseudocode
+      return await new SignJWT(jwtPayload)
+        .setProtectedHeader({
+          alg: "EdDSA",
+          kid: process.env.currentKid,
+          typ: "JWT",
+        })
+        .sign(process.env.clientPrivateKey);
+    },
+  },
+})
+```
+
+#### Remote Signing
+
+Useful if you are using a remote Key Management Service such as [Google KMS](https://cloud.google.com/kms/docs/encrypt-decrypt-rsa#kms-encrypt-asymmetric-nodejs), [Amazon KMS](https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html), or [Azure Key Vault](https://learn.microsoft.com/en-us/rest/api/keyvault/keys/sign/sign?view=rest-keyvault-keys-7.4&tabs=HTTP).
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  },
+  jwt: {
+    sign: async (jwtPayload: JWTPayload) => {
+      // this is pseudocode
+      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' })
+      const payload = JSON.stringify(jwtPayload)
+      const encodedHeaders = Buffer.from(headers).toString('base64url')
+      const encodedPayload = Buffer.from(payload).toString('base64url')
+      const hash = createHash('sha256')
+      const data = `${encodedHeaders}.${encodedPayload}`
+      hash.update(Buffer.from(data))
+      const digest = hash.digest()
+      const sig = await remoteSign(digest)
+      // integrityCheck(sig)
+      const jwt = `${data}.${sig}`
+      // verifyJwt(jwt)
+      return jwt
+    },
+  },
+})
+```
+
+
 ## Schema
 
 The JWT plugin adds the following tables to the database:

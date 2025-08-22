@@ -18,6 +18,7 @@ import { symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
 import z from "zod";
 import { BetterAuthError } from "../../error";
+import type { Awaitable } from "../../types/helper";
 
 type JWKOptions =
 	| {
@@ -123,6 +124,17 @@ export interface JwtOptions {
 			user: User & Record<string, any>;
 			session: Session & Record<string, any>;
 		}) => Promise<string> | string;
+		/**
+		 * A custom function to remote sign the jwt payload.
+		 *
+		 * All headers, such as `alg` and `kid`,
+		 * MUST be defined within this function.
+		 * You can safely define the header `typ: 'JWT'`.
+		 *
+		 * @requires jwks.remoteUrl
+		 * @invalidates other jwt.* options
+		 */
+		sign?: (payload: JWTPayload) => Awaitable<string>;
 	};
 
 	/**
@@ -162,6 +174,14 @@ export async function generateExportedKeyPair(
 }
 
 export const jwt = (options?: JwtOptions) => {
+	// Remote url must be set when using signing function
+	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwks.remoteUrl must be set when using jwt.sign",
+		);
+	}
+
 	// Alg is required to be specified when using remote url (needed in openid metadata)
 	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(

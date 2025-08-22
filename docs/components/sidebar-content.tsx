@@ -586,6 +586,24 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "PayPal",
+				href: "/docs/authentication/paypal",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81c1.01 1.15 1.304 2.42 1.012 4.287c-.023.143-.047.288-.077.437c-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.404-.404c-.404-.404-.878-.606-1.417-.606h-2.190c-.524 0-.968.382-1.05.9l-1.295 8.206c-.082.518.235.995.753.995h2.19c2.57 0 4.578-.543 5.69-1.81c1.01-1.15 1.304-2.42 1.012-4.287c-.293-1.857-.991-2.994-3.289-2.994z"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Slack",
 				href: "/docs/authentication/slack",
 				isNew: true,
@@ -1474,6 +1492,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Bearer",
 				icon: () => <Key className="w-4 h-4" />,
 				href: "/docs/plugins/bearer",
+			},
+			{
+				title: "Device Authorization",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2zM4 6h16v10H4z"
+						/>
+					</svg>
+				),
+				href: "/docs/plugins/device-authorization",
+				isNew: true,
 			},
 			{
 				title: "Captcha",

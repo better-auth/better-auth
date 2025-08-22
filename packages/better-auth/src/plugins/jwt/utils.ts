@@ -1,5 +1,28 @@
 import { subtle, getRandomValues } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
+import { joseSecs } from "../../utils/time";
+
+/**
+ * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)
+ *
+ * See https://github.com/panva/jose/blob/main/src/lib/jwt_claims_set.ts#L245
+ *
+ * @param expirationTime - see options.jwt.expirationTime
+ * @param iat - the iat time to consolidate on
+ * @returns
+ */
+export function toExpJWT(
+	expirationTime: number | Date | string,
+	iat: number,
+): number {
+	if (typeof expirationTime === "number") {
+		return expirationTime;
+	} else if (expirationTime instanceof Date) {
+		return Math.floor(expirationTime.getTime() / 1000);
+	} else {
+		return iat + joseSecs(expirationTime);
+	}
+}
 
 async function deriveKey(secretKey: string): Promise<CryptoKey> {
 	const enc = new TextEncoder();
