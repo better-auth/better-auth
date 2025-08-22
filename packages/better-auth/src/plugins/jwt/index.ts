@@ -15,8 +15,9 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
+export { signJWT } from "./sign";
 export type * from "./types";
-export { createJwk, generateExportedKeyPair } from "./utils";
+export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
 
 const signJWTBodySchema = z.object({
