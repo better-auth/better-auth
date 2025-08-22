@@ -90,7 +90,7 @@ export default function DeviceApprovalPage() {
 								className="flex-1"
 								disabled={isDenyPending}
 							>
-								{isApprovePending ? (
+								{isDenyPending ? (
 									<Loader2 className="h-4 w-4 animate-spin" />
 								) : (
 									<>
