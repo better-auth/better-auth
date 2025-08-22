@@ -23,6 +23,7 @@ import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { line } from "./line";
 import { paypal } from "./paypal";
 export const socialProviders = {
 	apple,
@@ -48,6 +49,7 @@ export const socialProviders = {
 	vk,
 	zoom,
 	notion,
+	line,
 	paypal,
 };
 
@@ -95,6 +97,7 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./line";
 export * from "./paypal";
 
 export type SocialProviderList = typeof socialProviderList;
