@@ -372,6 +372,16 @@ export interface AuthorizationQuery {
 }
 
 /**
+ * Merged Session schema type
+ */
+export type OAuthSession = Omit<Session, "token"> & {
+	token?: string;
+	refresh?: string;
+	clientId?: string;
+	scopes?: string;
+};
+
+/**
  * Stored within the verification.value field
  * in JSON format.
  *

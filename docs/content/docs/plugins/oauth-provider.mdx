@@ -43,9 +43,10 @@ Table: oauthAccessToken
 - Convert all `oauthAccessToken` to a `Session` using the following map:
 ```ts
 {
-  token: refreshToken,
+  refresh: refreshToken,
   expiresAt: refreshTokenExpiresAt,
-  scopes: scope,
+  clientId: clientId,
+  scopes: scopes,
   userId: userId,
   createdAt: createdAt,
   updatedAt: updatedAt,
@@ -56,7 +57,8 @@ Table: oauthAccessToken
 {
   token: accessToken,
   expiresAt: accessTokenExpiresAt,
-  scopes: scope,
+  clientId: clientId,
+  scopes: scopes,
   userId: userId,
   createdAt: createdAt,
   updatedAt: updatedAt,

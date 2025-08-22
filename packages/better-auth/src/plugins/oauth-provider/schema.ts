@@ -117,9 +117,14 @@ export const schema = {
 	 */
 	session: {
 		fields: {
+			/** Token logic is used in direct login methods */
 			token: {
 				type: "string",
-				// Optional because only available for refreshable Sessions
+				required: false,
+			},
+			/** Refresh is for oAuth logic */
+			refresh: {
+				type: "string",
 				required: false,
 			},
 			clientId: {
