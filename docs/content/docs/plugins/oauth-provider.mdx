@@ -1,0 +1,72 @@
+---
+title: oAuth2.1 Provider
+description: A Better Auth plugin that enables your auth server to serve as an oAuth 2.1 provider.
+---
+
+## Optimizations
+
+To improve lookup performance, map the `client_id` to `id` through your database adapter
+
+## Migration
+
+If you are migrating from the [OIDC Provider](./oidc-provider) to this oAuth2.1 provider, the following shall help with a full migration.
+
+### Configuration
+
+- **`accessTokenExpiresIn`** now defaults to `10 min` (previously `1 hour`)
+- **`idTokenExpiresIn`** now defaults to `10 hours` (previously `1 hour` through `accessTokenExpiresIn`)
+- **`refreshTokenExpiresIn`** now defaults to `30 days` (previously `7 days`)
+- **`advertisedMetadata`** (previously `metadata`) no longer supports changing metadata fields to prevent accidental misconfiguration.
+- **`clientRegistrationDefaultScopes`** (previously `defaultScope`) is now in array format instead of a space-separated string
+- **`consentPage`** is now required
+- **`getConsentHTML`** is removed in favor of the `consentPage` as raw html is not a response type supported by the authorize endpoint in oAuth
+- **`requirePKCE`** is removed as PKCE is required in oAuth2.1
+- **`allowPlainCodeChallengeMethod`** is removed as the `plain` code challenge is considered less secure than the default `S256` method
+- **`getAdditionalUserInfoClaim`** removes the client object as a parameter
+- **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJWTPlugin: true` (previously `plain`).
+- JWT plugin now is enabled by default. To disable the plugin, set `disableJWTPlugin: true`.
+
+### Database
+
+Table: oauthApplication
+
+- If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
+- `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
+    - Clients with `type: "public"`: set `type: undefined`, `public: true`, and  and `clientSecret: undefined`
+    - Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
+    - Clients with `type: "user-agent-based"`: set `public: true` and `clientSecret: undefined`
+    - Clients with `clientSecret: undefined`: set `public: true`
+- (optional) `metadata` now stored in database as individual fields instead of a JSON object
+
+Table: oauthAccessToken
+
+- Convert all `oauthAccessToken` to a `Session` using the following map:
+```ts
+{
+  token: refreshToken,
+  expiresAt: refreshTokenExpiresAt,
+  scopes: scope,
+  userId: userId,
+  createdAt: createdAt,
+  updatedAt: updatedAt,
+}
+```
+- Map all `oauthAccessToken`:
+```ts
+{
+  token: accessToken,
+  expiresAt: accessTokenExpiresAt,
+  scopes: scope,
+  userId: userId,
+  createdAt: createdAt,
+  updatedAt: updatedAt,
+}
+```
+
+## New Features
+
+- Secure by default - no need to understand the definitions of configuration options.
+- Customization of schema and fields through configuration options.
+- Ability to register public clients through `allowUnauthenticatedClientRegistration`
+- **getAdditionalUserInfoClaim** applies on the `userinfo` endpoint and the `id_token`
+- Successful login attempts create a `Session` which through other plugins can trigger hooks, such as welcome emails.
