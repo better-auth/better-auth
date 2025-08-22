@@ -59,9 +59,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
 ## Create a client
 
-Create a client instance. Here we are creating `auth.client.ts` file inside the `lib/` directory.
+Create a client instance. Here we are creating `auth-client.ts` file inside the `lib/` directory.
 
-```ts title="app/lib/auth.client.ts"
+```ts title="app/lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react" // make sure to import from better-auth/react
 
 export const authClient = createAuthClient({
@@ -78,7 +78,7 @@ Once you have created the client, you can use it to sign up, sign in, and perfor
 ```ts title="app/routes/signup.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"
-import { authClient } from "~/lib/auth.client"
+import { authClient } from "~/lib/auth-client"
 
 export default function SignUp() {
   const [email, setEmail] = useState("")
@@ -149,7 +149,7 @@ export default function SignUp() {
 ```ts title="app/routes/signin.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"
-import { authClient } from "~/services/auth.client"
+import { authClient } from "~/services/auth-client"
 
 export default function SignIn() {
   const [email, setEmail] = useState("")
