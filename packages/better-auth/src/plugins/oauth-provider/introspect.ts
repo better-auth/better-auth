@@ -3,7 +3,7 @@ import { createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import type { GenericEndpointContext, Session, User } from "../../types";
 import { basicToClientCredentials, validateClientCredentials } from "./token";
-import type { OAuthAccessToken, OAuthOptions } from "./types";
+import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 
 /**
@@ -199,23 +199,20 @@ async function validateRefreshToken(
 	token: string,
 	clientId: string,
 ) {
-	const userSession = await ctx.context.internalAdapter.findSession(token);
+	const userSession = await ctx.context.adapter.findOne<OAuthSession | null>({
+		model: "session",
+		where: [{ field: "refresh", value: token }],
+	});
 	if (!userSession) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
 			error: "invalid_token",
 		});
 	}
-	if (
-		!userSession.session.clientId ||
-		userSession.session.clientId !== clientId
-	) {
+	if (!userSession.clientId || userSession.clientId !== clientId) {
 		throw new Error("token does not match client ID");
 	}
-	if (
-		!userSession.session.expiresAt ||
-		userSession.session.expiresAt < new Date()
-	) {
+	if (!userSession.expiresAt || userSession.expiresAt < new Date()) {
 		return {
 			active: false,
 		};
@@ -230,11 +227,11 @@ async function validateRefreshToken(
 		active: true,
 		client_id: clientId,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.options.baseURL,
-		sub: userSession.user.id,
-		sid: userSession.session.sessionId,
-		exp: userSession.session.expiresAt.getTime() / 1000,
-		iat: userSession.session.createdAt.getTime() / 1000,
-		scope: userSession.session.scopes.replaceAll(",", " "),
+		sub: userSession.userId,
+		sid: userSession.id,
+		exp: userSession.expiresAt.getTime() / 1000,
+		iat: userSession.createdAt.getTime() / 1000,
+		scope: userSession.scopes?.replaceAll(",", " "),
 	} as JWTPayload;
 }
 
