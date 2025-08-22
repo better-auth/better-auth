@@ -4,17 +4,22 @@ import type {
 	Session,
 	User,
 } from "../../types";
-import { type Jwk, schema } from "./schema";
+import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { getJwtToken, signJWT } from "./sign";
-import { exportJWK, generateKeyPair, type JWK, type JWTPayload } from "jose";
+import { createJwk, getJwtToken, signJWT } from "./sign";
+import {
+	exportJWK,
+	generateKeyPair,
+	type JSONWebKeySet,
+	type JWK,
+	type JWTPayload,
+} from "jose";
 import {
 	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import { symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
 import z from "zod";
 import { BetterAuthError } from "../../error";
@@ -292,57 +297,26 @@ export const jwt = (options?: JwtOptions) => {
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
-						const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-							alg: "EdDSA",
-							crv: "Ed25519",
-						};
-						const keyPairConfig = {
-							...cfg,
-							extractable: true,
-						};
-
-						const { publicKey, privateKey } = await generateKeyPair(
-							alg,
-							keyPairConfig,
-						);
-
-						const publicWebKey = await exportJWK(publicKey);
-						const privateWebKey = await exportJWK(privateKey);
-						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-						const privateKeyEncryptionEnabled =
-							!options?.jwks?.disablePrivateKeyEncryption;
-						let jwk: Partial<Jwk> = {
-							publicKey: JSON.stringify({ alg, ...publicWebKey }),
-							privateKey: privateKeyEncryptionEnabled
-								? JSON.stringify(
-										await symmetricEncrypt({
-											key: ctx.context.secret,
-											data: stringifiedPrivateWebKey,
-										}),
-									)
-								: stringifiedPrivateWebKey,
-							createdAt: new Date(),
-						};
-
-						await adapter.createJwk(jwk as Jwk);
-
-						return ctx.json({
-							keys: [
-								{
-									...publicWebKey,
-									alg,
-									kid: jwk.id,
-								},
-							],
-						});
+						const key = await createJwk(ctx, options);
+						keySets.push(key);
 					}
 
+					const keyPairConfig = options?.jwks?.keyPairConfig;
+					const defaultCrv = keyPairConfig
+						? "crv" in keyPairConfig
+							? (keyPairConfig as { crv: string }).crv
+							: undefined
+						: undefined;
 					return ctx.json({
-						keys: keySets.map((keySet) => ({
-							...JSON.parse(keySet.publicKey),
-							kid: keySet.id,
-						})),
-					});
+						keys: keySets.map((keySet) => {
+							return {
+								alg: keySet.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+								crv: keySet.crv ?? defaultCrv,
+								...JSON.parse(keySet.publicKey),
+								kid: keySet.id,
+							};
+						}),
+					} satisfies JSONWebKeySet as JSONWebKeySet);
 				},
 			),
 

@@ -3,7 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
 import { generateExportedKeyPair, jwt, type JwtOptions } from "./index";
-import { importJWK, jwtVerify, type JSONWebKeySet } from "jose";
+import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
 
 type JWKOptions =
 	| {
@@ -97,11 +97,8 @@ describe("jwt", async (it) => {
 
 		const jwks = await client.jwks();
 
-		const publicWebKey = await importJWK({
-			...jwks.data?.keys[0],
-			alg: "EdDSA",
-		});
-		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+		const localJwks = createLocalJWKSet(jwks.data!);
+		const decoded = await jwtVerify(token.data?.token!, localJwks);
 
 		expect(decoded).toBeDefined();
 	});
@@ -115,11 +112,8 @@ describe("jwt", async (it) => {
 
 		const jwks = await client.jwks();
 
-		const publicWebKey = await importJWK({
-			...jwks.data?.keys[0],
-			alg: "EdDSA",
-		});
-		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+		const localJwks = createLocalJWKSet(jwks.data!);
+		const decoded = await jwtVerify(token.data?.token!, localJwks);
 		expect(decoded.payload.sub).toBeDefined();
 		expect(decoded.payload.sub).toBe(decoded.payload.id);
 	});
@@ -335,11 +329,8 @@ describe("jwt", async (it) => {
 
 					const jwks = await client.jwks();
 
-					const publicWebKey = await importJWK({
-						...jwks.data?.keys[0],
-						alg: algorithm.keyPairConfig.alg,
-					});
-					const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+					const localJwks = createLocalJWKSet(jwks.data!);
+					const decoded = await jwtVerify(token.data?.token!, localJwks);
 
 					expect(decoded).toBeDefined();
 				});
@@ -353,11 +344,8 @@ describe("jwt", async (it) => {
 
 					const jwks = await client.jwks();
 
-					const publicWebKey = await importJWK({
-						...jwks.data?.keys[0],
-						alg: algorithm.keyPairConfig.alg,
-					});
-					const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+					const localJwks = createLocalJWKSet(jwks.data!);
+					const decoded = await jwtVerify(token.data?.token!, localJwks);
 					expect(decoded.payload.sub).toBeDefined();
 					expect(decoded.payload.sub).toBe(decoded.payload.id);
 				});
@@ -407,11 +395,8 @@ describe("signJWT", async (it) => {
 			},
 		});
 		const jwks = await auth.api.getJwks();
-		const publicWebKey = await importJWK({
-			...jwks.keys[0],
-			alg: "EdDSA",
-		});
-		const decoded = await jwtVerify(jwt?.token!, publicWebKey);
+		const localJwks = createLocalJWKSet(jwks);
+		const decoded = await jwtVerify(jwt?.token!, localJwks);
 		expect(decoded).toMatchObject({
 			payload: {
 				iss: "https://example.com",

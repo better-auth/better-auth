@@ -25,6 +25,8 @@ export const jwk = z.object({
 	publicKey: z.string(),
 	privateKey: z.string(),
 	createdAt: z.date(),
+	alg: z.string().optional(),
+	crv: z.string().optional(),
 });
 
 export type Jwk = z.infer<typeof jwk>;
