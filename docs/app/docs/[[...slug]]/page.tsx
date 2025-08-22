@@ -47,7 +47,6 @@ export default async function Page({
 				path: `/docs/content/docs/${page.file.path}`,
 			}}
 			tableOfContent={{
-				style: "clerk",
 				header: <div className="w-10 h-4"></div>,
 			}}
 		>

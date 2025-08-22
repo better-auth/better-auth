@@ -1,13 +1,9 @@
 import type { PageTree } from "fumadocs-core/server";
 import { type ReactNode, type HTMLAttributes } from "react";
 import { cn } from "../../lib/utils";
-import { replaceOrDefault } from "./shared";
 import { type BaseLayoutProps } from "./shared";
-import { Navbar, NavbarSidebarTrigger } from "./docs.client";
 import { TreeContextProvider } from "fumadocs-ui/provider";
-import { NavProvider, Title } from "./layout/nav";
-import { SearchToggle } from "./layout/search-toggle";
-import { layoutVariables } from "./docs/shared";
+import { NavProvider } from "./layout/nav";
 import { type PageStyles, StylesProvider } from "fumadocs-ui/provider";
 import ArticleLayout from "../side-bar";
 
@@ -17,21 +13,9 @@ export interface DocsLayoutProps extends BaseLayoutProps {
 	containerProps?: HTMLAttributes<HTMLDivElement>;
 }
 
-export function DocsLayout({
-	nav: {
-		enabled: navEnabled = true,
-		component: navReplace,
-		transparentMode,
-		...nav
-	} = {},
-	children,
-	...props
-}: DocsLayoutProps): ReactNode {
+export function DocsLayout({ children, ...props }: DocsLayoutProps): ReactNode {
 	const variables = cn(
 		"[--fd-tocnav-height:36px] md:[--fd-sidebar-width:268px] lg:[--fd-sidebar-width:286px] xl:[--fd-toc-width:286px] xl:[--fd-tocnav-height:0px]",
-		!navReplace && navEnabled
-			? "[--fd-nav-height:calc(var(--spacing)*14)] md:[--fd-nav-height:0px]"
-			: undefined,
 	);
 
 	const pageStyles: PageStyles = {
@@ -41,19 +25,7 @@ export function DocsLayout({
 
 	return (
 		<TreeContextProvider tree={props.tree}>
-			<NavProvider transparentMode={transparentMode}>
-				{replaceOrDefault(
-					{ enabled: navEnabled, component: navReplace },
-					<Navbar className="md:hidden">
-						<Title url={nav.url} title={nav.title} />
-						<div className="flex flex-1 flex-row items-center gap-1">
-							{nav.children}
-						</div>
-						<SearchToggle hideIfDisabled />
-						<NavbarSidebarTrigger className="-me-2 md:hidden" />
-					</Navbar>,
-					nav,
-				)}
+			<NavProvider>
 				<main
 					id="nd-docs-layout"
 					{...props.containerProps}
@@ -62,10 +34,13 @@ export function DocsLayout({
 						variables,
 						props.containerProps?.className,
 					)}
-					style={{
-						...layoutVariables,
-						...props.containerProps?.style,
-					}}
+					style={
+						{
+							"--fd-layout-offset":
+								"max(calc(50vw - var(--fd-layout-width) / 2), 0px)",
+							...props.containerProps?.style,
+						} as object
+					}
 				>
 					<div
 						className={cn(
