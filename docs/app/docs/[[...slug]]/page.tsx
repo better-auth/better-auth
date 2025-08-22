@@ -13,6 +13,13 @@ import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import {
+	CodeBlock,
+	Pre,
+	CodeBlockTab,
+	CodeBlockTabsList,
+	CodeBlockTabs,
+} from "@/components/ui/code-block";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
@@ -22,7 +29,6 @@ import { APIMethod } from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 import { Callout } from "@/components/ui/callout";
-
 export default async function Page({
 	params,
 }: {
@@ -65,6 +71,38 @@ export default async function Page({
 				<MDX
 					components={{
 						...defaultMdxComponents,
+						CodeBlockTabs: (props) => {
+							return (
+								<CodeBlockTabs
+									{...props}
+									className="bg-fd-secondary border-b p-0 rounded-lg"
+								>
+									<div {...props}>{props.children}</div>
+								</CodeBlockTabs>
+							);
+						},
+						CodeBlockTabsList: (props) => {
+							return (
+								<CodeBlockTabsList
+									{...props}
+									className="bg-fd-secondary my-0 pb-0 rounded-lg"
+								/>
+							);
+						},
+						CodeBlockTab: (props) => {
+							return <CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />;
+						},
+						pre: (props) => {
+							return (
+								<CodeBlock className="bg-fd-muted rounded-xl" {...props}>
+									<div style={{ minWidth: "100%", display: "table" }}>
+										<Pre className="bg-fd-muted py-3 px-0 focus-visible:outline-none">
+											{props.children}
+										</Pre>
+									</div>
+								</CodeBlock>
+							);
+						},
 						Link: ({
 							className,
 							...props
