@@ -225,6 +225,22 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 						});
 					}),
 				},
+
+				{
+					matcher: (context) => {
+						return context.path === "/one-tap/callback";
+					},
+
+					handler: createAuthMiddleware(async (ctx) => {
+						const hasNewSession = !!ctx.context.newSession;
+						if (!hasNewSession) return;
+
+						ctx.setCookie(opts.cookieName, "one-tap", {
+							httpOnly: true,
+							maxAge: opts.maxAge,
+						});
+					}),
+				},
 			],
 		},
 	} satisfies BetterAuthPlugin;
