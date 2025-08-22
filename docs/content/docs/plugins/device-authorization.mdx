@@ -233,7 +233,7 @@ export default function DeviceAuthorizationPage() {
     try {
       // Format the code: remove dashes and convert to uppercase
       const formattedCode = userCode.trim().replace(/-/g, "").toUpperCase();
-      
+
       // Check if the code is valid using GET /device endpoint
       const response = await authClient.device.deviceVerify({
         query: { user_code: formattedCode },
@@ -241,7 +241,7 @@ export default function DeviceAuthorizationPage() {
       
       if (response.data) {
         // Redirect to approval page
-        window.location.href = `/device/approve?userCode=${formattedCode}`;
+        window.location.href = `/device/approve?user_code=${formattedCode}`;
       }
     } catch (err) {
       setError("Invalid or expired code");
@@ -268,6 +268,8 @@ export default function DeviceAuthorizationPage() {
 
 Users must be authenticated to approve or deny device authorization requests:
 
+#### Approve Device
+
 <APIMethod
   path="/device/approve"
   method="POST"
@@ -282,6 +284,8 @@ type deviceApprove = {
 }
 ```
 </APIMethod>
+
+#### Deny Device
 
 <APIMethod
   path="/device/deny"
@@ -298,7 +302,7 @@ type deviceDeny = {
 ```
 </APIMethod>
 
-Example approval page:
+#### Example Approval Page
 
 ```tsx title="app/device/approve/page.tsx"
 export default function DeviceApprovalPage() {
@@ -335,10 +339,10 @@ export default function DeviceApprovalPage() {
     }
     setIsProcessing(false);
   };
-  
+
   if (!user) {
     // Redirect to login if not authenticated
-    window.location.href = `/login?redirect=/device/approve?userCode=${userCode}`;
+    window.location.href = `/login?redirect=/device/approve?user_code=${userCode}`;
     return null;
   }
   
