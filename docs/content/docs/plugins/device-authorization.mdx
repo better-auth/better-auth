@@ -170,29 +170,40 @@ type deviceToken = {
 
 Example polling implementation:
 ```ts
+let pollingInterval = 5; // Start with 5 seconds
 const pollForToken = async () => {
-  try {
-    const { data } = await authClient.device.token({
-      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-      device_code,
-      client_id: "your-client-id",
-    });
-    
-    if (data?.access_token) {
-      console.log("Authorization successful!");
-      return data;
+  const { data, error } = await authClient.device.token({
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    device_code,
+    client_id: yourClientId,
+    fetchOptions: {
+      headers: {
+        "user-agent": `My CLI`,
+      },
+    },
+  });
+
+  if (data?.access_token) {
+    console.log("Authorization successful!");
+  } else if (error) {
+    switch (error.error) {
+      case "authorization_pending":
+        // Continue polling
+        break;
+      case "slow_down":
+        pollingInterval += 5;
+        break;
+      case "access_denied":
+        console.error("Access was denied by the user");
+        return;
+      case "expired_token":
+        console.error("The device code has expired. Please try again.");
+        return;
+      default:
+        console.error(`Error: ${error.error_description}`);
+        return;
     }
-  } catch (error) {
-    if (error.body?.error === "authorization_pending") {
-      // User hasn't authorized yet, continue polling
-      setTimeout(pollForToken, interval * 1000);
-    } else if (error.body?.error === "slow_down") {
-      // Polling too fast, increase interval
-      setTimeout(pollForToken, (interval + 5) * 1000);
-    } else {
-      // Handle other errors
-      console.error("Authorization failed:", error);
-    }
+    setTimeout(pollForToken, pollingInterval * 1000);
   }
 };
 
