@@ -3,7 +3,7 @@ import { createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import { basicToClientCredentials, validateClientCredentials } from "./token";
-import type { OAuthAccessToken, OAuthOptions } from "./types";
+import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 
 /**
@@ -120,28 +120,32 @@ async function revokeRefreshToken(
 	clientId: string,
 	token: string,
 ) {
-	const refreshToken = await ctx.context.internalAdapter.findSession(token);
-	if (!refreshToken) {
+	const userSession = await ctx.context.adapter.findOne<OAuthSession | null>({
+		model: "session",
+		where: [{ field: "refresh", value: token }],
+	});
+	if (!userSession) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "token not found",
 			error: "invalid_token",
 		});
 	}
-	if (
-		!refreshToken.session.clientId ||
-		refreshToken.session.clientId !== clientId
-	) {
+	if (!userSession.clientId || userSession.clientId !== clientId) {
 		throw new Error("token does not match client ID");
 	}
 
-	// Remove all access tokens associated with the refresh token
-	await ctx.context.adapter.delete({
-		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-		where: [{ field: "sessionId", value: refreshToken.session.id }],
-	});
-
-	// Remove the refresh token
-	ctx.context.internalAdapter.deleteSession(token);
+	await Promise.allSettled([
+		// Removes all access tokens associated with the refresh token
+		ctx.context.adapter.deleteMany({
+			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+			where: [{ field: "sessionId", value: userSession.id }],
+		}),
+		// Remove the refresh token
+		ctx.context.adapter.delete({
+			model: "session",
+			where: [{ field: "id", value: userSession.id }],
+		}),
+	]);
 }
 
 /**
