@@ -25,7 +25,8 @@ interface BearerOptions {
  * Converts bearer token to session cookie
  */
 export const bearer = (options?: BearerOptions) => {
-	const bearerConfirmationCookieName = options?.cookieName || "bearer-token-confirmation";
+	const bearerConfirmationCookieName =
+		options?.cookieName || "bearer-token-confirmation";
 	return {
 		id: "bearer",
 		endpoints: {
