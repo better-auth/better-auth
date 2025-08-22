@@ -37,17 +37,10 @@ export default function ArticleLayout() {
 	return (
 		<div className={cn("fixed top-0")}>
 			<aside
-				id="nd-sidebar"
 				className={cn(
-					"fixed start-0 flex flex-col items-end top-[55px] bottom-(--fd-sidebar-margin) z-20 bg-fd-card text-sm border-e max-md:hidden *:w-(--fd-sidebar-width)",
+					"md:transition-all",
+					"border-r border-lines top-[55px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
 				)}
-				style={{
-					top: `calc(var(--fd-banner-height) + var(--fd-nav-height) + var(--fd-sidebar-margin))`,
-					width: "var(--fd-sidebar-width)",
-					translate: `calc(var(--fd-layout-offset) + var(--fd-sidebar-offset))`,
-					opacity: 1,
-					transition: "top 250ms, opacity 250ms, translate 250ms, width 250ms",
-				}}
 			>
 				<div>
 					<SidebarTab group={group} setGroup={setGroup} />
@@ -237,7 +230,7 @@ function SidebarTab({
 				}
 			}}
 		>
-			<SelectTrigger className="h-14 border border-b border-none rounded-none px-5">
+			<SelectTrigger className="h-16 border border-b border-none rounded-none px-5">
 				{selected ? (
 					<div className="flex flex-col gap-1 items-start">
 						<div className="flex items-center gap-1 -ml-0.5">
