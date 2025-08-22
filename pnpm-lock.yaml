@@ -446,20 +446,20 @@ importers:
         specifier: ^8.5.1
         version: 8.6.0(react@19.1.1)
       fumadocs-core:
-        specifier: 15.7.0
-        version: 15.7.0(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        specifier: 15.0.15
+        version: 15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       fumadocs-docgen:
         specifier: 2.1.0
         version: 2.1.0
       fumadocs-mdx:
         specifier: 11.8.0
-        version: 11.8.0(acorn@8.15.0)(fumadocs-core@15.7.0(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react@19.1.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0))
+        version: 11.8.0(acorn@8.15.0)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react@19.1.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0))
       fumadocs-typescript:
-        specifier: 4.0.6
+        specifier: ^4.0.6
         version: 4.0.6(@types/react@19.1.6)(typescript@5.9.2)
       fumadocs-ui:
-        specifier: 15.7.0
-        version: 15.7.0(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(tailwindcss@4.1.8)
+        specifier: 15.0.15
+        version: 15.0.15(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(tailwindcss@4.1.8)
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -8560,23 +8560,16 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
-  fumadocs-core@15.7.0:
-    resolution: {integrity: sha512-KBRzqbk4pkrGgIeX8uVoJaBsvBu6qr7m9Hz52774jIZcEGDY1Rr6Rqqdi40cQhEYIkXKaGDyUsiLmWxHrGviwQ==}
+  fumadocs-core@15.0.15:
+    resolution: {integrity: sha512-roWAf6voyhpLpbdWalCBW4x4h2LVEJZ/J1sGG+3cR27QLn/5Vv/AEjPB0mFRcoH/fkEVU1wilxvgfDOpRXWDcA==}
     peerDependencies:
-      '@mixedbread/sdk': ^0.19.0
       '@oramacloud/client': 1.x.x || 2.x.x
-      '@types/react': '*'
-      algoliasearch: 5.x.x
+      algoliasearch: 4.24.0
       next: 14.x.x || 15.x.x
       react: 18.x.x || 19.x.x
       react-dom: 18.x.x || 19.x.x
-      react-router: 7.x.x
     peerDependenciesMeta:
-      '@mixedbread/sdk':
-        optional: true
       '@oramacloud/client':
-        optional: true
-      '@types/react':
         optional: true
       algoliasearch:
         optional: true
@@ -8585,8 +8578,6 @@ packages:
       react:
         optional: true
       react-dom:
-        optional: true
-      react-router:
         optional: true
 
   fumadocs-docgen@2.1.0:
@@ -8620,19 +8611,15 @@ packages:
       '@types/react':
         optional: true
 
-  fumadocs-ui@15.7.0:
-    resolution: {integrity: sha512-uVBtBV+0Yqp0n+PyB6ZJBu6n56Ae87b7v8PLYJ7j/P0N9CEgtmXNNMCIaDr/Sk4nisa65uJN29N7ibIMc8WJig==}
+  fumadocs-ui@15.0.15:
+    resolution: {integrity: sha512-D9x+GJlTgFe+te6h22Xp3OHDYGzEp/iWm86HiQkJQLhT5jwZ5/2htF/ehzBwOm+bizGvH6WIe3ZYfJ3dfer0/A==}
     peerDependencies:
-      '@types/react': '*'
+      fumadocs-core: 15.0.15
       next: 14.x.x || 15.x.x
       react: 18.x.x || 19.x.x
       react-dom: 18.x.x || 19.x.x
       tailwindcss: ^3.4.14 || ^4.0.0
     peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      next:
-        optional: true
       tailwindcss:
         optional: true
 
@@ -16737,7 +16724,7 @@ snapshots:
       aria-hidden: 1.2.6
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
-      react-remove-scroll: 2.7.0(@types/react@19.1.6)(react@19.1.1)
+      react-remove-scroll: 2.7.1(@types/react@19.1.6)(react@19.1.1)
     optionalDependencies:
       '@types/react': 19.1.6
       '@types/react-dom': 19.1.5(@types/react@19.1.6)
@@ -17019,7 +17006,7 @@ snapshots:
       aria-hidden: 1.2.6
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
-      react-remove-scroll: 2.7.0(@types/react@19.1.6)(react@19.1.1)
+      react-remove-scroll: 2.7.1(@types/react@19.1.6)(react@19.1.1)
     optionalDependencies:
       '@types/react': 19.1.6
       '@types/react-dom': 19.1.5(@types/react@19.1.6)
@@ -22109,7 +22096,7 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  fumadocs-core@15.7.0(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
       '@formatjs/intl-localematcher': 0.6.1
       '@orama/orama': 3.1.11
@@ -22120,20 +22107,18 @@ snapshots:
       hast-util-to-jsx-runtime: 2.3.6
       image-size: 2.0.2
       negotiator: 1.0.0
-      npm-to-yarn: 3.0.1
       react-remove-scroll: 2.7.1(@types/react@19.1.6)(react@19.1.1)
       remark: 15.0.1
       remark-gfm: 4.0.1
-      remark-rehype: 11.1.2
       scroll-into-view-if-needed: 3.1.0
       shiki: 3.11.0
       unist-util-visit: 5.0.0
     optionalDependencies:
-      '@types/react': 19.1.6
       next: 15.5.0(@babel/core@7.28.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1)
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
     transitivePeerDependencies:
+      - '@types/react'
       - supports-color
 
   fumadocs-docgen@2.1.0:
@@ -22145,14 +22130,14 @@ snapshots:
       unist-util-visit: 5.0.0
       zod: 3.25.76
 
-  fumadocs-mdx@11.8.0(acorn@8.15.0)(fumadocs-core@15.7.0(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react@19.1.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0)):
+  fumadocs-mdx@11.8.0(acorn@8.15.0)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react@19.1.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.5.1)(less@4.3.0)(lightningcss@1.30.1)(sass@1.89.1)(terser@5.40.0)(tsx@4.20.4)(yaml@2.8.0)):
     dependencies:
       '@mdx-js/mdx': 3.1.0(acorn@8.15.0)
       '@standard-schema/spec': 1.0.0
       chokidar: 4.0.3
       esbuild: 0.25.9
       estree-util-value-to-estree: 3.4.0
-      fumadocs-core: 15.7.0(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      fumadocs-core: 15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       js-yaml: 4.1.0
       lru-cache: 11.1.0
       picocolors: 1.1.1
@@ -22185,7 +22170,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-ui@15.7.0(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(tailwindcss@4.1.8):
+  fumadocs-ui@15.0.15(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(fumadocs-core@15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(tailwindcss@4.1.8):
     dependencies:
       '@radix-ui/react-accordion': 1.2.12(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@radix-ui/react-collapsible': 1.1.12(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -22193,31 +22178,25 @@ snapshots:
       '@radix-ui/react-direction': 1.1.1(@types/react@19.1.6)(react@19.1.1)
       '@radix-ui/react-navigation-menu': 1.2.14(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@radix-ui/react-popover': 1.1.15(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      '@radix-ui/react-presence': 1.1.5(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@radix-ui/react-scroll-area': 1.2.10(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@radix-ui/react-slot': 1.2.3(@types/react@19.1.6)(react@19.1.1)
       '@radix-ui/react-tabs': 1.1.13(@types/react-dom@19.1.5(@types/react@19.1.6))(@types/react@19.1.6)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       class-variance-authority: 0.7.1
-      fumadocs-core: 15.7.0(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      fumadocs-core: 15.0.15(@types/react@19.1.6)(next@15.5.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       lodash.merge: 4.6.2
+      lucide-react: 0.477.0(react@19.1.1)
+      next: 15.5.0(@babel/core@7.28.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1)
       next-themes: 0.4.6(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       postcss-selector-parser: 7.1.0
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
       react-medium-image-zoom: 5.3.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      scroll-into-view-if-needed: 3.1.0
       tailwind-merge: 3.3.1
     optionalDependencies:
-      '@types/react': 19.1.6
-      next: 15.5.0(@babel/core@7.28.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.89.1)
       tailwindcss: 4.1.8
     transitivePeerDependencies:
-      - '@mixedbread/sdk'
-      - '@oramacloud/client'
+      - '@types/react'
       - '@types/react-dom'
-      - algoliasearch
-      - react-router
-      - supports-color
 
   function-bind@1.1.2: {}
 
@@ -22897,7 +22876,7 @@ snapshots:
 
   is-reference@1.2.1:
     dependencies:
-      '@types/estree': 1.0.7
+      '@types/estree': 1.0.8
 
   is-reference@3.0.3:
     dependencies:
