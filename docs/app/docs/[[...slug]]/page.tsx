@@ -51,7 +51,7 @@ export default async function Page({
 				owner: "better-auth",
 				repo: "better-auth",
 				sha: "main",
-				path: `/docs/content/docs/${page.file.path}`,
+				path: `/docs/content/docs/${page.path}`,
 			}}
 			tableOfContent={{
 				header: <div className="w-10 h-4"></div>,

@@ -13,7 +13,6 @@ import {
 	type FooterProps,
 	LastUpdate,
 	TocPopoverHeader,
-	Breadcrumb,
 	type BreadcrumbProps,
 	PageBody,
 	PageArticle,
@@ -169,10 +168,6 @@ export function DocsPage({
 						props.article?.className,
 					)}
 				>
-					{replaceOrDefault(
-						props.breadcrumb,
-						<Breadcrumb {...props.breadcrumb} />,
-					)}
 					{props.children}
 					<div role="none" className="flex-1" />
 					<div className="flex flex-row flex-wrap items-center justify-between gap-4 empty:hidden">
