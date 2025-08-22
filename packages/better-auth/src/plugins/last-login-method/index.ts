@@ -3,6 +3,7 @@ import type {
 	RealizedLastLoginMethodOptions,
 } from "./types";
 import type { BetterAuthPlugin } from "../../types/plugins";
+import type { AuthContext, MiddlewareContext, MiddlewareOptions } from "../..";
 
 import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 
@@ -14,6 +15,32 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 		cookieName: options?.cookieName ?? "better-auth.last_used_login_method",
 		maxAge: options?.maxAge ?? 432000,
 	};
+
+	type AuthMiddlewareContext = MiddlewareContext<
+		MiddlewareOptions,
+		AuthContext & {
+			returned?: unknown;
+			responseHeaders?: Headers;
+		}
+	>;
+
+	const makeSignInHook = (
+		path: string,
+		value: string | ((ctx: AuthMiddlewareContext) => string | null),
+	) => ({
+		matcher: (ctx: { path: string }) => ctx.path === path,
+		handler: createAuthMiddleware(async (ctx) => {
+			if (!ctx.context.newSession) return;
+
+			const val = typeof value === "string" ? value : value(ctx);
+			if (!val) return;
+
+			ctx.setCookie(opts.cookieName, val, {
+				httpOnly: true,
+				maxAge: opts.maxAge,
+			});
+		}),
+	});
 
 	return {
 		id: "last-login-method",
@@ -45,218 +72,37 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 						},
 					},
 				},
-				async (c) => {
-					const loginMethod = c.getCookie(opts.cookieName);
-
-					if (!loginMethod) {
-						return null;
-					}
-
-					return loginMethod;
-				},
+				async (c) => c.getCookie(opts.cookieName) ?? null,
 			),
 		},
 		hooks: {
 			after: [
-				{
-					matcher: (context) => {
-						return context.path === "/callback/:id";
-					},
+				makeSignInHook("/callback/:id", (ctx) => {
+					if (!ctx.request?.url) return null;
+					const providerId = new URL(ctx.request.url).pathname.split("/").at(-1);
+					if (!providerId) return null;
 
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
+					const providers = ctx.context.socialProviders.map((x) =>
+						x.id.toLowerCase(),
+					);
+					return providers.includes(providerId.toLowerCase()) ? providerId : null;
+				}),
 
-						if (!ctx.request?.url) return null;
+				makeSignInHook("/oauth2/callback/:providerId", (ctx) => {
+					if (!ctx.request?.url) return null;
+					return new URL(ctx.request.url).pathname.split("/").at(-1) ?? null;
+				}),
 
-						const path = new URL(ctx.request?.url).pathname;
-						const providerId = path.split("/").at(-1);
-
-						if (!providerId) return;
-
-						const providers = ctx.context.socialProviders.map((x) =>
-							x.id.toLowerCase(),
-						);
-						const isProvider = providers.includes(providerId.toLowerCase());
-
-						if (!isProvider) return;
-
-						ctx.setCookie(opts.cookieName, providerId, {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/oauth2/callback/:providerId";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						if (!ctx.request?.url) return null;
-
-						const path = new URL(ctx.request?.url).pathname;
-						const providerId = path.split("/").at(-1);
-
-						if (!providerId) return;
-
-						ctx.setCookie(opts.cookieName, providerId, {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return (
-							context.path === "/sign-in/email" ||
-							context.path === "/sign-up/email"
-						);
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "email-password", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/verify-email";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "email-password", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/sign-in/phone-number";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "phone-number", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/sign-in/anonymous";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "anonymous", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/magic-link/verify";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "magic-link", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/sign-in/email-otp";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "email-otp", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/sign-in/passkey";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "passkey", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/one-tap/callback";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "one-tap", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
-
-				{
-					matcher: (context) => {
-						return context.path === "/siwe/verify";
-					},
-
-					handler: createAuthMiddleware(async (ctx) => {
-						const hasNewSession = !!ctx.context.newSession;
-						if (!hasNewSession) return;
-
-						ctx.setCookie(opts.cookieName, "siwe", {
-							httpOnly: true,
-							maxAge: opts.maxAge,
-						});
-					}),
-				},
+				makeSignInHook("/sign-in/email", "email-password"),
+				makeSignInHook("/sign-up/email", "email-password"),
+				makeSignInHook("/verify-email", "email-password"),
+				makeSignInHook("/sign-in/phone-number", "phone-number"),
+				makeSignInHook("/sign-in/anonymous", "anonymous"),
+				makeSignInHook("/magic-link/verify", "magic-link"),
+				makeSignInHook("/sign-in/email-otp", "email-otp"),
+				makeSignInHook("/sign-in/passkey", "passkey"),
+				makeSignInHook("/one-tap/callback", "one-tap"),
+				makeSignInHook("/siwe/verify", "siwe"),
 			],
 		},
 	} satisfies BetterAuthPlugin;
