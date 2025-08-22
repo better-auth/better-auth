@@ -3,7 +3,7 @@ title: Telemetry
 description: Better Auth now collects anonymous telemetry data about general usage.
 ---
 
-Better Auth collects anonymous usage data to help us improve the project. This is optional, transparent, and can be disabled at any time.
+Better Auth collects anonymous usage data to help us improve the project. This is optional, transparent, and disabled by default.
 
 ## Why is telemetry collected?
 
@@ -51,9 +51,9 @@ All collected data is fully anonymous and only useful in aggregate. It cannot be
 - **No full config**: We never send your full `betterAuth` configuration. Instead we send a reduced, redacted snapshot of non‑sensitive toggles and counts.
 - **Redaction by design**: See [detect-auth-config.ts](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/telemetry/detectors/detect-auth-config.ts) in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
 
-## How can I disable it?
+## How can I enable it?
 
-You can disable telemetry collection in your auth config or by setting an environment variable.
+You can enable telemetry collection in your auth config or by setting an environment variable.
 
 - Via your auth config.
 
@@ -61,7 +61,7 @@ You can disable telemetry collection in your auth config or by setting an enviro
   export const auth = betterAuth({
     // [!code highlight]
     telemetry: { // [!code highlight]
-      enabled: false // [!code highlight]
+      enabled: true// [!code highlight]
     } // [!code highlight]
   });
   ```
