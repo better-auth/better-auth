@@ -22,6 +22,7 @@ import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "../_components/stat-field";
 import Image from "next/image";
 import { BlogPage } from "../_components/blog-list";
+import { Callout } from "@/components/ui/callout";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -150,6 +151,19 @@ export default async function Page({
 							DatabaseTable,
 							Accordion,
 							Accordions,
+							Callout: ({
+								children,
+								type,
+								...props
+							}: {
+								children: React.ReactNode;
+								type?: "info" | "warn" | "error" | "success" | "warning";
+								[key: string]: any;
+							}) => (
+								<Callout type={type} {...props}>
+									{children}
+								</Callout>
+							),
 						}}
 					/>
 				</div>

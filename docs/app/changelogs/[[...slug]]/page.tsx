@@ -20,6 +20,7 @@ import { IconLink } from "../_components/changelog-layout";
 import { XIcon } from "../_components/icons";
 import { StarField } from "../_components/stat-field";
 import { GridPatterns } from "../_components/grid-pattern";
+import { Callout } from "@/components/ui/callout";
 
 const metaTitle = "Changelogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -102,6 +103,19 @@ export default async function Page({
 							DatabaseTable,
 							Accordion,
 							Accordions,
+							Callout: ({
+								children,
+								type,
+								...props
+							}: {
+								children: React.ReactNode;
+								type?: "info" | "warn" | "error" | "success" | "warning";
+								[key: string]: any;
+							}) => (
+								<Callout type={type} {...props}>
+									{children}
+								</Callout>
+							),
 						}}
 					/>
 				</div>

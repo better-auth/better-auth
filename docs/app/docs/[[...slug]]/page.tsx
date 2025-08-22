@@ -21,6 +21,7 @@ import { DividerText } from "@/components/divider-text";
 import { APIMethod } from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
+import { Callout } from "@/components/ui/callout";
 
 export default async function Page({
 	params,
@@ -95,19 +96,18 @@ export default async function Page({
 						Accordions,
 						Endpoint,
 						APIMethod,
-						Callout: ({ children, ...props }) => (
-							<defaultMdxComponents.Callout
-								{...props}
-								className={cn(
-									props,
-									"bg-none rounded-none border-dashed border-border",
-									props.type === "info" && "border-l-blue-500/50",
-									props.type === "warn" && "border-l-amber-700/50",
-									props.type === "error" && "border-l-red-500/50",
-								)}
-							>
+						Callout: ({
+							children,
+							type,
+							...props
+						}: {
+							children: React.ReactNode;
+							type?: "info" | "warn" | "error" | "success" | "warning";
+							[key: string]: any;
+						}) => (
+							<Callout type={type} {...props}>
 								{children}
-							</defaultMdxComponents.Callout>
+							</Callout>
 						),
 						DividerText,
 						iframe: (props) => (
