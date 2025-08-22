@@ -92,6 +92,9 @@ describe("anonymous", async () => {
 		});
 		expect(session.data?.session).toBeDefined();
 		expect(session.data?.user.isAnonymous).toBe(true);
+
+		const lastUsedLogin = await client.lastUsedLoginMethod({}, { headers });
+		expect(lastUsedLogin.data).toBe("anonymous");
 	});
 
 	it("link anonymous user account", async () => {

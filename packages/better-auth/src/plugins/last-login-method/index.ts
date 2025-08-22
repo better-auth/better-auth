@@ -164,6 +164,22 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 
 				{
 					matcher: (context) => {
+						return context.path === "/sign-in/anonymous";
+					},
+
+					handler: createAuthMiddleware(async (ctx) => {
+						const hasNewSession = !!ctx.context.newSession;
+						if (!hasNewSession) return;
+
+						ctx.setCookie(opts.cookieName, "anonymous", {
+							httpOnly: true,
+							maxAge: opts.maxAge,
+						});
+					}),
+				},
+
+				{
+					matcher: (context) => {
 						return context.path === "/magic-link/verify";
 					},
 
