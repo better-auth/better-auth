@@ -248,7 +248,10 @@ export async function getTestInstance<
 
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
-		plugins: [...(config?.clientOptions?.plugins || []), bearerClient()],
+		plugins: [
+			bearerClient(),
+			...((config?.clientOptions?.plugins as C["plugins"]) || []),
+		],
 		baseURL: getBaseURL(
 			options?.baseURL || "http://localhost:" + (config?.port || 3000),
 			options?.basePath || "/api/auth",
