@@ -1,9 +1,9 @@
 ---
-title: Last Social Provider
-description: Last Social Provider Plugin
+title: Last Login Method
+description: Plugin for remembering the last login method a user used.
 ---
 
-The Last Social Provider plugin remembers the last social login provider used by the user (e.g., Google, GitHub, etc.). This allows you to provide a better user experience, such as pre-selecting the provider on the next login attempt.
+The Last Login Method plugin stores the most recent login method a user used (e.g., Google, GitHub, email-password, passkey, etc.). This allows you to provide a smoother experience, such as pre-selecting the last method during future sign ins.
 
 ## Installation
 
@@ -13,12 +13,12 @@ The Last Social Provider plugin remembers the last social login provider used by
 
   ```ts title="auth.ts"
   import { betterAuth } from "better-auth"
-  import { lastSocialProvider } from "better-auth/plugins"
+  import { lastLoginMethod  } from "better-auth/plugins"
 
   export const auth = betterAuth({
-      plugins: [ // [!code highlight]
-          lastSocialProvider() // [!code highlight]
-      ] // [!code highlight]
+    plugins: [ // [!code highlight]
+      lastLoginMethod() // [!code highlight]
+    ] // [!code highlight]
   })
   ```
 </Step>
@@ -27,12 +27,12 @@ The Last Social Provider plugin remembers the last social login provider used by
 
   ```ts title="auth-client.ts"
   import { createAuthClient } from "better-auth/client"
-  import { lastSocialProviderClient } from "better-auth/client/plugins"
+  import { lastLoginMethodClient } from "better-auth/client/plugins"
 
   export const authClient = createAuthClient({
-      plugins: [ // [!code highlight]
-          lastSocialProviderClient() // [!code highlight]
-      ] // [!code highlight]
+    plugins: [ // [!code highlight]
+      lastLoginMethodClient() // [!code highlight]
+    ] // [!code highlight]
   })
   ```
 </Step>
@@ -40,36 +40,43 @@ The Last Social Provider plugin remembers the last social login provider used by
 
 ## Usage
 
-### Get the last used social provider
+### `lastUsedLoginMethod`
 
-The plugin exposes an endpoint to retrieve the last provider a user used to sign in.
+An endpoint to retrieve the last method a user used to sign in.
 
-```ts title="auth.ts"
-const lastProvider = await authClient.lastUsedSocial(); // [!code highlight]
-
-if (lastProvider) {
-  console.log("Last provider used:", lastProvider)
-} else {
-  console.log("No provider stored")
+<APIMethod path="/last-used-login-method" method="GET">
+```ts
+type lastUsedLoginMethod = {
 }
 ```
+</APIMethod>
 
-This returns the provider ID (e.g., "google", "github", "facebook"), or null if no provider has been stored.
+This endpoint returns the login method string or `null` if no method has been stored.
+
+```ts title="auth.ts"
+const lastLoginMethod = await authClient.lastUsedLoginMethod(); // [!code highlight]
+
+if (lastLoginMethod) {
+  console.log("Last login method:", lastLoginMethod)
+} else {
+  console.log("No login method stored")
+}
+```
 
 ## Options
 
 ### `cookieName`
 
-The name of the cookie used to store the last social provider. Default is `better-auth.last_used_social`.
+The name of the cookie used to store the last used login method. Default is `better-auth.last_used_login_method`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { lastSocialProvider } from "better-auth/plugins"
+import { lastLoginMethod  } from "better-auth/plugins"
 
 const auth = betterAuth({
   plugins: [
-    lastSocialProvider({
-      cookieName: "myapp.last_provider" // [!code highlight]
+    lastLoginMethod({
+      cookieName: "myapp.last_used_login_method" // [!code highlight]
     })
   ]
 })
@@ -81,11 +88,11 @@ The duration (in seconds) that the cookie remains valid. Default is `432000 (5 d
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { lastSocialProvider } from "better-auth/plugins"
+import { lastLoginMethod  } from "better-auth/plugins"
 
 const auth = betterAuth({
   plugins: [
-    lastSocialProvider({
+    lastLoginMethod({
       maxAge: 60 * 60 * 24 * 30 // 30 days // [!code highlight]
     })
   ]
