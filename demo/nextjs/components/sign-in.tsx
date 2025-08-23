@@ -12,19 +12,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { getCallbackURL } from "@/lib/shared";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
-	const [loading, setLoading] = useState(false);
+	const [loading, startTransition] = useTransition();
 	const [rememberMe, setRememberMe] = useState(false);
 	const router = useRouter();
+	const params = useSearchParams();
 
 	return (
 		<Card className="max-w-md rounded-none">
@@ -83,16 +86,17 @@ export default function SignIn() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							setLoading(true);
-							await signIn.email(
-								{ email, password, rememberMe: rememberMe ? true : false },
-								{
-									onSuccess(context) {
-										router.push("/dashboard");
+							startTransition(async () => {
+								await signIn.email(
+									{ email, password, rememberMe },
+									{
+										onSuccess(context) {
+											toast.success("Successfully signed in");
+											router.push(getCallbackURL(params));
+										},
 									},
-								},
-							);
-							setLoading(false);
+								);
+							});
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}

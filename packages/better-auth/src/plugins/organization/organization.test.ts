@@ -55,6 +55,7 @@ describe("organization", async (it) => {
 	});
 
 	let organizationId: string;
+	let organization2Id: string;
 	it("create organization", async () => {
 		const organization = await client.organization.create({
 			name: "test",
@@ -100,7 +101,6 @@ describe("organization", async (it) => {
 		expect(existingSlug.error?.status).toBe(400);
 		expect(existingSlug.error?.message).toBe("slug is taken");
 	});
-
 	it("should create organization directly in the server without cookie", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
@@ -116,11 +116,11 @@ describe("organization", async (it) => {
 			},
 		});
 
+		organization2Id = organization?.id as string;
 		expect(organization?.name).toBe("test2");
 		expect(organization?.members.length).toBe(1);
 		expect(organization?.members[0]?.role).toBe("owner");
 	});
-
 	it("should allow listing organizations", async () => {
 		const organizations = await client.organization.list({
 			fetchOptions: {
@@ -176,6 +176,23 @@ describe("organization", async (it) => {
 		});
 		expect((session.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
+		);
+	});
+	it("should allow activating organization by slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.setActive({
+			organizationSlug: "test2",
+			fetchOptions: {
+				headers,
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organization2Id,
 		);
 	});
 
@@ -287,6 +304,92 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invite.data?.role).toBe("admin,member");
+	});
+
+	it("should not allow inviting a user twice regardless of email casing", async () => {
+		const rng = crypto.randomUUID();
+		const user = {
+			email: `${rng}@email.com`,
+			password: rng,
+			name: rng,
+		};
+		const { headers } = await signInWithTestUser();
+
+		const invite = await client.organization.inviteMember({
+			organizationId,
+			email: user.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data) throw new Error("Invitation not created");
+		expect(invite.data?.email).toBe(user.email);
+
+		const inviteAgain = await client.organization.inviteMember({
+			organizationId,
+			email: user.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteAgain.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+		);
+
+		const inviteAgainUpper = await client.organization.inviteMember({
+			organizationId,
+			email: user.email.toUpperCase(),
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteAgainUpper.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+		);
+
+		await client.signUp.email({
+			email: user.email,
+			password: user.password,
+			name: user.name,
+		});
+		const { headers: userHeaders } = await signInWithUser(
+			user.email,
+			user.password,
+		);
+		const acceptRes = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(acceptRes.data?.invitation.status).toBe("accepted");
+
+		const inviteMemberAgain = await client.organization.inviteMember({
+			organizationId,
+			email: user.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteMemberAgain.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+		);
+
+		const inviteMemberAgainUpper = await client.organization.inviteMember({
+			organizationId,
+			email: user.email.toUpperCase(),
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(inviteMemberAgainUpper.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+		);
 	});
 
 	it("should allow getting a member", async () => {
@@ -481,7 +584,7 @@ describe("organization", async (it) => {
 			},
 		});
 
-		expect(orgBefore.data?.members.length).toBe(4);
+		expect(orgBefore.data?.members.length).toBe(5);
 		await client.organization.removeMember({
 			organizationId: organizationId,
 			memberIdOrEmail: adminUser.email,
@@ -497,7 +600,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(org.data?.members.length).toBe(3);
+		expect(org.data?.members.length).toBe(4);
 	});
 
 	it("shouldn't allow removing last owner from organization", async () => {
@@ -776,7 +879,7 @@ describe("organization", async (it) => {
 				headers: headers,
 			},
 		});
-		expect(invitations.data?.length).toBe(4);
+		expect(invitations.data?.length).toBe(5);
 	});
 
 	it("should allow listing invitations for a user using authClient", async () => {
@@ -847,6 +950,18 @@ describe("organization", async (it) => {
 		});
 
 		expect(invitations?.length).toBe(
+			orgInvitations.data.filter(
+				(x) => x.email === orgInvitations.data?.[0].email,
+			).length,
+		);
+
+		const invitationsUpper = await auth.api.listUserInvitations({
+			query: {
+				email: orgInvitations.data?.[0].email.toUpperCase(),
+			},
+		});
+
+		expect(invitationsUpper?.length).toBe(
 			orgInvitations.data.filter(
 				(x) => x.email === orgInvitations.data?.[0].email,
 			).length,
@@ -1122,6 +1237,74 @@ describe("cancel pending invitations on re-invite", async () => {
 	});
 });
 
+describe("resend invitation should reuse existing", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("should reuse existing invitation when resend is true", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test10@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const originalInviteId = invite.data?.id;
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test10@test.com",
+				role: "member",
+				resend: true,
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.data?.status).toBe("pending");
+		// Should return the same invitation ID, not create a new one
+		expect(invite2.data?.id).toBe(originalInviteId);
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+		// Should still only have 1 pending invitation, not 2
+		expect(
+			listInvitations.data?.filter((invite) => invite.status === "pending")
+				.length,
+		).toBe(1);
+	});
+});
+
 describe("owner can update roles", async () => {
 	const statement = {
 		custom: ["custom"],
@@ -1285,9 +1468,6 @@ describe("owner can update roles", async () => {
 		const member = await auth.api.getActiveMember({
 			headers: { cookie: adminCookie },
 		});
-
-		console.log({ member });
-
 		expect(member?.role).toBe("");
 	});
 });
