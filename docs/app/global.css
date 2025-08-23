@@ -245,8 +245,7 @@
 }
 
 html {
-	scroll-behavior: smooth;
-	scroll-padding-top: calc(var(--fd-nav-height) + 1rem);
+	scroll-behavior: auto;
 }
 
 @layer utilities {
