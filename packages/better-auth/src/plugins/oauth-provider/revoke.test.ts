@@ -12,7 +12,7 @@ import {
 import { generateRandomString } from "../../crypto";
 import type { MakeRequired } from "../../types/helper";
 
-describe("oidc revoke", async () => {
+describe("oauth revoke", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
