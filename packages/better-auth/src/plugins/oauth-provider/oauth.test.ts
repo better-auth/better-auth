@@ -11,7 +11,7 @@ import { listen, type Listener } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { createLocalJWKSet, jwtVerify } from "jose";
 
-describe("oauth - init", async () => {
+describe("oauth - init", () => {
 	it("should fail without the jwt plugin", async ({ expect }) => {
 		await expect(
 			getTestInstance({
@@ -207,18 +207,18 @@ describe("oauth", async () => {
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
-		let redirectURI = "";
+		let redirectUriResponse = "";
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
-				redirectURI = context.response.headers.get("Location") || "";
+				redirectUriResponse = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(redirectURI).toContain(redirectUri);
-		expect(redirectURI).toContain("code=");
+		expect(redirectUriResponse).toContain(redirectUri);
+		expect(redirectUriResponse).toContain("code=");
 
 		let callbackURL = "";
-		await client.$fetch(redirectURI, {
+		await client.$fetch(redirectUriResponse, {
 			method: "GET",
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
@@ -258,18 +258,18 @@ describe("oauth", async () => {
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
-		let redirectUri = "";
+		let redirectUriResponse = "";
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
-				redirectUri = context.response.headers.get("Location") || "";
+				redirectUriResponse = context.response.headers.get("Location") || "";
 			},
 		});
-		expect(redirectUri).toContain(redirectUri);
-		expect(redirectUri).toContain("code=");
+		expect(redirectUriResponse).toContain(redirectUriResponse);
+		expect(redirectUriResponse).toContain("code=");
 
 		let callbackURL = "";
-		await client.$fetch(redirectUri, {
+		await client.$fetch(redirectUriResponse, {
 			method: "GET",
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
@@ -397,7 +397,7 @@ describe("oauth", async () => {
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
 
-		let redirectURI = "";
+		let redirectUriResponse = "";
 		await serverClient.signIn.email(
 			{
 				email: testUser.email,
@@ -406,16 +406,16 @@ describe("oauth", async () => {
 			{
 				headers: newHeaders,
 				onError(context) {
-					redirectURI = context.response.headers.get("Location") || "";
+					redirectUriResponse = context.response.headers.get("Location") || "";
 					cookieSetter(newHeaders)(context);
 				},
 			},
 		);
-		expect(redirectURI).toContain(redirectUri);
-		expect(redirectURI).toContain("code=");
+		expect(redirectUriResponse).toContain(redirectUri);
+		expect(redirectUriResponse).toContain("code=");
 
 		let callbackURL = "";
-		await client.$fetch(redirectURI, {
+		await client.$fetch(redirectUriResponse, {
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -424,7 +424,7 @@ describe("oauth", async () => {
 	});
 });
 
-describe("oauth - config", async () => {
+describe("oauth - config", () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
@@ -562,18 +562,18 @@ describe("oauth - config", async () => {
 			);
 			expect(data.url).toContain(`client_id=${oauthClient?.client_id}`);
 
-			let redirectURI = "";
+			let redirectUriResponse = "";
 			await serverClient.$fetch(data.url, {
 				method: "GET",
 				onError(context) {
-					redirectURI = context.response.headers.get("Location") || "";
+					redirectUriResponse = context.response.headers.get("Location") || "";
 				},
 			});
-			expect(redirectURI).toContain(redirectUri);
-			expect(redirectURI).toContain("code=");
+			expect(redirectUriResponse).toContain(redirectUri);
+			expect(redirectUriResponse).toContain("code=");
 
 			let callbackURL = "";
-			await client.$fetch(redirectURI, {
+			await client.$fetch(redirectUriResponse, {
 				onError(context) {
 					callbackURL = context.response.headers.get("Location") || "";
 				},
@@ -662,19 +662,19 @@ describe("oauth - config", async () => {
 			);
 			expect(data.url).toContain(`client_id=${oauthClient?.client_id}`);
 
-			let redirectURI = "";
+			let redirectUriResponse = "";
 			await serverClient.$fetch(data.url, {
 				method: "GET",
 				onError(context) {
-					redirectURI = context.response.headers.get("Location") || "";
+					redirectUriResponse = context.response.headers.get("Location") || "";
 				},
 			});
-			expect(redirectURI).toContain(redirectUri);
-			expect(redirectURI).toContain("code=");
+			expect(redirectUriResponse).toContain(redirectUri);
+			expect(redirectUriResponse).toContain("code=");
 
 			let authToken: string | undefined;
 			let callbackURL: string | undefined;
-			await client.$fetch(redirectURI, {
+			await client.$fetch(redirectUriResponse, {
 				onError(context) {
 					callbackURL = context.response.headers.get("Location") ?? undefined;
 					authToken =

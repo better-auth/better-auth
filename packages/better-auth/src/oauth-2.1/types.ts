@@ -13,6 +13,12 @@ export type GrantType =
 // | "urn:ietf:params:oauth:grant-type:jwt-bearer"   // unspecified in oAuth2.1
 // | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
 
+export type AuthMethod =
+	| "client_secret_basic" // Basic header
+	| "client_secret_post"; // POST
+// | "private_key_jwt" // must also add alg_values_supported for that endpoint
+// | "client_secret_jwt" // must also add alg_values_supported for that endpoint
+
 /**
  * Metadata for authentication servers.
  *
@@ -81,10 +87,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	token_endpoint_auth_methods_supported: (
-		| "client_secret_basic"
-		| "client_secret_post"
-	)[];
+	token_endpoint_auth_methods_supported: AuthMethod[];
 	/**
 	 * Algorithms supported for access tokens.
 	 *
@@ -128,19 +131,16 @@ export interface AuthServerMetadata {
 	 * Array containing a list of client authentication
 	 * methods supported by this revocation endpoint
 	 *
-	 * @default ["client_secret_basic"]
+	 * @default
+	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	revocation_endpoint_auth_methods_supported?: (
-		| "none"
-		| "client_secret_basic"
-		| "client_secret_post"
-	)[];
+	revocation_endpoint_auth_methods_supported?: AuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the revocation endpoint for
 	 * the signature on the JWT.
 	 */
-	revocation_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms;
+	revocation_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
 	/**
 	 * URL of the authorization server's OAuth 2.0
 	 * introspection endpoint [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)
@@ -150,20 +150,21 @@ export interface AuthServerMetadata {
 	 * Array containing a list of client authentication
 	 * methods supported by this introspection endpoint
 	 *
-	 * @see https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml#token-types
+	 * @default
+	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	introspection_endpoint_auth_methods_supported?: "Bearer"[];
+	introspection_endpoint_auth_methods_supported?: AuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the introspection endpoint
 	 */
-	introspection_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms;
+	introspection_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
 	/**
 	 * Supported code challenge methods.
 	 *
-	 * @default ["s256"]
+	 * @default ["S256"]
 	 */
-	code_challenge_methods_supported: "s256"[];
+	code_challenge_methods_supported: "S256"[];
 }
 
 /**
@@ -215,7 +216,7 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 * @default
 	 * ["EdDSA"]
 	 */
-	id_token_signing_alg_values_supported: JWSAlgorithms[] | ["HS256"];
+	id_token_signing_alg_values_supported: JWSAlgorithms[];
 	/**
 	 * Supported claims.
 	 *

@@ -8,7 +8,7 @@ import { oauthProviderClient } from "./client";
 import { createAuthorizationURL } from "../../oauth2";
 import { generateRandomString } from "../../crypto";
 
-describe("oidc authorize - unauthenticated", async () => {
+describe("oauth authorize - unauthenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -96,7 +96,7 @@ describe("oidc authorize - unauthenticated", async () => {
 	});
 });
 
-describe("oidc authorize - authenticated", async () => {
+describe("oauth authorize - authenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({

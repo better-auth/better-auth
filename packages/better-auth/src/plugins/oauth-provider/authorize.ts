@@ -23,7 +23,7 @@ export function formatErrorURL(
 		error_description: description,
 	});
 	state && searchParams.append("state", state);
-	return `${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
+	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
 }
 
 /**
@@ -168,8 +168,7 @@ export async function authorizeEndpoint(
 			!options.scopes?.includes(scope) ||
 			// offline access must be requested through PKCE
 			(scope === "offline_access" &&
-				(query.code_challenge_method?.toLowerCase() !== "s256" ||
-					!query.code_challenge))
+				(query.code_challenge_method !== "S256" || !query.code_challenge))
 		);
 	});
 	if (invalidScopes.length) {
@@ -195,12 +194,8 @@ export async function authorizeEndpoint(
 	}
 
 	// Check code challenges
-	const codeChallengesSupported = ["s256"];
-	if (
-		!codeChallengesSupported.includes(
-			query.code_challenge_method?.toLowerCase(),
-		)
-	) {
+	const codeChallengesSupported = ["S256"];
+	if (!codeChallengesSupported.includes(query.code_challenge_method)) {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,
@@ -212,7 +207,7 @@ export async function authorizeEndpoint(
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const codeExpiresInMs = (options.codeExpiresIn ?? 0) * 1000;
+	const codeExpiresInMs = (options.codeExpiresIn ?? 600) * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
 	try {
 		/**

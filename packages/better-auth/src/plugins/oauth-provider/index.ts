@@ -500,14 +500,18 @@ export const oauthProvider = (options: OAuthOptions) => {
 						});
 					}
 					const authorization = ctx.request.headers.get("authorization");
-					const token = authorization?.replace("Bearer ", "");
+					const token =
+						typeof authorization === "string" &&
+						authorization?.startsWith("Bearer ")
+							? authorization?.replace("Bearer ", "")
+							: authorization;
 					if (!token?.length) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "authorization header not found",
 							error: "invalid_request",
 						});
 					}
-					const validate = await validateAccessToken(ctx, options, token);
+					const validate = await validateAccessToken(ctx, opts, token);
 
 					const scopes = (validate.scope as string | undefined)?.split(" ");
 					if (!scopes?.includes("openid")) {
@@ -548,7 +552,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						client_secret_expires_at: z.number().default(0).optional(),
 						scope: z.string().optional(),
 						client_name: z.string().optional(),
 						client_uri: z.string().optional(),
