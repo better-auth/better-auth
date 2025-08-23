@@ -339,7 +339,9 @@ export const auth = betterAuth({
 
 ### JWKS Endpoint
 
-The OIDC Provider plugin can integrate with the JWT plugin to provide proper asymmetric key signing for ID tokens. When enabled, ID tokens will be signed using RSA/EdDSA keys and can be verified using the JWKS endpoint.
+The OIDC Provider plugin can integrate with the JWT plugin to provide asymmetric key signing for ID tokens verifiable at a JWKS endpoint.
+
+To make your plugin OIDC compliant, you **MUST** disable the `/token` endpoint, the OAuth equivalent is located at `/oauth2/token` instead.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -347,6 +349,9 @@ import { oidcProvider } from "better-auth/plugins";
 import { jwt } from "better-auth/plugins";
 
 export const auth = betterAuth({
+    disabledPaths: [
+        "/token",
+    ],
     plugins: [
         jwt(), // Make sure to add the JWT plugin
         oidcProvider({

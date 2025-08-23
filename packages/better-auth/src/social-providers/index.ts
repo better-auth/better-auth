@@ -3,6 +3,7 @@ import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
+import { figma } from "./figma";
 import { github } from "./github";
 import { google } from "./google";
 import { kick } from "./kick";
@@ -22,10 +23,13 @@ import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { line } from "./line";
+import { paypal } from "./paypal";
 export const socialProviders = {
 	apple,
 	discord,
 	facebook,
+	figma,
 	github,
 	microsoft,
 	google,
@@ -45,6 +49,8 @@ export const socialProviders = {
 	vk,
 	zoom,
 	notion,
+	line,
+	paypal,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -70,6 +76,7 @@ export * from "./apple";
 export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
+export * from "./figma";
 export * from "./github";
 export * from "./linear";
 export * from "./linkedin";
@@ -90,5 +97,7 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./line";
+export * from "./paypal";
 
 export type SocialProviderList = typeof socialProviderList;
