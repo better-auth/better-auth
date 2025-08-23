@@ -1,4 +1,4 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { oauthProvider } from ".";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { createAuthClient } from "../../client";
@@ -6,7 +6,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
 import { oauthProviderClient } from "./client";
 
-describe("oidc register", async (it) => {
+describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -221,7 +221,7 @@ describe("oidc register", async (it) => {
 	});
 });
 
-describe("oidc register - unauthenticated", async (it) => {
+describe("oauth register - unauthenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const { customFetchImpl } = await getTestInstance({

@@ -1,5 +1,5 @@
 ---
-title: oAuth2.1 Provider
+title: oAuth 2.1 Provider
 description: A Better Auth plugin that enables your auth server to serve as an oAuth 2.1 provider.
 ---
 
@@ -25,6 +25,7 @@ If you are migrating from the [OIDC Provider](./oidc-provider) to this oAuth2.1 
 - **`getAdditionalUserInfoClaim`** removes the client object as a parameter
 - **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJWTPlugin: true` (previously `plain`).
 - JWT plugin now is enabled by default. To disable the plugin, set `disableJWTPlugin: true`.
+- Authorization query `code_challenge_method` "S256" must be in caps as described by oAuth 2.1
 
 ### Database
 

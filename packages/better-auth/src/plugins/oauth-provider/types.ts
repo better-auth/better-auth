@@ -78,6 +78,31 @@ export interface OAuthOptions {
 	 */
 	clientRegistrationAllowedScopes?: string[];
 	/**
+	 * How long a dynamically created confidential client
+	 * should last for.
+	 *
+	 * - If a `number` is passed as an argument it is used as the claim directly.
+	 * - If a `Date` instance is passed as an argument it is converted to unix timestamp and used as the
+	 *   claim.
+	 * - If a `string` is passed as an argument it is resolved to a time span, and then added to the
+	 *   current unix timestamp and used as the claim.
+	 *
+	 * Format used for time span should be a number followed by a unit, such as "5 minutes" or "1
+	 * day".
+	 *
+	 * Valid units are: "sec", "secs", "second", "seconds", "s", "minute", "minutes", "min", "mins",
+	 * "m", "hour", "hours", "hr", "hrs", "h", "day", "days", "d", "week", "weeks", "w", "year",
+	 * "years", "yr", "yrs", and "y". It is not possible to specify months. 365.25 days is used as an
+	 * alias for a year.
+	 *
+	 * If the string is suffixed with "ago", or prefixed with a "-", the resulting time span gets
+	 * subtracted from the current unix timestamp. A "from now" suffix can also be used for
+	 * readability when adding to the current unix timestamp.
+	 *
+	 * @default - undefined (does not expire)
+	 */
+	clientRegistrationClientSecretExpiration?: number | string | Date;
+	/**
 	 * List of scopes a newly registered client can have.
 	 *
 	 * Leave undefined to throw error if no scope was sent
@@ -271,7 +296,7 @@ export interface AuthorizationQuery {
 	/**
 	 * The redirect URI for the client. Must be one of the registered redirect URLs for the client.
 	 */
-	redirect_uri?: string;
+	redirect_uri: string;
 	/**
 	 * The scope of the request. Must be a space-separated list of case sensitive strings.
 	 *
@@ -359,7 +384,7 @@ export interface AuthorizationQuery {
 	/**
 	 * Code challenge method used
 	 */
-	code_challenge_method?: "plain" | "s256";
+	code_challenge_method?: "S256";
 	/**
 	 * String value used to associate a Client session with an ID Token, and to mitigate replay
 	 * attacks. The value is passed through unmodified from the Authentication Request to the ID Token.
@@ -396,7 +421,7 @@ export interface VerificationValue {
 	scopes?: string;
 	state?: string;
 	codeChallenge?: string;
-	codeChallengeMethod?: "s256";
+	codeChallengeMethod?: "S256";
 	nonce?: string;
 }
 
@@ -467,7 +492,7 @@ export interface SchemaClient {
 		| "client_secret_basic"
 		| "client_secret_post";
 	grantTypes?: GrantType[];
-	responseTypes?: ("code" | "token")[];
+	responseTypes?: "code"[];
 	//---- RFC6749 Spec ----//
 	/**
 	 * Indicates whether the client is public or confidential.
