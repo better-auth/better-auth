@@ -1,5 +1,5 @@
 import { source } from "@/lib/source";
-import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
+import { DocsPage, DocsBody, DocsTitle } from "@/components/docs/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";
 import DatabaseTable from "@/components/mdx/database-tables";
@@ -13,18 +13,22 @@ import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import {
+	CodeBlock,
+	Pre,
+	CodeBlockTab,
+	CodeBlockTabsList,
+	CodeBlockTabs,
+} from "@/components/ui/code-block";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
-import { Card, Cards } from "fumadocs-ui/components/card";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { contents } from "@/components/sidebar-content";
 import { Endpoint } from "@/components/endpoint";
 import { DividerText } from "@/components/divider-text";
 import { APIMethod } from "@/components/api-method";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-
+import { Callout } from "@/components/ui/callout";
 export default async function Page({
 	params,
 }: {
@@ -37,8 +41,6 @@ export default async function Page({
 		notFound();
 	}
 
-	const { nextPage, prevPage } = getPageLinks(page.url);
-
 	const MDX = page.data.body;
 	const avoidLLMHeader = ["Introduction", "Comparison"];
 	return (
@@ -49,15 +51,10 @@ export default async function Page({
 				owner: "better-auth",
 				repo: "better-auth",
 				sha: "main",
-				path: `/docs/content/docs/${page.file.path}`,
+				path: `/docs/content/docs/${page.path}`,
 			}}
 			tableOfContent={{
-				style: "clerk",
 				header: <div className="w-10 h-4"></div>,
-			}}
-			footer={{
-				enabled: true,
-				component: <div className="w-10 h-4" />,
 			}}
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
@@ -74,6 +71,38 @@ export default async function Page({
 				<MDX
 					components={{
 						...defaultMdxComponents,
+						CodeBlockTabs: (props) => {
+							return (
+								<CodeBlockTabs
+									{...props}
+									className="bg-fd-secondary border-b p-0 rounded-lg"
+								>
+									<div {...props}>{props.children}</div>
+								</CodeBlockTabs>
+							);
+						},
+						CodeBlockTabsList: (props) => {
+							return (
+								<CodeBlockTabsList
+									{...props}
+									className="bg-fd-secondary my-0 pb-0 rounded-lg"
+								/>
+							);
+						},
+						CodeBlockTab: (props) => {
+							return <CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />;
+						},
+						pre: (props) => {
+							return (
+								<CodeBlock className="bg-fd-muted rounded-xl" {...props}>
+									<div style={{ minWidth: "100%", display: "table" }}>
+										<Pre className="bg-fd-muted py-3 px-0 focus-visible:outline-none">
+											{props.children}
+										</Pre>
+									</div>
+								</CodeBlock>
+							);
+						},
 						Link: ({
 							className,
 							...props
@@ -105,19 +134,18 @@ export default async function Page({
 						Accordions,
 						Endpoint,
 						APIMethod,
-						Callout: ({ children, ...props }) => (
-							<defaultMdxComponents.Callout
-								{...props}
-								className={cn(
-									props,
-									"bg-none rounded-none border-dashed border-border",
-									props.type === "info" && "border-l-blue-500/50",
-									props.type === "warn" && "border-l-amber-700/50",
-									props.type === "error" && "border-l-red-500/50",
-								)}
-							>
+						Callout: ({
+							children,
+							type,
+							...props
+						}: {
+							children: React.ReactNode;
+							type?: "info" | "warn" | "error" | "success" | "warning";
+							[key: string]: any;
+						}) => (
+							<Callout type={type} {...props}>
 								{children}
-							</defaultMdxComponents.Callout>
+							</Callout>
 						),
 						DividerText,
 						iframe: (props) => (
@@ -125,48 +153,12 @@ export default async function Page({
 						),
 					}}
 				/>
-
-				<Cards className="mt-16">
-					{prevPage ? (
-						<Card
-							href={prevPage.url}
-							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
-							description={<>{prevPage.data.description}</>}
-							title={
-								<div className="flex items-center gap-1">
-									<ChevronLeft className="size-4" />
-									{prevPage.data.title}
-								</div>
-							}
-						/>
-					) : (
-						<div></div>
-					)}
-					{nextPage ? (
-						<Card
-							href={nextPage.url}
-							description={<>{nextPage.data.description}</>}
-							title={
-								<div className="flex items-center gap-1">
-									{nextPage.data.title}
-									<ChevronRight className="size-4" />
-								</div>
-							}
-							className="flex flex-col items-end text-right [&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
-						/>
-					) : (
-						<div></div>
-					)}
-				</Cards>
 			</DocsBody>
 		</DocsPage>
 	);
 }
 
 export async function generateStaticParams() {
-	const res = source.getPages().map((page) => ({
-		slug: page.slugs,
-	}));
 	return source.generateParams();
 }
 
@@ -210,57 +202,4 @@ export async function generateMetadata({
 			images: [url.toString()],
 		},
 	};
-}
-
-function getPageLinks(path: string) {
-	const current_category_index = contents.findIndex(
-		(x) => x.list.find((x) => x.href === path)!,
-	)!;
-	const current_category = contents[current_category_index];
-	if (!current_category) return { nextPage: undefined, prevPage: undefined };
-
-	// user's current page.
-	const current_page = current_category.list.find((x) => x.href === path)!;
-
-	// the next page in the array.
-	let next_page = current_category.list.filter((x) => !x.group)[
-		current_category.list
-			.filter((x) => !x.group)
-			.findIndex((x) => x.href === current_page.href) + 1
-	];
-	//if there isn't a next page, then go to next cat's page.
-	if (!next_page) {
-		// get next cat
-		let next_category = contents[current_category_index + 1];
-		// if doesn't exist, return to first cat.
-		if (!next_category) next_category = contents[0];
-
-		next_page = next_category.list[0];
-		if (next_page.group) {
-			next_page = next_category.list[1];
-		}
-	}
-	// the prev page in the array.
-	let prev_page = current_category.list.filter((x) => !x.group)[
-		current_category.list
-			.filter((x) => !x.group)
-			.findIndex((x) => x.href === current_page.href) - 1
-	];
-	// if there isn't a prev page, then go to prev cat's page.
-	if (!prev_page) {
-		// get prev cat
-		let prev_category = contents[current_category_index - 1];
-		// if doesn't exist, return to last cat.
-		if (!prev_category) prev_category = contents[contents.length - 1];
-		prev_page = prev_category.list[prev_category.list.length - 1];
-		if (prev_page.group) {
-			prev_page = prev_category.list[prev_category.list.length - 2];
-		}
-	}
-
-	const pages = source.getPages();
-	let next_page2 = pages.find((x) => x.url === next_page.href);
-	let prev_page2 = pages.find((x) => x.url === prev_page.href);
-	if (path === "/docs/introduction") prev_page2 = undefined;
-	return { nextPage: next_page2, prevPage: prev_page2 };
 }
