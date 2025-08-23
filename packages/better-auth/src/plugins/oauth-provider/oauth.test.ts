@@ -57,7 +57,8 @@ describe("oauth - init", () => {
 });
 
 describe("oauth", async () => {
-	const authServerBaseUrl = "http://localhost:3000";
+	const port = 3001;
+	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5000";
 	const {
 		auth: authorizationServer,
@@ -96,7 +97,7 @@ describe("oauth", async () => {
 	beforeAll(async () => {
 		// Opens the authorization server for testing with genericOAuth
 		server = await listen(toNodeHandler(authorizationServer.handler), {
-			port: 3000,
+			port,
 		});
 
 		// This test is performed in register.test.ts
@@ -425,7 +426,8 @@ describe("oauth", async () => {
 });
 
 describe("oauth - config", () => {
-	const authServerBaseUrl = "http://localhost:3000";
+	const port = 3002;
+	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
@@ -523,7 +525,7 @@ describe("oauth - config", () => {
 			});
 
 			server = await listen(toNodeHandler(authorizationServer.handler), {
-				port: 3000,
+				port,
 			});
 
 			const application: Partial<OAuthClient> = {
@@ -616,7 +618,7 @@ describe("oauth - config", () => {
 				},
 			});
 			server = await listen(toNodeHandler(authorizationServer.handler), {
-				port: 3000,
+				port,
 			});
 
 			const application: Partial<OAuthClient> = {
