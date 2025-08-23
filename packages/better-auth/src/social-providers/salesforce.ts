@@ -11,7 +11,7 @@ export interface SalesforceProfile {
 	user_id: string;
 	organization_id: string;
 	preferred_username?: string;
-	email: string;  
+	email: string;
 	email_verified?: boolean;
 	name: string;
 	given_name?: string;
@@ -26,12 +26,12 @@ export interface SalesforceProfile {
 export interface SalesforceOptions extends ProviderOptions<SalesforceProfile> {
 	environment?: "sandbox" | "production";
 	loginUrl?: string;
-    /**
-    * Override the redirect URI if auto-detection fails.
-    * Should match the Callback URL configured in your Salesforce Connected App.
-    * @example "http://localhost:3000/api/auth/callback/salesforce"
-    */
-    redirectURI?: string;
+	/**
+	 * Override the redirect URI if auto-detection fails.
+	 * Should match the Callback URL configured in your Salesforce Connected App.
+	 * @example "http://localhost:3000/api/auth/callback/salesforce"
+	 */
+	redirectURI?: string;
 }
 
 export const salesforce = (options: SalesforceOptions) => {
@@ -91,7 +91,7 @@ export const salesforce = (options: SalesforceOptions) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI : options.redirectURI || redirectURI,
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
 			});
