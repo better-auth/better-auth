@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
+import { PageTree } from "fumadocs-core/server";
 
 interface Content {
 	title: string;
@@ -32,6 +33,51 @@ interface Content {
 		group?: boolean;
 		isNew?: boolean;
 	}[];
+}
+
+export function getPageTree(): PageTree.Root {
+	return {
+		$id: "root",
+		name: "docs",
+		children: [
+			{
+				type: "folder",
+				root: true,
+				name: "Docs",
+				description: "get started, concepts, and plugins.",
+				children: contents.map(contentToPageTree),
+			},
+			{
+				type: "folder",
+				root: true,
+				name: "Examples",
+				description: "exmaples and guides.",
+				children: examples.map(contentToPageTree),
+			},
+		],
+	};
+}
+
+function contentToPageTree(content: Content): PageTree.Folder {
+	return {
+		type: "folder",
+		icon: <content.Icon />,
+		name: content.title,
+		index: content.href
+			? {
+					icon: <content.Icon />,
+					name: content.title,
+					type: "page",
+					url: content.href,
+				}
+			: undefined,
+		children: content.list.map((item) => ({
+			type: "page",
+			url: item.href,
+			name: item.title,
+			icon: <item.icon />,
+		})),
+	};
 }
 
 export const contents: Content[] = [

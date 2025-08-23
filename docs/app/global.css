@@ -4,8 +4,7 @@
 @config "../tailwind.config.js";
 @plugin 'tailwindcss-animate';
 @custom-variant dark (&:is(.dark *));
-@source '../../node_modules/fumadocs-ui/dist/**/*.js';
-@source '../node_modules/fumadocs-ui/dist/**/*.js';
+
 :root {
 	--fd-nav-height: 56px;
 
