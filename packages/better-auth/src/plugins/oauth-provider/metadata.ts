@@ -1,8 +1,12 @@
-import type { AuthServerMetadata, OIDCMetadata } from "../../oauth-2.1/types";
+import type {
+	AuthMethod,
+	AuthServerMetadata,
+	OIDCMetadata,
+} from "../../oauth-2.1/types";
 import type { GenericEndpointContext } from "../../types";
 import { getJwtPlugin } from "./utils";
 import type { OAuthOptions } from "./types";
-import type { JwtOptions } from "../jwt";
+import type { JWSAlgorithms, JwtOptions } from "../jwt";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -10,6 +14,10 @@ export function authServerMetadata(
 	scopesSupported?: string[],
 ) {
 	const baseURL = ctx.context.baseURL;
+	const authMethodsSupported: AuthMethod[] = [
+		"client_secret_basic",
+		"client_secret_post",
+	];
 	const metadata: AuthServerMetadata = {
 		scopes_supported: scopesSupported,
 		issuer: opts?.jwt?.issuer ?? baseURL,
@@ -30,11 +38,10 @@ export function authServerMetadata(
 			?.alg
 			? [opts.jwks.keyPairConfig.alg]
 			: ["EdDSA"],
-		token_endpoint_auth_methods_supported: [
-			"client_secret_basic",
-			"client_secret_post",
-		],
-		code_challenge_methods_supported: ["s256"],
+		token_endpoint_auth_methods_supported: authMethodsSupported,
+		introspection_endpoint_auth_methods_supported: authMethodsSupported,
+		revocation_endpoint_auth_methods_supported: authMethodsSupported,
+		code_challenge_methods_supported: ["S256"],
 	};
 	return metadata;
 }
@@ -52,7 +59,12 @@ export function oidcServerMetadata(
 		jwtPluginOptions,
 		opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 	);
-	const metadata: OIDCMetadata = {
+	const metadata: Omit<
+		OIDCMetadata,
+		"id_token_signing_alg_values_supported"
+	> & {
+		id_token_signing_alg_values_supported: JWSAlgorithms[] | ["HS256"];
+	} = {
 		...authMetadata,
 		claims_supported:
 			opts?.advertisedMetadata?.claims_supported ?? opts?.claims ?? [],

@@ -4,6 +4,7 @@ import type { OAuthClient } from "../../oauth-2.1/types";
 import { APIError, getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { storeClientSecret } from "./utils";
+import { toExpJWT } from "../jwt/utils";
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
@@ -98,10 +99,6 @@ export async function registerEndpoint(
 	const requestedScopes = (body?.scope as string | undefined)
 		?.split(" ")
 		.filter((v) => v.length);
-	let scope: string | undefined;
-	if (!requestedScopes?.length) {
-		scope = opts.clientRegistrationDefaultScopes?.join(" ");
-	}
 	const allowedScopes = opts.clientRegistrationAllowedScopes ?? opts.scopes;
 	if (allowedScopes) {
 		for (const requestedScope of requestedScopes ?? []) {
@@ -115,8 +112,10 @@ export async function registerEndpoint(
 	}
 
 	// Create the client with the existing schema
+	const iat = Math.floor(Date.now() / 1000);
 	let schema = oAuthToSchema(
 		{
+			scope: opts.clientRegistrationDefaultScopes?.join(" "),
 			...((body ?? {}) as Partial<OAuthClient>),
 			// Dynamic registration should not have disabled defined
 			disabled: undefined,
@@ -125,13 +124,14 @@ export async function registerEndpoint(
 			jwks_uri: undefined,
 			// Required if client secret is issued
 			client_secret_expires_at: storedClientSecret
-				? (body?.client_secret_expires_at ?? 0)
+				? opts?.clientRegistrationClientSecretExpiration
+					? toExpJWT(opts.clientRegistrationClientSecretExpiration, iat)
+					: 0
 				: undefined,
 			// Override
 			client_id: clientId,
 			client_secret: storedClientSecret,
-			client_id_issued_at: Math.floor(Date.now() / 1000),
-			scope,
+			client_id_issued_at: iat,
 			public: isPublic,
 			user_id: session?.session.userId,
 		},
@@ -159,7 +159,7 @@ export async function registerEndpoint(
 		});
 	// Format the response according to RFC7591
 	return ctx.json(
-		schemaToOauth(
+		schemaToOAuth(
 			{
 				...client,
 				clientSecret,
@@ -269,7 +269,7 @@ export function oAuthToSchema(
  * @param cleaned - determines if the output has only Oauth 2.0 compatible data
  * @returns
  */
-export function schemaToOauth(
+export function schemaToOAuth(
 	input: SchemaClient,
 	cleaned = true,
 ): OAuthClient {

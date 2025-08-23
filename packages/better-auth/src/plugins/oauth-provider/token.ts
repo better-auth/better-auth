@@ -53,12 +53,12 @@ export async function tokenEndpoint(
 		case undefined:
 			throw new APIError("BAD_REQUEST", {
 				error_description: "missing required grant_type",
-				error: "invalid_request",
+				error: "unsupported_grant_type",
 			});
 		default:
 			throw new APIError("BAD_REQUEST", {
 				error_description: `unsupported grant_type ${grantType}`,
-				error: "invalid_request",
+				error: "unsupported_grant_type",
 			});
 	}
 }
@@ -310,7 +310,7 @@ async function createUserTokens(
 
 	if (!session) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "invalid_session",
+			error: "invalid_request",
 			error_description: "unable to update/create user session",
 		});
 	}
@@ -335,7 +335,9 @@ async function createUserTokens(
 			scopes?.includes("openid")
 				? `${ctx.context.baseURL}/oauth2/userinfo`
 				: undefined,
-		].filter((v) => v?.length);
+		]
+			.flat()
+			.filter((v) => v?.length);
 		for (const aud of audience) {
 			if (!validAudiences.includes(aud)) {
 				throw new APIError("BAD_REQUEST", {
@@ -389,7 +391,7 @@ async function createUserTokens(
 	return ctx.json(
 		{
 			access_token: accessToken,
-			expires_in: opts.accessTokenExpiresIn,
+			expires_in: opts.accessTokenExpiresIn ?? 600,
 			expires_at: accessTokenExpiresAt,
 			token_type: "Bearer",
 			refresh_token: sessionRefresh,
@@ -488,14 +490,16 @@ export async function validateClientCredentials(
 	// If allowed scopes if set, must check against scopes
 	if (client.allowedScopes) {
 		if (!scopes) {
-			throw new APIError("NOT_ACCEPTABLE", {
-				message: "must request a scope",
+			throw new APIError("BAD_REQUEST", {
+				error_description: "must request a scope",
+				error: "invalid_scope",
 			});
 		}
 		for (const sc of scopes) {
 			if (!client.allowedScopes.includes(sc)) {
-				throw new APIError("NOT_ACCEPTABLE", {
-					message: `client does not allow scope ${sc}`,
+				throw new APIError("BAD_REQUEST", {
+					error_description: `client does not allow scope ${sc}`,
+					error: "invalid_scope",
 				});
 			}
 		}
@@ -524,7 +528,7 @@ async function checkVerificationValue(
 	if (!verification) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "Invalid code",
-			error: "invalid_request",
+			error: "invalid_verification",
 		});
 	}
 
@@ -535,9 +539,9 @@ async function checkVerificationValue(
 
 	// Check verification
 	if (!verification.expiresAt || verification.expiresAt < new Date()) {
-		throw new APIError("BAD_REQUEST", {
+		throw new APIError("UNAUTHORIZED", {
 			error_description: "code expired",
-			error: "invalid_grant",
+			error: "invalid_verification",
 		});
 	}
 
@@ -631,8 +635,7 @@ async function handleAuthorizationCodeGrant(
 
 	/** Check challenge */
 	const challenge =
-		code_verifier &&
-		verificationValue.codeChallengeMethod?.toLowerCase() === "s256"
+		code_verifier && verificationValue.codeChallengeMethod === "S256"
 			? await createHash("SHA-256", "base64urlnopad").digest(code_verifier)
 			: undefined;
 	if (
@@ -756,13 +759,15 @@ async function handleClientCredentialsGrant(
 	const invalidScopes = ["openid", "profile", "email", "offline_access"];
 	for (const sc of requestedScopes) {
 		if (invalidScopes.includes(sc)) {
-			throw new APIError("NOT_ACCEPTABLE", {
-				message: `unable to satisfy scope ${sc}`,
+			throw new APIError("BAD_REQUEST", {
+				error_description: `unable to satisfy scope ${sc}`,
+				error: "invalid_scope",
 			});
 		}
 		if (opts.scopes && !opts.scopes.includes(sc)) {
-			throw new APIError("NOT_ACCEPTABLE", {
-				message: `invalid scope ${sc}`,
+			throw new APIError("BAD_REQUEST", {
+				error_description: `invalid scope ${sc}`,
+				error: "invalid_scope",
 			});
 		}
 	}
@@ -870,7 +875,7 @@ async function handleRefreshTokenGrant(
 	if (!session) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session not found",
-			error: "invalid_session",
+			error: "invalid_request",
 		});
 	}
 	if (session.clientId !== client_id?.toString()) {
@@ -882,7 +887,7 @@ async function handleRefreshTokenGrant(
 	if (session.expiresAt < new Date()) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token expired",
-			error: "invalid_session",
+			error: "invalid_request",
 		});
 	}
 
@@ -892,8 +897,9 @@ async function handleRefreshTokenGrant(
 	if (requestedScopes) {
 		for (const requestedScope of requestedScopes) {
 			if (!scopes?.includes(requestedScope)) {
-				throw new APIError("NOT_ACCEPTABLE", {
-					message: `unable to issue scope ${requestedScope}`,
+				throw new APIError("BAD_REQUEST", {
+					error_description: `unable to issue scope ${requestedScope}`,
+					error: "invalid_scope",
 				});
 			}
 		}
@@ -911,7 +917,7 @@ async function handleRefreshTokenGrant(
 	if (!user) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "user not found",
-			error: "invalid_session",
+			error: "invalid_request",
 		});
 	}
 

@@ -38,10 +38,12 @@ async function revokeJwtAccessToken(
 				if (!res.ok) throw new Error(`Jwks error: status ${res.status}`);
 				return (await res.json()) as JSONWebKeySet | undefined;
 			})
-		: await jwtPlugin?.endpoints?.getJwks(ctx).then(async (res) => {
-				// @ts-expect-error response is a JSONWebKeySet but within the response field
-				return res.response as JSONWebKeySet | undefined;
-			});
+		: jwtPlugin?.endpoints
+			? await jwtPlugin.endpoints.getJwks(ctx).then(async (res) => {
+					// @ts-expect-error response is a JSONWebKeySet but within the response field
+					return res.response as JSONWebKeySet | undefined;
+				})
+			: undefined;
 	if (!jwksResult) throw new Error("No jwks found");
 	const jwks = createLocalJWKSet(jwksResult);
 
@@ -217,7 +219,7 @@ export async function revokeEndpoint(
 	}
 
 	// Check token
-	if (token.startsWith("Bearer ")) {
+	if (typeof token === "string" && token.startsWith("Bearer ")) {
 		token = token.replace("Bearer ", "");
 	}
 	if (!token.length) {
