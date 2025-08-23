@@ -50,6 +50,7 @@ type JWKOptions =
 			alg: "ES512"; // ECDSA with P-521 curve
 			crv?: never; // Only P-521 for ES512
 	  };
+export type JWSAlgorithms = JWKOptions["alg"];
 
 export interface JwtOptions {
 	jwks?: {

@@ -15,7 +15,7 @@ import type { MakeRequired } from "../../types/helper";
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
 import { createClientCredentialsTokenRequest } from "../../oauth2/client-credentials-token";
 
-describe("oidc token - authorization_code", async () => {
+describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
@@ -364,7 +364,7 @@ describe("oidc token - authorization_code", async () => {
 	});
 });
 
-describe("oidc token - refresh_token", async () => {
+describe("oauth token - refresh_token", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
@@ -499,9 +499,10 @@ describe("oidc token - refresh_token", async () => {
 		return tokens;
 	}
 
+	/** Initial authorization */
 	async function authorizeForRefreshToken(scopes: string[]) {
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
-			scopes: ["openid", "profile", "offline_access"],
+			scopes,
 		});
 
 		let callbackRedirectUrl = "";
@@ -787,7 +788,7 @@ describe("oidc token - refresh_token", async () => {
 		expect(newTokens.data?.access_token).toBeDefined();
 		expect(newTokens.data?.id_token).toBeDefined();
 		expect(newTokens.data?.refresh_token).toBeUndefined();
-		expect(newTokens.data?.scope).toBe([newScopes].join(" "));
+		expect(newTokens.data?.scope).toBe(newScopes.join(" "));
 
 		// Should not refresh token
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
@@ -833,7 +834,7 @@ describe("oidc token - refresh_token", async () => {
 	});
 });
 
-describe("oidc token - client_credentials", async () => {
+describe("oauth token - client_credentials", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";

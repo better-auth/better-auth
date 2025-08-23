@@ -41,10 +41,12 @@ async function validateJwtAccessToken(
 				if (!res.ok) throw new Error(`Jwks error: status ${res.status}`);
 				return (await res.json()) as JSONWebKeySet | undefined;
 			})
-		: await jwtPlugin?.endpoints?.getJwks(ctx).then(async (res) => {
-				// @ts-expect-error response is a JSONWebKeySet but within the response field
-				return res.response as JSONWebKeySet | undefined;
-			});
+		: jwtPlugin?.endpoints
+			? await jwtPlugin.endpoints.getJwks(ctx).then(async (res) => {
+					// @ts-expect-error response is a JSONWebKeySet but within the response field
+					return res.response as JSONWebKeySet | undefined;
+				})
+			: undefined;
 	if (!jwksResult) throw new Error("No jwks found");
 	const jwks = createLocalJWKSet(jwksResult);
 
@@ -196,6 +198,7 @@ async function validateOpaqueAccessToken(
  */
 async function validateRefreshToken(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
 	token: string,
 	clientId: string,
 ) {
@@ -220,8 +223,10 @@ async function validateRefreshToken(
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	const jwtPlugin = getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin.options;
+	const jwtPlugin = opts.disableJWTPlugin
+		? undefined
+		: getJwtPlugin(ctx.context);
+	const jwtPluginOptions = jwtPlugin?.options;
 
 	return {
 		active: true,
@@ -306,7 +311,7 @@ export async function introspectEndpoint(
 	}
 
 	// Check token
-	if (token.startsWith("Bearer ")) {
+	if (typeof token === "string" && token.startsWith("Bearer ")) {
 		token = token.replace("Bearer ", "");
 	}
 	if (!token.length) {
@@ -349,7 +354,12 @@ export async function introspectEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				const payload = await validateRefreshToken(ctx, token, client.clientId);
+				const payload = await validateRefreshToken(
+					ctx,
+					opts,
+					token,
+					client.clientId,
+				);
 				return ctx.json(payload);
 			} catch (error) {
 				if (error instanceof APIError) {
