@@ -16,8 +16,9 @@ import Image from "next/image";
 import { Loader2, X } from "lucide-react";
 import { signUp } from "@/lib/auth-client";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { getCallbackURL } from "@/lib/shared";
 
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");
@@ -28,6 +29,7 @@ export function SignUp() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const router = useRouter();
+	const params = useSearchParams();
 	const [loading, setLoading] = useState(false);
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,7 +170,8 @@ export function SignUp() {
 										toast.error(ctx.error.message);
 									},
 									onSuccess: async () => {
-										router.push("/dashboard");
+										toast.success("Successfully signed up");
+										router.push(getCallbackURL(params));
 									},
 								},
 							});

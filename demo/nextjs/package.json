@@ -69,7 +69,7 @@
     "lucide-react": "^0.477.0",
     "mini-svg-data-uri": "^1.4.4",
     "mysql2": "^3.11.5",
-    "next": "^15.2.3",
+    "next": "^15.5.0",
     "next-themes": "^0.3.0",
     "prisma": "^5.22.0",
     "react": "^19.0.0",
@@ -92,7 +92,7 @@
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
-    "@types/node": "^20.17.9",
+    "@types/node": "^24.3.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.168.0",

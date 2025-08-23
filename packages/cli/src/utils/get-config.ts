@@ -10,6 +10,7 @@ import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
+import type { JitiOptions } from "jiti";
 
 let possiblePaths = [
 	"auth.ts",
@@ -127,7 +128,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 /**
  * .tsx files are not supported by Jiti.
  */
-const jitiOptions = (cwd: string) => {
+const jitiOptions = (cwd: string): JitiOptions => {
 	const alias = getPathAliases(cwd) || {};
 	return {
 		transformOptions: {
@@ -148,6 +149,18 @@ const jitiOptions = (cwd: string) => {
 		alias,
 	};
 };
+
+const isDefaultExport = (
+	object: Record<string, unknown>,
+): object is BetterAuthOptions => {
+	return (
+		typeof object === "object" &&
+		object !== null &&
+		!Array.isArray(object) &&
+		Object.keys(object).length > 0 &&
+		"options" in object
+	);
+};
 export async function getConfig({
 	cwd,
 	configPath,
@@ -162,19 +175,21 @@ export async function getConfig({
 		if (configPath) {
 			let resolvedPath: string = path.join(cwd, configPath);
 			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
-			const { config } = await loadConfig<{
-				auth: {
-					options: BetterAuthOptions;
-				};
-				default?: {
-					options: BetterAuthOptions;
-				};
-			}>({
+			const { config } = await loadConfig<
+				| {
+						auth: {
+							options: BetterAuthOptions;
+						};
+				  }
+				| {
+						options: BetterAuthOptions;
+				  }
+			>({
 				configFile: resolvedPath,
 				dotenv: true,
 				jitiOptions: jitiOptions(cwd),
 			});
-			if (!config.auth && !config.default) {
+			if (!("auth" in config) && !isDefaultExport(config)) {
 				if (shouldThrowOnError) {
 					throw new Error(
 						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
@@ -185,7 +200,7 @@ export async function getConfig({
 				);
 				process.exit(1);
 			}
-			configFile = config.auth?.options || config.default?.options || null;
+			configFile = "auth" in config ? config.auth?.options : config.options;
 		}
 
 		if (!configFile) {

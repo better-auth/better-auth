@@ -1,6 +1,7 @@
 import { remark } from "remark";
 import remarkGfm from "remark-gfm";
-import { fileGenerator, remarkDocGen, remarkInstall } from "fumadocs-docgen";
+import { fileGenerator, remarkDocGen } from "fumadocs-docgen";
+import { remarkNpm } from "fumadocs-core/mdx-plugins";
 import remarkStringify from "remark-stringify";
 import remarkMdx from "remark-mdx";
 import { remarkAutoTypeTable } from "fumadocs-typescript";
@@ -13,7 +14,7 @@ const processor = remark()
 	.use(remarkGfm)
 	.use(remarkAutoTypeTable)
 	.use(remarkDocGen, { generators: [fileGenerator()] })
-	.use(remarkInstall)
+	.use(remarkNpm)
 	.use(remarkStringify);
 
 export async function getLLMText(docPage: any) {

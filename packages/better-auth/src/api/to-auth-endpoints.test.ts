@@ -433,3 +433,164 @@ describe("disabled paths", async () => {
 		expect(error?.status).toBe(404);
 	});
 });
+
+describe("debug mode stack trace", () => {
+	it("should preserve stack trace when logger is in debug mode and APIError is thrown", async () => {
+		const endpoints = {
+			testEndpoint: createAuthEndpoint(
+				"/test-error",
+				{ method: "GET" },
+				async () => {
+					throw new APIError("BAD_REQUEST", { message: "Test error" });
+				},
+			),
+		};
+
+		const authContext = init({
+			logger: {
+				level: "debug",
+			},
+		});
+
+		const api = toAuthEndpoints(endpoints, authContext);
+
+		try {
+			await api.testEndpoint({});
+		} catch (error: any) {
+			expect(error).toBeInstanceOf(APIError);
+			expect(error.stack).toBeDefined();
+			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
+			expect(error.stack).toMatch(/at\s+/);
+		}
+	});
+
+	it("should not modify stack trace when logger is not in debug mode", async () => {
+		const endpoints = {
+			testEndpoint: createAuthEndpoint(
+				"/test-error",
+				{ method: "GET" },
+				async () => {
+					throw new APIError("BAD_REQUEST", { message: "Test error" });
+				},
+			),
+		};
+
+		const authContext = init({
+			logger: {
+				level: "error", // Not debug mode
+			},
+		});
+
+		const api = toAuthEndpoints(endpoints, authContext);
+
+		try {
+			await api.testEndpoint({});
+		} catch (error: any) {
+			expect(error).toBeInstanceOf(APIError);
+			// Stack should exist but may be minimal when not in debug mode
+			expect(error.stack).toBeDefined();
+		}
+	});
+
+	it("should have detailed stack trace in debug mode", async () => {
+		const endpoints = {
+			testEndpoint: createAuthEndpoint(
+				"/test-error",
+				{ method: "GET" },
+				async () => {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Internal error occurred",
+					});
+				},
+			),
+		};
+
+		const authContext = init({
+			logger: {
+				level: "debug",
+			},
+		});
+
+		const api = toAuthEndpoints(endpoints, authContext);
+
+		try {
+			await api.testEndpoint({});
+		} catch (error: any) {
+			expect(error).toBeInstanceOf(APIError);
+			expect(error.stack).toBeDefined();
+			// Check for stack trace format
+			expect(error.stack).toMatch(/at\s+.*\(.*\)/); // Match "at functionName (file:line:col)"
+			expect(error.stack).toMatch(/\.ts:\d+:\d+/); // Match TypeScript file with line:column
+		}
+	});
+
+	it("should handle APIError in hooks with debug mode", async () => {
+		const endpoints = {
+			testEndpoint: createAuthEndpoint(
+				"/test-hook-error",
+				{ method: "GET" },
+				async () => {
+					return { data: "success" };
+				},
+			),
+		};
+
+		const authContext = init({
+			logger: {
+				level: "debug",
+			},
+			hooks: {
+				before: createAuthMiddleware(async () => {
+					throw new APIError("FORBIDDEN", { message: "Forbidden action" });
+				}),
+			},
+		});
+
+		const api = toAuthEndpoints(endpoints, authContext);
+
+		try {
+			await api.testEndpoint({});
+		} catch (error: any) {
+			expect(error).toBeInstanceOf(APIError);
+			expect(error.stack).toBeDefined();
+			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
+			expect(error.stack).toMatch(/at\s+/);
+		}
+	});
+
+	it("should handle Response containing APIError in debug mode", async () => {
+		const endpoints = {
+			testEndpoint: createAuthEndpoint(
+				"/test-response-error",
+				{ method: "GET" },
+				async () => {
+					throw new APIError("UNAUTHORIZED", {
+						message: "Unauthorized access",
+					});
+				},
+			),
+		};
+
+		const authContext = init({
+			logger: {
+				level: "debug",
+			},
+		});
+
+		const api = toAuthEndpoints(endpoints, authContext);
+
+		// Test with asResponse = true to get Response object
+		const response = await api.testEndpoint({ asResponse: true });
+		expect(response).toBeInstanceOf(Response);
+		expect(response.status).toBe(401);
+
+		// Test with asResponse = false to get thrown error
+		try {
+			await api.testEndpoint({ asResponse: false });
+		} catch (error: any) {
+			expect(error).toBeInstanceOf(APIError);
+			expect(error.stack).toBeDefined();
+			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
+		}
+	});
+});

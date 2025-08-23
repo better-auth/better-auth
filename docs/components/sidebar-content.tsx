@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
+import { PageTree } from "fumadocs-core/server";
 
 interface Content {
 	title: string;
@@ -32,6 +33,51 @@ interface Content {
 		group?: boolean;
 		isNew?: boolean;
 	}[];
+}
+
+export function getPageTree(): PageTree.Root {
+	return {
+		$id: "root",
+		name: "docs",
+		children: [
+			{
+				type: "folder",
+				root: true,
+				name: "Docs",
+				description: "get started, concepts, and plugins.",
+				children: contents.map(contentToPageTree),
+			},
+			{
+				type: "folder",
+				root: true,
+				name: "Examples",
+				description: "exmaples and guides.",
+				children: examples.map(contentToPageTree),
+			},
+		],
+	};
+}
+
+function contentToPageTree(content: Content): PageTree.Folder {
+	return {
+		type: "folder",
+		icon: <content.Icon />,
+		name: content.title,
+		index: content.href
+			? {
+					icon: <content.Icon />,
+					name: content.title,
+					type: "page",
+					url: content.href,
+				}
+			: undefined,
+		children: content.list.map((item) => ({
+			type: "page",
+			url: item.href,
+			name: item.title,
+			icon: <item.icon />,
+		})),
+	};
 }
 
 export const contents: Content[] = [
@@ -481,6 +527,24 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Figma",
+				href: "/docs/authentication/figma",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 64 64"
+					>
+						<path
+							fill="#888888"
+							d="M21.3 1C14.8 1 9.5 6.3 9.5 12.8V51.2c0 6.5 5.3 11.8 11.8 11.8c6.5 0 11.8-5.3 11.8-11.8v-7.9h7.9c6.5 0 11.8-5.3 11.8-11.8s-5.3-11.8-11.8-11.8h-7.9v-7.9c0-6.5-5.3-11.8-11.8-11.8zm0 7.9c2.2 0 3.9 1.8 3.9 3.9v7.9h-3.9c-2.2 0-3.9-1.8-3.9-3.9s1.8-3.9 3.9-3.9zm0 15.7h3.9v7.9h-3.9c-2.2 0-3.9-1.8-3.9-3.9s1.8-3.9 3.9-3.9zm0 15.7h3.9v7.9c0 2.2-1.8 3.9-3.9 3.9s-3.9-1.8-3.9-3.9v-7.9zm11.8-15.7c2.2 0 3.9 1.8 3.9 3.9s-1.8 3.9-3.9 3.9h-3.9v-7.9h3.9zm7.9-7.9c2.2 0 3.9 1.8 3.9 3.9s-1.8 3.9-3.9 3.9h-7.9v-7.9h7.9z"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "GitHub",
 				href: "/docs/authentication/github",
 				icon: () => (
@@ -513,6 +577,23 @@ export const contents: Content[] = [
 							fill="currentColor"
 							fillRule="evenodd"
 							d="M28.458 5c6.167 0 11.346 2.2 15.368 5.804l.323.295l-6.62 6.464c-1.695-1.59-4.666-3.493-9.07-3.493c-6.204 0-11.47 4.093-13.372 9.749c-.47 1.46-.756 3.023-.756 4.64c0 1.615.287 3.18.782 4.639c1.877 5.656 7.142 9.748 13.345 9.748c3.347 0 5.928-.886 7.881-2.176l.251-.17l.307-.222c2.813-2.108 4.144-5.084 4.46-7.169l.03-.22h-12.93v-8.705h22.025c.339 1.46.495 2.867.495 4.795c0 7.142-2.554 13.163-6.985 17.255c-3.884 3.597-9.201 5.682-15.535 5.682c-9.031 0-16.85-5.102-20.772-12.57l-.184-.358l-.222-.457A23.45 23.45 0 0 1 5 28.458c0-3.6.827-7.01 2.28-10.073l.222-.457l.184-.357C11.608 10.1 19.426 5 28.458 5"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "LINE",
+				href: "/docs/authentication/line",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"
 						/>
 					</svg>
 				),
@@ -565,6 +646,24 @@ export const contents: Content[] = [
 							fill="currentColor"
 							d="M2 3h9v9H2zm9 19H2v-9h9zM21 3v9h-9V3zm0 19h-9v-9h9z"
 						></path>
+					</svg>
+				),
+			},
+			{
+				title: "PayPal",
+				href: "/docs/authentication/paypal",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81c1.01 1.15 1.304 2.42 1.012 4.287c-.023.143-.047.288-.077.437c-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.404-.404c-.404-.404-.878-.606-1.417-.606h-2.190c-.524 0-.968.382-1.05.9l-1.295 8.206c-.082.518.235.995.753.995h2.19c2.57 0 4.578-.543 5.69-1.81c1.01-1.15 1.304-2.42 1.012-4.287c-.293-1.857-.991-2.994-3.289-2.994z"
+						/>
 					</svg>
 				),
 			},
@@ -1457,6 +1556,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Bearer",
 				icon: () => <Key className="w-4 h-4" />,
 				href: "/docs/plugins/bearer",
+			},
+			{
+				title: "Device Authorization",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2zM4 6h16v10H4z"
+						/>
+					</svg>
+				),
+				href: "/docs/plugins/device-authorization",
+				isNew: true,
 			},
 			{
 				title: "Captcha",
