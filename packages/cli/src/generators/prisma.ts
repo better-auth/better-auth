@@ -131,7 +131,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 
-
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
 					field === "id" && options.advanced?.database?.useNumberId

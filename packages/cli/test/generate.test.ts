@@ -165,7 +165,7 @@ describe("generate", async () => {
 				),
 				plugins: [twoFactor(), username()],
 				user: {
-					modelName: "custom_user"
+					modelName: "custom_user",
 				},
 				account: {
 					modelName: "custom_account",
@@ -206,7 +206,7 @@ describe("generate", async () => {
 					},
 				},
 				user: {
-					modelName: "custom_user"
+					modelName: "custom_user",
 				},
 				account: {
 					modelName: "custom_account",
