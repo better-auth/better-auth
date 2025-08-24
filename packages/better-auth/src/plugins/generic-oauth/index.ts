@@ -23,7 +23,6 @@ import type { GenericOAuthOptions } from "./types";
 
 export * from "./types";
 
-
 async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,

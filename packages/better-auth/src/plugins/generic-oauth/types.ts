@@ -2,7 +2,6 @@ import type { OAuth2Tokens, type OAuth2UserInfo } from "../../oauth2";
 import type { InferOptionSchema, User } from "../../types";
 import type { oauthRegistrationSchema } from "./schema";
 
-
 /**
  * Configuration interface for generic OAuth providers.
  */
