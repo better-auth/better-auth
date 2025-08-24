@@ -6,7 +6,6 @@ import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
 import type { ApiKeyOptions } from "./types";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
-import type { User } from "../../types";
 import { validateApiKey } from "./routes/verify-api-key";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -176,21 +175,16 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							schema,
 						});
 
-						await deleteAllExpiredApiKeys(ctx.context);
+						//for cleanup purposes
+						deleteAllExpiredApiKeys(ctx.context);
 
-						let user: User;
-						try {
-							const userResult = await ctx.context.internalAdapter.findUserById(
-								apiKey.userId,
-							);
-							if (!userResult) {
-								throw new APIError("UNAUTHORIZED", {
-									message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-								});
-							}
-							user = userResult;
-						} catch (error) {
-							throw error;
+						const user = await ctx.context.internalAdapter.findUserById(
+							apiKey.userId,
+						);
+						if (!user) {
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+							});
 						}
 
 						const session = {
@@ -198,7 +192,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							session: {
 								id: apiKey.id,
 								token: key,
-								userId: user.id,
+								userId: apiKey.userId,
 								userAgent: ctx.request?.headers.get("user-agent") ?? null,
 								ipAddress: ctx.request
 									? getIp(ctx.request, ctx.context.options)
@@ -213,6 +207,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 									),
 							},
 						};
+
+						// Always set the session context for API key authentication
 						ctx.context.session = session;
 
 						if (ctx.path === "/get-session") {
