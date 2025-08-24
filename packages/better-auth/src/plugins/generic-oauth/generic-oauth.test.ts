@@ -536,7 +536,11 @@ describe("oauth2", async () => {
 		const origin = `http://localhost:${port}`;
 		const url = `${origin}/api/auth/oauth2/register`;
 		const { auth, db } = await getTestInstance({
-      					dynamicRegistration: {
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							dynamicRegistration: {
 								registrationEndpoint: url,
 								clientName: "test",
 							},
@@ -580,7 +584,7 @@ describe("oauth2", async () => {
 
 		await server.close();
 	});
-  
+
 	it("should handle numeric account IDs correctly and prevent duplicate accounts", async () => {
 		const numericAccountId = 123456789;
 		const userEmail = "numeric-id-test@test.com";
@@ -925,4 +929,5 @@ describe("oauth2", async () => {
 			accountId: String(stravaUserId),
 			userId: session.data?.user.id,
 		});
+	});
 });
