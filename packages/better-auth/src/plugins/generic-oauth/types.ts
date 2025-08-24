@@ -1,6 +1,7 @@
-import type { OAuth2Tokens } from "../../oauth2";
+import type { OAuth2Tokens, type OAuth2UserInfo } from "../../oauth2";
 import type { InferOptionSchema, User } from "../../types";
 import type { oauthRegistrationSchema } from "./schema";
+
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -28,7 +29,6 @@ interface GenericOAuthConfigBase {
 	 * Optional if using discoveryUrl.
 	 */
 	userInfoUrl?: string;
-
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -70,27 +70,13 @@ interface GenericOAuthConfigBase {
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
 	 */
-	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+	getUserInfo?: (tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
-	mapProfileToUser?: (profile: Record<string, any>) =>
-		| {
-				id?: string;
-				name?: string;
-				email?: string;
-				image?: string;
-				emailVerified?: boolean;
-				[key: string]: any;
-		  }
-		| Promise<{
-				id?: string;
-				name?: string;
-				email?: string;
-				image?: string;
-				emailVerified?: boolean;
-				[key: string]: any;
-		  }>;
+	mapProfileToUser?: (
+		profile: Record<string, any>,
+	) => Partial<Partial<User>> | Promise<Partial<User>>;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
