@@ -785,7 +785,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						family_name: user.name.split(" ")[1],
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: new Date(user.updatedAt).toISOString(),
 					};
 					const email = {
 						email: user.email,

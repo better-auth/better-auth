@@ -4,8 +4,8 @@ import {
 	defineCollections,
 } from "fumadocs-mdx/config";
 import { z } from "zod";
-import { remarkInstall } from "fumadocs-docgen";
 import { remarkAutoTypeTable, createGenerator } from "fumadocs-typescript";
+import { remarkNpm } from "fumadocs-core/mdx-plugins";
 
 export const docs = defineDocs({
 	dir: "./content/docs",
@@ -44,7 +44,7 @@ export default defineConfig({
 	mdxOptions: {
 		remarkPlugins: [
 			[
-				remarkInstall,
+				remarkNpm,
 				{
 					persist: {
 						id: "persist-install",
