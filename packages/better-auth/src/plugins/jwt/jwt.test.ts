@@ -7,7 +7,7 @@ import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
 import type { JwtOptions, JWKOptions } from "./types";
 import { generateExportedKeyPair } from "./utils";
 
-describe("jwt", async (it) => {
+describe("jwt", async () => {
 	// Testing the default behaviour
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [jwt()],
@@ -393,7 +393,7 @@ describe.each([
 	});
 });
 
-describe("jwt - remote signing", async (it) => {
+describe("jwt - remote signing", async () => {
 	it("should fail if sign is defined and remoteUrl is not", async () => {
 		expect(() =>
 			getTestInstance({
@@ -411,7 +411,7 @@ describe("jwt - remote signing", async (it) => {
 	});
 });
 
-describe("jwt - remote url", async (it) => {
+describe("jwt - remote url", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			jwt({

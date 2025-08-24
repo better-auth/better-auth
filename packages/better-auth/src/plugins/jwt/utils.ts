@@ -2,7 +2,6 @@ import { subtle, getRandomValues } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { joseSecs } from "../../utils/time";
 import type { JwtOptions } from "./types";
-import type { JWK } from "jose";
 import { generateKeyPair, exportJWK } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import type { Jwk } from "./schema";
@@ -109,9 +108,7 @@ export async function decryptPrivateKey(
 	return dec.decode(decrypted);
 }
 
-export async function generateExportedKeyPair(
-	options?: JwtOptions,
-): Promise<{ publicWebKey: JWK; privateWebKey: JWK }> {
+export async function generateExportedKeyPair(options?: JwtOptions) {
 	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
 		alg: "EdDSA",
 		crv: "Ed25519",
@@ -124,7 +121,7 @@ export async function generateExportedKeyPair(
 	const publicWebKey = await exportJWK(publicKey);
 	const privateWebKey = await exportJWK(privateKey);
 
-	return { publicWebKey, privateWebKey };
+	return { publicWebKey, privateWebKey, alg, cfg };
 }
 
 /**
@@ -138,17 +135,8 @@ export async function createJwk(
 	ctx: GenericEndpointContext,
 	options?: JwtOptions,
 ) {
-	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
-		crv: "Ed25519",
-	};
-	const { publicKey, privateKey } = await generateKeyPair(alg, {
-		...cfg,
-		extractable: true,
-	});
-
-	const publicWebKey = await exportJWK(publicKey);
-	const privateWebKey = await exportJWK(privateKey);
+	const { publicWebKey, privateWebKey, alg, cfg } =
+		await generateExportedKeyPair(options);
 
 	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 	const privateKeyEncryptionEnabled =

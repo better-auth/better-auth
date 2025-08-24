@@ -1,5 +1,6 @@
 import type { AuthPluginSchema } from "../../types";
 import * as z from "zod/v4";
+import type { JWSAlgorithms } from "./types";
 
 export const schema = {
 	jwks: {
@@ -25,8 +26,16 @@ export const jwk = z.object({
 	publicKey: z.string(),
 	privateKey: z.string(),
 	createdAt: z.date(),
-	alg: z.string().optional(),
-	crv: z.string().optional(),
+	alg: z
+		.enum([
+			"EdDSA",
+			"ES256",
+			"ES512",
+			"PS256",
+			"RS256",
+		] satisfies JWSAlgorithms[])
+		.optional(),
+	crv: z.enum(["Ed25519", "P-256", "P-521"]).optional(),
 });
 
 export type Jwk = z.infer<typeof jwk>;
