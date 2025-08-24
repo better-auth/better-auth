@@ -489,7 +489,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								...freeTrial,
 								metadata: {
 									...ctx.body?.metadata,
-								}
+								},
 							},
 							mode: "subscription",
 							client_reference_id: referenceId,
