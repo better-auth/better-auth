@@ -50,7 +50,6 @@
     "@types/better-sqlite3": "^7.6.12",
     "better-call": "catalog:",
     "better-sqlite3": "^11.6.0",
-    "stripe": "^18.0.0",
-    "zod": "^4.0.0"
+    "stripe": "^18.0.0"
   }
 }
