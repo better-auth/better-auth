@@ -12,6 +12,7 @@ import { hasPermission } from "../has-permission";
 import type { OrganizationOptions } from "../types";
 import { toZodSchema } from "../../../db/to-zod";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import type { LiteralString } from "../../../types/helper";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -289,13 +290,18 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			const canDeleteMember = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["delete"],
+			const canDeleteMember = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["delete"],
+					},
+					organizationId,
 				},
-			});
+				ctx,
+			);
+
 			if (!canDeleteMember) {
 				throw new APIError("UNAUTHORIZED", {
 					message:
@@ -350,7 +356,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					body: {} as {
 						role:
 							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
+							| InferOrganizationRolesFromOption<O>[]
+							| LiteralString
+							| LiteralString[];
 						memberId: string;
 						/**
 						 * If not provided, the active organization will be used
@@ -471,14 +479,18 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const canUpdateMember = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["update"],
+			const canUpdateMember = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["update"],
+					},
+					allowCreatorAllPermissions: true,
+					organizationId,
 				},
-				allowCreatorAllPermissions: true,
-			});
+				ctx,
+			);
 
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
