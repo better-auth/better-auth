@@ -17,9 +17,9 @@ import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
 import { mergeSchema } from "../../db";
 import { oauthRegistrationSchema } from "./schema";
-import { getUserInfo } from "./get-user-info";
 import { getClientIdAndSecret } from "./get-client-id-and-secret";
 import type { GenericOAuthOptions } from "./types";
+import { decodeJwt } from "jose";
 
 export * from "./types";
 

@@ -1,4 +1,4 @@
-import type { OAuth2Tokens, type OAuth2UserInfo } from "../../oauth2";
+import type { OAuth2Tokens, OAuth2UserInfo } from "../../oauth2";
 import type { InferOptionSchema, User } from "../../types";
 import type { oauthRegistrationSchema } from "./schema";
 
