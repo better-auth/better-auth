@@ -1,8 +1,14 @@
-import { importJWK, SignJWT, type JWTPayload } from "jose";
+import {
+	exportJWK,
+	generateKeyPair,
+	importJWK,
+	SignJWT,
+	type JWTPayload,
+} from "jose";
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { generateExportedKeyPair, type JwtOptions } from ".";
+import { type JwtOptions } from ".";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { toExpJWT } from "./utils";
@@ -58,26 +64,7 @@ export async function signJWT(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		const alg = options?.jwks?.keyPairConfig?.alg || "EdDSA";
-
-		const { publicWebKey, privateWebKey } =
-			await generateExportedKeyPair(options);
-		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-
-		let jwk: Partial<Jwk> = {
-			publicKey: JSON.stringify({ alg, ...publicWebKey }),
-			privateKey: privateKeyEncryptionEnabled
-				? JSON.stringify(
-						await symmetricEncrypt({
-							key: ctx.context.secret,
-							data: stringifiedPrivateWebKey,
-						}),
-					)
-				: stringifiedPrivateWebKey,
-			createdAt: new Date(),
-		};
-
-		key = await adapter.createJwk(jwk as Jwk);
+		key = await createJwk(ctx, options);
 	}
 
 	let privateWebKey = privateKeyEncryptionEnabled
@@ -90,7 +77,7 @@ export async function signJWT(
 				);
 			})
 		: key.privateKey;
-	const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
 
 	const jwt = new SignJWT(payload)
@@ -125,4 +112,54 @@ export async function getJwtToken(
 				ctx.context.session!.user.id,
 		},
 	});
+}
+
+/**
+ * Creates a Jwk on the database
+ *
+ * @param ctx
+ * @param options
+ * @returns
+ */
+export async function createJwk(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions,
+) {
+	const keyPairConfig = options?.jwks?.keyPairConfig ?? {
+		alg: "EdDSA",
+		crv: "Ed25519",
+	};
+	const { publicKey, privateKey } = await generateKeyPair(keyPairConfig.alg, {
+		...keyPairConfig,
+		extractable: true,
+	});
+
+	const publicWebKey = await exportJWK(publicKey);
+	const privateWebKey = await exportJWK(privateKey);
+	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+	const privateKeyEncryptionEnabled =
+		!options?.jwks?.disablePrivateKeyEncryption;
+	let jwk: Partial<Jwk> = {
+		alg: keyPairConfig.alg,
+		...(keyPairConfig && "crv" in keyPairConfig
+			? {
+					crv: (keyPairConfig as { crv: (typeof jwk)["crv"] }).crv,
+				}
+			: {}),
+		publicKey: JSON.stringify(publicWebKey),
+		privateKey: privateKeyEncryptionEnabled
+			? JSON.stringify(
+					await symmetricEncrypt({
+						key: ctx.context.secret,
+						data: stringifiedPrivateWebKey,
+					}),
+				)
+			: stringifiedPrivateWebKey,
+		createdAt: new Date(),
+	};
+
+	const adapter = getJwksAdapter(ctx.context.adapter);
+	const key = await adapter.createJwk(jwk as Jwk);
+
+	return key;
 }
