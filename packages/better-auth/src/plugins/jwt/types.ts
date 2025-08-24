@@ -140,3 +140,12 @@ export type JWKOptions =
 	  };
 
 export type JWSAlgorithms = JWKOptions["alg"];
+
+export interface Jwk {
+	id: string;
+	publicKey: string;
+	privateKey: string;
+	createdAt: Date;
+	alg?: JWSAlgorithms;
+	crv?: "Ed25519" | "P-256" | "P-521";
+}

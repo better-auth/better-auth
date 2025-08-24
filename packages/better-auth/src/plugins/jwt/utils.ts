@@ -1,10 +1,9 @@
 import { subtle, getRandomValues } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { joseSecs } from "../../utils/time";
-import type { JwtOptions } from "./types";
+import type { JwtOptions, Jwk } from "./types";
 import { generateKeyPair, exportJWK } from "jose";
 import type { GenericEndpointContext } from "../../types";
-import type { Jwk } from "./schema";
 import { symmetricEncrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
 
@@ -141,7 +140,7 @@ export async function createJwk(
 	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
-	let jwk: Partial<Jwk> = {
+	let jwk: Omit<Jwk, "id"> = {
 		alg,
 		...(cfg && "crv" in cfg
 			? {
