@@ -26,13 +26,13 @@ import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
-import type { JwtOptions } from "../jwt";
+import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
 		(plugin) => plugin.id === "jwt",
-	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
+	) as ReturnType<typeof jwt>;
 };
 
 /**
@@ -319,11 +319,36 @@ export const oidcProvider = (options: OIDCOptions) => {
 					method: "POST",
 					body: z.object({
 						accept: z.boolean(),
+						consent_code: z.string().optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
-							description: "Handle OAuth2 consent",
+							description:
+								"Handle OAuth2 consent. Supports both URL parameter-based flows (consent_code in body) and cookie-based flows (signed cookie).",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												accept: {
+													type: "boolean",
+													description:
+														"Whether the user accepts or denies the consent request",
+												},
+												consent_code: {
+													type: "string",
+													description:
+														"The consent code from the authorization request. Optional if using cookie-based flow.",
+												},
+											},
+											required: ["accept"],
+										},
+									},
+								},
+							},
 							responses: {
 								"200": {
 									description: "Consent processed successfully",
@@ -349,18 +374,31 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const storedCode = await ctx.getSignedCookie(
-						"oidc_consent_prompt",
-						ctx.context.secret,
-					);
-					if (!storedCode) {
+					// Support both consent flow methods:
+					// 1. URL parameter-based: consent_code in request body (standard OAuth2 pattern)
+					// 2. Cookie-based: using signed cookie for stateful consent flows
+					let consentCode: string | null = ctx.body.consent_code || null;
+
+					if (!consentCode) {
+						// Check for cookie-based consent flow
+						consentCode = await ctx.getSignedCookie(
+							"oidc_consent_prompt",
+							ctx.context.secret,
+						);
+					}
+
+					if (!consentCode) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "No consent prompt found",
+							error_description:
+								"consent_code is required (either in body or cookie)",
 							error: "invalid_request",
 						});
 					}
+
 					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(storedCode);
+						await ctx.context.internalAdapter.findVerificationValue(
+							consentCode,
+						);
 					if (!verification) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Invalid code",
@@ -373,6 +411,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+
+					// Clear the cookie
+					ctx.setCookie("oidc_consent_prompt", "", {
+						maxAge: 0,
+					});
+
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
 					if (!value.requireConsent) {
 						throw new APIError("UNAUTHORIZED", {
@@ -482,6 +526,16 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 					}
+
+					const now = Date.now();
+					const iat = Math.floor(now / 1000);
+					const exp = iat + (opts.accessTokenExpiresIn ?? 3600);
+
+					const accessTokenExpiresAt = new Date(exp * 1000);
+					const refreshTokenExpiresAt = new Date(
+						(iat + (opts.refreshTokenExpiresIn ?? 604800)) * 1000,
+					);
+
 					const {
 						grant_type,
 						code,
@@ -525,12 +579,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
-						const accessTokenExpiresAt = new Date(
-							Date.now() + opts.accessTokenExpiresIn * 1000,
-						);
-						const refreshTokenExpiresAt = new Date(
-							Date.now() + opts.refreshTokenExpiresIn * 1000,
-						);
+
 						await ctx.context.adapter.create({
 							model: modelName.oauthAccessToken,
 							data: {
@@ -541,8 +590,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 								clientId: client_id.toString(),
 								userId: token.userId,
 								scopes: token.scopes,
-								createdAt: new Date(),
-								updatedAt: new Date(),
+								createdAt: new Date(iat * 1000),
+								updatedAt: new Date(iat * 1000),
 							},
 						});
 						return ctx.json({
@@ -707,12 +756,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
-					const accessTokenExpiresAt = new Date(
-						Date.now() + opts.accessTokenExpiresIn * 1000,
-					);
-					const refreshTokenExpiresAt = new Date(
-						Date.now() + opts.refreshTokenExpiresIn * 1000,
-					);
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,
 						data: {
@@ -723,8 +766,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: client_id.toString(),
 							userId: value.userId,
 							scopes: requestedScopes.join(" "),
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: new Date(iat * 1000),
+							updatedAt: new Date(iat * 1000),
 						},
 					});
 					const user = await ctx.context.internalAdapter.findUserById(
@@ -754,14 +797,20 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
 					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
-						auth_time: ctx.context.session?.session.createdAt.getTime(),
+						auth_time: ctx.context.session
+							? new Date(ctx.context.session.session.createdAt).getTime()
+							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
@@ -792,12 +841,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 									session: {
 										session: {
 											id: generateRandomString(32, "a-z", "A-Z"),
-											createdAt: new Date(),
-											updatedAt: new Date(),
+											createdAt: new Date(iat * 1000),
+											updatedAt: new Date(iat * 1000),
 											userId: user.id,
-											expiresAt: new Date(
-												Date.now() + opts.accessTokenExpiresIn * 1000,
-											),
+											expiresAt: accessTokenExpiresAt,
 											token: accessToken,
 											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
 										},
@@ -822,8 +869,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					} else {
 						idToken = await new SignJWT(payload)
 							.setProtectedHeader({ alg: "HS256" })
-							.setIssuedAt()
-							.setExpirationTime(expirationTime)
+							.setIssuedAt(iat)
+							.setExpirationTime(accessTokenExpiresAt)
 							.sign(new TextEncoder().encode(client.clientSecret));
 					}
 
@@ -956,6 +1003,18 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const client = await getClient(
+						accessToken.clientId,
+						ctx.context.adapter,
+						trustedClients,
+					);
+					if (!client) {
+						throw new APIError("UNAUTHORIZED", {
+							error_description: "client not found",
+							error: "invalid_token",
+						});
+					}
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						accessToken.userId,
 					);
@@ -984,7 +1043,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 					};
 					const userClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: baseUserClaims;
 					return ctx.json({
 						...baseUserClaims,

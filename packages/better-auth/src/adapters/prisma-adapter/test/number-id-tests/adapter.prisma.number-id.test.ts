@@ -2,7 +2,7 @@ import { beforeAll, describe } from "vitest";
 import { runNumberIdAdapterTest } from "../../../test";
 import { pushPrismaSchema } from "../push-schema";
 import { createTestOptions } from "../test-options";
-import * as fs from "node:fs";
+import * as fs from "fs";
 import { getState, stateFilePath } from "../state";
 
 describe("Number Id Adapter Test", async () => {
