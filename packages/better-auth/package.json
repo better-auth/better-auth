@@ -708,12 +708,12 @@
     "defu": "^6.1.4",
     "jose": "^5.10.0",
     "kysely": "^0.28.5",
-    "nanostores": "^0.11.4"
+    "nanostores": "^0.11.4",
+    "zod": "^4.1.0"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0",
-    "zod": "^3.25.0 || ^4.0.0"
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -753,8 +753,7 @@
     "type-fest": "^4.41.0",
     "typescript": "catalog:",
     "unbuild": "catalog:",
-    "vue": "^3.5.18",
-    "zod": "^4.0.17"
+    "vue": "^3.5.18"
   },
   "overrides": {
     "whatwg-url": "^14.2.0"

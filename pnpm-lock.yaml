@@ -643,6 +643,9 @@ importers:
       nanostores:
         specifier: ^0.11.4
         version: 0.11.4
+      zod:
+        specifier: ^4.1.0
+        version: 4.1.0
     devDependencies:
       '@prisma/client':
         specifier: ^5.22.0
@@ -734,9 +737,6 @@ importers:
       vue:
         specifier: ^3.5.18
         version: 3.5.19(typescript@5.9.2)
-      zod:
-        specifier: ^4.0.17
-        version: 4.0.17
 
   packages/cli:
     dependencies:
@@ -13418,6 +13418,9 @@ packages:
 
   zod@4.0.17:
     resolution: {integrity: sha512-1PHjlYRevNxxdy2JZ8JcNAw7rX8V9P1AKkP+x/xZfxB0K5FYfuV+Ug6P/6NVSR2jHQ+FzDDoDHS04nYUsOIyLQ==}
+
+  zod@4.1.0:
+    resolution: {integrity: sha512-UWxluYj2IDX9MHRXTMbB/2eeWrAMmmMSESM+MfT9MQw8U1qo9q5ASW08anoJh6AJ7pkt099fLdNFmfI+4aChHg==}
 
   zustand@3.7.2:
     resolution: {integrity: sha512-PIJDIZKtokhof+9+60cpockVOq05sJzHCriyvaLBmEJixseQ1a5Kdov6fWZfWOu5SK9c+FhH1jU0tntLxRJYMA==}
@@ -28123,6 +28126,8 @@ snapshots:
   zod@3.25.76: {}
 
   zod@4.0.17: {}
+
+  zod@4.1.0: {}
 
   zustand@3.7.2(react@19.1.1):
     optionalDependencies:
