@@ -166,16 +166,20 @@ export const apple = (options: AppleOptions) => {
 				typeof profile.email_verified === "boolean"
 					? profile.email_verified
 					: profile.email_verified === "true";
-			const userMap = await options.mapProfileToUser?.(profile);
+			const enrichedProfile = {
+				...profile,
+				name,
+			};
+			const userMap = await options.mapProfileToUser?.(enrichedProfile);
 			return {
 				user: {
 					id: profile.sub,
-					name: name,
+					name: enrichedProfile.name,
 					emailVerified: emailVerified,
 					email: profile.email,
 					...userMap,
 				},
-				data: profile,
+				data: enrichedProfile,
 			};
 		},
 		options,

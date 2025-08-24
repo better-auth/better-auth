@@ -735,9 +735,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						});
 					}
 
-					const sessions = await ctx.context.internalAdapter.listSessions(
-						ctx.body.userId,
-					);
+					const sessions: SessionWithImpersonatedBy[] =
+						await ctx.context.internalAdapter.listSessions(ctx.body.userId);
 					return {
 						sessions: sessions,
 					};
@@ -1345,6 +1344,13 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
+
+					if (ctx.body.userId === ctx.context.session.user.id) {
+						throw new APIError("BAD_REQUEST", {
+							message: ADMIN_ERROR_CODES.YOU_CANNOT_REMOVE_YOURSELF,
+						});
+					}
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						ctx.body.userId,
 					);
