@@ -43,7 +43,10 @@ export type BotIdOptions = {
 	validateRequest?: ({
 		request,
 		verification,
-	}: { request: Request; verification: BotIdVerification }) => Promise<boolean>;
+	}: {
+		request: Request;
+		verification: BotIdVerification;
+	}) => Promise<boolean>;
 	checkBotIdOptions?: Parameters<typeof checkBotId>[0];
 };
 
