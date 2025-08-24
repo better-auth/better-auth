@@ -191,6 +191,9 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					if (!opts.scopes?.includes("openid")) {
+						throw new APIError("NOT_FOUND");
+					}
 					const metadata = oidcServerMetadata(ctx, opts);
 					return ctx.json(metadata);
 				},
