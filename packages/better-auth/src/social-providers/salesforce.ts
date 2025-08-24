@@ -126,7 +126,7 @@ export const salesforce = (options: SalesforceOptions) => {
 				);
 
 				if (!user) {
-					logger.error("Failed to fetch user info from SalesForce");
+					logger.error("Failed to fetch user info from Salesforce");
 					return null;
 				}
 
@@ -144,7 +144,7 @@ export const salesforce = (options: SalesforceOptions) => {
 					data: user,
 				};
 			} catch (error) {
-				logger.error("Failed to fetch user info from SalesForce:", error);
+				logger.error("Failed to fetch user info from Salesforce:", error);
 				return null;
 			}
 		},
