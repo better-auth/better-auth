@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "better-auth": "workspace:^",
-    "zod": "^3.25.0 || ^4.0.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
