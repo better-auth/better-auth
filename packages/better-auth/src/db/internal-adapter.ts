@@ -929,7 +929,7 @@ export const createInternalAdapter = (
 					],
 				});
 			}
-			const lastVerification = verification[0];
+			const lastVerification = verification[0] ?? null;
 			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
