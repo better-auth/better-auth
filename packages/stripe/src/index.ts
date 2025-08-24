@@ -487,6 +487,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 							subscription_data: {
 								...freeTrial,
+								metadata: {
+									...ctx.body?.metadata,
+								}
 							},
 							mode: "subscription",
 							client_reference_id: referenceId,
