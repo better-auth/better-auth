@@ -87,9 +87,9 @@ describe("Custom Session Plugin Tests", async () => {
 		const session = sessions[0]!;
 		//@ts-expect-error
 		expect(session.newData).toEqual({ message: "Hello, World!" });
-  });
+	});
 
-it("should not create memory leaks with multiple plugin instances", async () => {
+	it("should not create memory leaks with multiple plugin instances", async () => {
 		const initialMemory = process.memoryUsage();
 
 		const pluginInstances = [];
