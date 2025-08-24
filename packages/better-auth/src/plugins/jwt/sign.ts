@@ -5,6 +5,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { generateExportedKeyPair, type JwtOptions } from ".";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
+import { toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
@@ -14,8 +15,44 @@ export async function signJWT(
 	},
 ) {
 	const { options, payload } = config;
-	const adapter = getJwksAdapter(ctx.context.adapter);
 
+	// Iat
+	const nowSeconds = Math.floor(Date.now() / 1000);
+	const iat = payload.iat;
+
+	// Exp
+	let exp = payload.exp;
+	const defaultExp = toExpJWT(
+		options?.jwt?.expirationTime ?? "15m",
+		iat ?? nowSeconds,
+	);
+	exp = exp ?? defaultExp;
+
+	// Nbf
+	const nbf = payload.nbf;
+
+	// Iss
+	const iss = payload.iss;
+	const defaultIss = options?.jwt?.issuer ?? ctx.context.options.baseURL!;
+
+	// Aud
+	const aud = payload.aud;
+	const defaultAud = options?.jwt?.audience ?? ctx.context.options.baseURL!;
+
+	// Custom/remote signing function
+	if (options?.jwt?.sign) {
+		const jwtPayload = {
+			...payload,
+			iat,
+			exp,
+			nbf,
+			iss: iss ?? defaultIss,
+			aud: aud ?? defaultAud,
+		};
+		return options.jwt.sign(jwtPayload);
+	}
+
+	const adapter = getJwksAdapter(ctx.context.adapter);
 	let key = await adapter.getLatestKey();
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
@@ -56,19 +93,19 @@ export async function signJWT(
 	const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
 
-	const jwt = await new SignJWT({
-		iss: options?.jwt?.issuer ?? ctx.context.options.baseURL!,
-		aud: options?.jwt?.audience ?? ctx.context.options.baseURL!,
-		...payload,
-	})
-		.setIssuedAt()
-		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
+	const jwt = new SignJWT(payload)
 		.setProtectedHeader({
 			alg,
 			kid: key.id,
 		})
-		.sign(privateKey);
-	return jwt;
+		.setExpirationTime(exp)
+		.setIssuer(iss ?? defaultIss)
+		.setAudience(aud ?? defaultAud);
+	if (iat) jwt.setIssuedAt(iat);
+	if (payload.sub) jwt.setSubject(payload.sub);
+	if (payload.nbf) jwt.setNotBefore(payload.nbf);
+	if (payload.jti) jwt.setJti(payload.jti);
+	return await jwt.sign(privateKey);
 }
 
 export async function getJwtToken(

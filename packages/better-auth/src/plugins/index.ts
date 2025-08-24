@@ -24,3 +24,4 @@ export * from "./haveibeenpwned";
 export * from "./one-time-token";
 export * from "./mcp";
 export * from "./siwe";
+export * from "./device-authorization";
