@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
-import { generateExportedKeyPair, jwt, type JwtOptions } from "./index";
+import { jwt } from ".";
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
-import type { JWKOptions } from "./types";
+import type { JwtOptions, JWKOptions } from "./types";
+import { generateExportedKeyPair } from "./utils";
 
 describe("jwt", async (it) => {
 	// Testing the default behaviour

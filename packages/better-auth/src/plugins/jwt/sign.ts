@@ -1,17 +1,10 @@
-import {
-	exportJWK,
-	generateKeyPair,
-	importJWK,
-	SignJWT,
-	type JWTPayload,
-} from "jose";
+import { importJWK, SignJWT, type JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { type JwtOptions } from ".";
-import type { Jwk } from "./schema";
+import { symmetricDecrypt } from "../../crypto";
+import type { JwtOptions } from "./types";
 import { getJwksAdapter } from "./adapter";
-import { toExpJWT } from "./utils";
+import { createJwk, toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
@@ -112,54 +105,4 @@ export async function getJwtToken(
 				ctx.context.session!.user.id,
 		},
 	});
-}
-
-/**
- * Creates a Jwk on the database
- *
- * @param ctx
- * @param options
- * @returns
- */
-export async function createJwk(
-	ctx: GenericEndpointContext,
-	options?: JwtOptions,
-) {
-	const keyPairConfig = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
-		crv: "Ed25519",
-	};
-	const { publicKey, privateKey } = await generateKeyPair(keyPairConfig.alg, {
-		...keyPairConfig,
-		extractable: true,
-	});
-
-	const publicWebKey = await exportJWK(publicKey);
-	const privateWebKey = await exportJWK(privateKey);
-	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-	const privateKeyEncryptionEnabled =
-		!options?.jwks?.disablePrivateKeyEncryption;
-	let jwk: Partial<Jwk> = {
-		alg: keyPairConfig.alg,
-		...(keyPairConfig && "crv" in keyPairConfig
-			? {
-					crv: (keyPairConfig as { crv: (typeof jwk)["crv"] }).crv,
-				}
-			: {}),
-		publicKey: JSON.stringify(publicWebKey),
-		privateKey: privateKeyEncryptionEnabled
-			? JSON.stringify(
-					await symmetricEncrypt({
-						key: ctx.context.secret,
-						data: stringifiedPrivateWebKey,
-					}),
-				)
-			: stringifiedPrivateWebKey,
-		createdAt: new Date(),
-	};
-
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	const key = await adapter.createJwk(jwk as Jwk);
-
-	return key;
 }

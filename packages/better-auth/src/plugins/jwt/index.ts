@@ -1,14 +1,8 @@
 import type { BetterAuthPlugin } from "../../types";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { createJwk, getJwtToken, signJWT } from "./sign";
-import {
-	exportJWK,
-	generateKeyPair,
-	type JSONWebKeySet,
-	type JWK,
-	type JWTPayload,
-} from "jose";
+import { getJwtToken, signJWT } from "./sign";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -19,27 +13,9 @@ import { mergeSchema } from "../../db/schema";
 import z from "zod";
 import { BetterAuthError } from "../../error";
 import type { JwtOptions } from "./types";
+import { createJwk } from "./utils";
 export type * from "./types";
-
-export async function generateExportedKeyPair(
-	options?: JwtOptions,
-): Promise<{ publicWebKey: JWK; privateWebKey: JWK }> {
-	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
-		crv: "Ed25519",
-	};
-	const keyPairConfig = {
-		...cfg,
-		extractable: true,
-	};
-
-	const { publicKey, privateKey } = await generateKeyPair(alg, keyPairConfig);
-
-	const publicWebKey = await exportJWK(publicKey);
-	const privateWebKey = await exportJWK(privateKey);
-
-	return { publicWebKey, privateWebKey };
-}
+export { generateExportedKeyPair, createJwk } from "./utils";
 
 export const jwt = (options?: JwtOptions) => {
 	// Remote url must be set when using signing function

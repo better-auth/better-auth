@@ -1,6 +1,13 @@
 import { subtle, getRandomValues } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { joseSecs } from "../../utils/time";
+import type { JwtOptions } from "./types";
+import type { JWK } from "jose";
+import { generateKeyPair, exportJWK } from "jose";
+import type { GenericEndpointContext } from "../../types";
+import type { Jwk } from "./schema";
+import { symmetricEncrypt } from "../../crypto";
+import { getJwksAdapter } from "./adapter";
 
 /**
  * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)
@@ -100,4 +107,73 @@ export async function decryptPrivateKey(
 
 	const dec = new TextDecoder();
 	return dec.decode(decrypted);
+}
+
+export async function generateExportedKeyPair(
+	options?: JwtOptions,
+): Promise<{ publicWebKey: JWK; privateWebKey: JWK }> {
+	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
+		alg: "EdDSA",
+		crv: "Ed25519",
+	};
+	const { publicKey, privateKey } = await generateKeyPair(alg, {
+		...cfg,
+		extractable: true,
+	});
+
+	const publicWebKey = await exportJWK(publicKey);
+	const privateWebKey = await exportJWK(privateKey);
+
+	return { publicWebKey, privateWebKey };
+}
+
+/**
+ * Creates a Jwk on the database
+ *
+ * @param ctx
+ * @param options
+ * @returns
+ */
+export async function createJwk(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions,
+) {
+	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
+		alg: "EdDSA",
+		crv: "Ed25519",
+	};
+	const { publicKey, privateKey } = await generateKeyPair(alg, {
+		...cfg,
+		extractable: true,
+	});
+
+	const publicWebKey = await exportJWK(publicKey);
+	const privateWebKey = await exportJWK(privateKey);
+
+	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+	const privateKeyEncryptionEnabled =
+		!options?.jwks?.disablePrivateKeyEncryption;
+	let jwk: Partial<Jwk> = {
+		alg,
+		...(cfg && "crv" in cfg
+			? {
+					crv: (cfg as { crv: (typeof jwk)["crv"] }).crv,
+				}
+			: {}),
+		publicKey: JSON.stringify(publicWebKey),
+		privateKey: privateKeyEncryptionEnabled
+			? JSON.stringify(
+					await symmetricEncrypt({
+						key: ctx.context.secret,
+						data: stringifiedPrivateWebKey,
+					}),
+				)
+			: stringifiedPrivateWebKey,
+		createdAt: new Date(),
+	};
+
+	const adapter = getJwksAdapter(ctx.context.adapter);
+	const key = await adapter.createJwk(jwk as Jwk);
+
+	return key;
 }
