@@ -7,7 +7,7 @@ import {
   serial,
 } from "drizzle-orm/pg-core";
 
-export const user = pgTable("user", {
+export const custom_user = pgTable("custom_user", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
@@ -26,7 +26,7 @@ export const user = pgTable("user", {
   displayUsername: text("display_username"),
 });
 
-export const session = pgTable("session", {
+export const custom_session = pgTable("custom_session", {
   id: serial("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
   token: text("token").notNull().unique(),
@@ -36,16 +36,16 @@ export const session = pgTable("session", {
   userAgent: text("user_agent"),
   userId: integer("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => custom_user.id, { onDelete: "cascade" }),
 });
 
-export const account = pgTable("account", {
+export const custom_account = pgTable("custom_account", {
   id: serial("id").primaryKey(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   userId: integer("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => custom_user.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   idToken: text("id_token"),
@@ -57,7 +57,7 @@ export const account = pgTable("account", {
   updatedAt: timestamp("updated_at").notNull(),
 });
 
-export const verification = pgTable("verification", {
+export const custom_verification = pgTable("custom_verification", {
   id: serial("id").primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
@@ -76,5 +76,5 @@ export const twoFactor = pgTable("two_factor", {
   backupCodes: text("backup_codes").notNull(),
   userId: integer("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => custom_user.id, { onDelete: "cascade" }),
 });
