@@ -17,19 +17,23 @@ describe("Custom Session Plugin Tests", async () => {
 		await getTestInstance({
 			plugins: [
 				...options.plugins,
-				customSession(async ({ user, session }) => {
-					const newData = {
-						message: "Hello, World!",
-					};
-					return {
-						user: {
-							firstName: user.name.split(" ")[0],
-							lastName: user.name.split(" ")[1],
-						},
-						newData,
-						session,
-					};
-				}, options),
+				customSession(
+					async ({ user, session }) => {
+						const newData = {
+							message: "Hello, World!",
+						};
+						return {
+							user: {
+								firstName: user.name.split(" ")[0],
+								lastName: user.name.split(" ")[1],
+							},
+							newData,
+							session,
+						};
+					},
+					options,
+					{ shouldMutateListDeviceSessionsEndpoint: true },
+				),
 			],
 		});
 

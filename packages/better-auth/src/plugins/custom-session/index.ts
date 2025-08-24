@@ -36,6 +36,14 @@ const getSessionQuerySchema = z.optional(
 	}),
 );
 
+export type CustomSessionPluginOptions = {
+	/**
+	 * This option is used to determine if the list-device-sessions endpoint should be mutated to the custom session data.
+	 * @default false
+	 */
+	shouldMutateListDeviceSessionsEndpoint?: boolean;
+};
+
 export const customSession = <
 	Returns extends Record<string, any>,
 	O extends BetterAuthOptions = BetterAuthOptions,
@@ -48,13 +56,16 @@ export const customSession = <
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
 	options?: O,
+	pluginOptions?: CustomSessionPluginOptions,
 ) => {
 	return {
 		id: "custom-session",
 		hooks: {
 			after: [
 				{
-					matcher: (ctx) => ctx.path === "/multi-session/list-device-sessions",
+					matcher: (ctx) =>
+						ctx.path === "/multi-session/list-device-sessions" &&
+						(pluginOptions?.shouldMutateListDeviceSessionsEndpoint ?? false),
 					handler: createAuthMiddleware(async (ctx) => {
 						const response = await getEndpointResponse<[]>(ctx);
 						if (!response) return;
