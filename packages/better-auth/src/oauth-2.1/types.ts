@@ -87,16 +87,15 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	token_endpoint_auth_methods_supported: AuthMethod[];
+	token_endpoint_auth_methods_supported?: AuthMethod[];
 	/**
-	 * Algorithms supported for access tokens.
-	 *
-	 * Automatically uses the same algorithm used in the JWK Plugin.
-	 *
-	 * @default
-	 * ["EdDSA"]
+	 * Array containing a list of the JWS signing
+	 * algorithms ("alg" values) supported by the token endpoint for
+	 * the signature on the JWT used to authenticate the client at the
+	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
+	 * authentication methods (see field token_endpoint_auth_methods_supported).
 	 */
-	token_endpoint_auth_signing_alg_values_supported: JWSAlgorithms[];
+	token_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
 	/**
 	 * URL of a page containing human-readable information
 	 * that developers might want or need to know when using the
@@ -138,7 +137,9 @@ export interface AuthServerMetadata {
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the revocation endpoint for
-	 * the signature on the JWT.
+	 * the signature on the JWT used to authenticate the client at the
+	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
+	 * authentication methods (see field revocation_endpoint_auth_methods_supported).
 	 */
 	revocation_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
 	/**
@@ -157,6 +158,9 @@ export interface AuthServerMetadata {
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the introspection endpoint
+	 * used to authenticate the client at the token endpoint for
+	 * the "private_key_jwt" and "client_secret_jwt" authentication methods
+	 * (see field introspection_endpoint_auth_methods_supported).
 	 */
 	introspection_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
 	/**
