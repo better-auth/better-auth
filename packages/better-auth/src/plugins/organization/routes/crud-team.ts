@@ -155,13 +155,52 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 			const { name, organizationId: _, ...additionalFields } = ctx.body;
-			const createdTeam = await adapter.createTeam({
+
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			let teamData = {
 				name,
 				organizationId,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				...additionalFields,
-			});
+			};
+
+			// Run beforeCreateTeam hook
+			if (options.organizationHooks?.beforeCreateTeam) {
+				const response = await options.organizationHooks.beforeCreateTeam({
+					team: {
+						name,
+						organizationId,
+						...additionalFields,
+					},
+					user: session?.user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					teamData = {
+						...teamData,
+						...response.data,
+					};
+				}
+			}
+
+			const createdTeam = await adapter.createTeam(teamData);
+
+			// Run afterCreateTeam hook
+			if (options.organizationHooks?.afterCreateTeam) {
+				await options.organizationHooks.afterCreateTeam({
+					team: createdTeam,
+					user: session?.user,
+					organization,
+				});
+			}
+
 			return ctx.json(createdTeam);
 		},
 	);
@@ -273,7 +312,33 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeDeleteTeam hook
+			if (options.organizationHooks?.beforeDeleteTeam) {
+				await options.organizationHooks.beforeDeleteTeam({
+					team,
+					user: session?.user,
+					organization,
+				});
+			}
+
 			await adapter.deleteTeam(team.id);
+
+			// Run afterDeleteTeam hook
+			if (options.organizationHooks?.afterDeleteTeam) {
+				await options.organizationHooks.afterDeleteTeam({
+					team,
+					user: session?.user,
+					organization,
+				});
+			}
+
 			return ctx.json({ message: "Team removed successfully." });
 		},
 	);
@@ -414,10 +479,57 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 
 			const { name, organizationId: __, ...additionalFields } = ctx.body.data;
 
-			const updatedTeam = await adapter.updateTeam(team.id, {
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const updates = {
 				name,
 				...additionalFields,
-			});
+			};
+
+			// Run beforeUpdateTeam hook
+			if (options.organizationHooks?.beforeUpdateTeam) {
+				const response = await options.organizationHooks.beforeUpdateTeam({
+					team,
+					updates,
+					user: session.user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					// Allow the hook to modify the updates
+					const modifiedUpdates = response.data;
+					const updatedTeam = await adapter.updateTeam(
+						team.id,
+						modifiedUpdates,
+					);
+
+					// Run afterUpdateTeam hook
+					if (options.organizationHooks?.afterUpdateTeam) {
+						await options.organizationHooks.afterUpdateTeam({
+							team: updatedTeam,
+							user: session.user,
+							organization,
+						});
+					}
+
+					return ctx.json(updatedTeam);
+				}
+			}
+
+			const updatedTeam = await adapter.updateTeam(team.id, updates);
+
+			// Run afterUpdateTeam hook
+			if (options.organizationHooks?.afterUpdateTeam) {
+				await options.organizationHooks.afterUpdateTeam({
+					team: updatedTeam,
+					user: session.user,
+					organization,
+				});
+			}
 
 			return ctx.json(updatedTeam);
 		},
@@ -862,10 +974,65 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const team = await adapter.findTeamById({
+				teamId: ctx.body.teamId,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			const organization = await adapter.findOrganizationById(
+				session.session.activeOrganizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const userBeingAdded = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!userBeingAdded) {
+				throw new APIError("BAD_REQUEST", {
+					message: "User not found",
+				});
+			}
+
+			// Run beforeAddTeamMember hook
+			if (options.organizationHooks?.beforeAddTeamMember) {
+				const response = await options.organizationHooks.beforeAddTeamMember({
+					teamMember: {
+						teamId: ctx.body.teamId,
+						userId: ctx.body.userId,
+					},
+					team,
+					user: userBeingAdded,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					// Allow the hook to modify the data
+				}
+			}
+
 			const teamMember = await adapter.findOrCreateTeamMember({
 				teamId: ctx.body.teamId,
 				userId: ctx.body.userId,
 			});
+
+			// Run afterAddTeamMember hook
+			if (options.organizationHooks?.afterAddTeamMember) {
+				await options.organizationHooks.afterAddTeamMember({
+					teamMember,
+					team,
+					user: userBeingAdded,
+					organization,
+				});
+			}
 
 			return ctx.json(teamMember);
 		},
@@ -962,10 +1129,70 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const team = await adapter.findTeamById({
+				teamId: ctx.body.teamId,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			const organization = await adapter.findOrganizationById(
+				session.session.activeOrganizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const userBeingRemoved = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!userBeingRemoved) {
+				throw new APIError("BAD_REQUEST", {
+					message: "User not found",
+				});
+			}
+
+			const teamMember = await adapter.findTeamMember({
+				teamId: ctx.body.teamId,
+				userId: ctx.body.userId,
+			});
+
+			if (!teamMember) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				});
+			}
+
+			// Run beforeRemoveTeamMember hook
+			if (options.organizationHooks?.beforeRemoveTeamMember) {
+				await options.organizationHooks.beforeRemoveTeamMember({
+					teamMember,
+					team,
+					user: userBeingRemoved,
+					organization,
+				});
+			}
+
 			await adapter.removeTeamMember({
 				teamId: ctx.body.teamId,
 				userId: ctx.body.userId,
 			});
+
+			// Run afterRemoveTeamMember hook
+			if (options.organizationHooks?.afterRemoveTeamMember) {
+				await options.organizationHooks.afterRemoveTeamMember({
+					teamMember,
+					team,
+					user: userBeingRemoved,
+					organization,
+				});
+			}
 
 			return ctx.json({ message: "Team member removed successfully." });
 		},

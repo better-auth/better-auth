@@ -379,14 +379,35 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				...additionalFields
 			} = ctx.body;
 
+			let invitationData = {
+				role: roles,
+				email: ctx.body.email.toLowerCase(),
+				organizationId: organizationId,
+				teamIds,
+				...(additionalFields ? additionalFields : {}),
+			};
+
+			// Run beforeCreateInvitation hook
+			if (option.organizationHooks?.beforeCreateInvitation) {
+				const response = await option.organizationHooks.beforeCreateInvitation({
+					invitation: {
+						...invitationData,
+						inviterId: session.user.id,
+						teamId: teamIds.length > 0 ? teamIds[0] : undefined,
+					},
+					inviter: session.user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					invitationData = {
+						...invitationData,
+						...response.data,
+					};
+				}
+			}
+
 			const invitation = await adapter.createInvitation({
-				invitation: {
-					role: roles,
-					email: ctx.body.email.toLowerCase(),
-					organizationId: organizationId,
-					teamIds,
-					...(additionalFields ? additionalFields : {}),
-				},
+				invitation: invitationData,
 				user: session.user,
 			});
 
@@ -405,6 +426,15 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				},
 				ctx.request,
 			);
+
+			// Run afterCreateInvitation hook
+			if (option.organizationHooks?.afterCreateInvitation) {
+				await option.organizationHooks.afterCreateInvitation({
+					invitation: invitation as unknown as Invitation,
+					inviter: session.user,
+					organization,
+				});
+			}
 
 			return ctx.json(invitation);
 		},
@@ -493,6 +523,25 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeAcceptInvitation hook
+			if (options.organizationHooks?.beforeAcceptInvitation) {
+				await options.organizationHooks.beforeAcceptInvitation({
+					invitation: invitation as unknown as Invitation,
+					user: session.user,
+					organization,
+				});
+			}
+
 			const acceptedI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
@@ -578,6 +627,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			// Run afterAcceptInvitation hook
+			if (options.organizationHooks?.afterAcceptInvitation) {
+				await options.organizationHooks.afterAcceptInvitation({
+					invitation: acceptedI as unknown as Invitation,
+					member,
+					user: session.user,
+					organization,
+				});
+			}
+
 			return ctx.json({
 				invitation: acceptedI,
 				member,
@@ -654,10 +713,37 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeRejectInvitation hook
+			if (options.organizationHooks?.beforeRejectInvitation) {
+				await options.organizationHooks.beforeRejectInvitation({
+					invitation: invitation as unknown as Invitation,
+					user: session.user,
+					organization,
+				});
+			}
+
 			const rejectedI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "rejected",
 			});
+
+			// Run afterRejectInvitation hook
+			if (options.organizationHooks?.afterRejectInvitation) {
+				await options.organizationHooks.afterRejectInvitation({
+					invitation: rejectedI || (invitation as unknown as Invitation),
+					user: session.user,
+					organization,
+				});
+			}
 
 			return ctx.json({
 				invitation: rejectedI,
@@ -731,10 +817,39 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// Run beforeCancelInvitation hook
+			if (options.organizationHooks?.beforeCancelInvitation) {
+				await options.organizationHooks.beforeCancelInvitation({
+					invitation: invitation as unknown as Invitation,
+					cancelledBy: session.user,
+					organization,
+				});
+			}
+
 			const canceledI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "canceled",
 			});
+
+			// Run afterCancelInvitation hook
+			if (options.organizationHooks?.afterCancelInvitation) {
+				await options.organizationHooks.afterCancelInvitation({
+					invitation: (canceledI as unknown as Invitation) || invitation,
+					cancelledBy: session.user,
+					organization,
+				});
+			}
+
 			return ctx.json(canceledI);
 		},
 	);

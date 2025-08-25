@@ -1870,3 +1870,80 @@ describe("Additional Fields", async () => {
 		expect(row.teamRequiredField).toBe("hey4");
 	});
 });
+
+describe("organization hooks", async (it) => {
+	let hooksCalled: string[] = [];
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				organizationHooks: {
+					beforeCreateOrganization: async (data) => {
+						hooksCalled.push("beforeCreateOrganization");
+						return {
+							data: {
+								...data.organization,
+								metadata: { hookCalled: true },
+							},
+						};
+					},
+					afterCreateOrganization: async (data) => {
+						hooksCalled.push("afterCreateOrganization");
+					},
+					beforeCreateInvitation: async (data) => {
+						hooksCalled.push("beforeCreateInvitation");
+					},
+					afterCreateInvitation: async (data) => {
+						hooksCalled.push("afterCreateInvitation");
+					},
+					beforeAddMember: async (data) => {
+						hooksCalled.push("beforeAddMember");
+					},
+					afterAddMember: async (data) => {
+						hooksCalled.push("afterAddMember");
+					},
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("should call organization creation hooks", async () => {
+		hooksCalled = []; // Reset hooks
+
+		const organization = await client.organization.create({
+			name: "Test Org with Hooks",
+			slug: "test-org-hooks",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateOrganization");
+		expect(hooksCalled).toContain("afterCreateOrganization");
+		expect(organization.data?.metadata).toEqual({ hookCalled: true });
+	});
+
+	it("should call invitation hooks", async () => {
+		hooksCalled = []; // Reset hooks
+
+		await client.organization.inviteMember({
+			email: "test@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateInvitation");
+		expect(hooksCalled).toContain("afterCreateInvitation");
+	});
+});

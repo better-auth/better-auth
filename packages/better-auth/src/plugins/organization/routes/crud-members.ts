@@ -147,18 +147,56 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				...additionalFields
 			} = ctx.body;
 
-			const createdMember = await adapter.createMember({
+			const organization = await adapter.findOrganizationById(orgId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			let memberData = {
 				organizationId: orgId,
 				userId: user.id,
 				role: parseRoles(ctx.body.role as string | string[]),
 				createdAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
-			});
+			};
+
+			// Run beforeAddMember hook
+			if (option.organizationHooks?.beforeAddMember) {
+				const response = await option.organizationHooks.beforeAddMember({
+					member: {
+						userId: user.id,
+						organizationId: orgId,
+						role: parseRoles(ctx.body.role as string | string[]),
+						...additionalFields,
+					},
+					user,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					memberData = {
+						...memberData,
+						...response.data,
+					};
+				}
+			}
+
+			const createdMember = await adapter.createMember(memberData);
 
 			if (teamId) {
 				await adapter.findOrCreateTeamMember({
 					userId: user.id,
 					teamId,
+				});
+			}
+
+			// Run afterAddMember hook
+			if (option.organizationHooks?.afterAddMember) {
+				await option.organizationHooks.afterAddMember({
+					member: createdMember,
+					user,
+					organization,
 				});
 			}
 
@@ -308,6 +346,32 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const userBeingRemoved = await ctx.context.internalAdapter.findUserById(
+				toBeRemovedMember.userId,
+			);
+			if (!userBeingRemoved) {
+				throw new APIError("BAD_REQUEST", {
+					message: "User not found",
+				});
+			}
+
+			// Run beforeRemoveMember hook
+			if (options.organizationHooks?.beforeRemoveMember) {
+				await options.organizationHooks.beforeRemoveMember({
+					member: toBeRemovedMember,
+					user: userBeingRemoved,
+					organization,
+				});
+			}
+
 			await adapter.deleteMember(toBeRemovedMember.id);
 			if (
 				session.user.id === toBeRemovedMember.userId &&
@@ -316,6 +380,16 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 			) {
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
+
+			// Run afterRemoveMember hook
+			if (options.organizationHooks?.afterRemoveMember) {
+				await options.organizationHooks.afterRemoveMember({
+					member: toBeRemovedMember,
+					user: userBeingRemoved,
+					organization,
+				});
+			}
+
 			return ctx.json({
 				member: toBeRemovedMember,
 			});
@@ -486,15 +560,80 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const userBeingUpdated = await ctx.context.internalAdapter.findUserById(
+				toBeUpdatedMember.userId,
+			);
+			if (!userBeingUpdated) {
+				throw new APIError("BAD_REQUEST", {
+					message: "User not found",
+				});
+			}
+
+			const previousRole = toBeUpdatedMember.role;
+			const newRole = parseRoles(ctx.body.role as string | string[]);
+
+			// Run beforeUpdateMemberRole hook
+			if (option.organizationHooks?.beforeUpdateMemberRole) {
+				const response = await option.organizationHooks.beforeUpdateMemberRole({
+					member: toBeUpdatedMember,
+					newRole,
+					user: userBeingUpdated,
+					organization,
+				});
+				if (response && typeof response === "object" && "data" in response) {
+					// Allow the hook to modify the role
+					const updatedMember = await adapter.updateMember(
+						ctx.body.memberId,
+						response.data.role || newRole,
+					);
+					if (!updatedMember) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+						});
+					}
+
+					// Run afterUpdateMemberRole hook
+					if (option.organizationHooks?.afterUpdateMemberRole) {
+						await option.organizationHooks.afterUpdateMemberRole({
+							member: updatedMember,
+							previousRole,
+							user: userBeingUpdated,
+							organization,
+						});
+					}
+
+					return ctx.json(updatedMember);
+				}
+			}
+
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
-				parseRoles(ctx.body.role as string | string[]),
+				newRole,
 			);
 			if (!updatedMember) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
+
+			// Run afterUpdateMemberRole hook
+			if (option.organizationHooks?.afterUpdateMemberRole) {
+				await option.organizationHooks.afterUpdateMemberRole({
+					member: updatedMember,
+					previousRole,
+					user: userBeingUpdated,
+					organization,
+				});
+			}
+
 			return ctx.json(updatedMember);
 		},
 	);
