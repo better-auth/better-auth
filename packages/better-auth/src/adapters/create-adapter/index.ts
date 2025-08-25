@@ -5,6 +5,7 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId as defaultGenerateId, logger } from "../../utils";
 import type {
 	AdapterConfig,
+	AdapterContext,
 	AdapterTestDebugLogs,
 	CleanedWhere,
 	CreateCustomAdapter,
@@ -46,12 +47,14 @@ const colors = {
 };
 
 export const createAdapter =
-	({
+	<C extends AdapterContext | undefined>({
 		adapter,
+		context: baseContext,
 		config: cfg,
 	}: {
 		config: AdapterConfig;
-		adapter: CreateCustomAdapter;
+		context?: C;
+		adapter: CreateCustomAdapter<C>;
 	}) =>
 	(options: BetterAuthOptions): Adapter => {
 		const config = {
@@ -74,6 +77,10 @@ export const createAdapter =
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
+
+		const getContext = (ctx: AdapterContext | undefined) => {
+			return (ctx || baseContext) as C;
+		};
 
 		/**
 		 * This function helps us get the default field name from the schema defined by devs.
@@ -244,6 +251,11 @@ export const createAdapter =
 						) {
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
+							return;
+						} else if (
+							method === "transaction" &&
+							!config.debugLogs.transaction
+						) {
 							return;
 						}
 					}
@@ -560,17 +572,20 @@ export const createAdapter =
 		};
 
 		return {
-			create: async <T extends Record<string, any>, R = T>({
-				data: unsafeData,
-				model: unsafeModel,
-				select,
-				forceAllowId = false,
-			}: {
-				model: string;
-				data: T;
-				select?: string[];
-				forceAllowId?: boolean;
-			}): Promise<R> => {
+			create: async <T extends Record<string, any>, R = T>(
+				{
+					data: unsafeData,
+					model: unsafeModel,
+					select,
+					forceAllowId = false,
+				}: {
+					model: string;
+					data: T;
+					select?: string[];
+					forceAllowId?: boolean;
+				},
+				ctx?: AdapterContext,
+			): Promise<R> => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -607,7 +622,10 @@ export const createAdapter =
 					`${formatMethod("create")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.create<T>({ data, model });
+				const res = await adapterInstance.create<T>(
+					{ data, model },
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -623,15 +641,18 @@ export const createAdapter =
 				);
 				return transformed;
 			},
-			update: async <T>({
-				model: unsafeModel,
-				where: unsafeWhere,
-				update: unsafeData,
-			}: {
-				model: string;
-				where: Where[];
-				update: Record<string, any>;
-			}): Promise<T | null> => {
+			update: async <T>(
+				{
+					model: unsafeModel,
+					where: unsafeWhere,
+					update: unsafeData,
+				}: {
+					model: string;
+					where: Where[];
+					update: Record<string, any>;
+				},
+				ctx?: AdapterContext,
+			): Promise<T | null> => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -656,11 +677,14 @@ export const createAdapter =
 					`${formatMethod("update")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.update<T>({
-					model,
-					where,
-					update: data,
-				});
+				const res = await adapterInstance.update<T>(
+					{
+						model,
+						where,
+						update: data,
+					},
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -676,15 +700,18 @@ export const createAdapter =
 				);
 				return transformed;
 			},
-			updateMany: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-				update: unsafeData,
-			}: {
-				model: string;
-				where: Where[];
-				update: Record<string, any>;
-			}) => {
+			updateMany: async (
+				{
+					model: unsafeModel,
+					where: unsafeWhere,
+					update: unsafeData,
+				}: {
+					model: string;
+					where: Where[];
+					update: Record<string, any>;
+				},
+				ctx?: AdapterContext,
+			) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -706,11 +733,14 @@ export const createAdapter =
 					{ model, data },
 				);
 
-				const updatedCount = await adapterInstance.updateMany({
-					model,
-					where,
-					update: data,
-				});
+				const updatedCount = await adapterInstance.updateMany(
+					{
+						model,
+						where,
+						update: data,
+					},
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -725,15 +755,18 @@ export const createAdapter =
 				);
 				return updatedCount;
 			},
-			findOne: async <T extends Record<string, any>>({
-				model: unsafeModel,
-				where: unsafeWhere,
-				select,
-			}: {
-				model: string;
-				where: Where[];
-				select?: string[];
-			}) => {
+			findOne: async <T extends Record<string, any>>(
+				{
+					model: unsafeModel,
+					where: unsafeWhere,
+					select,
+				}: {
+					model: string;
+					where: Where[];
+					select?: string[];
+				},
+				ctx?: AdapterContext,
+			) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -747,11 +780,14 @@ export const createAdapter =
 					`${formatMethod("findOne")}:`,
 					{ model, where, select },
 				);
-				const res = await adapterInstance.findOne<T>({
-					model,
-					where,
-					select,
-				});
+				const res = await adapterInstance.findOne<T>(
+					{
+						model,
+						where,
+						select,
+					},
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
@@ -771,19 +807,22 @@ export const createAdapter =
 				);
 				return transformed;
 			},
-			findMany: async <T extends Record<string, any>>({
-				model: unsafeModel,
-				where: unsafeWhere,
-				limit: unsafeLimit,
-				sortBy,
-				offset,
-			}: {
-				model: string;
-				where?: Where[];
-				limit?: number;
-				sortBy?: { field: string; direction: "asc" | "desc" };
-				offset?: number;
-			}) => {
+			findMany: async <T extends Record<string, any>>(
+				{
+					model: unsafeModel,
+					where: unsafeWhere,
+					limit: unsafeLimit,
+					sortBy,
+					offset,
+				}: {
+					model: string;
+					where?: Where[];
+					limit?: number;
+					sortBy?: { field: string; direction: "asc" | "desc" };
+					offset?: number;
+				},
+				ctx?: AdapterContext,
+			) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const limit =
@@ -801,13 +840,16 @@ export const createAdapter =
 					`${formatMethod("findMany")}:`,
 					{ model, where, limit, sortBy, offset },
 				);
-				const res = await adapterInstance.findMany<T>({
-					model,
-					where,
-					limit: limit,
-					sortBy,
-					offset,
-				});
+				const res = await adapterInstance.findMany<T>(
+					{
+						model,
+						where,
+						limit: limit,
+						sortBy,
+						offset,
+					},
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
@@ -825,13 +867,16 @@ export const createAdapter =
 				);
 				return transformed;
 			},
-			delete: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-			}: {
-				model: string;
-				where: Where[];
-			}) => {
+			delete: async (
+				{
+					model: unsafeModel,
+					where: unsafeWhere,
+				}: {
+					model: string;
+					where: Where[];
+				},
+				ctx?: AdapterContext,
+			) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -845,10 +890,13 @@ export const createAdapter =
 					`${formatMethod("delete")}:`,
 					{ model, where },
 				);
-				await adapterInstance.delete({
-					model,
-					where,
-				});
+				await adapterInstance.delete(
+					{
+						model,
+						where,
+					},
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -856,13 +904,16 @@ export const createAdapter =
 					{ model },
 				);
 			},
-			deleteMany: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-			}: {
-				model: string;
-				where: Where[];
-			}) => {
+			deleteMany: async (
+				{
+					model: unsafeModel,
+					where: unsafeWhere,
+				}: {
+					model: string;
+					where: Where[];
+				},
+				ctx?: AdapterContext,
+			) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -876,10 +927,13 @@ export const createAdapter =
 					`${formatMethod("deleteMany")} ${formatAction("DeleteMany")}:`,
 					{ model, where },
 				);
-				const res = await adapterInstance.deleteMany({
-					model,
-					where,
-				});
+				const res = await adapterInstance.deleteMany(
+					{
+						model,
+						where,
+					},
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -888,13 +942,16 @@ export const createAdapter =
 				);
 				return res;
 			},
-			count: async ({
-				model: unsafeModel,
-				where: unsafeWhere,
-			}: {
-				model: string;
-				where?: Where[];
-			}) => {
+			count: async (
+				{
+					model: unsafeModel,
+					where: unsafeWhere,
+				}: {
+					model: string;
+					where?: Where[];
+				},
+				ctx?: AdapterContext,
+			) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -911,10 +968,13 @@ export const createAdapter =
 						where,
 					},
 				);
-				const res = await adapterInstance.count({
-					model,
-					where,
-				});
+				const res = await adapterInstance.count(
+					{
+						model,
+						where,
+					},
+					getContext(ctx),
+				);
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -925,6 +985,43 @@ export const createAdapter =
 					},
 				);
 				return res;
+			},
+			transaction: async <R>(
+				callback: (txCtx: AdapterContext) => Promise<R>,
+				ctx?: AdapterContext,
+			): Promise<R> => {
+				transactionId++;
+				let thisTransactionId = transactionId;
+				const context = getContext(ctx);
+				const supportsTransactions = !!(adapterInstance.transaction && context);
+
+				const debugSteps = supportsTransactions ? 2 : 3;
+				debugLog(
+					{ method: "transaction" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, debugSteps)}`,
+					`${formatMethod("transaction")} ${formatAction("Begin")}`,
+				);
+
+				let result: Promise<R>;
+				if (!supportsTransactions) {
+					debugLog(
+						{ method: "transaction" },
+						`${formatTransactionId(thisTransactionId)} ${formatStep(2, debugSteps)}`,
+						`${formatMethod("transaction")} ${formatAction("⚠︎ This adapter doesn't support transactions. Running callback with current context.")}`,
+					);
+					result = callback(undefined as any);
+				} else {
+					result = adapterInstance.transaction(callback, context);
+				}
+
+				debugLog(
+					{ method: "transaction" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(debugSteps, debugSteps)}`,
+					`${formatMethod("transaction")} ${formatAction("End")}`,
+					{ data: result },
+				);
+
+				return result;
 			},
 			createSchema: adapterInstance.createSchema
 				? async (_, file) => {

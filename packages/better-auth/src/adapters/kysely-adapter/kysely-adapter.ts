@@ -1,4 +1,8 @@
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
+import {
+	createAdapter,
+	type AdapterContext,
+	type AdapterDebugLogs,
+} from "../create-adapter";
 import type { Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
@@ -39,6 +43,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					: true,
 			supportsJSON: false,
 		},
+		context: {
+			db,
+		},
 		adapter: ({ getFieldName, schema }) => {
 			const withReturning = async (
 				values: Record<string, any>,
@@ -47,6 +54,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					| UpdateQueryBuilder<any, string, string, any>,
 				model: string,
 				where: Where[],
+				ctx: AdapterContext,
 			) => {
 				let res: any;
 				if (config?.type === "mysql") {
@@ -60,7 +68,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 							: "id";
 
 					if (!values.id && where.length === 0) {
-						res = await db
+						res = await ctx.db
 							.selectFrom(model)
 							.selectAll()
 							.orderBy(getFieldName({ model, field }), "desc")
@@ -70,7 +78,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					}
 
 					const value = values[field] || where[0].value;
-					res = await db
+					res = await ctx.db
 						.selectFrom(model)
 						.selectAll()
 						.orderBy(getFieldName({ model, field }), "desc")
@@ -188,14 +196,14 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				};
 			}
 			return {
-				async create({ data, model }) {
-					const builder = db.insertInto(model).values(data);
+				async create({ data, model }, ctx) {
+					const builder = ctx.db.insertInto(model).values(data);
 
-					return (await withReturning(data, builder, model, [])) as any;
+					return (await withReturning(data, builder, model, [], ctx)) as any;
 				},
-				async findOne({ model, where, select }) {
+				async findOne({ model, where, select }, ctx) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model).selectAll();
+					let query = ctx.db.selectFrom(model).selectAll();
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -206,9 +214,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					if (!res) return null;
 					return res as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy }) {
+				async findMany({ model, where, limit, offset, sortBy }, ctx) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model);
+					let query = ctx.db.selectFrom(model);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -243,21 +251,21 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					if (!res) return [];
 					return res as any;
 				},
-				async update({ model, where, update: values }) {
+				async update({ model, where, update: values }, ctx) {
 					const { and, or } = convertWhereClause(model, where);
 
-					let query = db.updateTable(model).set(values as any);
+					let query = ctx.db.updateTable(model).set(values as any);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return await withReturning(values as any, query, model, where);
+					return await withReturning(values as any, query, model, where, ctx);
 				},
-				async updateMany({ model, where, update: values }) {
+				async updateMany({ model, where, update: values }, ctx) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.updateTable(model).set(values as any);
+					let query = ctx.db.updateTable(model).set(values as any);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -267,12 +275,12 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					const res = await query.execute();
 					return res.length;
 				},
-				async count({ model, where }) {
+				async count({ model, where }, ctx) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db
+					let query = ctx.db
 						.selectFrom(model)
 						// a temporal solution for counting other than "*" - see more - https://www.sqlite.org/quirks.html#double_quoted_string_literals_are_accepted
-						.select(db.fn.count("id").as("count"));
+						.select(ctx.db.fn.count("id").as("count"));
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -282,9 +290,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					const res = await query.execute();
 					return res[0].count as number;
 				},
-				async delete({ model, where }) {
+				async delete({ model, where }, ctx) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.deleteFrom(model);
+					let query = ctx.db.deleteFrom(model);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -294,9 +302,9 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					}
 					await query.execute();
 				},
-				async deleteMany({ model, where }) {
+				async deleteMany({ model, where }, ctx) {
 					const { and, or } = convertWhereClause(model, where);
-					let query = db.deleteFrom(model);
+					let query = ctx.db.deleteFrom(model);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -304,6 +312,14 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					return (await query.execute()).length;
+				},
+				async transaction(callback, ctx) {
+					return ctx.db.transaction().execute((db) => {
+						return callback({
+							...ctx,
+							db,
+						});
+					});
 				},
 				options: config,
 			};
