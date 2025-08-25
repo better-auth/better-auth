@@ -1,5 +1,52 @@
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { lastLoginMethod, lastLoginMethodClient } from "../../plugins";
+
+describe("sign-up", async (it) => {
+	const { client, db, cookieSetter } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [lastLoginMethod()],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [lastLoginMethodClient()],
+			},
+		},
+	);
+
+	it("should signup", async () => {
+		const signUpHeaders = new Headers();
+		const res = await client.signUp.email(
+			{
+				email: "email@test.com",
+				password: "password",
+				name: "Test Name",
+				image: "https://picsum.photos/200",
+			},
+			{
+				onSuccess(context) {
+					cookieSetter(signUpHeaders)(context);
+				},
+			},
+		);
+		expect(res.data?.token).toBeDefined();
+
+		const accounts = await db.findMany({
+			model: "account",
+		});
+		expect(accounts).toHaveLength(1);
+
+		const lastUsedLoginMethod = await client.lastUsedLoginMethod(
+			{},
+			{ headers: signUpHeaders },
+		);
+		expect(lastUsedLoginMethod.data).toBe("email-password");
+	});
+});
 
 describe("sign-up with custom fields", async (it) => {
 	const mockFn = vi.fn();

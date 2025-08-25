@@ -2,6 +2,7 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siwe } from "./index";
 import { siweClient } from "./client";
+import { lastLoginMethod, lastLoginMethodClient } from "../last-login-method";
 
 describe("siwe", async (it) => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
@@ -337,7 +338,7 @@ describe("siwe", async (it) => {
 	});
 
 	it("should allow verification without email when anonymous is true", async () => {
-		const { client } = await getTestInstance(
+		const { client, cookieSetter } = await getTestInstance(
 			{
 				plugins: [
 					siwe({
@@ -352,24 +353,40 @@ describe("siwe", async (it) => {
 							);
 						},
 					}),
+					lastLoginMethod(),
 				],
 			},
 			{
 				clientOptions: {
-					plugins: [siweClient()],
+					plugins: [siweClient(), lastLoginMethodClient()],
 				},
 			},
 		);
 
+		const signInHeaders = new Headers();
+
 		await client.siwe.nonce({ walletAddress, chainId });
-		const { data, error } = await client.siwe.verify({
-			message: "valid_message",
-			signature: "valid_signature",
-			walletAddress,
-			chainId,
-		});
+		const { data, error } = await client.siwe.verify(
+			{
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			},
+			{
+				onSuccess(context) {
+					cookieSetter(signInHeaders)(context);
+				},
+			},
+		);
 		expect(error).toBeNull();
 		expect(data?.success).toBe(true);
+
+		const lastUsedLogin = await client.lastUsedLoginMethod(
+			{},
+			{ headers: signInHeaders },
+		);
+		expect(lastUsedLogin.data).toBe("siwe");
 	});
 
 	it("should not allow nonce reuse", async () => {
