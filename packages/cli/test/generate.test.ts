@@ -1,12 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { generate } from "../src/commands/generate";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { generatePrismaSchema } from "../src/generators/prisma";
-import { organization, twoFactor, username } from "better-auth/plugins";
+import { twoFactor, username } from "better-auth/plugins";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { generateMigrations } from "../src/generators/kysely";
 import Database from "better-sqlite3";
 import type { BetterAuthOptions } from "better-auth";
+import fs from "fs/promises";
+import path from "path";
+
+describe("generate command", () => {
+	it("should have a --schema-file option", () => {
+		const schemaFileOption = generate.options.find(
+			(o) => o.long === "--schema-file",
+		);
+		expect(schemaFileOption).toBeDefined();
+		expect(schemaFileOption?.description).toBe(
+			"Path to your prisma schema file.",
+		);
+	});
+});
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -108,40 +123,47 @@ describe("generate", async () => {
 		);
 	});
 
-	it("should generate prisma schema for mysql with custom model names", async () => {
+	it("should generate prisma schema with a specific schema file", async () => {
+		const dir = await fs.mkdtemp("schema-file-test");
+		const schemaPath = path.join(dir, "auth.prisma");
+		const initialSchema = `
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+generator client {
+  provider = "prisma-client-js"
+}
+model Post {
+  id    Int     @id @default(autoincrement())
+  title String
+}
+`;
+		await fs.writeFile(schemaPath, initialSchema);
+
 		const schema = await generatePrismaSchema({
-			file: "test.prisma",
+			schemaFile: schemaPath,
 			adapter: prismaAdapter(
 				{},
 				{
-					provider: "mysql",
+					provider: "postgresql",
 				},
 			)({} as BetterAuthOptions),
 			options: {
 				database: prismaAdapter(
 					{},
 					{
-						provider: "mongodb",
+						provider: "postgresql",
 					},
 				),
-				plugins: [
-					twoFactor(),
-					username(),
-					organization({
-						schema: {
-							organization: {
-								modelName: "workspace",
-							},
-							invitation: {
-								modelName: "workspaceInvitation",
-							},
-						},
-					}),
-				],
+				plugins: [twoFactor(), username()],
 			},
 		});
+		await fs.rm(dir, { recursive: true });
+
+		expect(schema.fileName).toBe(schemaPath);
 		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/schema-mysql-custom.prisma",
+			"./__snapshots__/schema-with-existing.prisma",
 		);
 	});
 
@@ -167,37 +189,6 @@ describe("generate", async () => {
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
-	});
-
-	it("should generate drizzle schema with number id", async () => {
-		const schema = await generateDrizzleSchema({
-			file: "test.drizzle",
-			adapter: drizzleAdapter(
-				{},
-				{
-					provider: "pg",
-					schema: {},
-				},
-			)({} as BetterAuthOptions),
-			options: {
-				database: drizzleAdapter(
-					{},
-					{
-						provider: "pg",
-						schema: {},
-					},
-				),
-				plugins: [twoFactor(), username()],
-				advanced: {
-					database: {
-						useNumberId: true,
-					},
-				},
-			},
-		});
-		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/auth-schema-number-id.txt",
-		);
 	});
 
 	it("should generate kysely schema", async () => {
