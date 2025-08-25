@@ -224,7 +224,7 @@ export const auth = betterAuth({
 			interval: "5s",
 		}),
 	],
-	trustedOrigins: ["exp://"],
+	trustedOrigins: ["exp://", "http://localhost:3000"],
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: process.env.NODE_ENV === "production",
