@@ -148,7 +148,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						.map((field) => {
 							const attr = fields[field]!;
 							let type = getType(field, attr);
-							if (attr.defaultValue) {
+							if (
+								attr.defaultValue !== null &&
+								typeof attr.defaultValue !== "undefined"
+							) {
 								if (typeof attr.defaultValue === "function") {
 									type += `.$defaultFn(${attr.defaultValue})`;
 								} else if (typeof attr.defaultValue === "string") {
@@ -162,7 +165,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											attr.references.model,
+											tables[attr.references.model]?.modelName ||
+												attr.references.model,
 											adapter.options,
 										)}.${attr.references.field}, { onDelete: '${
 											attr.references.onDelete || "cascade"
