@@ -241,44 +241,77 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 				});
 			}
-			await ctx.context.internalAdapter.linkAccount(
-				{
-					userId: createdUser.id,
-					providerId: "credential",
-					accountId: createdUser.id,
-					password: hash,
-				},
-				ctx,
-			);
-			if (
-				ctx.context.options.emailVerification?.sendOnSignUp ||
-				ctx.context.options.emailAndPassword.requireEmailVerification
-			) {
-				const token = await createEmailVerificationToken(
-					ctx.context.secret,
-					createdUser.email,
-					undefined,
-					ctx.context.options.emailVerification?.expiresIn,
-				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
-				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+			try {
+				await ctx.context.internalAdapter.linkAccount(
 					{
-						user: createdUser,
-						url,
-						token,
+						userId: createdUser.id,
+						providerId: "credential",
+						accountId: createdUser.id,
+						password: hash,
 					},
-					ctx.request,
+					ctx,
 				);
-			}
+				if (
+					ctx.context.options.emailVerification?.sendOnSignUp ||
+					ctx.context.options.emailAndPassword.requireEmailVerification
+				) {
+					const token = await createEmailVerificationToken(
+						ctx.context.secret,
+						createdUser.email,
+						undefined,
+						ctx.context.options.emailVerification?.expiresIn,
+					);
+					const url = `${
+						ctx.context.baseURL
+					}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
+					await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+						{
+							user: createdUser,
+							url,
+							token,
+						},
+						ctx.request,
+					);
+				}
 
-			if (
-				ctx.context.options.emailAndPassword.autoSignIn === false ||
-				ctx.context.options.emailAndPassword.requireEmailVerification
-			) {
+				if (
+					ctx.context.options.emailAndPassword.autoSignIn === false ||
+					ctx.context.options.emailAndPassword.requireEmailVerification
+				) {
+					return ctx.json({
+						token: null,
+						user: {
+							id: createdUser.id,
+							email: createdUser.email,
+							name: createdUser.name,
+							image: createdUser.image,
+							emailVerified: createdUser.emailVerified,
+							createdAt: createdUser.createdAt,
+							updatedAt: createdUser.updatedAt,
+						},
+					});
+				}
+
+				const session = await ctx.context.internalAdapter.createSession(
+					createdUser.id,
+					ctx,
+					rememberMe === false,
+				);
+				if (!session) {
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+					});
+				}
+				await setSessionCookie(
+					ctx,
+					{
+						session,
+						user: createdUser,
+					},
+					rememberMe === false,
+				);
 				return ctx.json({
-					token: null,
+					token: session.token,
 					user: {
 						id: createdUser.id,
 						email: createdUser.email,
@@ -289,37 +322,81 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						updatedAt: createdUser.updatedAt,
 					},
 				});
-			}
+			} catch (error) {
+				ctx.context.logger.error(
+					"Sign-up failed after user creation, attempting rollback",
+					{
+						userId: createdUser.id,
+						error: error instanceof APIError ? error.message : String(error),
+					},
+				);
 
-			const session = await ctx.context.internalAdapter.createSession(
-				createdUser.id,
-				ctx,
-				rememberMe === false,
-			);
-			if (!session) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-				});
+				try {
+					const existingUser = await ctx.context.internalAdapter.findUserById(
+						createdUser.id,
+					);
+					if (!existingUser) {
+						ctx.context.logger.error("User not found during rollback", {
+							userId: createdUser.id,
+						});
+						throw error;
+					}
+					if (ctx.context.internalAdapter.deleteUser) {
+						await ctx.context.internalAdapter.deleteUser(createdUser.id);
+					} else {
+						ctx.context.logger.warn(
+							"deleteUser not enabled, attempting manual cleanup",
+							{
+								userId: createdUser.id,
+							},
+						);
+						try {
+							const sessions = await ctx.context.internalAdapter.listSessions(
+								createdUser.id,
+							);
+							for (const session of sessions) {
+								await ctx.context.internalAdapter.deleteSession(session.token);
+							}
+						} catch (sessionError) {
+							ctx.context.logger.error(
+								"Failed to delete sessions during rollback",
+								{
+									userId: createdUser.id,
+									error: sessionError,
+								},
+							);
+						}
+						try {
+							await ctx.context.internalAdapter.deleteAccounts(createdUser.id);
+						} catch (accountError) {
+							ctx.context.logger.error(
+								"Failed to delete linked accounts during rollback",
+								{
+									userId: createdUser.id,
+									error: accountError,
+								},
+							);
+						}
+						ctx.context.logger.warn(
+							"Manual user deletion not implemented - user may remain in database",
+							{
+								userId: createdUser.id,
+								message:
+									"Consider enabling deleteUser in Better Auth configuration for complete cleanup",
+							},
+						);
+					}
+				} catch (rollbackError) {
+					ctx.context.logger.error("Failed to rollback user creation", {
+						userId: createdUser.id,
+						originalError: error instanceof APIError ? error.message : error,
+						rollbackError:
+							rollbackError instanceof APIError
+								? rollbackError.message
+								: rollbackError,
+					});
+				}
+				throw error;
 			}
-			await setSessionCookie(
-				ctx,
-				{
-					session,
-					user: createdUser,
-				},
-				rememberMe === false,
-			);
-			return ctx.json({
-				token: session.token,
-				user: {
-					id: createdUser.id,
-					email: createdUser.email,
-					name: createdUser.name,
-					image: createdUser.image,
-					emailVerified: createdUser.emailVerified,
-					createdAt: createdUser.createdAt,
-					updatedAt: createdUser.updatedAt,
-				},
-			});
 		},
 	);
