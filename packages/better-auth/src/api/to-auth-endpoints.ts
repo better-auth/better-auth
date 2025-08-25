@@ -8,11 +8,13 @@ import {
 import type { AuthEndpoint, AuthMiddleware } from "./call";
 import type { AuthContext, HookEndpointContext } from "../types";
 import { createDefu } from "defu";
+import { shouldPublishLog } from "../utils";
 
 type InternalContext = InputContext<string, any> &
 	EndpointContext<string, any> & {
 		asResponse?: boolean;
 		context: AuthContext & {
+			logger: AuthContext["logger"];
 			returned?: unknown;
 			responseHeaders?: Headers;
 		};
@@ -115,6 +117,14 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				result.response = after.response;
 			}
 
+			if (
+				result.response instanceof APIError &&
+				shouldPublishLog(authContext.logger.level, "debug")
+			) {
+				// inherit stack from errorWithStack if debug mode is enabled
+				result.response.stack = result.response.errorWithStack.stack;
+			}
+
 			if (result.response instanceof APIError && !context?.asResponse) {
 				throw result.response;
 			}
@@ -138,7 +148,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 }
 
 async function runBeforeHooks(
-	context: HookEndpointContext,
+	context: InternalContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
@@ -149,10 +159,21 @@ async function runBeforeHooks(
 	} = {};
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
-			const result = await hook.handler({
-				...context,
-				returnHeaders: false,
-			});
+			const result = await hook
+				.handler({
+					...context,
+					returnHeaders: false,
+				})
+				.catch((e: unknown) => {
+					if (
+						e instanceof APIError &&
+						shouldPublishLog(context.context.logger.level, "debug")
+					) {
+						// inherit stack from errorWithStack if debug mode is enabled
+						e.stack = e.errorWithStack.stack;
+					}
+					throw e;
+				});
 			if (result && typeof result === "object") {
 				if ("context" in result && typeof result.context === "object") {
 					const { headers, ...rest } = result.context as {
@@ -179,7 +200,7 @@ async function runBeforeHooks(
 }
 
 async function runAfterHooks(
-	context: HookEndpointContext,
+	context: InternalContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
@@ -189,6 +210,10 @@ async function runAfterHooks(
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
 				if (e instanceof APIError) {
+					if (shouldPublishLog(context.context.logger.level, "debug")) {
+						// inherit stack from errorWithStack if debug mode is enabled
+						e.stack = e.errorWithStack.stack;
+					}
 					return {
 						response: e,
 						headers: e.headers ? new Headers(e.headers) : null,
