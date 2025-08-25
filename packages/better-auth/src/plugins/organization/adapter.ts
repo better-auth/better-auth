@@ -832,7 +832,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
-
 			const invite = await adapter.create<
 				Omit<InvitationInput, "id">,
 				InferInvitation<O>
@@ -843,7 +842,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					expiresAt,
 					inviterId: user.id,
 					...invitation,
-					teamId: invitation.teamIds.join(","),
+					teamId:
+						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
 				},
 			});
 
