@@ -89,30 +89,35 @@ export const atlassian = (options: AtlassianOptions) => {
 				return null;
 			}
 
-			const { data: profile } = await betterFetch<{
-				account_id: string;
-				name: string;
-				email?: string;
-				picture?: string;
-			}>("https://api.atlassian.com/me", {
-				headers: { Authorization: `Bearer ${token.accessToken}` },
-			});
+			try {
+				const { data: profile } = await betterFetch<{
+					account_id: string;
+					name: string;
+					email?: string;
+					picture?: string;
+				}>("https://api.atlassian.com/me", {
+					headers: { Authorization: `Bearer ${token.accessToken}` },
+				});
 
-			if (!profile) return null;
+				if (!profile) return null;
 
-			const userMap = await options.mapProfileToUser?.(profile);
+				const userMap = await options.mapProfileToUser?.(profile);
 
-			return {
-				user: {
-					id: profile.account_id,
-					name: profile.name,
-					email: profile.email,
-					image: profile.picture,
-					emailVerified: false,
-					...userMap,
-				},
-				data: profile,
-			};
+				return {
+					user: {
+						id: profile.account_id,
+						name: profile.name,
+						email: profile.email,
+						image: profile.picture,
+						emailVerified: false,
+						...userMap,
+					},
+					data: profile,
+				};
+			} catch (error) {
+				logger.error("Failed to fetch user info from Figma:", error);
+				return null;
+			}
 		},
 
 		options,
