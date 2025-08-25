@@ -30,6 +30,14 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				}
 				return props.data;
 			},
+			supportsArrays: true,
+			supportsJSON: true,
+			supportsJSONB: true,
+			supportsDates: true,
+			supportsNumbers: true,
+			supportsNumericIds: true,
+			supportsBooleans: true,
+			disableIdGeneration: false,
 		},
 		adapter: ({ getFieldName, options, debugLog }) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {
