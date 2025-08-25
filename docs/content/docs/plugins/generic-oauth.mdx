@@ -182,6 +182,8 @@ interface GenericOAuthConfig {
 
 **mapProfileToUser**: (Optional) A function to map the provider's user profile to your app's user object. Useful for custom field mapping or transformations.
 
+**verifyIdToken**: (Optional) A function to verify the ID token returned by the provider. Takes the token string and optional nonce as parameters and returns a `Promise<boolean>`.
+
 **authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters.
 
 **disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
@@ -243,6 +245,60 @@ genericOAuth({
   ]
 })
 ```
+
+### ID Tokens
+
+#### Verify ID Token
+
+For OAuth providers that return ID tokens, use `verifyIdToken` to verify the token and extract user info from the JWT claims.
+
+```ts
+import { decodeJwt, jwtVerify } from "jose";
+
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      // ... other config options
+      verifyIdToken: async (idToken, nonce) => {
+        // Verify ID token signature and claims
+        const verified = await jwtVerify(idToken, nonce);
+        return verified;
+      },
+      // Default behavior requires `sub` and `email` claims, but can be customized with this function
+      getUserInfo: async (tokens) => {
+        if (!tokens.idToken) return null;
+        const decoded = decodeJwt(tokens.idToken);
+        return {
+          id: decoded.sub,
+          email: decoded.email,
+          name: decoded.name,
+          emailVerified: decoded.email_verified,
+          image: decoded.picture
+        };
+      }
+    }
+  ]
+})
+```
+
+#### Sign In with ID Token
+
+To sign in with an OAuth provider using an ID Token, you can use the `signIn.social` function to pass the ID Token directly.
+
+<Callout>
+ If an ID token is provided no redirection will happen, and the user will be signed in directly.
+</Callout>
+
+```ts title="auth-client.ts"
+await authClient.signIn.social({
+    providerId: "custom-provider",
+    idToken: {
+        token: // OAuth Provider ID Token,
+    }
+})
+```
+
 
 ### Error Handling
 
