@@ -14,7 +14,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint, userNormalClaims } from "./token";
 import { mergeSchema } from "../../db";
 import { registerEndpoint } from "./register";
-import { oidcServerMetadata } from "./metadata";
+import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import { getJwtPlugin } from "./utils";
 import { introspectEndpoint, validateAccessToken } from "./introspect";
 import { revokeEndpoint } from "./revoke";
@@ -182,6 +182,30 @@ export const oauthProvider = (options: OAuthOptions) => {
 			],
 		},
 		endpoints: {
+			getOAuthServerConfig: createAuthEndpoint(
+				"/.well-known/oauth-authorization-server",
+				{
+					method: "GET",
+					metadata: {
+						isAction: false,
+					},
+				},
+				async (ctx) => {
+					if (opts.scopes?.includes("openid")) {
+						const metadata = oidcServerMetadata(ctx, opts);
+						return ctx.json(metadata);
+					} else {
+						const jwtPluginOptions = opts.disableJWTPlugin
+							? undefined
+							: getJwtPlugin(ctx.context).options;
+						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
+							scopes_supported:
+								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+						});
+						return ctx.json(authMetadata);
+					}
+				},
+			),
 			getOpenIdConfig: createAuthEndpoint(
 				"/.well-known/openid-configuration",
 				{

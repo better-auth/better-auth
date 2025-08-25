@@ -231,7 +231,7 @@ export interface OAuthOptions {
 		 *
 		 * All values must be found in the scope field
 		 */
-		scopes_supported: string[];
+		scopes_supported?: string[];
 		/**
 		 * Advertised claims_supported located at /.well-known/openid-configuration
 		 *
@@ -241,7 +241,7 @@ export interface OAuthOptions {
 		 * Internally supported claims:
 		 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp"]
 		 */
-		claims_supported: string[];
+		claims_supported?: string[];
 	};
 	/**
 	 * Custom session token formatter. You can
