@@ -40,5 +40,8 @@
       "unified": "11.0.4",
       "whatwg-url": "^14.0.0"
     }
+  },
+  "resolutions": {
+    "zod": "^4.0.0"
   }
 }
