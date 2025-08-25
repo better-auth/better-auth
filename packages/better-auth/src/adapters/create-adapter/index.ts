@@ -10,6 +10,7 @@ import type {
 	CreateCustomAdapter,
 } from "./types";
 import type { FieldAttribute } from "../../db";
+import { APIError } from "better-call";
 export * from "./types";
 
 let debugLogs: any[] = [];
@@ -266,6 +267,7 @@ export const createAdapter =
 				!options.advanced?.database?.useNumberId &&
 				!forceAllowId;
 			const model = getDefaultModelName(customModelName ?? "id");
+
 			return {
 				type: options.advanced?.database?.useNumberId ? "number" : "string",
 				required: shouldGenerateId ? true : false,
@@ -326,13 +328,18 @@ export const createAdapter =
 			getFieldAttributes,
 		});
 
-		const transformInput = async (
-			data: Record<string, any>,
-			unsafe_model: string,
-			action: "create" | "update",
-			forceAllowId?: boolean,
-		) => {
-			const transformedData: Record<string, any> = {};
+		const transformInput = async <T extends Record<string, any>>({
+			action,
+			data,
+			unsafe_model,
+			forceAllowId = false,
+		}: {
+			data: T;
+			unsafe_model: string;
+			action: "create" | "update";
+			forceAllowId?: boolean;
+		}) => {
+			let transformedData: Record<string, any> = {};
 			const fields = schema[unsafe_model].fields;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
 			if (
@@ -408,16 +415,46 @@ export const createAdapter =
 					});
 				}
 
+				// Check if the user has defined DB hooks for the model.
+				if (options.databaseHooks && unsafe_model in options.databaseHooks) {
+					const hook = (options.databaseHooks as any)[
+						unsafe_model
+					] as typeof options.databaseHooks.account;
+
+					const result = await hook?.[action]?.before?.(transformedData as any);
+
+					if (result === false) {
+						if (options.logger?.level === "debug") {
+							logger.warn(
+								`[#better-auth]: Database hook returned false during ${action} for model ${unsafe_model} in the before hook.`,
+							);
+						}
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Database hook validation failed",
+						});
+					}
+					// If returned data, it means they may want to partially overwrite the data.
+					if (typeof result === "object" && result.data) {
+						transformedData = Object.assign(transformedData, result.data);
+					}
+				}
+
 				transformedData[newFieldName] = newValue;
 			}
-			return transformedData;
+			return transformedData as T;
 		};
 
-		const transformOutput = async (
-			data: Record<string, any> | null,
-			unsafe_model: string,
-			select: string[] = [],
-		) => {
+		const transformOutput = async ({
+			data,
+			action,
+			unsafe_model,
+			select = [],
+		}: {
+			data: Record<string, any> | null;
+			action: "create" | "update" | "delete" | "find";
+			unsafe_model: string;
+			select?: string[];
+		}) => {
 			if (!data) return null;
 			const newMappedKeys = config.mapKeysTransformOutput ?? {};
 			const transformedData: Record<string, any> = {};
@@ -485,9 +522,24 @@ export const createAdapter =
 						});
 					}
 
+					// Check if the user has defined DB hooks for the model.
+					if (
+						options.databaseHooks &&
+						unsafe_model in options.databaseHooks &&
+						(action === "update" || action === "create")
+					) {
+						const hook = (options.databaseHooks as any)[
+							unsafe_model
+						] as typeof options.databaseHooks.account;
+
+						// Call the after hook.
+						await hook?.[action]?.after?.(transformedData as any);
+					}
+
 					transformedData[newFieldName] = newValue;
 				}
 			}
+
 			return transformedData as any;
 		};
 
@@ -595,12 +647,12 @@ export const createAdapter =
 					`${formatMethod("create")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
-					unsafeData,
-					unsafeModel,
-					"create",
+				const data = await transformInput<T>({
+					data: unsafeData,
+					unsafe_model: unsafeModel,
+					action: "create",
 					forceAllowId,
-				)) as T;
+				});
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -614,7 +666,12 @@ export const createAdapter =
 					`${formatMethod("create")} ${formatAction("DB Result")}:`,
 					{ model, res },
 				);
-				const transformed = await transformOutput(res, unsafeModel, select);
+				const transformed = await transformOutput({
+					data: res,
+					action: "create",
+					unsafe_model: unsafeModel,
+					select,
+				});
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
@@ -645,11 +702,11 @@ export const createAdapter =
 					`${formatMethod("update")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = (await transformInput(
-					unsafeData,
-					unsafeModel,
-					"update",
-				)) as T;
+				const data = (await transformInput({
+					action: "update",
+					data: unsafeData,
+					unsafe_model: unsafeModel,
+				})) as T;
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -667,7 +724,11 @@ export const createAdapter =
 					`${formatMethod("update")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-				const transformed = await transformOutput(res as any, unsafeModel);
+				const transformed = await transformOutput({
+					data: res as any,
+					action: "update",
+					unsafe_model: unsafeModel,
+				});
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
@@ -698,7 +759,11 @@ export const createAdapter =
 					`${formatMethod("updateMany")} ${formatAction("Unsafe Input")}:`,
 					{ model, data: unsafeData },
 				);
-				const data = await transformInput(unsafeData, unsafeModel, "update");
+				const data = await transformInput({
+					action: "update",
+					data: unsafeData,
+					unsafe_model: unsafeModel,
+				});
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
@@ -758,11 +823,12 @@ export const createAdapter =
 					`${formatMethod("findOne")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
-				const transformed = await transformOutput(
-					res as any,
-					unsafeModel,
+				const transformed = await transformOutput({
+					data: res,
+					action: "find",
+					unsafe_model: unsafeModel,
 					select,
-				);
+				});
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
@@ -815,7 +881,14 @@ export const createAdapter =
 					{ model, data: res },
 				);
 				const transformed = await Promise.all(
-					res.map(async (r) => await transformOutput(r as any, unsafeModel)),
+					res.map(
+						async (r) =>
+							await transformOutput({
+								data: r,
+								action: "find",
+								unsafe_model: unsafeModel,
+							}),
+					),
 				);
 				debugLog(
 					{ method: "findMany" },
