@@ -351,4 +351,72 @@ describe("captcha", async (it) => {
 
 		// TODO: Adding tests for hCaptcha
 	});
+	describe("yandex-smart-captcha", async (it) => {
+		const { client } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "yandex-smart-captcha",
+					secretKey: "xx-secret-key",
+				}),
+			],
+		});
+
+		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					status: "ok",
+					message: "",
+					host: "example.com",
+				},
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+					},
+				},
+			});
+
+			expect(res.data?.user).toBeDefined();
+		});
+
+		it("Should return 500 if the call to /validate fails", async () => {
+			mockBetterFetch.mockResolvedValue({
+				error: "Failed to fetch",
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(500);
+		});
+
+		it("Should return 403 in case of a validation failure", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					status: "failed",
+					message: "Token invalid or expired.",
+				},
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "invalid-captcha-token",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
+	});
 });
