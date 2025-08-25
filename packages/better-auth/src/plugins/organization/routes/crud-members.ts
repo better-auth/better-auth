@@ -461,6 +461,8 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const isSettingCreatorRole = roleToSet.includes(creatorRole);
 
+			const memberIsUpdatingThemselves = member.id === toBeUpdatedMember.id;
+
 			if (
 				(isUpdatingCreator && !updaterIsCreator) ||
 				(isSettingCreatorRole && !updaterIsCreator)
@@ -469,6 +471,28 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
+			}
+
+			if (updaterIsCreator && memberIsUpdatingThemselves) {
+				const members = await ctx.context.adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+				const owners = members.filter((member: Member) => {
+					const roles = member.role.split(",");
+					return roles.includes(creatorRole);
+				});
+				if (owners.length <= 1 && !isSettingCreatorRole) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
+					});
+				}
 			}
 
 			const canUpdateMember = hasPermission({
@@ -593,8 +617,8 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const isOwnerLeaving =
-				member.role === (ctx.context.orgOptions?.creatorRole || "owner");
+			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
+			const isOwnerLeaving = member.role.split(",").includes(creatorRole);
 			if (isOwnerLeaving) {
 				const members = await ctx.context.adapter.findMany<Member>({
 					model: "member",
@@ -605,9 +629,8 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 						},
 					],
 				});
-				const owners = members.filter(
-					(member) =>
-						member.role === (ctx.context.orgOptions?.creatorRole || "owner"),
+				const owners = members.filter((member) =>
+					member.role.split(",").includes(creatorRole),
 				);
 				if (owners.length <= 1) {
 					throw new APIError("BAD_REQUEST", {
