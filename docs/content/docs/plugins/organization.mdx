@@ -475,6 +475,8 @@ export const auth = betterAuth({
 All hooks support error handling. Throwing an error in a `before` hook will prevent the operation from proceeding:
 
 ```ts title="auth.ts"
+import { APIError } from "better-auth/api";
+
 export const auth = betterAuth({
   plugins: [
     organization({
@@ -483,9 +485,10 @@ export const auth = betterAuth({
           // Check if user has pending violations
           const violations = await checkUserViolations(user.id);
           if (violations.length > 0) {
-            throw new Error(
-              "User has pending violations and cannot join organizations"
-            );
+            throw new APIError("BAD_REQUEST", {
+              message:
+                "User has pending violations and cannot join organizations",
+            });
           }
         },
 
@@ -493,7 +496,9 @@ export const auth = betterAuth({
           // Validate team name uniqueness
           const existingTeam = await findTeamByName(team.name, organization.id);
           if (existingTeam) {
-            throw new Error("Team name already exists in this organization");
+            throw new APIError("BAD_REQUEST", {
+              message: "Team name already exists in this organization",
+            });
           }
         },
       },
