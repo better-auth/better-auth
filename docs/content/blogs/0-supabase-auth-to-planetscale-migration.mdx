@@ -1,11 +1,10 @@
 ---
-title: Supabase Auth to PlanetScale + Better Auth Migration Guide
+title: Migrate from Supabase Auth to Better Auth + PlanetScale PostgreSQL
 description: This migration guide aims to guide you move your auth from Supabase Auth to Better Auth on PlanetScale PostgreSQL.
-date: 2025-08-13
+date: 2025-08-25
 author:
   name: "Dagmawi Esayas"
-  avatar: "/blogs/bereket.png"
-  twitter: "dagmawibabi"
+
 image: "/blogs/supabaseauth-planetscale-guide.png"
 tags: ["migration", "guides", "supabase", "planetscale"]
 ---
@@ -13,7 +12,7 @@ tags: ["migration", "guides", "supabase", "planetscale"]
 import { HomeIcon } from "lucide-react";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-# Supabase Auth to PlanetScale PostgreSQL + Better Auth Migration Guide
+# Supabase Auth to Better Auth + PlanetScale PostgreSQL Migration Guide
 
 Recently, [PlanetScale announced](https://planetscale.com/blog/planetscale-for-postgres) support for PostgreSQL. This is exciting news for developers and a big step forward for the database industry.
 
@@ -325,8 +324,7 @@ bun migration.ts # or use node, ts-node, etc.
 
 ### 8. Migrate the Rest of Your Data
 
-If you have additional user-related data in Supabase, import it into PlanetScale using their PostgreSQL import tools:
-[PlanetScale PostgreSQL Import Guide](https://planetscale.com/docs/postgres/imports/postgres-imports)
+If you have additional user-related data in Supabase, you can use the [Supabase to PlanetScale migration tool](https://planetscale.com/docs/postgres/imports/supabase).
 
 ### 9. Clean up all the Supabase Auth code from your codebase
 
