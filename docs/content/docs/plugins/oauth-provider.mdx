@@ -5,11 +5,11 @@ description: A Better Auth plugin that enables your auth server to serve as an o
 
 ## Optimizations
 
-To improve lookup performance, map the `client_id` to `id` through your database adapter
+To improve lookup performance, map the `client_id` to `id` through your database adapter.
 
 ## Migration
 
-If you are migrating from the [OIDC Provider](./oidc-provider) to this oAuth2.1 provider, the following shall help with a full migration.
+If you are migrating from the [OIDC Provider](/docs/plugins/oidc-provider) to this oAuth2.1 provider, the following shall help with a full migration.
 
 ### Configuration
 
@@ -33,11 +33,11 @@ Table: oauthApplication
 
 - If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
 - `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
-    - Clients with `type: "public"`: set `type: undefined`, `public: true`, and  and `clientSecret: undefined`
+    - Clients with `type: "public"`: set `type: undefined`, `public: true`, and `clientSecret: undefined`
     - Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
     - Clients with `type: "user-agent-based"`: set `public: true` and `clientSecret: undefined`
     - Clients with `clientSecret: undefined`: set `public: true`
-- (optional) `metadata` now stored in database as individual fields instead of a JSON object
+- `metadata` is now stored in database as individual fields instead of a JSON object. Parse the metadata into their respective fields. The OIDC plugin did not utilize this field but this oAuth plugin may utilize them in the future.
 
 Table: oauthAccessToken
 
