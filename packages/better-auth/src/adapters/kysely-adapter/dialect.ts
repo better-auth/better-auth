@@ -82,7 +82,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = db;
 	}
 
-	if ("aggregate" in db) {
+	if ("aggregate" in db && !("createSession" in db)) {
 		dialect = new SqliteDialect({
 			database: db,
 		});
