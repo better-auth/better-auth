@@ -193,6 +193,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.default("/"),
 					/**
+					 * Success URL Stripe Replaceable Params
+					 * these params will not be encoded when sent to stripe, because they need to be replaced with actual values by stripe
+					 * example: `{ session_id: "{CHECKOUT_SESSION_ID}" }` will be replaced with the actual checkout session id, useful for when following the stripe documentation
+					 */
+					successUrlStripeReplaceableParams: z.record(z.string(), z.any()).optional(),
+					/**
 					 * Cancel URL
 					 */
 					cancelUrl: z
@@ -215,13 +221,26 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					/**
 					 * Disable Redirect
 					 */
-					disableRedirect: z
+          disableRedirect: z
 						.boolean()
 						.meta({
 							description:
 								"Disable redirect after successful subscription. Eg: true",
 						})
 						.default(false),
+					/**
+					 * Stripe UI_Mode
+					 * @default "hosted"
+					 */
+					uiMode: z
+						.enum(["custom", "embedded", "hosted"])
+						.default("hosted"),
+					/**
+					 * Stripe Checkout Create Session Additional Params
+					 */
+					additionalCheckoutSessionParams: z
+						.record(z.string(), z.any())
+						.optional(),
 				}),
 				use: [
 					sessionMiddleware,
@@ -438,6 +457,31 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							}
 						: undefined;
 
+				// Construct URL parameters from replaceable params object
+				// These params will be passed directly to Stripe without encoding
+				let successUrlReplaceableParams = "";
+				
+				if (ctx.body.successUrlStripeReplaceableParams) {
+					const paramEntries = Object.entries(ctx.body.successUrlStripeReplaceableParams);
+					
+					successUrlReplaceableParams = paramEntries.map(([key, value], index) => {
+						const prefix = index === 0 ? "?" : "&";
+						const paramKey = encodeURIComponent(`${prefix}${key}=`);
+						return `${paramKey}${value}`;
+					}).join("");
+				}
+
+				// Construct the success URL with the replaceable params
+				const successUrl = getUrl(
+					ctx,
+					`${
+						ctx.context.baseURL
+					}/subscription/success?callbackURL=${encodeURIComponent(
+						ctx.body.successUrl,
+					)}${successUrlReplaceableParams}&subscriptionId=${encodeURIComponent(subscription.id)}`,
+				);
+        
+        
 				let priceIdToUse: string | undefined = undefined;
 				if (ctx.body.annual) {
 					priceIdToUse = plan.annualDiscountPriceId;
@@ -456,6 +500,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						);
 					}
 				}
+        
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
@@ -470,15 +515,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								: {
 										customer_email: session.user.email,
 									}),
-							success_url: getUrl(
-								ctx,
-								`${
-									ctx.context.baseURL
-								}/subscription/success?callbackURL=${encodeURIComponent(
-									ctx.body.successUrl,
-								)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
-							),
-							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+							...(ctx.body.uiMode === "hosted"
+								? {
+										ui_mode: "hosted",
+										success_url: successUrl,
+										cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+									}
+								: {
+										// custom and embedded mode
+										ui_mode: ctx.body.uiMode,
+										// stripe doesn't support success_url/cancel_url for custom and embedded mode
+										return_url: successUrl,
+									}),
 							line_items: [
 								{
 									price: priceIdToUse,
@@ -497,6 +545,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								referenceId,
 								...params?.params?.metadata,
 							},
+							...ctx.body.additionalCheckoutSessionParams,
 						},
 						params?.options,
 					)
@@ -506,9 +555,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							code: e.code,
 						});
 					});
+				// we only care about disableRedirect for hosted mode
+				// because in custom and embedded mode, there isn't any redirect that should happen
+				const redirect = !ctx.body.disableRedirect && ctx.body.uiMode === "hosted";
 				return ctx.json({
 					...checkoutSession,
-					redirect: !ctx.body.disableRedirect,
+					redirect,
 				});
 			},
 		),
