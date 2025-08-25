@@ -1921,8 +1921,7 @@ describe("organization hooks", async (it) => {
 	const { headers } = await signInWithTestUser();
 
 	it("should call organization creation hooks", async () => {
-		hooksCalled = []; // Reset hooks
-
+		hooksCalled = [];
 		const organization = await client.organization.create({
 			name: "Test Org with Hooks",
 			slug: "test-org-hooks",
@@ -1935,7 +1934,7 @@ describe("organization hooks", async (it) => {
 	});
 
 	it("should call invitation hooks", async () => {
-		hooksCalled = []; // Reset hooks
+		hooksCalled = [];
 
 		await client.organization.inviteMember({
 			email: "test@example.com",

@@ -172,8 +172,8 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			};
 
 			// Run beforeCreateTeam hook
-			if (options.organizationHooks?.beforeCreateTeam) {
-				const response = await options.organizationHooks.beforeCreateTeam({
+			if (options?.organizationHooks?.beforeCreateTeam) {
+				const response = await options?.organizationHooks.beforeCreateTeam({
 					team: {
 						name,
 						organizationId,
@@ -193,8 +193,8 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			const createdTeam = await adapter.createTeam(teamData);
 
 			// Run afterCreateTeam hook
-			if (options.organizationHooks?.afterCreateTeam) {
-				await options.organizationHooks.afterCreateTeam({
+			if (options?.organizationHooks?.afterCreateTeam) {
+				await options?.organizationHooks.afterCreateTeam({
 					team: createdTeam,
 					user: session?.user,
 					organization,
@@ -320,8 +320,8 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			// Run beforeDeleteTeam hook
-			if (options.organizationHooks?.beforeDeleteTeam) {
-				await options.organizationHooks.beforeDeleteTeam({
+			if (options?.organizationHooks?.beforeDeleteTeam) {
+				await options?.organizationHooks.beforeDeleteTeam({
 					team,
 					user: session?.user,
 					organization,
@@ -331,8 +331,8 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			await adapter.deleteTeam(team.id);
 
 			// Run afterDeleteTeam hook
-			if (options.organizationHooks?.afterDeleteTeam) {
-				await options.organizationHooks.afterDeleteTeam({
+			if (options?.organizationHooks?.afterDeleteTeam) {
+				await options?.organizationHooks.afterDeleteTeam({
 					team,
 					user: session?.user,
 					organization,
@@ -492,8 +492,8 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			};
 
 			// Run beforeUpdateTeam hook
-			if (options.organizationHooks?.beforeUpdateTeam) {
-				const response = await options.organizationHooks.beforeUpdateTeam({
+			if (options?.organizationHooks?.beforeUpdateTeam) {
+				const response = await options?.organizationHooks.beforeUpdateTeam({
 					team,
 					updates,
 					user: session.user,
@@ -508,8 +508,8 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 					);
 
 					// Run afterUpdateTeam hook
-					if (options.organizationHooks?.afterUpdateTeam) {
-						await options.organizationHooks.afterUpdateTeam({
+					if (options?.organizationHooks?.afterUpdateTeam) {
+						await options?.organizationHooks.afterUpdateTeam({
 							team: updatedTeam,
 							user: session.user,
 							organization,
@@ -523,8 +523,8 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			const updatedTeam = await adapter.updateTeam(team.id, updates);
 
 			// Run afterUpdateTeam hook
-			if (options.organizationHooks?.afterUpdateTeam) {
-				await options.organizationHooks.afterUpdateTeam({
+			if (options?.organizationHooks?.afterUpdateTeam) {
+				await options?.organizationHooks.afterUpdateTeam({
 					team: updatedTeam,
 					user: session.user,
 					organization,
@@ -1004,8 +1004,8 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			// Run beforeAddTeamMember hook
-			if (options.organizationHooks?.beforeAddTeamMember) {
-				const response = await options.organizationHooks.beforeAddTeamMember({
+			if (options?.organizationHooks?.beforeAddTeamMember) {
+				const response = await options?.organizationHooks.beforeAddTeamMember({
 					teamMember: {
 						teamId: ctx.body.teamId,
 						userId: ctx.body.userId,
@@ -1025,8 +1025,8 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			});
 
 			// Run afterAddTeamMember hook
-			if (options.organizationHooks?.afterAddTeamMember) {
-				await options.organizationHooks.afterAddTeamMember({
+			if (options?.organizationHooks?.afterAddTeamMember) {
+				await options?.organizationHooks.afterAddTeamMember({
 					teamMember,
 					team,
 					user: userBeingAdded,
@@ -1170,8 +1170,8 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			// Run beforeRemoveTeamMember hook
-			if (options.organizationHooks?.beforeRemoveTeamMember) {
-				await options.organizationHooks.beforeRemoveTeamMember({
+			if (options?.organizationHooks?.beforeRemoveTeamMember) {
+				await options?.organizationHooks.beforeRemoveTeamMember({
 					teamMember,
 					team,
 					user: userBeingRemoved,
@@ -1185,8 +1185,8 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			});
 
 			// Run afterRemoveTeamMember hook
-			if (options.organizationHooks?.afterRemoveTeamMember) {
-				await options.organizationHooks.afterRemoveTeamMember({
+			if (options?.organizationHooks?.afterRemoveTeamMember) {
+				await options?.organizationHooks.afterRemoveTeamMember({
 					teamMember,
 					team,
 					user: userBeingRemoved,

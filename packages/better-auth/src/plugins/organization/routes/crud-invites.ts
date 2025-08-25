@@ -388,16 +388,18 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			};
 
 			// Run beforeCreateInvitation hook
-			if (option.organizationHooks?.beforeCreateInvitation) {
-				const response = await option.organizationHooks.beforeCreateInvitation({
-					invitation: {
-						...invitationData,
-						inviterId: session.user.id,
-						teamId: teamIds.length > 0 ? teamIds[0] : undefined,
+			if (option?.organizationHooks?.beforeCreateInvitation) {
+				const response = await option?.organizationHooks.beforeCreateInvitation(
+					{
+						invitation: {
+							...invitationData,
+							inviterId: session.user.id,
+							teamId: teamIds.length > 0 ? teamIds[0] : undefined,
+						},
+						inviter: session.user,
+						organization,
 					},
-					inviter: session.user,
-					organization,
-				});
+				);
 				if (response && typeof response === "object" && "data" in response) {
 					invitationData = {
 						...invitationData,
@@ -428,8 +430,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			);
 
 			// Run afterCreateInvitation hook
-			if (option.organizationHooks?.afterCreateInvitation) {
-				await option.organizationHooks.afterCreateInvitation({
+			if (option?.organizationHooks?.afterCreateInvitation) {
+				await option?.organizationHooks.afterCreateInvitation({
 					invitation: invitation as unknown as Invitation,
 					inviter: session.user,
 					organization,
@@ -534,8 +536,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			// Run beforeAcceptInvitation hook
-			if (options.organizationHooks?.beforeAcceptInvitation) {
-				await options.organizationHooks.beforeAcceptInvitation({
+			if (options?.organizationHooks?.beforeAcceptInvitation) {
+				await options?.organizationHooks.beforeAcceptInvitation({
 					invitation: invitation as unknown as Invitation,
 					user: session.user,
 					organization,
@@ -628,8 +630,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			// Run afterAcceptInvitation hook
-			if (options.organizationHooks?.afterAcceptInvitation) {
-				await options.organizationHooks.afterAcceptInvitation({
+			if (options?.organizationHooks?.afterAcceptInvitation) {
+				await options?.organizationHooks.afterAcceptInvitation({
 					invitation: acceptedI as unknown as Invitation,
 					member,
 					user: session.user,
@@ -723,8 +725,8 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			// Run beforeRejectInvitation hook
-			if (options.organizationHooks?.beforeRejectInvitation) {
-				await options.organizationHooks.beforeRejectInvitation({
+			if (options?.organizationHooks?.beforeRejectInvitation) {
+				await options?.organizationHooks.beforeRejectInvitation({
 					invitation: invitation as unknown as Invitation,
 					user: session.user,
 					organization,
@@ -737,8 +739,8 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			});
 
 			// Run afterRejectInvitation hook
-			if (options.organizationHooks?.afterRejectInvitation) {
-				await options.organizationHooks.afterRejectInvitation({
+			if (options?.organizationHooks?.afterRejectInvitation) {
+				await options?.organizationHooks.afterRejectInvitation({
 					invitation: rejectedI || (invitation as unknown as Invitation),
 					user: session.user,
 					organization,
@@ -828,8 +830,8 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			// Run beforeCancelInvitation hook
-			if (options.organizationHooks?.beforeCancelInvitation) {
-				await options.organizationHooks.beforeCancelInvitation({
+			if (options?.organizationHooks?.beforeCancelInvitation) {
+				await options?.organizationHooks.beforeCancelInvitation({
 					invitation: invitation as unknown as Invitation,
 					cancelledBy: session.user,
 					organization,
@@ -842,8 +844,8 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			});
 
 			// Run afterCancelInvitation hook
-			if (options.organizationHooks?.afterCancelInvitation) {
-				await options.organizationHooks.afterCancelInvitation({
+			if (options?.organizationHooks?.afterCancelInvitation) {
+				await options?.organizationHooks.afterCancelInvitation({
 					invitation: (canceledI as unknown as Invitation) || invitation,
 					cancelledBy: session.user,
 					organization,

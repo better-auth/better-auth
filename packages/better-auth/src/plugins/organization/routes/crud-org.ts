@@ -22,7 +22,7 @@ import {
 } from "../../../db";
 
 export const createOrganization = <O extends OrganizationOptions>(
-	options: O,
+	options?: O,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -181,9 +181,9 @@ export const createOrganization = <O extends OrganizationOptions>(
 				}
 			}
 
-			if (options.organizationHooks?.beforeCreateOrganization) {
+			if (options?.organizationHooks?.beforeCreateOrganization) {
 				const response =
-					await options.organizationHooks.beforeCreateOrganization({
+					await options?.organizationHooks.beforeCreateOrganization({
 						organization: orgData,
 						user,
 					});
@@ -251,8 +251,8 @@ export const createOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
-			if (options.organizationHooks?.afterCreateOrganization) {
-				await options.organizationHooks.afterCreateOrganization({
+			if (options?.organizationHooks?.afterCreateOrganization) {
+				await options?.organizationHooks.afterCreateOrganization({
 					organization,
 					user,
 					member,
@@ -315,7 +315,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	);
 
 export const updateOrganization = <O extends OrganizationOptions>(
-	options: O,
+	options?: O,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -434,7 +434,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				});
 			}
-			if (options.organizationHooks?.beforeUpdateOrganization) {
+			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
 					await options.organizationHooks.beforeUpdateOrganization({
 						organization: ctx.body.data,
@@ -452,7 +452,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				organizationId,
 				ctx.body.data,
 			);
-			if (options.organizationHooks?.afterUpdateOrganization) {
+			if (options?.organizationHooks?.afterUpdateOrganization) {
 				await options.organizationHooks.afterUpdateOrganization({
 					organization: updatedOrg,
 					user: session.user,
