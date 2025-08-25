@@ -15,12 +15,12 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Pre } from "fumadocs-ui/components/codeblock";
-import { DocsBody } from "fumadocs-ui/page";
 import ChangelogPage, { Glow } from "../_components/default-changelog";
 import { IconLink } from "../_components/changelog-layout";
 import { XIcon } from "../_components/icons";
 import { StarField } from "../_components/stat-field";
 import { GridPatterns } from "../_components/grid-pattern";
+import { Callout } from "@/components/ui/callout";
 
 const metaTitle = "Changelogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -71,7 +71,7 @@ export default async function Page({
 			</div>
 			<div className="px-4 relative md:px-8 pb-12 md:py-12">
 				<div className="absolute top-0 left-0 h-full -translate-x-full w-px bg-gradient-to-b from-black/5 dark:from-white/10 via-black/3 dark:via-white/5 to-transparent"></div>
-				<DocsBody className="pt-8 md:pt-0">
+				<div className="prose pt-8 md:pt-0">
 					<MDX
 						components={{
 							...defaultMdxComponents,
@@ -103,9 +103,22 @@ export default async function Page({
 							DatabaseTable,
 							Accordion,
 							Accordions,
+							Callout: ({
+								children,
+								type,
+								...props
+							}: {
+								children: React.ReactNode;
+								type?: "info" | "warn" | "error" | "success" | "warning";
+								[key: string]: any;
+							}) => (
+								<Callout type={type} {...props}>
+									{children}
+								</Callout>
+							),
 						}}
 					/>
-				</DocsBody>
+				</div>
 			</div>
 		</div>
 	);
