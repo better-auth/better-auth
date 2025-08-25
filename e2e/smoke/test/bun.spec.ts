@@ -7,7 +7,7 @@ import assert from "node:assert";
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
 describe("bun", () => {
-	it("simple server with memory sqlite", async (t) => {
+	it("simple server with bun:sqlite", async (t) => {
 		const cp = spawn("bun", [join(fixturesDir, "bun-simple.ts")], {
 			stdio: "pipe",
 		});
