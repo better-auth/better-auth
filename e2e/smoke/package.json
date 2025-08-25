@@ -7,6 +7,6 @@
     "@types/node": "^24.3.0"
   },
   "scripts": {
-    "e2e": "node --test ./test/*.spec.ts"
+    "e2e:smoke": "node --test ./test/*.spec.ts"
   }
 }
