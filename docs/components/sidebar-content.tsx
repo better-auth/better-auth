@@ -493,6 +493,24 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Atlassian",
+				href: "/docs/authentication/atlassian",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 20 20"
+					>
+						<path
+							fill="currentColor"
+							d="M7.45 10.54c-.15-.26-.44-.26-.59 0L3.12 17.8c-.15.26-.02.47.29.47h3.68c.21 0 .4-.11.49-.29l1.77-3.07c.8-1.38.87-3.04.1-4.37m1.14-6.91c-.8 1.33-.73 2.98.1 4.37l4.84 8.41c.09.18.28.29.49.29h3.68c.31 0 .44-.21.29-.47L8.73 3.34c-.15-.26-.44-.26-.59 0l.45.29z"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Discord",
 				href: "/docs/authentication/discord",
 				icon: () => (
