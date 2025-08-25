@@ -118,7 +118,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `text('${name}').array()`,
 				},
 			} as const;
-			return typeMap[type][databaseType];
+			const dbTypeMap = (
+				typeMap as Record<string, Record<typeof databaseType, string>>
+			)[type as string];
+			if (!dbTypeMap) {
+				throw new Error(
+					`Unsupported field type '${field.type}' for field '${name}'.`,
+				);
+			}
+			return dbTypeMap[databaseType];
 		}
 
 		let id: string = "";
