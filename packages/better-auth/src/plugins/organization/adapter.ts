@@ -846,8 +846,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					teamId:
 						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
 					domainWhitelist: !invitation.email
-					? invitation.domainWhitelist
-					: undefined,
+						? invitation.domainWhitelist
+						: undefined,
 				},
 			});
 

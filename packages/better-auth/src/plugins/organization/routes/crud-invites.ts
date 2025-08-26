@@ -197,7 +197,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const invitationType = ctx.body.email ? "personal" : "public";
-			
+
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -504,7 +504,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						)
 					) {
 						throw new APIError("FORBIDDEN", {
-							message: ORGANIZATION_ERROR_CODES.EMAIL_DOMAIN_NOT_ALLOWED
+							message: ORGANIZATION_ERROR_CODES.EMAIL_DOMAIN_NOT_ALLOWED,
 						});
 					}
 				}
