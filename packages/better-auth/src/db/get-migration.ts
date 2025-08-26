@@ -23,6 +23,7 @@ const postgresMap = {
 	],
 	boolean: ["bool", "boolean"],
 	date: ["timestamp", "date"],
+	json: ["json", "jsonb"],
 };
 const mysqlMap = {
 	string: ["varchar", "text"],
@@ -37,6 +38,7 @@ const mysqlMap = {
 	],
 	boolean: ["boolean", "tinyint"],
 	date: ["timestamp", "datetime", "date"],
+	json: ["json"],
 };
 
 const sqliteMap = {
@@ -44,6 +46,7 @@ const sqliteMap = {
 	number: ["INTEGER", "REAL"],
 	boolean: ["INTEGER", "BOOLEAN"], // 0 or 1
 	date: ["DATE", "INTEGER"],
+	json: ["TEXT"],
 };
 
 const mssqlMap = {
@@ -51,6 +54,7 @@ const mssqlMap = {
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
+	json: ["json"],
 };
 
 const map = {
@@ -68,11 +72,7 @@ export function matchType(
 	function normalize(type: string) {
 		return type.toLowerCase().split("(")[0].trim();
 	}
-	if (
-		fieldType === "string[]" ||
-		fieldType === "number[]" ||
-		fieldType === "json"
-	) {
+	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
