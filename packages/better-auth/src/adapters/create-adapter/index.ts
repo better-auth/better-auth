@@ -380,8 +380,14 @@ export const createAdapter =
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					//@ts-expect-error -Future proofing
 					fieldAttributes.type === "json"
+				) {
+					newValue = JSON.stringify(newValue);
+				} else if (
+					config.supportsJSON === false &&
+					Array.isArray(newValue) &&
+					(fieldAttributes.type === "string[]" ||
+						fieldAttributes.type === "number[]")
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
@@ -456,10 +462,15 @@ export const createAdapter =
 					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
-						//@ts-expect-error - Future proofing
 						field.type === "json"
 					) {
 						newValue = safeJSONParse(newValue);
+					} else if (
+						config.supportsJSON === false &&
+						typeof newValue === "string" &&
+						(field.type === "string[]" || field.type === "number[]")
+					) {
+						newValue = JSON.parse(newValue);
 					} else if (
 						config.supportsDates === false &&
 						typeof newValue === "string" &&

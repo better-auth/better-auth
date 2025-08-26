@@ -23,6 +23,12 @@ export function toZodSchema<
 		if (isClientSide && field.input === false) {
 			return acc;
 		}
+		if (field.type === "json") {
+			return {
+				...acc,
+				[key]: z.json(),
+			};
+		}
 		if (field.type === "string[]" || field.type === "number[]") {
 			return {
 				...acc,
