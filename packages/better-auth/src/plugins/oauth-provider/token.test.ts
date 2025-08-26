@@ -1,6 +1,7 @@
 import { beforeAll, describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oauthProvider } from ".";
+import type { OAuthOptions } from "./types";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { createAuthClient } from "../../client";
 import { oauthProviderClient } from "./client";
@@ -10,10 +11,17 @@ import {
 	createAuthorizationURL,
 	createRefreshAccessTokenRequest,
 } from "../../oauth2";
+import type { ProviderOptions } from "../../oauth2";
 import { generateRandomString } from "../../crypto";
 import type { MakeRequired } from "../../types/helper";
-import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
+import {
+	createLocalJWKSet,
+	decodeJwt,
+	jwtVerify,
+	type JSONWebKeySet,
+} from "jose";
 import { createClientCredentialsTokenRequest } from "../../oauth2/client-credentials-token";
+import { jwtClient } from "../jwt/client";
 
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -1014,4 +1022,211 @@ describe("oauth token - client_credentials", async () => {
 		);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
+});
+
+describe("oauth token - config", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	const state = "123";
+	const scopes = [
+		"openid",
+		"email",
+		"profile",
+		"offline_access",
+		"read:payments", // should use scopeExpirations 30m
+		"write:payments", // should use scopeExpirations 5m
+		"read:profile", // should use default
+	];
+
+	async function createTestInstance(opts?: {
+		oauthProviderConfig?: Omit<OAuthOptions, "loginPage" | "consentPage">;
+	}) {
+		const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes,
+					allowDynamicClientRegistration: true,
+					...opts?.oauthProviderConfig,
+				}),
+				...(opts?.oauthProviderConfig?.disableJWTPlugin
+					? []
+					: [
+							jwt({
+								jwt: {
+									audience: validAudience,
+									issuer: authServerBaseUrl,
+								},
+							}),
+						]),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient(), jwtClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const registeredClient = await client.oauth2.register({
+			redirect_uris: [redirectUri],
+		});
+
+		return {
+			client,
+			oauthClient: registeredClient.data,
+		};
+	}
+
+	async function createAuthUrl(
+		credentials: ProviderOptions,
+		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+	) {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: credentials,
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+			...overrides,
+		});
+		return {
+			url,
+			codeVerifier,
+		};
+	}
+
+	// Client Credentials Grant
+	it.each([
+		{
+			testScopes: ["read:payments"],
+			result: 1800, // 30m lowest
+		},
+		{
+			testScopes: ["read:payments", "write:payments"],
+			result: 300, // 5m lowest
+		},
+		{
+			testScopes: ["read:profile"],
+			result: 7200, // m2m expiresIn 2hr
+		},
+	])(
+		"scopeExpirations - access token expiration $testScopes",
+		async ({ testScopes, result }) => {
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					m2mAccessTokenExpiresIn: 7200,
+					scopeExpirations: {
+						"read:payments": "30m",
+						"write:payments": "5m",
+					},
+				},
+			});
+			// Client credentials
+			const tokens = await client.oauth2.token({
+				resource: validAudience,
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+			});
+			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+		},
+	);
+
+	// Authorization Code and Refresh Token grants
+	it.each([
+		{
+			testScopes: ["read:payments", "offline_access"],
+			result: 1800, // 30m lowest
+		},
+		{
+			testScopes: ["read:payments", "write:payments", "offline_access"],
+			result: 300, // 5m lowest
+		},
+		{
+			testScopes: ["profile", "offline_access"],
+			result: 7200, // accessTokenExpiresIn 2hr
+		},
+	])(
+		"scopeExpirations - access token expiration $testScopes",
+		async ({ testScopes, result }) => {
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					accessTokenExpiresIn: 7200,
+					scopeExpirations: {
+						"read:payments": "30m",
+						"write:payments": "5m",
+					},
+				},
+			});
+			const { url: authUrl, codeVerifier } = await createAuthUrl(
+				{
+					clientId: oauthClient?.client_id!,
+					clientSecret: oauthClient?.client_secret,
+				},
+				{
+					scopes: testScopes,
+					redirectURI: redirectUri,
+				},
+			);
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			expect(callbackRedirectUrl).toContain(redirectUri);
+			expect(callbackRedirectUrl).toContain(`code=`);
+			expect(callbackRedirectUrl).toContain(`state=123`);
+			const url = new URL(callbackRedirectUrl);
+
+			// Authorization code
+			const tokens = await client.oauth2.token({
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				resource: validAudience,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			});
+			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+
+			// Refresh token
+			const refreshedTokens = await client.oauth2.token({
+				resource: validAudience,
+				// @ts-expect-error refresh token is sent
+				refresh_token: tokens.data?.refresh_token,
+				grant_type: "refresh_token",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			});
+			expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const refreshedAccessToken = decodeJwt(
+				refreshedTokens.data?.access_token ?? "",
+			);
+			expect(
+				(refreshedAccessToken.exp ?? 0) - (refreshedAccessToken.iat ?? 0),
+			).toBe(result); // 5m lowest
+		},
+	);
 });
