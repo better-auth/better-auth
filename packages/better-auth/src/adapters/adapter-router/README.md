@@ -1,4 +1,4 @@
-# Auto-Router Adapter
+# Adapter Router
 
 Route different Better Auth models to different database adapters while maintaining a unified interface. Perfect for things like multi-tenancy, gradual migrations, performance tiers, and microservices data ownership.
 
@@ -251,4 +251,4 @@ const config: AdapterRouterConfig = {
 
 ---
 
-**Use the auto-router for specific architectural requirements like multi-tenancy, compliance, or microservices. For general applications, a single adapter is simpler and more performant.**
+**Use the Adapter Router for specific architectural requirements like multi-tenancy, compliance, or microservices. For general applications, a single adapter is simpler and more performant.**
