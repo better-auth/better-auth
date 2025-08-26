@@ -208,12 +208,16 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
 							const to = callbackURL;
 							const signInURL = context.data?.url;
-							let Browser: any;
+							let Browser: typeof import("expo-web-browser") | undefined =
+								undefined;
 							try {
 								Browser = await import("expo-web-browser");
 							} catch (error) {
 								throw new Error(
-									"expo-web-browser is not installed as a dependency!",
+									'"expo-web-browser" is not installed as a dependency!',
+									{
+										cause: error,
+									},
 								);
 							}
 							const result = await Browser.openAuthSessionAsync(signInURL, to);
