@@ -1507,9 +1507,7 @@ describe("resend invitation should reuse existing", async () => {
 describe("public invitations", async () => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
-			plugins: [
-				organization(),
-			],
+			plugins: [organization()],
 		});
 
 	const client = createAuthClient({
@@ -1597,7 +1595,7 @@ describe("public invitations", async () => {
 			},
 		});
 		const memberEmails = orgDetails.data?.members.map((m) => m.user?.email);
-		
+
 		expect(memberEmails).toContain(user1.email);
 		expect(memberEmails).toContain(user2.email);
 	});
@@ -1634,7 +1632,7 @@ describe("public invitations", async () => {
 				headers,
 			},
 		});
-		
+
 		const user = {
 			email: "user@otherdomain.com",
 			password: "password123",
@@ -1687,9 +1685,7 @@ describe("public invitations", async () => {
 		const canceledInvite = invitations.data?.find((i) => i.id === inviteId);
 		expect(canceledInvite?.status).toBe("canceled");
 	});
-
 });
-
 
 describe("owner can update roles", async () => {
 	const statement = {
