@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { $deviceAuthorizationOptionsSchema, deviceAuthorization } from ".";
 import { deviceAuthorizationClient } from "./client";
+import type { DeviceCode } from "./schema";
 
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
@@ -470,6 +471,40 @@ describe("device authorization flow", async () => {
 });
 
 describe("device authorization with custom options", async () => {
+	it("should correctly store interval as milliseconds in database", async () => {
+		const { auth, client, db } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					interval: "5s",
+				}),
+			],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+
+		// Response should return interval in seconds
+		expect(response.interval).toBe(5);
+
+		// Check that the interval is stored as milliseconds in the database
+		const deviceCodeRecord: DeviceCode | null = await db.findOne({
+			model: "deviceCode",
+			where: [
+				{
+					field: "deviceCode",
+					value: response.device_code,
+				},
+			],
+		});
+
+		// Should be stored as 5000 milliseconds, not "5s" string
+		expect(deviceCodeRecord?.pollingInterval).toBe(5000);
+		expect(typeof deviceCodeRecord?.pollingInterval).toBe("number");
+	});
+
 	it("should use custom code generators", async () => {
 		const customDeviceCode = "custom-device-code-12345";
 		const customUserCode = "CUSTOM12";

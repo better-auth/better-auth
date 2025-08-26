@@ -123,23 +123,15 @@ type deviceCode = {
 
 Example usage:
 ```ts
-const response = await authClient.device.code({
+const { data } = await authClient.device.code({
   client_id: "your-client-id",
   scope: "openid profile email",
 });
 
-// Returns:
-// {
-//   device_code: string,      // Device verification code
-//   user_code: string,        // User-friendly code (e.g., "ABCD1234")
-//   verification_uri: string, // URL for user verification
-//   verification_uri_complete?: string, // URL with embedded user code
-//   expires_in: number,       // Seconds until expiration
-//   interval: number          // Minimum polling interval in seconds
-// }
-
-console.log(`Please visit: ${response.verification_uri}`);
-console.log(`And enter code: ${response.user_code}`);
+if (data) {
+  console.log(`Please visit: ${data.verification_uri}`);
+  console.log(`And enter code: ${data.user_code}`);
+}
 ```
 
 ### Polling for Token
@@ -170,29 +162,40 @@ type deviceToken = {
 
 Example polling implementation:
 ```ts
+let pollingInterval = 5; // Start with 5 seconds
 const pollForToken = async () => {
-  try {
-    const { data } = await authClient.device.token({
-      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-      device_code,
-      client_id: "your-client-id",
-    });
-    
-    if (data?.access_token) {
-      console.log("Authorization successful!");
-      return data;
+  const { data, error } = await authClient.device.token({
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    device_code,
+    client_id: yourClientId,
+    fetchOptions: {
+      headers: {
+        "user-agent": `My CLI`,
+      },
+    },
+  });
+
+  if (data?.access_token) {
+    console.log("Authorization successful!");
+  } else if (error) {
+    switch (error.error) {
+      case "authorization_pending":
+        // Continue polling
+        break;
+      case "slow_down":
+        pollingInterval += 5;
+        break;
+      case "access_denied":
+        console.error("Access was denied by the user");
+        return;
+      case "expired_token":
+        console.error("The device code has expired. Please try again.");
+        return;
+      default:
+        console.error(`Error: ${error.error_description}`);
+        return;
     }
-  } catch (error) {
-    if (error.body?.error === "authorization_pending") {
-      // User hasn't authorized yet, continue polling
-      setTimeout(pollForToken, interval * 1000);
-    } else if (error.body?.error === "slow_down") {
-      // Polling too fast, increase interval
-      setTimeout(pollForToken, (interval + 5) * 1000);
-    } else {
-      // Handle other errors
-      console.error("Authorization failed:", error);
-    }
+    setTimeout(pollForToken, pollingInterval * 1000);
   }
 };
 
@@ -222,7 +225,7 @@ export default function DeviceAuthorizationPage() {
     try {
       // Format the code: remove dashes and convert to uppercase
       const formattedCode = userCode.trim().replace(/-/g, "").toUpperCase();
-      
+
       // Check if the code is valid using GET /device endpoint
       const response = await authClient.device.deviceVerify({
         query: { user_code: formattedCode },
@@ -230,7 +233,7 @@ export default function DeviceAuthorizationPage() {
       
       if (response.data) {
         // Redirect to approval page
-        window.location.href = `/device/approve?userCode=${formattedCode}`;
+        window.location.href = `/device/approve?user_code=${formattedCode}`;
       }
     } catch (err) {
       setError("Invalid or expired code");
@@ -257,6 +260,8 @@ export default function DeviceAuthorizationPage() {
 
 Users must be authenticated to approve or deny device authorization requests:
 
+#### Approve Device
+
 <APIMethod
   path="/device/approve"
   method="POST"
@@ -271,6 +276,8 @@ type deviceApprove = {
 }
 ```
 </APIMethod>
+
+#### Deny Device
 
 <APIMethod
   path="/device/deny"
@@ -287,7 +294,7 @@ type deviceDeny = {
 ```
 </APIMethod>
 
-Example approval page:
+#### Example Approval Page
 
 ```tsx title="app/device/approve/page.tsx"
 export default function DeviceApprovalPage() {
@@ -324,10 +331,10 @@ export default function DeviceApprovalPage() {
     }
     setIsProcessing(false);
   };
-  
+
   if (!user) {
     // Redirect to login if not authenticated
-    window.location.href = `/login?redirect=/device/approve?userCode=${userCode}`;
+    window.location.href = `/login?redirect=/device/approve?user_code=${userCode}`;
     return null;
   }
   

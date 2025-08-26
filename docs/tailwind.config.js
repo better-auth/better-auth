@@ -6,7 +6,6 @@ import svgToDataUri from "mini-svg-data-uri";
 export default {
 	darkMode: ["class"],
 	plugins: [
-		require("tailwindcss-animate"),
 		addVariablesForColors,
 		function ({ matchUtilities, theme }) {
 			matchUtilities(

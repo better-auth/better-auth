@@ -1,8 +1,10 @@
 import * as z from "zod/v4";
 import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
+import { atlassian } from "./atlassian";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
+import { figma } from "./figma";
 import { github } from "./github";
 import { google } from "./google";
 import { kick } from "./kick";
@@ -20,13 +22,17 @@ import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
+import { salesforce } from "./salesforce";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { line } from "./line";
 import { paypal } from "./paypal";
 export const socialProviders = {
 	apple,
+	atlassian,
 	discord,
 	facebook,
+	figma,
 	github,
 	microsoft,
 	google,
@@ -43,9 +49,11 @@ export const socialProviders = {
 	tiktok,
 	reddit,
 	roblox,
+	salesforce,
 	vk,
 	zoom,
 	notion,
+	line,
 	paypal,
 };
 
@@ -69,9 +77,11 @@ export type SocialProviders = {
 };
 
 export * from "./apple";
+export * from "./atlassian";
 export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
+export * from "./figma";
 export * from "./github";
 export * from "./linear";
 export * from "./linkedin";
@@ -83,6 +93,7 @@ export * from "./microsoft-entra-id";
 export * from "./notion";
 export * from "./reddit";
 export * from "./roblox";
+export * from "./salesforce";
 export * from "./spotify";
 export * from "./tiktok";
 export * from "./twitch";
@@ -92,6 +103,7 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./line";
 export * from "./paypal";
 
 export type SocialProviderList = typeof socialProviderList;
