@@ -1,21 +1,12 @@
 import { APIError } from "../../api";
-import type {
-	GenericEndpointContext,
-	Session,
-	User,
-	Verification,
-} from "../../types";
-import type {
-	SchemaClient,
-	OAuthOptions,
-	VerificationValue,
-	OAuthSession,
-} from "./types";
+import type { GenericEndpointContext, Session, User } from "../../types";
+import type { SchemaClient, OAuthOptions, OAuthSession } from "./types";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
 import {
 	decryptStoredClientSecret,
+	getClient,
 	getJwtPlugin,
 	verifyStoredClientSecret,
 } from "./utils";
@@ -254,7 +245,7 @@ async function createOpaqueAccessToken(
 			token,
 			clientId,
 			sessionId: payload.sid,
-			scopes: scopes.join(" "),
+			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
 		},
@@ -300,7 +291,7 @@ async function createUserTokens(
 				data: {
 					userId: user.id,
 					clientId: client.clientId,
-					scopes: scopes.join(","),
+					scopes,
 					refresh: refreshToken,
 					createdAt: now,
 					updatedAt: now,
@@ -438,10 +429,7 @@ export async function validateClientCredentials(
 	clientSecret?: string, // optional because required if client is confidential or this value is defined
 	scopes?: string[], // checks requested scopes against allowed scopes
 ) {
-	const client: SchemaClient | null = await ctx.context.adapter.findOne({
-		model: options.schema?.oauthApplication?.modelName ?? "oauthApplication",
-		where: [{ field: "clientId", value: clientId.toString() }],
-	});
+	const client = await getClient(ctx, options, clientId);
 	if (!client) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing client",
@@ -514,16 +502,11 @@ async function checkVerificationValue(
 	code: string,
 	client_id: string,
 ) {
-	const verification = await ctx.context.internalAdapter
-		.findVerificationValue(code)
-		.then((val) => {
-			if (!val) return null;
-			return {
-				...val,
-				value: val?.value ? JSON.parse(val?.value) : undefined,
-			} as Omit<Verification, "value"> & { value?: VerificationValue };
-		});
-	const verificationValue = verification?.value;
+	const verification =
+		await ctx.context.internalAdapter.findVerificationValue(code);
+	const verificationValue = verification
+		? JSON.parse(verification?.value)
+		: undefined;
 
 	if (!verification) {
 		throw new APIError("UNAUTHORIZED", {
@@ -892,7 +875,7 @@ async function handleRefreshTokenGrant(
 	}
 
 	// Check session scopes
-	const scopes = session?.scopes?.split(",") ?? [];
+	const scopes = session?.scopes ?? [];
 	const requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
 		for (const requestedScope of requestedScopes) {
