@@ -90,7 +90,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 
 	const opts: OAuthOptions & { claims?: string[] } = {
 		codeExpiresIn: 600, // 10 min
-		accessTokenExpiresIn: 600, // 10 min
+		accessTokenExpiresIn: 3600, // 1 hour
 		m2mAccessTokenExpiresIn: 3600, // 1 hour
 		refreshTokenExpiresIn: 2592000, // 30 days
 		allowUnauthenticatedClientRegistration: false,

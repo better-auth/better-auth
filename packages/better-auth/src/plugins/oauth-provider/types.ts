@@ -15,9 +15,8 @@ export interface OAuthOptions {
 	trustedClients?: (SchemaClient & { skipConsent?: boolean })[];
 	/**
 	 * The amount of time in seconds that the access token is valid for.
-	 * 10 min is recommended by the OIDC spec (https://openid.net/specs/oauth-v2-jarm.html#section-2.1-2.3.1)
 	 *
-	 * @default 600 (10 min)
+	 * @default 3600 (1 hour) - Industry standard
 	 */
 	accessTokenExpiresIn?: number;
 	/**
@@ -122,6 +121,21 @@ export interface OAuthOptions {
 	 * ```
 	 */
 	scopes?: string[];
+	/**
+	 * Create access token expirations based on scope.
+	 *
+	 * This is useful for higher-privelege scopes that
+	 * require shorter expiration times. The earliest
+	 * expiration will take precendence. If not specified,
+	 * the default will take place.
+	 *
+	 * Note: values should be lower than the defaults
+	 * `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`
+	 *
+	 * @example
+	 * { "write:payments": "5m", "read:payments": "30m" }
+	 */
+	scopeExpirations?: Record<string, number | string | Date>;
 	/**
 	 * The URL to the login page. This is used if the client requests the `login`
 	 * prompt.
