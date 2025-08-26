@@ -144,21 +144,9 @@ database: adapterRouter({
 })
 ```
 
-## Cross-Adapter Relationships
+## Plugin Model Support
 
-Better Auth handles relationships through application-level sequential queries rather than database foreign keys, making cross-adapter routing possible:
-
-```ts
-// When deleting a user across adapters:
-// 1. Better Auth queries for user sessions -> routed to Redis
-// 2. Better Auth queries for user accounts -> routed to MongoDB  
-// 3. Better Auth deletes user -> routed to PostgreSQL
-// All handled automatically by Better Auth's application logic
-```
-
-### Plugin Model Support
-
-Works seamlessly with existing Better Auth plugins. The organization plugin's `findFullOrganization` function automatically works across adapters by making sequential queries:
+Works seamlessly with existing and future Better Auth plugins. The organization plugin's `findFullOrganization` function automatically works across adapters by making sequential queries:
 
 ```ts
 // With users in PostgreSQL and organizations in MongoDB:
