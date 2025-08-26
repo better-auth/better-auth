@@ -431,7 +431,7 @@ describe("Create Adapter Helper", async () => {
 								};
 							},
 						});
-						const obj = { preferences: [6,7] };
+						const obj = { preferences: [6, 7] };
 						const res = await adapter.create({
 							model: "user",
 							data: obj,
@@ -440,9 +440,7 @@ describe("Create Adapter Helper", async () => {
 						expect(res.preferences).toEqual(obj.preferences);
 					});
 				expect(createJSONParameters.data).toHaveProperty("preferences");
-				expect(createJSONParameters.data.preferences).toEqual(
-					'[6,7]',
-				);
+				expect(createJSONParameters.data.preferences).toEqual("[6,7]");
 			});
 
 			test("Should modify JSON type to TEXT if the DB doesn't support it. And expect the result to be transformed back to JSON", async () => {

@@ -68,7 +68,11 @@ export function matchType(
 	function normalize(type: string) {
 		return type.toLowerCase().split("(")[0].trim();
 	}
-	if (fieldType === "string[]" || fieldType === "number[]" || fieldType === "json") {
+	if (
+		fieldType === "string[]" ||
+		fieldType === "number[]" ||
+		fieldType === "json"
+	) {
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
@@ -220,7 +224,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 		if (fieldName === "id" || field.references?.field === "id") {
 			return typeMap.id[dbType!];
 		}
-		if (dbType === "sqlite" && (type === "string[]" || type === "number[]" || type === "json")) {
+		if (
+			dbType === "sqlite" &&
+			(type === "string[]" || type === "number[]" || type === "json")
+		) {
 			return "text";
 		}
 		if (type === "string[]" || type === "number[]" || type === "json") {
