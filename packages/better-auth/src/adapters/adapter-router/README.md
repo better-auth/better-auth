@@ -48,6 +48,18 @@ database: adapterRouter({
 
 The router acts as a completely transparent proxy - it behaves exactly like a normal adapter. Better Auth's application code handles relationships through sequential queries, so the router simply routes each query to the appropriate adapter.
 
+**Why This Works Universally:**
+
+Better Auth's adapter interface is intentionally designed as a simple CRUD layer with no support for joins, relations, or cross-model queries. The `Adapter` interface only provides:
+
+- `create`, `findOne`, `findMany`, `update`, `delete` - all single-model operations
+- `where` clauses limited to simple field comparisons (no cross-model paths)
+- No `join`, `include`, or referential integrity features
+
+This architectural choice forces all relationship handling into application code through sequential queries, making cross-adapter routing fundamentally compatible with any Better Auth plugin - existing or future.
+
+For example, the organization plugin's `findFullOrganization` makes 3+ separate queries even with a single database (organization, members, users) - the Adapter Router simply routes these same queries to different adapters (see [Plugin Model Support](#plugin-model-support) below).
+
 ## Dynamic Routing Examples
 
 ### Multi-Tenant Isolation
@@ -220,21 +232,6 @@ Output:
 ```
 [AdapterRouter] Route 0 matched for model "session": redis
 [AdapterRouter] Using fallback adapter for model "user": postgres
-```
-
-## TypeScript Support
-
-Fully typed with model validation:
-
-```ts
-import type { AdapterRouterConfig } from "better-auth/adapters";
-
-const config: AdapterRouterConfig = {
-  fallbackAdapter: prismaAdapter(prisma),
-  routes: [
-    ({ modelName }) => modelName === 'session' ? redisAdapter : null, // ✅ Typed
-  ],
-};
 ```
 
 ---
