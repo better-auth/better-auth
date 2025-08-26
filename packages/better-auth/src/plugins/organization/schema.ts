@@ -308,9 +308,10 @@ export const memberSchema = z.object({
 export const invitationSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
-	email: z.string(),
+	email: z.string().nullish(),
 	role: roleSchema,
 	status: invitationStatus,
+	domainWhitelist: z.string().nullish(),
 	teamId: z.string().nullish(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
@@ -439,9 +440,10 @@ export type InferInvitation<
 		? {
 				id: string;
 				organizationId: string;
-				email: string;
+				email?: string;
 				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
+				domainWhitelist?: string;
 				inviterId: string;
 				expiresAt: Date;
 				createdAt: Date;
@@ -450,9 +452,10 @@ export type InferInvitation<
 		: {
 				id: string;
 				organizationId: string;
-				email: string;
+				email?: string;
 				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
+				domainWhitelist?: string;
 				inviterId: string;
 				expiresAt: Date;
 				createdAt: Date;
