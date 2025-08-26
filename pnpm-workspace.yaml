@@ -3,6 +3,7 @@ packages:
   - docs
   - integration-tests/**
   - demo/*
+  - e2e/*
 catalogs:
   react18:
     '@types/react': ^19.1.0

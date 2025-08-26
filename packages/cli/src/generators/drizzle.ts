@@ -165,7 +165,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											attr.references.model,
+											tables[attr.references.model]?.modelName ||
+												attr.references.model,
 											adapter.options,
 										)}.${attr.references.field}, { onDelete: '${
 											attr.references.onDelete || "cascade"

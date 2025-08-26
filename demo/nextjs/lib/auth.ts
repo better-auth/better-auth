@@ -9,6 +9,7 @@ import {
 	oAuthProxy,
 	openAPI,
 	customSession,
+	deviceAuthorization,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -47,8 +48,28 @@ const PLUS_PRICE_ID = {
 	default: "price_1RoxnJHmTADgihIthZTLmrPn",
 	annual: "price_1Roxo5HmTADgihItEbJu5llL",
 };
+
+const baseURL: string | undefined =
+	process.env.VERCEL === "1"
+		? process.env.VERCEL_ENV === "production"
+			? process.env.BETTER_AUTH_URL
+			: process.env.VERCEL_ENV === "preview"
+				? `https://${process.env.VERCEL_URL}`
+				: undefined
+		: undefined;
+
+const cookieDomain: string | undefined =
+	process.env.VERCEL === "1"
+		? process.env.VERCEL_ENV === "production"
+			? ".better-auth.com"
+			: process.env.VERCEL_ENV === "preview"
+				? `.${process.env.VERCEL_URL}`
+				: undefined
+		: undefined;
+
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
+	baseURL,
 	database: {
 		dialect: libsql,
 		type: "sqlite",
@@ -198,12 +219,16 @@ export const auth = betterAuth({
 				],
 			},
 		}),
+		deviceAuthorization({
+			expiresIn: "3min",
+			interval: "5s",
+		}),
 	],
 	trustedOrigins: ["exp://"],
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: process.env.NODE_ENV === "production",
-			domain: ".better-auth.com",
+			domain: cookieDomain,
 		},
 	},
 });
