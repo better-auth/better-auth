@@ -38,12 +38,13 @@ export function toZodSchema<
 		if (field?.required === false) {
 			schema = schema.optional();
 		}
-		return field?.returned
-			? {
-					...acc,
-					[key]: schema,
-				}
-			: acc;
+		if (field?.returned === false) {
+			return acc;
+		}
+		return {
+			...acc,
+			[key]: schema,
+		};
 	}, {});
 	const schema = z.object(zodFields);
 	return schema as z.ZodObject<
