@@ -26,7 +26,7 @@ export const auth = betterAuth({
 
 ## Array-Based Routing with Priority
 
-Routes are an array of callbacks evaluated in order. Each callback receives `{ modelName, data, operation }` and can return an adapter or `null` to continue:
+Routes are an array of callbacks evaluated in order. Each callback receives `{ modelName, data, operation, fallbackAdapter }` and can return an adapter or `null` to continue:
 
 ```ts
 database: adapterRouter({
@@ -59,6 +59,30 @@ Better Auth's adapter interface is intentionally designed as a simple CRUD layer
 This architectural choice forces all relationship handling into application code through sequential queries, making cross-adapter routing fundamentally compatible with any Better Auth plugin - existing or future.
 
 For example, the organization plugin's `findFullOrganization` makes 3+ separate queries even with a single database (organization, members, users) - the Adapter Router simply routes these same queries to different adapters (see [Plugin Model Support](#plugin-model-support) below).
+
+## Fallback Adapter Access
+
+Route callbacks now receive access to the fallback adapter, enabling dynamic routing based on data lookups. This is perfect for scenarios like multi-tenancy where you need to look up a user's tenant before routing their data.
+
+```ts
+routes: [
+  async ({ data, fallbackAdapter }) => {
+    if (data?.userId && !data?.tenantId) {
+      // Look up user's tenant from the fallback adapter
+      const user = await fallbackAdapter.findOne({
+        model: 'user',
+        where: [{ field: 'id', value: data.userId }]
+      });
+      
+      // Route to tenant-specific adapter based on lookup
+      if (user?.tenantId === 'enterprise') return enterpriseAdapter;
+      if (user?.tenantId === 'startup') return startupAdapter;
+    }
+    return null; // Continue to next route or fallback
+  }
+]
+```
+
 
 ## Dynamic Routing Examples
 
@@ -106,6 +130,43 @@ routes: [
     // Read operations go to replica
     return ['findOne', 'findMany', 'count'].includes(operation) ? replicaAdapter : null;
     // Write operations fall through to primary (fallback)
+  },
+]
+```
+
+### Dynamic Tenant Lookup
+```ts
+routes: [
+  async ({ data, fallbackAdapter }) => {
+    if (data?.userId && !data?.tenantId) {
+      // Look up user's tenant from the fallback adapter
+      const user = await fallbackAdapter.findOne({
+        model: 'user',
+        where: [{ field: 'id', value: data.userId }],
+      });
+      
+      if (user?.tenantId === 'enterprise') return enterpriseAdapter;
+      if (user?.tenantId === 'startup') return startupAdapter;
+    }
+    return null; // Fall back to shared adapter
+  },
+]
+```
+
+### User Preference-Based Routing
+```ts
+routes: [
+  async ({ data, fallbackAdapter }) => {
+    if (data?.userId && !data?.storageType) {
+      // Look up user's storage preference from fallback
+      const config = await fallbackAdapter.findOne({
+        model: 'userConfig',
+        where: [{ field: 'userId', value: data.userId }],
+      });
+      
+      return config?.storageType === 'premium' ? premiumAdapter : null;
+    }
+    return null;
   },
 ]
 ```
@@ -188,21 +249,20 @@ type AdapterRouterCallback = (params: {
   modelName: string;
   data?: any;
   operation: 'create' | 'findOne' | 'findMany' | 'update' | 'updateMany' | 'delete' | 'deleteMany' | 'count';
+  fallbackAdapter: Adapter;
 }) => Adapter | Promise<Adapter> | null | undefined;
 ```
 
 ## Trade-offs
 
 **Benefits:**
+- **Flexibility**: Can route to different databases for different models
 - **Completely Transparent**: Acts exactly like a normal adapter
 - **Plugin Compatible**: Works with any Better Auth plugin out of the box
-- **Microservices Ready**: Perfect for distributed data ownership
-- **Performance Tiers**: Route based on user tier, operation type, etc.
-- **Compliance**: Geographic or regulatory data placement
-- **Migration Support**: Gradual migration between systems
 
 **Costs:**
 - **Operational Complexity**: More moving parts to monitor and maintain
+- **Debugging**: More difficult to trace issues with multiple database connections
 
 ## Debug Logging
 

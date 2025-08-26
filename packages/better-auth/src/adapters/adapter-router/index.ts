@@ -15,6 +15,7 @@ export interface AdapterRouterParams {
 		| "delete"
 		| "deleteMany"
 		| "count";
+	fallbackAdapter: Adapter;
 }
 
 /**
@@ -129,6 +130,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					modelName: model,
 					data,
 					operation,
+					fallbackAdapter,
 				});
 
 				if (adapter) {

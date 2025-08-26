@@ -566,6 +566,188 @@ describe("AdapterRouter", () => {
 		});
 	});
 
+	describe("Fallback Adapter Access", () => {
+		it("should provide access to fallback adapter in route callbacks", async () => {
+			const mainDb: TestDB = {};
+			const tenantDb: TestDB = {};
+
+			const mainAdapter = memoryAdapter(mainDb);
+			const tenantAdapter = memoryAdapter(tenantDb);
+
+			let capturedFallbackAdapter: any = null;
+
+			const router = adapterRouter({
+				fallbackAdapter: mainAdapter,
+				routes: [
+					({ data, fallbackAdapter }) => {
+						capturedFallbackAdapter = fallbackAdapter;
+						// Use tenant adapter for users with tenantId, otherwise use fallback
+						return data?.tenantId ? tenantAdapter(mockOptions) : null;
+					},
+				],
+			});
+
+			const adapter = router(mockOptions);
+
+			// Create a user without tenantId - should use fallback
+			await adapter.create({
+				model: "user",
+				data: { email: "main@example.com", name: "Main User" },
+			});
+
+			// Verify fallback adapter was passed to callback
+			expect(capturedFallbackAdapter).toBeDefined();
+			expect(capturedFallbackAdapter.id).toBe("memory");
+
+			// Verify user was created in main database
+			expect(mainDb.user?.length).toBe(1);
+			expect(tenantDb.user).toBeUndefined();
+		});
+
+		it("should allow dynamic tenant lookup using fallback adapter", async () => {
+			const mainDb: TestDB = {
+				tenant: [
+					{ id: "tenant1", name: "Tenant 1", dbUrl: "tenant1-db" },
+					{ id: "tenant2", name: "Tenant 2", dbUrl: "tenant2-db" },
+				],
+			};
+			const tenant1Db: TestDB = {};
+			const tenant2Db: TestDB = {};
+
+			const mainAdapter = memoryAdapter(mainDb);
+			const tenant1Adapter = memoryAdapter(tenant1Db);
+			const tenant2Adapter = memoryAdapter(tenant2Db);
+
+			const router = adapterRouter({
+				fallbackAdapter: mainAdapter,
+				routes: [
+					async ({ data, fallbackAdapter }) => {
+						if (data?.userId && !data?.tenantId) {
+							// Look up user's tenant from fallback adapter
+							const user = await fallbackAdapter.findOne({
+								model: "user",
+								where: [{ field: "id", value: data.userId }],
+							});
+
+							if ((user as any)?.email?.includes("tenant1")) {
+								return tenant1Adapter(mockOptions);
+							}
+							if ((user as any)?.email?.includes("tenant2")) {
+								return tenant2Adapter(mockOptions);
+							}
+						}
+						return null;
+					},
+				],
+			});
+
+			const adapter = router(mockOptions);
+
+			// Create users in main database with different email domains to simulate tenants
+			const user1 = await adapter.create({
+				model: "user",
+				data: { email: "user@tenant1.com", name: "User 1" },
+			});
+			const user2 = await adapter.create({
+				model: "user",
+				data: { email: "user@tenant2.com", name: "User 2" },
+			});
+
+			// Create sessions that should be routed based on user lookup
+			await adapter.create({
+				model: "session",
+				data: { userId: user1.id, token: "session1", expiresAt: new Date() },
+			});
+			await adapter.create({
+				model: "session",
+				data: { userId: user2.id, token: "session2", expiresAt: new Date() },
+			});
+
+			// Verify sessions were routed to correct tenant databases
+			expect(tenant1Db.session?.length).toBe(1);
+			expect(tenant1Db.session?.[0]?.token).toBe("session1");
+			expect(tenant2Db.session?.length).toBe(1);
+			expect(tenant2Db.session?.[0]?.token).toBe("session2");
+
+			// Main database should have users but no sessions
+			expect(mainDb.user?.length).toBe(2);
+			expect(mainDb.session).toBeUndefined();
+		});
+
+		it("should handle fallback adapter queries in async route callbacks", async () => {
+			const mainDb: TestDB = {};
+			const premiumDb: TestDB = {};
+			const standardDb: TestDB = {};
+
+			const mainAdapter = memoryAdapter(mainDb);
+			const premiumAdapter = memoryAdapter(premiumDb);
+			const standardAdapter = memoryAdapter(standardDb);
+
+			const router = adapterRouter({
+				fallbackAdapter: mainAdapter,
+				routes: [
+					async ({ data, fallbackAdapter }) => {
+						if (data?.userId && !data?.storageType) {
+							// Look up user from fallback to determine storage tier
+							const user = await fallbackAdapter.findOne({
+								model: "user",
+								where: [{ field: "id", value: data.userId }],
+							});
+
+							if ((user as any)?.name?.includes("Premium")) {
+								return premiumAdapter(mockOptions);
+							}
+							if ((user as any)?.name?.includes("Standard")) {
+								return standardAdapter(mockOptions);
+							}
+						}
+						return null;
+					},
+				],
+			});
+
+			const adapter = router(mockOptions);
+
+			// Create users with different tiers indicated by name
+			const premiumUser = await adapter.create({
+				model: "user",
+				data: { email: "premium@example.com", name: "Premium User" },
+			});
+			const standardUser = await adapter.create({
+				model: "user",
+				data: { email: "standard@example.com", name: "Standard User" },
+			});
+
+			// Create sessions that should be routed based on user lookup
+			await adapter.create({
+				model: "session",
+				data: {
+					userId: premiumUser.id,
+					token: "premium-session",
+					expiresAt: new Date(),
+				},
+			});
+			await adapter.create({
+				model: "session",
+				data: {
+					userId: standardUser.id,
+					token: "standard-session",
+					expiresAt: new Date(),
+				},
+			});
+
+			// Verify sessions were routed to correct storage
+			expect(premiumDb.session?.length).toBe(1);
+			expect(premiumDb.session?.[0]?.token).toBe("premium-session");
+			expect(standardDb.session?.length).toBe(1);
+			expect(standardDb.session?.[0]?.token).toBe("standard-session");
+
+			// Main database should have users but no sessions
+			expect(mainDb.user?.length).toBe(2);
+			expect(mainDb.session).toBeUndefined();
+		});
+	});
+
 	describe("Configuration", () => {
 		it("should support debug logging", async () => {
 			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
