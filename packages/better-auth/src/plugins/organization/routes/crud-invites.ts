@@ -26,9 +26,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	});
 
 	const baseSchema = z.object({
-		email: z.string().meta({
-			description: "The email address of the user to invite",
-		}),
+		email: z
+			.string()
+			.meta({
+				description: "The email address of the user to invite",
+			})
+			.optional(),
 		role: z
 			.union([
 				z.string().meta({
@@ -55,6 +58,13 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			.meta({
 				description:
 					"Resend the invitation email, if the user is already invited. Eg: true",
+			})
+			.optional(),
+		domainWhitelist: z
+			.string()
+			.meta({
+				description:
+					"Comma-separated list of domains allowed to accept this public invitation",
 			})
 			.optional(),
 		teamId: z.union([
@@ -87,9 +97,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					body: {} as {
 						/**
 						 * The email address of the user
-						 * to invite
+						 * to invite (optional for public invitations)
 						 */
-						email: string;
+						email?: string;
 						/**
 						 * The role to assign to the user
 						 */
@@ -106,6 +116,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * the user is already invited
 						 */
 						resend?: boolean;
+						/**
+						 * For public invitations, restrict which
+						 * email domains can accept the invite
+						 */
+						domainWhitelist?: string;
 					} & (O extends { teams: { enabled: true } }
 						? {
 								/**
@@ -132,6 +147,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											},
 											email: {
 												type: "string",
+												nullable: true,
 											},
 											role: {
 												type: "string",
@@ -148,10 +164,13 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 											expiresAt: {
 												type: "string",
 											},
+											domainWhitelist: {
+												type: "string",
+												nullable: true,
+											},
 										},
 										required: [
 											"id",
-											"email",
 											"role",
 											"organizationId",
 											"inviterId",
@@ -175,6 +194,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -218,27 +238,6 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 
-			const alreadyMember = await adapter.findMemberByEmail({
-				email: ctx.body.email,
-				organizationId: organizationId,
-			});
-			if (alreadyMember) {
-				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
-			}
-			const alreadyInvited = await adapter.findPendingInvitation({
-				email: ctx.body.email,
-				organizationId: organizationId,
-			});
-			if (alreadyInvited.length && !ctx.body.resend) {
-				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
-				});
-			}
-
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw new APIError("BAD_REQUEST", {
@@ -246,61 +245,73 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 
-			// If resend is true and there's an existing invitation, reuse it
-			if (alreadyInvited.length && ctx.body.resend) {
-				const existingInvitation = alreadyInvited[0];
+			if (ctx.body.email) {
+				const alreadyMember = await adapter.findMemberByEmail({
+					email: ctx.body.email,
+					organizationId: organizationId,
+				});
+				if (alreadyMember) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+					});
+				}
 
-				// Update the invitation's expiration date using the same logic as createInvitation
-				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
-				const newExpiresAt = getDate(
-					ctx.context.orgOptions.invitationExpiresIn || defaultExpiration,
-					"sec",
-				);
+				const alreadyInvited = await adapter.findPendingInvitation({
+					email: ctx.body.email,
+					organizationId: organizationId,
+				});
 
-				await ctx.context.adapter.update({
-					model: "invitation",
-					where: [
-						{
-							field: "id",
-							value: existingInvitation.id,
+				if (alreadyInvited.length) {
+					if (!ctx.body.resend) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+						});
+					}
+
+					const existingInvitation = alreadyInvited[0];
+					const defaultExpiration = 60 * 60 * 48;
+					const newExpiresAt = getDate(
+						ctx.context.orgOptions.invitationExpiresIn || defaultExpiration,
+						"sec",
+					);
+
+					await ctx.context.adapter.update({
+						model: "invitation",
+						where: [
+							{
+								field: "id",
+								value: existingInvitation.id,
+							},
+						],
+						update: {
+							expiresAt: newExpiresAt,
 						},
-					],
-					update: {
+					});
+
+					const updatedInvitation = {
+						...existingInvitation,
 						expiresAt: newExpiresAt,
-					},
-				});
+					};
 
-				const updatedInvitation = {
-					...existingInvitation,
-					expiresAt: newExpiresAt,
-				};
-
-				await ctx.context.orgOptions.sendInvitationEmail?.(
-					{
-						id: updatedInvitation.id,
-						role: updatedInvitation.role as string,
-						email: updatedInvitation.email.toLowerCase(),
-						organization: organization,
-						inviter: {
-							...member,
-							user: session.user,
+					await ctx.context.orgOptions.sendInvitationEmail?.(
+						{
+							id: updatedInvitation.id,
+							role: updatedInvitation.role as string,
+							email: updatedInvitation.email!.toLowerCase(),
+							organization: organization,
+							inviter: {
+								...member,
+								user: session.user,
+							},
+							invitation: updatedInvitation as unknown as Invitation,
 						},
-						invitation: updatedInvitation as unknown as Invitation,
-					},
-					ctx.request,
-				);
+						ctx.request,
+					);
 
-				return ctx.json(updatedInvitation);
-			}
-
-			if (
-				alreadyInvited.length &&
-				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
-			) {
-				await adapter.updateInvitation({
-					invitationId: alreadyInvited[0].id,
-					status: "canceled",
-				});
+					return ctx.json(updatedInvitation);
+				}
 			}
 
 			const invitationLimit =
@@ -380,12 +391,13 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				role: __,
 				organizationId: ___,
 				resend: ____,
+				domainWhitelist: _____,
 				...additionalFields
 			} = ctx.body;
 
 			let invitationData = {
 				role: roles,
-				email: ctx.body.email.toLowerCase(),
+				email: ctx.body.email?.toLowerCase(),
 				organizationId: organizationId,
 				teamIds,
 				...(additionalFields ? additionalFields : {}),
@@ -417,21 +429,23 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				user: session.user,
 			});
 
-			await ctx.context.orgOptions.sendInvitationEmail?.(
-				{
-					id: invitation.id,
-					role: invitation.role as string,
-					email: invitation.email.toLowerCase(),
-					organization: organization,
-					inviter: {
-						...member,
-						user: session.user,
+			if (invitation.email) {
+				await ctx.context.orgOptions.sendInvitationEmail?.(
+					{
+						id: invitation.id,
+						role: invitation.role as string,
+						email: invitation.email.toLowerCase(),
+						organization: organization,
+						inviter: {
+							...member,
+							user: session.user,
+						},
+						//@ts-expect-error
+						invitation,
 					},
-					//@ts-expect-error
-					invitation,
-				},
-				ctx.request,
-			);
+					ctx.request,
+				);
+			}
 
 			// Run afterCreateInvitation hook
 			if (option?.organizationHooks?.afterCreateInvitation) {
@@ -501,11 +515,43 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+			if (invitation.email) {
+				if (
+					invitation.email.toLowerCase() !== session.user.email.toLowerCase()
+				) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+					});
+				}
+			} else {
+				if (invitation.domainWhitelist) {
+					const [_localPart, domain] = session.user.email.split("@", 2);
+					const domainWhitelist = invitation.domainWhitelist.split(",");
+
+					if (
+						domainWhitelist.length > 0 &&
+						!domainWhitelist.some(
+							(wDomain) =>
+								wDomain.trim().toLowerCase() === domain.trim().toLowerCase(),
+						)
+					) {
+						throw new APIError("FORBIDDEN", {
+							message: ORGANIZATION_ERROR_CODES.EMAIL_DOMAIN_NOT_ALLOWED,
+						});
+					}
+				}
+
+				const existingMember = await adapter.findMemberByEmail({
+					email: session.user.email,
+					organizationId: invitation.organizationId,
 				});
+				if (existingMember) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+					});
+				}
 			}
 
 			if (
@@ -552,11 +598,13 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
 			});
+
 			if (!acceptedI) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 				});
 			}
+
 			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
@@ -693,10 +741,21 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.status !== "pending"
 			) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Invitation not found!",
+					message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+
+			if (!invitation.email) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.PUBLIC_INVITATIONS_CANNOT_BE_REJECTED,
+				});
+			}
+
+			if (
+				invitation.email &&
+				invitation.email.toLowerCase() !== session.user.email.toLowerCase()
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -887,6 +946,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 											},
 											email: {
 												type: "string",
+												nullable: true,
 											},
 											role: {
 												type: "string",
@@ -912,10 +972,15 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 											inviterEmail: {
 												type: "string",
 											},
+											domainWhitelist: {
+												type: "string",
+												nullable: true,
+												description:
+													"Comma-separated list of allowed domains for public invitations",
+											},
 										},
 										required: [
 											"id",
-											"email",
 											"role",
 											"organizationId",
 											"inviterId",
@@ -948,10 +1013,13 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.expiresAt < new Date()
 			) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Invitation not found!",
+					message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			if (
+				invitation.email &&
+				invitation.email.toLowerCase() !== session.user.email.toLowerCase()
+			) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
