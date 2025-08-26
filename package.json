@@ -17,6 +17,7 @@
     "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
     "test": "turbo --filter \"./packages/*\" test",
+    "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
     "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
   "devDependencies": {
@@ -40,5 +41,8 @@
       "unified": "11.0.4",
       "whatwg-url": "^14.0.0"
     }
+  },
+  "resolutions": {
+    "zod": "^4.0.0"
   }
 }
