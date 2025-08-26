@@ -239,7 +239,7 @@ export interface OAuthOptions {
 		 * be an internally supported claim.
 		 *
 		 * Internally supported claims:
-		 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp"]
+		 * ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"]
 		 */
 		claims_supported?: string[];
 	};
