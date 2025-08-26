@@ -55,7 +55,7 @@ export const cognito = (options: CognitoOptions) => {
 		id: "cognito",
 		name: "Cognito",
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			if (!options.clientId || !options.clientSecret) {
+			if (!options.clientId || !options.clientSecret || !options.userPoolId) {
 				logger.error(
 					"Client Id and Client Secret is required for AWS Cognito. Make sure to provide them in the options.",
 				);
@@ -69,7 +69,7 @@ export const cognito = (options: CognitoOptions) => {
 			scopes && _scopes.push(...scopes);
 
 			const url = await createAuthorizationURL({
-				id: "aws-cognito",
+				id: "cognito",
 				options: {
 					...options,
 				},
