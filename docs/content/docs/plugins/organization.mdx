@@ -828,7 +828,11 @@ To add a member to an organization, we first need to send an invitation to the u
 
 ### Setup Invitation Email
 
-For member invitation to work we first need to provide `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
+For personal invitations (those sent to specific email addresses) to work, we first need to provide `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
+
+<Callout type="info">
+**Note:** This function is only called for personal invitations. Public invitations don't trigger email notifications since they don't have a specific recipient.
+</Callout>
 
 You'll need to construct and send the invitation link to the user. The link should include the invitation ID, which will be used with the acceptInvitation function when the user clicks on it.
 
@@ -856,15 +860,18 @@ export const auth = betterAuth({
 
 ### Send Invitation
 
-To invite users to an organization, you can use the `invite` function provided by the client. The `invite` function takes an object with the following properties:
+To invite users to an organization, you can use the `inviteMember` function provided by the client. You can create two types of invitations:
+
+1. **Personal invitations** - Sent to a specific email address
+2. **Public invitations** - Reusable invitation links that anyone can use
 
 <APIMethod path="/organization/invite-member" method="POST">
 ```ts
 type createInvitation = {
     /**
-     * The email address of the user to invite.  
+     * The email address of the user to invite. Optional for public invitations.  
      */
-    email: string = "example@gmail.com"
+    email?: string = "example@gmail.com"
     /**
      * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
      */
@@ -881,6 +888,11 @@ type createInvitation = {
      * The team ID to invite the user to.  
      */
     teamId?: string = "team-id"
+    /**
+     * Comma-separated list of domains allowed to accept this public invitation.
+     * Only applies to public invitations (when email is not provided).
+     */
+    domainWhitelist?: string = "example.com,company.org"
 }
 ```
 </APIMethod>
@@ -894,9 +906,101 @@ type createInvitation = {
   invitation is sent.
 </Callout>
 
+### Public Invitations
+
+Public invitations are reusable invitation links that don't require a specific email address. They're perfect for:
+- Open team signups
+- Onboarding multiple users with a single link
+- Self-service organization joining
+
+#### Creating Public Invitations
+
+To create a public invitation, simply omit the `email` field:
+
+```ts
+// Unrestricted public invitation - anyone can join
+const publicInvite = await authClient.organization.inviteMember({
+    organizationId: "org-id",
+    role: "member"
+})
+
+// Domain-restricted public invitation
+const restrictedInvite = await authClient.organization.inviteMember({
+    organizationId: "org-id",
+    role: "member",
+    domainWhitelist: "company.com,partner.org"
+})
+```
+
+#### Key Differences from Personal Invitations
+
+1. **No email notifications** - Since there's no specific recipient, no email is sent when creating public invitations
+2. **Reusable** - Public invitations remain `pending` after being accepted and can be used by multiple users
+3. **Cannot be rejected** - Only personal invitations can be rejected. Public invitations can only be canceled by authorized members
+4. **Domain restrictions** - You can limit who can use the invitation based on email domains
+
+#### Domain Whitelisting
+
+When creating a public invitation with `domainWhitelist`, only users whose email addresses match one of the specified domains can accept the invitation:
+
+```ts
+const domainRestrictedInvite = await authClient.organization.inviteMember({
+    role: "member",
+    domainWhitelist: "acme.com,partner.com" // Only @acme.com and @partner.com emails
+})
+```
+
+#### Example: Building a Self-Service Signup Flow
+
+Here's a complete example of implementing self-service organization joining:
+
+```ts
+// 1. Admin creates a public invitation link
+async function createPublicInviteLink(organizationId: string) {
+    const invite = await authClient.organization.inviteMember({
+        organizationId,
+        role: "member",
+        domainWhitelist: "company.com" // Optional: restrict to company emails
+    })
+    
+    // Generate a shareable link
+    const inviteLink = `https://app.example.com/join?inviteId=${invite.data.id}`
+    return inviteLink
+}
+
+// 2. New user visits the link and signs up
+async function handleJoinOrganization(inviteId: string) {
+    // First, ensure the user is logged in
+    const session = await authClient.session.get()
+    if (!session) {
+        // Redirect to login/signup with return URL
+        window.location.href = `/auth?return=/join?inviteId=${inviteId}`
+        return
+    }
+    
+    // Accept the invitation
+    try {
+        const result = await authClient.organization.acceptInvitation({
+            invitationId: inviteId
+        })
+        
+        // User is now a member of the organization
+        console.log("Successfully joined organization:", result.data.member)
+        
+        // Set the new organization as active
+        await authClient.organization.setActive({
+            organizationId: result.data.member.organizationId
+        })
+    } catch (error) {
+        // Handle errors (e.g., domain not allowed, invitation expired)
+        console.error("Failed to join organization:", error)
+    }
+}
+```
+
 ### Accept Invitation
 
-When a user receives an invitation email, they can click on the invitation link to accept the invitation. The invitation link should include the invitation ID, which will be used to accept the invitation.
+Users can accept both personal and public invitations using the same method. The invitation link should include the invitation ID, which will be used to accept the invitation.
 
 Make sure to call the `acceptInvitation` function after the user is logged in.
 
@@ -910,6 +1014,13 @@ type acceptInvitation = {
 }
 ```
 </APIMethod>
+
+<Callout type="info">
+**Behavior differences:**
+- **Personal invitations**: Status changes to `accepted` and cannot be reused
+- **Public invitations**: Remain `pending` and can be accepted by multiple users
+- **Domain validation**: For public invitations with `domainWhitelist`, the user's email domain is validated before acceptance
+</Callout>
 
 #### Email Verification Requirement
 
@@ -981,7 +1092,7 @@ type cancelInvitation = {
 
 ### Reject Invitation
 
-If this user has received an invitation, but wants to decline it, this method will allow you to do so by rejecting it.
+Users can reject personal invitations they have received. This method only works for personal invitations (those sent to a specific email address).
 
 <APIMethod path="/organization/reject-invitation" method="POST" noResult>
 ```ts
@@ -993,6 +1104,10 @@ type rejectInvitation = {
 }
 ```
 </APIMethod>
+
+<Callout type="warning">
+**Public invitations cannot be rejected** - Since public invitations are meant to be reusable and don't have a specific recipient, they cannot be rejected. Only the organization's authorized members can cancel public invitations.
+</Callout>
 
 <Callout type="info">
   Like accepting invitations, rejecting invitations also requires email
@@ -2245,7 +2360,8 @@ Table Name: `invitation`
     {
       name: "email",
       type: "string",
-      description: "The email address of the user",
+      description: "The email address of the user. Optional for public invitations",
+      isOptional: true
     },
     {
       name: "inviterId",
@@ -2278,6 +2394,12 @@ Table Name: `invitation`
       name: "expiresAt",
       type: "Date",
       description: "Timestamp of when the invitation expires",
+    },
+    {
+      name: "domainWhitelist",
+      type: "string",
+      description: "Comma-separated list of allowed email domains for public invitations",
+      isOptional: true
     },
   ]}
 />
