@@ -22,6 +22,7 @@ import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
+import { salesforce } from "./salesforce";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
 import { line } from "./line";
@@ -48,6 +49,7 @@ export const socialProviders = {
 	tiktok,
 	reddit,
 	roblox,
+	salesforce,
 	vk,
 	zoom,
 	notion,
@@ -91,6 +93,7 @@ export * from "./microsoft-entra-id";
 export * from "./notion";
 export * from "./reddit";
 export * from "./roblox";
+export * from "./salesforce";
 export * from "./spotify";
 export * from "./tiktok";
 export * from "./twitch";
