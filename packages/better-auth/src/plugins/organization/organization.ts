@@ -707,7 +707,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 					email: {
 						type: "string",
-						required: true,
+						required: false,
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
 					},
@@ -747,6 +747,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						},
 						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
+					},
+					domainWhitelist: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.invitation?.fields?.domainWhitelist,
 					},
 					...(options?.schema?.invitation?.additionalFields || {}),
 				},
