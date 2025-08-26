@@ -1,11 +1,10 @@
 import { importJWK, SignJWT, type JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { generateExportedKeyPair, type JwtOptions } from ".";
-import type { Jwk } from "./schema";
+import { symmetricDecrypt } from "../../crypto";
+import type { JwtOptions } from "./types";
 import { getJwksAdapter } from "./adapter";
-import { toExpJWT } from "./utils";
+import { createJwk, toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
@@ -58,26 +57,7 @@ export async function signJWT(
 		!options?.jwks?.disablePrivateKeyEncryption;
 
 	if (key === undefined) {
-		const alg = options?.jwks?.keyPairConfig?.alg || "EdDSA";
-
-		const { publicWebKey, privateWebKey } =
-			await generateExportedKeyPair(options);
-		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-
-		let jwk: Partial<Jwk> = {
-			publicKey: JSON.stringify({ alg, ...publicWebKey }),
-			privateKey: privateKeyEncryptionEnabled
-				? JSON.stringify(
-						await symmetricEncrypt({
-							key: ctx.context.secret,
-							data: stringifiedPrivateWebKey,
-						}),
-					)
-				: stringifiedPrivateWebKey,
-			createdAt: new Date(),
-		};
-
-		key = await adapter.createJwk(jwk as Jwk);
+		key = await createJwk(ctx, options);
 	}
 
 	let privateWebKey = privateKeyEncryptionEnabled
@@ -90,7 +70,7 @@ export async function signJWT(
 				);
 			})
 		: key.privateKey;
-	const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
 
 	const jwt = new SignJWT(payload)
