@@ -146,15 +146,28 @@ Better Auth handles relationships through application-level sequential queries r
 
 ### Plugin Model Support
 
-Works seamlessly with any Better Auth plugin. The organization plugin's `findFullOrganization` function automatically works across adapters:
+Works seamlessly with existing Better Auth plugins. The organization plugin's `findFullOrganization` function automatically works across adapters by making sequential queries:
 
 ```ts
-// Better Auth handles the sequential queries:
-// 1. Query organization -> routed to orgAdapter
-// 2. Query members -> routed to orgAdapter  
-// 3. Query users (based on member userIds) -> routed to userAdapter
-// 4. Combine results in application code
+// With users in PostgreSQL and organizations in MongoDB:
+database: adapterRouter({
+  fallbackAdapter: postgresAdapter, // Users here
+  routes: [
+    ({ modelName }) => ['organization', 'member', 'invitation'].includes(modelName) 
+      ? mongoAdapter : null, // Org models here
+  ]
+})
+
+// When you call:
 const fullOrg = await auth.api.getFullOrganization({ organizationId: "org123" });
+
+// Better Auth automatically makes these sequential queries:
+// 1. adapter.findOne({ model: "organization", where: [{ field: "id", value: "org123" }] })
+//    -> Routed to mongoAdapter
+// 2. adapter.findMany({ model: "member", where: [{ field: "organizationId", value: "org123" }] })
+//    -> Routed to mongoAdapter  
+// 3. adapter.findMany({ model: "user", where: [{ field: "id", value: userIds, operator: "in" }] })
+//    -> Routed to postgresAdapter (fallback)
 ```
 
 ## Configuration Options
