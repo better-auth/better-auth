@@ -29,7 +29,6 @@ description: Amazon Cognito provider setup and usage.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
-    import { cognito } from "better-auth/providers/cognito"
 
     export const auth = betterAuth({
       providers: [
@@ -60,7 +59,19 @@ description: Amazon Cognito provider setup and usage.
       })
     }
     ```
-    <Callout type="info">
+    
+      ### Additional Options:
+        - `scope`: Additional OAuth2 scopes to request (combined with default permissions).
+            - Default: `"openid" "profile" "email"`
+            - Common Cognito scopes:
+              - `openid`: Required for OpenID Connect authentication
+              - `profile`: Access to basic profile info
+              - `email`: Access to user’s email
+              - `phone`: Access to user’s phone number
+              - `aws.cognito.signin.user.admin`: Grants access to Cognito-specific APIs
+        - Note: You must configure the scopes in your Cognito App Client settings. [available scopes](https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html#token-endpoint-userinfo)
+        - `getUserInfo`: Custom function to retrieve user information from the Cognito UserInfo endpoint.  
+       <Callout type="info">
         For more information about Amazon Cognito's scopes and API capabilities, refer to the [official documentation](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html?utm_source).
         </Callout>
   </Step>
