@@ -11,12 +11,12 @@
   "dependencies": {
     "better-auth": "workspace:^",
     "drizzle-orm": "^0.39.3",
-    "hono": "^4.7.2"
+    "hono": "^4.9.4"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.60",
-    "@cloudflare/workers-types": "^4.20250805.0",
-    "drizzle-kit": "^0.30.4",
-    "wrangler": "^3.109.2"
+    "@cloudflare/vitest-pool-workers": "^0.8.66",
+    "@cloudflare/workers-types": "^4.20250823.0",
+    "drizzle-kit": "^0.31.4",
+    "wrangler": "^3.114.14"
   }
 }
