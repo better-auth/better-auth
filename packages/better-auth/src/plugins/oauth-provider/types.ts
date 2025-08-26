@@ -12,7 +12,7 @@ export interface OAuthOptions {
 	 * Trusted clients that are configured directly in the provider options.
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
-	trustedClients?: SchemaClient[];
+	trustedClients?: (SchemaClient & { skipConsent?: boolean })[];
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 * 10 min is recommended by the OIDC spec (https://openid.net/specs/oauth-v2-jarm.html#section-2.1-2.3.1)
@@ -403,7 +403,7 @@ export type OAuthSession = Omit<Session, "token"> & {
 	token?: string;
 	refresh?: string;
 	clientId?: string;
-	scopes?: string;
+	scopes?: string[];
 };
 
 /**
@@ -548,5 +548,5 @@ export interface OAuthAccessToken {
 	 *
 	 * Shall match the sessionId.scopes if sessionId is provided.
 	 */
-	scopes: string;
+	scopes: string[];
 }

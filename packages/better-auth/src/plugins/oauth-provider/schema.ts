@@ -19,8 +19,8 @@ export const schema = {
 				defaultValue: false,
 				required: false,
 			},
-			scope: {
-				type: "string",
+			scopes: {
+				type: "string[]",
 				required: false,
 			},
 			// Recommended client data
@@ -54,7 +54,7 @@ export const schema = {
 				required: false,
 			},
 			contacts: {
-				type: "string",
+				type: "string[]",
 				required: false,
 			},
 			tos: {
@@ -80,7 +80,7 @@ export const schema = {
 			},
 			// Authentication Metadata
 			redirectURLs: {
-				type: "string",
+				type: "string[]",
 				required: false,
 			},
 			tokenEndpointAuthMethod: {
@@ -88,11 +88,11 @@ export const schema = {
 				required: false,
 			},
 			grantTypes: {
-				type: "string",
+				type: "string[]",
 				required: false,
 			},
 			responseTypes: {
-				type: "string",
+				type: "string[]",
 				required: false,
 			},
 			// RFC6749 Spec
@@ -106,7 +106,7 @@ export const schema = {
 			},
 			// All other metadata
 			metadata: {
-				type: "string",
+				type: "json",
 				required: false,
 			},
 		},
@@ -136,7 +136,7 @@ export const schema = {
 				},
 			},
 			scopes: {
-				type: "string",
+				type: "string[]",
 				required: false,
 			},
 		},
@@ -186,8 +186,8 @@ export const schema = {
 			},
 			// Shall be same as sessionId.scopes if using sessionId
 			scopes: {
+				type: "string[]",
 				required: true,
-				type: "string",
 			},
 		},
 	},
