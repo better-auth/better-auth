@@ -9,6 +9,7 @@ export type FieldType =
 	| "date"
 	| "json"
 	| `${"string" | "number"}[]`
+	| "json"
 	| Array<LiteralString>;
 
 type Primitive =
