@@ -14,7 +14,7 @@ export default defineWorkersProject(async () => {
 			poolOptions: {
 				workers: {
 					singleWorker: true,
-					wrangler: { configPath: "./wrangler.jsonc" },
+					wrangler: { configPath: "./wrangler.json" },
 					miniflare: {
 						d1Databases: ["DB"],
 						bindings: { TEST_MIGRATIONS: migrations },

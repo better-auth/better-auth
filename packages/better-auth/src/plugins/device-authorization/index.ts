@@ -293,7 +293,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							userCode,
 							expiresAt,
 							status: "pending",
-							pollingInterval: opts.interval,
+							pollingInterval: ms(opts.interval),
 							clientId: ctx.body.client_id,
 							scope: ctx.body.scope,
 						},
@@ -473,10 +473,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					) {
 						const timeSinceLastPoll =
 							Date.now() - new Date(deviceCodeRecord.lastPolledAt).getTime();
-						const minInterval =
-							typeof deviceCodeRecord.pollingInterval === "string"
-								? ms(deviceCodeRecord.pollingInterval as MSStringValue)
-								: deviceCodeRecord.pollingInterval;
+						const minInterval = deviceCodeRecord.pollingInterval;
 
 						if (timeSinceLastPoll < minInterval) {
 							throw new APIError("BAD_REQUEST", {
