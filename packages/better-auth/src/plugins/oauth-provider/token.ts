@@ -13,6 +13,7 @@ import {
 import type { GrantType } from "../../oauth-2.1/types";
 import { SignJWT, type JWTPayload } from "jose";
 import { signJWT } from "../jwt/sign";
+import { toExpJWT } from "../jwt/utils";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -71,7 +72,7 @@ async function createJwtAccessToken(
 ) {
 	const now = Date.now();
 	const iat = overrides?.iat ?? Math.floor(now / 1000);
-	const expiresIn = opts.accessTokenExpiresIn ?? 600; // 10 min recommended by OIDC spec
+	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
 	const exp = overrides?.exp ?? iat + expiresIn;
 	const customClaims = opts.customJwtClaims
 		? await opts.customJwtClaims(user, scopes)
@@ -236,7 +237,7 @@ async function createOpaqueAccessToken(
 ) {
 	const now = Date.now();
 	const iat = payload.iat ?? Math.floor(now / 1000);
-	const expiresIn = opts.accessTokenExpiresIn ?? 600; // 10 min recommended by OIDC spec
+	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
 	const exp = payload?.exp ?? iat + expiresIn;
 	const token = generateRandomString(32, "A-Z", "a-z");
 	await ctx.context.adapter.create({
@@ -271,7 +272,18 @@ async function createUserTokens(
 		: undefined;
 	const iat = Math.floor(Date.now() / 1000);
 	const now = new Date(iat * 1000);
-	const exp = iat + (opts.accessTokenExpiresIn ?? 600);
+	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
+	const exp = opts.scopeExpirations
+		? scopes
+				.map((sc) =>
+					opts.scopeExpirations?.[sc]
+						? toExpJWT(opts.scopeExpirations[sc], iat)
+						: defaultExp,
+				)
+				.reduce((prev, curr) => {
+					return prev < curr ? prev : curr;
+				}, defaultExp)
+		: defaultExp;
 	const accessTokenExpiresAt = new Date(exp * 1000);
 	const refreshTokenExpiresAt = refreshToken
 		? new Date((iat + (opts.refreshTokenExpiresIn ?? 2592000)) * 1000)
@@ -382,7 +394,7 @@ async function createUserTokens(
 	return ctx.json(
 		{
 			access_token: accessToken,
-			expires_in: opts.accessTokenExpiresIn ?? 600,
+			expires_in: exp - iat,
 			expires_at: accessTokenExpiresAt,
 			token_type: "Bearer",
 			refresh_token: sessionRefresh,
@@ -764,8 +776,18 @@ async function handleClientCredentialsGrant(
 	);
 
 	const iat = Math.floor(Date.now() / 1000);
-	const expiresIn = opts.m2mAccessTokenExpiresIn ?? 3600; // 1 hour
-	const exp = iat + expiresIn;
+	const defaultExp = iat + (opts.m2mAccessTokenExpiresIn ?? 3600);
+	const exp = opts.scopeExpirations
+		? requestedScopes
+				.map((sc) =>
+					opts.scopeExpirations?.[sc]
+						? toExpJWT(opts.scopeExpirations[sc], iat)
+						: defaultExp,
+				)
+				.reduce((prev, curr) => {
+					return prev < curr ? prev : curr;
+				}, defaultExp)
+		: defaultExp;
 
 	const accessToken = resource
 		? await signJWT(ctx, {
@@ -787,7 +809,7 @@ async function handleClientCredentialsGrant(
 	return ctx.json(
 		{
 			access_token: accessToken,
-			expires_in: expiresIn,
+			expires_in: exp - iat,
 			expires_at: new Date(exp * 1000),
 			token_type: "Bearer",
 			scope: requestedScopes.join(" "),
