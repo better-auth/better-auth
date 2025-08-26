@@ -3,7 +3,7 @@ import { BetterAuthError } from "../../error";
 import type { jwt } from "../jwt";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { OAuthOptions } from "./types";
+import type { OAuthOptions, SchemaClient } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 
 export const getJwtPlugin = (ctx: AuthContext) => {
@@ -13,6 +13,28 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	}
 	return plugin as ReturnType<typeof jwt>;
 };
+
+/**
+ * Get a client by ID, checking trusted clients first, then database
+ */
+export async function getClient(
+	ctx: GenericEndpointContext,
+	options: OAuthOptions,
+	clientId: string,
+) {
+	const trustedClient = options.trustedClients?.find(
+		(client) => client.clientId === clientId,
+	);
+	if (trustedClient) {
+		return trustedClient;
+	}
+	const dbClient = await ctx.context.adapter.findOne<SchemaClient>({
+		model: options.schema?.oauthApplication?.modelName ?? "oauthApplication",
+		where: [{ field: "clientId", value: clientId }],
+	});
+
+	return dbClient as (SchemaClient & { skipConsent?: boolean }) | null;
+}
 
 /**
  * Default client secret hasher using SHA-256

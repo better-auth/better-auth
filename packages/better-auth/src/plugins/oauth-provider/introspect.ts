@@ -187,7 +187,7 @@ async function validateOpaqueAccessToken(
 		sid: accessToken.sessionId,
 		exp: accessToken.expiresAt.getTime() / 1000,
 		iat: accessToken.createdAt.getTime() / 1000,
-		scope: accessToken.scopes,
+		scope: accessToken.scopes?.join(" "),
 	} as JWTPayload;
 }
 
@@ -236,7 +236,7 @@ async function validateRefreshToken(
 		sid: userSession.id,
 		exp: userSession.expiresAt.getTime() / 1000,
 		iat: userSession.createdAt.getTime() / 1000,
-		scope: userSession.scopes?.replaceAll(",", " "),
+		scope: userSession.scopes?.join(" "),
 	} as JWTPayload;
 }
 

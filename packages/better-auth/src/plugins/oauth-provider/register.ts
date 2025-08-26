@@ -137,26 +137,10 @@ export async function registerEndpoint(
 		},
 		true,
 	);
-	const client = await ctx.context.adapter
-		.create({
-			model: opts.schema?.oauthApplication?.modelName ?? "oauthApplication",
-			data: {
-				...schema,
-				contacts: schema.contacts?.join(","),
-				grantTypes: schema.grantTypes?.join(","),
-				responseTypes: schema.responseTypes?.join(","),
-				redirectURLs: schema.redirectURLs?.join(","),
-			},
-		})
-		.then((res: Record<string, string | null>) => {
-			return {
-				...res,
-				contacts: res.contacts?.split(",") ?? undefined,
-				grantTypes: res.grantTypes?.split(",") ?? undefined,
-				responseTypes: res.responseTypes?.split(",") ?? undefined,
-				redirectURLs: res?.redirectURLs?.split(",") ?? undefined,
-			} as SchemaClient;
-		});
+	const client = await ctx.context.adapter.create<SchemaClient>({
+		model: opts.schema?.oauthApplication?.modelName ?? "oauthApplication",
+		data: schema,
+	});
 	// Format the response according to RFC7591
 	return ctx.json(
 		schemaToOAuth(
