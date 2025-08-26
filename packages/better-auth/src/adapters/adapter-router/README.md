@@ -202,32 +202,7 @@ type AdapterRouterCallback = (params: {
 - **Migration Support**: Gradual migration between systems
 
 **Costs:**
-- **Multiple Round-Trips**: Cross-adapter relationships require sequential queries (same as Better Auth normally does)
-- **No Transactions**: No transactional guarantees across different adapters
 - **Operational Complexity**: More moving parts to monitor and maintain
-
-## Best Practices
-
-**✅ Recommended Patterns:**
-```ts
-// Keep related models together
-routes: [
-  // All organization models in same adapter
-  ({ modelName }) => ['organization', 'member', 'invitation'].includes(modelName) ? orgAdapter : null,
-  
-  // Independent models can be separate
-  ({ modelName }) => modelName === 'session' ? cacheAdapter : null,
-]
-```
-
-**❌ Avoid:**
-```ts
-// Splitting tightly coupled models
-routes: [
-  ({ modelName }) => modelName === 'organization' ? adapter1 : null,
-  ({ modelName }) => modelName === 'member' ? adapter2 : null, // Bad: members reference organizations
-]
-```
 
 ## Debug Logging
 
