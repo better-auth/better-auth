@@ -470,7 +470,7 @@ export const createAdapter =
 						typeof newValue === "string" &&
 						(field.type === "string[]" || field.type === "number[]")
 					) {
-						newValue = JSON.parse(newValue);
+						newValue = safeJSONParse(newValue);
 					} else if (
 						config.supportsDates === false &&
 						typeof newValue === "string" &&

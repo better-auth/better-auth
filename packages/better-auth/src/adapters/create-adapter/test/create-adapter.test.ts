@@ -417,7 +417,7 @@ describe("Create Adapter Helper", async () => {
 								user: {
 									additionalFields: {
 										preferences: {
-											type: "string[]",
+											type: "number[]",
 										},
 									},
 								},

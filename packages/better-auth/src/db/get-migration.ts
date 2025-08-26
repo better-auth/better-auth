@@ -210,6 +210,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mysql: "datetime",
 				mssql: "datetime",
 			},
+			json: {
+				sqlite: "text",
+				postgres: "jsonb",
+				mysql: "jsonb",
+				mssql: "jsonb",
+			},
 			id: {
 				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",
 				mysql: config.advanced?.database?.useNumberId
@@ -224,13 +230,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 		if (fieldName === "id" || field.references?.field === "id") {
 			return typeMap.id[dbType!];
 		}
-		if (
-			dbType === "sqlite" &&
-			(type === "string[]" || type === "number[]" || type === "json")
-		) {
+		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
 			return "text";
 		}
-		if (type === "string[]" || type === "number[]" || type === "json") {
+		if (type === "string[]" || type === "number[]") {
 			return "jsonb";
 		}
 		if (Array.isArray(type)) {
