@@ -3,11 +3,11 @@ import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type {
 	AuthorizationQuery,
-	SchemaClient,
 	OAuthOptions,
 	VerificationValue,
 } from "./types";
 import { generateRandomString } from "../../crypto";
+import { getClient } from "./utils";
 
 /**
  * Formats an error url
@@ -114,29 +114,7 @@ export async function authorizeEndpoint(
 	}
 
 	/** Check client */
-	const client = await ctx.context.adapter
-		.findOne<Record<string, string | null>>({
-			model: options.schema?.oauthApplication?.modelName ?? "oauthApplication",
-			where: [
-				{
-					field: "clientId",
-					value: ctx.query.client_id,
-				},
-			],
-		})
-		.then((res) => {
-			if (!res) {
-				return null;
-			}
-			return {
-				...res,
-				contacts: res.contacts?.split(",") ?? undefined,
-				grantTypes: res.grantTypes?.split(",") ?? undefined,
-				responseTypes: res.responseTypes?.split(",") ?? undefined,
-				redirectURLs: res?.redirectURLs?.split(",") ?? undefined,
-				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as SchemaClient;
-		});
+	const client = await getClient(ctx, options, ctx.query.client_id);
 	if (!client) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -247,6 +225,11 @@ export async function authorizeEndpoint(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
+		return handleRedirect(redirectURIWithCode.toString());
+	}
+
+	// Check if this is a trusted client that should skip consent
+	if (client.skipConsent) {
 		return handleRedirect(redirectURIWithCode.toString());
 	}
 
