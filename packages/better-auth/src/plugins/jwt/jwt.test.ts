@@ -1,33 +1,13 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
-import { generateExportedKeyPair, jwt, type JwtOptions } from "./index";
-import { importJWK, jwtVerify, type JSONWebKeySet } from "jose";
+import { jwt } from ".";
+import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
+import type { JwtOptions, JWKOptions } from "./types";
+import { generateExportedKeyPair } from "./utils";
 
-type JWKOptions =
-	| {
-			alg: "EdDSA"; // EdDSA with either Ed25519
-			crv?: "Ed25519";
-	  }
-	| {
-			alg: "ES256"; // ECDSA with P-256 curve
-			crv?: never; // Only one valid option, no need for crv
-	  }
-	| {
-			alg: "RS256"; // RSA with SHA-256
-			modulusLength?: number; // Default to 2048 or higher
-	  }
-	| {
-			alg: "PS256"; // RSA-PSS with SHA-256
-			modulusLength?: number; // Default to 2048 or higher
-	  }
-	| {
-			alg: "ES512"; // ECDSA with P-521 curve
-			crv?: never; // Only P-521 for ES512
-	  };
-
-describe("jwt", async (it) => {
+describe("jwt", async () => {
 	// Testing the default behaviour
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [jwt()],
@@ -97,11 +77,8 @@ describe("jwt", async (it) => {
 
 		const jwks = await client.jwks();
 
-		const publicWebKey = await importJWK({
-			...jwks.data?.keys[0],
-			alg: "EdDSA",
-		});
-		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+		const localJwks = createLocalJWKSet(jwks.data!);
+		const decoded = await jwtVerify(token.data?.token!, localJwks);
 
 		expect(decoded).toBeDefined();
 	});
@@ -115,11 +92,8 @@ describe("jwt", async (it) => {
 
 		const jwks = await client.jwks();
 
-		const publicWebKey = await importJWK({
-			...jwks.data?.keys[0],
-			alg: "EdDSA",
-		});
-		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+		const localJwks = createLocalJWKSet(jwks.data!);
+		const decoded = await jwtVerify(token.data?.token!, localJwks);
 		expect(decoded.payload.sub).toBeDefined();
 		expect(decoded.payload.sub).toBe(decoded.payload.id);
 	});
@@ -130,6 +104,18 @@ describe("jwt", async (it) => {
 	}[] = [
 		{
 			keyPairConfig: {
+				alg: "EdDSA",
+				crv: "Ed25519",
+			},
+			expectedOutcome: {
+				ec: "OKP",
+				length: 43,
+				crv: "Ed25519",
+				alg: "EdDSA",
+			},
+		},
+		{
+			keyPairConfig: {
 				alg: "ES256",
 			},
 			expectedOutcome: {
@@ -152,30 +138,14 @@ describe("jwt", async (it) => {
 		},
 		{
 			keyPairConfig: {
-				alg: "EdDSA",
-				crv: "Ed25519",
+				alg: "PS256",
 			},
 			expectedOutcome: {
-				ec: "OKP",
-				length: 43,
-				crv: "Ed25519",
-				alg: "EdDSA",
+				ec: "RSA",
+				length: 342,
+				alg: "PS256",
 			},
 		},
-		// This is not supported (https://github.com/panva/jose/issues/210)
-		/*
-		{
-			keyPairConfig: {
-				alg: "EdDSA",
-				crv: "Ed448",
-			},
-			expectedOutcome: {
-				ec: "OKP",
-				length: 43,
-				crv: "Ed448",
-				alg: "EdDSA",
-			},
-		},*/
 		{
 			keyPairConfig: {
 				alg: "RS256",
@@ -186,44 +156,6 @@ describe("jwt", async (it) => {
 				alg: "RS256",
 			},
 		},
-		// We cannot sign using key exchange protocol, need to establish a key first (only allowed usage for these keys is `deriveBits`)
-		/*
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-256",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 43,
-				crv: "P-256",
-				alg: "ECDH-ES",
-			},
-		},
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-384",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 64,
-				crv: "P-384",
-				alg: "ECDH-ES",
-			},
-		},
-		{
-			keyPairConfig: {
-				alg: "ECDH-ES",
-				crv: "P-521",
-			},
-			expectedOutcome: {
-				ec: "EC",
-				length: 88,
-				crv: "P-521",
-				alg: "ECDH-ES",
-			},
-		},*/
 	];
 
 	for (const algorithm of algorithmsToTest) {
@@ -255,8 +187,18 @@ describe("jwt", async (it) => {
 					: "";
 
 				it(`${alg} algorithm${enc} can be used to generate JWKS`, async () => {
-					const jwks = await auth.api.getJwks();
+					// Unit test (JWS Supported key)
+					const { publicWebKey, privateWebKey } =
+						await generateExportedKeyPair(jwtOptions);
+					for (const key of [publicWebKey, privateWebKey]) {
+						expect(key.kty).toBe(expectedOutcome.ec);
+						if (key.x) expect(key.x).toHaveLength(expectedOutcome.length);
+						if (key.y) expect(key.y).toHaveLength(expectedOutcome.length);
+						if (key.n) expect(key.n).toHaveLength(expectedOutcome.length);
+					}
 
+					// Functional test (JWKS)
+					const jwks = await auth.api.getJwks();
 					expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome.ec);
 					if (jwks.keys.at(0)?.crv)
 						expect(jwks.keys.at(0)?.crv).toBe(expectedOutcome.crv);
@@ -267,17 +209,6 @@ describe("jwt", async (it) => {
 						expect(jwks.keys.at(0)?.y).toHaveLength(expectedOutcome.length);
 					if (jwks.keys.at(0)?.n)
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
-				});
-
-				it(`${alg} algorithm${enc}: Endpoint "/token" can extract valid keys`, async () => {
-					const { publicWebKey, privateWebKey } =
-						await generateExportedKeyPair(jwtOptions);
-					for (const key of [publicWebKey, privateWebKey]) {
-						expect(key.kty).toBe(expectedOutcome.ec);
-						if (key.x) expect(key.x).toHaveLength(expectedOutcome.length);
-						if (key.y) expect(key.y).toHaveLength(expectedOutcome.length);
-						if (key.n) expect(key.n).toHaveLength(expectedOutcome.length);
-					}
 				});
 
 				const client = createAuthClient({
@@ -335,11 +266,8 @@ describe("jwt", async (it) => {
 
 					const jwks = await client.jwks();
 
-					const publicWebKey = await importJWK({
-						...jwks.data?.keys[0],
-						alg: algorithm.keyPairConfig.alg,
-					});
-					const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+					const localJwks = createLocalJWKSet(jwks.data!);
+					const decoded = await jwtVerify(token.data?.token!, localJwks);
 
 					expect(decoded).toBeDefined();
 				});
@@ -353,11 +281,8 @@ describe("jwt", async (it) => {
 
 					const jwks = await client.jwks();
 
-					const publicWebKey = await importJWK({
-						...jwks.data?.keys[0],
-						alg: algorithm.keyPairConfig.alg,
-					});
-					const decoded = await jwtVerify(token.data?.token!, publicWebKey);
+					const localJwks = createLocalJWKSet(jwks.data!);
+					const decoded = await jwtVerify(token.data?.token!, localJwks);
 					expect(decoded.payload.sub).toBeDefined();
 					expect(decoded.payload.sub).toBe(decoded.payload.id);
 				});
@@ -369,9 +294,32 @@ describe("jwt", async (it) => {
 	}
 });
 
-describe("signJWT", async (it) => {
+describe.each([
+	{
+		alg: "EdDSA",
+		crv: "Ed25519",
+	},
+	{
+		alg: "ES256",
+	},
+	{
+		alg: "ES512",
+	},
+	{
+		alg: "PS256",
+	},
+	{
+		alg: "RS256",
+	},
+] as JWKOptions[])("signJWT - alg: $alg", async (keyPairConfig) => {
 	const { auth } = await getTestInstance({
-		plugins: [jwt()],
+		plugins: [
+			jwt({
+				jwks: {
+					keyPairConfig,
+				},
+			}),
+		],
 		logger: {
 			level: "error",
 		},
@@ -407,11 +355,8 @@ describe("signJWT", async (it) => {
 			},
 		});
 		const jwks = await auth.api.getJwks();
-		const publicWebKey = await importJWK({
-			...jwks.keys[0],
-			alg: "EdDSA",
-		});
-		const decoded = await jwtVerify(jwt?.token!, publicWebKey);
+		const localJwks = createLocalJWKSet(jwks);
+		const decoded = await jwtVerify(jwt?.token!, localJwks);
 		expect(decoded).toMatchObject({
 			payload: {
 				iss: "https://example.com",
@@ -421,7 +366,10 @@ describe("signJWT", async (it) => {
 				iat: expect.any(Number),
 				custom: "custom",
 			},
-			protectedHeader: { alg: "EdDSA", kid: jwks.keys[0].kid },
+			protectedHeader: {
+				alg: keyPairConfig.alg,
+				kid: jwks.keys[0].kid,
+			},
 		});
 	});
 
@@ -445,7 +393,7 @@ describe("signJWT", async (it) => {
 	});
 });
 
-describe("jwt - remote signing", async (it) => {
+describe("jwt - remote signing", async () => {
 	it("should fail if sign is defined and remoteUrl is not", async () => {
 		expect(() =>
 			getTestInstance({
@@ -463,7 +411,7 @@ describe("jwt - remote signing", async (it) => {
 	});
 });
 
-describe("jwt - remote url", async (it) => {
+describe("jwt - remote url", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			jwt({
