@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { $deviceAuthorizationOptionsSchema, deviceAuthorization } from ".";
 import { deviceAuthorizationClient } from "./client";
+import type { DeviceCode } from "./schema";
 
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
@@ -489,7 +490,7 @@ describe("device authorization with custom options", async () => {
 		expect(response.interval).toBe(5);
 
 		// Check that the interval is stored as milliseconds in the database
-		const deviceCodeRecord = await db.findOne({
+		const deviceCodeRecord: DeviceCode | null = await db.findOne({
 			model: "deviceCode",
 			where: [
 				{
