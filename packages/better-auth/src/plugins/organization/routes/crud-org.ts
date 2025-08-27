@@ -498,6 +498,19 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			const disableOrganizationDeletion =
+				ctx.context.orgOptions.organizationDeletion?.disabled ||
+				ctx.context.orgOptions.disableOrganizationDeletion;
+			if (disableOrganizationDeletion) {
+				if (ctx.context.orgOptions.organizationDeletion?.disabled) {
+					ctx.context.logger.info(
+						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
+					);
+				}
+				throw new APIError("NOT_FOUND", {
+					message: "Organization deletion is disabled",
+				});
+			}
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
 				throw new APIError("UNAUTHORIZED", { status: 401 });
@@ -545,23 +558,20 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				 */
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
-			const option = ctx.context.orgOptions.organizationDeletion;
-			if (option?.disabled) {
-				throw new APIError("FORBIDDEN");
-			}
+
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
 				throw new APIError("BAD_REQUEST");
 			}
-			if (option?.beforeDelete) {
-				await option.beforeDelete({
+			if (options?.organizationHooks?.beforeDeleteOrganization) {
+				await options.organizationHooks.beforeDeleteOrganization({
 					organization: org,
 					user: session.user,
 				});
 			}
 			await adapter.deleteOrganization(organizationId);
-			if (option?.afterDelete) {
-				await option.afterDelete({
+			if (options?.organizationHooks?.afterDeleteOrganization) {
+				await options.organizationHooks.afterDeleteOrganization({
 					organization: org,
 					user: session.user,
 				});

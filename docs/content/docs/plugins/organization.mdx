@@ -803,12 +803,12 @@ You can configure how organization deletion is handled through `organizationDele
 const auth = betterAuth({
   plugins: [
     organization({
-      organizationDeletion: {
-        disabled: true, //to disable it altogether
-        beforeDelete: async (data, request) => {
+      disableOrganizationDeletion: true, //to disable it altogether
+      organizationHooks: {
+        beforeDeleteOrganization: async (data, request) => {
           // a callback to run before deleting org
         },
-        afterDelete: async (data, request) => {
+        afterDeleteOrganization: async (data, request) => {
           // a callback to run after deleting org
         },
       },

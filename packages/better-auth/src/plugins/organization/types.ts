@@ -276,17 +276,28 @@ export interface OrganizationOptions {
 		};
 	};
 	/**
+	 * Disable organization deletion
+	 *
+	 * @default false
+	 */
+	disableOrganizationDeletion?: boolean;
+	/**
 	 * Configure how organization deletion is handled
+	 *
+	 * @deprecated Use `organizationHooks` instead
 	 */
 	organizationDeletion?: {
 		/**
 		 * disable deleting organization
+		 *
+		 * @deprecated Use `disableOrganizationDeletion` instead
 		 */
 		disabled?: boolean;
 		/**
 		 * A callback that runs before the organization is
 		 * deleted
 		 *
+		 * @deprecated Use `organizationHooks` instead
 		 * @param data - organization and user object
 		 * @param request - the request object
 		 * @returns
@@ -302,6 +313,7 @@ export interface OrganizationOptions {
 		 * A callback that runs after the organization is
 		 * deleted
 		 *
+		 * @deprecated Use `organizationHooks` instead
 		 * @param data - organization and user object
 		 * @param request - the request object
 		 * @returns
@@ -437,7 +449,20 @@ export interface OrganizationOptions {
 			user: User & Record<string, any>;
 			member: Member & Record<string, any>;
 		}) => Promise<void>;
-
+		/**
+		 * A callback that runs before the organization is deleted
+		 */
+		beforeDeleteOrganization?: (data: {
+			organization: Organization & Record<string, any>;
+			user: User & Record<string, any>;
+		}) => Promise<void>;
+		/**
+		 * A callback that runs after the organization is deleted
+		 */
+		afterDeleteOrganization?: (data: {
+			organization: Organization & Record<string, any>;
+			user: User & Record<string, any>;
+		}) => Promise<void>;
 		/**
 		 * Member hooks
 		 */
