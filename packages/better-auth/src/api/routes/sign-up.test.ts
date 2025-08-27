@@ -76,4 +76,31 @@ describe("sign-up with custom fields", async (it) => {
 			ipAddress: "127.0.0.1",
 		});
 	});
+
+	it("should rollback when session creation fails", async () => {
+		
+		const ctx = await auth.$context
+		const originalCreateSession = ctx.internalAdapter.createSession;
+		ctx.internalAdapter.createSession = vi.fn().mockRejectedValue(
+			new Error("Session creation failed")
+		);
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "rollback@test.com",
+					password: "password",
+					name: "Rollback Test",
+				},
+			}),
+		).rejects.toThrow();
+
+		const users = await db.findMany({ model: "user" });
+		const rollbackUser = users.find((u:any) => u.email === "rollback@test.com");
+		expect(rollbackUser).toBeUndefined();
+
+		ctx.internalAdapter.createSession = originalCreateSession;
+	});;
+	
+	
 });
