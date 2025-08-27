@@ -2,14 +2,14 @@ import { APIError } from "../../api";
 import type { GenericEndpointContext, Session, User } from "../../types";
 import type { SchemaClient, OAuthOptions, OAuthSession } from "./types";
 import { createHash } from "@better-auth/utils/hash";
-import { base64 } from "@better-auth/utils/base64";
 import { generateRandomString } from "../../crypto";
 import {
+	basicToClientCredentials,
 	decryptStoredClientSecret,
-	getClient,
 	getJwtPlugin,
-	verifyStoredClientSecret,
+	validateClientCredentials,
 } from "./utils";
+import { userNormalClaims } from "./userinfo";
 import type { GrantType } from "../../oauth-2.1/types";
 import { SignJWT, type JWTPayload } from "jose";
 import { signJWT } from "../jwt/sign";
@@ -100,29 +100,6 @@ async function createJwtAccessToken(
 			exp,
 		},
 	});
-}
-
-// Note this function is used for both /userinfo and IdToken Creation
-// To separate functionality, see createIdToken function and /userinfo endpoint
-// https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
-export function userNormalClaims(user: User, scopes: string[]) {
-	const name = user.name.split(" ").filter((v) => v !== " ");
-	const profile = {
-		name: user.name ?? undefined,
-		picture: user.image ?? undefined,
-		given_name: name.length > 1 ? name.slice(0, -1).join(" ") : undefined,
-		family_name: name.length > 1 ? name.at(-1) : undefined,
-	};
-	const email = {
-		email: user.email ?? undefined,
-		email_verified: user.emailVerified ?? false,
-	};
-
-	return {
-		sub: user.id ?? undefined,
-		...(scopes.includes("profile") ? profile : {}),
-		...(scopes.includes("email") ? email : {}),
-	};
 }
 
 /**
@@ -412,104 +389,6 @@ async function createUserTokens(
 			},
 		},
 	);
-}
-
-export function basicToClientCredentials(authorization: string) {
-	if (authorization.startsWith("Basic ")) {
-		const encoded = authorization.replace("Basic ", "");
-		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		if (!decoded.includes(":")) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		const [id, secret] = decoded.split(":");
-		if (!id || !secret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		return {
-			client_id: id,
-			client_secret: secret,
-		};
-	}
-}
-
-export async function validateClientCredentials(
-	ctx: GenericEndpointContext,
-	options: OAuthOptions,
-	clientId: string,
-	clientSecret?: string, // optional because required if client is confidential or this value is defined
-	scopes?: string[], // checks requested scopes against allowed scopes
-) {
-	const client = await getClient(ctx, options, clientId);
-	if (!client) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "missing client",
-			error: "invalid_client",
-		});
-	}
-	if (client.disabled) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client is disabled",
-			error: "invalid_client",
-		});
-	}
-
-	// Require secret for confidential clients
-	if (!client.public && !clientSecret) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client secret must be provided",
-			error: "invalid_client",
-		});
-	}
-
-	// Secret should not be received
-	if (clientSecret && !client.clientSecret) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "public client, client secret should not be received",
-			error: "invalid_client",
-		});
-	}
-
-	// Compare Secrets when secret is provided
-	if (
-		clientSecret &&
-		!(await verifyStoredClientSecret(
-			ctx,
-			options,
-			client.clientSecret!,
-			clientSecret,
-		))
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "invalid client_secret",
-			error: "invalid_client",
-		});
-	}
-
-	// If allowed scopes if set, must check against scopes
-	if (client.allowedScopes) {
-		if (!scopes) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "must request a scope",
-				error: "invalid_scope",
-			});
-		}
-		for (const sc of scopes) {
-			if (!client.allowedScopes.includes(sc)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: `client does not allow scope ${sc}`,
-					error: "invalid_scope",
-				});
-			}
-		}
-	}
-
-	return client;
 }
 
 /** Checks verification value */
