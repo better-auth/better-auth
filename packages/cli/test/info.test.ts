@@ -10,7 +10,12 @@ let tmpDir = ".";
 
 describe("info command", () => {
 	beforeEach(async () => {
-		const tmp = path.join(process.cwd(), "info_test-");
+		const tmp = path.join(
+			process.cwd(),
+			"node_modules",
+			".cache",
+			"info_test-",
+		);
 		tmpDir = await fs.mkdtemp(tmp);
 
 		// Mock console methods to avoid noise in test output
