@@ -145,8 +145,10 @@ export const oauthProvider = (options: OAuthOptions) => {
 					 * prompt a consent screen or return with session if consented
 					 */
 					handler: createAuthMiddleware(async (ctx) => {
+						const { name: loginPromptCookieName } =
+							ctx.context.createAuthCookie("oauth_login_prompt");
 						const cookie = await ctx.getSignedCookie(
-							"oidc_login_prompt",
+							loginPromptCookieName,
 							ctx.context.secret,
 						);
 						const cookieName = ctx.context.authCookies.sessionToken.name;
@@ -157,7 +159,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
+						ctx.setCookie(loginPromptCookieName, "", {
 							maxAge: 0,
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
@@ -287,8 +289,11 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					const { name: cookieName } = ctx.context.createAuthCookie(
+						"oauth_consent_prompt",
+					);
 					const storedCode = await ctx.getSignedCookie(
-						"oidc_consent_prompt",
+						cookieName,
 						ctx.context.secret,
 					);
 					if (!storedCode) {
