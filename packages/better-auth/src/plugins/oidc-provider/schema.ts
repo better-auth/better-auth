@@ -70,6 +70,11 @@ export const schema = {
 			},
 			clientId: {
 				type: "string",
+				references: {
+					model: "oauthApplication",
+					field: "clientId",
+					onDelete: "cascade",
+				},
 			},
 			userId: {
 				type: "string",
@@ -96,6 +101,11 @@ export const schema = {
 		fields: {
 			clientId: {
 				type: "string",
+				references: {
+					model: "oauthApplication",
+					field: "clientId",
+					onDelete: "cascade",
+				},
 			},
 			userId: {
 				type: "string",
