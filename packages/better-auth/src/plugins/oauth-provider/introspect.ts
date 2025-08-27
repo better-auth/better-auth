@@ -185,8 +185,8 @@ async function validateOpaqueAccessToken(
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: accessToken.sessionId,
-		exp: accessToken.expiresAt.getTime() / 1000,
-		iat: accessToken.createdAt.getTime() / 1000,
+		exp: Math.floor(accessToken.expiresAt.getTime() / 1000),
+		iat: Math.floor(accessToken.createdAt.getTime() / 1000),
 		scope: accessToken.scopes?.join(" "),
 	} as JWTPayload;
 }
@@ -234,8 +234,8 @@ async function validateRefreshToken(
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.options.baseURL,
 		sub: userSession.userId,
 		sid: userSession.id,
-		exp: userSession.expiresAt.getTime() / 1000,
-		iat: userSession.createdAt.getTime() / 1000,
+		exp: Math.floor(userSession.expiresAt.getTime() / 1000),
+		iat: Math.floor(userSession.createdAt.getTime() / 1000),
 		scope: userSession.scopes?.join(" "),
 	} as JWTPayload;
 }

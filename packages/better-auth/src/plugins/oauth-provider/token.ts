@@ -395,7 +395,7 @@ async function createUserTokens(
 		{
 			access_token: accessToken,
 			expires_in: exp - iat,
-			expires_at: accessTokenExpiresAt,
+			expires_at: exp,
 			token_type: "Bearer",
 			refresh_token: sessionRefresh,
 			scope: scopes.join(" "),
@@ -810,7 +810,7 @@ async function handleClientCredentialsGrant(
 		{
 			access_token: accessToken,
 			expires_in: exp - iat,
-			expires_at: new Date(exp * 1000),
+			expires_at: exp,
 			token_type: "Bearer",
 			scope: requestedScopes.join(" "),
 		},
