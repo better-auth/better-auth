@@ -233,6 +233,47 @@ async function createOpaqueAccessToken(
 	return (opts.opaqueAccessTokenPrefix ?? "") + token;
 }
 
+/**
+ * Checks the resource parameter, if provided,
+ * and returns a valid audience based on the request
+ *
+ */
+async function checkResource(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+	scopes: string[],
+) {
+	let _aud: string | string[] | undefined = ctx.body.resource;
+	const audience = typeof _aud === "string" ? [_aud] : _aud;
+	if (audience) {
+		// Adds /userinfo to audience
+		if (scopes.includes("openid")) {
+			audience.push(`${ctx.context.baseURL}/oauth2/userinfo`);
+		}
+		// Check valid audiences
+		const jwtPluginOptions = opts.disableJWTPlugin
+			? undefined
+			: getJwtPlugin(ctx.context).options;
+		const validAudiences = [
+			jwtPluginOptions?.jwt?.audience ?? ctx.context.baseURL,
+			scopes?.includes("openid")
+				? `${ctx.context.baseURL}/oauth2/userinfo`
+				: undefined,
+		]
+			.flat()
+			.filter((v) => v?.length);
+		for (const aud of audience) {
+			if (!validAudiences.includes(aud)) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "requested resource invalid",
+					error: "invalid_request",
+				});
+			}
+		}
+	}
+	return audience?.length === 1 ? audience.at(0) : audience;
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
@@ -305,32 +346,7 @@ async function createUserTokens(
 	}
 
 	// Check requested audience if sent as the resource parameter
-	let _aud: string | string[] | undefined = ctx.body.resource;
-	const audience = typeof _aud === "string" ? [_aud] : _aud;
-	if (scopes.includes("openid")) {
-		audience?.push(`${ctx.context.baseURL}/oauth2/userinfo`);
-	}
-	if (audience) {
-		const jwtPluginOptions = opts.disableJWTPlugin
-			? undefined
-			: getJwtPlugin(ctx.context).options;
-		const validAudiences = [
-			jwtPluginOptions?.jwt?.audience ?? ctx.context.baseURL,
-			scopes?.includes("openid")
-				? `${ctx.context.baseURL}/oauth2/userinfo`
-				: undefined,
-		]
-			.flat()
-			.filter((v) => v?.length);
-		for (const aud of audience) {
-			if (!validAudiences.includes(aud)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: "requested resource invalid",
-					error: "invalid_request",
-				});
-			}
-		}
-	}
+	const audience = await checkResource(ctx, opts, scopes);
 
 	// Sign jwt and refresh tokens in parallel
 	const [accessToken, sessionRefresh, idToken] = await Promise.allSettled([
@@ -581,12 +597,10 @@ async function handleClientCredentialsGrant(
 		client_id,
 		client_secret,
 		scope,
-		resource,
 	}: {
 		client_id?: string;
 		client_secret?: string;
 		scope?: string;
-		resource?: string;
 	} = body;
 	const authorization = ctx.request?.headers.get("authorization") || null;
 
@@ -617,21 +631,6 @@ async function handleClientCredentialsGrant(
 		});
 	}
 
-	// Check if requested resource (aka audience is the same)
-	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-	if (
-		resource &&
-		!(
-			resource === jwtPluginOptions?.jwt?.audience ||
-			resource === ctx.context.options.baseURL
-		)
-	) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "requested resource invalid",
-			error: "invalid_request",
-		});
-	}
-
 	// OIDC scopes should not be requestable (code authorization grant should be used)
 	const requestedScopes = scope.split(" ");
 	const invalidScopes = ["openid", "profile", "email", "offline_access"];
@@ -649,6 +648,12 @@ async function handleClientCredentialsGrant(
 			});
 		}
 	}
+
+	// Check requested audience if sent as the resource parameter
+	const jwtPluginOptions = opts.disableJWTPlugin
+		? undefined
+		: getJwtPlugin(ctx.context).options;
+	const audience = await checkResource(ctx, opts, requestedScopes);
 
 	await validateClientCredentials(
 		ctx,
@@ -672,22 +677,23 @@ async function handleClientCredentialsGrant(
 				}, defaultExp)
 		: defaultExp;
 
-	const accessToken = resource && !opts.disableJWTPlugin
-		? await signJWT(ctx, {
-				options: jwtPluginOptions,
-				payload: {
-					aud: resource,
-					azp: client_id,
-					scope: requestedScopes.join(" "),
-					iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+	const accessToken =
+		audience && !opts.disableJWTPlugin
+			? await signJWT(ctx, {
+					options: jwtPluginOptions,
+					payload: {
+						aud: audience,
+						azp: client_id,
+						scope: requestedScopes.join(" "),
+						iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+						iat,
+						exp,
+					},
+				})
+			: await createOpaqueAccessToken(ctx, opts, client_id, requestedScopes, {
 					iat,
 					exp,
-				},
-			})
-		: await createOpaqueAccessToken(ctx, opts, client_id, requestedScopes, {
-				iat,
-				exp,
-			});
+				});
 
 	return ctx.json(
 		{
