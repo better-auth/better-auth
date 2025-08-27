@@ -267,6 +267,7 @@ export const changePassword = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.updateAccount(account.id, {
 			password: passwordHash,
+			updatedAt: new Date(),
 		});
 		let token = null;
 		if (revokeOtherSessions) {
@@ -354,6 +355,7 @@ export const setPassword = createAuthEndpoint(
 					providerId: "credential",
 					accountId: session.user.id,
 					password: passwordHash,
+					updatedAt: new Date(),
 				},
 				ctx,
 			);
