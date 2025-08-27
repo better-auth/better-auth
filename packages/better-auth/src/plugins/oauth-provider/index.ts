@@ -12,12 +12,12 @@ import type { OAuthOptions, VerificationValue } from "./types";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { tokenEndpoint } from "./token";
-import { userNormalClaims } from "./userinfo";
+import { userinfoEndpoint } from "./userinfo";
 import { mergeSchema } from "../../db";
 import { registerEndpoint } from "./register";
 import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import { getJwtPlugin } from "./utils";
-import { introspectEndpoint, validateAccessToken } from "./introspect";
+import { introspectEndpoint } from "./introspect";
 import { revokeEndpoint } from "./revoke";
 import { BetterAuthError } from "../../error";
 export { authServerMetadata, oidcServerMetadata } from "./metadata";
@@ -374,7 +374,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 						},
 					);
 					await ctx.context.adapter.create({
-						model: options.schema?.oauthConsent?.modelName ?? "oauthConsent",
+						model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 						data: {
 							clientId: verificationValue.clientId,
 							userId: verificationValue.userId,
@@ -519,58 +519,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					if (!ctx.request) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "request not found",
-							error: "invalid_request",
-						});
-					}
-					const authorization = ctx.request.headers.get("authorization");
-					const token =
-						typeof authorization === "string" &&
-						authorization?.startsWith("Bearer ")
-							? authorization?.replace("Bearer ", "")
-							: authorization;
-					if (!token?.length) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "authorization header not found",
-							error: "invalid_request",
-						});
-					}
-					const validate = await validateAccessToken(ctx, opts, token);
-
-					const scopes = (validate.scope as string | undefined)?.split(" ");
-					if (!scopes?.includes("openid")) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "authorization header not found",
-							error: "invalid_request",
-						});
-					}
-
-					if (!validate.sub) {
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "User not found",
-						});
-					}
-
-					const user = await ctx.context.internalAdapter.findUserById(
-						validate.sub,
-					);
-					if (!user) {
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "User not found",
-						});
-					}
-
-					const baseUserClaims = userNormalClaims(user, scopes ?? []);
-					const additionalInfoUserClaims =
-						options.getAdditionalUserInfoClaim && scopes?.length
-							? await options.getAdditionalUserInfoClaim(user, scopes)
-							: {};
-					return ctx.json({
-						...baseUserClaims,
-						...additionalInfoUserClaims,
-					});
+					return userinfoEndpoint(ctx, opts);
 				},
 			),
 			registerOAuthClient: createAuthEndpoint(

@@ -1235,7 +1235,6 @@ describe("oauth token - config", async () => {
 			client_secret: oauthClient?.client_secret,
 			scope: testScopes.join(""),
 		});
-		console.log(tokens);
 		expect(tokens.data?.access_token.startsWith(prefix)).toBeTruthy();
 	});
 
