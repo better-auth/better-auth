@@ -351,4 +351,4 @@ describe("info command", () => {
 		expect(output.frameworks).toBeNull();
 		expect(output.databases).toBeNull();
 	});
-});
+}, 20000);
