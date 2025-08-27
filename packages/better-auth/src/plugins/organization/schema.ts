@@ -32,12 +32,13 @@ export const memberSchema = z.object({
 export const invitationSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
-	email: z.string(),
+	email: z.string().nullish(),
 	role,
 	status: invitationStatus,
 	teamId: z.string().nullish(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
+	domainWhitelist: z.string().nullish(),
 });
 
 export const teamSchema = z.object({
@@ -134,20 +135,22 @@ export type InferInvitation<O extends OrganizationOptions> =
 		? {
 				id: string;
 				organizationId: string;
-				email: string;
+				email?: string;
 				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
 				teamId?: string;
+				domainWhitelist?: string;
 			}
 		: {
 				id: string;
 				organizationId: string;
-				email: string;
+				email?: string;
 				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
+				domainWhitelist?: string;
 			}) &
 		InferAdditionalFieldsFromPluginOptions<"invitation", O, false>;
