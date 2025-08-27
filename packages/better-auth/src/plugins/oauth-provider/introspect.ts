@@ -2,7 +2,7 @@ import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import type { GenericEndpointContext, Session, User } from "../../types";
-import { basicToClientCredentials, validateClientCredentials } from "./utils";
+import { basicToClientCredentials, getClient, validateClientCredentials } from "./utils";
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 
@@ -86,8 +86,17 @@ async function validateJwtAccessToken(
 		}
 		throw new Error(error as unknown as string);
 	}
-	if (jwtPayload.azp && jwtPayload.azp !== clientId) {
-		throw new Error("token does not match client ID");
+	if (jwtPayload.azp && clientId && jwtPayload.azp !== clientId) {
+		if (clientId && jwtPayload.azp !== clientId) {
+			throw new Error("token does not match client ID");
+		} else {
+			const client = await getClient(ctx, opts, jwtPayload.azp);
+			if (!client || client?.disabled) {
+				return {
+					active: false,
+				};
+			}
+		}
 	}
 
 	// Validate JWT against its session if it exists
