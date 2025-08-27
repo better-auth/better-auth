@@ -78,12 +78,11 @@ describe("sign-up with custom fields", async (it) => {
 	});
 
 	it("should rollback when session creation fails", async () => {
-		
-		const ctx = await auth.$context
+		const ctx = await auth.$context;
 		const originalCreateSession = ctx.internalAdapter.createSession;
-		ctx.internalAdapter.createSession = vi.fn().mockRejectedValue(
-			new Error("Session creation failed")
-		);
+		ctx.internalAdapter.createSession = vi
+			.fn()
+			.mockRejectedValue(new Error("Session creation failed"));
 
 		await expect(
 			auth.api.signUpEmail({
@@ -96,11 +95,11 @@ describe("sign-up with custom fields", async (it) => {
 		).rejects.toThrow();
 
 		const users = await db.findMany({ model: "user" });
-		const rollbackUser = users.find((u:any) => u.email === "rollback@test.com");
+		const rollbackUser = users.find(
+			(u: any) => u.email === "rollback@test.com",
+		);
 		expect(rollbackUser).toBeUndefined();
 
 		ctx.internalAdapter.createSession = originalCreateSession;
-	});;
-	
-	
+	});
 });
