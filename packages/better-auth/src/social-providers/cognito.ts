@@ -43,7 +43,7 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 export const cognito = (options: CognitoOptions) => {
 	if (!options.domain || !options.region || !options.userPoolId) {
 		logger.error(
-			"Domain,Region and UserPoolId are required for Amazon Cognito. Make sure to provide them in the options.",
+			"Domain, region and userPoolId are required for Amazon Cognito. Make sure to provide them in the options.",
 		);
 		throw new BetterAuthError("DOMAIN_AND_REGION_REQUIRED");
 	}
