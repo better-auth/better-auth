@@ -360,8 +360,10 @@ export const oauthProvider = (options: OAuthOptions) => {
 
 					// Consent accepted
 					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-					const codeExpiresInMs = (opts.codeExpiresIn ?? 600) * 1000;
-					const expiresAt = new Date(Date.now() + codeExpiresInMs);
+					const iat = Math.floor(Date.now() / 1000);
+					const now = new Date(iat * 1000);
+					const exp = iat + (opts.codeExpiresIn ?? 600);
+
 					await ctx.context.internalAdapter.updateVerificationValue(
 						verification.id,
 						{
@@ -370,7 +372,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 								requireConsent: false,
 							}),
 							identifier: code,
-							expiresAt,
+							expiresAt: new Date(exp * 1000),
 						},
 					);
 					await ctx.context.adapter.create({
@@ -380,8 +382,8 @@ export const oauthProvider = (options: OAuthOptions) => {
 							userId: verificationValue.userId,
 							scopes: verificationValue.scopes,
 							consentGiven: true,
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: now,
+							updatedAt: now,
 						},
 					});
 					const redirectURI = new URL(
