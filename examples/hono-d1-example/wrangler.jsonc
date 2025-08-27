@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "better-auth-hono-d1",
+  "main": "src/index.ts",
+	"compatibility_date": "2025-04-05",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "D1",
+			"database_name": "example-database-name",
+			"database_id": "example-database-id",
+			"migrations_dir": "./migrations"
+		}
+	]
+}
