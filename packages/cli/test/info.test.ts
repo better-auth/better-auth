@@ -16,6 +16,9 @@ describe("info command", () => {
 			".cache",
 			"info_test-",
 		);
+		await fs.mkdir(path.join(tmp, "node_modules", ".cache"), {
+			recursive: true,
+		});
 		tmpDir = await fs.mkdtemp(tmp);
 
 		// Mock console methods to avoid noise in test output
