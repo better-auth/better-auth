@@ -2,7 +2,7 @@ import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import type { GenericEndpointContext, Session, User } from "../../types";
-import { basicToClientCredentials, validateClientCredentials } from "./token";
+import { basicToClientCredentials, validateClientCredentials } from "./utils";
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 
