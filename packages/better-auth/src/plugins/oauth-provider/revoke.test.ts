@@ -2,6 +2,7 @@ import { beforeAll, describe, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
 import { oauthProvider } from ".";
+import type { OAuthOptions } from "./types";
 import { createAuthClient } from "../../client";
 import type { OAuthClient } from "../../oauth-2.1/types";
 import { oauthProviderClient } from "./client";
@@ -272,6 +273,93 @@ describe("oauth revoke", async () => {
 				client_secret: oauthClient?.client_secret,
 				token: tokens.data?.refresh_token,
 			},
+		});
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+});
+
+describe("oauth revoke - config", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const scopes = [
+		"openid",
+		"email",
+		"profile",
+		"offline_access",
+		"read:profile",
+	];
+
+	async function createTestInstance(opts?: {
+		oauthProviderConfig?: Omit<OAuthOptions, "loginPage" | "consentPage">;
+	}) {
+		const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes,
+					allowDynamicClientRegistration: true,
+					...opts?.oauthProviderConfig,
+				}),
+				...(opts?.oauthProviderConfig?.disableJWTPlugin
+					? []
+					: [
+							jwt({
+								jwt: {
+									audience: validAudience,
+									issuer: authServerBaseUrl,
+								},
+							}),
+						]),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const registeredClient = await client.oauth2.register({
+			redirect_uris: [redirectUri],
+		});
+
+		return {
+			client,
+			oauthClient: registeredClient.data,
+		};
+	}
+
+	it("should pass with the correct opaqueAccessTokenPrefix", async () => {
+		const prefix = "hello_";
+		const testScopes = ["read:profile"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				opaqueAccessTokenPrefix: prefix,
+				scopes: testScopes,
+			},
+		});
+		const tokens = await client.oauth2.token({
+			grant_type: "client_credentials",
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			scope: testScopes.join(" "),
+		});
+		expect(tokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+
+		const revocation = await client.oauth2.revoke({
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.access_token ?? "",
+			token_type_hint: "access_token",
 		});
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);

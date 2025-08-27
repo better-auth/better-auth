@@ -239,19 +239,21 @@ async function createOpaqueAccessToken(
 	const iat = payload.iat ?? Math.floor(now / 1000);
 	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
 	const exp = payload?.exp ?? iat + expiresIn;
-	const token = generateRandomString(32, "A-Z", "a-z");
+	const token = opts.generateOpaqueAccessToken
+		? await opts.generateOpaqueAccessToken()
+		: generateRandomString(32, "A-Z", "a-z");
 	await ctx.context.adapter.create({
 		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 		data: {
 			token,
 			clientId,
-			sessionId: payload.sid,
+			sessionId: payload?.sid,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
 		},
 	});
-	return token;
+	return (opts.opaqueAccessTokenPrefix ?? "") + token;
 }
 
 async function createUserTokens(
@@ -268,7 +270,9 @@ async function createUserTokens(
 	nonce?: string,
 ) {
 	const refreshToken = scopes.includes("offline_access")
-		? generateRandomString(32, "A-Z", "a-z")
+		? opts.generateRefreshToken
+			? await opts.generateRefreshToken()
+			: generateRandomString(32, "A-Z", "a-z")
 		: undefined;
 	const iat = Math.floor(Date.now() / 1000);
 	const now = new Date(iat * 1000);
@@ -393,7 +397,7 @@ async function createUserTokens(
 
 	return ctx.json(
 		{
-			access_token: accessToken,
+			access_token: (opts.opaqueAccessTokenPrefix ?? "") + accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
 			token_type: "Bearer",
@@ -789,7 +793,7 @@ async function handleClientCredentialsGrant(
 				}, defaultExp)
 		: defaultExp;
 
-	const accessToken = resource
+	const accessToken = resource && !opts.disableJWTPlugin
 		? await signJWT(ctx, {
 				options: jwtPluginOptions,
 				payload: {

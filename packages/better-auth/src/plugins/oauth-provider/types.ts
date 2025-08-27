@@ -258,6 +258,32 @@ export interface OAuthOptions {
 		claims_supported?: string[];
 	};
 	/**
+	 * Adds a prefix to an opaque access token.
+	 * Note: the prefix is not stored in the database.
+	 *
+	 * Useful when also using the [API Key Plugin](../api-key/index.ts).
+	 *
+	 * We recommend to append an underscore to make it more identifiable
+	 *
+	 * @example "hello_"
+	 * @default undefined
+	 */
+	opaqueAccessTokenPrefix?: string;
+	/**
+	 * Generate a unique access token to save on the database.
+	 *
+	 * @default
+	 * generateRandomString(32, "A-Z", "a-z")
+	 */
+	generateOpaqueAccessToken?: () => Awaitable<string>;
+	/**
+	 * Generate a unique refresh token to save on the database.
+	 *
+	 * @default
+	 * generateRandomString(32, "A-Z", "a-z")
+	 */
+	generateRefreshToken?: () => Awaitable<string>;
+	/**
 	 * Custom session token formatter. You can
 	 * choose to perform additional functionality such as
 	 * refresh token encryption or store the raw token
