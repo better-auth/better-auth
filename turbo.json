@@ -23,6 +23,10 @@
       "dependsOn": ["build"],
       "outputs": []
     },
+    "e2e:smoke": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
     "typecheck": {
       "outputs": [],
       "cache": true

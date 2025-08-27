@@ -246,6 +246,12 @@
 
 html {
 	scroll-behavior: smooth;
+	scroll-padding-top: calc(
+		var(--fd-nav-height) +
+		var(--fd-banner-height, 0px) +
+		var(--fd-tocnav-height, 0px) +
+		16px
+	);
 }
 
 @layer utilities {

@@ -592,3 +592,5 @@ Table Name: `oauthConsent`
 **getAdditionalUserInfoClaim**: `(user: User, scopes: string[], client: Client) => Record<string, any>` - Function to get additional user info claims.
 
 **useJWTPlugin**: `boolean` - When `true`, ID tokens are signed using the JWT plugin's asymmetric keys. When `false` (default), ID tokens are signed with HMAC-SHA256 using the application secret.
+
+**schema**: `AuthPluginSchema` - Customize the OIDC provider schema.
