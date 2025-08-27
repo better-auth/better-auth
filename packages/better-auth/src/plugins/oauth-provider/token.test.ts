@@ -21,7 +21,6 @@ import {
 	type JSONWebKeySet,
 } from "jose";
 import { createClientCredentialsTokenRequest } from "../../oauth2/client-credentials-token";
-import { jwtClient } from "../jwt/client";
 
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -1061,7 +1060,7 @@ describe("oauth token - config", async () => {
 		});
 		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
-			plugins: [oauthProviderClient(), jwtClient()],
+			plugins: [oauthProviderClient()],
 			baseURL: authServerBaseUrl,
 			fetchOptions: {
 				customFetchImpl,
@@ -1087,7 +1086,7 @@ describe("oauth token - config", async () => {
 		const url = await createAuthorizationURL({
 			id: providerId,
 			options: credentials,
-			redirectURI: "",
+			redirectURI: redirectUri,
 			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
 			state,
 			scopes,
@@ -1174,7 +1173,6 @@ describe("oauth token - config", async () => {
 				},
 				{
 					scopes: testScopes,
-					redirectURI: redirectUri,
 				},
 			);
 			let callbackRedirectUrl = "";
@@ -1221,4 +1219,66 @@ describe("oauth token - config", async () => {
 			).toBe(result); // 5m lowest
 		},
 	);
+
+	it("opaqueAccessTokenPrefix - client_credentials", async () => {
+		const prefix = "hello_";
+		const testScopes = ["read:profile"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				opaqueAccessTokenPrefix: prefix,
+			},
+		});
+		// Client credentials
+		const tokens = await client.oauth2.token({
+			grant_type: "client_credentials",
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			scope: testScopes.join(""),
+		});
+		console.log(tokens);
+		expect(tokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+	});
+
+	it("opaqueAccessTokenPrefix - code_authorization, refresh_token", async () => {
+		const prefix = "hello_";
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				opaqueAccessTokenPrefix: prefix,
+			},
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			clientId: oauthClient?.client_id!,
+			clientSecret: oauthClient?.client_secret,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain(`code=`);
+		expect(callbackRedirectUrl).toContain(`state=123`);
+		const url = new URL(callbackRedirectUrl);
+
+		// Authorization code
+		const tokens = await client.oauth2.token({
+			code: url.searchParams.get("code")!,
+			code_verifier: codeVerifier,
+			grant_type: "authorization_code",
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+		});
+		expect(tokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+
+		// Refresh token
+		const refreshedTokens = await client.oauth2.token({
+			// @ts-expect-error refresh token is sent
+			refresh_token: tokens.data?.refresh_token,
+			grant_type: "refresh_token",
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+		});
+		expect(refreshedTokens.data?.access_token.startsWith(prefix)).toBeTruthy();
+	});
 });
