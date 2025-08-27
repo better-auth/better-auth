@@ -70,8 +70,7 @@ async function createJwtAccessToken(
 		exp?: number;
 	},
 ) {
-	const now = Date.now();
-	const iat = overrides?.iat ?? Math.floor(now / 1000);
+	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
 	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
 	const exp = overrides?.exp ?? iat + expiresIn;
 	const customClaims = opts.customJwtClaims
@@ -115,13 +114,13 @@ async function createIdToken(
 	scopes: string[],
 	nonce?: string,
 ) {
-	const now = Date.now();
-	const iat = Math.floor(now / 1000);
+	const iat = Math.floor(Date.now() / 1000);
 	const expiresIn = 60 * 60 * 10; // 10 hour id token lifetime
 	const exp = iat + expiresIn;
 	const userClaims = userNormalClaims(user, scopes);
 	const authTime = Math.floor(
-		(ctx.context.session?.session.createdAt.getTime() ?? now) / 1000,
+		(ctx.context.session?.session.createdAt ?? new Date(iat * 1000)).getTime() /
+			1000,
 	);
 	// TODO: this should be validated against the login process
 	// - bronze : password only
@@ -212,8 +211,7 @@ async function createOpaqueAccessToken(
 	scopes: string[],
 	payload: JWTPayload,
 ) {
-	const now = Date.now();
-	const iat = payload.iat ?? Math.floor(now / 1000);
+	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
 	const exp = payload?.exp ?? iat + expiresIn;
 	const token = opts.generateOpaqueAccessToken
