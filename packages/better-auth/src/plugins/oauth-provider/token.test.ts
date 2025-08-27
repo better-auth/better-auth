@@ -365,9 +365,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
 		expect(accessToken.payload.sub).toBeDefined();
 		expect(accessToken.payload.iat).toBeDefined();
-		expect(accessToken.payload.exp).toBe(
-			Date.parse(tokens.data?.expires_at!) / 1000,
-		);
+		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
 });
@@ -642,9 +640,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
 		expect(accessToken.payload.sub).toBeDefined();
 		expect(accessToken.payload.iat).toBeDefined();
-		expect(accessToken.payload.exp).toBe(
-			Date.parse(newTokens.data?.expires_at!) / 1000,
-		);
+		expect(accessToken.payload.exp).toBe(newTokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
 
@@ -749,9 +745,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
 		expect(accessToken.payload.sub).toBeDefined();
 		expect(accessToken.payload.iat).toBeDefined();
-		expect(accessToken.payload.exp).toBe(
-			Date.parse(newTokens.data?.expires_at!) / 1000,
-		);
+		expect(accessToken.payload.exp).toBe(newTokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(newScopes.join(" "));
 	});
 
@@ -1017,9 +1011,7 @@ describe("oauth token - client_credentials", async () => {
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
 		expect(accessToken.payload.sub).toBeUndefined(); // unset since not a user!
 		expect(accessToken.payload.iat).toBeDefined();
-		expect(accessToken.payload.exp).toBe(
-			Date.parse(tokens.data?.expires_at!) / 1000,
-		);
+		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
 });
