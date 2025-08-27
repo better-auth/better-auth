@@ -27,10 +27,10 @@ export const schema = {
 			userId: {
 				type: "string",
 				required: false,
-				references: {
-					model: "user",
-					field: "id",
-				},
+				// references: {
+				// 	model: "user",
+				// 	field: "id",
+				// },
 			},
 			createdAt: {
 				type: "date",
@@ -130,10 +130,10 @@ export const schema = {
 			clientId: {
 				type: "string",
 				required: false,
-				references: {
-					model: "oauthApplication",
-					field: "clientId",
-				},
+				// references: {
+				// 	model: "oauthApplication",
+				// 	field: "clientId",
+				// },
 			},
 			scopes: {
 				type: "string[]",
@@ -173,10 +173,10 @@ export const schema = {
 				// Optional for client credentials grant
 				required: false,
 				// Not unique, multiple sessions could exist
-				references: {
-					model: "session",
-					field: "id",
-				},
+				// references: {
+				// 	model: "session",
+				// 	field: "id",
+				// },
 			},
 			expiresAt: {
 				type: "date",
