@@ -129,10 +129,21 @@ async function validateOpaqueAccessToken(
 	token: string,
 	clientId?: string,
 ) {
+	let tokenValue = token;
+	if (opts.opaqueAccessTokenPrefix) {
+		if (tokenValue.startsWith(opts.opaqueAccessTokenPrefix)) {
+			tokenValue = tokenValue.replace(opts.opaqueAccessTokenPrefix, "");
+		} else {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "opaque access token not found",
+				error: "invalid_token",
+			});
+		}
+	}
 	const accessToken: OAuthAccessToken | null =
 		await ctx.context.adapter.findOne({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-			where: [{ field: "token", value: token }],
+			where: [{ field: "token", value: tokenValue }],
 		});
 	if (!accessToken) {
 		throw new APIError("BAD_REQUEST", {
