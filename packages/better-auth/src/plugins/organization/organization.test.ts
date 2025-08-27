@@ -743,6 +743,43 @@ describe("organization", async (it) => {
 		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
+	it("should return BAD_REQUEST when non-member tries to delete organization", async () => {
+		// Create an organization first
+		const testOrg = await client.organization.create({
+			name: "test-delete-org",
+			slug: "test-delete-org",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Create a new user who is not a member of any organization
+		const nonMemberUser = {
+			email: "nonmember@test.com",
+			password: "password123",
+			name: "Non Member User",
+		};
+
+		await client.signUp.email(nonMemberUser);
+		const { headers: nonMemberHeaders } = await signInWithUser(
+			nonMemberUser.email,
+			nonMemberUser.password,
+		);
+
+		// Try to delete an organization they're not a member of
+		const deleteResult = await client.organization.delete({
+			organizationId: testOrg.data?.id as string,
+			fetchOptions: {
+				headers: nonMemberHeaders,
+			},
+		});
+
+		expect(deleteResult.error?.status).toBe(400);
+		expect(deleteResult.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		);
+	});
+
 	it("should allow deleting organization", async () => {
 		const { headers: adminHeaders } = await signInWithUser(
 			adminUser.email,
