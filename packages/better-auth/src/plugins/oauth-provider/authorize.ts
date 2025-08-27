@@ -70,16 +70,13 @@ export async function authorizeEndpoint(
 		 * If the user is not logged in, we need to redirect them to the
 		 * login page.
 		 */
+		const { name: cookieName, attributes: cookieAttributes } =
+			ctx.context.createAuthCookie("oauth_login_prompt");
 		await ctx.setSignedCookie(
-			"oidc_login_prompt",
+			cookieName,
 			JSON.stringify(ctx.query),
 			ctx.context.secret,
-			{
-				httpOnly: true,
-				maxAge: 600,
-				path: "/oauth2",
-				sameSite: "strict",
-			},
+			cookieAttributes,
 		);
 		const queryFromURL = ctx.request.url?.split("?")[1];
 		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
@@ -261,12 +258,14 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
-		httpOnly: true,
-		maxAge: 600,
-		path: "/",
-		sameSite: "strict",
-	});
+	const { name: cookieName, attributes: cookieAttributes } =
+		ctx.context.createAuthCookie("oauth_consent_prompt");
+	await ctx.setSignedCookie(
+		cookieName,
+		code,
+		ctx.context.secret,
+		cookieAttributes,
+	);
 	const params = new URLSearchParams({
 		client_id: client.clientId,
 		scope: requestScope.join(" "),
