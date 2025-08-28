@@ -3,6 +3,7 @@ packages:
   - docs
   - demo/*
   - e2e/**
+neverBuiltDependencies: []
 catalogs:
   react18:
     '@types/react': ^19.1.0
