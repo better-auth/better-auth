@@ -1,7 +1,8 @@
 // https://github.com/zkochan/packages/blob/main/which-pm-runs/index.js
-export function detectPackageManager() {
-	const userAgent = process.env.npm_config_user_agent;
+import { env } from "../../utils/env";
 
+export function detectPackageManager() {
+	const userAgent = env.npm_config_user_agent;
 	if (!userAgent) {
 		return undefined;
 	}
