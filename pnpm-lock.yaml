@@ -875,7 +875,7 @@ importers:
   packages/stripe:
     dependencies:
       better-auth:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../better-auth
       zod:
         specifier: ^4.0.0
