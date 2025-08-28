@@ -451,9 +451,7 @@ export function createApiKey({
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(
-							apiKey.permissions,
-						)
+					? safeJSONParse(apiKey.permissions)
 					: null,
 			});
 		},
