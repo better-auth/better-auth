@@ -46,6 +46,9 @@
     "better-auth": "workspace:^",
     "zod": "^4.0.0"
   },
+  "peerDependencies": {
+    "stripe": "^18"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "better-call": "catalog:",
