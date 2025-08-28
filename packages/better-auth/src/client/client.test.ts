@@ -347,37 +347,37 @@ describe("type", () => {
 		}>();
 	});
 
-  it("should support refetch with query parameters", () => {
-    const client = createReactClient({
-      plugins: [testClientPlugin()],
-      baseURL: "http://localhost:3000",
-      fetchOptions: {
-        customFetchImpl: async (url, init) => {
-          return new Response();
-        },
-      },
-    });
+	it("should support refetch with query parameters", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
 
-    type UseSessionReturn = ReturnType<typeof client.useSession>;
-    expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
-      data: {
-        user: {
-          id: string;
-          email: string;
-          emailVerified: boolean;
-          name: string;
-          createdAt: Date;
-          updatedAt: Date;
-          image?: string | undefined | null;
-          testField4: string;
-          testField?: string | undefined | null;
-          testField2?: number | undefined | null;
-        };
-        session: Session;
-      } | null;
-      isPending: boolean;
-      error: BetterFetchError | null;
-      refetch: (queryParams?: { query?: SessionQueryParams }) => void;
-    }>();
-  });
+		type UseSessionReturn = ReturnType<typeof client.useSession>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			error: BetterFetchError | null;
+			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+		}>();
+	});
 });
