@@ -39,10 +39,12 @@ export async function getClient(
 
 /**
  * Default client secret hasher using SHA-256
+ *
+ * @internal
  */
-export const defaultClientSecretHasher = async (clientSecret: string) => {
+const defaultHasher = async (value: string) => {
 	const hash = await createHash("SHA-256").digest(
-		new TextEncoder().encode(clientSecret),
+		new TextEncoder().encode(value),
 	);
 	const hashed = base64Url.encode(new Uint8Array(hash), {
 		padding: false,
@@ -52,6 +54,8 @@ export const defaultClientSecretHasher = async (clientSecret: string) => {
 
 /**
  * Decrypts a storedClientSecret for signing
+ *
+ * @internal
  */
 export async function decryptStoredClientSecret(
 	ctx: GenericEndpointContext,
@@ -63,8 +67,7 @@ export async function decryptStoredClientSecret(
 			key: ctx.context.secret,
 			data: storedClientSecret,
 		});
-	}
-	if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
+	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
 		return await storageMethod.decrypt(storedClientSecret);
 	}
 
@@ -75,8 +78,10 @@ export async function decryptStoredClientSecret(
 
 /**
  * Verify stored client secret against provided client secret
+ *
+ * @internal
  */
-export async function verifyStoredClientSecret(
+async function verifyStoredClientSecret(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 	storedClientSecret: string,
@@ -87,17 +92,15 @@ export async function verifyStoredClientSecret(
 
 	if (storageMethod === "hashed") {
 		const hashedClientSecret = clientSecret
-			? await defaultClientSecretHasher(clientSecret)
+			? await defaultHasher(clientSecret)
 			: undefined;
 		return hashedClientSecret === storedClientSecret;
-	}
-	if (typeof storageMethod === "object" && "hash" in storageMethod) {
+	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
 		const hashedClientSecret = clientSecret
 			? await storageMethod.hash(clientSecret)
 			: undefined;
 		return hashedClientSecret === storedClientSecret;
-	}
-	if (
+	} else if (
 		storageMethod === "encrypted" ||
 		(typeof storageMethod === "object" && "decrypt" in storageMethod)
 	) {
@@ -116,6 +119,8 @@ export async function verifyStoredClientSecret(
 
 /**
  * Store client secret according to the configured storage method
+ *
+ * @internal
  */
 export async function storeClientSecret(
 	ctx: GenericEndpointContext,
@@ -130,14 +135,11 @@ export async function storeClientSecret(
 			key: ctx.context.secret,
 			data: clientSecret,
 		});
-	}
-	if (storageMethod === "hashed") {
-		return await defaultClientSecretHasher(clientSecret);
-	}
-	if (typeof storageMethod === "object" && "hash" in storageMethod) {
+	} else if (storageMethod === "hashed") {
+		return await defaultHasher(clientSecret);
+	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
 		return await storageMethod.hash(clientSecret);
-	}
-	if (typeof storageMethod === "object" && "encrypt" in storageMethod) {
+	} else if (typeof storageMethod === "object" && "encrypt" in storageMethod) {
 		return await storageMethod.encrypt(clientSecret);
 	}
 
@@ -146,6 +148,55 @@ export async function storeClientSecret(
 	);
 }
 
+/**
+ * Stores a token value (ie opaque token or refresh token)
+ * on the database in a secure hashed format.
+ *
+ * @internal
+ */
+export async function storeToken(
+	storageMethod: OAuthOptions["storeTokens"] = "hashed",
+	token: string,
+) {
+	if (storageMethod === "hashed") {
+		return await defaultHasher(token);
+	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
+		return await storageMethod.hash(token);
+	}
+
+	throw new BetterAuthError(
+		`storeToken: unsupported storageMethod type '${storageMethod}'`,
+	);
+}
+
+/**
+ * Gets a hashed token value to find on the database.
+ *
+ * @internal
+ */
+export async function getStoredToken(
+	storageMethod: OAuthOptions["storeTokens"] = "hashed",
+	token: string,
+) {
+	if (storageMethod === "hashed") {
+		const hashedClientSecret = await defaultHasher(token);
+		return hashedClientSecret;
+	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
+		const hashedClientSecret = await storageMethod.hash(token);
+		return hashedClientSecret;
+	}
+
+	throw new BetterAuthError(
+		`getStoredToken: unsupported storageMethod type '${storageMethod}'`,
+	);
+}
+
+/**
+ * Converts a BASIC authorization header
+ * into its client_id and client_secret representation
+ *
+ * @internal
+ */
 export function basicToClientCredentials(authorization: string) {
 	if (authorization.startsWith("Basic ")) {
 		const encoded = authorization.replace("Basic ", "");
@@ -170,6 +221,10 @@ export function basicToClientCredentials(authorization: string) {
 	}
 }
 
+/**
+ * Validates client credentials failing on mismatches
+ * and incorrectly provided information
+ */
 export async function validateClientCredentials(
 	ctx: GenericEndpointContext,
 	options: OAuthOptions,

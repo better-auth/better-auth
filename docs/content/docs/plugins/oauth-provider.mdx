@@ -5,7 +5,7 @@ description: A Better Auth plugin that enables your auth server to serve as an o
 
 ## Optimizations
 
-To improve lookup performance, map the `client_id` to `id` through your database adapter.
+To improve lookup performance, map the field `client_id` on the table `oauthApplication` to `id` through your database adapter.
 
 ## Migration
 
@@ -44,7 +44,7 @@ Table: oauthAccessToken
 - Convert all `oauthAccessToken` to a `Session` using the following map:
 ```ts
 {
-  refresh: refreshToken,
+  refresh: hashed(refreshToken),
   expiresAt: refreshTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
@@ -56,7 +56,7 @@ Table: oauthAccessToken
 - Map all `oauthAccessToken`:
 ```ts
 {
-  token: accessToken,
+  token: hashed(accessToken),
   expiresAt: accessTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,

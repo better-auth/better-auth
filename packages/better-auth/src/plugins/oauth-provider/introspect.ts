@@ -1,10 +1,11 @@
 import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import type { GenericEndpointContext, Session, User } from "../../types";
+import type { GenericEndpointContext, User } from "../../types";
 import {
 	basicToClientCredentials,
 	getClient,
+	getStoredToken,
 	validateClientCredentials,
 } from "./utils";
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
@@ -105,7 +106,7 @@ async function validateJwtAccessToken(
 
 	// Validate JWT against its session if it exists
 	if (jwtPayload.sid) {
-		const session = await ctx.context.adapter.findOne<Session>({
+		const session = await ctx.context.adapter.findOne<OAuthSession>({
 			model: "session",
 			where: [
 				{
@@ -156,7 +157,12 @@ async function validateOpaqueAccessToken(
 	const accessToken: OAuthAccessToken | null =
 		await ctx.context.adapter.findOne({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-			where: [{ field: "token", value: tokenValue }],
+			where: [
+				{
+					field: "token",
+					value: await getStoredToken(opts.storeTokens, tokenValue),
+				},
+			],
 		});
 	if (!accessToken) {
 		throw new APIError("BAD_REQUEST", {
@@ -175,7 +181,7 @@ async function validateOpaqueAccessToken(
 
 	let user: (User & Record<string, any>) | undefined;
 	if (accessToken.sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
+		const session = await ctx.context.adapter.findOne<OAuthSession>({
 			model: "session",
 			where: [
 				{
@@ -228,7 +234,12 @@ async function validateRefreshToken(
 ) {
 	const userSession = await ctx.context.adapter.findOne<OAuthSession | null>({
 		model: "session",
-		where: [{ field: "refresh", value: token }],
+		where: [
+			{
+				field: "refresh",
+				value: await getStoredToken(opts.storeTokens, token),
+			},
+		],
 	});
 	if (!userSession) {
 		throw new APIError("BAD_REQUEST", {
