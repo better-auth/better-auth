@@ -492,6 +492,96 @@ describe("oauth - config", () => {
 		{
 			storeClientSecret: "hashed",
 		},
+	] as const)(
+		"storeClientSecret: $storeClientSecret",
+		async ({ storeClientSecret }) => {
+			const {
+				auth: authorizationServer,
+				signInWithTestUser,
+				customFetchImpl,
+			} = await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						storeClientSecret,
+					}),
+					jwt(),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+			const serverClient = createAuthClient({
+				plugins: [oauthProviderClient()],
+				baseURL: authServerBaseUrl,
+				fetchOptions: {
+					customFetchImpl,
+					headers,
+				},
+			});
+
+			server = await listen(toNodeHandler(authorizationServer.handler), {
+				port,
+			});
+
+			const application: Partial<OAuthClient> = {
+				redirect_uris: [redirectUri],
+			};
+			const createdClient = await serverClient.oauth2.register(application);
+			expect(createdClient.data?.client_id).toBeDefined();
+			expect(createdClient.data?.user_id).toBeDefined();
+			expect(createdClient.data?.client_secret).toBeDefined();
+			expect(createdClient.data?.redirect_uris).toEqual(
+				application.redirect_uris,
+			);
+			oauthClient = createdClient.data;
+
+			// The RP (Relying Party) - the client application
+			const { customFetchImpl: customFetchImplRP } = await createTestInstance();
+
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: rpBaseUrl,
+				fetchOptions: {
+					customFetchImpl: customFetchImplRP,
+				},
+			});
+			const data = await client.signIn.oauth2(
+				{
+					providerId: "test",
+					callbackURL: "/success",
+				},
+				{
+					throw: true,
+				},
+			);
+			expect(data.url).toContain(
+				`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			);
+			expect(data.url).toContain(`client_id=${oauthClient?.client_id}`);
+
+			let redirectUriResponse = "";
+			await serverClient.$fetch(data.url, {
+				method: "GET",
+				onError(context) {
+					redirectUriResponse = context.response.headers.get("Location") || "";
+				},
+			});
+			expect(redirectUriResponse).toContain(redirectUri);
+			expect(redirectUriResponse).toContain("code=");
+
+			let callbackURL = "";
+			await client.$fetch(redirectUriResponse, {
+				onError(context) {
+					callbackURL = context.response.headers.get("Location") || "";
+				},
+			});
+			expect(callbackURL).toContain("/success");
+		},
+	);
+
+	it.each([
 		{
 			storeClientSecret: "encrypted",
 		},
@@ -510,8 +600,8 @@ describe("oauth - config", () => {
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
 						storeClientSecret,
+						disableJWTPlugin: true,
 					}),
-					jwt(),
 				],
 			});
 			const { headers } = await signInWithTestUser();

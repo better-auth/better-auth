@@ -6,7 +6,9 @@ import { generateRandomString } from "../../crypto";
 import {
 	basicToClientCredentials,
 	decryptStoredClientSecret,
+	getStoredToken,
 	getJwtPlugin,
+	storeToken,
 	validateClientCredentials,
 } from "./utils";
 import { userNormalClaims } from "./userinfo";
@@ -220,7 +222,7 @@ async function createOpaqueAccessToken(
 	await ctx.context.adapter.create({
 		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
 		data: {
-			token,
+			token: await storeToken(opts.storeTokens, token),
 			clientId,
 			sessionId: payload?.sid,
 			scopes,
@@ -311,9 +313,19 @@ async function createUserTokens(
 	const session: OAuthSession | null = _session?.sessionToken
 		? await ctx.context.adapter.update({
 				model: "session",
-				where: [{ field: "refresh", value: _session.sessionToken }],
+				where: [
+					{
+						field: "refresh",
+						value: await getStoredToken(
+							opts.storeTokens,
+							_session.sessionToken,
+						),
+					},
+				],
 				update: {
-					refresh: refreshToken,
+					refresh: refreshToken
+						? await storeToken(opts.storeTokens, refreshToken)
+						: undefined,
 					updatedAt: now,
 					expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
 				},
@@ -324,7 +336,9 @@ async function createUserTokens(
 					userId: user.id,
 					clientId: client.clientId,
 					scopes,
-					refresh: refreshToken,
+					refresh: refreshToken
+						? await storeToken(opts.storeTokens, refreshToken)
+						: undefined,
 					createdAt: now,
 					updatedAt: now,
 					expiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
@@ -760,7 +774,12 @@ async function handleRefreshTokenGrant(
 
 	const session = await ctx.context.adapter.findOne<OAuthSession>({
 		model: "session",
-		where: [{ field: "refresh", value: decodedRefresh.token }],
+		where: [
+			{
+				field: "refresh",
+				value: await getStoredToken(opts.storeTokens, decodedRefresh.token),
+			},
+		],
 	});
 
 	// Check session

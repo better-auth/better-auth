@@ -177,12 +177,16 @@ export interface OAuthOptions {
 	 * Store the client secret in your database in a secure way
 	 * Note: This will not affect the client secret sent to the user, it will only affect the client secret stored in your database
 	 *
+	 * When disableJWTPlugin = false (recommended):
 	 * - "hashed" - The client secret is hashed using the `hash` function.
-	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
 	 * - { hash: (clientSecret: string) => Promise<string> } - A function that hashes the client secret.
+	 *
+	 * When disableJWTPlugin = true:
+	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
 	 * - { encrypt: (clientSecret: string) => Promise<string>, decrypt: (clientSecret: string) => Promise<string> } - A function that encrypts and decrypts the client secret.
 	 *
-	 * @default "hashed"
+	 * @default
+	 * options.disableJWTPlugin ? "encrypted" : "hashed"
 	 */
 	storeClientSecret?:
 		| "hashed"
@@ -192,6 +196,15 @@ export interface OAuthOptions {
 				encrypt: (clientSecret: string) => Promise<string>;
 				decrypt: (clientSecret: string) => Promise<string>;
 		  };
+	/**
+	 * Storage method of opaque access tokens and refresh tokens on your database.
+	 *
+	 * - "hashed" - The client secret is hashed using the `hash` function.
+	 * - { hash: (token: string) => Promise<string> } - A function that hashes the token
+	 *
+	 * @default "hashed"
+	 */
+	storeTokens?: "hashed" | { hash: (token: string) => Promise<string> };
 	/**
 	 * Get the additional user info claims
 	 *
