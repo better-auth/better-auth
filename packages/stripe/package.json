@@ -43,10 +43,10 @@
     }
   },
   "dependencies": {
-    "better-auth": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependencies": {
+    "better-auth": "workspace:*",
     "stripe": "^18"
   },
   "devDependencies": {
