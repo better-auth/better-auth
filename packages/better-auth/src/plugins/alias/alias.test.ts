@@ -75,7 +75,7 @@ describe("alias plugin", () => {
 		const plugin = createMockPlugin("payment");
 		const aliasedPlugin = alias("/polar", plugin);
 
-		expect(aliasedPlugin.id).toBe("payment-aliased--polar");
+		expect(aliasedPlugin.id).toBe("payment");
 	});
 
 	it("should prefix middleware paths", () => {
