@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { getCallbackURL } from "@/lib/shared";
+import { ErrorContext } from "@better-fetch/fetch";
 
 export default function Page() {
 	const router = useRouter();
@@ -15,7 +16,7 @@ export default function Page() {
 	useEffect(() => {
 		client.oneTap({
 			fetchOptions: {
-				onError: ({ error }) => {
+				onError: ({ error }: ErrorContext) => {
 					toast.error(error.message || "An error occurred");
 				},
 				onSuccess: () => {
