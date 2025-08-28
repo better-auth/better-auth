@@ -806,9 +806,6 @@ importers:
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.18
-      better-call:
-        specifier: 'catalog:'
-        version: 1.0.15
     devDependencies:
       better-auth:
         specifier: workspace:*
@@ -838,10 +835,10 @@ importers:
   packages/sso:
     dependencies:
       '@better-fetch/fetch':
-        specifier: ^1.1.18
+        specifier: 'catalog:'
         version: 1.1.18
       better-auth:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../better-auth
       fast-xml-parser:
         specifier: ^5.2.5
@@ -865,9 +862,6 @@ importers:
       '@types/express':
         specifier: ^5.0.3
         version: 5.0.3
-      better-call:
-        specifier: 'catalog:'
-        version: 1.0.15
 
   packages/stripe:
     dependencies:
@@ -16940,7 +16934,9 @@ snapshots:
       metro-runtime: 0.83.1
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.79.5': {}
 

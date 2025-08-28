@@ -1,5 +1,6 @@
 import type { BetterFetchOption } from "@better-fetch/fetch";
 import type { BetterAuthClientPlugin } from "../../types";
+import type { oneTap } from './index'
 
 declare global {
 	interface Window {
@@ -87,7 +88,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 			oneTap: async (
 				opts?: GoogleOneTapActionOptions,
 				fetchOptions?: BetterFetchOption,
-			) => {
+			): Promise<void> => {
 				if (isRequestInProgress) {
 					console.warn(
 						"A Google One Tap request is already in progress. Please wait.",
@@ -189,6 +190,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 		getAtoms($fetch) {
 			return {};
 		},
+		$InferServerPlugin: {} as ReturnType<typeof oneTap>,
 	} satisfies BetterAuthClientPlugin;
 };
 
