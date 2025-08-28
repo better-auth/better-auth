@@ -7,6 +7,8 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { generateMigrations } from "../src/generators/kysely";
 import Database from "better-sqlite3";
 import type { BetterAuthOptions } from "better-auth";
+import { generateAuthConfig } from "../src/generators/auth-config";
+import type { SupportedPlugin } from "../src/commands/init";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -141,5 +143,32 @@ describe("generate", async () => {
 			adapter: {} as any,
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
+	});
+
+	it("should add plugin to empty plugins array without leading comma", async () => {
+		const initialConfig = `export const auth = betterAuth({
+			plugins: []
+		});`;
+
+		const mockFormat = (code: string) => Promise.resolve(code);
+		const mockSpinner = { stop: () => {} };
+		const plugins: SupportedPlugin[] = [{
+			id: "next-cookies",
+			name: "nextCookies",
+			path: "better-auth/next-js",
+			clientName: undefined,
+			clientPath: undefined,
+		}];
+
+		const result = await generateAuthConfig({
+			format: mockFormat,
+			current_user_config: initialConfig,
+			spinner: mockSpinner as any,
+			plugins,
+			database: null,
+		});
+
+		expect(result.generatedCode).toContain(`plugins: [nextCookies()]`);
+		expect(result.generatedCode).not.toContain(`plugins: [, nextCookies()]`);
 	});
 });
