@@ -1,4 +1,4 @@
-import { getEndpoints, router } from "./api";
+import { getEndpoints, router, checkEndpointConflicts } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type {
