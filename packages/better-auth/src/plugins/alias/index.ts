@@ -35,7 +35,6 @@ export function alias<T extends BetterAuthPlugin>(
 
 	const aliasedPlugin: BetterAuthPlugin = {
 		...plugin,
-		id: `${plugin.id}-aliased-${cleanPrefix.replace(/\//g, "-")}`,
 	};
 	if (plugin.endpoints) {
 		const prefixedEndpoints: Record<string, AuthEndpoint> = {};
