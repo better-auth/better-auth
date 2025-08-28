@@ -98,6 +98,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 		allowDynamicClientRegistration: false,
 		disableJWTPlugin: false,
 		storeClientSecret: options.disableJWTPlugin ? "encrypted" : "hashed",
+		storeTokens: "hashed",
 		...options,
 		scopes: Array.from(scopes),
 		claims: Array.from(claims),
@@ -122,6 +123,18 @@ export const oauthProvider = (options: OAuthOptions) => {
 	) {
 		throw new BetterAuthError(
 			"unable to store hashed secrets because id tokens will be signed with secret",
+		);
+	}
+
+	if (
+		!opts.disableJWTPlugin &&
+		(opts.storeClientSecret === "encrypted" ||
+			(typeof opts.storeClientSecret === "object" &&
+				("encrypt" in opts.storeClientSecret ||
+					"decrypt" in opts.storeClientSecret)))
+	) {
+		throw new BetterAuthError(
+			"encryption method not recommended, please use 'hashed' or the 'hash' function",
 		);
 	}
 
