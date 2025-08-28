@@ -160,6 +160,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.default(${attr.defaultValue})`;
 								}
 							}
+							// Add .$onUpdate() for fields with onUpdate property
+							// Supported for all database types: PostgreSQL, MySQL, and SQLite
+							if (attr.onUpdate && attr.type === "date") {
+								if (typeof attr.onUpdate === "function") {
+									type += `.$onUpdate(${attr.onUpdate})`;
+								}
+							}
 							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${

@@ -353,8 +353,9 @@ export const createAdapter =
 				if (
 					value === undefined &&
 					((!fieldAttributes.defaultValue &&
-						!fieldAttributes.transform?.input) ||
-						action === "update")
+						!fieldAttributes.transform?.input &&
+						!(action === "update" && fieldAttributes.onUpdate)) ||
+						(action === "update" && !fieldAttributes.onUpdate))
 				) {
 					continue;
 				}

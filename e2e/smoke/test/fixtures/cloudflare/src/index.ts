@@ -1,5 +1,26 @@
 import { Hono } from "hono";
-import { Auth, createAuth } from "./auth";
+
+import { betterAuth } from "better-auth";
+import { createDrizzle } from "./db";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+
+interface CloudflareBindings {
+	DB: D1Database;
+}
+
+const createAuth = (env: CloudflareBindings) =>
+	betterAuth({
+		baseURL: "http://localhost:4000",
+		database: drizzleAdapter(createDrizzle(env.DB), { provider: "sqlite" }),
+		emailAndPassword: {
+			enabled: true,
+		},
+		logger: {
+			level: "debug",
+		},
+	});
+
+type Auth = ReturnType<typeof createAuth>;
 
 const app = new Hono<{
 	Bindings: CloudflareBindings;

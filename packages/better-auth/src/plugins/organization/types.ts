@@ -222,6 +222,41 @@ export interface OrganizationOptions {
 		request?: Request,
 	) => Promise<void>;
 
+	onInvitationAccepted?: (
+		data: {
+			/**
+			 * the invitation id
+			 */
+			id: string;
+			/**
+			 * the role of the user
+			 */
+			role: string;
+			/**
+			 * the organization the user joined
+			 */
+			organization: Organization;
+			/**
+			 * the invitation object
+			 */
+			invitation: Invitation;
+			/**
+			 * the member who sent the invitation
+			 */
+			inviter: Member & {
+				user: User;
+			};
+			/**
+			 * the user who accepted the invitation
+			 */
+			acceptedUser: User;
+		},
+		/**
+		 * The request object
+		 */
+		request?: Request,
+	) => Promise<void>;
+
 	/**
 	 * The schema for the organization plugin.
 	 */
