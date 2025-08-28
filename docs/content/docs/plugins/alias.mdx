@@ -84,21 +84,6 @@ const authClient = createAuthClient({
 })
 ```
 
-### Nested Aliases
-
-You can nest aliases for more complex routing structures:
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-    plugins: [
-        alias("/v1", 
-            alias("/payments", paymentPlugin())
-        )
-        // Results in: /api/auth/v1/payments/...
-    ]
-})
-```
-
 ## Configuration
 
 The alias plugin accepts two parameters:
