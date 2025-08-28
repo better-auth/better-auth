@@ -132,23 +132,6 @@ The alias plugin modifies the wrapped plugin by:
 
 ## Examples
 
-### Multiple OAuth Providers
-
-When using the generic OAuth plugin for multiple providers:
-
-```ts
-export const auth = betterAuth({
-    plugins: [
-        alias("/github", genericOAuth({
-            // GitHub OAuth config
-        })),
-        alias("/gitlab", genericOAuth({
-            // GitLab OAuth config  
-        }))
-    ]
-})
-```
-
 ### API Versioning
 
 Use aliases to version your authentication API:
