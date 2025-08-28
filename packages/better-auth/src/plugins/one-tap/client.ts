@@ -186,9 +186,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 				}
 			},
 		}),
-		getAtoms($fetch) {
-			return {};
-		},
 	} satisfies BetterAuthClientPlugin;
 };
 
