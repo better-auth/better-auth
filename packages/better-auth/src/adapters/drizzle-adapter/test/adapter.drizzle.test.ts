@@ -152,3 +152,107 @@ describe("Drizzle Adapter Number Id Test", async () => {
 		},
 	});
 });
+
+describe("Drizzle Adapter fieldName Mapping Tests", async () => {
+	let pg: Pool;
+	let postgres: Kysely<any>;
+
+	beforeAll(async () => {
+		pg = createTestPool();
+		postgres = createKyselyInstance(pg);
+		await cleanupDatabase(postgres, false);
+	});
+
+	afterAll(async () => {
+		await cleanupDatabase(postgres);
+	});
+
+	it("should handle fieldName mapping in additionalFields during user creation", async () => {
+		const optsWithFieldNameMapping = {
+			database: pg,
+			user: {
+				fields: { email: "email_address" },
+				additionalFields: {
+					test: {
+						type: "string",
+						fieldName: "test",
+						defaultValue: "default-test-value",
+					},
+				},
+			},
+			session: {
+				modelName: "sessions",
+			},
+		} satisfies BetterAuthOptions;
+
+		const { runMigrations } = await getMigrations(optsWithFieldNameMapping);
+		await runMigrations();
+
+		const db = drizzle(pg);
+		const auth = betterAuth({
+			...optsWithFieldNameMapping,
+			database: drizzleAdapter(db, { provider: "pg", schema }),
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+
+		const testUser = {
+			email: "fieldname-test@example.com",
+			password: "password123",
+			name: "FieldName Test User",
+		};
+
+		const result = await auth.api.signUpEmail({ body: testUser });
+
+		expect(result).toBeDefined();
+		expect(result.user).toBeDefined();
+		expect(result.user.email).toBe(testUser.email);
+		expect(result.user.name).toBe(testUser.name);
+	});
+
+	it("should handle case where fieldName differs from property name", async () => {
+		const optsWithDifferentFieldName = {
+			database: pg,
+			user: {
+				fields: {
+					email: "email_address",
+				},
+				additionalFields: {
+					test: {
+						type: "string",
+						defaultValue: "test-value",
+					},
+				},
+			},
+			session: {
+				modelName: "sessions",
+			},
+		} satisfies BetterAuthOptions;
+
+		await cleanupDatabase(postgres, false);
+		const { runMigrations } = await getMigrations(optsWithDifferentFieldName);
+		await runMigrations();
+
+		const db = drizzle(pg);
+		const auth = betterAuth({
+			...optsWithDifferentFieldName,
+			database: drizzleAdapter(db, { provider: "pg", schema }),
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+
+		const testUser = {
+			email: "different-fieldname@example.com",
+			password: "password123",
+			name: "Different FieldName Test",
+		};
+
+		const result = await auth.api.signUpEmail({ body: testUser });
+
+		expect(result).toBeDefined();
+		expect(result.user).toBeDefined();
+		expect(result.user.email).toBe(testUser.email);
+	});
+});
