@@ -164,6 +164,18 @@ describe("generate", async () => {
 					},
 				),
 				plugins: [twoFactor(), username()],
+				user: {
+					modelName: "custom_user",
+				},
+				account: {
+					modelName: "custom_account",
+				},
+				session: {
+					modelName: "custom_session",
+				},
+				verification: {
+					modelName: "custom_verification",
+				},
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
@@ -192,6 +204,18 @@ describe("generate", async () => {
 					database: {
 						useNumberId: true,
 					},
+				},
+				user: {
+					modelName: "custom_user",
+				},
+				account: {
+					modelName: "custom_account",
+				},
+				session: {
+					modelName: "custom_session",
+				},
+				verification: {
+					modelName: "custom_verification",
 				},
 			},
 		});

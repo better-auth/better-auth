@@ -21,6 +21,7 @@ import type { LiteralUnion, OmitId } from "./helper";
 import type { AdapterDebugLogs } from "../adapters";
 //@ts-ignore - we need to import this to get the type of the database
 import type { Database as BunDatabase } from "bun:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 export type BetterAuthOptions = {
 	/**
@@ -84,6 +85,7 @@ export type BetterAuthOptions = {
 		| Dialect
 		| AdapterInstance
 		| BunDatabase
+		| DatabaseSync
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -1058,7 +1060,7 @@ export type BetterAuthOptions = {
 		/**
 		 * Enable telemetry collection
 		 *
-		 * @default true
+		 * @default false
 		 */
 		enabled?: boolean;
 		/**
@@ -1067,11 +1069,5 @@ export type BetterAuthOptions = {
 		 * @default false
 		 */
 		debug?: boolean;
-		/**
-		 * Disable telemetry notice
-		 *
-		 * @default false
-		 */
-		disableNotice?: boolean;
 	};
 };
