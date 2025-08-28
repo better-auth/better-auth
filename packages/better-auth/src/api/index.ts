@@ -79,7 +79,6 @@ export function checkEndpointConflicts(
 		}
 	}
 
-	// Throw error if conflicts detected
 	if (conflicts.length > 0) {
 		const conflictMessages = conflicts
 			.map(
