@@ -2,7 +2,11 @@ import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../../types";
-import { basicToClientCredentials, validateClientCredentials } from "./utils";
+import {
+	basicToClientCredentials,
+	getStoredToken,
+	validateClientCredentials,
+} from "./utils";
 import type { OAuthAccessToken, OAuthOptions, OAuthSession } from "./types";
 import { getJwtPlugin } from "./utils";
 
@@ -101,7 +105,12 @@ async function revokeOpaqueAccessToken(
 	const accessToken: (OAuthAccessToken & { id?: string }) | null =
 		await ctx.context.adapter.findOne({
 			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-			where: [{ field: "token", value: tokenValue }],
+			where: [
+				{
+					field: "token",
+					value: await getStoredToken(opts.storeTokens, tokenValue),
+				},
+			],
 		});
 	if (!accessToken) {
 		throw new APIError("BAD_REQUEST", {
@@ -133,9 +142,14 @@ async function revokeRefreshToken(
 	clientId: string,
 	token: string,
 ) {
-	const userSession = await ctx.context.adapter.findOne<OAuthSession | null>({
+	const userSession = await ctx.context.adapter.findOne<OAuthSession>({
 		model: "session",
-		where: [{ field: "refresh", value: token }],
+		where: [
+			{
+				field: "refresh",
+				value: await getStoredToken(opts.storeTokens, token),
+			},
+		],
 	});
 	if (!userSession) {
 		throw new APIError("BAD_REQUEST", {
