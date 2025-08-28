@@ -3,6 +3,7 @@ import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares/origin-check";
+import { BetterAuthError } from "../error";
 import {
 	callbackOAuth,
 	forgetPassword,
@@ -36,10 +37,61 @@ import {
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
-import { logger } from "../utils/logger";
+import { type InternalLogger, logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
+
+export function checkEndpointConflicts(
+	options: BetterAuthOptions,
+	logger: InternalLogger,
+) {
+	const endpointRegistry = new Map<
+		string,
+		{ plugin: string; endpointKey: string }[]
+	>();
+
+	options.plugins?.forEach((plugin) => {
+		if (plugin.endpoints) {
+			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
+				if (endpoint && "path" in endpoint) {
+					const path = (endpoint as any).path as string;
+					if (!endpointRegistry.has(path)) {
+						endpointRegistry.set(path, []);
+					}
+					endpointRegistry.get(path)!.push({
+						plugin: plugin.id,
+						endpointKey: key,
+					});
+				}
+			}
+		}
+	});
+
+	const conflicts: { path: string; plugins: string[] }[] = [];
+	for (const [path, entries] of endpointRegistry.entries()) {
+		if (entries.length > 1) {
+			const uniquePlugins = [...new Set(entries.map((e) => e.plugin))];
+			conflicts.push({
+				path,
+				plugins: uniquePlugins,
+			});
+		}
+	}
+
+	// Throw error if conflicts detected
+	if (conflicts.length > 0) {
+		const conflictMessages = conflicts
+			.map(
+				(conflict) =>
+					`  - "${conflict.path}" used by plugins: ${conflict.plugins.join(", ")}`,
+			)
+			.join("\n");
+		logger.error(
+			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths:\n${conflictMessages}\n\nTo resolve this, you can:\n1. Use only one of the conflicting plugins\n2. Configure the plugins to use different paths (if supported)\n3. Use alias plugin to avoid conflicts`,
+		);
+	}
+}
 
 export function getEndpoints<
 	C extends AuthContext,
