@@ -64,8 +64,7 @@
     "better-auth": "workspace:*"
   },
   "dependencies": {
-    "@better-fetch/fetch": "catalog:",
-    "better-call": "catalog:"
+    "@better-fetch/fetch": "catalog:"
   },
   "files": [
     "dist"
