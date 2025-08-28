@@ -44,6 +44,11 @@ describe("Number Id Adapter Test", async () => {
 					...session,
 					...customOptions.session,
 				},
+				verification: {
+					fields: {
+						expiresAt: "expires_at",
+					},
+				},
 				advanced: {
 					...advanced,
 					...customOptions.advanced,
