@@ -48,19 +48,19 @@ export function checkEndpointConflicts(
 ) {
 	const endpointRegistry = new Map<
 		string,
-		{ plugin: string; endpointKey: string }[]
+		{ pluginId: string; endpointKey: string }[]
 	>();
 
 	options.plugins?.forEach((plugin) => {
 		if (plugin.endpoints) {
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
 				if (endpoint && "path" in endpoint) {
-					const path = (endpoint as any).path as string;
+					const path = endpoint.path;
 					if (!endpointRegistry.has(path)) {
 						endpointRegistry.set(path, []);
 					}
 					endpointRegistry.get(path)!.push({
-						plugin: plugin.id,
+						pluginId: plugin.id,
 						endpointKey: key,
 					});
 				}
@@ -71,7 +71,7 @@ export function checkEndpointConflicts(
 	const conflicts: { path: string; plugins: string[] }[] = [];
 	for (const [path, entries] of endpointRegistry.entries()) {
 		if (entries.length > 1) {
-			const uniquePlugins = [...new Set(entries.map((e) => e.plugin))];
+			const uniquePlugins = [...new Set(entries.map((e) => e.pluginId))];
 			conflicts.push({
 				path,
 				plugins: uniquePlugins,
