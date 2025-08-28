@@ -497,7 +497,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
 			});
-
 			if (!acceptedI) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
@@ -568,7 +567,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				session.session.token,
 				invitation.organizationId,
 			);
-
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,
@@ -576,6 +574,36 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 					},
 				});
+			}
+			if (ctx.context.orgOptions.onInvitationAccepted) {
+				const organization = await adapter.findOrganizationById(
+					invitation.organizationId,
+				);
+
+				const inviterMember = await adapter.findMemberByOrgId({
+					userId: invitation.inviterId,
+					organizationId: invitation.organizationId,
+				});
+
+				const inviterUser = await ctx.context.internalAdapter.findUserById(
+					invitation.inviterId,
+				);
+				if (organization && inviterMember && inviterUser) {
+					await ctx.context.orgOptions.onInvitationAccepted(
+						{
+							id: invitation.id,
+							role: invitation.role as string,
+							organization: organization,
+							invitation: invitation as unknown as Invitation,
+							inviter: {
+								...inviterMember,
+								user: inviterUser,
+							},
+							acceptedUser: session.user,
+						},
+						ctx.request,
+					);
+				}
 			}
 
 			return ctx.json({

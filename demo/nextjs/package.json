@@ -59,7 +59,6 @@
     "clsx": "^2.1.1",
     "cmdk": "1.0.0",
     "consola": "^3.2.3",
-    "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.1",
     "framer-motion": "^11.13.1",
@@ -101,8 +100,7 @@
     "dotenv-cli": "^7.4.4",
     "eslint-config-next": "15.0.0-canary.149",
     "postcss": "^8.4.49",
-    "tailwindcss": "3.4.16",
-    "typescript": "^5.7.2"
+    "tailwindcss": "3.4.16"
   },
   "overrides": {
     "whatwg-url": "^14.0.0"

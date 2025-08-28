@@ -493,6 +493,24 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Atlassian",
+				href: "/docs/authentication/atlassian",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 20 20"
+					>
+						<path
+							fill="currentColor"
+							d="M7.45 10.54c-.15-.26-.44-.26-.59 0L3.12 17.8c-.15.26-.02.47.29.47h3.68c.21 0 .4-.11.49-.29l1.77-3.07c.8-1.38.87-3.04.1-4.37m1.14-6.91c-.8 1.33-.73 2.98.1 4.37l4.84 8.41c.09.18.28.29.49.29h3.68c.31 0 .44-.21.29-.47L8.73 3.34c-.15-.26-.44-.26-.59 0l.45.29z"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Discord",
 				href: "/docs/authentication/discord",
 				icon: () => (
@@ -679,6 +697,25 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "Salesforce",
+				href: "/docs/authentication/salesforce",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						width="1.2em"
+						height="1.2em"
+					>
+						<path
+							fill="currentColor"
+							d="M8.5 3.5c-1.4 0-2.5 1.1-2.5 2.5 0 .4.1.7.2 1-1.7.3-3 1.7-3 3.5 0 2 1.6 3.6 3.6 3.6h10.2c1.6 0 2.9-1.3 2.9-2.9 0-1.2-.7-2.2-1.7-2.6 0-.3 0-.5 0-.8-.3-2-1.9-3.5-4-3.3-.4 0-.7.1-1 .2-.5-.8-1.4-1.3-2.4-1.3-.9 0-1.7.4-2.2 1.1zm7.7 7.1c-.5-.3-1.1-.5-1.7-.5-.6 0-1.2.2-1.7.5-.1-2-1.7-3.6-3.8-3.6-1.3 0-2.4.6-3.1 1.6-.4-.2-.8-.3-1.3-.3-1.8 0-3.3 1.5-3.3 3.3 0 .2 0 .5.1.7-1.6.4-2.7 1.8-2.7 3.5 0 2 1.6 3.6 3.6 3.6h10.6c2 0 3.6-1.6 3.6-3.6 0-1.9-1.4-3.4-3.2-3.5z"
+						/>
+					</svg>
+				),
+			},
+
 			{
 				title: "Slack",
 				href: "/docs/authentication/slack",

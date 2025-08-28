@@ -70,7 +70,7 @@ export interface AppleNonConformUser {
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	appBundleIdentifier?: string;
-	audience?: string;
+	audience?: string | string[];
 }
 
 export const apple = (options: AppleOptions) => {
