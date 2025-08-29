@@ -54,7 +54,7 @@ const mssqlMap = {
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
-	json: ["json"],
+	json: ["varchar", "nvarchar"],
 };
 
 const map = {
@@ -212,9 +212,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			json: {
 				sqlite: "text",
-				postgres: "jsonb",
-				mysql: "jsonb",
-				mssql: "jsonb",
+				postgres: "json",
+				mysql: "json",
+				mssql: "varchar(8000)",
 			},
 			id: {
 				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",

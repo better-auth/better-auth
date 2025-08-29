@@ -26,7 +26,7 @@ export function toZodSchema<
 
 		let schema: ZodSchema;
 		if (field.type === "json") {
-			schema = z.json();
+			schema = (z as any).json ? (z as any).json() : z.any();
 		} else if (field.type === "string[]" || field.type === "number[]") {
 			schema = z.array(field.type === "string[]" ? z.string() : z.number());
 		} else if (Array.isArray(field.type)) {
