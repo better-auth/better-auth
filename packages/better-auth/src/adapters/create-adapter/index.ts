@@ -587,7 +587,7 @@ export const createAdapter =
 						.join("\n")
 						.replace("Error:", "Create method with `id` being called at:");
 					console.log(stack);
-					//@ts-ignore
+					//@ts-expect-error
 					unsafeData.id = undefined;
 				}
 				debugLog(

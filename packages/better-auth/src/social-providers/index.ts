@@ -25,8 +25,11 @@ import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { kakao } from "./kakao";
+import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+
 export const socialProviders = {
 	apple,
 	atlassian,
@@ -53,6 +56,8 @@ export const socialProviders = {
 	vk,
 	zoom,
 	notion,
+	kakao,
+	naver,
 	line,
 	paypal,
 };
@@ -103,6 +108,8 @@ export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
 export * from "./slack";
+export * from "./kakao";
+export * from "./naver";
 export * from "./line";
 export * from "./paypal";
 
