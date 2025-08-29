@@ -1,4 +1,10 @@
-import { ObjectId, type MongoClient, type Db, ClientSession, type DbOptions } from "mongodb";
+import {
+	ObjectId,
+	type MongoClient,
+	type Db,
+	ClientSession,
+	type DbOptions,
+} from "mongodb";
 import type { BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapter,
