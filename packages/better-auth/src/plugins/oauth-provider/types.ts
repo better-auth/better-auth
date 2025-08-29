@@ -262,7 +262,7 @@ export interface OAuthOptions {
 		/**
 		 * Advertised claims_supported located at /.well-known/openid-configuration
 		 *
-		 * All values must be found in the customizedClaims field or
+		 * All values must be found in the customClaims field or
 		 * be an internally supported claim.
 		 *
 		 * Internally supported claims:
