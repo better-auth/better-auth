@@ -65,9 +65,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				})
 				.optional(),
 			z
-				.array(
-					z.string()
-				).meta({
+				.array(z.string())
+				.meta({
 					description: "The team IDs to invite the user to",
 				})
 				.optional(),
