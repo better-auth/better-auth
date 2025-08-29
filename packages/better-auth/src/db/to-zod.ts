@@ -23,7 +23,7 @@ export function toZodSchema<
 		if (isClientSide && field.input === false) {
 			return acc;
 		}
-		
+
 		let schema: ZodSchema;
 		if (field.type === "json") {
 			schema = z.json();
