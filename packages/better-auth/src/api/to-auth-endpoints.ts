@@ -212,7 +212,7 @@ async function runAfterHooks(
 				if (e instanceof APIError) {
 					if (shouldPublishLog(context.context.logger.level, "debug")) {
 						// inherit stack from errorWithStack if debug mode is enabled
-						e.stack = e.errorWithStack?.stack;
+						e.stack = e.errorWithStack?.stack ?? e.stack;
 					}
 					return {
 						response: e,
