@@ -1,4 +1,4 @@
-import { ObjectId, type MongoClient, type Db, ClientSession } from "mongodb";
+import { ObjectId, type MongoClient, type Db, ClientSession, type DbOptions } from "mongodb";
 import type { BetterAuthOptions, Where } from "../../types";
 import {
 	createAdapter,
@@ -33,7 +33,8 @@ type MongoDBAdapterContext = {
 		| Db
 		| {
 				client: MongoClient;
-				database: string;
+				database?: string;
+				options?: DbOptions;
 		  };
 	client: MongoClient | undefined;
 	session: ClientSession | undefined;
@@ -44,7 +45,7 @@ export const mongodbAdapter = (
 		| Db
 		| {
 				client: MongoClient;
-				database: string;
+				database?: string;
 		  },
 	config?: MongoDBAdapterConfig,
 ) => {
@@ -129,9 +130,9 @@ export const mongodbAdapter = (
 			const serializeContext = (
 				ctx: AdapterContext,
 			): Omit<MongoDBAdapterContext, "db"> & { db: Db } => {
-				return "client" in ctx.db && "database" in ctx.db
+				return "client" in ctx.db
 					? {
-							db: ctx.db.client.db(ctx.db.database),
+							db: ctx.db.client.db(ctx.db.database, ctx.db.options),
 							client: ctx.db.client,
 							session: ctx.session,
 						}
