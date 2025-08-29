@@ -621,9 +621,6 @@ importers:
       kysely:
         specifier: ^0.28.5
         version: 0.28.5
-      ms:
-        specifier: 4.0.0-nightly.202508271359
-        version: 4.0.0-nightly.202508271359
       nanostores:
         specifier: ^0.11.4
         version: 0.11.4
@@ -676,6 +673,9 @@ importers:
       mongodb:
         specifier: ^6.18.0
         version: 6.18.0
+      ms:
+        specifier: 4.0.0-nightly.202508271359
+        version: 4.0.0-nightly.202508271359
       mysql2:
         specifier: ^3.14.3
         version: 3.14.3
