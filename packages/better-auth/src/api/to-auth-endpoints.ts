@@ -170,7 +170,7 @@ async function runBeforeHooks(
 						shouldPublishLog(context.context.logger.level, "debug")
 					) {
 						// inherit stack from errorWithStack if debug mode is enabled
-						e.stack = e.errorWithStack?.stack;
+						e.stack = e.errorWithStack?.stack ?? e.stack;
 					}
 					throw e;
 				});
