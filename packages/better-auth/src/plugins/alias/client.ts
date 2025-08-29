@@ -1,6 +1,33 @@
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { BetterAuthPlugin } from "../../types/plugins";
 
+type ExtendPathMethods<
+	T extends BetterAuthClientPlugin,
+	P extends string,
+> = T extends {
+	pathMethods: infer U;
+}
+	? {
+			pathMethods: {
+				[K in keyof U as `${P}${K & string}`]: U[K];
+			};
+		}
+	: {
+			pathMethods: undefined;
+		};
+
+type NormalizePrefix<S extends string> = S extends ""
+	? ""
+	: S extends "/"
+		? ""
+		: S extends `/${infer Rest}`
+			? Rest extends `${infer Inner}/`
+				? `/${Inner}`
+				: `/${Rest}`
+			: S extends `${infer Inner}/`
+				? `/${Inner}`
+				: `/${S}`;
+
 /**
  * Wraps a client plugin and prefixes all its endpoints with a sub-path
  * to avoid conflicts between plugins with similar endpoint paths.
@@ -24,10 +51,13 @@ import type { BetterAuthPlugin } from "../../types/plugins";
  * // - /api/auth/dodo/checkout
  * ```
  */
-export function aliasClient<T extends BetterAuthClientPlugin>(
-	prefix: string,
+export function aliasClient<
+	T extends BetterAuthClientPlugin,
+	Prefix extends string,
+>(
+	prefix: Prefix,
 	plugin: T,
-): T {
+): Omit<T, "pathMethods"> & ExtendPathMethods<T, NormalizePrefix<Prefix>> {
 	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
@@ -139,5 +169,5 @@ export function aliasClient<T extends BetterAuthClientPlugin>(
 		aliasedPlugin.$InferServerPlugin = wrappedServerPlugin;
 	}
 
-	return aliasedPlugin as T;
+	return aliasedPlugin as any;
 }
