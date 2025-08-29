@@ -5,58 +5,59 @@ import { createEndpoint } from "better-call";
 
 describe("aliasClient plugin", () => {
 	const endpoint = createEndpoint.create();
-	const createMockClientPlugin = (id: string): BetterAuthClientPlugin => ({
-		id,
-		pathMethods: {
-			"/checkout": "POST",
-			"/customer/portal": "GET",
-			"/subscription/cancel": "POST",
-		},
-		atomListeners: [
-			{
-				matcher: (path) => path.startsWith("/checkout"),
-				signal: "$sessionSignal",
+	const createMockClientPlugin = (id: string) =>
+		({
+			id,
+			pathMethods: {
+				"/checkout": "POST",
+				"/customer/portal": "GET",
+				"/subscription/cancel": "POST",
 			},
-			{
-				matcher: (path) => path === "/customer/portal",
-				signal: "customSignal",
-			},
-		],
-		fetchPlugins: [
-			{
-				id: `${id}-fetch`,
-				name: `${id}-fetch`,
-				hooks: {
-					onRequest: async (context) => {
-						return context;
+			atomListeners: [
+				{
+					matcher: (path) => path.startsWith("/checkout"),
+					signal: "$sessionSignal",
+				},
+				{
+					matcher: (path) => path === "/customer/portal",
+					signal: "customSignal",
+				},
+			],
+			fetchPlugins: [
+				{
+					id: `${id}-fetch`,
+					name: `${id}-fetch`,
+					hooks: {
+						onRequest: async (context) => {
+							return context;
+						},
 					},
 				},
+			],
+			getActions: (fetch, store, options) => ({
+				customAction: () => "action-result",
+				anotherAction: (param: string) => `result-${param}`,
+			}),
+			$InferServerPlugin: {
+				id: `${id}-server`,
+				endpoints: {
+					checkout: endpoint(
+						"/checkout",
+						{
+							method: "POST",
+						},
+						(ctx) => ctx.json({}),
+					),
+					customerPortal: endpoint(
+						"/customer/portal",
+						{
+							method: "GET",
+						},
+						(ctx) => ctx.json({}),
+					),
+				},
 			},
-		],
-		getActions: (fetch, store, options) => ({
-			customAction: () => "action-result",
-			anotherAction: (param: string) => `result-${param}`,
-		}),
-		$InferServerPlugin: {
-			id: `${id}-server`,
-			endpoints: {
-				checkout: endpoint(
-					"/checkout",
-					{
-						method: "POST",
-					},
-					(ctx) => ctx.json({}),
-				),
-				customerPortal: endpoint(
-					"/customer/portal",
-					{
-						method: "GET",
-					},
-					(ctx) => ctx.json({}),
-				),
-			},
-		},
-	});
+		}) satisfies BetterAuthClientPlugin;
 
 	it("should prefix pathMethods", () => {
 		const plugin = createMockClientPlugin("payment");
