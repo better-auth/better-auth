@@ -449,6 +449,293 @@ const auth = betterAuth({
 
 ## Schema
 
+The OIDC Provider plugin adds the following tables to the database:
+
+### OAuth Application
+
+Table Name: `oauthApplication`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Database ID of the OAuth client",
+      isPrimaryKey: true
+    },
+    {
+      name: "clientId",
+      type: "string",
+      description: "Unique identifier for each OAuth client",
+      isPrimaryKey: true
+    },
+    {
+      name: "clientSecret",
+      type: "string",
+      description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
+      isOptional: true
+    },
+    {
+      name: "disabled",
+      type: "boolean",
+      description: "Field that indicates if the current application is disabled",
+      isOptional: true,
+    },
+    {
+      name: "scopes",
+      type: "string[]",
+      description: "Scopes this client is allowed to use",
+      isOptional: true,
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "ID of the user who owns the client. (optional)",
+      isOptional: true
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was created" 
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was last updated"
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "Name of the OAuth client",
+      isOptional: true,
+    },
+    {
+      name: "uri",
+      type: "string",
+      description: "Website Uri displayed on UI Screens",
+      isOptional: true,
+    },
+    {
+      name: "icon",
+      type: "string",
+      description: "Website Icon displayed on UI Screens",
+      isOptional: true,
+    },
+    {
+      name: "contacts",
+      type: "string[]",
+      description: "Client contact list (ie customer service emails, phone numbers) to be displayed on UI Screens",
+      isOptional: true,
+    },
+    {
+      name: "tos",
+      type: "string[]",
+      description: "Client Terms of Service displayed on UI Screens",
+      isOptional: true,
+    },
+    {
+      name: "policy",
+      type: "string[]",
+      description: "Client Privacy policy displayed on UI Screens",
+      isOptional: true,
+    },
+    {
+      name: "softwareId",
+      type: "string",
+      description: "Client-defined software identifier. This should remain the same across multiple versions for the same piece of software.",
+      isOptional: true,
+    },
+    {
+      name: "softwareVersion",
+      type: "string",
+      description: "Client-defined version number of the softwareId.",
+      isOptional: true,
+    },
+    {
+      name: "softwareStatement",
+      type: "string",
+      description: "Signed JWT containing the software metadata as signed claims.",
+      isOptional: true,
+    },
+    {
+      name: "redirectURLs",
+      type: "string[]",
+      description: "Array of of redirect uris",
+      isRequired: true
+    },
+    {
+      name: "tokenEndpointAuthMethod",
+      type: "string",
+      description: "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post']",
+      isOptional: true,
+    },
+    {
+      name: "grantTypes",
+      type: "string[]",
+      description: "Array of supported grant types. Supports: ['authorization_code', 'authorization_code', 'refresh_token']",
+      isOptional: true,
+    },
+    {
+      name: "responseTypes",
+      type: "string[]",
+      description: "Array of supported grant types. Supports: ['code']",
+      isOptional: true,
+    },
+    {
+      name: "public",
+      type: "boolean",
+      description: "Indication if the client is confidential or public",
+      isOptional: true,
+    },
+    {
+      name: "type",
+      type: "string",
+      description: "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
+      isOptional: true,
+    },
+    {
+      name: "metadata",
+      type: "string",
+      description: "Additional metadata for the OAuth client",
+      isOptional: true,
+    },
+  ]}
+/>
+
+### Session
+
+Table Name: `session`
+
+Extends the native [`session`](/docs/concepts/session-management) table.
+
+<Callout type="warn">
+The original required `token` field is now marked as optional.
+</Callout>
+
+<DatabaseTable
+  fields={[
+    {
+      name: "refresh",
+      type: "string",
+      description: "A hashed/encrypted refresh token",
+      isOptional: true,
+    },
+    {
+      name: "clientId",
+      type: "string",
+      description: "ID of the OAuth client",
+      references: { model: "oauthApplication", field: "clientId" },
+      isOptional: true,
+    },
+    {
+      name: "scopes",
+      type: "string[]",
+      description: "Array of granted scopes",
+      isRequired: true,
+    },
+  ]}
+/>
+
+### OAuth Access Token
+
+Table Name: `oauthAccessToken`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Database ID of the opaque access token",
+      isPrimaryKey: true
+    },
+    {
+      name: "token",
+      type: "string",
+      description: "Hashed/encrypted access token",
+    },
+    {
+      name: "clientId",
+      type: "string",
+      description: "ID of the OAuth client",
+      isForeignKey: true,
+      references: { model: "oauthApplication", field: "clientId" }
+    },
+    {
+      name: "sessionId",
+      type: "string",
+      description: "ID of the user associated with the token",
+      isForeignKey: true,
+      references: { model: "session", field: "id" },
+    },
+    {
+      name: "scopes",
+      type: "string[]",
+      description: "Array of granted scopes",
+      isRequired: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp when the access token was created" 
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "Timestamp when the token will expire",
+    },
+  ]}
+/>
+
+### OAuth Consent
+
+Table Name: `oauthConsent`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Database ID of the consent",
+      isPrimaryKey: true
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "ID of the user who gave consent",
+      isForeignKey: true,
+      references: { model: "user", field: "id" }
+    },
+    {
+      name: "clientId",
+      type: "string",
+      description: "ID of the OAuth client",
+      isForeignKey: true,
+      references: { model: "oauthClient", field: "clientId" }
+    },
+    {
+      name: "scopes",
+      type: "string",
+      description: "Comma-separated list of scopes consented to",
+      isRequired: true
+    },
+    {
+      name: "consentGiven",
+      type: "boolean",
+      description: "Indicates if consent was given",
+      isRequired: true
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the consent was given" 
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the consent was last updated"
+    },
+  ]}
+/>
 
 ## Options
 
