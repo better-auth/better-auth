@@ -1,4 +1,8 @@
-import type { AuthServerMetadata, OIDCMetadata } from "../../oauth-2.1/types";
+import type {
+	AuthServerMetadata,
+	OIDCMetadata,
+	TokenEndpointAuthMethod,
+} from "../../oauth-2.1/types";
 import type { GenericEndpointContext } from "../../types";
 import { getJwtPlugin } from "./utils";
 import type { OAuthOptions } from "./types";
@@ -9,6 +13,7 @@ export function authServerMetadata(
 	opts?: JwtOptions,
 	overrides?: {
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
+		public_client_supported?: boolean;
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
@@ -29,6 +34,9 @@ export function authServerMetadata(
 			"client_credentials",
 		],
 		token_endpoint_auth_methods_supported: [
+			...(overrides?.public_client_supported
+				? (["none"] satisfies TokenEndpointAuthMethod[])
+				: []),
 			"client_secret_basic",
 			"client_secret_post",
 		],
@@ -55,6 +63,7 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		public_client_supported: opts.allowUnauthenticatedClientRegistration,
 	});
 	const metadata: Omit<
 		OIDCMetadata,
