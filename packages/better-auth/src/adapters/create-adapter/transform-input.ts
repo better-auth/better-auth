@@ -21,6 +21,9 @@ export const initTransformInput = ({
 		forceAllowId?: boolean,
 	) => {
 		const transformedData: Record<string, any> = {};
+		// Create a new object to avoid mutating the original schema.
+		const fields = { ...schema[unsafe_model].fields };
+		const newMappedKeys = config.mapKeysTransformInput ?? {};
 		if (!schema[unsafe_model]) {
 			const err = new Error(`Model ${unsafe_model} not found in schema`);
 			err.stack = err.stack
@@ -31,10 +34,6 @@ export const initTransformInput = ({
 			throw err;
 		}
 
-		// Create a new object to avoid mutating the original schema.
-		const fields = { ...schema[unsafe_model].fields };
-
-		const newMappedKeys = config.mapKeysTransformInput ?? {};
 		if (
 			!config.disableIdGeneration &&
 			!options.advanced?.database?.useNumberId
@@ -52,8 +51,10 @@ export const initTransformInput = ({
 				newMappedKeys[field] || fields[field].fieldName || field;
 			if (
 				value === undefined &&
-				((!fieldAttributes.defaultValue && !fieldAttributes.transform?.input) ||
-					action === "update")
+				((!fieldAttributes.defaultValue &&
+					!fieldAttributes.transform?.input &&
+					!(action === "update" && fieldAttributes.onUpdate)) ||
+					(action === "update" && !fieldAttributes.onUpdate))
 			) {
 				continue;
 			}
