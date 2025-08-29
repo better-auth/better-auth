@@ -1,4 +1,4 @@
-import type { ZodSchema } from "zod/v4";
+import type { ZodType } from "zod/v4";
 import type { BetterAuthOptions } from "../types";
 import type { LiteralString } from "../types/helper";
 
@@ -90,8 +90,8 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * A zod schema to validate the value.
 	 */
 	validator?: {
-		input?: ZodSchema;
-		output?: ZodSchema;
+		input?: ZodType;
+		output?: ZodType;
 	};
 	/**
 	 * The name of the field on the database.

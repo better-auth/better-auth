@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { ZodSchema } from "zod/v4";
+import type { ZodType } from "zod/v4";
 import type { FieldAttribute } from ".";
 
 export function toZodSchema<
@@ -24,7 +24,7 @@ export function toZodSchema<
 			return acc;
 		}
 
-		let schema: ZodSchema;
+		let schema: ZodType;
 		if (field.type === "json") {
 			schema = (z as any).json ? (z as any).json() : z.any();
 		} else if (field.type === "string[]" || field.type === "number[]") {
