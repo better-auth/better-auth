@@ -547,6 +547,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 				{
 					method: "POST",
 					body: z.object({
+						redirect_uris: z.array(z.string()),
 						scope: z.string().optional(),
 						client_name: z.string().optional(),
 						client_uri: z.string().optional(),
@@ -557,7 +558,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 						software_id: z.string().optional(),
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
-						redirect_uris: z.array(z.string()).optional(),
 						token_endpoint_auth_method: z
 							.enum(["none", "client_secret_basic", "client_secret_post"])
 							.default("client_secret_basic")

@@ -525,16 +525,13 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const application: Partial<OAuthClient> = {
+			const createdClient = await serverClient.oauth2.register({
 				redirect_uris: [redirectUri],
-			};
-			const createdClient = await serverClient.oauth2.register(application);
+			});
 			expect(createdClient.data?.client_id).toBeDefined();
 			expect(createdClient.data?.user_id).toBeDefined();
 			expect(createdClient.data?.client_secret).toBeDefined();
-			expect(createdClient.data?.redirect_uris).toEqual(
-				application.redirect_uris,
-			);
+			expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
 			oauthClient = createdClient.data;
 
 			// The RP (Relying Party) - the client application
@@ -618,16 +615,13 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const application: Partial<OAuthClient> = {
+			const createdClient = await serverClient.oauth2.register({
 				redirect_uris: [redirectUri],
-			};
-			const createdClient = await serverClient.oauth2.register(application);
+			});
 			expect(createdClient.data?.client_id).toBeDefined();
 			expect(createdClient.data?.user_id).toBeDefined();
 			expect(createdClient.data?.client_secret).toBeDefined();
-			expect(createdClient.data?.redirect_uris).toEqual(
-				application.redirect_uris,
-			);
+			expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
 			oauthClient = createdClient.data;
 
 			// The RP (Relying Party) - the client application
@@ -711,12 +705,10 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const application: Partial<OAuthClient> = {
+			const createdClient = await serverClient.oauth2.register({
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: publicClient ? "none" : undefined,
-			};
-
-			const createdClient = await serverClient.oauth2.register(application);
+			});
 			expect(createdClient.data?.client_id).toBeDefined();
 			expect(createdClient.data?.user_id).toBeDefined();
 			if (publicClient) {
@@ -724,9 +716,7 @@ describe("oauth - config", () => {
 			} else {
 				expect(createdClient.data?.client_secret).toBeDefined();
 			}
-			expect(createdClient.data?.redirect_uris).toEqual(
-				application.redirect_uris,
-			);
+			expect(createdClient.data?.redirect_uris).toEqual([redirectUri]);
 			oauthClient = createdClient.data;
 
 			// The RP (Relying Party) - the client application
