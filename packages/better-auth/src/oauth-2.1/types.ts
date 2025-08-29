@@ -18,6 +18,7 @@ export type AuthMethod =
 	| "client_secret_post"; // POST
 // | "private_key_jwt" // must also add alg_values_supported for that endpoint
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
+export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
 
 /**
  * Metadata for authentication servers.
@@ -87,7 +88,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	token_endpoint_auth_methods_supported?: AuthMethod[];
+	token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the token endpoint for
