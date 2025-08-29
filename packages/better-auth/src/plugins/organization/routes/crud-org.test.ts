@@ -126,7 +126,7 @@ describe("get-full-organization", async () => {
 				headers,
 			},
 		});
-		expect(result.error?.status).toBe(400);
+		expect(result.error?.status).toBe(404);
 		expect(result.error?.message).toContain(
 			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 		);
