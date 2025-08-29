@@ -65,11 +65,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				})
 				.optional(),
 			z
-				.array(
-					z.string().meta({
-						description: "The team ID to invite the user to",
-					}),
-				)
+				.array(z.string())
+				.meta({
+					description: "The team IDs to invite the user to",
+				})
 				.optional(),
 		]),
 	});
@@ -502,7 +501,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 				});
 			}
-
 			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
@@ -605,7 +603,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 			}
-
 			return ctx.json({
 				invitation: acceptedI,
 				member,
