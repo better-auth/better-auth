@@ -141,6 +141,14 @@ export interface ZoomProfile extends Record<string, any> {
 
 export interface ZoomOptions extends ProviderOptions<ZoomProfile> {
 	pkce?: boolean;
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 
 export const zoom = (userOptions: ZoomOptions) => {

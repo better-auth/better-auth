@@ -18,6 +18,14 @@ export interface RedditProfile {
 
 export interface RedditOptions extends ProviderOptions<RedditProfile> {
 	duration?: string;
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 
 export const reddit = (options: RedditOptions) => {

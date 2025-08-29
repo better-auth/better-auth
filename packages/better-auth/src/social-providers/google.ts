@@ -46,6 +46,14 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * The hosted domain of the user
 	 */
 	hd?: string;
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 
 export const google = (options: GoogleOptions) => {

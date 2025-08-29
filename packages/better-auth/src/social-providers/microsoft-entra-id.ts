@@ -133,6 +133,14 @@ export interface MicrosoftOptions
 	 * Disable profile photo
 	 */
 	disableProfilePhoto?: boolean;
+	/**
+	 * The client ID of your application
+	 */
+	clientId: string;
+	/**
+	 * The client secret of your application
+	 */
+	clientSecret: string;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {

@@ -87,7 +87,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client ID of your application
 	 */
-	clientId: string;
+	clientId?: string;
 	/**
 	 * The client secret of your application
 	 */
