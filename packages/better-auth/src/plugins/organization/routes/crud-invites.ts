@@ -624,26 +624,13 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					},
 				});
 			}
-			if (ctx.context.orgOptions.onInvitationAccepted) {
-				const organization = await adapter.findOrganizationById(
-					invitation.organizationId,
-				);
-
-				const inviterMember = await adapter.findMemberByOrgId({
-					userId: invitation.inviterId,
-					organizationId: invitation.organizationId,
+			if (options?.organizationHooks?.afterAcceptInvitation) {
+				await options?.organizationHooks.afterAcceptInvitation({
+					invitation: acceptedI as unknown as Invitation,
+					member,
+					user: session.user,
+					organization,
 				});
-
-				const inviterUser = await ctx.context.internalAdapter.findUserById(
-					invitation.inviterId,
-				);
-			  if (options?.organizationHooks?.afterAcceptInvitation) {
-          await options?.organizationHooks.afterAcceptInvitation({
-            invitation: acceptedI as unknown as Invitation,
-            member,
-            user: session.user,
-            organization,
-          });
 			}
 			return ctx.json({
 				invitation: acceptedI,
