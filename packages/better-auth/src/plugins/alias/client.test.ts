@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, test, vi } from 'vitest'
 import type { BetterAuthClientPlugin } from "../../client/types";
 import { aliasClient } from "./client";
 import { createEndpoint } from "better-call";
+import { createAuthClient as createClient } from '../../client/vanilla'
+import { testClientPlugin } from '../../client/test-plugin'
 
 describe("aliasClient plugin", () => {
 	const endpoint = createEndpoint.create();

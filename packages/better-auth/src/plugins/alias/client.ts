@@ -16,6 +16,22 @@ type ExtendPathMethods<
 			pathMethods: undefined;
 		};
 
+type ExtendGetActions<
+T extends BetterAuthClientPlugin,
+	P extends string,
+> = T extends
+	{ getActions: (fetch: infer F, store: infer S, options: infer O) => infer Actions }
+		? {
+				getActions: (
+					fetch: F,
+					store: S,
+					options: O
+				) => {
+					[K in keyof Actions]: Actions[K];
+				};
+		  }
+		: { getActions: undefined };
+
 type NormalizePrefix<S extends string> = S extends ""
 	? ""
 	: S extends "/"
@@ -57,7 +73,7 @@ export function aliasClient<
 >(
 	prefix: Prefix,
 	plugin: T,
-): Omit<T, "pathMethods"> & ExtendPathMethods<T, NormalizePrefix<Prefix>> {
+): Omit<T, "pathMethods"> & ExtendPathMethods<T, NormalizePrefix<Prefix>> & ExtendGetActions<T, NormalizePrefix<Prefix>> {
 	const normalizedPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
 	const cleanPrefix = normalizedPrefix.endsWith("/")
 		? normalizedPrefix.slice(0, -1)
