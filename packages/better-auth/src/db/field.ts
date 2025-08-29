@@ -7,6 +7,7 @@ export type FieldType =
 	| "number"
 	| "boolean"
 	| "date"
+	| "json"
 	| `${"string" | "number"}[]`
 	| Array<LiteralString>;
 

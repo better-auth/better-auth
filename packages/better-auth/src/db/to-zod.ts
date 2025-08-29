@@ -23,19 +23,18 @@ export function toZodSchema<
 		if (isClientSide && field.input === false) {
 			return acc;
 		}
-		if (field.type === "string[]" || field.type === "number[]") {
-			return {
-				...acc,
-				[key]: z.array(field.type === "string[]" ? z.string() : z.number()),
-			};
+		
+		let schema: ZodSchema;
+		if (field.type === "json") {
+			schema = z.json();
+		} else if (field.type === "string[]" || field.type === "number[]") {
+			schema = z.array(field.type === "string[]" ? z.string() : z.number());
+		} else if (Array.isArray(field.type)) {
+			schema = z.any();
+		} else {
+			schema = z[field.type]();
 		}
-		if (Array.isArray(field.type)) {
-			return {
-				...acc,
-				[key]: z.any(),
-			};
-		}
-		let schema: ZodSchema = z[field.type]();
+
 		if (field?.required === false) {
 			schema = schema.optional();
 		}
