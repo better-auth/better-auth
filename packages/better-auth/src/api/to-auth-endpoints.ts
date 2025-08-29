@@ -122,7 +122,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				shouldPublishLog(authContext.logger.level, "debug")
 			) {
 				// inherit stack from errorWithStack if debug mode is enabled
-				result.response.stack = result.response.errorWithStack.stack;
+				result.response.stack = result.response.errorWithStack?.stack;
 			}
 
 			if (result.response instanceof APIError && !context?.asResponse) {
@@ -170,7 +170,7 @@ async function runBeforeHooks(
 						shouldPublishLog(context.context.logger.level, "debug")
 					) {
 						// inherit stack from errorWithStack if debug mode is enabled
-						e.stack = e.errorWithStack.stack;
+						e.stack = e.errorWithStack?.stack;
 					}
 					throw e;
 				});
@@ -212,7 +212,7 @@ async function runAfterHooks(
 				if (e instanceof APIError) {
 					if (shouldPublishLog(context.context.logger.level, "debug")) {
 						// inherit stack from errorWithStack if debug mode is enabled
-						e.stack = e.errorWithStack.stack;
+						e.stack = e.errorWithStack?.stack;
 					}
 					return {
 						response: e,
