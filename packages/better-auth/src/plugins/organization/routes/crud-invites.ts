@@ -565,7 +565,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				session.session.token,
 				invitation.organizationId,
 			);
-
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,
