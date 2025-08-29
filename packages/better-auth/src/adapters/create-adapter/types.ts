@@ -99,6 +99,13 @@ export interface AdapterConfig {
 	 */
 	disableIdGeneration?: boolean;
 	/**
+	 * Opt out of using database transactions. Useful for compatibility with databases
+	 * that don't support transactions like Cloudflare D1.
+	 * 
+	 * @default false
+	 */
+	bypassTransactions?: boolean;
+	/**
 	 * Map the keys of the input data.
 	 *
 	 * This is useful for databases that expect a different key name for a given situation.

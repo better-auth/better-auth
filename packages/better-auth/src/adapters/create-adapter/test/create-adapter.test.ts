@@ -71,7 +71,7 @@ async function createTestAdapter(
 			config,
 		),
 		context,
-		// @ts-ignore
+		// @ts-expect-error
 		adapter: (...args) => {
 			const x = adapter(...args) as Partial<ReturnType<CreateCustomAdapter>>;
 			return {
@@ -1960,6 +1960,52 @@ describe("Create Adapter Helper", async () => {
 			).rejects.toThrow("Fail inner");
 
 			expect(operations).toEqual([]);
+		});
+
+		test("Should bypass transactions when bypassTransactions is enabled", async () => {
+			let transactionCalled = false;
+			let operations: string[] = [];
+
+			const adapter = await createTestAdapter({
+				config: {
+					bypassTransactions: true,
+				},
+				context: {
+					db: {
+						inTransaction: false,
+					},
+				},
+				adapter(args_0) {
+					return {
+						async create({ data, model }, ctx) {
+							operations.push(`${ctx.db.inTransaction ? "tx" : "outside"}:${model}`);
+							return data;
+						},
+						async transaction(callback, ctx) {
+							transactionCalled = true;
+							return callback({
+								...ctx,
+								db: {
+									inTransaction: true,
+								},
+							});
+						},
+					};
+				},
+			});
+
+			const result = await adapter.transaction(async (tx) => {
+				await adapter.create({ model: "user", data: {} }, tx);
+				await adapter.create({ model: "session", data: {} }, tx);
+				return "success";
+			});
+
+			expect(transactionCalled).toBe(false);
+			expect(result).toBe("success");
+			expect(operations).toEqual([
+				"outside:user",
+				"outside:session",
+			]);
 		});
 	});
 });

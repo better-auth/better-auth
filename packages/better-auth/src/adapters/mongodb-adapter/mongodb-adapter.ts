@@ -19,6 +19,13 @@ export interface MongoDBAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Opt out of using database transactions. Useful for compatibility with databases
+	 * that don't support transactions like Cloudflare D1.
+	 * 
+	 * @default false
+	 */
+	bypassTransactions?: boolean;
 }
 
 type MongoDBAdapterContext = {
@@ -62,6 +69,7 @@ export const mongodbAdapter = (
 				_id: "id",
 			},
 			supportsNumericIds: false,
+			bypassTransactions: config?.bypassTransactions ?? false,
 			customTransformInput({
 				action,
 				data,

@@ -51,6 +51,13 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	camelCase?: boolean;
+	/**
+	 * Opt out of using database transactions. Useful for compatibility with databases
+	 * that don't support transactions like Cloudflare D1.
+	 * 
+	 * @default false
+	 */
+	bypassTransactions?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
@@ -60,6 +67,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			bypassTransactions: config.bypassTransactions ?? false,
 		},
 		context: {
 			db,

@@ -27,6 +27,14 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+
+	/**
+	 * Opt out of using database transactions. Useful for compatibility with databases
+	 * that don't support transactions like Cloudflare D1.
+	 * 
+	 * @default false
+	 */
+	bypassTransactions?: boolean;
 }
 
 interface PrismaClient {}
@@ -50,6 +58,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 			adapterName: "Prisma Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			bypassTransactions: config.bypassTransactions ?? false,
 		},
 		context: {
 			db: prisma as PrismaClientInternal,

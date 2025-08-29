@@ -24,6 +24,13 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Opt out of using database transactions. Useful for compatibility with databases
+	 * that don't support transactions like Cloudflare D1.
+	 * 
+	 * @default false
+	 */
+	bypassTransactions?: boolean;
 }
 
 export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
@@ -42,6 +49,7 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					? false
 					: true,
 			supportsJSON: false,
+			bypassTransactions: config?.bypassTransactions ?? false,
 		},
 		context: {
 			db,

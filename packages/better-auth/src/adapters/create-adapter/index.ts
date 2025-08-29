@@ -995,7 +995,7 @@ export const createAdapter =
 				const context = getContext(ctx);
 				const supportsTransactions = !!(adapterInstance.transaction && context);
 
-				const debugSteps = supportsTransactions ? 2 : 3;
+				const debugSteps = supportsTransactions && !config.bypassTransactions ? 2 : 3;
 				debugLog(
 					{ method: "transaction" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, debugSteps)}`,
@@ -1003,11 +1003,11 @@ export const createAdapter =
 				);
 
 				let result: Promise<R>;
-				if (!supportsTransactions) {
+				if (!supportsTransactions || config.bypassTransactions) {
 					debugLog(
 						{ method: "transaction" },
 						`${formatTransactionId(thisTransactionId)} ${formatStep(2, debugSteps)}`,
-						`${formatMethod("transaction")} ${formatAction("⚠︎ This adapter doesn't support transactions. Running callback with current context.")}`,
+						`${formatMethod("transaction")} ${formatAction(`⚠︎ ${config.bypassTransactions ? "Bypassing transactions" : "This adapter doesn't support transactions"}. Running callback with current context.`)}`,
 					);
 					result = callback(undefined as any);
 				} else {
