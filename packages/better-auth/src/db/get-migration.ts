@@ -23,7 +23,6 @@ const postgresMap = {
 	],
 	boolean: ["bool", "boolean"],
 	date: ["timestamp", "date"],
-	json: ["json", "jsonb"],
 };
 const mysqlMap = {
 	string: ["varchar", "text"],
@@ -38,7 +37,6 @@ const mysqlMap = {
 	],
 	boolean: ["boolean", "tinyint"],
 	date: ["timestamp", "datetime", "date"],
-	json: ["json"],
 };
 
 const sqliteMap = {
@@ -46,7 +44,6 @@ const sqliteMap = {
 	number: ["INTEGER", "REAL"],
 	boolean: ["INTEGER", "BOOLEAN"], // 0 or 1
 	date: ["DATE", "INTEGER"],
-	json: ["TEXT"],
 };
 
 const mssqlMap = {
@@ -54,7 +51,6 @@ const mssqlMap = {
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
-	json: ["json"],
 };
 
 const map = {
@@ -209,12 +205,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 				postgres: "timestamp",
 				mysql: "datetime",
 				mssql: "datetime",
-			},
-			json: {
-				sqlite: "text",
-				postgres: "jsonb",
-				mysql: "jsonb",
-				mssql: "jsonb",
 			},
 			id: {
 				postgres: config.advanced?.database?.useNumberId ? "serial" : "text",

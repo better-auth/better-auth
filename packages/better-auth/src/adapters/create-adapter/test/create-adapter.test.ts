@@ -454,6 +454,7 @@ describe("Create Adapter Helper", async () => {
 								user: {
 									additionalFields: {
 										preferences: {
+											//@ts-expect-error - Not *technically* implemented yet, however the `createAdapter` helper already supports it.
 											type: "json",
 										},
 									},
@@ -1018,6 +1019,7 @@ describe("Create Adapter Helper", async () => {
 								user: {
 									additionalFields: {
 										preferences: {
+											//@ts-expect-error - Not *technically* implemented yet, however the `createAdapter` helper already supports it.
 											type: "json",
 										},
 									},
