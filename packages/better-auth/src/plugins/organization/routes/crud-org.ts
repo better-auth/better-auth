@@ -174,6 +174,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organization: {
 							...orgData,
 							createdAt: new Date(),
+							updatedAt: new Date(),
 						},
 						user,
 					},
@@ -188,6 +189,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				organization: {
 					...orgData,
 					createdAt: new Date(),
+					updatedAt: new Date(),
 					...(hookResponse?.data || {}),
 				},
 			});
@@ -210,6 +212,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organizationId: organization.id,
 						name: `${organization.name}`,
 						createdAt: new Date(),
+						updatedAt: new Date(),
 					}));
 
 				member = await adapter.createMember({

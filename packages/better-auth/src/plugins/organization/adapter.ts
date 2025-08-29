@@ -287,6 +287,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 				update: {
 					role,
+					updatedAt: new Date(),
 				},
 			});
 			return member;
@@ -317,6 +318,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 				update: {
 					...data,
+					updatedAt: new Date(),
 					metadata:
 						typeof data.metadata === "object"
 							? JSON.stringify(data.metadata)
