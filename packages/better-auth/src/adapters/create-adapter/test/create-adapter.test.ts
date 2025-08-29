@@ -1978,7 +1978,9 @@ describe("Create Adapter Helper", async () => {
 				adapter(args_0) {
 					return {
 						async create({ data, model }, ctx) {
-							operations.push(`${ctx.db.inTransaction ? "tx" : "outside"}:${model}`);
+							operations.push(
+								`${ctx.db.inTransaction ? "tx" : "outside"}:${model}`,
+							);
 							return data;
 						},
 						async transaction(callback, ctx) {
@@ -2002,10 +2004,7 @@ describe("Create Adapter Helper", async () => {
 
 			expect(transactionCalled).toBe(false);
 			expect(result).toBe("success");
-			expect(operations).toEqual([
-				"outside:user",
-				"outside:session",
-			]);
+			expect(operations).toEqual(["outside:user", "outside:session"]);
 		});
 	});
 });

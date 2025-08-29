@@ -27,7 +27,7 @@ interface KyselyAdapterConfig {
 	/**
 	 * Opt out of using database transactions. Useful for compatibility with databases
 	 * that don't support transactions like Cloudflare D1.
-	 * 
+	 *
 	 * @default false
 	 */
 	bypassTransactions?: boolean;

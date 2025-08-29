@@ -995,7 +995,8 @@ export const createAdapter =
 				const context = getContext(ctx);
 				const supportsTransactions = !!(adapterInstance.transaction && context);
 
-				const debugSteps = supportsTransactions && !config.bypassTransactions ? 2 : 3;
+				const debugSteps =
+					supportsTransactions && !config.bypassTransactions ? 2 : 3;
 				debugLog(
 					{ method: "transaction" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, debugSteps)}`,
