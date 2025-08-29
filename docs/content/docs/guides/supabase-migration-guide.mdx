@@ -210,7 +210,7 @@ const migrateFromSupabase = async () => {
 
 			if (identity.provider === "email") {
 				const hasCredential = existingAccounts.find(
-					(account) => account.providerId === "credential",
+					(account: { providerId: string; }) => account.providerId === "credential",
 				);
 				if (!hasCredential) {
 					await ctx.adapter
@@ -231,7 +231,7 @@ const migrateFromSupabase = async () => {
 			const supportedProviders = Object.keys(ctx.options.socialProviders || {})
 			if (supportedProviders.includes(identity.provider)) {
 				const hasAccount = existingAccounts.find(
-					(account) => account.providerId === identity.provider,
+					(account: { providerId: string; }) => account.providerId === identity.provider,
 				);
 				if (!hasAccount) {
 					await ctx.adapter.create({
