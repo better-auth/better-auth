@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.0.2-beta.8",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.15.0",
   "scripts": {
     "build": "turbo --filter \"./packages/*\" build",
     "dev": "turbo --filter \"./packages/*\" dev",
@@ -17,6 +17,7 @@
     "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
     "test": "turbo --filter \"./packages/*\" test",
+    "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
     "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
   "devDependencies": {
@@ -38,7 +39,8 @@
       "remark-mdx": "3.0.0",
       "remark-parse": "11.0.0",
       "unified": "11.0.4",
-      "whatwg-url": "^14.0.0"
+      "whatwg-url": "^14.0.0",
+      "miniflare>zod": "^3"
     }
   },
   "resolutions": {

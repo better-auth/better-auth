@@ -65,11 +65,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				})
 				.optional(),
 			z
-				.array(
-					z.string().meta({
-						description: "The team ID to invite the user to",
-					}),
-				)
+				.array(z.string())
+				.meta({
+					description: "The team IDs to invite the user to",
+				})
 				.optional(),
 		]),
 	});
@@ -548,13 +547,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
 			});
-
 			if (!acceptedI) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 				});
 			}
-
 			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
@@ -619,7 +616,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				session.session.token,
 				invitation.organizationId,
 			);
-
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,
@@ -628,17 +624,27 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					},
 				});
 			}
+			if (ctx.context.orgOptions.onInvitationAccepted) {
+				const organization = await adapter.findOrganizationById(
+					invitation.organizationId,
+				);
 
-			// Run afterAcceptInvitation hook
-			if (options?.organizationHooks?.afterAcceptInvitation) {
-				await options?.organizationHooks.afterAcceptInvitation({
-					invitation: acceptedI as unknown as Invitation,
-					member,
-					user: session.user,
-					organization,
+				const inviterMember = await adapter.findMemberByOrgId({
+					userId: invitation.inviterId,
+					organizationId: invitation.organizationId,
 				});
-			}
 
+				const inviterUser = await ctx.context.internalAdapter.findUserById(
+					invitation.inviterId,
+				);
+			  if (options?.organizationHooks?.afterAcceptInvitation) {
+          await options?.organizationHooks.afterAcceptInvitation({
+            invitation: acceptedI as unknown as Invitation,
+            member,
+            user: session.user,
+            organization,
+          });
+			}
 			return ctx.json({
 				invitation: acceptedI,
 				member,
