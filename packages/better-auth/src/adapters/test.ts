@@ -54,7 +54,7 @@ const numberIdAdapterTests = {
 	SHOULD_RETURN_A_NUMBER_ID_AS_A_RESULT:
 		"Should return a number id as a result",
 	SHOULD_INCREMENT_THE_ID_BY_1: "Should increment the id by 1",
-} as const;
+};
 
 // @ts-expect-error
 // biome-ignore lint/performance/noDelete: testing propose
@@ -134,7 +134,6 @@ async function adapterTest(
 				},
 			});
 			expect(res).toHaveProperty("id");
-			//@ts-ignore
 			expect(typeof res?.id).toEqual("string");
 		},
 	);

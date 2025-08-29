@@ -153,6 +153,240 @@ export const createAdapter =
 			getFieldAttributes,
 		});
 
+		const transformInput = async (
+			data: Record<string, any>,
+			unsafe_model: string,
+			action: "create" | "update",
+			forceAllowId?: boolean,
+		) => {
+			const transformedData: Record<string, any> = {};
+			const fields = schema[unsafe_model].fields;
+			const newMappedKeys = config.mapKeysTransformInput ?? {};
+			if (
+				!config.disableIdGeneration &&
+				!options.advanced?.database?.useNumberId
+			) {
+				fields.id = idField({
+					customModelName: unsafe_model,
+					forceAllowId: forceAllowId && "id" in data,
+				});
+			}
+			for (const field in fields) {
+				const value = data[field];
+				const fieldAttributes = fields[field];
+
+				let newFieldName: string =
+					newMappedKeys[field] || fields[field].fieldName || field;
+				if (
+					value === undefined &&
+					((!fieldAttributes.defaultValue &&
+						!fieldAttributes.transform?.input &&
+						!(action === "update" && fieldAttributes.onUpdate)) ||
+						(action === "update" && !fieldAttributes.onUpdate))
+				) {
+					continue;
+				}
+				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
+				let newValue = withApplyDefault(value, fieldAttributes, action);
+
+				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
+				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
+				if (fieldAttributes.transform?.input) {
+					newValue = await fieldAttributes.transform.input(newValue);
+				}
+
+				if (
+					fieldAttributes.references?.field === "id" &&
+					options.advanced?.database?.useNumberId
+				) {
+					if (Array.isArray(newValue)) {
+						newValue = newValue.map(Number);
+					} else {
+						newValue = Number(newValue);
+					}
+				} else if (
+					config.supportsJSON === false &&
+					typeof newValue === "object" &&
+					//@ts-expect-error -Future proofing
+					fieldAttributes.type === "json"
+				) {
+					newValue = JSON.stringify(newValue);
+				} else if (
+					config.supportsDates === false &&
+					newValue instanceof Date &&
+					fieldAttributes.type === "date"
+				) {
+					newValue = newValue.toISOString();
+				} else if (
+					config.supportsBooleans === false &&
+					typeof newValue === "boolean"
+				) {
+					newValue = newValue ? 1 : 0;
+				}
+
+				if (config.customTransformInput) {
+					newValue = config.customTransformInput({
+						data: newValue,
+						action,
+						field: newFieldName,
+						fieldAttributes: fieldAttributes,
+						model: unsafe_model,
+						schema,
+						options,
+					});
+				}
+
+				transformedData[newFieldName] = newValue;
+			}
+			return transformedData;
+		};
+
+		const transformOutput = async (
+			data: Record<string, any> | null,
+			unsafe_model: string,
+			select: string[] = [],
+		) => {
+			if (!data) return null;
+			const newMappedKeys = config.mapKeysTransformOutput ?? {};
+			const transformedData: Record<string, any> = {};
+			const tableSchema = schema[unsafe_model].fields;
+			const idKey = Object.entries(newMappedKeys).find(
+				([_, v]) => v === "id",
+			)?.[0];
+			tableSchema[idKey ?? "id"] = {
+				type: options.advanced?.database?.useNumberId ? "number" : "string",
+			};
+			for (const key in tableSchema) {
+				if (select.length && !select.includes(key)) {
+					continue;
+				}
+				const field = tableSchema[key];
+				if (field) {
+					const originalKey = field.fieldName || key;
+					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
+					let newValue =
+						data[
+							Object.entries(newMappedKeys).find(
+								([_, v]) => v === originalKey,
+							)?.[0] || originalKey
+						];
+
+					if (field.transform?.output) {
+						newValue = await field.transform.output(newValue);
+					}
+
+					let newFieldName: string = newMappedKeys[key] || key;
+
+					if (originalKey === "id" || field.references?.field === "id") {
+						// Even if `useNumberId` is true, we must always return a string `id` output.
+						if (typeof newValue !== "undefined") newValue = String(newValue);
+					} else if (
+						config.supportsJSON === false &&
+						typeof newValue === "string" &&
+						//@ts-expect-error - Future proofing
+						field.type === "json"
+					) {
+						newValue = safeJSONParse(newValue);
+					} else if (
+						config.supportsDates === false &&
+						typeof newValue === "string" &&
+						field.type === "date"
+					) {
+						newValue = new Date(newValue);
+					} else if (
+						config.supportsBooleans === false &&
+						typeof newValue === "number" &&
+						field.type === "boolean"
+					) {
+						newValue = newValue === 1;
+					}
+
+					if (config.customTransformOutput) {
+						newValue = config.customTransformOutput({
+							data: newValue,
+							field: newFieldName,
+							fieldAttributes: field,
+							select,
+							model: unsafe_model,
+							schema,
+							options,
+						});
+					}
+
+					transformedData[newFieldName] = newValue;
+				}
+			}
+			return transformedData as any;
+		};
+
+		const transformWhereClause = <W extends Where[] | undefined>({
+			model,
+			where,
+		}: {
+			where: W;
+			model: string;
+		}): W extends undefined ? undefined : CleanedWhere[] => {
+			if (!where) return undefined as any;
+			const newMappedKeys = config.mapKeysTransformInput ?? {};
+
+			return where.map((w) => {
+				const {
+					field: unsafe_field,
+					value,
+					operator = "eq",
+					connector = "AND",
+				} = w;
+				if (operator === "in") {
+					if (!Array.isArray(value)) {
+						throw new Error("Value must be an array");
+					}
+				}
+
+				const defaultModelName = getDefaultModelName(model);
+				const defaultFieldName = getDefaultFieldName({
+					field: unsafe_field,
+					model,
+				});
+				const fieldName: string =
+					newMappedKeys[defaultFieldName] ||
+					getFieldName({
+						field: defaultFieldName,
+						model: defaultModelName,
+					});
+
+				const fieldAttr = getFieldAttributes({
+					field: defaultFieldName,
+					model: defaultModelName,
+				});
+
+				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
+					if (options.advanced?.database?.useNumberId) {
+						if (Array.isArray(value)) {
+							return {
+								operator,
+								connector,
+								field: fieldName,
+								value: value.map(Number),
+							} satisfies CleanedWhere;
+						}
+						return {
+							operator,
+							connector,
+							field: fieldName,
+							value: Number(value),
+						} satisfies CleanedWhere;
+					}
+				}
+
+				return {
+					operator,
+					connector,
+					field: fieldName,
+					value: value,
+				} satisfies CleanedWhere;
+			}) as any;
+		};
+
 		return {
 			create: async <T extends Record<string, any>, R = T>({
 				data: unsafeData,
@@ -180,7 +414,7 @@ export const createAdapter =
 						.join("\n")
 						.replace("Error:", "Create method with `id` being called at:");
 					console.log(stack);
-					//@ts-ignore
+					//@ts-expect-error
 					unsafeData.id = undefined;
 				}
 				debugLog(

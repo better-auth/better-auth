@@ -205,6 +205,7 @@ exports[`init > should match config 1`] = `
         },
         "updatedAt": {
           "fieldName": "updatedAt",
+          "onUpdate": [Function],
           "required": true,
           "type": "date",
         },
@@ -247,6 +248,7 @@ exports[`init > should match config 1`] = `
         },
         "updatedAt": {
           "fieldName": "updatedAt",
+          "onUpdate": [Function],
           "required": true,
           "type": "date",
         },
@@ -304,6 +306,7 @@ exports[`init > should match config 1`] = `
         "updatedAt": {
           "defaultValue": [Function],
           "fieldName": "updatedAt",
+          "onUpdate": [Function],
           "required": true,
           "type": "date",
         },
@@ -332,6 +335,7 @@ exports[`init > should match config 1`] = `
         "updatedAt": {
           "defaultValue": [Function],
           "fieldName": "updatedAt",
+          "onUpdate": [Function],
           "required": false,
           "type": "date",
         },

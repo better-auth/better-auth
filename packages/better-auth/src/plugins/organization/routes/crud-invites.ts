@@ -65,11 +65,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				})
 				.optional(),
 			z
-				.array(
-					z.string().meta({
-						description: "The team ID to invite the user to",
-					}),
-				)
+				.array(z.string())
+				.meta({
+					description: "The team IDs to invite the user to",
+				})
 				.optional(),
 		]),
 	});
@@ -497,13 +496,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
 			});
-
 			if (!acceptedI) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 				});
 			}
-
 			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
@@ -568,7 +565,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				session.session.token,
 				invitation.organizationId,
 			);
-
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,
@@ -577,7 +573,36 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					},
 				});
 			}
+			if (ctx.context.orgOptions.onInvitationAccepted) {
+				const organization = await adapter.findOrganizationById(
+					invitation.organizationId,
+				);
 
+				const inviterMember = await adapter.findMemberByOrgId({
+					userId: invitation.inviterId,
+					organizationId: invitation.organizationId,
+				});
+
+				const inviterUser = await ctx.context.internalAdapter.findUserById(
+					invitation.inviterId,
+				);
+				if (organization && inviterMember && inviterUser) {
+					await ctx.context.orgOptions.onInvitationAccepted(
+						{
+							id: invitation.id,
+							role: invitation.role as string,
+							organization: organization,
+							invitation: invitation as unknown as Invitation,
+							inviter: {
+								...inviterMember,
+								user: inviterUser,
+							},
+							acceptedUser: session.user,
+						},
+						ctx.request,
+					);
+				}
+			}
 			return ctx.json({
 				invitation: acceptedI,
 				member,

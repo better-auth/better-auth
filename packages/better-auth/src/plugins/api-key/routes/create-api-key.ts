@@ -429,7 +429,7 @@ export function createApiKey({
 						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-ignore - we intentionally save the permissions as string on DB.
+				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -451,10 +451,7 @@ export function createApiKey({
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(
-							//@ts-ignore - from DB, this value is always a string
-							apiKey.permissions,
-						)
+					? safeJSONParse(apiKey.permissions)
 					: null,
 			});
 		},
