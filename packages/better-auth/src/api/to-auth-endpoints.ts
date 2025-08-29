@@ -122,7 +122,7 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 				shouldPublishLog(authContext.logger.level, "debug")
 			) {
 				// inherit stack from errorWithStack if debug mode is enabled
-				result.response.stack = result.response.errorWithStack?.stack;
+				result.response.stack = result.response.errorWithStack?.stack ?? result.response.stack;
 			}
 
 			if (result.response instanceof APIError && !context?.asResponse) {
