@@ -654,6 +654,43 @@ describe("organization", async (it) => {
 		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
+	it("should return BAD_REQUEST when non-member tries to delete organization", async () => {
+		// Create an organization first
+		const testOrg = await client.organization.create({
+			name: "test-delete-org",
+			slug: "test-delete-org",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Create a new user who is not a member of any organization
+		const nonMemberUser = {
+			email: "nonmember@test.com",
+			password: "password123",
+			name: "Non Member User",
+		};
+
+		await client.signUp.email(nonMemberUser);
+		const { headers: nonMemberHeaders } = await signInWithUser(
+			nonMemberUser.email,
+			nonMemberUser.password,
+		);
+
+		// Try to delete an organization they're not a member of
+		const deleteResult = await client.organization.delete({
+			organizationId: testOrg.data?.id as string,
+			fetchOptions: {
+				headers: nonMemberHeaders,
+			},
+		});
+
+		expect(deleteResult.error?.status).toBe(400);
+		expect(deleteResult.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		);
+	});
+
 	it("should allow deleting organization", async () => {
 		const { headers: adminHeaders } = await signInWithUser(
 			adminUser.email,
@@ -1868,5 +1905,81 @@ describe("Additional Fields", async () => {
 		expect(row).toBeDefined();
 		expect(row.teamOptionalField).toBe("hey3");
 		expect(row.teamRequiredField).toBe("hey4");
+	});
+});
+
+describe("organization hooks", async (it) => {
+	let hooksCalled: string[] = [];
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				organizationHooks: {
+					beforeCreateOrganization: async (data) => {
+						hooksCalled.push("beforeCreateOrganization");
+						return {
+							data: {
+								...data.organization,
+								metadata: { hookCalled: true },
+							},
+						};
+					},
+					afterCreateOrganization: async (data) => {
+						hooksCalled.push("afterCreateOrganization");
+					},
+					beforeCreateInvitation: async (data) => {
+						hooksCalled.push("beforeCreateInvitation");
+					},
+					afterCreateInvitation: async (data) => {
+						hooksCalled.push("afterCreateInvitation");
+					},
+					beforeAddMember: async (data) => {
+						hooksCalled.push("beforeAddMember");
+					},
+					afterAddMember: async (data) => {
+						hooksCalled.push("afterAddMember");
+					},
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("should call organization creation hooks", async () => {
+		hooksCalled = [];
+		const organization = await client.organization.create({
+			name: "Test Org with Hooks",
+			slug: "test-org-hooks",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateOrganization");
+		expect(hooksCalled).toContain("afterCreateOrganization");
+		expect(organization.data?.metadata).toEqual({ hookCalled: true });
+	});
+
+	it("should call invitation hooks", async () => {
+		hooksCalled = [];
+
+		await client.organization.inviteMember({
+			email: "test@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateInvitation");
+		expect(hooksCalled).toContain("afterCreateInvitation");
 	});
 });

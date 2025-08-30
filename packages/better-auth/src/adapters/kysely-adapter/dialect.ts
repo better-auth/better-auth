@@ -89,7 +89,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	if ("getConnection" in db) {
-		// @ts-ignore - mysql2/promise
+		// @ts-expect-error - mysql2/promise
 		dialect = new MysqlDialect(db);
 	}
 

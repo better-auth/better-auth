@@ -149,7 +149,7 @@ function getRequestBody(options: EndpointOptions): any {
 		options.body instanceof ZodObject ||
 		options.body instanceof ZodOptional
 	) {
-		// @ts-ignore
+		// @ts-expect-error
 		const shape = options.body.shape;
 		if (!shape) return undefined;
 		const properties: Record<string, any> = {};
@@ -319,7 +319,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			}
 		});
 
-		// @ts-ignore
+		// @ts-expect-error
 		acc[modelName] = {
 			type: "object",
 			properties,

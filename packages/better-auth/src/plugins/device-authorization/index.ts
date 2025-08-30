@@ -4,7 +4,7 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
 import { generateRandomString } from "../../crypto";
 import { getSessionFromCtx } from "../../api/routes/session";
-import { ms, type StringValue as MSStringValue } from "../../utils/time/ms";
+import { ms, type StringValue as MSStringValue } from "ms";
 import { getRandomValues } from "@better-auth/utils";
 import { schema, type DeviceCode } from "./schema";
 import { mergeSchema } from "../../db";
