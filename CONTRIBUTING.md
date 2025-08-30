@@ -147,7 +147,6 @@ pnpm lint:fix
 7. Ensure all tests pass and the code is properly formatted
 8. Commit your changes with a descriptive message following this format:
    For changes that need to be included in the changelog (excluding docs or chore changes), use the `fix` or `feat` format with a specific scope:
-
    ```
    fix(organization): fix incorrect member role assignment
    
