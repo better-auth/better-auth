@@ -359,7 +359,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "GET",
 					query: z.object({
-						id: z.string({
+						id: z.string().meta({
 							description: "The id of the User",
 						}),
 					}),
