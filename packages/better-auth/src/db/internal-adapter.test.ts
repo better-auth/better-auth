@@ -1,5 +1,5 @@
 import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import type { BetterAuthOptions, BetterAuthPlugin, User } from "../types";
 import Database from "better-sqlite3";
 import { init } from "../init";
 import { getMigrations } from "./get-migration";
@@ -198,12 +198,19 @@ describe("adapter test", async () => {
 			name: "Last Login Test User",
 		});
 
-		expect(user.lastLoginAt).toBeNull();
+		// Allow both null and undefined as the schema defines lastLoginAt as nullish
+		expect(user.lastLoginAt === null || user.lastLoginAt === undefined).toBe(
+			true,
+		);
 
 		const dbUser = await ctx.adapter.findOne({
 			model: "user",
 			where: [{ field: "id", value: user.id }],
 		});
-		expect((dbUser as any).lastLoginAt).toBeNull();
+		// Allow both null and undefined as the schema defines lastLoginAt as nullish
+		expect(
+			(dbUser as User).lastLoginAt === null ||
+				(dbUser as User).lastLoginAt === undefined,
+		).toBe(true);
 	});
 });

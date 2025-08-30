@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
+import type { User } from "../types";
 
 describe("lastLoginAt feature", () => {
 	describe("initial state", () => {
@@ -13,7 +14,11 @@ describe("lastLoginAt feature", () => {
 			});
 
 			expect(signUpResponse.data).toBeDefined();
-			expect(signUpResponse.data?.user.lastLoginAt).toBeNull();
+			// Allow both null and undefined as the schema defines lastLoginAt as nullish
+			expect(
+				signUpResponse.data?.user.lastLoginAt === null ||
+					signUpResponse.data?.user.lastLoginAt === undefined,
+			).toBe(true);
 		});
 	});
 
@@ -33,9 +38,7 @@ describe("lastLoginAt feature", () => {
 			});
 
 			expect(signInResponse.data).toBeDefined();
-			expect(signInResponse.data?.user.lastLoginAt).toBeInstanceOf(
-				Date,
-			);
+			expect(signInResponse.data?.user.lastLoginAt).toBeInstanceOf(Date);
 			expect(signInResponse.data?.user.lastLoginAt).not.toBeNull();
 		});
 
@@ -96,8 +99,8 @@ describe("lastLoginAt feature", () => {
 			});
 
 			expect(users).toHaveLength(1);
-			expect((users[0] as any).lastLoginAt).toBeInstanceOf(Date);
-			expect((users[0] as any).lastLoginAt).not.toBeNull();
+			expect((users[0] as User).lastLoginAt).toBeInstanceOf(Date);
+			expect((users[0] as User).lastLoginAt).not.toBeNull();
 		});
 	});
 });

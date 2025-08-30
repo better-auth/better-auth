@@ -284,10 +284,14 @@ export const createInternalAdapter = (
 			);
 
 			// Update user's lastLoginAt timestamp when session is created
+			const lastLoginAtFieldName =
+				options.user?.fields?.lastLoginAt || "lastLoginAt";
+			const updatedAtFieldName = options.user?.fields?.updatedAt || "updatedAt";
+
 			await updateWithHooks(
 				{
-					lastLoginAt: new Date(),
-					updatedAt: new Date(),
+					[lastLoginAtFieldName]: new Date(),
+					[updatedAtFieldName]: new Date(),
 				},
 				[
 					{
