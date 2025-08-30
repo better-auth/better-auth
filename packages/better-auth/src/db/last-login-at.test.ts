@@ -33,7 +33,9 @@ describe("lastLoginAt feature", () => {
 			});
 
 			expect(signInResponse.data).toBeDefined();
-			expect((signInResponse.data?.user as any).lastLoginAt).toBeInstanceOf(Date);
+			expect((signInResponse.data?.user as any).lastLoginAt).toBeInstanceOf(
+				Date,
+			);
 			expect((signInResponse.data?.user as any).lastLoginAt).not.toBeNull();
 		});
 
@@ -54,7 +56,7 @@ describe("lastLoginAt feature", () => {
 			const firstLoginTime = (firstSignIn.data?.user as any).lastLoginAt;
 			expect(firstLoginTime).toBeInstanceOf(Date);
 
-			await new Promise(resolve => setTimeout(resolve, 10));
+			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			const secondSignIn = await client.signIn.email({
 				email: "multi@example.com",
@@ -64,7 +66,9 @@ describe("lastLoginAt feature", () => {
 			const secondLoginTime = (secondSignIn.data?.user as any).lastLoginAt;
 			expect(secondLoginTime).toBeInstanceOf(Date);
 			expect(secondLoginTime).not.toEqual(firstLoginTime);
-			expect(secondLoginTime!.getTime()).toBeGreaterThan(firstLoginTime!.getTime());
+			expect(secondLoginTime!.getTime()).toBeGreaterThan(
+				firstLoginTime!.getTime(),
+			);
 		});
 	});
 
