@@ -11,6 +11,7 @@ import { originCheck, sessionMiddleware } from "../../api";
 // TODO docs: react examples, redirect/callback flows
 // TODO test: test link with existing account
 // TODO feat: add callback-link endpoint
+// TODO callback api errors should redirect to url like magic link
 
 const buildTelegramHash = (dataFields: object) => {
 	// build data string
