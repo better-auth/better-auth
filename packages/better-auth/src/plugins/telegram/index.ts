@@ -427,12 +427,12 @@ export const telegram = (options: TelegramOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						id: z.number(),
+						id: z.string(),
 						first_name: z.string().optional(),
 						last_name: z.string().optional(),
 						username: z.string().optional(),
 						photo_url: z.string().optional(),
-						auth_date: z.number(),
+						auth_date: z.string(),
 						hash: z.string(),
 					}),
 				},
@@ -495,7 +495,7 @@ export const telegram = (options: TelegramOptions) => {
 					}
 
 					let profile: TelegramProfile = {
-						id: id,
+						id: parseInt(id),
 						first_name: first_name,
 						last_name: last_name,
 						username: username,
