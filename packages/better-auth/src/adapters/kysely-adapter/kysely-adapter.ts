@@ -20,6 +20,15 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	usePlural?: boolean;
+	/**
+	 * Whether the database supports native date types.
+	 * When false, dates will be handled as ISO strings.
+	 * 
+	 * @default Automatically determined based on database type:
+	 * - `false` for sqlite, mssql
+	 * - `true` for postgres, mysql
+	 */
+	supportsDates?: boolean;
 }
 
 export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
@@ -34,9 +43,11 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					? false
 					: true,
 			supportsDates:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
+				config?.supportsDates !== undefined
+					? config.supportsDates
+					: config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+						? false
+						: true,
 			supportsJSON: false,
 		},
 		adapter: ({ getFieldName, schema }) => {
