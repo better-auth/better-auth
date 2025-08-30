@@ -75,9 +75,7 @@ export function parseSetCookieHeader(
 }
 
 export function setCookieToHeader(headers: Headers) {
-	return (context: {
-		response: Response;
-	}) => {
+	return (context: { response: Response }) => {
 		const setCookieHeader = context.response.headers.get("set-cookie");
 		if (!setCookieHeader) {
 			return;

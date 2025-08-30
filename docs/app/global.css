@@ -241,7 +241,7 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground overscroll-none;
+		@apply overscroll-none bg-background text-foreground selection:bg-foreground selection:text-background;
 	}
 }
 
@@ -251,11 +251,10 @@ html {
 
 @layer utilities {
 	.no-scrollbar::-webkit-scrollbar {
-	  display: none;
+		display: none;
 	}
 	.no-scrollbar {
-	  -ms-overflow-style: none;
-	  scrollbar-width: none;
+		-ms-overflow-style: none;
+		scrollbar-width: none;
 	}
-  }
-  
+}

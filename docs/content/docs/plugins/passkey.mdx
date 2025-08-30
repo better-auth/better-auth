@@ -96,6 +96,10 @@ To add or register a passkey make sure a user is authenticated and then call the
 ```ts
 type addPasskey = {
     /**
+     * An optional name to label the authenticator account being registered. If not provided, it will default to the user's email address or user ID
+    */
+    name?: string = "example-passkey-name"
+    /**
      * You can also specify the type of authenticator you want to register. Default behavior allows both platform and cross-platform passkeys
     */
     authenticatorAttachment?: "platform" | "cross-platform" = "cross-platform"

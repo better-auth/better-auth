@@ -118,7 +118,7 @@ Here are examples of how you can do caching in different frameworks and environm
 
 ## SSR Optimizations
 
-If you're using a framework that supports server-side rendering, it's usually best to pre-fetch user session on the server and use it as a fallback on the client.
+If you're using a framework that supports server-side rendering, it's usually best to pre-fetch the user session on the server and use it as a fallback on the client.
 
 ```ts
 const session = await auth.api.getSession({

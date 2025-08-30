@@ -190,8 +190,11 @@ export const magicLink = (options: MagicLinkopts) => {
 						ctx,
 					);
 					const realBaseURL = new URL(ctx.context.baseURL);
+					const pathname =
+						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
+					const basePath = pathname ? "" : ctx.context.options.basePath || "";
 					const url = new URL(
-						`${realBaseURL.pathname}/magic-link/verify`,
+						`${pathname}${basePath}/magic-link/verify`,
 						realBaseURL.origin,
 					);
 					url.searchParams.set("token", verificationToken);

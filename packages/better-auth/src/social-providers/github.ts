@@ -137,7 +137,7 @@ export const github = (options: GithubOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id.toString(),
+					id: profile.id,
 					name: profile.name || profile.login,
 					email: profile.email,
 					image: profile.avatar_url,

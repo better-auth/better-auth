@@ -52,14 +52,15 @@ export const auth = betterAuth({
 
 ### Cross Subdomain Cookies
 
-Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `example.com`, and if you authenticate on `example.com`, you may want to access the same session on `app.example.com`.
+Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `auth.example.com`, and if you authenticate on `auth.example.com`, you may want to access the same session on `app.example.com`.
 
-By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies by configuring `crossSubDomainCookies` and `defaultCookieAttributes` in the `advanced` object of the auth options.
+<Callout type="warn">
+The `domain` attribute controls which domains can access the cookie. Setting it to your root domain (e.g. `example.com`) makes the cookie accessible across all subdomains. For security, you should:
 
-<Callout>The leading period of the `domain` attribute broadens the cookie's scope beyond your main domain, making it accessible across all subdomains.</Callout>
-
-<Callout type="note">
-If your frontend and backend are on different domains, you must configure CORS on your backend, set <code>credentials: 'include'</code> in your frontend requests, and add your frontend domain to <code>trustedOrigins</code>. See the example above for cookie attributes and trustedOrigins usage.
+1. Only enable cross-subdomain cookies if it's necessary
+2. Set the domain to the most specific scope needed (e.g. `app.example.com` instead of `.example.com`)
+3. Be cautious of untrusted subdomains that could potentially access these cookies
+4. Consider using separate domains for untrusted services (e.g. `status.company.com` vs `app.company.com`)
 </Callout>
 
 ```ts title="auth.ts"
@@ -69,7 +70,7 @@ export const auth = betterAuth({
     advanced: {
         crossSubDomainCookies: {
             enabled: true,
-            domain: ".example.com", // your domain
+            domain: "app.example.com", // your domain
         },
     },
     trustedOrigins: [

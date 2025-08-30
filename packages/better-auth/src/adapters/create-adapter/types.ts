@@ -222,9 +222,7 @@ export interface AdapterConfig {
 	 * }
 	 * ```
 	 */
-	customIdGenerator?: (props: {
-		model: string;
-	}) => string;
+	customIdGenerator?: (props: { model: string }) => string;
 }
 
 export type CreateCustomAdapter = ({
@@ -280,7 +278,10 @@ export type CreateCustomAdapter = ({
 	getDefaultFieldName: ({
 		model,
 		field,
-	}: { model: string; field: string }) => string;
+	}: {
+		model: string;
+		field: string;
+	}) => string;
 	/**
 	 * Get the field attributes for a given model and field.
 	 *
@@ -289,7 +290,10 @@ export type CreateCustomAdapter = ({
 	getFieldAttributes: ({
 		model,
 		field,
-	}: { model: string; field: string }) => FieldAttribute;
+	}: {
+		model: string;
+		field: string;
+	}) => FieldAttribute;
 }) => CustomAdapter;
 
 export interface CustomAdapter {

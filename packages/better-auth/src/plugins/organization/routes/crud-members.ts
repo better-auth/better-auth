@@ -179,10 +179,13 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				/**
 				 * If not provided, the active organization will be used
 				 */
-				organizationId: z.string().meta({
-					description:
-						'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
-				}),
+				organizationId: z
+					.string()
+					.meta({
+						description:
+							'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
+					})
+					.optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -435,6 +438,16 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			if (!toBeUpdatedMember) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				});
+			}
+
+			const memberBelongsToOrganization =
+				toBeUpdatedMember.organizationId === organizationId;
+
+			if (!memberBelongsToOrganization) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
 			}
 

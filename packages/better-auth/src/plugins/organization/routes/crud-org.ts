@@ -461,10 +461,9 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
-				return ctx.json(null, {
-					status: 401,
-				});
+				throw new APIError("UNAUTHORIZED", { status: 401 });
 			}
+
 			const organizationId = ctx.body.organizationId;
 			if (!organizationId) {
 				return ctx.json(null, {
@@ -687,7 +686,9 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
-			let organizationId = ctx.body.organizationSlug || ctx.body.organizationId;
+			let organizationId = ctx.body.organizationId;
+			let organizationSlug = ctx.body.organizationSlug;
+
 			if (organizationId === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
@@ -703,13 +704,32 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				});
 				return ctx.json(null);
 			}
-			if (!organizationId) {
+
+			if (!organizationId && !organizationSlug) {
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
 				}
 				organizationId = sessionOrgId;
 			}
+
+			if (organizationSlug && !organizationId) {
+				const organization =
+					await adapter.findOrganizationBySlug(organizationSlug);
+				if (!organization) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					});
+				}
+				organizationId = organization.id;
+			}
+
+			if (!organizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
 				organizationId,
@@ -721,16 +741,12 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
+
 			let organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
-				if (ctx.body.organizationSlug) {
-					organization = await adapter.findOrganizationBySlug(organizationId);
-				}
-				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
-				}
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
 			}
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,

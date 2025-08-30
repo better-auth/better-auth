@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
@@ -363,11 +363,15 @@ describe("session storage", async () => {
 		},
 	});
 
+	beforeEach(() => {
+		store.clear();
+	});
+
 	it("should store session in secondary storage", async () => {
 		//since the instance creates a session on init, we expect the store to have 2 item (1 for session and 1 for active sessions record for the user)
-		expect(store.size).toBe(2);
+		expect(store.size).toBe(0);
 		const { headers } = await signInWithTestUser();
-		expect(store.size).toBe(3);
+		expect(store.size).toBe(2);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -400,7 +404,35 @@ describe("session storage", async () => {
 				headers,
 			},
 		});
-		expect(response.data?.length).toBeGreaterThan(1);
+		expect(response.data?.length).toBe(1);
+	});
+
+	it("revoke session and list sessions", async () => {
+		const { headers } = await signInWithTestUser();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.session?.token).toBeDefined();
+		const userId = session.data!.session.userId;
+		const sessions = JSON.parse(store.get(`active-sessions-${userId}`)!);
+		expect(sessions.length).toBe(1);
+		const res = await client.revokeSession({
+			fetchOptions: {
+				headers,
+			},
+			token: session.data?.session?.token!,
+		});
+		expect(res.data?.status).toBe(true);
+		const response = await client.listSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(response.data).toBe(null);
+		expect(store.size).toBe(0);
 	});
 
 	it("should revoke session", async () => {

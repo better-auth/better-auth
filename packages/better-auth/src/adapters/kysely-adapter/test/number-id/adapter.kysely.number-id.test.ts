@@ -1,6 +1,6 @@
 import merge from "deepmerge";
-import fs from "node:fs";
-import fsPromises from "node:fs/promises";
+import fs from "fs";
+import fsPromises from "fs/promises";
 import { afterAll, beforeAll, describe } from "vitest";
 import { runNumberIdAdapterTest } from "../../../test";
 import path from "path";
@@ -15,7 +15,10 @@ import type { BetterAuthOptions } from "../../../../types";
 export const opts = ({
 	database,
 	isNumberIdTest,
-}: { database: BetterAuthOptions["database"]; isNumberIdTest: boolean }) =>
+}: {
+	database: BetterAuthOptions["database"];
+	isNumberIdTest: boolean;
+}) =>
 	({
 		database: database,
 		user: {

@@ -31,7 +31,7 @@ describe("mcp", async () => {
 						loginPage: "/login",
 						requirePKCE: true,
 
-						getAdditionalUserInfoClaim(user, scopes) {
+						getAdditionalUserInfoClaim(user, scopes, client) {
 							return {
 								custom: "custom value",
 								userId: user.id,
@@ -76,6 +76,9 @@ describe("mcp", async () => {
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
+			},
+			onResponse(context) {
+				expect(context.response.status).toBe(201);
 			},
 		});
 

@@ -234,10 +234,11 @@ type upgradeSubscription = {
      */
     successUrl: string
     /**
-     * Callback URL to redirect back after successful subscription. 
+     * If set, checkout shows a back button and customers will be directed here if they cancel payment.
      */
     cancelUrl: string 
-     * Return URL to redirect back after successful subscription. 
+    /**
+     * URL to take customers to when they click on the billing portal’s link to return to your website.
      */
     returnUrl?: string
     /**
@@ -345,7 +346,7 @@ type cancelSubscription = {
      */
     subscriptionId?: string = 'sub_123'
     /**
-     * Return URL to redirect back after successful subscription. 
+     * URL to take customers to when they click on the billing portal’s link to return to your website.
      */
     returnUrl: string = '/account'
 }
@@ -382,6 +383,31 @@ type restoreSubscription = {
 This will reactivate a subscription that was previously set to cancel at the end of the billing period (`cancelAtPeriodEnd: true`). The subscription will continue to renew automatically.
 
 > **Note:** This only works for subscriptions that are still active but marked to cancel at the end of the period. It cannot restore subscriptions that have already ended.
+
+#### Creating Billing Portal Sessions
+
+To create a [Stripe billing portal session](https://docs.stripe.com/api/customer_portal/sessions/create) where customers can manage their subscriptions, update payment methods, and view billing history:
+
+<APIMethod
+  path="/subscription/billing-portal"
+  method="POST"
+  requireSession
+>
+```ts
+type createBillingPortal = {
+    /**
+     * Reference id of the subscription to upgrade. 
+     */
+    referenceId?: string = "123"
+    /**
+     * Return URL to redirect back after successful subscription. 
+     */
+    returnUrl?: string
+}
+```
+</APIMethod>
+        
+This endpoint creates a Stripe billing portal session and returns a URL in the response as `data.url`. You can redirect users to this URL to allow them to manage their subscription, payment methods, and billing history.
 
 ### Reference System
 

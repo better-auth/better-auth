@@ -617,4 +617,22 @@ describe("mulit team support", async (it) => {
 
 		expect(teams).toHaveLength(3);
 	});
+
+	it("should create invitation without teamId", async () => {
+		expect(organizationId).toBeDefined();
+		if (!organizationId) throw Error("can not run test");
+
+		const invitation = await auth.api.createInvitation({
+			headers: admin.headers,
+			body: {
+				email: "noteam@email.com",
+				role: "member",
+				organizationId,
+			},
+		});
+
+		expect(invitation.id).toBeDefined();
+		expect(invitation.teamId).toBeNull();
+		expect(invitation.teamId).not.toBe("");
+	});
 });

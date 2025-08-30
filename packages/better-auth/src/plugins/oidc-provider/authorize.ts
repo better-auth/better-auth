@@ -193,7 +193,7 @@ export async function authorize(
 					redirectURI: query.redirect_uri,
 					scope: requestScope,
 					userId: session.user.id,
-					authTime: session.session.createdAt.getTime(),
+					authTime: new Date(session.session.createdAt).getTime(),
 					/**
 					 * If the prompt is set to `consent`, then we need
 					 * to require the user to consent to the scopes.
@@ -263,14 +263,19 @@ export async function authorize(
 	}
 
 	if (options?.consentPage) {
+		// Set cookie to support cookie-based consent flows
 		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
 			maxAge: 600,
 			path: "/",
 			sameSite: "lax",
 		});
-		const consentURI = `${options.consentPage}?client_id=${
-			client.clientId
-		}&scope=${requestScope.join(" ")}`;
+
+		// Pass the consent code as a URL parameter to support URL-based consent flows
+		const urlParams = new URLSearchParams();
+		urlParams.set("consent_code", code);
+		urlParams.set("client_id", client.clientId);
+		urlParams.set("scope", requestScope.join(" "));
+		const consentURI = `${options.consentPage}?${urlParams.toString()}`;
 
 		return handleRedirect(consentURI);
 	}

@@ -148,6 +148,19 @@ export const linkSocialAccount = createAuthEndpoint(
 						"The URL to redirect to if there is an error during the link process",
 				})
 				.optional(),
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z
+				.boolean()
+				.meta({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
@@ -243,6 +256,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
+			const linkingUserId = String(linkingUserInfo.user.id);
+
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
@@ -257,16 +272,14 @@ export const linkSocialAccount = createAuthEndpoint(
 			);
 
 			const hasBeenLinked = existingAccounts.find(
-				(a) =>
-					a.providerId === provider.id &&
-					a.accountId === linkingUserInfo.user.id,
+				(a) => a.providerId === provider.id && a.accountId === linkingUserId,
 			);
 
 			if (hasBeenLinked) {
 				return c.json({
-					redirect: false,
 					url: "", // this is for type inference
 					status: true,
+					redirect: false,
 				});
 			}
 
@@ -297,7 +310,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					{
 						userId: session.user.id,
 						providerId: provider.id,
-						accountId: linkingUserInfo.user.id.toString(),
+						accountId: linkingUserId,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 						refreshToken: c.body.idToken.refreshToken,
@@ -325,9 +338,9 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			return c.json({
-				redirect: false,
 				url: "", // this is for type inference
 				status: true,
+				redirect: false,
 			});
 		}
 
@@ -346,7 +359,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );

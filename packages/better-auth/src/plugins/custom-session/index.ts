@@ -8,6 +8,29 @@ import type {
 	InferUser,
 } from "../../types";
 
+const getSessionQuerySchema = z.optional(
+	z.object({
+		/**
+		 * If cookie cache is enabled, it will disable the cache
+		 * and fetch the session from the database
+		 */
+		disableCookieCache: z
+			.boolean()
+			.meta({
+				description: "Disable cookie cache and fetch session from database",
+			})
+			.or(z.string().transform((v) => v === "true"))
+			.optional(),
+		disableRefresh: z
+			.boolean()
+			.meta({
+				description:
+					"Disable session refresh. Useful for checking session status, without updating the session",
+			})
+			.optional(),
+	}),
+);
+
 export const customSession = <
 	Returns extends Record<string, any>,
 	O extends BetterAuthOptions = BetterAuthOptions,
@@ -28,29 +51,7 @@ export const customSession = <
 				"/get-session",
 				{
 					method: "GET",
-					query: z.optional(
-						z.object({
-							/**
-							 * If cookie cache is enabled, it will disable the cache
-							 * and fetch the session from the database
-							 */
-							disableCookieCache: z
-								.boolean()
-								.meta({
-									description:
-										"Disable cookie cache and fetch session from database",
-								})
-								.or(z.string().transform((v) => v === "true"))
-								.optional(),
-							disableRefresh: z
-								.boolean()
-								.meta({
-									description:
-										"Disable session refresh. Useful for checking session status, without updating the session",
-								})
-								.optional(),
-						}),
-					),
+					query: getSessionQuerySchema,
 					metadata: {
 						CUSTOM_SESSION: true,
 						openapi: {

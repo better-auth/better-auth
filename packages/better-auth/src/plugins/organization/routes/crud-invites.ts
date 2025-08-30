@@ -3,7 +3,10 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { type InferOrganizationRolesFromOption } from "../schema";
+import {
+	type InferOrganizationRolesFromOption,
+	type Invitation,
+} from "../schema";
 import { APIError } from "better-call";
 import { parseRoles } from "../organization";
 import { type OrganizationOptions } from "../types";
@@ -14,6 +17,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
+import { getDate } from "../../../utils/date";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -230,6 +234,61 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
+
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			// If resend is true and there's an existing invitation, reuse it
+			if (alreadyInvited.length && ctx.body.resend) {
+				const existingInvitation = alreadyInvited[0];
+
+				// Update the invitation's expiration date using the same logic as createInvitation
+				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
+				const newExpiresAt = getDate(
+					ctx.context.orgOptions.invitationExpiresIn || defaultExpiration,
+					"sec",
+				);
+
+				await ctx.context.adapter.update({
+					model: "invitation",
+					where: [
+						{
+							field: "id",
+							value: existingInvitation.id,
+						},
+					],
+					update: {
+						expiresAt: newExpiresAt,
+					},
+				});
+
+				const updatedInvitation = {
+					...existingInvitation,
+					expiresAt: newExpiresAt,
+				};
+
+				await ctx.context.orgOptions.sendInvitationEmail?.(
+					{
+						id: updatedInvitation.id,
+						role: updatedInvitation.role as string,
+						email: updatedInvitation.email.toLowerCase(),
+						organization: organization,
+						inviter: {
+							...member,
+							user: session.user,
+						},
+						invitation: updatedInvitation as unknown as Invitation,
+					},
+					ctx.request,
+				);
+
+				return ctx.json(updatedInvitation);
+			}
+
 			if (
 				alreadyInvited.length &&
 				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
@@ -237,12 +296,6 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				await adapter.updateInvitation({
 					invitationId: alreadyInvited[0].id,
 					status: "canceled",
-				});
-			}
-			const organization = await adapter.findOrganizationById(organizationId);
-			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 
@@ -256,7 +309,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							},
 							ctx.context,
 						)
-					: ctx.context.orgOptions.invitationLimit ?? 100;
+					: (ctx.context.orgOptions.invitationLimit ?? 100);
 
 			const pendingInvitations = await adapter.findPendingInvitations({
 				organizationId: organizationId,
@@ -315,7 +368,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				"teamId" in ctx.body
 					? typeof ctx.body.teamId === "string"
 						? [ctx.body.teamId as string]
-						: (ctx.body.teamId as string[]) ?? []
+						: ((ctx.body.teamId as string[]) ?? [])
 					: [];
 
 			const {
@@ -416,6 +469,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				});
+			}
+
+			if (
+				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				!session.user.emailVerified
+			) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION,
 				});
 			}
 
@@ -578,6 +641,16 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				});
+			}
+
+			if (
+				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				!session.user.emailVerified
+			) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION,
 				});
 			}
 

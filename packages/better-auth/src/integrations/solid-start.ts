@@ -5,9 +5,7 @@ export function toSolidStartHandler(
 		  }
 		| ((request: Request) => Promise<Response>),
 ) {
-	const handler = async (event: {
-		request: Request;
-	}) => {
+	const handler = async (event: { request: Request }) => {
 		return "handler" in auth
 			? auth.handler(event.request)
 			: auth(event.request);
