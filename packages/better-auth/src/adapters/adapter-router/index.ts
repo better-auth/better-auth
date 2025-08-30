@@ -1,94 +1,84 @@
-import type { Adapter, AdapterInstance, BetterAuthOptions, Where } from "../../types";
-
-/**
- * Core authentication tables used by Better Auth
- */
-const CORE_AUTH_TABLES = new Set([
-	"user", "users",
-	"account", "accounts", 
-	"session", "sessions",
-	"organization", "organizations",
-	"member", "members",
-	"invitation", "invitations", 
-	"verification", "verifications",
-	"tenant", "tenants",
-]);
+import type {
+	Adapter,
+	AdapterInstance,
+	BetterAuthOptions,
+	Where,
+} from "../../types";
 
 /**
  * Parameters passed to adapter router callbacks
  */
 export type AdapterRouterParams = {
 	modelName: string;
-	isCoreBetterAuthModel: boolean;
 	fallbackAdapter: Adapter;
 } & (
 	| {
-		operation: "create";
-		data?: {
-			model: string;
-			data: Omit<Record<string, any>, "id">;
-			select?: string[];
-			forceAllowId?: boolean;
-		};
-	}
-	| {
-		operation: "findOne";
-		data?: {
-			model: string;
-			where: Where[];
-			select?: string[];
-		};
-	}
-	| {
-		operation: "findMany";
-		data?: {
-			model: string;
-			where?: Where[];
-			limit?: number;
-			sortBy?: {
-				field: string;
-				direction: "asc" | "desc";
+			operation: "create";
+			data?: {
+				model: string;
+				data: Omit<Record<string, any>, "id">;
+				select?: string[];
+				forceAllowId?: boolean;
 			};
-			offset?: number;
-		};
-	}
+	  }
 	| {
-		operation: "update";
-		data?: {
-			model: string;
-			where: Where[];
-			update: Record<string, any>;
-		};
-	}
+			operation: "findOne";
+			data?: {
+				model: string;
+				where: Where[];
+				select?: string[];
+			};
+	  }
 	| {
-		operation: "updateMany";
-		data?: {
-			model: string;
-			where: Where[];
-			update: Record<string, any>;
-		};
-	}
+			operation: "findMany";
+			data?: {
+				model: string;
+				where?: Where[];
+				limit?: number;
+				sortBy?: {
+					field: string;
+					direction: "asc" | "desc";
+				};
+				offset?: number;
+			};
+	  }
 	| {
-		operation: "delete";
-		data?: {
-			model: string;
-			where: Where[];
-		};
-	}
+			operation: "update";
+			data?: {
+				model: string;
+				where: Where[];
+				update: Record<string, any>;
+			};
+	  }
 	| {
-		operation: "deleteMany";
-		data?: {
-			model: string;
-			where: Where[];
-		};
-	}
+			operation: "updateMany";
+			data?: {
+				model: string;
+				where: Where[];
+				update: Record<string, any>;
+			};
+	  }
 	| {
-		operation: "count";
-		data?: {
-			model: string;
-			where?: Where[];
-		};
-	}
+			operation: "delete";
+			data?: {
+				model: string;
+				where: Where[];
+			};
+	  }
+	| {
+			operation: "deleteMany";
+			data?: {
+				model: string;
+				where: Where[];
+			};
+	  }
+	| {
+			operation: "count";
+			data?: {
+				model: string;
+				where?: Where[];
+			};
+	  }
 );
 
 /**
@@ -114,7 +104,7 @@ export interface AdapterRouterConfig {
 
 	/**
 	 * Array of routing callbacks evaluated in order
-	 * Each callback receives { modelName, data, operation } and can return:
+	 * Each callback receives `{ modelName, data, operation, fallbackAdapter }` and can return:
 	 * - An Adapter instance to use for this request
 	 * - null/undefined to continue to the next route
 	 *
@@ -174,6 +164,7 @@ export interface AdapterRouterConfig {
  *     ]
  *   })
  * });
+ *
  * ```
  */
 export const adapterRouter = (config: AdapterRouterConfig) => {
@@ -205,7 +196,6 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 				const routeCallback = routes[i];
 				const adapter = await routeCallback({
 					modelName: model,
-					isCoreBetterAuthModel: CORE_AUTH_TABLES.has(model),
 					data,
 					operation,
 					fallbackAdapter,
