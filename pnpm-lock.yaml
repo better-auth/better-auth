@@ -554,6 +554,8 @@ importers:
         specifier: ^5.8.2
         version: 5.9.2
 
+  e2e/integration: {}
+
   e2e/integration/vanilla-node:
     dependencies:
       better-auth:

@@ -3,10 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "server": "tsx ./src/server.ts",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "start:server": "tsx ./src/server.ts",
+    "start:client": "vite"
   },
   "devDependencies": {
     "typescript": "^5.9.2",
