@@ -55,5 +55,7 @@ export const resolveOIDCOptions = (
 			(() => generateRandomString(32, "a-z", "A-Z")),
 		getAdditionalUserInfoClaim:
 			options.getAdditionalUserInfoClaim ?? (() => ({})),
+
+		schema: options.schema ?? {},
 	};
 };
