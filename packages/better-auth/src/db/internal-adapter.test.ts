@@ -191,4 +191,19 @@ describe("adapter test", async () => {
 			identifier: "test-id-1",
 		});
 	});
+
+	it("should have lastLoginAt field in user schema", async () => {
+		const user = await internalAdapter.createUser({
+			email: "lastlogin@test.com",
+			name: "Last Login Test User",
+		});
+
+		expect((user as any).lastLoginAt).toBeNull();
+
+		const dbUser = await ctx.adapter.findOne({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect((dbUser as any).lastLoginAt).toBeNull();
+	});
 });
