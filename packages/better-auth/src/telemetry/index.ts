@@ -15,6 +15,14 @@ export async function createTelemetry(
 	options: BetterAuthOptions,
 	context?: TelemetryContext,
 ) {
+	const calledFromCli = getBooleanEnvVar("BETTER_AUTH_CALLED_FROM_CLI", false);
+
+	// If running from the Better Auth CLI, replace telemetry with a no-op.
+	// This avoids sending the telemetry report twice when the CLI already handled it.
+	if (calledFromCli) {
+		return { publish: async (event: TelemetryEvent) => {} };
+	}
+
 	const debugEnabled =
 		options.telemetry?.debug ||
 		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);

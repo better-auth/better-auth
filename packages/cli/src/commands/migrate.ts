@@ -25,6 +25,9 @@ export async function migrateAction(opts: any) {
 		process.exit(1);
 	}
 
+	// Mark as CLI execution before loading config.
+	// This prevents the telemetry report from running during initialization.
+	process.env.BETTER_AUTH_CALLED_FROM_CLI = "true";
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
@@ -45,13 +48,16 @@ export async function migrateAction(opts: any) {
 		process.exit(1);
 	}
 
+	// Unmark CLI execution before creating telemetry.
+	process.env.BETTER_AUTH_CALLED_FROM_CLI = "false";
+	const telemetry = await createTelemetry(config);
+
 	if (db.id !== "kysely") {
 		if (db.id === "prisma") {
 			logger.error(
 				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
 			);
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_migrate",
 					payload: {
@@ -68,7 +74,6 @@ export async function migrateAction(opts: any) {
 				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle’s migrate or push to apply it.",
 			);
 			try {
-				const telemetry = await createTelemetry(config);
 				await telemetry.publish({
 					type: "cli_migrate",
 					payload: {
@@ -82,7 +87,6 @@ export async function migrateAction(opts: any) {
 		}
 		logger.error("Migrate command isn't supported for this adapter.");
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_migrate",
 				payload: {
@@ -103,7 +107,6 @@ export async function migrateAction(opts: any) {
 		spinner.stop();
 		logger.info("🚀 No migrations needed.");
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_migrate",
 				payload: {
@@ -147,7 +150,6 @@ export async function migrateAction(opts: any) {
 	if (!migrate) {
 		logger.info("Migration cancelled.");
 		try {
-			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_migrate",
 				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
@@ -161,7 +163,6 @@ export async function migrateAction(opts: any) {
 	spinner.stop();
 	logger.info("🚀 migration was completed successfully!");
 	try {
-		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
 			type: "cli_migrate",
 			payload: { outcome: "migrated", config: getTelemetryAuthConfig(config) },
