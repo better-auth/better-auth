@@ -630,9 +630,12 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							},
 							ctx,
 						);
+						await setSessionCookie(ctx, {
+							session: session.session,
+							user,
+						});
 						return ctx.json({
 							status: true,
-							token: session.session.token,
 							user: {
 								id: user.id,
 								email: user.email,
