@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { source } from "@/lib/source";
 import { DocsPage, DocsBody, DocsTitle } from "@/components/docs/page";
 import { notFound } from "next/navigation";
