@@ -1,12 +1,10 @@
 import type { Client } from "../types";
-import type { MakeOIDCPlugin } from "../index";
 import type { GenericEndpointContext } from "../../../types";
 import type { ResolvedOIDCOptions } from "./resolve-oidc-options";
 
 export async function getClient(
 	ctx: GenericEndpointContext,
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOIDCPlugin,
 	clientId: string,
 ): Promise<Client | null> {
 	const trustedClient = options.trustedClients.find(
@@ -19,7 +17,7 @@ export async function getClient(
 
 	const dbClient = await ctx.context.adapter
 		.findOne({
-			model: makePluginOpts.modelNames.oauthClient,
+			model: "oauthClient",
 			where: [{ field: "clientId", value: clientId }],
 		})
 		.then((res: any) => {

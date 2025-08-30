@@ -94,7 +94,7 @@ export const oAuth2UserInfo = (
 			}
 			const token = authorization.toLowerCase().replace("bearer ", "");
 			const accessToken = await ctx.context.adapter.findOne<OAuthAccessToken>({
-				model: makePluginOpts.modelNames.oauthAccessToken,
+				model: "oauthAccessToken",
 				where: [
 					{
 						field: "accessToken",
@@ -115,12 +115,7 @@ export const oAuth2UserInfo = (
 				});
 			}
 
-			const client = await getClient(
-				ctx,
-				options,
-				makePluginOpts,
-				accessToken.clientId,
-			);
+			const client = await getClient(ctx, options, accessToken.clientId);
 			if (!client) {
 				throw new APIError("UNAUTHORIZED", {
 					error_description: "client not found",

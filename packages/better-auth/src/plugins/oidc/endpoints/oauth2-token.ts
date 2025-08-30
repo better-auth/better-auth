@@ -103,7 +103,7 @@ export const oAuth2Token = (
 					});
 				}
 				const token = await ctx.context.adapter.findOne<OAuthAccessToken>({
-					model: makePluginOpts.modelNames.oauthAccessToken,
+					model: "oauthAccessToken",
 					where: [
 						{
 							field: "refreshToken",
@@ -133,7 +133,7 @@ export const oAuth2Token = (
 				const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
 
 				await ctx.context.adapter.create({
-					model: makePluginOpts.modelNames.oauthAccessToken,
+					model: "oauthAccessToken",
 					data: {
 						accessToken,
 						refreshToken: newRefreshToken,
@@ -219,12 +219,7 @@ export const oAuth2Token = (
 				});
 			}
 
-			const client = await getClient(
-				ctx,
-				options,
-				makePluginOpts,
-				client_id.toString(),
-			);
+			const client = await getClient(ctx, options, client_id.toString());
 			if (!client) {
 				throw new APIError("UNAUTHORIZED", {
 					error_description: "invalid client_id",
@@ -308,7 +303,7 @@ export const oAuth2Token = (
 			const accessToken = generateRandomString(32, "a-z", "A-Z");
 			const refreshToken = generateRandomString(32, "A-Z", "a-z");
 			await ctx.context.adapter.create({
-				model: makePluginOpts.modelNames.oauthAccessToken,
+				model: "oauthAccessToken",
 				data: {
 					accessToken,
 					refreshToken,

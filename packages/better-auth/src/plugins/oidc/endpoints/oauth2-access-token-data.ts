@@ -20,7 +20,7 @@ export const oAuth2AccessTokenData = (makePluginOpts: MakeOIDCPlugin) =>
 			}
 			const accessTokenData = await c.context.adapter.findOne<OAuthAccessToken>(
 				{
-					model: makePluginOpts.modelNames.oauthAccessToken,
+					model: "oauthAccessToken",
 					where: [
 						{
 							field: "accessToken",

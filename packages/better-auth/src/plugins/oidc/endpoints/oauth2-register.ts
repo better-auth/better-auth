@@ -306,7 +306,7 @@ export const oAuth2Register = (
 
 			// Create the client with the existing schema
 			const client: Client = await ctx.context.adapter.create({
-				model: makePluginOpts.modelNames.oauthClient,
+				model: "oauthClient",
 				data: {
 					type: clientType,
 					name: body.client_name,

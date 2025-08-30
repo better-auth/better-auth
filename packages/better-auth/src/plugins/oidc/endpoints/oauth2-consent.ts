@@ -143,7 +143,7 @@ export const oAuth2Consent = (
 				},
 			);
 			await ctx.context.adapter.create({
-				model: makePluginOpts.modelNames.oauthConsent,
+				model: "oauthConsent",
 				data: {
 					clientId: value.clientId,
 					userId: value.userId,

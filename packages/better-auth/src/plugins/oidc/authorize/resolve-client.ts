@@ -1,4 +1,3 @@
-import type { MakeOIDCPlugin } from "../index";
 import type { GenericEndpointContext } from "../../../types";
 import type { ResolvedOIDCOptions } from "../utils/resolve-oidc-options";
 
@@ -9,12 +8,11 @@ import { makeRedirectHandler } from "../utils/redirect";
 export async function resolveClient(
 	ctx: GenericEndpointContext,
 	options: ResolvedOIDCOptions,
-	makePluginOpts: MakeOIDCPlugin,
 	clientId: string,
 ) {
 	const handleRedirect = makeRedirectHandler(ctx);
 
-	const client = await getClient(ctx, options, makePluginOpts, clientId);
+	const client = await getClient(ctx, options, clientId);
 
 	if (!client) {
 		throw handleRedirect(
