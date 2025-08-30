@@ -1,6 +1,7 @@
 import type {
 	AlterTableColumnAlteringBuilder,
 	CreateTableBuilder,
+	DropTableBuilder,
 } from "kysely";
 import type { FieldAttribute, FieldType } from ".";
 import { sql } from "kysely";
@@ -97,6 +98,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		);
 		process.exit(1);
 	}
+	const force = (config as unknown as { __force?: boolean }).__force === true;
 	const tableMetadata = await db.introspection.getTables();
 	const toBeCreated: {
 		table: string;
@@ -110,7 +112,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}[] = [];
 
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
-		const table = tableMetadata.find((t) => t.name === key);
+		const table = force ? undefined : tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
 			const tableData = {
@@ -166,6 +168,24 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| AlterTableColumnAlteringBuilder
 		| CreateTableBuilder<string, string>
 	)[] = [];
+	const dropMigrations: DropTableBuilder[] = [];
+	// when force is true, we need to drop the tables in the reverse order of creation
+	if (force) {
+		const schemaOrder: { name: string; order: number }[] = Object.entries(
+			betterAuthSchema,
+		).map(([name, data]) => ({ name, order: data.order || Infinity }));
+
+		const dropOrder = schemaOrder
+			.sort((a, b) => (a.order || Infinity) - (b.order || Infinity))
+			.reverse();
+
+		for (const { name } of dropOrder) {
+			const existsInDb = tableMetadata.find((t) => t.name === name);
+			if (existsInDb) {
+				dropMigrations.push(db.schema.dropTable(name).ifExists());
+			}
+		}
+	}
 
 	function getType(field: FieldAttribute, fieldName: string) {
 		const type = field.type;
@@ -315,6 +335,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 	async function runMigrations() {
+		// Execute drops first when forcing
+		if (force) {
+			for (const drop of dropMigrations) {
+				await drop.execute();
+			}
+		}
 		for (const migration of migrations) {
 			await migration.execute();
 		}
