@@ -1,6 +1,8 @@
 import type { MakeOIDCPlugin } from "./index";
 import type { AuthPluginSchema } from "../../types";
 
+export type OIDCSchema = ReturnType<typeof makeSchema>;
+
 export const makeSchema = ({ modelNames }: MakeOIDCPlugin) =>
 	({
 		[modelNames.oauthClient]: {
