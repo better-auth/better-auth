@@ -554,7 +554,11 @@ importers:
         specifier: ^5.8.2
         version: 5.9.2
 
-  e2e/integration: {}
+  e2e/integration:
+    devDependencies:
+      '@playwright/test':
+        specifier: ^1.55.0
+        version: 1.55.0
 
   e2e/integration/vanilla-node:
     dependencies:
@@ -15609,7 +15613,6 @@ snapshots:
   '@playwright/test@1.55.0':
     dependencies:
       playwright: 1.55.0
-    optional: true
 
   '@polka/url@1.0.0-next.29':
     optional: true
@@ -24303,15 +24306,13 @@ snapshots:
       exsolve: 1.0.7
       pathe: 2.0.3
 
-  playwright-core@1.55.0:
-    optional: true
+  playwright-core@1.55.0: {}
 
   playwright@1.55.0:
     dependencies:
       playwright-core: 1.55.0
     optionalDependencies:
       fsevents: 2.3.2
-    optional: true
 
   plist@3.1.0:
     dependencies:
