@@ -5,102 +5,23 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import {
-	type BetterAuthPlugin,
-	type InferOptionSchema,
-	type Session,
-	type User,
-	type Where,
-} from "../../types";
+import { type BetterAuthPlugin, type Session, type Where } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
-import { type AccessControl, type Role } from "../access";
+import { type AccessControl } from "../access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { schema } from "./schema";
-
-export interface UserWithRole extends User {
-	role?: string;
-	banned?: boolean | null;
-	banReason?: string | null;
-	banExpires?: Date | null;
-}
-
-export interface SessionWithImpersonatedBy extends Session {
-	impersonatedBy?: string;
-}
-
-export interface AdminOptions {
-	/**
-	 * The default role for a user
-	 *
-	 * @default "user"
-	 */
-	defaultRole?: string;
-	/**
-	 * Roles that are considered admin roles.
-	 *
-	 * Any user role that isn't in this list, even if they have the permission,
-	 * will not be considered an admin.
-	 *
-	 * @default ["admin"]
-	 */
-	adminRoles?: string | string[];
-	/**
-	 * A default ban reason
-	 *
-	 * By default, no reason is provided
-	 */
-	defaultBanReason?: string;
-	/**
-	 * Number of seconds until the ban expires
-	 *
-	 * By default, the ban never expires
-	 */
-	defaultBanExpiresIn?: number;
-	/**
-	 * Duration of the impersonation session in seconds
-	 *
-	 * By default, the impersonation session lasts 1 hour
-	 */
-	impersonationSessionDuration?: number;
-	/**
-	 * Custom schema for the admin plugin
-	 */
-	schema?: InferOptionSchema<typeof schema>;
-	/**
-	 * Configure the roles and permissions for the admin
-	 * plugin.
-	 */
-	ac?: AccessControl;
-	/**
-	 * Custom permissions for roles.
-	 */
-	roles?: {
-		[key in string]?: Role;
-	};
-	/**
-	 * List of user ids that should have admin access
-	 *
-	 * If this is set, the `adminRole` option is ignored
-	 */
-	adminUserIds?: string[];
-	/**
-	 * Message to show when a user is banned
-	 *
-	 * By default, the message is "You have been banned from this application"
-	 */
-	bannedUserMessage?: string;
-}
-
-export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
-	O extends { roles: Record<string, unknown> }
-		? keyof O["roles"]
-		: "user" | "admin";
+import type {
+	AdminOptions,
+	InferAdminRolesFromOption,
+	SessionWithImpersonatedBy,
+	UserWithRole,
+} from "./types";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
