@@ -13,7 +13,7 @@ describe("lastLoginAt feature", () => {
 			});
 
 			expect(signUpResponse.data).toBeDefined();
-			expect((signUpResponse.data?.user as any).lastLoginAt).toBeNull();
+			expect(signUpResponse.data?.user.lastLoginAt).toBeNull();
 		});
 	});
 
@@ -33,10 +33,10 @@ describe("lastLoginAt feature", () => {
 			});
 
 			expect(signInResponse.data).toBeDefined();
-			expect((signInResponse.data?.user as any).lastLoginAt).toBeInstanceOf(
+			expect(signInResponse.data?.user.lastLoginAt).toBeInstanceOf(
 				Date,
 			);
-			expect((signInResponse.data?.user as any).lastLoginAt).not.toBeNull();
+			expect(signInResponse.data?.user.lastLoginAt).not.toBeNull();
 		});
 
 		it("should update lastLoginAt on subsequent logins", async () => {
@@ -53,7 +53,7 @@ describe("lastLoginAt feature", () => {
 				password: "password123",
 			});
 
-			const firstLoginTime = (firstSignIn.data?.user as any).lastLoginAt;
+			const firstLoginTime = firstSignIn.data?.user.lastLoginAt;
 			expect(firstLoginTime).toBeInstanceOf(Date);
 
 			await new Promise((resolve) => setTimeout(resolve, 10));
@@ -63,7 +63,7 @@ describe("lastLoginAt feature", () => {
 				password: "password123",
 			});
 
-			const secondLoginTime = (secondSignIn.data?.user as any).lastLoginAt;
+			const secondLoginTime = secondSignIn.data?.user.lastLoginAt;
 			expect(secondLoginTime).toBeInstanceOf(Date);
 			expect(secondLoginTime).not.toEqual(firstLoginTime);
 			expect(secondLoginTime!.getTime()).toBeGreaterThan(

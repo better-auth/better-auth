@@ -198,7 +198,7 @@ describe("adapter test", async () => {
 			name: "Last Login Test User",
 		});
 
-		expect((user as any).lastLoginAt).toBeNull();
+		expect(user.lastLoginAt).toBeNull();
 
 		const dbUser = await ctx.adapter.findOne({
 			model: "user",
