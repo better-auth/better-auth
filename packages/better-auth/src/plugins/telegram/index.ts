@@ -6,7 +6,7 @@ import type { Account, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { sessionMiddleware } from "../../api";
+import { originCheck, sessionMiddleware } from "../../api";
 
 // TODO test: test link with existing account
 // TODO docs: react examples, redirect/callback flows
@@ -436,6 +436,13 @@ export const telegram = (options: TelegramOptions) => {
 						hash: z.string(),
 						callbackURL: z.string().optional(),
 					}),
+					use: [
+						originCheck((ctx) => {
+							return ctx.query.callbackURL
+								? decodeURIComponent(ctx.query.callbackURL)
+								: "/";
+						}),
+					],
 				},
 				async (ctx) => {
 					const {
