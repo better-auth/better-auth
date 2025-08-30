@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@root/*": ["./server/*"]
+    }
+  },
+  "references": [{ "path": "./app" }]
+}

@@ -8,6 +8,7 @@ export const custom_user = sqliteTable("custom_user", {
     .$defaultFn(() => false)
     .notNull(),
   image: text("image"),
+  lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),

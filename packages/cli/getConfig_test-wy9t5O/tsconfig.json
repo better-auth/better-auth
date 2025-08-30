@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    /* Path Aliases */
+    "baseUrl": "./test",
+    "paths": {
+      "@server/*": ["./server/*"]
+    }
+  }
+}
