@@ -153,6 +153,11 @@ export const getAuthTables = (
 					required: false,
 					fieldName: options.user?.fields?.image || "image",
 				},
+				lastLoginAt: {
+					type: "date",
+					required: false,
+					fieldName: options.user?.fields?.lastLoginAt || "lastLoginAt",
+				},
 				createdAt: {
 					type: "date",
 					defaultValue: () => new Date(),
