@@ -8,10 +8,11 @@ import { createHash } from "@better-auth/utils/hash";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { sessionMiddleware } from "../../api";
 
-// TODO implement link with existing account
+// TODO test link with existing account
 // TODO docs texts: react examples, redirect/callback flows
 // TODO add tests: reject invalid hash
 // TODO add callback url to redirect
+// TODO add callback-link endpoint
 
 const buildTelegramHash = (dataFields: object) => {
 	// build data string
