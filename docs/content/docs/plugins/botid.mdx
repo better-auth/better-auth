@@ -1,0 +1,124 @@
+---
+title: Vercel BotID
+description: Vercel BotID plugin for Better Auth.
+---
+
+The Vercel BotID is a security feature built into the Vercel platform that protects your web applications from sophisticated
+bots and automated abuse. It's designed to be frictionless for both developers and end users,
+acting as an invisible CAPTCHA that doesn't interrupt the user experience.
+
+You can read more about it in the [Vercel documentation](https://vercel.com/docs/botid#get-started-with-botid).
+
+## Installation
+
+<Steps>
+<Step>
+    ### Installation
+
+    To install the plugin, run:
+
+    ```package-install
+    npm install @better-auth/botid
+    ```
+
+    Then, install the Vercel BotID library:
+
+    ```package-install
+    npm install botid
+    ```
+
+</Step>
+  <Step>
+    ### Initialize the plugin
+
+    Initialize the plugin in your `auth.ts` file:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { botId } from "@better-auth/botid";
+
+    export const auth = betterAuth({
+        plugins: [
+            botId()
+        ]
+    })
+    ```
+  </Step>
+  <Step>
+    ### And that's it!
+
+    The plugin will now check all endpoints for bots and automatically reject those requests!
+  </Step>
+</Steps>
+
+## Configuration
+
+Below is a list of possible configuration options for the plugin.
+
+### `endpoints`
+
+The endpoints to check for bots. By default the plugin will check all endpoints.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            endpoints: ["/sign-up/*", "/sign-in/*"] // or "all" for all endpoints // [!code highlight]
+        })
+    ]
+})
+```
+
+### `validateRequest`
+
+A custom function to validate the request, this will override the default validation.
+
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            validateRequest: ({request, verification}) => { // [!code highlight]
+                return !verification.isBot; // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
+```
+
+<Callout>
+    This function will not be called if the request path doesn't match the `endpoints` option.
+</Callout>
+
+
+### `disable`
+
+Whether to disable Vercel BotID. By default the plugin is enabled.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            disable: true // [!code highlight]
+        })
+    ]
+})
+```
+
+### `checkBotIdOptions`
+
+The options to pass to the `checkBotId` function from the Vercel BotID library.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        botId({
+            checkBotIdOptions: {
+                developmentOptions: {
+                    bypass: "BAD-BOT"
+                }
+            }
+        })
+    ]
+})
+```
