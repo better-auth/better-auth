@@ -69,38 +69,39 @@ Once you've installed the plugin, you can start using the organization plugin to
 ### Create an organization
 
 <APIMethod path="/organization/create" method="POST" requireSession>
-  ```ts
-  const metadata = { someKey: "someValue" };
+
+```ts
+const metadata = { someKey: "someValue" };
 
 type createOrganization = {
-/**
-_ The organization name.
-_/
-name: string = "My Organization"
-/**
-_ The organization slug.
-_/
-slug: string = "my-org"
-/**
-_ The organization logo.
-_/
-logo?: string = "https://example.com/logo.png"
-/**
-_ The metadata of the organization.
-_/
-metadata?: Record<string, any>
-/**
-_ The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.
-_ @serverOnly
-\*/
-userId?: string = "some_user_id"
-/**
-_ Whether to keep the current active organization active after creating a new one.
-_/
-keepCurrentActiveOrganization?: boolean = false
+  /**
+   The organization name.
+  */
+  name: string = "My Organization"
+  /**
+  * The organization slug.
+  */
+  slug: string = "my-org"
+  /**
+  * The organization logo.
+  */
+  logo?: string = "https://example.com/logo.png"
+  /**
+  * The metadata of the organization.
+  */
+  metadata?: Record<string, any>
+  /**
+  * The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.
+  * @serverOnly
+  */
+  userId?: string = "some_user_id"
+  /**
+  * Whether to keep the current active organization active after creating a new one.
+  */
+  keepCurrentActiveOrganization?: boolean = false
 }
+```
 
-````
 </APIMethod>
 
 #### Restrict who can create an organization
@@ -108,21 +109,22 @@ keepCurrentActiveOrganization?: boolean = false
 By default, any user can create an organization. To restrict this, set the `allowUserToCreateOrganization` option to a function that returns a boolean, or directly to `true` or `false`.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { organization } from "better-auth/plugins"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
 
 const auth = betterAuth({
   //...
   plugins: [
-      organization({
-          allowUserToCreateOrganization: async (user) => { // [!code highlight]
-              const subscription = await getSubscription(user.id) // [!code highlight]
-              return subscription.plan === "pro" // [!code highlight]
-          } // [!code highlight]
-      })
-  ]
-})
-````
+    organization({
+      allowUserToCreateOrganization: async (user) => {
+        // [!code highlight]
+        const subscription = await getSubscription(user.id); // [!code highlight]
+        return subscription.plan === "pro"; // [!code highlight]
+      }, // [!code highlight]
+    }),
+  ],
+});
+```
 
 #### Check if organization slug is taken
 
@@ -526,8 +528,7 @@ return (
   ))}
 </div>
 ) }
-
-````
+```
 </Tab>
 
 <Tab value="Svelte">
@@ -540,6 +541,7 @@ return (
 <h1>Organizations</h1>s
 
 {#if $organizations.isPending}
+
   <p>Loading...</p>
 {:else if $organizations.data === null}
   <p>No organizations found.</p>
@@ -550,7 +552,7 @@ return (
     {/each}
   </ul>
 {/if}
-````
+```
 
 </Tab>
 
@@ -584,9 +586,13 @@ export default {
 Or alternatively, you can call `organization.list` if you don't want to use a hook.
 
 <APIMethod path="/organization/list" method="GET">
-  ```ts type listOrganizations = {}
+  ```ts
+  type listOrganizations = {
+    
+  }
   ```
 </APIMethod>
+
 
 ### Active Organization
 
@@ -735,6 +741,7 @@ type getFullOrganization = {
 }
 ```
 </APIMethod>
+
 
 ### Update Organization
 
@@ -1095,10 +1102,8 @@ type listMembers = {
      * The value to filter by.
      */
     filterValue?: string = "value"
-    /**
 }
 ```
-
 </APIMethod>
 
 ### Remove Member
@@ -1153,7 +1158,10 @@ To get the current member of the active organization you can use the `organizati
   requireSession
   resultVariable="member"
 >
-  ```ts type getActiveMember = {}
+  ```ts 
+  type getActiveMember = {
+
+  }
   ```
 </APIMethod>
 
@@ -1602,7 +1610,10 @@ type setActiveTeam = {
 List all teams that the current user is a part of.
 
 <APIMethod path="/organization/list-user-teams" method="GET">
-  ```ts type listUserTeams = {}
+  ```ts 
+  type listUserTeams = {
+    
+  }
   ```
 </APIMethod>
 
