@@ -145,8 +145,8 @@ pnpm lint:fix
    ```
 
 7. Ensure all tests pass and the code is properly formatted
-8. If your change is either a bug fix or a feature in the following packages: `better-auth`, `@better-auth/cli`, `@better-auth/expo`,
-   `@better-auth/sso` or `@better-auth/stripe`. Run the following command to create a [changeset](https://github.com/changesets/changesets/tree/main?tab=readme-ov-file#how-do-we-do-that).
+8. Commit your changes with a descriptive message following this format:
+   For changes that need to be included in the changelog (excluding docs or chore changes), use the `fix` or `feat` format with a specific scope:
 
    ```
    fix(organization): fix incorrect member role assignment
