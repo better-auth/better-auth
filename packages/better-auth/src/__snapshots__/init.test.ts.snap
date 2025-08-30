@@ -293,6 +293,11 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "lastLoginAt": {
+          "fieldName": "lastLoginAt",
+          "required": false,
+          "type": "date",
+        },
         "name": {
           "fieldName": "name",
           "required": true,
