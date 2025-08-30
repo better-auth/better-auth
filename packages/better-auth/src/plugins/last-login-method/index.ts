@@ -35,7 +35,7 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 			const val = typeof value === "string" ? value : value(ctx);
 			if (!val) return;
 
-			ctx.setCookie(opts.cookieName, val, {
+			ctx.setSignedCookie(opts.cookieName, val, ctx.context.secret, {
 				httpOnly: true,
 				maxAge: opts.maxAge,
 			});
@@ -72,7 +72,8 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 						},
 					},
 				},
-				async (c) => c.getCookie(opts.cookieName) ?? null,
+				async (c) =>
+					c.getSignedCookie(opts.cookieName, c.context.secret) ?? null,
 			),
 		},
 		hooks: {
