@@ -178,37 +178,40 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						//for cleanup purposes
 						deleteAllExpiredApiKeys(ctx.context);
 
+						const user = await ctx.context.internalAdapter.findUserById(
+							apiKey.userId,
+						);
+						if (!user) {
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+							});
+						}
+
+						const session = {
+							user,
+							session: {
+								id: apiKey.id,
+								token: key,
+								userId: apiKey.userId,
+								userAgent: ctx.request?.headers.get("user-agent") ?? null,
+								ipAddress: ctx.request
+									? getIp(ctx.request, ctx.context.options)
+									: null,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								expiresAt:
+									apiKey.expiresAt ||
+									getDate(
+										ctx.context.options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
+										"ms",
+									),
+							},
+						};
+
+						// Always set the session context for API key authentication
+						ctx.context.session = session;
+
 						if (ctx.path === "/get-session") {
-							const user = await ctx.context.internalAdapter.findUserById(
-								apiKey.userId,
-							);
-							if (!user) {
-								throw new APIError("UNAUTHORIZED", {
-									message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-								});
-							}
-							const session = {
-								user,
-								session: {
-									id: apiKey.id,
-									token: key,
-									userId: apiKey.userId,
-									userAgent: ctx.request?.headers.get("user-agent") ?? null,
-									ipAddress: ctx.request
-										? getIp(ctx.request, ctx.context.options)
-										: null,
-									createdAt: new Date(),
-									updatedAt: new Date(),
-									expiresAt:
-										apiKey.expiresAt ||
-										getDate(
-											ctx.context.options.session?.expiresIn ||
-												60 * 60 * 24 * 7, // 7 days
-											"ms",
-										),
-								},
-							};
-							ctx.context.session = session;
 							return session;
 						} else {
 							return {

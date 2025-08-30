@@ -75,7 +75,7 @@
     "@tailwindcss/postcss": "^4.0.9",
     "@types/jsrsasign": "^10.5.15",
     "@types/mdx": "^2.0.13",
-    "@types/node": "22.13.8",
+    "@types/node": "^24.3.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "postcss": "^8.5.3",

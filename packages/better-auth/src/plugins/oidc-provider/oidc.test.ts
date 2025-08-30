@@ -683,6 +683,8 @@ describe("oidc-jwt", async () => {
 					jwkSet,
 				);
 				expect(checkSignature).toBeDefined();
+				expect(Number.isInteger(checkSignature.payload.iat)).toBeTruthy();
+				expect(Number.isInteger(checkSignature.payload.exp)).toBeTruthy();
 			} else {
 				const clientSecret = application.clientSecret;
 				const checkSignature = await jwtVerify(

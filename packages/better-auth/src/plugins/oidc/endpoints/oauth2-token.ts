@@ -81,6 +81,18 @@ export const oAuth2Token = (
 					});
 				}
 			}
+
+			const now = Date.now();
+			const iat = Math.floor(now / 1000);
+			const exp = iat + (options.accessTokenExpiresIn ?? 3600);
+
+			const accessTokenExpiresAt = new Date(
+				Date.now() + options.accessTokenExpiresIn * 1000,
+			);
+			const refreshTokenExpiresAt = new Date(
+				Date.now() + options.refreshTokenExpiresIn * 1000,
+			);
+
 			const { grant_type, code, redirect_uri, refresh_token, code_verifier } =
 				body;
 			if (grant_type === "refresh_token") {
@@ -119,12 +131,7 @@ export const oAuth2Token = (
 				}
 				const accessToken = generateRandomString(32, "a-z", "A-Z");
 				const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
-				const accessTokenExpiresAt = new Date(
-					Date.now() + options.accessTokenExpiresIn * 1000,
-				);
-				const refreshTokenExpiresAt = new Date(
-					Date.now() + options.refreshTokenExpiresIn * 1000,
-				);
+
 				await ctx.context.adapter.create({
 					model: makePluginOpts.modelNames.oauthAccessToken,
 					data: {
@@ -300,12 +307,6 @@ export const oAuth2Token = (
 			);
 			const accessToken = generateRandomString(32, "a-z", "A-Z");
 			const refreshToken = generateRandomString(32, "A-Z", "a-z");
-			const accessTokenExpiresAt = new Date(
-				Date.now() + options.accessTokenExpiresIn * 1000,
-			);
-			const refreshTokenExpiresAt = new Date(
-				Date.now() + options.refreshTokenExpiresIn * 1000,
-			);
 			await ctx.context.adapter.create({
 				model: makePluginOpts.modelNames.oauthAccessToken,
 				data: {
@@ -316,8 +317,8 @@ export const oAuth2Token = (
 					clientId: client_id.toString(),
 					userId: value.userId,
 					scopes: requestedScopes.join(" "),
-					createdAt: new Date(),
-					updatedAt: new Date(),
+					createdAt: new Date(iat * 1000),
+					updatedAt: new Date(iat * 1000),
 				},
 			});
 			const user = await ctx.context.internalAdapter.findUserById(value.userId);
