@@ -1,10 +1,25 @@
 import type { Adapter, AdapterInstance, BetterAuthOptions } from "../../types";
 
 /**
+ * Core authentication tables used by Better Auth
+ */
+const CORE_AUTH_TABLES = new Set([
+	"user", "users",
+	"account", "accounts", 
+	"session", "sessions",
+	"organization", "organizations",
+	"member", "members",
+	"invitation", "invitations", 
+	"verification", "verifications",
+	"tenant", "tenants",
+]);
+
+/**
  * Parameters passed to adapter router callbacks
  */
 export interface AdapterRouterParams {
 	modelName: string;
+	isCoreBetterAuthModel: boolean;
 	data?: any;
 	operation:
 		| "create"
@@ -24,7 +39,11 @@ export interface AdapterRouterParams {
  */
 export type AdapterRouterCallback = (
 	params: AdapterRouterParams,
-) => Adapter | Promise<Adapter | null | undefined> | null | undefined;
+) =>
+	| AdapterInstance
+	| Promise<AdapterInstance | null | undefined>
+	| null
+	| undefined;
 
 /**
  * Configuration for the simplified adapter router
@@ -128,6 +147,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 				const routeCallback = routes[i];
 				const adapter = await routeCallback({
 					modelName: model,
+					isCoreBetterAuthModel: CORE_AUTH_TABLES.has(model),
 					data,
 					operation,
 					fallbackAdapter,
@@ -136,10 +156,10 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 				if (adapter) {
 					if (config.debugLogs) {
 						console.log(
-							`[AdapterRouter] Route ${i} matched for model "${model}": ${adapter.id}`,
+							`[AdapterRouter] Route ${i} matched for model "${model}": ${adapter.name}`,
 						);
 					}
-					return adapter;
+					return adapter(options);
 				}
 			}
 
