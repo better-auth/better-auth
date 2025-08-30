@@ -51,6 +51,13 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	camelCase?: boolean;
+	/**
+	 * Opt out of using database transactions. Useful for compatibility with databases
+	 * that don't support transactions like Cloudflare D1.
+	 *
+	 * @default false
+	 */
+	bypassTransactions?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
@@ -60,6 +67,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			bypassTransactions: config.bypassTransactions ?? false,
+		},
+		context: {
+			db,
 		},
 		adapter: ({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {
@@ -248,29 +259,29 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 				}
 			}
 			return {
-				async create({ model, data: values }) {
+				async create({ model, data: values }, ctx) {
 					const schemaModel = getSchema(model);
 					checkMissingFields(schemaModel, model, values);
-					const builder = db.insert(schemaModel).values(values);
+					const builder = ctx.db.insert(schemaModel).values(values);
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where }) {
+				async findOne({ model, where }, ctx) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const res = await db
+					const res = await ctx.db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset }) {
+				async findMany({ model, where, sortBy, limit, offset }, ctx) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
 
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
+					const builder = ctx.db
 						.select()
 						.from(schemaModel)
 						.limit(limit || 100)
@@ -284,44 +295,52 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 					}
 					return (await builder.where(...clause)) as any[];
 				},
-				async count({ model, where }) {
+				async count({ model, where }, ctx) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
-					const res = await db
+					const res = await ctx.db
 						.select({ count: count() })
 						.from(schemaModel)
 						.where(...clause);
 					return res[0].count;
 				},
-				async update({ model, where, update: values }) {
+				async update({ model, where, update: values }, ctx) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db
+					const builder = ctx.db
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
 					return await withReturning(model, builder, values as any, where);
 				},
-				async updateMany({ model, where, update: values }) {
+				async updateMany({ model, where, update: values }, ctx) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db
+					const builder = ctx.db
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
 					return await builder;
 				},
-				async delete({ model, where }) {
+				async delete({ model, where }, ctx) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
+					const builder = ctx.db.delete(schemaModel).where(...clause);
 					return await builder;
 				},
-				async deleteMany({ model, where }) {
+				async deleteMany({ model, where }, ctx) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
+					const builder = ctx.db.delete(schemaModel).where(...clause);
 					return await builder;
+				},
+				async transaction(callback, ctx) {
+					return ctx.db.transaction((db: DB) => {
+						return callback({
+							...ctx,
+							db,
+						});
+					});
 				},
 				options: config,
 			};
