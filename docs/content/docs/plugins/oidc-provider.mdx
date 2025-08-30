@@ -443,7 +443,8 @@ Table Name: `oauthApplication`
       name: "userId", 
       type: "string", 
       description: "ID of the user who owns the client. (optional)",
-      isOptional: true
+      isOptional: true,
+      references: { model: "user", field: "id" }
     },
     { 
       name: "createdAt", 
@@ -498,7 +499,7 @@ Table Name: `oauthAccessToken`
       type: "string", 
       description: "ID of the OAuth client",
       isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
+      references: { model: "oauthApplication", field: "clientId" }
     },
     { 
       name: "userId", 
@@ -550,7 +551,7 @@ Table Name: `oauthConsent`
       type: "string", 
       description: "ID of the OAuth client",
       isForeignKey: true,
-      references: { model: "oauthClient", field: "clientId" }
+      references: { model: "oauthApplication", field: "clientId" }
     },
     { 
       name: "scopes", 

@@ -271,3 +271,25 @@ export const auth = betterAuth({
 
 2. When your server and client code are in separate projects or repositories, and you cannot import the `auth` instance as a type reference, type inference for custom session fields will not work on the client side.
 3. Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.
+
+**Mutating the list-device-sessions endpoint**
+The `/multi-session/list-device-sessions` endpoint from the [multi-session](/docs/plugins/multi-session) plugin is used to list the devices that the user is signed into.
+
+You can mutate the response of this endpoint by passing the `shouldMutateListDeviceSessionsEndpoint` option to the `customSession` plugin.
+
+By default, we do not mutate the response of this endpoint.
+
+```ts title="auth.ts"
+import { customSession } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        customSession(async ({ user, session }, ctx) => {
+            return {
+                user,
+                session
+            }
+        }, {}, { shouldMutateListDeviceSessionsEndpoint: true }), // [!code highlight]
+    ],
+});
+```

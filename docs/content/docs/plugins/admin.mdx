@@ -205,7 +205,7 @@ const users = await authClient.admin.listUsers({
 });
 
 const totalUsers = users.total;
-const totalPages = Math.ceil(totalUsers / limit)
+const totalPages = Math.ceil(totalUsers / pageSize)
 ```
 
 ### Set User Role

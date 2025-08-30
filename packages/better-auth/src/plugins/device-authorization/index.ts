@@ -4,7 +4,7 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin, InferOptionSchema } from "../../types/plugins";
 import { generateRandomString } from "../../crypto";
 import { getSessionFromCtx } from "../../api/routes/session";
-import { ms, type StringValue as MSStringValue } from "../../utils/time/ms";
+import { ms, type StringValue as MSStringValue } from "ms";
 import { getRandomValues } from "@better-auth/utils";
 import { schema, type DeviceCode } from "./schema";
 import { mergeSchema } from "../../db";
@@ -293,7 +293,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							userCode,
 							expiresAt,
 							status: "pending",
-							pollingInterval: opts.interval,
+							pollingInterval: ms(opts.interval),
 							clientId: ctx.body.client_id,
 							scope: ctx.body.scope,
 						},
@@ -473,10 +473,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					) {
 						const timeSinceLastPoll =
 							Date.now() - new Date(deviceCodeRecord.lastPolledAt).getTime();
-						const minInterval =
-							typeof deviceCodeRecord.pollingInterval === "string"
-								? ms(deviceCodeRecord.pollingInterval as MSStringValue)
-								: deviceCodeRecord.pollingInterval;
+						const minInterval = deviceCodeRecord.pollingInterval;
 
 						if (timeSinceLastPoll < minInterval) {
 							throw new APIError("BAD_REQUEST", {
