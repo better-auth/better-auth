@@ -353,8 +353,9 @@ export const createAdapter =
 				if (
 					value === undefined &&
 					((!fieldAttributes.defaultValue &&
-						!fieldAttributes.transform?.input) ||
-						action === "update")
+						!fieldAttributes.transform?.input &&
+						!(action === "update" && fieldAttributes.onUpdate)) ||
+						(action === "update" && !fieldAttributes.onUpdate))
 				) {
 					continue;
 				}
@@ -586,7 +587,7 @@ export const createAdapter =
 						.join("\n")
 						.replace("Error:", "Create method with `id` being called at:");
 					console.log(stack);
-					//@ts-ignore
+					//@ts-expect-error
 					unsafeData.id = undefined;
 				}
 				debugLog(
