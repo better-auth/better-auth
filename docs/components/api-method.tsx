@@ -10,7 +10,7 @@ import {
 	TableRow,
 } from "./ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { ReactNode } from "react";
+import { JSX, ReactNode } from "react";
 import { Link } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
@@ -396,7 +396,8 @@ function parseCode(children: JSX.Element) {
 		.map((x: any) =>
 			x === "\n" ? { props: { children: { props: { children: "\n" } } } } : x,
 		)
-		.map((x: any) => x.props.children);
+		.map((x: any) => x.props.children)
+		.filter((x: any) => x != null);
 	const arrayOfCode: string[] = arrayOfJSXCode
 		.flatMap(
 			(
