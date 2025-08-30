@@ -1,0 +1,100 @@
+---
+title: Last Login Method
+description: Plugin for remembering the last login method a user used.
+---
+
+The Last Login Method plugin stores the most recent login method a user used (e.g., Google, GitHub, email-password, passkey, etc.). This allows you to provide a smoother experience, such as pre-selecting the last method during future sign ins.
+
+## Installation
+
+<Steps>
+<Step>
+  ### Add plugin to the server
+
+  ```ts title="auth.ts"
+  import { betterAuth } from "better-auth"
+  import { lastLoginMethod  } from "better-auth/plugins"
+
+  export const auth = betterAuth({
+    plugins: [ // [!code highlight]
+      lastLoginMethod() // [!code highlight]
+    ] // [!code highlight]
+  })
+  ```
+</Step>
+<Step>
+  ### Add the client plugin
+
+  ```ts title="auth-client.ts"
+  import { createAuthClient } from "better-auth/client"
+  import { lastLoginMethodClient } from "better-auth/client/plugins"
+
+  export const authClient = createAuthClient({
+    plugins: [ // [!code highlight]
+      lastLoginMethodClient() // [!code highlight]
+    ] // [!code highlight]
+  })
+  ```
+</Step>
+</Steps>
+
+## Usage
+
+### `lastUsedLoginMethod`
+
+An endpoint to retrieve the last method a user used to sign in.
+
+<APIMethod path="/last-used-login-method" method="GET">
+```ts
+type lastUsedLoginMethod = {
+}
+```
+</APIMethod>
+
+This endpoint returns the login method string or `null` if no method has been stored.
+
+```ts title="auth.ts"
+const lastLoginMethod = await authClient.lastUsedLoginMethod(); // [!code highlight]
+
+if (lastLoginMethod) {
+  console.log("Last login method:", lastLoginMethod)
+} else {
+  console.log("No login method stored")
+}
+```
+
+## Options
+
+### `cookieName`
+
+The name of the cookie used to store the last used login method. Default is `better-auth.last_used_login_method`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod  } from "better-auth/plugins"
+
+const auth = betterAuth({
+  plugins: [
+    lastLoginMethod({
+      cookieName: "myapp.last_used_login_method" // [!code highlight]
+    })
+  ]
+})
+```
+
+### `maxAge`
+
+The duration (in seconds) that the cookie remains valid. Default is `432000 (5 days)`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod  } from "better-auth/plugins"
+
+const auth = betterAuth({
+  plugins: [
+    lastLoginMethod({
+      maxAge: 60 * 60 * 24 * 30 // 30 days // [!code highlight]
+    })
+  ]
+})
+```

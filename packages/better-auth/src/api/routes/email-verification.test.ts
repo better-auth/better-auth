@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { lastLoginMethod, lastLoginMethodClient } from "../../plugins";
 
 describe("Email Verification", async () => {
 	const mockSendEmail = vi.fn();
@@ -65,20 +66,28 @@ describe("Email Verification", async () => {
 	});
 
 	it("should sign after verification", async () => {
-		const { testUser, signInWithUser, client, sessionSetter } =
-			await getTestInstance({
-				emailAndPassword: {
-					enabled: true,
-					requireEmailVerification: true,
-				},
-				emailVerification: {
-					async sendVerificationEmail({ user, url, token: _token }) {
-						token = _token;
-						mockSendEmail(user.email, url);
+		const { testUser, signInWithUser, client, cookieSetter } =
+			await getTestInstance(
+				{
+					emailAndPassword: {
+						enabled: true,
+						requireEmailVerification: true,
 					},
-					autoSignInAfterVerification: true,
+					emailVerification: {
+						async sendVerificationEmail({ user, url, token: _token }) {
+							token = _token;
+							mockSendEmail(user.email, url);
+						},
+						autoSignInAfterVerification: true,
+					},
+					plugins: [lastLoginMethod()],
 				},
-			});
+				{
+					clientOptions: {
+						plugins: [lastLoginMethodClient()],
+					},
+				},
+			);
 
 		const { headers } = await signInWithUser(testUser.email, testUser.password);
 
@@ -103,7 +112,7 @@ describe("Email Verification", async () => {
 			fetchOptions: {
 				onSuccess(context) {
 					sessionToken = context.response.headers.get("set-auth-token") || "";
-					sessionSetter(headers)(context);
+					cookieSetter(headers)(context);
 				},
 			},
 		});
@@ -115,6 +124,12 @@ describe("Email Verification", async () => {
 			},
 		});
 		expect(session!.user.emailVerified).toBe(true);
+
+		const lastUsedLoginMethod = await client.lastUsedLoginMethod(
+			{},
+			{ headers },
+		);
+		expect(lastUsedLoginMethod.data).toBe("email-password");
 	});
 
 	it("should use custom expiresIn", async () => {
