@@ -45,14 +45,11 @@ const ChangelogPage = async () => {
 			if (line.startsWith("- ")) {
 				const mainContent = line.split(";")[0];
 				const context = line.split(";")[2];
-				const mentions = context
-					?.split(" ")
-					.filter((word) => word.startsWith("@"))
-					.map((mention) => {
-						const username = mention.replace("@", "");
-						const avatarUrl = `https://github.com/${username}.png`;
-						return `[![${mention}](${avatarUrl})](https://github.com/${username})`;
-					});
+				const mentions = context?.match(/@([A-Za-z0-9-]+)/g)?.map((match) => {
+					const username = match.slice(1);
+					const avatarUrl = `https://github.com/${username}.png`;
+					return `[![${match}](${avatarUrl})](https://github.com/${username})`;
+				});
 				if (!mentions) {
 					return line;
 				}
