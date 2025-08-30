@@ -931,20 +931,20 @@ export const auth = betterAuth({
 You can configure Better Auth to execute a callback function when an invitation is accepted. This is useful for logging events, updating analytics, sending notifications, or any other custom logic you need to run when someone joins your organization.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { organization } from "better-auth/plugins"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
 
 export const auth = betterAuth({
-	plugins: [
-		organization({
-			async sendInvitationEmail(data) {
-				// ... your invitation email logic
-			},
-			async onInvitationAccepted(data) {
-				// This callback gets triggered when an invitation is accepted
-			},
-		}),
-	],
+  plugins: [
+    organization({
+      async sendInvitationEmail(data) {
+        // ... your invitation email logic
+      },
+      async onInvitationAccepted(data) {
+        // This callback gets triggered when an invitation is accepted
+      },
+    }),
+  ],
 });
 ```
 
@@ -956,7 +956,6 @@ The callback receives the following data:
 - `invitation`: The invitation object
 - `inviter`: The member who sent the invitation (including user details)
 - `acceptedUser`: The user who accepted the invitation
-
 
 ### Cancel Invitation
 
