@@ -30,7 +30,11 @@
       "outputs": []
     },
     "e2e:smoke": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "e2e:integration": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "typecheck": {
