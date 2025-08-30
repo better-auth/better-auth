@@ -434,6 +434,7 @@ export const telegram = (options: TelegramOptions) => {
 						photo_url: z.string().optional(),
 						auth_date: z.string(),
 						hash: z.string(),
+						callbackURL: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -594,18 +595,27 @@ export const telegram = (options: TelegramOptions) => {
 						user: user,
 					});
 
-					return ctx.json({
-						token: session.token,
-						user: {
-							id: user.id,
-							name: user.name,
-							email: user.email,
-							emailVerified: user.emailVerified,
-							image: user.image,
-							createdAt: user.createdAt,
-							updatedAt: user.updatedAt,
-						},
-					});
+					// return ctx.json({
+					// 	token: session.token,
+					// 	user: {
+					// 		id: user.id,
+					// 		name: user.name,
+					// 		email: user.email,
+					// 		emailVerified: user.emailVerified,
+					// 		image: user.image,
+					// 		createdAt: user.createdAt,
+					// 		updatedAt: user.updatedAt,
+					// 	},
+					// });
+
+					const callbackURL = new URL(
+						ctx.query.callbackURL
+							? decodeURIComponent(ctx.query.callbackURL)
+							: "/",
+						ctx.context.baseURL,
+					).toString();
+
+					throw ctx.redirect(callbackURL);
 				},
 			),
 		},
