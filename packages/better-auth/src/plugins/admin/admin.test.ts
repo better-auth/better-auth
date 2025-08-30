@@ -234,7 +234,6 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 	});
-
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
 			query: {
@@ -764,6 +763,38 @@ describe("Admin plugin", async () => {
 			name: "Test User",
 			role: "user",
 		});
+	});
+
+	it("should allow admin to update user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					name: "Updated Name",
+					customField: "custom value",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.name).toBe("Updated Name");
+	});
+
+	it("should not allow non-admin to update user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					name: "Unauthorized Update",
+				},
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 	});
 });
 

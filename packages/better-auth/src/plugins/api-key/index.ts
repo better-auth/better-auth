@@ -6,7 +6,6 @@ import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
 import type { ApiKeyOptions } from "./types";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
-import type { User } from "../../types";
 import { validateApiKey } from "./routes/verify-api-key";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -156,13 +155,13 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						}
 
-						if (
-							opts.customAPIKeyValidator &&
-							!opts.customAPIKeyValidator({ ctx, key })
-						) {
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
+						if (opts.customAPIKeyValidator) {
+							const isValid = await opts.customAPIKeyValidator({ ctx, key });
+							if (!isValid) {
+								throw new APIError("FORBIDDEN", {
+									message: ERROR_CODES.INVALID_API_KEY,
+								});
+							}
 						}
 
 						const hashed = opts.disableKeyHashing
@@ -176,21 +175,16 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							schema,
 						});
 
-						await deleteAllExpiredApiKeys(ctx.context);
+						//for cleanup purposes
+						deleteAllExpiredApiKeys(ctx.context);
 
-						let user: User;
-						try {
-							const userResult = await ctx.context.internalAdapter.findUserById(
-								apiKey.userId,
-							);
-							if (!userResult) {
-								throw new APIError("UNAUTHORIZED", {
-									message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-								});
-							}
-							user = userResult;
-						} catch (error) {
-							throw error;
+						const user = await ctx.context.internalAdapter.findUserById(
+							apiKey.userId,
+						);
+						if (!user) {
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+							});
 						}
 
 						const session = {
@@ -198,7 +192,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							session: {
 								id: apiKey.id,
 								token: key,
-								userId: user.id,
+								userId: apiKey.userId,
 								userAgent: ctx.request?.headers.get("user-agent") ?? null,
 								ipAddress: ctx.request
 									? getIp(ctx.request, ctx.context.options)
@@ -213,6 +207,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 									),
 							},
 						};
+
+						// Always set the session context for API key authentication
 						ctx.context.session = session;
 
 						if (ctx.path === "/get-session") {
@@ -227,12 +223,112 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			],
 		},
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/create`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.createApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.create`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-create)
+			 */
 			createApiKey: routes.createApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/verify`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyApiKey`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-verify)
+			 */
 			verifyApiKey: routes.verifyApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/api-key/get`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.getApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.get`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-get)
+			 */
 			getApiKey: routes.getApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/update`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.updateApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.update`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-update)
+			 */
 			updateApiKey: routes.updateApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/delete`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deleteApiKey`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.delete`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-delete)
+			 */
 			deleteApiKey: routes.deleteApiKey,
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/api-key/list`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.listApiKeys`
+			 *
+			 * **client:**
+			 * `authClient.apiKey.list`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-list)
+			 */
 			listApiKeys: routes.listApiKeys,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/api-key/delete-all-expired-api-keys`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deleteAllExpiredApiKeys`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-delete-all-expired-api-keys)
+			 */
+			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
 	} satisfies BetterAuthPlugin;

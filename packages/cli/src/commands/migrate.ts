@@ -1,11 +1,11 @@
 import { Command } from "commander";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
 import yoctoSpinner from "yocto-spinner";
 import chalk from "chalk";
 import prompts from "prompts";
-import { logger } from "better-auth";
+import { logger, createTelemetry, getTelemetryAuthConfig } from "better-auth";
 import { getAdapter, getMigrations } from "better-auth/db";
 import { getConfig } from "../utils/get-config";
 
@@ -15,13 +15,16 @@ export async function migrateAction(opts: any) {
 			cwd: z.string(),
 			config: z.string().optional(),
 			y: z.boolean().optional(),
+			yes: z.boolean().optional(),
 		})
 		.parse(opts);
+
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
 		logger.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
+
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
@@ -47,15 +50,48 @@ export async function migrateAction(opts: any) {
 			logger.error(
 				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
 			);
+			try {
+				const telemetry = await createTelemetry(config);
+				await telemetry.publish({
+					type: "cli_migrate",
+					payload: {
+						outcome: "unsupported_adapter",
+						adapter: "prisma",
+						config: getTelemetryAuthConfig(config),
+					},
+				});
+			} catch {}
 			process.exit(0);
 		}
 		if (db.id === "drizzle") {
 			logger.error(
 				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle’s migrate or push to apply it.",
 			);
+			try {
+				const telemetry = await createTelemetry(config);
+				await telemetry.publish({
+					type: "cli_migrate",
+					payload: {
+						outcome: "unsupported_adapter",
+						adapter: "drizzle",
+						config: getTelemetryAuthConfig(config),
+					},
+				});
+			} catch {}
 			process.exit(0);
 		}
 		logger.error("Migrate command isn't supported for this adapter.");
+		try {
+			const telemetry = await createTelemetry(config);
+			await telemetry.publish({
+				type: "cli_migrate",
+				payload: {
+					outcome: "unsupported_adapter",
+					adapter: db.id,
+					config: getTelemetryAuthConfig(config),
+				},
+			});
+		} catch {}
 		process.exit(1);
 	}
 
@@ -66,6 +102,16 @@ export async function migrateAction(opts: any) {
 	if (!toBeAdded.length && !toBeCreated.length) {
 		spinner.stop();
 		logger.info("🚀 No migrations needed.");
+		try {
+			const telemetry = await createTelemetry(config);
+			await telemetry.publish({
+				type: "cli_migrate",
+				payload: {
+					outcome: "no_changes",
+					config: getTelemetryAuthConfig(config),
+				},
+			});
+		} catch {}
 		process.exit(0);
 	}
 
@@ -82,7 +128,12 @@ export async function migrateAction(opts: any) {
 		);
 	}
 
-	let migrate = options.y;
+	if (options.y) {
+		console.warn("WARNING: --y is deprecated. Consider -y or --yes");
+		options.yes = true;
+	}
+
+	let migrate = options.yes;
 	if (!migrate) {
 		const response = await prompts({
 			type: "confirm",
@@ -95,6 +146,13 @@ export async function migrateAction(opts: any) {
 
 	if (!migrate) {
 		logger.info("Migration cancelled.");
+		try {
+			const telemetry = await createTelemetry(config);
+			await telemetry.publish({
+				type: "cli_migrate",
+				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
+			});
+		} catch {}
 		process.exit(0);
 	}
 
@@ -102,6 +160,13 @@ export async function migrateAction(opts: any) {
 	await runMigrations();
 	spinner.stop();
 	logger.info("🚀 migration was completed successfully!");
+	try {
+		const telemetry = await createTelemetry(config);
+		await telemetry.publish({
+			type: "cli_migrate",
+			payload: { outcome: "migrated", config: getTelemetryAuthConfig(config) },
+		});
+	} catch {}
 	process.exit(0);
 }
 
@@ -116,8 +181,9 @@ export const migrate = new Command("migrate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option(
-		"-y, --y",
+		"-y, --yes",
 		"automatically accept and run migrations without prompting",
 		false,
 	)
+	.option("--y", "(deprecated) same as --yes", false)
 	.action(migrateAction);

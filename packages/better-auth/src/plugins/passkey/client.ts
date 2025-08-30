@@ -59,9 +59,8 @@ export const getPasskeyActions = (
 				...options,
 				method: "POST",
 			});
-			if (!verified.data) {
-				return verified;
-			}
+
+			return verified;
 		} catch (e) {
 			return {
 				data: null,
@@ -105,6 +104,9 @@ export const getPasskeyActions = (
 				query: {
 					...(opts?.authenticatorAttachment && {
 						authenticatorAttachment: opts.authenticatorAttachment,
+					}),
+					...(opts?.name && {
+						name: opts.name,
 					}),
 				},
 			},

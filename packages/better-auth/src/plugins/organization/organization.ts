@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { AuthPluginSchema } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
@@ -16,11 +16,13 @@ import {
 	getInvitation,
 	listInvitations,
 	rejectInvitation,
+	listUserInvitations,
 } from "./routes/crud-invites";
 import {
 	addMember,
 	getActiveMember,
 	leaveOrganization,
+	listMembers,
 	removeMember,
 	updateMemberRole,
 } from "./routes/crud-members";
@@ -38,12 +40,18 @@ import {
 	listOrganizationTeams,
 	removeTeam,
 	updateTeam,
+	setActiveTeam,
+	listUserTeams,
+	listTeamMembers,
+	addTeamMember,
+	removeTeamMember,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
 	InferMember,
-	Organization,
+	InferOrganization,
 	Team,
+	TeamMember,
 } from "./schema";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
@@ -69,35 +77,474 @@ export function parseRoles(roles: string | string[]): string {
  * });
  * ```
  */
-export const organization = <O extends OrganizationOptions>(
-	options?: OrganizationOptions & O,
-) => {
+export const organization = <O extends OrganizationOptions>(options?: O) => {
 	let endpoints = {
-		createOrganization,
-		updateOrganization,
-		deleteOrganization,
-		setActiveOrganization: setActiveOrganization<O>(),
-		getFullOrganization: getFullOrganization<O>(),
-		listOrganizations,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/create`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.create`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create)
+		 */
+		createOrganization: createOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.update`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update)
+		 */
+		updateOrganization: updateOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/delete`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.deleteOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.delete`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
+		 */
+		deleteOrganization: deleteOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/set-active`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.setActiveOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.setActive`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
+		 */
+		setActiveOrganization: setActiveOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-full-organization`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getFullOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.getFullOrganization`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
+		 */
+		getFullOrganization: getFullOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listOrganizations`
+		 *
+		 * **client:**
+		 * `authClient.organization.list`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list)
+		 */
+		listOrganizations: listOrganizations(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/invite-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.inviteMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-invite-member)
+		 */
 		createInvitation: createInvitation(options as O),
-		cancelInvitation,
-		acceptInvitation,
-		getInvitation,
-		rejectInvitation,
-		checkOrganizationSlug,
-		addMember: addMember<O>(),
-		removeMember,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/cancel-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.cancelInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.cancelInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-cancel-invitation)
+		 */
+		cancelInvitation: cancelInvitation(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/accept-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.acceptInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.acceptInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-accept-invitation)
+		 */
+		acceptInvitation: acceptInvitation(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.getInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-invitation)
+		 */
+		getInvitation: getInvitation(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/reject-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.rejectInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.rejectInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-reject-invitation)
+		 */
+		rejectInvitation: rejectInvitation(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-invitations`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listInvitations`
+		 *
+		 * **client:**
+		 * `authClient.organization.listInvitations`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-invitations)
+		 */
+		listInvitations: listInvitations(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-active-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getActiveMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.getActiveMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member)
+		 */
+		getActiveMember: getActiveMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/check-slug`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.checkOrganizationSlug`
+		 *
+		 * **client:**
+		 * `authClient.organization.checkSlug`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-check-slug)
+		 */
+		checkOrganizationSlug: checkOrganizationSlug(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/add-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.addMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.addMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
+		 */
+
+		addMember: addMember<O>(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/remove-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.removeMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.removeMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-member)
+		 */
+		removeMember: removeMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update-member-role`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateMemberRole`
+		 *
+		 * **client:**
+		 * `authClient.organization.updateMemberRole`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-member-role)
+		 */
 		updateMemberRole: updateMemberRole(options as O),
-		getActiveMember,
-		leaveOrganization,
-		listInvitations,
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/leave`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.leaveOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.leave`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
+		 */
+		leaveOrganization: leaveOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-members`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listMembers`
+		 *
+		 * **client:**
+		 * `authClient.organization.listMembers`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-members)
+		 */
+		listUserInvitations: listUserInvitations(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-members`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listMembers`
+		 *
+		 * **client:**
+		 * `authClient.organization.listMembers`
+		 */
+		listMembers: listMembers(options as O),
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/create-team`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createTeam`
+		 *
+		 * **client:**
+		 * `authClient.organization.createTeam`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create-team)
+		 */
 		createTeam: createTeam(options as O),
-		listOrganizationTeams,
-		removeTeam,
-		updateTeam,
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-teams`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listOrganizationTeams`
+		 *
+		 * **client:**
+		 * `authClient.organization.listTeams`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-teams)
+		 */
+		listOrganizationTeams: listOrganizationTeams(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/remove-team`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.removeTeam`
+		 *
+		 * **client:**
+		 * `authClient.organization.removeTeam`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-team)
+		 */
+		removeTeam: removeTeam(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update-team`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateTeam`
+		 *
+		 * **client:**
+		 * `authClient.organization.updateTeam`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-team)
+		 */
+		updateTeam: updateTeam(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/set-active-team`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.setActiveTeam`
+		 *
+		 * **client:**
+		 * `authClient.organization.setActiveTeam`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
+		 */
+		setActiveTeam: setActiveTeam(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/list-user-teams`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listUserTeams`
+		 *
+		 * **client:**
+		 * `authClient.organization.listUserTeams`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
+		 */
+		listUserTeams: listUserTeams(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/list-team-members`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listTeamMembers`
+		 *
+		 * **client:**
+		 * `authClient.organization.listTeamMembers`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
+		 */
+		listTeamMembers: listTeamMembers(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/add-team-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.addTeamMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.addTeamMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-team-member)
+		 */
+		addTeamMember: addTeamMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/remove-team-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.removeTeamMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.removeTeamMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
+		 */
+		removeTeamMember: removeTeamMember(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -110,6 +557,7 @@ export const organization = <O extends OrganizationOptions>(
 		...options?.roles,
 	};
 
+	// Build team schema in a way that never introduces undefined values when spreading
 	const teamSchema = teamSupport
 		? ({
 				team: {
@@ -139,10 +587,172 @@ export const organization = <O extends OrganizationOptions>(
 							required: false,
 							fieldName: options?.schema?.team?.fields?.updatedAt,
 						},
+						...(options?.schema?.team?.additionalFields || {}),
+					},
+				},
+				teamMember: {
+					modelName: options?.schema?.teamMember?.modelName,
+					fields: {
+						teamId: {
+							type: "string",
+							required: true,
+							references: {
+								model: "team",
+								field: "id",
+							},
+							fieldName: options?.schema?.teamMember?.fields?.teamId,
+						},
+						userId: {
+							type: "string",
+							required: true,
+							references: {
+								model: "user",
+								field: "id",
+							},
+							fieldName: options?.schema?.teamMember?.fields?.userId,
+						},
+						createdAt: {
+							type: "date",
+							required: false,
+							fieldName: options?.schema?.teamMember?.fields?.createdAt,
+						},
 					},
 				},
 			} satisfies AuthPluginSchema)
-		: undefined;
+		: {};
+
+	const schema = {
+		...teamSchema,
+		...({
+			organization: {
+				modelName: options?.schema?.organization?.modelName,
+				fields: {
+					name: {
+						type: "string",
+						required: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.name,
+					},
+					slug: {
+						type: "string",
+						unique: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.slug,
+					},
+					logo: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.organization?.fields?.logo,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.organization?.fields?.createdAt,
+					},
+					metadata: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.organization?.fields?.metadata,
+					},
+					...(options?.schema?.organization?.additionalFields || {}),
+				},
+			},
+			member: {
+				modelName: options?.schema?.member?.modelName,
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
+						fieldName: options?.schema?.member?.fields?.organizationId,
+					},
+					userId: {
+						type: "string",
+						required: true,
+						fieldName: options?.schema?.member?.fields?.userId,
+						references: {
+							model: "user",
+							field: "id",
+						},
+					},
+					role: {
+						type: "string",
+						required: true,
+						sortable: true,
+						defaultValue: "member",
+						fieldName: options?.schema?.member?.fields?.role,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.member?.fields?.createdAt,
+					},
+					...(options?.schema?.member?.additionalFields || {}),
+				},
+			},
+			invitation: {
+				modelName: options?.schema?.invitation?.modelName,
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
+						fieldName: options?.schema?.invitation?.fields?.organizationId,
+					},
+					email: {
+						type: "string",
+						required: true,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.email,
+					},
+					role: {
+						type: "string",
+						required: false,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.role,
+					},
+					...(teamSupport
+						? {
+								teamId: {
+									type: "string",
+									required: false,
+									sortable: true,
+									fieldName: options?.schema?.invitation?.fields?.teamId,
+								},
+							}
+						: {}),
+					status: {
+						type: "string",
+						required: true,
+						sortable: true,
+						defaultValue: "pending",
+						fieldName: options?.schema?.invitation?.fields?.status,
+					},
+					expiresAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.invitation?.fields?.expiresAt,
+					},
+					inviterId: {
+						type: "string",
+						references: {
+							model: "user",
+							field: "id",
+						},
+						fieldName: options?.schema?.invitation?.fields?.inviterId,
+						required: true,
+					},
+					...(options?.schema?.invitation?.additionalFields || {}),
+				},
+			},
+		} satisfies AuthPluginSchema),
+	};
 
 	/**
 	 * the orgMiddleware type-asserts an empty object representing org options, roles, and a getSession function.
@@ -184,6 +794,7 @@ export const organization = <O extends OrganizationOptions>(
 	return {
 		id: "organization",
 		endpoints: {
+			// ...endpoints,
 			...(api as O["teams"] extends { enabled: true }
 				? typeof teamEndpoints & typeof endpoints
 				: typeof endpoints),
@@ -271,7 +882,7 @@ export const organization = <O extends OrganizationOptions>(
 							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 						});
 					}
-					const adapter = getOrgAdapter(ctx.context);
+					const adapter = getOrgAdapter<O>(ctx.context, options);
 					const member = await adapter.findMemberByOrgId({
 						userId: ctx.context.session.user.id,
 						organizationId: activeOrganizationId,
@@ -295,6 +906,7 @@ export const organization = <O extends OrganizationOptions>(
 			),
 		},
 		schema: {
+			...(schema as AuthPluginSchema),
 			session: {
 				fields: {
 					activeOrganizationId: {
@@ -302,154 +914,47 @@ export const organization = <O extends OrganizationOptions>(
 						required: false,
 						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
 					},
-				},
-			},
-			organization: {
-				modelName: options?.schema?.organization?.modelName,
-				fields: {
-					name: {
-						type: "string",
-						required: true,
-						sortable: true,
-						fieldName: options?.schema?.organization?.fields?.name,
-					},
-					slug: {
-						type: "string",
-						unique: true,
-						sortable: true,
-						fieldName: options?.schema?.organization?.fields?.slug,
-					},
-					logo: {
-						type: "string",
-						required: false,
-						fieldName: options?.schema?.organization?.fields?.logo,
-					},
-					createdAt: {
-						type: "date",
-						required: true,
-						fieldName: options?.schema?.organization?.fields?.createdAt,
-					},
-					metadata: {
-						type: "string",
-						required: false,
-						fieldName: options?.schema?.organization?.fields?.metadata,
-					},
-				},
-			},
-			member: {
-				modelName: options?.schema?.member?.modelName,
-				fields: {
-					organizationId: {
-						type: "string",
-						required: true,
-						references: {
-							model: "organization",
-							field: "id",
-						},
-						fieldName: options?.schema?.member?.fields?.organizationId,
-					},
-					userId: {
-						type: "string",
-						required: true,
-						fieldName: options?.schema?.member?.fields?.userId,
-						references: {
-							model: "user",
-							field: "id",
-						},
-					},
-					role: {
-						type: "string",
-						required: true,
-						sortable: true,
-						defaultValue: "member",
-						fieldName: options?.schema?.member?.fields?.role,
-					},
 					...(teamSupport
 						? {
-								teamId: {
+								activeTeamId: {
 									type: "string",
 									required: false,
-									sortable: true,
-									fieldName: options?.schema?.member?.fields?.teamId,
+									fieldName: options?.schema?.session?.fields?.activeTeamId,
 								},
 							}
 						: {}),
-					createdAt: {
-						type: "date",
-						required: true,
-						fieldName: options?.schema?.member?.fields?.createdAt,
-					},
-				},
-			},
-			invitation: {
-				modelName: options?.schema?.invitation?.modelName,
-				fields: {
-					organizationId: {
-						type: "string",
-						required: true,
-						references: {
-							model: "organization",
-							field: "id",
+				} as unknown as O["teams"] extends {
+					enabled: true;
+				}
+					? {
+							activeTeamId: {
+								type: "string";
+								required: false;
+							};
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+							};
+						}
+					: {
+							activeOrganizationId: {
+								type: "string";
+								required: false;
+							};
 						},
-						fieldName: options?.schema?.invitation?.fields?.organizationId,
-					},
-					email: {
-						type: "string",
-						required: true,
-						sortable: true,
-						fieldName: options?.schema?.invitation?.fields?.email,
-					},
-					role: {
-						type: "string",
-						required: false,
-						sortable: true,
-						fieldName: options?.schema?.invitation?.fields?.role,
-					},
-					...(teamSupport
-						? {
-								teamId: {
-									type: "string",
-									required: false,
-									sortable: true,
-									fieldName: options?.schema?.invitation?.fields?.teamId,
-								},
-							}
-						: {}),
-					status: {
-						type: "string",
-						required: true,
-						sortable: true,
-						defaultValue: "pending",
-						fieldName: options?.schema?.invitation?.fields?.status,
-					},
-					expiresAt: {
-						type: "date",
-						required: true,
-						fieldName: options?.schema?.invitation?.fields?.expiresAt,
-					},
-					inviterId: {
-						type: "string",
-						references: {
-							model: "user",
-							field: "id",
-						},
-						fieldName: options?.schema?.invitation?.fields?.inviterId,
-						required: true,
-					},
-				},
 			},
-			...(teamSupport ? teamSchema : {}),
 		},
 		$Infer: {
-			Organization: {} as Organization,
+			Organization: {} as InferOrganization<O>,
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
 			Team: teamSupport ? ({} as Team) : ({} as any),
+			TeamMember: teamSupport ? ({} as TeamMember) : ({} as any),
 			ActiveOrganization: {} as Awaited<
 				ReturnType<ReturnType<typeof getFullOrganization<O>>>
 			>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
-		options,
+		options: options as O,
 	} satisfies BetterAuthPlugin;
 };

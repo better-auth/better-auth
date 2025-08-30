@@ -51,10 +51,7 @@ export type Adapter = {
 		};
 		offset?: number;
 	}) => Promise<T[]>;
-	count: (data: {
-		model: string;
-		where?: Where[];
-	}) => Promise<number>;
+	count: (data: { model: string; where?: Where[] }) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
 	 * if multiple where clauses are provided
@@ -114,7 +111,7 @@ export interface SecondaryStorage {
 	 * @param key - Key to get
 	 * @returns - Value of the key
 	 */
-	get: (key: string) => Promise<string | null> | string | null;
+	get: (key: string) => Promise<unknown> | unknown;
 	set: (
 		/**
 		 * Key to store
@@ -128,7 +125,7 @@ export interface SecondaryStorage {
 		 * Time to live in seconds
 		 */
 		ttl?: number,
-	) => Promise<void | null | string> | void;
+	) => Promise<void | null | unknown> | void;
 	/**
 	 *
 	 * @param key - Key to delete

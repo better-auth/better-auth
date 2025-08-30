@@ -3,6 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { magicLink } from ".";
 import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
+import { defaultKeyHasher } from "./utils";
 
 type VerificationEmail = {
 	email: string;
@@ -31,7 +32,8 @@ describe("magic link", async () => {
 		fetchOptions: {
 			customFetchImpl,
 		},
-		baseURL: "http://localhost:3000/api/auth",
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
 	});
 
 	it("should send magic link", async () => {
@@ -214,5 +216,90 @@ describe("magic link verify", async () => {
 		expect(response.data?.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
+	});
+});
+
+describe("magic link storeToken", async () => {
+	it("should store token in hashed", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { auth, signInWithTestUser, client, testUser } =
+			await getTestInstance({
+				plugins: [
+					magicLink({
+						storeToken: "hashed",
+						sendMagicLink(data, request) {
+							verificationEmail = data;
+						},
+					}),
+				],
+			});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers,
+		});
+		const hashedToken = await defaultKeyHasher(verificationEmail.token);
+		const storedToken =
+			await internalAdapter.findVerificationValue(hashedToken);
+		expect(storedToken).toBeDefined();
+		const response2 = await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers,
+		});
+		expect(response2.status).toBe(true);
+	});
+
+	it("should store token with custom hasher", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { auth, signInWithTestUser, client, testUser } =
+			await getTestInstance({
+				plugins: [
+					magicLink({
+						storeToken: {
+							type: "custom-hasher",
+							async hash(token) {
+								return token + "hashed";
+							},
+						},
+						sendMagicLink(data, request) {
+							verificationEmail = data;
+						},
+					}),
+				],
+			});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const { headers } = await signInWithTestUser();
+		await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers,
+		});
+		const hashedToken = `${verificationEmail.token}hashed`;
+		const storedToken =
+			await internalAdapter.findVerificationValue(hashedToken);
+		expect(storedToken).toBeDefined();
+		const response2 = await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers,
+		});
+		expect(response2.status).toBe(true);
 	});
 });

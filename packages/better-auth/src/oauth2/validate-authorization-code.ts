@@ -13,15 +13,17 @@ export async function validateAuthorizationCode({
 	authentication,
 	deviceId,
 	headers,
+	additionalParams = {},
 }: {
 	code: string;
 	redirectURI: string;
-	options: ProviderOptions;
+	options: Partial<ProviderOptions>;
 	codeVerifier?: string;
 	deviceId?: string;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
+	additionalParams?: Record<string, string>;
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
@@ -36,15 +38,23 @@ export async function validateAuthorizationCode({
 	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
+	// for resolving the issue with some oauth server.
+	options.clientId && body.set("client_id", options.clientId);
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		requestHeaders["authorization"] = base64.encode(
-			`${options.clientId}:${options.clientSecret}`,
+		const encodedCredentials = base64.encode(
+			`${options.clientId}:${options.clientSecret ?? ""}`,
 		);
-	} else {
-		body.set("client_id", options.clientId);
+		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
+	}
+
+	if (options.clientSecret) {
 		body.set("client_secret", options.clientSecret);
+	}
+
+	for (const [key, value] of Object.entries(additionalParams)) {
+		if (!body.has(key)) body.append(key, value);
 	}
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",

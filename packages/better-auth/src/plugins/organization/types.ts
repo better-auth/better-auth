@@ -1,6 +1,13 @@
+import type { FieldAttribute } from "../../db";
 import type { User, Session, AuthContext } from "../../types";
 import type { AccessControl, Role } from "../access";
-import type { Invitation, Member, Organization, Team } from "./schema";
+import type {
+	Invitation,
+	Member,
+	Organization,
+	Team,
+	TeamMember,
+} from "./schema";
 
 export interface OrganizationOptions {
 	/**
@@ -18,7 +25,7 @@ export interface OrganizationOptions {
 	 */
 	allowUserToCreateOrganization?:
 		| boolean
-		| ((user: User) => Promise<boolean> | boolean);
+		| ((user: User & Record<string, any>) => Promise<boolean> | boolean);
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
@@ -33,7 +40,7 @@ export interface OrganizationOptions {
 	 */
 	creatorRole?: string;
 	/**
-	 * The number of memberships a user can have in an organization.
+	 * The maximum number of members allowed in an organization.
 	 *
 	 * @default 100
 	 */
@@ -147,9 +154,15 @@ export interface OrganizationOptions {
 	/**
 	 * Cancel pending invitations on re-invite.
 	 *
-	 * @default true
+	 * @default false
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean;
+	/**
+	 * Require email verification on accepting or rejecting an invitation
+	 *
+	 * @default false
+	 */
+	requireEmailVerificationOnInvitation?: boolean;
 	/**
 	 * Send an email with the
 	 * invitation link to the user.
@@ -216,6 +229,7 @@ export interface OrganizationOptions {
 		session?: {
 			fields?: {
 				activeOrganizationId?: string;
+				activeTeamId?: string;
 			};
 		};
 		organization?: {
@@ -223,11 +237,17 @@ export interface OrganizationOptions {
 			fields?: {
 				[key in keyof Omit<Organization, "id">]?: string;
 			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
+			};
 		};
 		member?: {
 			modelName?: string;
 			fields?: {
 				[key in keyof Omit<Member, "id">]?: string;
+			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
 			};
 		};
 		invitation?: {
@@ -235,12 +255,23 @@ export interface OrganizationOptions {
 			fields?: {
 				[key in keyof Omit<Invitation, "id">]?: string;
 			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
+			};
 		};
-
 		team?: {
 			modelName?: string;
 			fields?: {
 				[key in keyof Omit<Team, "id">]?: string;
+			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
+			};
+		};
+		teamMember?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<TeamMember, "id">]?: string;
 			};
 		};
 	};
@@ -287,17 +318,17 @@ export interface OrganizationOptions {
 		disabled?: boolean;
 		beforeCreate?: (
 			data: {
-				organization: Omit<Organization, "id">;
+				organization: Omit<Organization, "id"> & Record<string, any>;
 				user: User;
 			},
 			request?: Request,
 		) => Promise<void | {
-			data: Omit<Organization, "id">;
+			data: Record<string, any>;
 		}>;
 		afterCreate?: (
 			data: {
-				organization: Organization;
-				member: Member;
+				organization: Organization & Record<string, any>;
+				member: Member & Record<string, any>;
 				user: User;
 			},
 			request?: Request,

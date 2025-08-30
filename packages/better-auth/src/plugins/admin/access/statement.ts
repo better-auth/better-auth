@@ -10,6 +10,7 @@ export const defaultStatements = {
 		"delete",
 		"set-password",
 		"get",
+		"update",
 	],
 	session: ["list", "revoke", "delete"],
 } as const;
@@ -26,6 +27,7 @@ export const adminAc = defaultAc.newRole({
 		"delete",
 		"set-password",
 		"get",
+		"update",
 	],
 	session: ["list", "revoke", "delete"],
 });

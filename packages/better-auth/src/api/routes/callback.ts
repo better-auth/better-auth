@@ -1,6 +1,6 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { setSessionCookie } from "../../cookies";
-import type { OAuth2Tokens } from "../../oauth2";
+import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
@@ -133,7 +133,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			const existingAccount = await c.context.internalAdapter.findAccount(
-				userInfo.id,
+				String(userInfo.id),
 			);
 
 			if (existingAccount) {
@@ -142,9 +142,9 @@ export const callbackOAuth = createAuthEndpoint(
 				}
 				const updateData = Object.fromEntries(
 					Object.entries({
-						accessToken: tokens.accessToken,
+						accessToken: await setTokenUtil(tokens.accessToken, c.context),
+						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
 						idToken: tokens.idToken,
-						refreshToken: tokens.refreshToken,
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 						scope: tokens.scopes?.join(","),
@@ -159,8 +159,10 @@ export const callbackOAuth = createAuthEndpoint(
 					{
 						userId: link.userId,
 						providerId: provider.id,
-						accountId: userInfo.id,
+						accountId: String(userInfo.id),
 						...tokens,
+						accessToken: await setTokenUtil(tokens.accessToken, c.context),
+						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
 						scope: tokens.scopes?.join(","),
 					},
 					c,
@@ -189,12 +191,13 @@ export const callbackOAuth = createAuthEndpoint(
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
+				id: String(userInfo.id),
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
 			account: {
 				providerId: provider.id,
-				accountId: userInfo.id,
+				accountId: String(userInfo.id),
 				...tokens,
 				scope: tokens.scopes?.join(","),
 			},
