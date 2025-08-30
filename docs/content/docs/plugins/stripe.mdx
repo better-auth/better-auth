@@ -48,9 +48,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         import { stripe } from "@better-auth/stripe"
         import Stripe from "stripe"
 
-        const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-            apiVersion: "2025-02-24.acacia",
-        })
+        const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
         export const auth = betterAuth({
             // ... your existing config
@@ -132,9 +130,9 @@ You can customize the customer creation process:
 stripe({
     // ... other options
     createCustomerOnSignUp: true,
-    onCustomerCreate: async ({ customer, stripeCustomer, user }, request) => {
+    onCustomerCreate: async ({ stripeCustomer, user }, request) => {
         // Do something with the newly created customer
-        console.log(`Customer ${customer.id} created for user ${user.id}`);
+        console.log(`Customer ${stripeCustomer.id} created for user ${user.id}`);
     },
     getCustomerCreateParams: async ({ user, session }, request) => {
         // Customize the Stripe customer creation parameters
