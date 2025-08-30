@@ -120,13 +120,18 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
 					});
 				}
-				const canCreate = hasPermission({
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						team: ["create"],
+				const canCreate = await hasPermission(
+					{
+						role: member.role,
+						options: ctx.context.orgOptions,
+						permissions: {
+							team: ["create"],
+						},
+						organizationId,
 					},
-				});
+					ctx,
+				);
+
 				if (!canCreate) {
 					throw new APIError("FORBIDDEN", {
 						message:
@@ -279,13 +284,18 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 
-				const canRemove = hasPermission({
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						team: ["delete"],
+				const canRemove = await hasPermission(
+					{
+						role: member.role,
+						options: ctx.context.orgOptions,
+						permissions: {
+							team: ["delete"],
+						},
+						organizationId,
 					},
-				});
+					ctx,
+				);
+
 				if (!canRemove) {
 					throw new APIError("FORBIDDEN", {
 						message:
@@ -452,13 +462,18 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const canUpdate = hasPermission({
-				role: member.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					team: ["update"],
+			const canUpdate = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						team: ["update"],
+					},
+					organizationId,
 				},
-			});
+				ctx,
+			);
+
 			if (!canUpdate) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -947,13 +962,17 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canUpdateMember = hasPermission({
-				role: currentMember.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["update"],
+			const canUpdateMember = await hasPermission(
+				{
+					role: currentMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["update"],
+					},
+					organizationId: session.session.activeOrganizationId,
 				},
-			});
+				ctx,
+			);
 
 			if (!canUpdateMember) {
 				throw new APIError("FORBIDDEN", {
@@ -1102,13 +1121,17 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canDeleteMember = hasPermission({
-				role: currentMember.role,
-				options: ctx.context.orgOptions,
-				permissions: {
-					member: ["delete"],
+			const canDeleteMember = await hasPermission(
+				{
+					role: currentMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						member: ["delete"],
+					},
+					organizationId: session.session.activeOrganizationId,
 				},
-			});
+				ctx,
+			);
 
 			if (!canDeleteMember) {
 				throw new APIError("FORBIDDEN", {
