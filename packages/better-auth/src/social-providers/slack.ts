@@ -33,7 +33,12 @@ export interface SlackProfile extends Record<string, any> {
 	"https://slack.com/team_image_default": boolean;
 }
 
-export interface SlackOptions extends ProviderOptions<SlackProfile> {}
+export interface SlackOptions extends ProviderOptions<SlackProfile> {
+	/**
+	 * Optional Slack workspace ID to restrict sign in to a specific workspace
+	 */
+	team?: string | (() => string);
+}
 
 export const slack = (options: SlackOptions) => {
 	return {
@@ -49,6 +54,14 @@ export const slack = (options: SlackOptions) => {
 			url.searchParams.set("scope", _scopes.join(" "));
 			url.searchParams.set("response_type", "code");
 			url.searchParams.set("client_id", options.clientId);
+
+			if (options.team) {
+				let teamValue = options.team;
+				if (typeof teamValue === "function") {
+					teamValue = teamValue();
+				}
+				url.searchParams.set("team", teamValue);
+			}
 			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
 			url.searchParams.set("state", state);
 			return url;
