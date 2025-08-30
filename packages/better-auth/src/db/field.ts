@@ -8,6 +8,7 @@ export type FieldType =
 	| "boolean"
 	| "date"
 	| `${"string" | "number"}[]`
+	| "json"
 	| Array<LiteralString>;
 
 type Primitive =
