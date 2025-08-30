@@ -1,6 +1,7 @@
 import type { OIDCOptions } from "./types";
+import type { InferOptionSchema } from "..";
 
-import { makeSchema } from "./schema";
+import { schema } from "./schema";
 import { mergeSchema } from "../../db";
 import { consentHook } from "./hooks/consent-hook";
 import { oAuth2Token } from "./endpoints/oauth2-token";
@@ -17,11 +18,7 @@ export type MakeOIDCPlugin = {
 	pathPrefix: string;
 	disableCors: boolean;
 	alwaysSkipConsent: boolean;
-	modelNames: {
-		oauthClient: string;
-		oauthAccessToken: string;
-		oauthConsent: string;
-	};
+	schema?: InferOptionSchema<typeof schema>;
 };
 
 export const makeOIDCPlugin = (
@@ -30,10 +27,10 @@ export const makeOIDCPlugin = (
 ) => {
 	const resolved = resolveOIDCOptions(options);
 
-	const schema = makeSchema(makePluginOpts);
+	const mergedSchema = mergeSchema(schema, makePluginOpts.schema);
 
 	return {
-		schema: mergeSchema(schema, options.schema),
+		schema: mergeSchema(mergedSchema, options.schema),
 		consentHook: consentHook(resolved, makePluginOpts),
 		oAuth2Token: oAuth2Token(resolved, makePluginOpts),
 		oAuth2Client: oAuth2Client(resolved, makePluginOpts),

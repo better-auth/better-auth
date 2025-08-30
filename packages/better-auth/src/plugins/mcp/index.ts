@@ -22,10 +22,16 @@ export const mcp = (options: OIDCOptions) => {
 			pathPrefix: "mcp",
 			disableCors: true,
 			alwaysSkipConsent: true,
-			modelNames: {
-				oauthClient: "mcpOauthApplication",
-				oauthAccessToken: "mcpOauthAccesToken",
-				oauthConsent: "mcpOauthConsent",
+			schema: {
+				oauthClient: {
+					modelName: "mcpOauthApplication",
+				},
+				oauthAccessToken: {
+					modelName: "mcpOauthAccesToken",
+				},
+				oauthConsent: {
+					modelName: "mcpOauthConsent",
+				},
 			},
 		},
 		options,
