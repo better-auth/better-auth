@@ -267,6 +267,7 @@ describe("type", () => {
 				createdAt: Date;
 				updatedAt: Date;
 				image?: string | undefined | null;
+				lastLoginAt?: Date | undefined | null;
 				testField4: string;
 				testField?: string | undefined | null;
 				testField2?: number | undefined | null;
@@ -288,6 +289,7 @@ describe("type", () => {
 			createdAt: Date;
 			updatedAt: Date;
 			image?: string | undefined | null;
+			lastLoginAt?: Date | undefined | null;
 			twoFactorEnabled: boolean | undefined | null;
 		}>();
 	});
@@ -314,6 +316,7 @@ describe("type", () => {
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
+					lastLoginAt?: Date | undefined | null;
 					testField4: string;
 					testField?: string | undefined | null;
 					testField2?: number | undefined | null;
