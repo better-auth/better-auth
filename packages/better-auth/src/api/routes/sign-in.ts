@@ -569,6 +569,7 @@ export const signInEmail = createAuthEndpoint(
 				name: user.user.name,
 				image: user.user.image,
 				emailVerified: user.user.emailVerified,
+				lastLoginAt: (user.user as any).lastLoginAt,
 				createdAt: user.user.createdAt,
 				updatedAt: user.user.updatedAt,
 			},

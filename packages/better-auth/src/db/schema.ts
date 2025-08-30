@@ -39,6 +39,7 @@ export const userSchema = z.object({
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
 	image: z.string().nullish(),
+	lastLoginAt: z.date().nullish(),
 	createdAt: z.date().default(() => new Date()),
 	updatedAt: z.date().default(() => new Date()),
 });

@@ -282,6 +282,24 @@ export const createInternalAdapter = (
 					: undefined,
 				ctx,
 			);
+
+			// Update user's lastLoginAt timestamp when session is created
+			await updateWithHooks(
+				{
+					lastLoginAt: new Date(),
+					updatedAt: new Date(),
+				},
+				[
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+				"user",
+				undefined,
+				ctx,
+			);
+
 			return res as Session;
 		},
 		findSession: async (
