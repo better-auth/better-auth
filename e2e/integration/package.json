@@ -4,6 +4,7 @@
     "e2e:integration": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0"
+    "@playwright/test": "^1.55.0",
+    "terminate": "^2.8.0"
   }
 }
