@@ -181,18 +181,20 @@ holy sh** is it good, works so nice with typescript + drizzle`,
 		avatar: "/people-say/egoist.png",
 		social: <Icons.x />,
 	},
-].sort(() => Math.random() - 0.5);
+];
 
 type TestimonialProps = (typeof testimonials)[number];
 
 const TestimonialItem = ({
 	reverse = false,
 	testimonials,
+	noSsr,
 }: {
 	reverse?: boolean;
 	testimonials: TestimonialProps[];
+	noSsr?: boolean;
 }) => {
-	noSSR();
+	noSsr && noSSR();
 	const animeSeconds = testimonials.length * 10;
 	return (
 		<div className="max-w-full mx-auto">
@@ -262,10 +264,25 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<Suspense>
+					<Suspense
+						fallback={
+							<TestimonialItem
+								testimonials={Array(15)
+									.fill(
+										testimonials.slice(
+											Math.floor(testimonials.length / 2) + 1,
+											testimonials.length - 1,
+										),
+									)
+									.flat()}
+							/>
+						}
+					>
 						<TestimonialItem
+							noSsr
 							reverse
 							testimonials={Array(15)
+								.sort(() => Math.random() - 0.5)
 								.fill(
 									testimonials.slice(0, Math.floor(testimonials.length / 2)),
 								)
@@ -280,9 +297,24 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<Suspense>
+					<Suspense
+						fallback={
+							<TestimonialItem
+								testimonials={Array(15)
+									.fill(
+										testimonials.slice(
+											Math.floor(testimonials.length / 2) + 1,
+											testimonials.length - 1,
+										),
+									)
+									.flat()}
+							/>
+						}
+					>
 						<TestimonialItem
+							noSsr
 							testimonials={Array(15)
+								.sort(() => Math.random() - 0.5)
 								.fill(
 									testimonials.slice(
 										Math.floor(testimonials.length / 2) + 1,
