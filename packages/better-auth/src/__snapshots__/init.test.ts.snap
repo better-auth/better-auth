@@ -236,6 +236,12 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "lastLoginAt": {
+          "defaultValue": [Function],
+          "fieldName": "lastLoginAt",
+          "required": true,
+          "type": "date",
+        },
         "token": {
           "fieldName": "token",
           "required": true,
