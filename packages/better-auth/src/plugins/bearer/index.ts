@@ -1,7 +1,7 @@
 import { serializeSignedCookie } from "better-call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { parseSetCookieHeader } from "../../cookies";
-import { createAuthMiddleware } from "../../api";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 interface BearerOptions {
@@ -13,14 +13,79 @@ interface BearerOptions {
 	 * @default false
 	 */
 	requireSignature?: boolean;
+	/**
+	 * Custom cookie name for the temporary bearer token confirmation cookie.
+	 *
+	 * @default "bearer-token-confirmation"
+	 */
+	cookieName?: string;
 }
 
 /**
  * Converts bearer token to session cookie
  */
 export const bearer = (options?: BearerOptions) => {
+	const bearerConfirmationCookieName =
+		options?.cookieName || "bearer-token-confirmation";
 	return {
 		id: "bearer",
+		endpoints: {
+			getBearerToken: createAuthEndpoint(
+				"/get-bearer-token",
+				{
+					method: "GET",
+					metadata: {
+						client: false,
+					},
+					requireHeaders: true,
+				},
+				async (ctx) => {
+					const cookieString = ctx.headers.get("cookie");
+					if (!cookieString) {
+						return ctx.json({
+							success: false,
+						});
+					}
+					const cookies = cookieString
+						.split(";")
+						.map((cookie) => cookie.trim());
+					const foundBearerToken = cookies.find((cookie) =>
+						cookie.startsWith(`${bearerConfirmationCookieName}=`),
+					);
+					const foundSessionToken = cookies.find((cookie) =>
+						cookie.startsWith(ctx.context.authCookies.sessionToken.name),
+					);
+					if (foundBearerToken && foundSessionToken) {
+						const setCookie = foundSessionToken.split("=")[1];
+						const parsedCookies = parseSetCookieHeader(setCookie);
+						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const sessionCookie = parsedCookies.get(cookieName);
+						if (
+							!sessionCookie ||
+							!sessionCookie.value ||
+							sessionCookie["max-age"] === 0
+						) {
+							return;
+						}
+						const token = sessionCookie.value;
+						ctx.setHeader("set-auth-token", token);
+						// Delete the confirmation cookie
+						ctx.setCookie(bearerConfirmationCookieName, "", {
+							httpOnly: true,
+							sameSite: "strict",
+							maxAge: 0,
+							expires: new Date(0),
+						});
+						return ctx.json({
+							success: true,
+						});
+					}
+					return ctx.json({
+						success: false,
+					});
+				},
+			),
+		},
 		hooks: {
 			before: [
 				{
@@ -114,6 +179,20 @@ export const bearer = (options?: BearerOptions) => {
 								.filter(Boolean),
 						);
 						headersSet.add("set-auth-token");
+						const location =
+							ctx.context.responseHeaders?.get("location") ||
+							ctx.context.responseHeaders?.get("Location");
+						// If location exists, it likely means the authClient isn't able to pick up the bearer token.
+						// We will store a "bearer-token-confirmation" cookie so that when the authClient loads it can hit the
+						// `/get-bearer-token` endpoint and check for it, then delete it and return the bearer token.
+						if (location) {
+							// set a temporary cookie that will be used to get the bearer token
+							ctx.setCookie(bearerConfirmationCookieName, "true", {
+								httpOnly: true,
+								sameSite: "strict",
+								secure: true,
+							});
+						}
 						ctx.setHeader("set-auth-token", token);
 						ctx.setHeader(
 							"Access-Control-Expose-Headers",

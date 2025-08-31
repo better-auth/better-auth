@@ -20,4 +20,5 @@ export * from "../../plugins/api-key/client";
 export * from "../../plugins/one-time-token/client";
 export * from "../../plugins/siwe/client";
 export * from "../../plugins/device-authorization/client";
+export * from "../../plugins/bearer/client";
 export type * from "@simplewebauthn/server";
