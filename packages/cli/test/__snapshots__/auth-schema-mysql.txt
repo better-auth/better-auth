@@ -29,6 +29,7 @@ export const custom_user = mysqlTable("custom_user", {
 export const custom_session = mysqlTable("custom_session", {
   id: varchar("id", { length: 36 }).primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
+  lastLoginAt: timestamp("last_login_at").notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at")

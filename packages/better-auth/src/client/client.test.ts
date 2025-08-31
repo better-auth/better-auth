@@ -253,6 +253,7 @@ describe("type", () => {
 				id: string;
 				userId: string;
 				expiresAt: Date;
+				lastLoginAt: Date;
 				token: string;
 				ipAddress?: string | undefined | null;
 				userAgent?: string | undefined | null;
@@ -322,6 +323,10 @@ describe("type", () => {
 					id: string;
 					userId: string;
 					expiresAt: Date;
+					lastLoginAt: Date;
+					createdAt: Date;
+					updatedAt: Date;
+					token: string;
 					ipAddress?: string | undefined | null;
 					userAgent?: string | undefined | null;
 				};

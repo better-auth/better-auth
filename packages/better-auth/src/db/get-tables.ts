@@ -81,6 +81,12 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.session?.fields?.expiresAt || "expiresAt",
 				},
+				lastLoginAt: {
+					type: "date",
+					defaultValue: () => new Date(),
+					required: true,
+					fieldName: options.session?.fields?.lastLoginAt || "lastLoginAt",
+				},
 				token: {
 					type: "string",
 					required: true,

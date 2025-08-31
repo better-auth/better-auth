@@ -29,15 +29,16 @@ model User {
 }
 
 model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String
-  createdAt DateTime
-  updatedAt DateTime
-  ipAddress String?  @db.Text
-  userAgent String?  @db.Text
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @db.VarChar(36)
+  expiresAt   DateTime
+  lastLoginAt DateTime
+  token       String   @db.VarChar(255)
+  createdAt   DateTime
+  updatedAt   DateTime
+  ipAddress   String?  @db.Text
+  userAgent   String?  @db.Text
+  userId      String   @db.VarChar(36)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
   @@map("session")

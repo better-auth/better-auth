@@ -30,6 +30,7 @@ export const custom_user = pgTable("custom_user", {
 export const custom_session = pgTable("custom_session", {
   id: serial("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
+  lastLoginAt: timestamp("last_login_at").notNull(),
   token: text("token").notNull().unique(),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at")

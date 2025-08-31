@@ -10,6 +10,7 @@ describe("general types", async (it) => {
 				id: string;
 				userId: string;
 				token: string;
+				lastLoginAt: Date;
 				createdAt: Date;
 				updatedAt: Date;
 				expiresAt: Date;
@@ -47,6 +48,7 @@ describe("general types", async (it) => {
 			id: string;
 			userId: string;
 			expiresAt: Date;
+			lastLoginAt: Date;
 			createdAt: Date;
 			updatedAt: Date;
 			token: string;

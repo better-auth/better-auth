@@ -199,6 +199,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 									: null,
 								createdAt: new Date(),
 								updatedAt: new Date(),
+								lastLoginAt: new Date(),
 								expiresAt:
 									apiKey.expiresAt ||
 									getDate(

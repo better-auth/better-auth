@@ -238,6 +238,7 @@ export const createInternalAdapter = (
 					: getDate(sessionExpiration, "sec"),
 				userId,
 				token: generateId(32),
+				lastLoginAt: new Date(),
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),

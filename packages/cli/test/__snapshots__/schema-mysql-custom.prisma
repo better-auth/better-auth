@@ -33,6 +33,7 @@ model User {
 model Session {
   id                   String   @id
   expiresAt            DateTime
+  lastLoginAt          DateTime
   token                String
   createdAt            DateTime
   updatedAt            DateTime
