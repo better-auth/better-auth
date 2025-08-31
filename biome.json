@@ -62,7 +62,8 @@
       "!**/.source",
       "!**/.expo",
       "!**/.cache",
-      "!**/dev/cloudflare/drizzle"
+      "!**/dev/cloudflare/drizzle",
+      "!**/playwright-report"
     ]
   }
 }
