@@ -1,15 +1,19 @@
-import { test, expect } from "@playwright/test";
+import { chromium, expect, test } from "@playwright/test";
 import { runClient, setup } from "./utils";
 
 const { ref, start, clean } = setup();
-test.describe("vanilla-node", async () => {
+test.describe("cross domain", async () => {
 	test.beforeEach(async () => start());
 	test.afterEach(async () => clean());
 
-	test("signIn with existing email and password should work", async ({
-		page,
-	}) => {
-		await page.goto(`http://localhost:${ref.clientPort}/`);
+	test("should work across domains", async () => {
+		const browser = await chromium.launch({
+			args: [`--host-resolver-rules=MAP * localhost`],
+		});
+
+		const page = await browser.newPage();
+
+		await page.goto(`http://test.com:${ref.clientPort}/`);
 		await page.locator("text=Ready").waitFor();
 
 		await expect(
@@ -25,10 +29,10 @@ test.describe("vanilla-node", async () => {
 			}),
 		);
 
-		// Check that the session is now set
+		// Check that the session is not set because of we didn't set the cookie domain correctly
 		const cookies = await page.context().cookies();
 		expect(
 			cookies.find((c) => c.name === "better-auth.session_token"),
-		).toBeDefined();
+		).not.toBeDefined();
 	});
 });
