@@ -15,8 +15,7 @@ export const user = mysqlTable("user", {
 export const sessions = mysqlTable("sessions", {
 	id: varchar("id", { length: 255 }).primaryKey(),
 	expiresAt: datetime("expiresAt", { mode: "date" }).notNull(), // Use `date` mode
- .
- 	lastLoginAt: datetime("lastLoginAt", { mode: "date" }).notNull(), // Use `date` mode
+	lastLoginAt: datetime("lastLoginAt", { mode: "date" }).notNull(), // Use `date` mode
 	ipAddress: varchar("ipAddress", { length: 255 }),
 	userAgent: varchar("userAgent", { length: 255 }),
 	token: varchar("token", { length: 255 }).notNull(),
