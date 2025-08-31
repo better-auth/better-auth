@@ -335,7 +335,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		// @ts-ignore
+		// @ts-expect-error
 		expect(session?.user.newField).toBe("new");
 	});
 

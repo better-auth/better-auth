@@ -9,7 +9,7 @@ import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
 import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
-import type { Session } from "../types";
+import type { Session, SessionQueryParams } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { twoFactorClient } from "../plugins";
 import { organizationClient, passkeyClient } from "./plugins";
@@ -344,6 +344,40 @@ describe("type", () => {
 			code: number;
 			message: string;
 			test: boolean;
+		}>();
+	});
+
+	it("should support refetch with query parameters", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionReturn = ReturnType<typeof client.useSession>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			error: BetterFetchError | null;
+			refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 		}>();
 	});
 });
