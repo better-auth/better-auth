@@ -85,6 +85,5 @@ describe("bearer", async () => {
 				},
 			},
 		});
-
 	});
 });
