@@ -71,7 +71,7 @@ export const bearer = (options?: BearerOptions) => {
 						ctx.setHeader("set-auth-token", token);
 						// Delete the confirmation cookie
 						ctx.setCookie(bearerConfirmationCookieName, "", {
-							httpOnly: true,
+							httpOnly: false,
 							sameSite: "strict",
 							maxAge: 0,
 							expires: new Date(0),
@@ -188,7 +188,7 @@ export const bearer = (options?: BearerOptions) => {
 						if (location) {
 							// set a temporary cookie that will be used to get the bearer token
 							ctx.setCookie(bearerConfirmationCookieName, "true", {
-								httpOnly: true,
+								httpOnly: false, // Needs to be read on the client side
 								sameSite: "strict",
 								secure: true,
 							});
