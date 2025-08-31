@@ -14,6 +14,7 @@ model User {
   email            String
   emailVerified    Boolean
   image            String?
+  lastLoginAt      DateTime?
   createdAt        DateTime
   updatedAt        DateTime
   twoFactorEnabled Boolean?
@@ -29,16 +30,15 @@ model User {
 }
 
 model Session {
-  id          String   @id
-  expiresAt   DateTime
-  lastLoginAt DateTime
-  token       String
-  createdAt   DateTime
-  updatedAt   DateTime
-  ipAddress   String?
-  userAgent   String?
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
   @@map("session")

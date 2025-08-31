@@ -14,6 +14,7 @@ model User {
   email                String
   emailVerified        Boolean
   image                String?               @db.Text
+  lastLoginAt          DateTime?
   createdAt            DateTime
   updatedAt            DateTime
   twoFactorEnabled     Boolean?
@@ -33,7 +34,6 @@ model User {
 model Session {
   id                   String   @id
   expiresAt            DateTime
-  lastLoginAt          DateTime
   token                String
   createdAt            DateTime
   updatedAt            DateTime
