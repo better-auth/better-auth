@@ -91,7 +91,6 @@ test.describe("vanilla-node", async () => {
 				return typeof window.client !== "undefined";
 			}),
 		).resolves.toBe(true);
-		await page.pause();
 		await expect(
 			page.evaluate(async () => window.client.getSession()),
 		).resolves.toEqual({ data: null, error: null });
