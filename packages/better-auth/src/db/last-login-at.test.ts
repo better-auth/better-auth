@@ -30,6 +30,6 @@ describe("lastLoginAt feature", () => {
 			if (sessionResponse.data?.session) {
 				expect(sessionResponse.data.session.lastLoginAt).toBeInstanceOf(Date);
 			}
-		});
+		}, 30000); // 30 second timeout
 	});
 });

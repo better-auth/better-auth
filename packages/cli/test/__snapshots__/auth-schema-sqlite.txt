@@ -8,7 +8,6 @@ export const custom_user = sqliteTable("custom_user", {
     .$defaultFn(() => false)
     .notNull(),
   image: text("image"),
-  lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
@@ -26,6 +25,9 @@ export const custom_user = sqliteTable("custom_user", {
 export const custom_session = sqliteTable("custom_session", {
   id: text("id").primaryKey(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  lastLoginAt: integer("last_login_at", { mode: "timestamp" })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
   token: text("token").notNull().unique(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" })

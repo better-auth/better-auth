@@ -8,7 +8,6 @@ export const custom_user = pgTable("custom_user", {
     .$defaultFn(() => false)
     .notNull(),
   image: text("image"),
-  lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at")
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
@@ -24,6 +23,9 @@ export const custom_user = pgTable("custom_user", {
 export const custom_session = pgTable("custom_session", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
+  lastLoginAt: timestamp("last_login_at")
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
   token: text("token").notNull().unique(),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at")
