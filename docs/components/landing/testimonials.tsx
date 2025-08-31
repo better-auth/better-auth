@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils";
 import { Icons } from "../icons";
 import Link from "next/link";
+import { noSSR } from "foxact/no-ssr";
+import { Suspense } from "react";
 
 const testimonials = [
 	{
@@ -190,6 +192,7 @@ const TestimonialItem = ({
 	reverse?: boolean;
 	testimonials: TestimonialProps[];
 }) => {
+	noSSR();
 	const animeSeconds = testimonials.length * 10;
 	return (
 		<div className="max-w-full mx-auto">
@@ -259,12 +262,16 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<TestimonialItem
-						reverse
-						testimonials={Array(15)
-							.fill(testimonials.slice(0, Math.floor(testimonials.length / 2)))
-							.flat()}
-					/>
+					<Suspense>
+						<TestimonialItem
+							reverse
+							testimonials={Array(15)
+								.fill(
+									testimonials.slice(0, Math.floor(testimonials.length / 2)),
+								)
+								.flat()}
+						/>
+					</Suspense>
 				</div>
 				<div
 					style={{
@@ -273,16 +280,18 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<TestimonialItem
-						testimonials={Array(15)
-							.fill(
-								testimonials.slice(
-									Math.floor(testimonials.length / 2) + 1,
-									testimonials.length - 1,
-								),
-							)
-							.flat()}
-					/>
+					<Suspense>
+						<TestimonialItem
+							testimonials={Array(15)
+								.fill(
+									testimonials.slice(
+										Math.floor(testimonials.length / 2) + 1,
+										testimonials.length - 1,
+									),
+								)
+								.flat()}
+						/>
+					</Suspense>
 				</div>
 			</div>
 		</div>
