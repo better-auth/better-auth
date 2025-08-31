@@ -15,7 +15,7 @@ describe("lastLoginAt feature", () => {
 
 			expect(signUpResponse.data).toBeDefined();
 			expect(signUpResponse.data?.user).toBeDefined();
-			
+
 			const signInResponse = await client.signIn.email({
 				email: "test@example.com",
 				password: "password123",
@@ -23,10 +23,10 @@ describe("lastLoginAt feature", () => {
 
 			expect(signInResponse.data).toBeDefined();
 			expect(signInResponse.data?.user).toBeDefined();
-			
+
 			const sessionResponse = await client.getSession();
 			expect(sessionResponse.data).toBeDefined();
-			
+
 			if (sessionResponse.data?.session) {
 				expect(sessionResponse.data.session.lastLoginAt).toBeInstanceOf(Date);
 			}
