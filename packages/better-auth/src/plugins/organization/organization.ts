@@ -607,6 +607,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							type: "date",
 							required: false,
 							fieldName: options?.schema?.team?.fields?.updatedAt,
+							onUpdate: () => new Date(),
 						},
 						...(options?.schema?.team?.additionalFields || {}),
 					},
@@ -669,15 +670,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						createdAt: {
 							type: "date",
 							required: true,
-							defaultValue() {
-								return new Date();
-							},
+							defaultValue: () => new Date(),
 							fieldName: options?.schema?.organizationRole?.fields?.createdAt,
 						},
 						updatedAt: {
 							type: "date",
 							required: false,
 							fieldName: options?.schema?.organizationRole?.fields?.updatedAt,
+							onUpdate: () => new Date(),
 						},
 						...(options?.schema?.organizationRole?.additionalFields || {}),
 					},

@@ -249,7 +249,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? await options.dynamicAccessControl.maximumRolesPerOrganization(
 							organizationId,
 						)
-					: options.dynamicAccessControl?.maximumRolesPerOrganization ?? 25;
+					: (options.dynamicAccessControl?.maximumRolesPerOrganization ?? 25);
 			const rolesInDB = await ctx.context.adapter.count({
 				model: "organizationRole",
 				where: [
