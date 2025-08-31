@@ -5,7 +5,7 @@ Route different Better Auth models to different database adapters while maintain
 ## Installation
 
 ```ts
-import { adapterRouter } from "better-auth/adapters";
+import { adapterRouter } from "better-auth/adapters/adapter-router";
 ```
 
 ## Basic Usage

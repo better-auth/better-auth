@@ -30,8 +30,7 @@ describe("AdapterRouter", () => {
 				fallbackAdapter: mainAdapter,
 				routes: [
 					// Sessions go to cache
-					({ modelName }) =>
-						modelName === "session" ? cacheAdapter(mockOptions) : null,
+					({ modelName }) => (modelName === "session" ? cacheAdapter : null),
 				],
 			});
 
@@ -71,8 +70,7 @@ describe("AdapterRouter", () => {
 				fallbackAdapter: mainAdapter,
 				routes: [
 					// Only sessions go to cache
-					({ modelName }) =>
-						modelName === "session" ? cacheAdapter(mockOptions) : null,
+					({ modelName }) => (modelName === "session" ? cacheAdapter : null),
 				],
 			});
 
@@ -102,7 +100,7 @@ describe("AdapterRouter", () => {
 				routes: [
 					// Premium users get premium storage
 					({ data }) =>
-						data?.tier === "premium" ? premiumAdapter(mockOptions) : null,
+						(data as any)?.tier === "premium" ? premiumAdapter : null,
 				],
 			});
 
@@ -146,12 +144,10 @@ describe("AdapterRouter", () => {
 				fallbackAdapter: fallbackAdapter,
 				routes: [
 					// First route: premium users
-					({ data }) =>
-						data?.tier === "premium" ? adapter1(mockOptions) : null,
+					({ data }) => ((data as any)?.tier === "premium" ? adapter1 : null),
 
 					// Second route: all users (would catch everything, but premium already handled)
-					({ modelName }) =>
-						modelName === "user" ? adapter2(mockOptions) : null,
+					({ modelName }) => (modelName === "user" ? adapter2 : null),
 				],
 			});
 
@@ -204,7 +200,7 @@ describe("AdapterRouter", () => {
 					async ({ data }) => {
 						// Simulate async geo lookup
 						await new Promise((resolve) => setTimeout(resolve, 1));
-						return data?.region === "eu" ? euAdapter(mockOptions) : null;
+						return (data as any)?.region === "eu" ? euAdapter : null;
 					},
 				],
 			});
@@ -252,7 +248,7 @@ describe("AdapterRouter", () => {
 					({ operation }) => {
 						// Reads go to replica, writes go to primary
 						return ["findOne", "findMany", "count"].includes(operation)
-							? replicaAdapter(mockOptions)
+							? replicaAdapter
 							: null; // Let writes fall through to primary
 					},
 				],
@@ -288,9 +284,7 @@ describe("AdapterRouter", () => {
 				routes: [
 					({ data }) => {
 						// Return adapter instance directly for premium users
-						return data?.tier === "premium"
-							? premiumAdapter(mockOptions)
-							: null;
+						return (data as any)?.tier === "premium" ? premiumAdapter : null;
 					},
 				],
 			});
@@ -335,7 +329,7 @@ describe("AdapterRouter", () => {
 					async ({ data }) => {
 						// Simulate async geo lookup and return adapter instance
 						await new Promise((resolve) => setTimeout(resolve, 1));
-						return data?.region === "eu" ? euAdapter(mockOptions) : null;
+						return (data as any)?.region === "eu" ? euAdapter : null;
 					},
 				],
 			});
@@ -377,8 +371,7 @@ describe("AdapterRouter", () => {
 			const router = adapterRouter({
 				fallbackAdapter: postgresAdapter,
 				routes: [
-					({ modelName }) =>
-						modelName === "session" ? memoryAdapter_(mockOptions) : null,
+					({ modelName }) => (modelName === "session" ? memoryAdapter_ : null),
 				],
 			});
 
@@ -419,9 +412,9 @@ describe("AdapterRouter", () => {
 				fallbackAdapter: sharedAdapter,
 				routes: [
 					({ data }) => {
-						const tenantId = data?.tenantId;
-						if (tenantId === "1") return tenant1Adapter(mockOptions);
-						if (tenantId === "2") return tenant2Adapter(mockOptions);
+						const tenantId = (data as any)?.tenantId;
+						if (tenantId === "1") return tenant1Adapter;
+						if (tenantId === "2") return tenant2Adapter;
 						return null; // Fall back to shared
 					},
 				],
@@ -473,8 +466,7 @@ describe("AdapterRouter", () => {
 			const router = adapterRouter({
 				fallbackAdapter: userAdapter,
 				routes: [
-					({ modelName }) =>
-						modelName === "account" ? accountAdapter(mockOptions) : null,
+					({ modelName }) => (modelName === "account" ? accountAdapter : null),
 				],
 			});
 
@@ -542,7 +534,7 @@ describe("AdapterRouter", () => {
 			const router = adapterRouter({
 				fallbackAdapter: workingAdapter,
 				routes: [
-					({ modelName }) => (modelName === "session" ? faultyAdapter() : null),
+					({ modelName }) => (modelName === "session" ? faultyAdapter : null),
 				],
 			});
 
@@ -582,7 +574,7 @@ describe("AdapterRouter", () => {
 					({ data, fallbackAdapter }) => {
 						capturedFallbackAdapter = fallbackAdapter;
 						// Use tenant adapter for users with tenantId, otherwise use fallback
-						return data?.tenantId ? tenantAdapter(mockOptions) : null;
+						return (data as any)?.tenantId ? tenantAdapter : null;
 					},
 				],
 			});
@@ -622,18 +614,18 @@ describe("AdapterRouter", () => {
 				fallbackAdapter: mainAdapter,
 				routes: [
 					async ({ data, fallbackAdapter }) => {
-						if (data?.userId && !data?.tenantId) {
+						if ((data as any)?.userId && !(data as any)?.tenantId) {
 							// Look up user's tenant from fallback adapter
 							const user = await fallbackAdapter.findOne({
 								model: "user",
-								where: [{ field: "id", value: data.userId }],
+								where: [{ field: "id", value: (data as any).userId }],
 							});
 
 							if ((user as any)?.email?.includes("tenant1")) {
-								return tenant1Adapter(mockOptions);
+								return tenant1Adapter;
 							}
 							if ((user as any)?.email?.includes("tenant2")) {
-								return tenant2Adapter(mockOptions);
+								return tenant2Adapter;
 							}
 						}
 						return null;
@@ -687,18 +679,18 @@ describe("AdapterRouter", () => {
 				fallbackAdapter: mainAdapter,
 				routes: [
 					async ({ data, fallbackAdapter }) => {
-						if (data?.userId && !data?.storageType) {
+						if ((data as any)?.userId && !(data as any)?.storageType) {
 							// Look up user from fallback to determine storage tier
 							const user = await fallbackAdapter.findOne({
 								model: "user",
-								where: [{ field: "id", value: data.userId }],
+								where: [{ field: "id", value: (data as any).userId }],
 							});
 
 							if ((user as any)?.name?.includes("Premium")) {
-								return premiumAdapter(mockOptions);
+								return premiumAdapter;
 							}
 							if ((user as any)?.name?.includes("Standard")) {
-								return standardAdapter(mockOptions);
+								return standardAdapter;
 							}
 						}
 						return null;
@@ -758,8 +750,7 @@ describe("AdapterRouter", () => {
 			const router = adapterRouter({
 				fallbackAdapter: mainAdapter,
 				routes: [
-					({ modelName }) =>
-						modelName === "session" ? cacheAdapter(mockOptions) : null,
+					({ modelName }) => (modelName === "session" ? cacheAdapter : null),
 				],
 				debugLogs: true,
 			});
@@ -821,6 +812,142 @@ describe("AdapterRouter", () => {
 			expect(found?.email).toBe("test@example.com");
 			expect(updated?.name).toBe("Updated User");
 			expect(count).toBe(1);
+		});
+
+		it("should support updateMany and deleteMany operations", async () => {
+			const mainDb: TestDB = {};
+			const cacheDb: TestDB = {};
+
+			const mainAdapter = memoryAdapter(mainDb);
+			const cacheAdapter = memoryAdapter(cacheDb);
+
+			const router = adapterRouter({
+				fallbackAdapter: mainAdapter,
+				routes: [
+					// Sessions go to cache
+					({ modelName }) => (modelName === "session" ? cacheAdapter : null),
+				],
+			});
+
+			const adapter = router(mockOptions);
+
+			// Create multiple users in main database
+			const user1 = await adapter.create({
+				model: "user",
+				data: { email: "user1@example.com", name: "User 1" },
+			});
+			const user2 = await adapter.create({
+				model: "user",
+				data: { email: "user2@example.com", name: "User 2" },
+			});
+			const user3 = await adapter.create({
+				model: "user",
+				data: { email: "user3@example.com", name: "User 3" },
+			});
+
+			// Create multiple sessions in cache
+			await adapter.create({
+				model: "session",
+				data: { userId: user1.id, token: "token1", expiresAt: new Date() },
+			});
+			await adapter.create({
+				model: "session",
+				data: { userId: user2.id, token: "token2", expiresAt: new Date() },
+			});
+			await adapter.create({
+				model: "session",
+				data: { userId: user3.id, token: "token3", expiresAt: new Date() },
+			});
+
+			// UpdateMany - update users with specific names in main database
+			const updatedUsersCount = await adapter.updateMany({
+				model: "user",
+				where: [{ field: "name", value: "User 1" }],
+				update: { name: "Updated User 1" },
+			});
+
+			// UpdateMany - update sessions with specific tokens in cache
+			const updatedSessionsCount = await adapter.updateMany({
+				model: "session",
+				where: [{ field: "token", value: "token2" }],
+				update: { token: "updated-token2" },
+			});
+
+			// DeleteMany - delete sessions with specific userId from cache
+			const deletedSessionsCount = await adapter.deleteMany({
+				model: "session",
+				where: [{ field: "userId", value: user3.id }],
+			});
+
+			// DeleteMany - delete users with specific email pattern from main
+			const deletedUsersCount = await adapter.deleteMany({
+				model: "user",
+				where: [{ field: "email", value: "user3@example.com" }],
+			});
+
+			// Memory adapter returns the updated record, not count
+			expect(updatedUsersCount).toHaveProperty("name", "Updated User 1");
+			expect(updatedSessionsCount).toHaveProperty("token", "updated-token2");
+			expect(deletedSessionsCount).toBe(1); // deleteMany returns count
+			expect(deletedUsersCount).toBe(1); // deleteMany returns count
+
+			// Verify data is in correct databases
+			expect(mainDb.user?.length).toBe(2); // 2 users remaining (1 deleted)
+			expect(cacheDb.session?.length).toBe(2); // 2 sessions remaining (1 deleted)
+		});
+
+		it("should delegate createSchema to fallback adapter", async () => {
+			let schemaCreated = false;
+			const mockSchemaResult = {
+				code: "CREATE TABLE test (id TEXT PRIMARY KEY);",
+				path: "schema.sql",
+			};
+
+			const mainAdapter = memoryAdapter({});
+			// Override createSchema for testing
+			const mainAdapterWithSchema = (options: BetterAuthOptions) => {
+				const baseAdapter = mainAdapter(options);
+				return {
+					...baseAdapter,
+					createSchema: async () => {
+						schemaCreated = true;
+						return mockSchemaResult;
+					},
+				};
+			};
+
+			const cacheAdapter = memoryAdapter({});
+
+			const router = adapterRouter({
+				fallbackAdapter: mainAdapterWithSchema,
+				routes: [
+					({ modelName }) => (modelName === "session" ? cacheAdapter : null),
+				],
+			});
+
+			const adapter = router(mockOptions);
+
+			// Call createSchema - should delegate to fallback adapter
+			const result = await adapter.createSchema?.(mockOptions, "test.sql");
+
+			expect(schemaCreated).toBe(true);
+			expect(result).toEqual(mockSchemaResult);
+		});
+
+		it("should throw error if fallback adapter doesn't support createSchema", async () => {
+			const mainAdapter = memoryAdapter({});
+			const router = adapterRouter({
+				fallbackAdapter: mainAdapter,
+			});
+
+			const adapter = router(mockOptions);
+
+			// Call createSchema - should throw error since memory adapter doesn't support it
+			await expect(
+				adapter.createSchema?.(mockOptions, "test.sql"),
+			).rejects.toThrow(
+				"[AdapterRouter] Fallback adapter does not support schema creation",
+			);
 		});
 	});
 });
