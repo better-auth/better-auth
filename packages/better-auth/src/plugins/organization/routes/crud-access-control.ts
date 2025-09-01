@@ -19,7 +19,8 @@ type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 		: false
 	: false;
 
-const defaultNormalizeRoleName = (x: { role: string }) => x.role.toLowerCase();
+const normalizeRoleName = (x: { role: string }) => x.role.toLowerCase();
+const DEFAULT_MAXIMUM_ROLES_PER_ORGANIZATION = Number.POSITIVE_INFINITY;
 
 const getAdditionalFields = <
 	O extends OrganizationOptions,
@@ -102,8 +103,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			const permission = ctx.body.permission;
 			const additionalFields = ctx.body.additionalFields;
 
-			// -----
-			// Ensure `ac` is defined in auth config.
 			const ac = options.ac;
 			if (!ac) {
 				ctx.context.logger.error(
@@ -116,7 +115,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
 			// Get the organization id where the role will be created.
 			// We can verify if the org id is valid and associated with the user in the next step when we try to find the member.
 			const organizationId =
@@ -130,7 +128,17 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
+			roleName = normalizeRoleName({
+				role: roleName,
+			});
+
+			await checkIfRoleNameIsTakenByPreDefinedRole({
+				role: roleName,
+				organizationId,
+				options,
+				ctx,
+			});
+
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
 			const member = await ctx.context.adapter.findOne<Member>({
@@ -163,8 +171,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Check if the user has the permission to create a role by checking against `ac` resource on the `create` permission.
 			const canCreateRole = await hasPermission(
 				{
 					options,
@@ -190,66 +196,14 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Ensure the provided permission doesn't contain any invalid resources.
-			// We do this by checking it against the `ac.statements` object.
-			await checkForInvalidResources({ ac, ctx, permission });
-
-			// -----
-			// Check if the other permissions that they want on the new role are accessible by the current user's role.
-			// For example, an admin can't delete an org, thus if the admin makes a new role, they can't add the delete-org permission to it.
-			await checkIfMemberHasPermission({
-				ctx,
-				member,
-				options,
-				organizationId,
-				permissionRequired: permission,
-				user,
-				action: "create",
-			});
-
-			// -----
-			// Normalize the role name.
-			roleName = await normalizeRoleName({
-				role: roleName,
-				organizationId,
-				options,
-			});
-
-			// -----
-			// Validate the role name.
-			await validateRoleName({
-				role: roleName,
-				organizationId,
-				options,
-			});
-
-			// -----
-			// Check if the role name is already taken by a pre-defined/hard-coded role.
-			await checkIfRoleNameIsTakenByPreDefinedRole({
-				role: roleName,
-				organizationId,
-				options,
-				ctx,
-			});
-
-			// -----
-			// Check if the role name is already taken by a role in the database.
-			await checkIfRoleNameIsTakenByRoleInDB({
-				ctx,
-				organizationId,
-				role: roleName,
-			});
-
-			// -----
-			// Make sure the organization doesn't have too many roles.
 			const maximumRolesPerOrganization =
 				typeof options.dynamicAccessControl?.maximumRolesPerOrganization ===
 				"function"
 					? await options.dynamicAccessControl.maximumRolesPerOrganization(
 							organizationId,
 						)
-					: (options.dynamicAccessControl?.maximumRolesPerOrganization ?? 25);
+					: (options.dynamicAccessControl?.maximumRolesPerOrganization ??
+						DEFAULT_MAXIMUM_ROLES_PER_ORGANIZATION);
 			const rolesInDB = await ctx.context.adapter.count({
 				model: "organizationRole",
 				where: [
@@ -276,39 +230,26 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Create the new role.
+			await checkForInvalidResources({ ac, ctx, permission });
+
+			await checkIfMemberHasPermission({
+				ctx,
+				member,
+				options,
+				organizationId,
+				permissionRequired: permission,
+				user,
+				action: "create",
+			});
+
+			await checkIfRoleNameIsTakenByRoleInDB({
+				ctx,
+				organizationId,
+				role: roleName,
+			});
+
 			const newRole = ac.newRole(permission);
 
-			// -----
-			// Check if the request is allowed
-			let action = options.dynamicAccessControl?.allowCreatingRole;
-			if (action) {
-				const isAllowed = await action(
-					{
-						role: {
-							role: roleName,
-							organizationId,
-							permission,
-						},
-						organizationId,
-						member,
-						session: { session, user },
-					},
-					ctx,
-				);
-				if (!isAllowed) {
-					ctx.context.logger.error(
-						`[Dynamic Access Control] The user is not allowed to create a role based on the dynamic access control configuration.`,
-					);
-					throw new APIError("FORBIDDEN", {
-						message: "You are not allowed to create this role.",
-					});
-				}
-			}
-
-			// -----
-			// Create the new role and store it in the database.
 			const newRoleInDB = await ctx.context.adapter.create<
 				Omit<OrganizationRole, "permission"> & { permission: string }
 			>({
@@ -322,8 +263,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				},
 			});
 
-			// -----
-			// Return data to confirm creation of role.
 			const data = {
 				...newRoleInDB,
 				permission,
@@ -381,8 +320,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Get the organization id where the role will be deleted.
 			// We can verify if the org id is valid and associated with the user in the next step when we try to find the member.
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
@@ -395,7 +332,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
 			const member = await ctx.context.adapter.findOne<Member>({
@@ -428,8 +364,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Check if the user has the permission to create a role by checking against `ac` resource on the `delete` permission.
 			const canDeleteRole = await hasPermission(
 				{
 					options,
@@ -455,9 +389,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Check if the role name they are trying to delete is associated to a pre-defined/hard-coded role.
-			// If so, we can't delete it.
 			if ("roleName" in ctx.body) {
 				const roleName = ctx.body.roleName;
 				const defaultRoles = options.roles
@@ -478,8 +409,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				}
 			}
 
-			// -----
-			// Check if the role name/id exists in the database.
 			let condition: Where;
 			if ("roleName" in ctx.body) {
 				condition = {
@@ -524,37 +453,10 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Convert the `permission` from string to object
 			existingRoleInDB.permission = JSON.parse(
 				existingRoleInDB.permission as never as string,
 			);
 
-			// -----
-			// Check if the user is allowed to delete the role.
-			let action = options.dynamicAccessControl?.allowDeletingRole;
-			if (action) {
-				const isAllowed = await action(
-					{
-						role: existingRoleInDB,
-						organizationId,
-						member,
-						session: { session, user },
-					},
-					ctx,
-				);
-				if (!isAllowed) {
-					ctx.context.logger.error(
-						`[Dynamic Access Control] The user is not allowed to delete the role based on the dynamic access control configuration.`,
-					);
-					throw new APIError("FORBIDDEN", {
-						message: "You are not allowed to delete this role.",
-					});
-				}
-			}
-
-			// -----
-			// Delete the role from the database.
 			await ctx.context.adapter.delete({
 				model: "organizationRole",
 				where: [
@@ -568,8 +470,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				],
 			});
 
-			// -----
-			// Return success message.
 			return ctx.json({
 				success: true,
 			});
@@ -598,8 +498,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Get org id
 			const organizationId =
 				ctx.query?.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -611,8 +509,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate org id & get member
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -637,8 +533,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate permissions
 			const canListRoles = await hasPermission(
 				{
 					options,
@@ -664,8 +558,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get all roles in the organization
 			let roles = await ctx.context.adapter.findMany<
 				OrganizationRole & ReturnAdditionalFields
 			>({
@@ -680,40 +572,19 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				],
 			});
 
-			// -----
-			// Convert the `permission` from string to object
 			roles = roles.map((x) => ({
 				...x,
 				permission: JSON.parse(x.permission as never as string),
 			}));
 
-			// -----
-			// Check if the user is allowed to list roles
-			let action = options.dynamicAccessControl?.allowListingRoles;
-			if (action) {
-				const isAllowed = await action(
-					{ roles, organizationId, member, session: { session, user } },
-					ctx,
-				);
-				if (!isAllowed) {
-					ctx.context.logger.error(
-						`[Dynamic Access Control] The user is not allowed to list roles based on the dynamic access control configuration.`,
-					);
-					throw new APIError("FORBIDDEN", {
-						message: "You are not allowed to list roles.",
-					});
-				}
-			}
-
-			// -----
-			// Return the roles
 			return ctx.json(roles);
 		},
 	);
 };
 
-// todo: endpoint additional fields vvvvv
 export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
+	const { $ReturnAdditionalFields } = getAdditionalFields<O>(options, false);
+	type ReturnAdditionalFields = typeof $ReturnAdditionalFields;
 	return createAuthEndpoint(
 		"/organization/get-role",
 		{
@@ -752,8 +623,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Get org id
 			const organizationId =
 				ctx.query?.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -765,8 +634,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate org id & get member
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -791,8 +658,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate permissions
 			const canListRoles = await hasPermission(
 				{
 					options,
@@ -818,8 +683,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get the role, and ensure that it exists.
 			let condition: Where;
 			if ("roleName" in ctx.query) {
 				condition = {
@@ -863,28 +726,9 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Convert the `permission` from string to object
 			role.permission = JSON.parse(role.permission as never as string);
 
-			// -----
-			// Check if the user is allowed to get the role
-			let action = options.dynamicAccessControl?.allowGettingRole;
-			if (action) {
-				const isAllowed = await action(
-					{ role, organizationId, member, session: { session, user } },
-					ctx,
-				);
-				if (!isAllowed) {
-					throw new APIError("FORBIDDEN", {
-						message: "You are not allowed to get this role.",
-					});
-				}
-			}
-
-			// -----
-			// Return the role
-			return ctx.json(role);
+			return ctx.json(role as OrganizationRole & ReturnAdditionalFields);
 		},
 	);
 };
@@ -948,8 +792,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Ensure `ac` is defined in auth config.
 			const ac = options.ac;
 			if (!ac) {
 				ctx.context.logger.error(
@@ -962,8 +804,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get org id
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -975,8 +815,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate org id & get member
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -1001,8 +839,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate permissions
 			const canUpdateRole = await hasPermission(
 				{
 					options,
@@ -1023,8 +859,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get the role, and ensure that it exists.
 			let condition: Where;
 			if ("roleName" in ctx.body) {
 				condition = {
@@ -1071,8 +905,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				? JSON.parse(role.permission as never as string)
 				: undefined;
 
-			// -----
-			// Update the role
 			const {
 				permission: _,
 				roleName: __,
@@ -1086,12 +918,8 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			if (ctx.body.data.permission) {
 				let newPermission = ctx.body.data.permission;
 
-				// -----
-				// Check for invalid resources
 				await checkForInvalidResources({ ac, ctx, permission: newPermission });
 
-				// -----
-				// Check if the new permission is accessible by the current user's role
 				await checkIfMemberHasPermission({
 					ctx,
 					member,
@@ -1102,27 +930,15 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					action: "update",
 				});
 
-				// -----
-				// Update the permission
 				updateData.permission = newPermission;
 			}
 			if (ctx.body.data.roleName) {
 				let newRoleName = ctx.body.data.roleName;
 
-				// -----
-				// Normalize the role name
-				newRoleName = await normalizeRoleName({
-					options,
-					organizationId,
+				newRoleName = normalizeRoleName({
 					role: newRoleName,
 				});
 
-				// -----
-				// Validate the role name
-				await validateRoleName({ options, organizationId, role: newRoleName });
-
-				// -----
-				// Check if the role name is already taken
 				await checkIfRoleNameIsTakenByPreDefinedRole({
 					role: newRoleName,
 					organizationId,
@@ -1135,8 +951,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ctx,
 				});
 
-				// -----
-				// Update the role name
 				updateData.role = newRoleName;
 			}
 
@@ -1175,10 +989,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 		},
 	);
 };
-
-// ================================================
-// Helper functions
-// ================================================
 
 async function checkForInvalidResources({
 	ac,
@@ -1267,43 +1077,6 @@ async function checkIfMemberHasPermission({
 			message: `You are not permitted to ${action} a role with those set of permissions. Please get someone with high enough permissions to ${action} this role.`,
 			missingPermissions,
 		});
-	}
-}
-
-async function normalizeRoleName({
-	options,
-	role,
-	organizationId,
-}: {
-	options: OrganizationOptions;
-	role: string;
-	organizationId: string;
-}) {
-	const normalize =
-		options.dynamicAccessControl?.normalizeRoleName || defaultNormalizeRoleName;
-	return await normalize({ role, organizationId });
-}
-
-async function validateRoleName({
-	options,
-	organizationId,
-	role,
-}: {
-	options: OrganizationOptions;
-	role: string;
-	organizationId: string;
-}) {
-	const validateRoleName = options.dynamicAccessControl?.validateRoleName;
-	if (validateRoleName) {
-		const isValid = await validateRoleName({
-			role,
-			organizationId,
-		});
-		if (typeof isValid === "boolean" && !isValid) {
-			throw new APIError("BAD_REQUEST", {
-				message: "That role name is not valid.",
-			});
-		}
 	}
 }
 

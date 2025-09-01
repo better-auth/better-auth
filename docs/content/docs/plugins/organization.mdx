@@ -1697,140 +1697,16 @@ organization({
 })
 ```
 
-#### `validateRoleName`
-
-This function will be called after role name normalization and is expected to return a boolean indicating whether the role name is allowed.
-Useful for keeping a consistent naming convention for roles.
-
-True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role name valid.
-
-```ts 
-organization({
-  dynamicAccessControl: {
-    validateRoleName: ({ role, organizationId, }) => { // [!code highlight]
-      if (role === "pre-reserved-role") { // [!code highlight]
-        return false // Denies the role name // [!code highlight]
-      } // [!code highlight]
-      return true // Accepts the role name // [!code highlight]
-    } // [!code highlight]
-  }
-})
-```
-
-#### `allowCreatingRole`
-
-This function is expected to return a boolean indicating whether the creation of a given role is allowed.
-Useful if you want to have custom access control logic for when a role is created.
-
-True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is created.
-
-```ts
-organization({
-  dynamicAccessControl: {
-    allowCreatingRole: ({ role, organizationId, member, session }, ctx) => { // [!code highlight]
-      // Custom validation logic // [!code highlight]
-    } // [!code highlight]
-  }
-})
-```
-
-#### `allowUpdatingRole`
-
-This function is expected to return a boolean indicating whether the updating of a given role is allowed.
-Useful if you want to have custom access control logic for when a role is updated.
-
-True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is updated.
-
-
-```ts
-organization({
-  dynamicAccessControl: {
-    allowUpdatingRole: ({ role, organizationId, member, session }, ctx) => { // [!code highlight]
-      // Custom validation logic // [!code highlight]
-    } // [!code highlight]
-  }
-})
-```
-
-#### `allowDeletingRole`
-
-This function is expected to return a boolean indicating whether the deletion of a given role is allowed.
-Useful if you want to have custom access control logic for when a role is deleted.
-
-True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is deleted.
-
-
-```ts
-organization({
-  dynamicAccessControl: {
-    allowDeletingRole: ({ role, organizationId, member, session }, ctx) => { // [!code highlight]
-      // Custom validation logic // [!code highlight]
-    } // [!code highlight]
-  }
-})
-```
-
-#### `allowListingRoles`
-
-This function is expected to return a boolean indicating whether the listing of roles is allowed.
-Useful if you want to have custom access control logic for when a role is listed.
-
-True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the roles are listed.
-
-```ts
-organization({
-  dynamicAccessControl: {
-    allowListingRoles: ({ roles, organizationId, member, session }, ctx) => { // [!code highlight]
-      // Custom validation logic // [!code highlight]
-    } // [!code highlight]
-  }
-})
-```
-
-#### `allowGettingRole`
-
-This function is expected to return a boolean indicating whether the getting of a given role is allowed.
-Useful if you want to have custom access control logic for when a role is retrieved.
-
-True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is retrieved.
-
-```ts
-organization({
-  dynamicAccessControl: {
-    allowGettingRole: ({ role, organizationId, member, userId }, ctx) => { // [!code highlight]
-      // Custom validation logic // [!code highlight]
-    } // [!code highlight]
-  }
-})
-```
-
-#### `normalizeRoleName`
-
-This function will be called before the role is created and is expected to return a normalized role name.
-By default, role names will be normalized to lowercase.
-
-```ts
-organization({
-  dynamicAccessControl: {
-    normalizeRoleName: ({ role, organizationId }) => role.toLowerCase() // [!code highlight]
-  }
-})
-```
-
-<Callout>
-This is called before [`validateRoleName`](#validaterolename) is called.
-</Callout>
-
 #### `maximumRolesPerOrganization`
 
 This option is used to limit the number of roles that can be created for an organization.
 
-By default, the maximum number of roles that can be created for an organization is 25.
+By default, the maximum number of roles that can be created for an organization is infinite.
 
 ```ts
 organization({
   dynamicAccessControl: {
-    maximumRolesPerOrganization: 25 // [!code highlight]
+    maximumRolesPerOrganization: 10 // [!code highlight]
   }
 })
 ```
@@ -1842,7 +1718,7 @@ organization({
   dynamicAccessControl: {
     maximumRolesPerOrganization: async (organizationId) => { // [!code highlight]
       const organization = await getOrganization(organizationId); // [!code highlight]
-      return organization.plan === "pro" ? 100 : 25; // [!code highlight]
+      return organization.plan === "pro" ? 100 : 10; // [!code highlight]
     } // [!code highlight]
   }
 })

@@ -176,20 +176,6 @@ describe("dynamic access control", async (it) => {
 		role: "member",
 	});
 
-	// .---------------------------------------.
-	// |                                       |
-	// |    ____                    _          |
-	// |   / ___| _ __  ___   __ _ | |_  ___   |
-	// |  | |    | '__|/ _ \ / _` || __|/ _ \  |
-	// |  | |___ | |  |  __/| (_| || |_|  __/  |
-	// |   \____||_|   \___| \__,_| \__|\___|  |
-	// |                                       |
-	// '---------------------------------------'
-	// https://www.asciiart.eu/text-to-ascii-art
-	// border: simple. V padding 1. H padding 2.
-	// H layout: Fitted.
-	// Comment style: double slash.
-
 	/**
 	 * The following test will:
 	 * - Creation of a new role
@@ -350,16 +336,6 @@ describe("dynamic access control", async (it) => {
 		expect(testRole2.error.message).toEqual("That role name is already taken.");
 	});
 
-	// .------------------------------------.
-	// |                                    |
-	// |   ____         _        _          |
-	// |  |  _ \   ___ | |  ___ | |_  ___   |
-	// |  | | | | / _ \| | / _ \| __|/ _ \  |
-	// |  | |_| ||  __/| ||  __/| |_|  __/  |
-	// |  |____/  \___||_| \___| \__|\___|  |
-	// |                                    |
-	// '------------------------------------'
-
 	it("should delete a role by id", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
@@ -428,16 +404,6 @@ describe("dynamic access control", async (it) => {
 		}
 	});
 
-	// .----------------------------.
-	// |                            |
-	// |  ____                   _  |
-	// | |  _ \  ___   __ _   __| | |
-	// | | |_) |/ _ \ / _` | / _` | |
-	// | |  _ <|  __/| (_| || (_| | |
-	// | |_| \_\\___| \__,_| \__,_| |
-	// |                            |
-	// '----------------------------'
-
 	it("should list roles", async () => {
 		const permission = {
 			project: ["create"],
@@ -497,6 +463,8 @@ describe("dynamic access control", async (it) => {
 		expect(res).not.toBeNull();
 		expect(res.role).toBe(testRole.data.roleData.role);
 		expect(res.permission).toEqual(testRole.data.roleData.permission);
+		expect(res.color).toBe("#000000");
+		expectTypeOf(res.color).toEqualTypeOf<string>();
 	});
 
 	it("should get a role by name", async () => {
@@ -527,18 +495,9 @@ describe("dynamic access control", async (it) => {
 		expect(res).not.toBeNull();
 		expect(res.role).toBe(testRole.data.roleData.role);
 		expect(res.permission).toEqual(testRole.data.roleData.permission);
+		expect(res.color).toBe("#000000");
+		expectTypeOf(res.color).toEqualTypeOf<string>();
 	});
-
-	// .----------------------------------------.
-	// |                                        |
-	// |  _   _             _         _         |
-	// | | | | | _ __    __| |  __ _ | |_  ___  |
-	// | | | | || '_ \  / _` | / _` || __|/ _ \ |
-	// | | |_| || |_) || (_| || (_| || |_|  __/ |
-	// |  \___/ | .__/  \__,_| \__,_| \__|\___| |
-	// |        |_|                             |
-	// |                                        |
-	// '----------------------------------------'
 
 	it("should update a role's permission by id", async () => {
 		await auth.api.updateMemberRole({
