@@ -38,7 +38,7 @@ const makeLastUsedLoginMethod = (opts: RealizedLastLoginMethodOptions) =>
 				},
 			},
 		},
-		async (c) => c.getSignedCookie(opts.cookieName, c.context.secret) ?? null,
+		async (c) => c.getCookie(opts.cookieName) ?? null,
 	);
 
 export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
