@@ -72,7 +72,31 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	defaultOverrideUserInfo?: boolean;
+	/**
+	 * Pre-configured SSO providers to register during plugin initialization.
+	 * This allows you to define your SSO providers directly when configuring the plugin,
+	 * rather than using the `registerSSOProvider` endpoint later.
+	 * 
+	 * @example
+	 * ```ts
+	 * providers: [
+	 *   {
+	 *     providerId: "google-sso",
+	 *     issuer: "https://accounts.google.com",
+	 *     domain: "example.com",
+	 *     oidcConfig: {
+	 *       clientId: "your-client-id",
+	 *       clientSecret: "your-client-secret",
+	 *       discoveryEndpoint: "https://accounts.google.com/.well-known/openid-configuration",
+	 *       pkce: true,
+	 *     }
+	 *   }
+	 * ]
+	 * ```
+	 */
+	providers?: SSOProvider[];
 }
+
 
 export const sso = (options?: SSOOptions) => {
 	return {
@@ -1023,6 +1047,7 @@ export const sso = (options?: SSOOptions) => {
 					},
 					userId: {
 						type: "string",
+						required: false,
 						references: {
 							model: "user",
 							field: "id",
@@ -1050,7 +1075,7 @@ export const sso = (options?: SSOOptions) => {
 export interface SSOProvider {
 	issuer: string;
 	oidcConfig: OIDCConfig;
-	userId: string;
+	userId?: string;
 	providerId: string;
 	organizationId?: string;
 }

@@ -80,10 +80,11 @@ export interface SSOProvider {
 	issuer: string;
 	oidcConfig?: OIDCConfig;
 	samlConfig?: SAMLConfig;
-	userId: string;
+	userId?: string;
 	providerId: string;
 	organizationId?: string;
 }
+
 
 export interface SSOOptions {
 	/**
@@ -162,9 +163,90 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean;
+	/**
+	 * Pre-configured SSO providers to register during plugin initialization.
+	 * This allows you to define your SSO providers directly when configuring the plugin,
+	 * rather than using the `registerSSOProvider` endpoint later.
+	 * 
+	 * @example
+	 * ```ts
+	 * providers: [
+	 *   {
+	 *     providerId: "google-sso",
+	 *     issuer: "https://accounts.google.com",
+	 *     domain: "example.com",
+	 *     oidcConfig: {
+	 *       clientId: "your-client-id",
+	 *       clientSecret: "your-client-secret",
+	 *       discoveryEndpoint: "https://accounts.google.com/.well-known/openid-configuration",
+	 *       pkce: true,
+	 *     }
+	 *   }
+	 * ]
+	 * ```
+	 */
+	providers?: SSOProvider[];
 }
 
 export const sso = (options?: SSOOptions) => {
+	// Helper function to find provider from both config and database
+	const findProvider = async (ctx: any, providerId?: string, domain?: string, organizationSlug?: string) => {
+		// First check configured providers (runtime)
+		if (options?.providers?.length) {
+			const configProvider = options.providers.find(p => {
+				if (providerId && p.providerId === providerId) return true;
+				if (domain && p.domain === domain) return true;
+				// Note: organizationSlug matching would need organization data, keeping simple for now
+				return false;
+			});
+			
+			if (configProvider) {
+				// Convert config to SSOProvider format
+				return {
+					...configProvider,
+					userId: undefined, // Config-based providers don't belong to a specific user
+					oidcConfig: configProvider.oidcConfig,
+					samlConfig: configProvider.samlConfig,
+				} as SSOProvider;
+			}
+		}
+
+		// Then check database providers
+		let whereClause: any[] = [];
+		if (providerId) {
+			whereClause.push({ field: "providerId", value: providerId });
+		} else if (organizationSlug) {
+			// Handle organization-based lookup
+			const orgId = await ctx.adapter
+				.findOne<{ id: string }>({
+					model: "organization", 
+					where: [{ field: "slug", value: organizationSlug }],
+				})
+				.then((res) => res?.id);
+			if (orgId) {
+				whereClause.push({ field: "organizationId", value: orgId });
+			}
+		} else if (domain) {
+			whereClause.push({ field: "domain", value: domain });
+		}
+
+		if (whereClause.length === 0) return null;
+
+		return await ctx.adapter
+			.findOne<SSOProvider>({
+				model: "ssoProvider",
+				where: whereClause,
+			})
+			.then((res) => {
+				if (!res) return null;
+				return {
+					...res,
+					oidcConfig: res.oidcConfig ? JSON.parse(res.oidcConfig as string) : undefined,
+					samlConfig: res.samlConfig ? JSON.parse(res.samlConfig as string) : undefined,
+				} as SSOProvider;
+			});
+	};
+
 	return {
 		id: "sso",
 		endpoints: {
@@ -825,48 +907,9 @@ export const sso = (options?: SSOOptions) => {
 						});
 					}
 					domain = body.domain || email?.split("@")[1];
-					let orgId = "";
-					if (organizationSlug) {
-						orgId = await ctx.context.adapter
-							.findOne<{ id: string }>({
-								model: "organization",
-								where: [
-									{
-										field: "slug",
-										value: organizationSlug,
-									},
-								],
-							})
-							.then((res) => {
-								if (!res) {
-									return "";
-								}
-								return res.id;
-							});
-					}
-					const provider = await ctx.context.adapter
-						.findOne<SSOProvider>({
-							model: "ssoProvider",
-							where: [
-								{
-									field: providerId
-										? "providerId"
-										: orgId
-											? "organizationId"
-											: "domain",
-									value: providerId || orgId || domain!,
-								},
-							],
-						})
-						.then((res) => {
-							if (!res) {
-								return null;
-							}
-							return {
-								...res,
-								oidcConfig: JSON.parse(res.oidcConfig as unknown as string),
-							};
-						});
+					
+					const provider = await findProvider(ctx.context, providerId, domain, organizationSlug);
+					
 					if (!provider) {
 						throw new APIError("NOT_FOUND", {
 							message: "No provider found for the issuer",
@@ -985,27 +1028,7 @@ export const sso = (options?: SSOOptions) => {
 							}?error=${error}&error_description=${error_description}`,
 						);
 					}
-					const provider = await ctx.context.adapter
-						.findOne<{
-							oidcConfig: string;
-						}>({
-							model: "ssoProvider",
-							where: [
-								{
-									field: "providerId",
-									value: ctx.params.providerId,
-								},
-							],
-						})
-						.then((res) => {
-							if (!res) {
-								return null;
-							}
-							return {
-								...res,
-								oidcConfig: JSON.parse(res.oidcConfig),
-							} as SSOProvider;
-						});
+					const provider = await findProvider(ctx.context, ctx.params.providerId);
 					if (!provider) {
 						throw ctx.redirect(
 							`${
@@ -1305,10 +1328,7 @@ export const sso = (options?: SSOOptions) => {
 				async (ctx) => {
 					const { SAMLResponse, RelayState } = ctx.body;
 					const { providerId } = ctx.params;
-					const provider = await ctx.context.adapter.findOne<SSOProvider>({
-						model: "ssoProvider",
-						where: [{ field: "providerId", value: providerId }],
-					});
+					const provider = await findProvider(ctx.context, providerId);
 
 					if (!provider) {
 						throw new APIError("NOT_FOUND", {

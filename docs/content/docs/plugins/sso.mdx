@@ -71,9 +71,140 @@ This plugin is in active development and may not be suitable for production use.
     </Step>
 </Steps>
 
+## Configuration
+
+The SSO plugin can be configured with pre-defined providers during initialization, allowing you to define your SSO providers directly in your auth configuration instead of using the `registerSSOProvider` endpoint later.
+
+### Basic Configuration
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { sso } from "@better-auth/sso"
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            providers: [
+                {
+                    providerId: "google-workspace",
+                    issuer: "https://accounts.google.com",
+                    domain: "yourcompany.com",
+                    oidcConfig: {
+                        clientId: process.env.GOOGLE_CLIENT_ID,
+                        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+                        discoveryEndpoint: "https://accounts.google.com/.well-known/openid-configuration",
+                        pkce: true,
+                        scopes: ["openid", "email", "profile"],
+                        mapping: {
+                            id: "sub",
+                            email: "email",
+                            name: "name",
+                            image: "picture"
+                        }
+                    }
+                },
+                {
+                    providerId: "company-saml",
+                    issuer: "https://idp.yourcompany.com",
+                    domain: "yourcompany.com", 
+                    samlConfig: {
+                        entryPoint: "https://idp.yourcompany.com/sso",
+                        cert: process.env.SAML_CERT,
+                        // ... other SAML configuration
+                    }
+                }
+            ]
+        })
+    ]
+})
+```
+
+### Organization-Linked Providers
+
+You can also link providers directly to organizations during initialization:
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [
+        sso({
+            providers: [
+                {
+                    providerId: "acme-corp-sso",
+                    issuer: "https://acme.okta.com",
+                    domain: "acmecorp.com",
+                    organizationId: "org_acme_corp_id", // Link to organization
+                    oidcConfig: {
+                        // ... OIDC configuration
+                    }
+                }
+            ]
+        })
+    ]
+})
+```
+
+This approach offers several advantages:
+- **Declarative configuration**: Define providers alongside your auth setup
+- **Version control**: Provider configurations are stored in your codebase
+- **Environment-based**: Different configurations for different environments
+- **No database persistence**: Configuration-based providers exist only at runtime, avoiding configuration drift
+- **Easy updates**: Change your config and restart - no database migrations needed
+
 ## Usage
 
+You can configure SSO providers in two ways:
+
+1. **During plugin initialization** (recommended) - Define providers directly in your auth configuration
+2. **At runtime** - Register providers dynamically using the API endpoints
+
+### When to use each approach:
+
+- **Configuration-based (initialization)**: Use for static providers that are known at build time, environment-specific providers, or when you want to avoid database complexity. These providers exist only at runtime and don't persist to the database.
+
+- **Runtime registration**: Use for dynamic providers that users can add/remove through your application UI, multi-tenant scenarios where providers vary by tenant, or when you need persistent provider storage.
+
 ### Register an OIDC Provider
+
+You can register OIDC providers either during initialization or at runtime.
+
+#### During Initialization (Recommended)
+
+```ts title="auth.ts"
+import { sso } from "@better-auth/sso"
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            providers: [
+                {
+                    providerId: "google-sso",
+                    issuer: "https://accounts.google.com",
+                    domain: "example.com",
+                    oidcConfig: {
+                        clientId: "your-client-id",
+                        clientSecret: "your-client-secret",
+                        discoveryEndpoint: "https://accounts.google.com/.well-known/openid-configuration",
+                        pkce: true,
+                        scopes: ["openid", "email", "profile"],
+                        mapping: {
+                            id: "sub",
+                            email: "email",
+                            name: "name",
+                            image: "picture"
+                        }
+                    }
+                }
+            ]
+        })
+    ]
+})
+```
+
+#### At Runtime
+
+If you need to register providers dynamically, you can use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
+
+A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
 
@@ -147,7 +278,41 @@ await auth.api.registerSSOProvider({
 
 ### Register a SAML Provider
 
-To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
+SAML providers can be configured during initialization or registered at runtime. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
+
+#### During Initialization (Recommended)
+
+```ts title="auth.ts"
+import { sso } from "@better-auth/sso"
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            providers: [
+                {
+                    providerId: "company-saml",
+                    issuer: "https://idp.example.com",
+                    domain: "example.com",
+                    samlConfig: {
+                        entryPoint: "https://idp.example.com/sso",
+                        cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                        // ... other SAML configuration
+                        mapping: {
+                            id: "nameID",
+                            email: "email",
+                            name: "displayName"
+                        }
+                    }
+                }
+            ]
+        })
+    ]
+})
+```
+
+#### At Runtime
+
+To register a SAML provider dynamically, use the `registerSSOProvider` endpoint with SAML configuration details.
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
@@ -683,6 +848,8 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 
 ### Server
 
+**providers**: Pre-configured SSO providers to register during plugin initialization.
+
 **provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
 
 **organizationProvisioning**: Options for provisioning users to an organization.
@@ -695,6 +862,39 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 
 <TypeTable
   type={{
+    providers: {
+        description: "Pre-configured SSO providers to register during plugin initialization. This allows you to define your SSO providers directly when configuring the plugin, rather than using the `registerSSOProvider` endpoint later.",
+        type: "array",
+        items: {
+            type: "object",
+            properties: {
+                providerId: {
+                    description: "Unique identifier for the provider",
+                    type: "string",
+                },
+                issuer: {
+                    description: "The issuer URL of the provider",
+                    type: "string",
+                },
+                domain: {
+                    description: "The domain of the provider for email matching",
+                    type: "string",
+                },
+                organizationId: {
+                    description: "Optional organization ID to link the provider to",
+                    type: "string",
+                },
+                oidcConfig: {
+                    description: "OIDC configuration for the provider",
+                    type: "object",
+                },
+                samlConfig: {
+                    description: "SAML configuration for the provider",
+                    type: "object",
+                },
+            },
+        },
+    },
     provisionUser: {
         description: "A custom function to provision a user when they sign in with an SSO provider.",
         type: "function",

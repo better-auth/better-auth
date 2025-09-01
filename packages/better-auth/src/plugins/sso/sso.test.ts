@@ -473,4 +473,48 @@ describe("provisioning", async (ctx) => {
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
 	});
+
+	it("should pre-configure providers during plugin initialization", async () => {
+		const { auth: authWithPreconfig, signInWithTestUser: signInPreconfig } = await getTestInstance({
+			plugins: [
+				sso({
+					providers: [
+						{
+							providerId: "test-preconfig",
+							issuer: server.issuer.url!,
+							domain: "preconfigured.com",
+							oidcConfig: {
+								clientId: "preconfig-client",
+								clientSecret: "preconfig-secret",
+								discoveryEndpoint: `${server.issuer.url}/.well-known/openid_configuration`,
+								pkce: true,
+								scopes: ["openid", "email", "profile"],
+								mapping: {
+									id: "sub",
+									email: "email",
+									name: "name",
+									image: "picture",
+								},
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		// The provider should be available for sign-in immediately (from config, not DB)
+		const { headers } = await signInPreconfig();
+		
+		// Try to sign in with the pre-configured provider
+		const res = await authWithPreconfig.api.signInSSO({
+			body: {
+				providerId: "test-preconfig",
+				callbackURL: "/dashboard",
+			},
+			headers,
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain("client_id=preconfig-client");
+	});
 });
