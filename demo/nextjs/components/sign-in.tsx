@@ -28,12 +28,7 @@ export default function SignIn() {
 	const [rememberMe, setRememberMe] = useState(false);
 	const router = useRouter();
 	const params = useSearchParams();
-	const lastUsed = client.getLastUsedLoginMethod();
 
-	// Helper function to check if method was last used
-	const isLastUsed = (method: string) => lastUsed === method;
-
-	// Last Used indicator component
 	const LastUsedIndicator = () => (
 		<span className="ml-auto absolute top-0 right-0 px-2 py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 rounded-md font-medium">
 			Last Used
@@ -118,7 +113,7 @@ export default function SignIn() {
 									"Login"
 								)}
 							</span>
-							{isLastUsed("email") && <LastUsedIndicator />}
+							{client.isLastUsedLoginMethod("email") && <LastUsedIndicator />}
 						</div>
 					</Button>
 
@@ -162,7 +157,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Google</span>
-							{isLastUsed("google") && <LastUsedIndicator />}
+							{client.isLastUsedLoginMethod("google") && <LastUsedIndicator />}
 						</Button>
 						<Button
 							variant="outline"
@@ -186,7 +181,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with GitHub</span>
-							{isLastUsed("github") && <LastUsedIndicator />}
+							{client.isLastUsedLoginMethod("github") && <LastUsedIndicator />}
 						</Button>
 						<Button
 							variant="outline"
@@ -210,7 +205,9 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Microsoft</span>
-							{isLastUsed("microsoft") && <LastUsedIndicator />}
+							{client.isLastUsedLoginMethod("microsoft") && (
+								<LastUsedIndicator />
+							)}
 						</Button>
 					</div>
 				</div>
