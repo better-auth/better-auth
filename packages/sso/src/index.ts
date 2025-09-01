@@ -85,6 +85,34 @@ export interface SSOProvider {
 	organizationId?: string;
 }
 
+export interface SSOProviderConfig {
+	/**
+	 * Unique identifier for the SSO provider
+	 */
+	providerId: string;
+	/**
+	 * The issuer URL of the identity provider
+	 */
+	issuer: string;
+	/**
+	 * The domain for email matching (e.g., "company.com")
+	 * Users with emails from this domain will be able to use this provider
+	 */
+	domain: string;
+	/**
+	 * Optional organization ID to link this provider to a specific organization
+	 */
+	organizationId?: string;
+	/**
+	 * OIDC configuration for OpenID Connect providers
+	 */
+	oidcConfig?: OIDCConfig;
+	/**
+	 * SAML configuration for SAML providers
+	 */
+	samlConfig?: SAMLConfig;
+}
+
 
 export interface SSOOptions {
 	/**
@@ -185,7 +213,7 @@ export interface SSOOptions {
 	 * ]
 	 * ```
 	 */
-	providers?: SSOProvider[];
+	providers?: SSOProviderConfig[];
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -201,17 +229,18 @@ export const sso = (options?: SSOOptions) => {
 			});
 			
 			if (configProvider) {
-				// Convert config to SSOProvider format
+				// Convert SSOProviderConfig to SSOProvider format
 				return {
-					...configProvider,
-					userId: undefined, // Config-based providers don't belong to a specific user
+					issuer: configProvider.issuer,
+					domain: configProvider.domain,
+					providerId: configProvider.providerId,
+					organizationId: configProvider.organizationId,
 					oidcConfig: configProvider.oidcConfig,
 					samlConfig: configProvider.samlConfig,
+					userId: undefined, // Configuration-based providers don't have a userId
 				} as SSOProvider;
 			}
-		}
-
-		// Then check database providers
+		}		// Then check database providers
 		let whereClause: any[] = [];
 		if (providerId) {
 			whereClause.push({ field: "providerId", value: providerId });
