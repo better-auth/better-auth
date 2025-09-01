@@ -78,19 +78,11 @@ export interface Path {
 	};
 }
 
+type AllowedType = "string" | "number" | "boolean" | "array" | "object";
+const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
 function getTypeFromZodType(zodType: ZodType<any>) {
-	if (zodType instanceof ZodString) {
-		return "string";
-	} else if (zodType instanceof ZodNumber) {
-		return "number";
-	} else if (zodType instanceof ZodBoolean) {
-		return "boolean";
-	} else if (zodType instanceof ZodObject) {
-		return "object";
-	} else if (zodType instanceof ZodArray) {
-		return "array";
-	}
-	return "string";
+	const type = zodType.type;
+	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
 function getFieldSchema(field: FieldAttribute) {
