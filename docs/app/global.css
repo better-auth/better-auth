@@ -241,10 +241,20 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground overscroll-none;
+		@apply overscroll-none bg-background text-foreground selection:bg-foreground selection:text-background;
 	}
 }
 
 html {
 	scroll-behavior: smooth;
+}
+
+@layer utilities {
+	.no-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+	.no-scrollbar {
+		-ms-overflow-style: none;
+		scrollbar-width: none;
+	}
 }

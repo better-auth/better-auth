@@ -72,10 +72,11 @@ export function getEndpoints<
 			?.map((plugin) =>
 				plugin.middlewares?.map((m) => {
 					const middleware = (async (context: any) => {
+						const authContext = await ctx;
 						return m.middleware({
 							...context,
 							context: {
-								...ctx,
+								...authContext,
 								...context.context,
 							},
 						});

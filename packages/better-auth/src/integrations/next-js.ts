@@ -37,7 +37,25 @@ export const nextCookies = () => {
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							const { cookies } = await import("next/headers");
-							const cookieHelper = await cookies();
+							let cookieHelper: Awaited<ReturnType<typeof cookies>>;
+							try {
+								cookieHelper = await cookies();
+							} catch (error) {
+								if (
+									error instanceof Error &&
+									error.message.startsWith(
+										"`cookies` was called outside a request scope.",
+									)
+								) {
+									// If error it means the `cookies` was called outside request scope.
+									// NextJS docs on this: https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
+									// This often gets called in a monorepo workspace (outside of NextJS),
+									// so we will try to catch this suppress it, and ignore using next-cookies.
+									return;
+								}
+								// If it's an unexpected error, throw it.
+								throw error;
+							}
 							parsed.forEach((value, key) => {
 								if (!key) return;
 								const opts = {

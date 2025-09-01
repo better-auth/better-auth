@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
@@ -30,7 +30,7 @@ export const oneTap = (options?: OneTapOptions) =>
 				{
 					method: "POST",
 					body: z.object({
-						idToken: z.string({
+						idToken: z.string().meta({
 							description:
 								"Google ID token, which the client obtains from the One Tap API",
 						}),

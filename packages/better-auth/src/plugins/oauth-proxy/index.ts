@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -8,6 +8,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
 import { env } from "../../utils/env";
 import { getOrigin } from "../../utils/url";
+import type { EndpointContext } from "better-call";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
@@ -44,6 +45,15 @@ interface OAuthProxyOptions {
  * the redirect URL can't be known in advance to add to the OAuth provider.
  */
 export const oAuthProxy = (opts?: OAuthProxyOptions) => {
+	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
+		return new URL(
+			opts?.currentURL ||
+				ctx.request?.url ||
+				getVenderBaseURL() ||
+				ctx.context.baseURL,
+		);
+	};
+
 	return {
 		id: "oauth-proxy",
 		endpoints: {
@@ -52,10 +62,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						callbackURL: z.string({
+						callbackURL: z.string().meta({
 							description: "The URL to redirect to after the proxy",
 						}),
-						cookies: z.string({
+						cookies: z.string().meta({
 							description: "The cookies to set after the proxy",
 						}),
 					}),
@@ -111,9 +121,8 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							`${error}?error=OAuthProxy - Invalid cookies or secret`,
 						);
 					}
-					const isSecureContext = ctx.request
-						? new URL(ctx.request.url).protocol === "https:"
-						: true;
+
+					const isSecureContext = resolveCurrentURL(ctx).protocol === "https:";
 					const prefix =
 						ctx.context.options.advanced?.cookiePrefix || "better-auth";
 					const cookieToSet = isSecureContext
@@ -188,12 +197,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						if (skipProxy) {
 							return;
 						}
-						const url = new URL(
-							opts?.currentURL ||
-								ctx.request?.url ||
-								getVenderBaseURL() ||
-								ctx.context.baseURL,
-						);
+						const url = resolveCurrentURL(ctx);
 						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
 						if (productionURL === ctx.context.options.baseURL) {
 							return;

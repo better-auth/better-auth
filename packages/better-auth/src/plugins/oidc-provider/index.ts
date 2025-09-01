@@ -1,5 +1,5 @@
+import * as z from "zod/v4";
 import { SignJWT } from "jose";
-import { z } from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -8,8 +8,11 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
-import { generateRandomString } from "../../crypto";
-import { subtle } from "@better-auth/utils";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../crypto";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -22,13 +25,62 @@ import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
 import { base64 } from "@better-auth/utils/base64";
+import { getJwtToken } from "../jwt/sign";
+import type { jwt } from "../jwt";
+import { defaultClientSecretHasher } from "./utils";
+
+const getJwtPlugin = (ctx: GenericEndpointContext) => {
+	return ctx.context.options.plugins?.find(
+		(plugin) => plugin.id === "jwt",
+	) as ReturnType<typeof jwt>;
+};
+
+/**
+ * Get a client by ID, checking trusted clients first, then database
+ */
+export async function getClient(
+	clientId: string,
+	adapter: any,
+	trustedClients: (Client & { skipConsent?: boolean })[] = [],
+): Promise<(Client & { skipConsent?: boolean }) | null> {
+	const trustedClient = trustedClients.find(
+		(client) => client.clientId === clientId,
+	);
+	if (trustedClient) {
+		return trustedClient;
+	}
+	const dbClient = await adapter
+		.findOne({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: clientId }],
+		})
+		.then((res: Record<string, any> | null) => {
+			if (!res) {
+				return null;
+			}
+			return {
+				...res,
+				redirectURLs: (res.redirectURLs ?? "").split(","),
+				metadata: res.metadata ? JSON.parse(res.metadata) : {},
+			} as Client;
+		});
+
+	return dbClient;
+}
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
+	const jwtPlugin = getJwtPlugin(ctx);
+	const issuer =
+		jwtPlugin && jwtPlugin.options?.jwt && jwtPlugin.options.jwt.issuer
+			? jwtPlugin.options.jwt.issuer
+			: (ctx.context.options.baseURL as string);
 	const baseURL = ctx.context.baseURL;
+	const supportedAlgs = options?.useJWTPlugin
+		? ["RS256", "EdDSA", "none"]
+		: ["HS256", "none"];
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -39,16 +91,17 @@ export const getMetadata = (
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
-		grant_types_supported: ["authorization_code"],
+		grant_types_supported: ["authorization_code", "refresh_token"],
 		acr_values_supported: [
 			"urn:mace:incommon:iap:silver",
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256", "none"],
+		id_token_signing_alg_values_supported: supportedAlgs,
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"none",
 		],
 		code_challenge_methods_supported: ["S256"],
 		claims_supported: [
@@ -88,6 +141,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
 		allowPlainCodeChallengeMethod: true,
+		storeClientSecret: "plain" as const,
 		...options,
 		scopes: [
 			"openid",
@@ -97,6 +151,80 @@ export const oidcProvider = (options: OIDCOptions) => {
 			...(options?.scopes || []),
 		],
 	};
+
+	const trustedClients = options.trustedClients || [];
+
+	/**
+	 * Store client secret according to the configured storage method
+	 */
+	async function storeClientSecret(
+		ctx: GenericEndpointContext,
+		clientSecret: string,
+	) {
+		if (opts.storeClientSecret === "encrypted") {
+			return await symmetricEncrypt({
+				key: ctx.context.secret,
+				data: clientSecret,
+			});
+		}
+		if (opts.storeClientSecret === "hashed") {
+			return await defaultClientSecretHasher(clientSecret);
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"hash" in opts.storeClientSecret
+		) {
+			return await opts.storeClientSecret.hash(clientSecret);
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"encrypt" in opts.storeClientSecret
+		) {
+			return await opts.storeClientSecret.encrypt(clientSecret);
+		}
+
+		return clientSecret;
+	}
+
+	/**
+	 * Verify stored client secret against provided client secret
+	 */
+	async function verifyStoredClientSecret(
+		ctx: GenericEndpointContext,
+		storedClientSecret: string,
+		clientSecret: string,
+	): Promise<boolean> {
+		if (opts.storeClientSecret === "encrypted") {
+			return (
+				(await symmetricDecrypt({
+					key: ctx.context.secret,
+					data: storedClientSecret,
+				})) === clientSecret
+			);
+		}
+		if (opts.storeClientSecret === "hashed") {
+			const hashedClientSecret = await defaultClientSecretHasher(clientSecret);
+			return hashedClientSecret === storedClientSecret;
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"hash" in opts.storeClientSecret
+		) {
+			const hashedClientSecret =
+				await opts.storeClientSecret.hash(clientSecret);
+			return hashedClientSecret === storedClientSecret;
+		}
+		if (
+			typeof opts.storeClientSecret === "object" &&
+			"decrypt" in opts.storeClientSecret
+		) {
+			const decryptedClientSecret =
+				await opts.storeClientSecret.decrypt(storedClientSecret);
+			return decryptedClientSecret === clientSecret;
+		}
+
+		return clientSecret === storedClientSecret;
+	}
 
 	return {
 		id: "oidc",
@@ -191,11 +319,36 @@ export const oidcProvider = (options: OIDCOptions) => {
 					method: "POST",
 					body: z.object({
 						accept: z.boolean(),
+						consent_code: z.string().optional(),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
-							description: "Handle OAuth2 consent",
+							description:
+								"Handle OAuth2 consent. Supports both URL parameter-based flows (consent_code in body) and cookie-based flows (signed cookie).",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												accept: {
+													type: "boolean",
+													description:
+														"Whether the user accepts or denies the consent request",
+												},
+												consent_code: {
+													type: "string",
+													description:
+														"The consent code from the authorization request. Optional if using cookie-based flow.",
+												},
+											},
+											required: ["accept"],
+										},
+									},
+								},
+							},
 							responses: {
 								"200": {
 									description: "Consent processed successfully",
@@ -221,18 +374,31 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const storedCode = await ctx.getSignedCookie(
-						"oidc_consent_prompt",
-						ctx.context.secret,
-					);
-					if (!storedCode) {
+					// Support both consent flow methods:
+					// 1. URL parameter-based: consent_code in request body (standard OAuth2 pattern)
+					// 2. Cookie-based: using signed cookie for stateful consent flows
+					let consentCode: string | null = ctx.body.consent_code || null;
+
+					if (!consentCode) {
+						// Check for cookie-based consent flow
+						consentCode = await ctx.getSignedCookie(
+							"oidc_consent_prompt",
+							ctx.context.secret,
+						);
+					}
+
+					if (!consentCode) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "No consent prompt found",
+							error_description:
+								"consent_code is required (either in body or cookie)",
 							error: "invalid_request",
 						});
 					}
+
 					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(storedCode);
+						await ctx.context.internalAdapter.findVerificationValue(
+							consentCode,
+						);
 					if (!verification) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Invalid code",
@@ -245,6 +411,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+
+					// Clear the cookie
+					ctx.setCookie("oidc_consent_prompt", "", {
+						maxAge: 0,
+					});
+
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
 					if (!value.requireConsent) {
 						throw new APIError("UNAUTHORIZED", {
@@ -298,7 +470,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.record(z.any()),
+					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
 					},
@@ -354,6 +526,16 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 					}
+
+					const now = Date.now();
+					const iat = Math.floor(now / 1000);
+					const exp = iat + (opts.accessTokenExpiresIn ?? 3600);
+
+					const accessTokenExpiresAt = new Date(exp * 1000);
+					const refreshTokenExpiresAt = new Date(
+						(iat + (opts.refreshTokenExpiresIn ?? 604800)) * 1000,
+					);
+
 					const {
 						grant_type,
 						code,
@@ -397,12 +579,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
-						const accessTokenExpiresAt = new Date(
-							Date.now() + opts.accessTokenExpiresIn * 1000,
-						);
-						const refreshTokenExpiresAt = new Date(
-							Date.now() + opts.refreshTokenExpiresIn * 1000,
-						);
+
 						await ctx.context.adapter.create({
 							model: modelName.oauthAccessToken,
 							data: {
@@ -413,8 +590,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 								clientId: client_id.toString(),
 								userId: token.userId,
 								scopes: token.scopes,
-								createdAt: new Date(),
-								updatedAt: new Date(),
+								createdAt: new Date(iat * 1000),
+								updatedAt: new Date(iat * 1000),
 							},
 						});
 						return ctx.json({
@@ -464,9 +641,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					if (!client_id || !client_secret) {
+					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "client_id and client_secret are required",
+							error_description: "client_id is required",
 							error: "invalid_client",
 						});
 					}
@@ -490,21 +667,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await ctx.context.adapter
-						.findOne<Record<string, any>>({
-							model: modelName.oauthClient,
-							where: [{ field: "clientId", value: client_id.toString() }],
-						})
-						.then((res) => {
-							if (!res) {
-								return null;
-							}
-							return {
-								...res,
-								redirectURLs: res.redirectURLs.split(","),
-								metadata: res.metadata ? JSON.parse(res.metadata) : {},
-							} as Client;
-						});
+					const client = await getClient(
+						client_id.toString(),
+						ctx.context.adapter,
+						trustedClients,
+					);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -517,14 +684,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_client",
 						});
 					}
-					const isValidSecret =
-						client.clientSecret === client_secret.toString();
-					if (!isValidSecret) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_secret",
-							error: "invalid_client",
-						});
-					}
+
 					const value = JSON.parse(
 						verificationValue.value,
 					) as CodeVerificationValue;
@@ -546,7 +706,36 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
-
+					if (client.type === "public") {
+						// For public clients (type: 'public'), validate PKCE instead of client_secret
+						if (!code_verifier) {
+							throw new APIError("BAD_REQUEST", {
+								error_description:
+									"code verifier is required for public clients",
+								error: "invalid_request",
+							});
+						}
+						// PKCE validation happens later in the flow, so we skip client_secret validation
+					} else {
+						if (!client.clientSecret || !client_secret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"client_secret is required for confidential clients",
+								error: "invalid_client",
+							});
+						}
+						const isValidSecret = await verifyStoredClientSecret(
+							ctx,
+							client.clientSecret,
+							client_secret.toString(),
+						);
+						if (!isValidSecret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_secret",
+								error: "invalid_client",
+							});
+						}
+					}
 					const challenge =
 						value.codeChallengeMethod === "plain"
 							? code_verifier
@@ -567,12 +756,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
-					const accessTokenExpiresAt = new Date(
-						Date.now() + opts.accessTokenExpiresIn * 1000,
-					);
-					const refreshTokenExpiresAt = new Date(
-						Date.now() + opts.refreshTokenExpiresIn * 1000,
-					);
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,
 						data: {
@@ -583,8 +766,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: client_id.toString(),
 							userId: value.userId,
 							scopes: requestedScopes.join(" "),
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: new Date(iat * 1000),
+							updatedAt: new Date(iat * 1000),
 						},
 					});
 					const user = await ctx.context.internalAdapter.findUserById(
@@ -596,17 +779,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
-						alg: "HS256",
-						key: await subtle.generateKey(
-							{
-								name: "HMAC",
-								hash: "SHA-256",
-							},
-							true,
-							["sign", "verify"],
-						),
-					};
+
 					const profile = {
 						given_name: user.name.split(" ")[0],
 						family_name: user.name.split(" ")[1],
@@ -624,25 +797,82 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
-					const idToken = await new SignJWT({
+					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
-						auth_time: ctx.context.session?.session.createdAt.getTime(),
+						auth_time: ctx.context.session
+							? new Date(ctx.context.session.session.createdAt).getTime()
+							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 						...additionalUserClaims,
-					})
-						.setProtectedHeader({ alg: secretKey.alg })
-						.setIssuedAt()
-						.setExpirationTime(
-							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
-						)
-						.sign(secretKey.key);
+					};
+					const expirationTime =
+						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+
+					let idToken: string;
+
+					// The JWT plugin is enabled, so we use the JWKS keys to sign
+					if (options.useJWTPlugin) {
+						const jwtPlugin = getJwtPlugin(ctx);
+						if (!jwtPlugin) {
+							ctx.context.logger.error(
+								"OIDC: `useJWTPlugin` is enabled but the JWT plugin is not available. Make sure you have the JWT Plugin in your plugins array or set `useJWTPlugin` to false.",
+							);
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description: "JWT plugin is not enabled",
+								error: "internal_server_error",
+							});
+						}
+						idToken = await getJwtToken(
+							{
+								...ctx,
+								context: {
+									...ctx.context,
+									session: {
+										session: {
+											id: generateRandomString(32, "a-z", "A-Z"),
+											createdAt: new Date(iat * 1000),
+											updatedAt: new Date(iat * 1000),
+											userId: user.id,
+											expiresAt: accessTokenExpiresAt,
+											token: accessToken,
+											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+										},
+										user,
+									},
+								},
+							},
+							{
+								...jwtPlugin.options,
+								jwt: {
+									...jwtPlugin.options?.jwt,
+									getSubject: () => user.id,
+									audience: client_id.toString(),
+									issuer: ctx.context.options.baseURL,
+									expirationTime,
+									definePayload: () => payload,
+								},
+							},
+						);
+
+						// If the JWT token is not enabled, create a key and use it to sign
+					} else {
+						idToken = await new SignJWT(payload)
+							.setProtectedHeader({ alg: "HS256" })
+							.setIssuedAt(iat)
+							.setExpirationTime(accessTokenExpiresAt)
+							.sign(new TextEncoder().encode(client.clientSecret));
+					}
 
 					return ctx.json(
 						{
@@ -773,6 +1003,18 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const client = await getClient(
+						accessToken.clientId,
+						ctx.context.adapter,
+						trustedClients,
+					);
+					if (!client) {
+						throw new APIError("UNAUTHORIZED", {
+							error_description: "client not found",
+							error: "invalid_token",
+						});
+					}
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						accessToken.userId,
 					);
@@ -801,7 +1043,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 					};
 					const userClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: baseUserClaims;
 					return ctx.json({
 						...baseUserClaims,
@@ -809,14 +1055,36 @@ export const oidcProvider = (options: OIDCOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/oauth2/register`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.registerOAuthApplication`
+			 *
+			 * **client:**
+			 * `authClient.oauth2.register`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/oidc-provider#api-method-oauth2-register)
+			 */
 			registerOAuthApplication: createAuthEndpoint(
 				"/oauth2/register",
 				{
 					method: "POST",
 					body: z.object({
-						redirect_uris: z.array(z.string()),
+						redirect_uris: z.array(z.string()).meta({
+							description:
+								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+						}),
 						token_endpoint_auth_method: z
 							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.meta({
+								description:
+									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
+							})
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
@@ -831,25 +1099,109 @@ export const oidcProvider = (options: OIDCOptions) => {
 									"urn:ietf:params:oauth:grant-type:saml2-bearer",
 								]),
 							)
+							.meta({
+								description:
+									'The grant types supported by the application. Eg: ["authorization_code"]',
+							})
 							.default(["authorization_code"])
 							.optional(),
 						response_types: z
 							.array(z.enum(["code", "token"]))
+							.meta({
+								description:
+									'The response types supported by the application. Eg: ["code"]',
+							})
 							.default(["code"])
 							.optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						scope: z.string().optional(),
-						contacts: z.array(z.string()).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						jwks_uri: z.string().optional(),
-						jwks: z.record(z.any()).optional(),
-						metadata: z.record(z.any()).optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
+						client_name: z
+							.string()
+							.meta({
+								description: 'The name of the application. Eg: "My App"',
+							})
+							.optional(),
+						client_uri: z
+							.string()
+							.meta({
+								description:
+									'The URI of the application. Eg: "https://client.example.com"',
+							})
+							.optional(),
+						logo_uri: z
+							.string()
+							.meta({
+								description:
+									'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
+							})
+							.optional(),
+						scope: z
+							.string()
+							.meta({
+								description:
+									'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
+							})
+							.optional(),
+						contacts: z
+							.array(z.string())
+							.meta({
+								description:
+									'The contact information for the application. Eg: ["admin@example.com"]',
+							})
+							.optional(),
+						tos_uri: z
+							.string()
+							.meta({
+								description:
+									'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
+							})
+							.optional(),
+						policy_uri: z
+							.string()
+							.meta({
+								description:
+									'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
+							})
+							.optional(),
+						jwks_uri: z
+							.string()
+							.meta({
+								description:
+									'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
+							})
+							.optional(),
+						jwks: z
+							.record(z.any(), z.any())
+							.meta({
+								description:
+									'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
+							})
+							.optional(),
+						metadata: z
+							.record(z.any(), z.any())
+							.meta({
+								description:
+									'The metadata of the application. Eg: {"key": "value"}',
+							})
+							.optional(),
+						software_id: z
+							.string()
+							.meta({
+								description:
+									'The software ID of the application. Eg: "my-software"',
+							})
+							.optional(),
+						software_version: z
+							.string()
+							.meta({
+								description:
+									'The software version of the application. Eg: "1.0.0"',
+							})
+							.optional(),
+						software_statement: z
+							.string()
+							.meta({
+								description: "The software statement of the application.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -1001,6 +1353,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						options.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
+					const storedClientSecret = await storeClientSecret(ctx, clientSecret);
+
 					// Create the client with the existing schema
 					const client: Client = await ctx.context.adapter.create({
 						model: modelName.oauthClient,
@@ -1009,7 +1363,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
-							clientSecret: clientSecret,
+							clientSecret: storedClientSecret,
 							redirectURLs: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
@@ -1025,7 +1379,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 					return ctx.json(
 						{
 							client_id: clientId,
-							client_secret: clientSecret,
+							...(client.type !== "public"
+								? {
+										client_secret: clientSecret,
+										client_secret_expires_at: 0, // 0 means it doesn't expire
+									}
+								: {}),
 							client_id_issued_at: Math.floor(Date.now() / 1000),
 							client_secret_expires_at: 0, // 0 means it doesn't expire
 							redirect_uris: body.redirect_uris,
@@ -1097,11 +1456,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const client = await ctx.context.adapter.findOne<Record<string, any>>(
-						{
-							model: modelName.oauthClient,
-							where: [{ field: "clientId", value: ctx.params.id }],
-						},
+					const client = await getClient(
+						ctx.params.id,
+						ctx.context.adapter,
+						trustedClients,
 					);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {

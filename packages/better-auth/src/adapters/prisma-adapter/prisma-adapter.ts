@@ -68,6 +68,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) =>
 						return "startsWith";
 					case "ends_with":
 						return "endsWith";
+					case "ne":
+						return "not";
 					default:
 						return operator;
 				}

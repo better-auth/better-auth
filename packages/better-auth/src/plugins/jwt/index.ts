@@ -1,21 +1,24 @@
 import type {
 	BetterAuthPlugin,
-	GenericEndpointContext,
 	InferOptionSchema,
 	Session,
 	User,
 } from "../../types";
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
+import { getJwtToken, signJWT } from "./sign";
+import { exportJWK, generateKeyPair, type JWK, type JWTPayload } from "jose";
 import {
+	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
+import z from "zod";
 import { BetterAuthError } from "../../error";
+import type { Awaitable } from "../../types/helper";
 
 type JWKOptions =
 	| {
@@ -45,6 +48,14 @@ type JWKOptions =
 
 export interface JwtOptions {
 	jwks?: {
+		/**
+		 * Disables the /jwks endpoint and uses this endpoint in discovery.
+		 *
+		 * Useful if jwks are not managed at /jwks or
+		 * if your jwks are signed with a certificate and placed on your CDN.
+		 */
+		remoteUrl?: string;
+
 		/**
 		 * Key pair configuration
 		 * @description A subset of the options available for the generateKeyPair function
@@ -113,91 +124,75 @@ export interface JwtOptions {
 			user: User & Record<string, any>;
 			session: Session & Record<string, any>;
 		}) => Promise<string> | string;
+		/**
+		 * A custom function to remote sign the jwt payload.
+		 *
+		 * All headers, such as `alg` and `kid`,
+		 * MUST be defined within this function.
+		 * You can safely define the header `typ: 'JWT'`.
+		 *
+		 * @requires jwks.remoteUrl
+		 * @invalidates other jwt.* options
+		 */
+		sign?: (payload: JWTPayload) => Awaitable<string>;
 	};
+
+	/**
+	 * Disables setting JWTs through middleware.
+	 *
+	 * Recommended to set `true` when using an oAuth provider plugin
+	 * like OIDC or MCP where session payloads should not be signed.
+	 *
+	 * @default false
+	 */
+	disableSettingJwtHeader?: boolean;
+
 	/**
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 }
 
-export async function getJwtToken(
-	ctx: GenericEndpointContext,
+export async function generateExportedKeyPair(
 	options?: JwtOptions,
-) {
-	const adapter = getJwksAdapter(ctx.context.adapter);
+): Promise<{ publicWebKey: JWK; privateWebKey: JWK }> {
+	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
+		alg: "EdDSA",
+		crv: "Ed25519",
+	};
+	const keyPairConfig = {
+		...cfg,
+		extractable: true,
+	};
 
-	let key = await adapter.getLatestKey();
-	const privateKeyEncryptionEnabled =
-		!options?.jwks?.disablePrivateKeyEncryption;
+	const { publicKey, privateKey } = await generateKeyPair(alg, keyPairConfig);
 
-	if (key === undefined) {
-		const { publicKey, privateKey } = await generateKeyPair(
-			options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-			options?.jwks?.keyPairConfig ?? {
-				crv: "Ed25519",
-				extractable: true,
-			},
+	const publicWebKey = await exportJWK(publicKey);
+	const privateWebKey = await exportJWK(privateKey);
+
+	return { publicWebKey, privateWebKey };
+}
+
+export const jwt = (options?: JwtOptions) => {
+	// Remote url must be set when using signing function
+	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwks.remoteUrl must be set when using jwt.sign",
 		);
-
-		const publicWebKey = await exportJWK(publicKey);
-		const privateWebKey = await exportJWK(privateKey);
-		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-
-		let jwk: Partial<Jwk> = {
-			publicKey: JSON.stringify(publicWebKey),
-			privateKey: privateKeyEncryptionEnabled
-				? JSON.stringify(
-						await symmetricEncrypt({
-							key: ctx.context.secret,
-							data: stringifiedPrivateWebKey,
-						}),
-					)
-				: stringifiedPrivateWebKey,
-			createdAt: new Date(),
-		};
-
-		key = await adapter.createJwk(jwk as Jwk);
 	}
 
-	let privateWebKey = privateKeyEncryptionEnabled
-		? await symmetricDecrypt({
-				key: ctx.context.secret,
-				data: JSON.parse(key.privateKey),
-			}).catch(() => {
-				throw new BetterAuthError(
-					"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
-				);
-			})
-		: key.privateKey;
+	// Alg is required to be specified when using remote url (needed in openid metadata)
+	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"must specify alg when using the oidc plugin and jwks.remoteUrl",
+		);
+	}
 
-	const privateKey = await importJWK(
-		JSON.parse(privateWebKey),
-		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-	);
-
-	const payload = !options?.jwt?.definePayload
-		? ctx.context.session!.user
-		: await options?.jwt.definePayload(ctx.context.session!);
-
-	const jwt = await new SignJWT(payload)
-		.setProtectedHeader({
-			alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-			kid: key.id,
-		})
-		.setIssuedAt()
-		.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
-		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
-		.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
-		.setSubject(
-			(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
-				ctx.context.session!.user.id,
-		)
-		.sign(privateKey);
-	return jwt;
-}
-export const jwt = (options?: JwtOptions) => {
 	return {
 		id: "jwt",
+		options,
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				"/jwks",
@@ -287,18 +282,28 @@ export const jwt = (options?: JwtOptions) => {
 					},
 				},
 				async (ctx) => {
+					// Disables endpoint if using remote url strategy
+					if (options?.jwks?.remoteUrl) {
+						throw new APIError("NOT_FOUND");
+					}
+
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
-						const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+						const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
+							alg: "EdDSA",
+							crv: "Ed25519",
+						};
+						const keyPairConfig = {
+							...cfg,
+							extractable: true,
+						};
+
 						const { publicKey, privateKey } = await generateKeyPair(
 							alg,
-							options?.jwks?.keyPairConfig ?? {
-								crv: "Ed25519",
-								extractable: true,
-							},
+							keyPairConfig,
 						);
 
 						const publicWebKey = await exportJWK(publicKey);
@@ -377,6 +382,35 @@ export const jwt = (options?: JwtOptions) => {
 					});
 				},
 			),
+			signJWT: createAuthEndpoint(
+				"/sign-jwt",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as {
+								payload: JWTPayload;
+								overrideOptions?: JwtOptions;
+							},
+						},
+					},
+					body: z.object({
+						payload: z.record(z.string(), z.any()),
+						overrideOptions: z.record(z.string(), z.any()).optional(),
+					}),
+				},
+				async (c) => {
+					const jwt = await signJWT(c, {
+						options: {
+							...options,
+							...c.body.overrideOptions,
+						},
+						payload: c.body.payload,
+					});
+					return c.json({ token: jwt });
+				},
+			),
 		},
 		hooks: {
 			after: [
@@ -385,11 +419,29 @@ export const jwt = (options?: JwtOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (options?.disableSettingJwtHeader) {
+							return;
+						}
+
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
+							const exposedHeaders =
+								ctx.context.responseHeaders?.get(
+									"access-control-expose-headers",
+								) || "";
+							const headersSet = new Set(
+								exposedHeaders
+									.split(",")
+									.map((header) => header.trim())
+									.filter(Boolean),
+							);
+							headersSet.add("set-auth-jwt");
 							ctx.setHeader("set-auth-jwt", jwt);
-							ctx.setHeader("Access-Control-Expose-Headers", "set-auth-jwt");
+							ctx.setHeader(
+								"Access-Control-Expose-Headers",
+								Array.from(headersSet).join(", "),
+							);
 						}
 					}),
 				},
@@ -398,3 +450,5 @@ export const jwt = (options?: JwtOptions) => {
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
+
+export { getJwtToken };

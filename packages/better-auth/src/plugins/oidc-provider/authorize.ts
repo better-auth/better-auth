@@ -1,13 +1,25 @@
 import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
-import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
+import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { generateRandomString } from "../../crypto";
+import { getClient } from "./index";
 
-function redirectErrorURL(url: string, error: string, description: string) {
+function formatErrorURL(url: string, error: string, description: string) {
 	return `${
 		url.includes("?") ? "&" : "?"
 	}error=${error}&error_description=${description}`;
+}
+
+function getErrorURL(
+	ctx: GenericEndpointContext,
+	error: string,
+	description: string,
+) {
+	const baseURL =
+		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
+	const formattedURL = formatErrorURL(baseURL, error, description);
+	return formattedURL;
 }
 
 export async function authorize(
@@ -66,41 +78,37 @@ export async function authorize(
 
 	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
-		return handleRedirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		const errorURL = getErrorURL(
+			ctx,
+			"invalid_client",
+			"client_id is required",
+		);
+		throw ctx.redirect(errorURL);
 	}
 
 	if (!query.response_type) {
-		return handleRedirect(
-			redirectErrorURL(
-				`${ctx.context.baseURL}/error`,
-				"invalid_request",
-				"response_type is required",
-			),
+		const errorURL = getErrorURL(
+			ctx,
+			"invalid_request",
+			"response_type is required",
+		);
+		throw ctx.redirect(
+			getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
 	}
 
-	const client = await ctx.context.adapter
-		.findOne<Record<string, any>>({
-			model: "oauthApplication",
-			where: [
-				{
-					field: "clientId",
-					value: ctx.query.client_id,
-				},
-			],
-		})
-		.then((res) => {
-			if (!res) {
-				return null;
-			}
-			return {
-				...res,
-				redirectURLs: res.redirectURLs.split(","),
-				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
-		});
+	const client = await getClient(
+		ctx.query.client_id,
+		ctx.context.adapter,
+		options.trustedClients || [],
+	);
 	if (!client) {
-		return handleRedirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		const errorURL = getErrorURL(
+			ctx,
+			"invalid_client",
+			"client_id is required",
+		);
+		throw ctx.redirect(errorURL);
 	}
 	const redirectURI = client.redirectURLs.find(
 		(url) => url === ctx.query.redirect_uri,
@@ -115,26 +123,27 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
-		return handleRedirect(`${ctx.context.baseURL}/error?error=client_disabled`);
+		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
+		throw ctx.redirect(errorURL);
 	}
 
 	if (query.response_type !== "code") {
-		return handleRedirect(
-			`${ctx.context.baseURL}/error?error=unsupported_response_type`,
+		const errorURL = getErrorURL(
+			ctx,
+			"unsupported_response_type",
+			"unsupported response type",
 		);
+		throw ctx.redirect(errorURL);
 	}
 
 	const requestScope =
 		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
 	const invalidScopes = requestScope.filter((scope) => {
-		const isInvalid =
-			!opts.scopes.includes(scope) ||
-			(scope === "offline_access" && query.prompt !== "consent");
-		return isInvalid;
+		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
 		return handleRedirect(
-			redirectErrorURL(
+			formatErrorURL(
 				query.redirect_uri,
 				"invalid_scope",
 				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
@@ -147,11 +156,7 @@ export async function authorize(
 		options.requirePKCE
 	) {
 		return handleRedirect(
-			redirectErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"pkce is required",
-			),
+			formatErrorURL(query.redirect_uri, "invalid_request", "pkce is required"),
 		);
 	}
 
@@ -166,7 +171,7 @@ export async function authorize(
 		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
 		return handleRedirect(
-			redirectErrorURL(
+			formatErrorURL(
 				query.redirect_uri,
 				"invalid_request",
 				"invalid code_challenge method",
@@ -188,7 +193,7 @@ export async function authorize(
 					redirectURI: query.redirect_uri,
 					scope: requestScope,
 					userId: session.user.id,
-					authTime: session.session.createdAt.getTime(),
+					authTime: new Date(session.session.createdAt).getTime(),
 					/**
 					 * If the prompt is set to `consent`, then we need
 					 * to require the user to consent to the scopes.
@@ -214,7 +219,7 @@ export async function authorize(
 		);
 	} catch (e) {
 		return handleRedirect(
-			redirectErrorURL(
+			formatErrorURL(
 				query.redirect_uri,
 				"server_error",
 				"An error occurred while processing the request",
@@ -227,6 +232,11 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
+		return handleRedirect(redirectURIWithCode.toString());
+	}
+
+	// Check if this is a trusted client that should skip consent
+	if (client.skipConsent) {
 		return handleRedirect(redirectURIWithCode.toString());
 	}
 
@@ -253,14 +263,19 @@ export async function authorize(
 	}
 
 	if (options?.consentPage) {
+		// Set cookie to support cookie-based consent flows
 		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
 			maxAge: 600,
 			path: "/",
 			sameSite: "lax",
 		});
-		const consentURI = `${options.consentPage}?client_id=${
-			client.clientId
-		}&scope=${requestScope.join(" ")}`;
+
+		// Pass the consent code as a URL parameter to support URL-based consent flows
+		const urlParams = new URLSearchParams();
+		urlParams.set("consent_code", code);
+		urlParams.set("client_id", client.clientId);
+		urlParams.set("scope", requestScope.join(" "));
+		const consentURI = `${options.consentPage}?${urlParams.toString()}`;
 
 		return handleRedirect(consentURI);
 	}

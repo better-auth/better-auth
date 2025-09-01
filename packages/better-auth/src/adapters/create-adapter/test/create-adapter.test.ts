@@ -1,6 +1,10 @@
 import { describe, test, expect } from "vitest";
 import { createAdapter } from "..";
-import type { AdapterConfig, CreateCustomAdapter } from "../types";
+import type {
+	AdapterConfig,
+	CleanedWhere,
+	CreateCustomAdapter,
+} from "../types";
 import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
 
@@ -159,6 +163,31 @@ describe("Create Adapter Helper", async () => {
 		expect(res).toHaveProperty("id");
 		//@ts-ignore
 		expect(res.id).toBe("HARD-CODED-ID");
+	});
+
+	test("Should not generate an id if `advanced.database.generateId` is not defined or false", async () => {
+		const adapter = await createTestAdapter({
+			config: {},
+			options: {
+				advanced: {
+					database: { generateId: false, useNumberId: false },
+				},
+			},
+			adapter(args_0) {
+				return {
+					async create(data) {
+						expect(data.data.id).not.toBeDefined();
+						return data.data;
+					},
+				};
+			},
+		});
+
+		const testResult = await adapter.create({
+			model: "user",
+			data: { name: "test-name" },
+		});
+		expect(testResult.id).not.toBeDefined();
 	});
 
 	test("Should throw an error if the database doesn't support numeric ids and the user has enabled `useNumberId`", async () => {
@@ -559,6 +588,7 @@ describe("Create Adapter Helper", async () => {
 							};
 						},
 					});
+
 					const res = (await adapter.create({
 						model: "user",
 						data: { email: "test@test.com" },
@@ -570,6 +600,33 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(parameters.data).toHaveProperty("email_address");
 				expect(parameters.data.email_address).toEqual("test@test.com");
+			});
+
+			test("Should allow custom transform input to transform the where clause", async () => {
+				const parameters: CleanedWhere[] = await new Promise(async (r) => {
+					const adapter = await createTestAdapter({
+						config: {
+							debugLogs: {},
+							mapKeysTransformInput: {
+								id: "_id",
+							},
+						},
+						adapter(args_0) {
+							return {
+								async findOne({ model, where, select }) {
+									r(where);
+									return {} as any;
+								},
+							};
+						},
+					});
+					adapter.findOne({
+						model: "user",
+						where: [{ field: "id", value: "123" }],
+					});
+				});
+
+				expect(parameters[0]!.field).toEqual("_id");
 			});
 
 			test("Should allow custom map output key transformation", async () => {
