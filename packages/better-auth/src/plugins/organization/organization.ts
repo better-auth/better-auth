@@ -31,6 +31,7 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
+	getOrganization,
 	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
@@ -159,6 +160,22 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
 		 */
 		getFullOrganization: getFullOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.getOrganization`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-organization)
+		 */
+		getOrganization: getOrganization(options as O),
 		/**
 		 * ### Endpoint
 		 *
