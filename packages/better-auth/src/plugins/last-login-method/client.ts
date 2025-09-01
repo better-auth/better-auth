@@ -19,15 +19,14 @@ export const lastLoginMethodClient = <
 	return {
 		id: "last-login-method",
 		$InferServerPlugin: {} as LastLoginMethodPlugin<Storage>,
-		getActions:
-			opts.storage === "local-storage"
-				? () => ({
-						getLastUsedLoginMethod: async () => {
-							const key = localStorage.getItem(opts.key) ?? null;
-							return key;
-						},
-					})
-				: undefined,
+
+		getActions: () => ({
+			getLastUsedLoginMethod: async () => {
+				const key = localStorage.getItem(opts.key) ?? null;
+				return key;
+			},
+		}),
+
 		fetchPlugins: [
 			{
 				id: "last-login-method-hook",

@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
-import { signIn } from "@/lib/auth-client";
+import { client, signIn } from "@/lib/auth-client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -28,6 +28,9 @@ export default function SignIn() {
 	const [rememberMe, setRememberMe] = useState(false);
 	const router = useRouter();
 	const params = useSearchParams();
+
+	const lastUsed = client.getLastUsedLoginMethod();
+	console.log({ lastUsed });
 
 	return (
 		<Card className="max-w-md rounded-none">

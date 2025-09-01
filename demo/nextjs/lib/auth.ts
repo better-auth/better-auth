@@ -10,6 +10,7 @@ import {
 	openAPI,
 	customSession,
 	deviceAuthorization,
+	lastLoginMethod,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -223,6 +224,7 @@ export const auth = betterAuth({
 			expiresIn: "3min",
 			interval: "5s",
 		}),
+		lastLoginMethod(),
 	],
 	trustedOrigins: ["exp://"],
 	advanced: {
