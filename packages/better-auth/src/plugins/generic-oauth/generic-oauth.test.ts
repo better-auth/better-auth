@@ -34,15 +34,12 @@ describe("oauth2", async () => {
 					},
 				],
 			}),
-			lastLoginMethod({ storage: "cookie" }),
+			lastLoginMethod(),
 		],
 	});
 
 	const authClient = createAuthClient({
-		plugins: [
-			genericOAuthClient(),
-			lastLoginMethodClient({ storage: "cookie" }),
-		],
+		plugins: [genericOAuthClient(), lastLoginMethodClient()],
 		baseURL: "http://localhost:3000",
 		fetchOptions: {
 			customFetchImpl,

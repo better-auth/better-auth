@@ -9,11 +9,11 @@ import { lastLoginMethod, lastLoginMethodClient } from "../../plugins";
 describe("sign-in", async (it) => {
 	const { auth, testUser, cookieSetter, client } = await getTestInstance(
 		{
-			plugins: [lastLoginMethod({ storage: "cookie" })],
+			plugins: [lastLoginMethod()],
 		},
 		{
 			clientOptions: {
-				plugins: [lastLoginMethodClient({ storage: "cookie" })],
+				plugins: [lastLoginMethodClient()],
 			},
 		},
 	);

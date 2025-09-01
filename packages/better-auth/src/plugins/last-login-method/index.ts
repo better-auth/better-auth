@@ -1,5 +1,4 @@
 import {
-	LAST_USED_LOGIN_METHOD_HEADER,
 	type LastLoginMethodOptions,
 	type RealizedLastLoginMethodOptions,
 } from "./types";
@@ -11,19 +10,7 @@ import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 export * from "./types";
 export * from "./client";
 
-export type LastLoginMethodPlugin<
-	Storage extends "cookie" | "local-storage" = "local-storage",
-> = {
-	id: "last-login-method";
-	endpoints: Storage extends "cookie"
-		? { lastUsedLoginMethod: ReturnType<typeof makeLastUsedLoginMethod> }
-		: {};
-	hooks: BetterAuthPlugin["hooks"];
-};
-
-const makeLastUsedLoginMethod = <Storage>(
-	opts: RealizedLastLoginMethodOptions<Storage>,
-) =>
+const makeLastUsedLoginMethod = (opts: RealizedLastLoginMethodOptions) =>
 	createAuthEndpoint(
 		"/last-used-login-method",
 		{
@@ -54,11 +41,8 @@ const makeLastUsedLoginMethod = <Storage>(
 		async (c) => c.getSignedCookie(opts.cookieName, c.context.secret) ?? null,
 	);
 
-export const lastLoginMethod = <Storage extends "cookie" | "local-storage">(
-	options?: LastLoginMethodOptions<Storage>,
-) => {
-	const opts: RealizedLastLoginMethodOptions<Storage> = {
-		storage: options?.storage ?? ("local-storage" as Storage),
+export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
+	const opts: RealizedLastLoginMethodOptions = {
 		cookieName: options?.cookieName ?? "better-auth.last_used_login_method",
 		maxAge: options?.maxAge ?? 432000,
 	};
@@ -82,14 +66,10 @@ export const lastLoginMethod = <Storage extends "cookie" | "local-storage">(
 			const val = typeof value === "string" ? value : value(ctx);
 			if (!val) return;
 
-			if (opts.storage === "local-storage")
-				ctx.headers?.append(LAST_USED_LOGIN_METHOD_HEADER, val);
-
-			if (opts.storage === "cookie")
-				await ctx.setSignedCookie(opts.cookieName, val, ctx.context.secret, {
-					httpOnly: true,
-					maxAge: opts.maxAge,
-				});
+			ctx.setCookie(opts.cookieName, val, {
+				httpOnly: false,
+				maxAge: opts.maxAge,
+			});
 		}),
 	});
 
@@ -97,11 +77,7 @@ export const lastLoginMethod = <Storage extends "cookie" | "local-storage">(
 
 	return {
 		id: "last-login-method",
-		endpoints: (opts.storage === "cookie"
-			? { lastUsedLoginMethod }
-			: {}) as Storage extends "cookie"
-			? { lastUsedLoginMethod: typeof lastUsedLoginMethod }
-			: {},
+		endpoints: { lastUsedLoginMethod },
 		hooks: {
 			after: [
 				makeSignInHook("/callback/:id", (ctx) => {
@@ -136,5 +112,5 @@ export const lastLoginMethod = <Storage extends "cookie" | "local-storage">(
 				makeSignInHook("/siwe/verify", "siwe"),
 			],
 		},
-	} satisfies LastLoginMethodPlugin<Storage>;
+	} satisfies BetterAuthPlugin;
 };

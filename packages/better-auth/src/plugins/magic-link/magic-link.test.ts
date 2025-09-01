@@ -26,12 +26,12 @@ describe("magic link", async () => {
 						verificationEmail = data;
 					},
 				}),
-				lastLoginMethod({ storage: "cookie" }),
+				lastLoginMethod(),
 			],
 		});
 
 	const client = createAuthClient({
-		plugins: [magicLinkClient(), lastLoginMethodClient({ storage: "cookie" })],
+		plugins: [magicLinkClient(), lastLoginMethodClient()],
 		fetchOptions: {
 			customFetchImpl,
 		},

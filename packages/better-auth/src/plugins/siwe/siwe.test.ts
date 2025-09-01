@@ -353,12 +353,12 @@ describe("siwe", async (it) => {
 							);
 						},
 					}),
-					lastLoginMethod({ storage: "cookie" }),
+					lastLoginMethod(),
 				],
 			},
 			{
 				clientOptions: {
-					plugins: [siweClient(), lastLoginMethodClient({ storage: "cookie" })],
+					plugins: [siweClient(), lastLoginMethodClient()],
 				},
 			},
 		);

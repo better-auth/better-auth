@@ -1,49 +1,28 @@
 import {
-	LAST_USED_LOGIN_METHOD_HEADER,
+	lastLoginMethod,
 	type LastLoginMethodClientOptions,
-	type LastLoginMethodPlugin,
 	type RealizedLastLoginMethodClientOptions,
 } from ".";
+import { parseCookies } from "../../cookies";
 import type { BetterAuthClientPlugin } from "../../types";
 
-export const lastLoginMethodClient = <
-	Storage extends "cookie" | "local-storage" = "local-storage",
->(
-	options?: LastLoginMethodClientOptions<Storage>,
+export const lastLoginMethodClient = (
+	options?: LastLoginMethodClientOptions,
 ) => {
-	const opts: RealizedLastLoginMethodClientOptions<Storage> = {
-		storage: options?.storage ?? ("local-storage" as Storage),
-		key: options?.key ?? "better-auth.last_used_login_method",
+	const opts: RealizedLastLoginMethodClientOptions = {
+		cookieName: options?.cookieName ?? "better-auth.last_used_login_method",
 	};
 
 	return {
 		id: "last-login-method",
-		$InferServerPlugin: {} as LastLoginMethodPlugin<Storage>,
+		$InferServerPlugin: {} as ReturnType<typeof lastLoginMethod>,
 
 		getActions: () => ({
 			getLastUsedLoginMethod: async () => {
-				const key = localStorage.getItem(opts.key) ?? null;
-				return key;
+				const cookies = parseCookies(document.cookie);
+				const lastUsedLoginMethod = cookies.get(opts.cookieName);
+				return lastUsedLoginMethod;
 			},
 		}),
-
-		fetchPlugins: [
-			{
-				id: "last-login-method-hook",
-				name: "last-login-method-hook",
-				hooks:
-					opts.storage === "local-storage"
-						? {
-								onResponse(context) {
-									const lastUsedLoginMethod = context.response.headers.get(
-										LAST_USED_LOGIN_METHOD_HEADER,
-									);
-									if (!lastUsedLoginMethod) return;
-									localStorage.setItem(opts.key, lastUsedLoginMethod);
-								},
-							}
-						: undefined,
-			},
-		],
 	} satisfies BetterAuthClientPlugin;
 };

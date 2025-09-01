@@ -40,21 +40,12 @@ The Last Login Method plugin stores the most recent login method a user used (e.
 
 ## Usage
 
-### `lastUsedLoginMethod`
+### `getLastUsedLoginMethod`
 
-An endpoint to retrieve the last method a user used to sign in. This can an only be used when the storage value is set to `cookie`.
-
-<APIMethod path="/last-used-login-method" method="GET">
-```ts
-type lastUsedLoginMethod = {
-}
-```
-</APIMethod>
-
-This endpoint returns the login method string or `null` if no method has been stored.
+Get the last used login method.
 
 ```ts title="auth.ts"
-const lastLoginMethod = await authClient.lastUsedLoginMethod(); // [!code highlight]
+const lastLoginMethod = await authClient.getLastUsedLoginMethod(); // [!code highlight]
 
 if (lastLoginMethod) {
   console.log("Last login method:", lastLoginMethod)
@@ -64,22 +55,6 @@ if (lastLoginMethod) {
 ```
 
 ## Options
-
-### `storage`
-
-Choose where the last login method is stored: `"cookie"` or `"local-storage"`.
-Default is `"local-storage"`
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { lastLoginMethod  } from "better-auth/plugins"
-
-const auth = betterAuth({
-  plugins: [
-    lastLoginMethod({ storage: "cookie" })
-  ]
-})
-```
 
 ### `cookieName`
 
@@ -119,27 +94,9 @@ const auth = betterAuth({
 
 ## Client Options
 
-### `storage`
+### `cookie`
 
-The storage option you configured in your auth config.
-Default: `"local-storage"`
-
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-import { lastLoginMethodClient } from "better-auth/client/plugins"
-
-export const authClient = createAuthClient({
-  plugins: [
-    lastLoginMethodClient({
-      storage: "cookie" // [!code highlight]
-    })
-  ]
-})
-```
-
-### `key`
-
-The `localStorage` key used to store the last login method.
+The cookie name configured in the auth config.
 Default is `"better-auth.last_used_login_method"`.
 
 ```ts title="auth-client.ts"
@@ -149,7 +106,7 @@ import { lastLoginMethodClient } from "better-auth/client/plugins"
 export const authClient = createAuthClient({
   plugins: [
     lastLoginMethodClient({
-      key: "better-auth.last_used_login_method" // [!code highlight]
+      cookie: "better-auth.last_used_login_method" // [!code highlight]
     })
   ]
 })

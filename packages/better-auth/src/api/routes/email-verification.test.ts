@@ -80,11 +80,11 @@ describe("Email Verification", async () => {
 						},
 						autoSignInAfterVerification: true,
 					},
-					plugins: [lastLoginMethod({ storage: "cookie" })],
+					plugins: [lastLoginMethod()],
 				},
 				{
 					clientOptions: {
-						plugins: [lastLoginMethodClient({ storage: "cookie" })],
+						plugins: [lastLoginMethodClient()],
 					},
 				},
 			);
