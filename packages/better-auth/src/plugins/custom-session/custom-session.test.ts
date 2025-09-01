@@ -88,7 +88,7 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 		console.log(cachedData);
 		expect((cachedData as any)?.newData).toEqual({ message: "Hello, World!" });
-  });
+	});
 
 	it("should not create memory leaks with multiple plugin instances", async () => {
 		const initialMemory = process.memoryUsage();
