@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
@@ -11,11 +11,10 @@ import type { OrganizationOptions } from "./types";
 import type { PrettifyDeep } from "../../types/helper";
 import type { InvitationStatus } from "./schema";
 import { admin } from "../admin";
-import { ownerAc } from "./access";
+import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { nextCookies } from "../../integrations/next-js";
 
 describe("organization", async (it) => {
-	const onInvitationAccepted = vi.fn();
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
 			user: {
@@ -37,7 +36,6 @@ describe("organization", async (it) => {
 						},
 					},
 					invitationLimit: 3,
-					onInvitationAccepted,
 				}),
 			],
 			logger: {
@@ -295,94 +293,7 @@ describe("organization", async (it) => {
 			organizationId,
 		);
 	});
-	it("should call onInvitationAccepted callback when invitation is accepted", async () => {
-		onInvitationAccepted.mockClear();
 
-		const testOrg = await client.organization.create({
-			name: "Test Org for Callback",
-			slug: `test-org-callback-${Math.random().toString(36).substring(7)}`,
-			metadata: {
-				test: "test",
-			},
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		if (!testOrg.data) {
-			throw new Error("Failed to create test organization");
-		}
-
-		const uniqueId = Math.random().toString(36).substring(7);
-		const newUser = {
-			email: `test-accept-${uniqueId}@example.com`,
-			password: "password123",
-			name: "Test Accept User",
-		};
-
-		await client.signUp.email({
-			email: newUser.email,
-			password: newUser.password,
-			name: newUser.name,
-		});
-
-		const { headers: newUserHeaders } = await signInWithUser(
-			newUser.email,
-			newUser.password,
-		);
-
-		const invite = await client.organization.inviteMember({
-			organizationId: testOrg.data.id,
-			email: newUser.email,
-			role: "member",
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		if (!invite.data) {
-			console.error("Invitation creation failed:", invite);
-			throw new Error("Invitation not created");
-		}
-		expect(invite.data.role).toBe("member");
-
-		const accept = await client.organization.acceptInvitation({
-			invitationId: invite.data.id,
-			fetchOptions: {
-				headers: newUserHeaders,
-			},
-		});
-
-		expect(accept.data?.invitation.status).toBe("accepted");
-
-		expect(onInvitationAccepted).toHaveBeenCalledTimes(1);
-		expect(onInvitationAccepted).toHaveBeenCalledWith(
-			expect.objectContaining({
-				id: invite.data.id,
-				role: "member",
-				organization: expect.objectContaining({
-					id: testOrg.data.id,
-					name: "Test Org for Callback",
-				}),
-				invitation: expect.objectContaining({
-					id: invite.data.id,
-					status: expect.any(String),
-				}),
-				inviter: expect.objectContaining({
-					user: expect.objectContaining({
-						email: expect.any(String),
-						name: expect.any(String),
-					}),
-				}),
-				acceptedUser: expect.objectContaining({
-					id: expect.any(String),
-					email: newUser.email,
-					name: newUser.name,
-				}),
-			}),
-			expect.any(Object),
-		);
-	});
 	it("should create invitation with multiple roles", async () => {
 		const invite = await client.organization.inviteMember({
 			organizationId: organizationId,
@@ -1099,18 +1010,22 @@ describe("access control", async (it) => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
+		...defaultStatements,
 	});
 	const owner = ac.newRole({
 		project: ["create", "delete", "update", "read"],
 		sales: ["create", "read", "update", "delete"],
+		...ownerAc.statements,
 	});
 	const admin = ac.newRole({
 		project: ["create", "read"],
 		sales: ["create", "read"],
+		...adminAc.statements,
 	});
 	const member = ac.newRole({
 		project: ["read"],
 		sales: ["read"],
+		...memberAc.statements,
 	});
 	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
 		await getTestInstance({
@@ -1122,13 +1037,14 @@ describe("access control", async (it) => {
 						member,
 						owner,
 					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
 				}),
 			],
 		});
 
-	const {
-		organization: { checkRolePermission, hasPermission, create },
-	} = createAuthClient({
+	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
 		plugins: [
 			organizationClient({
@@ -1138,14 +1054,20 @@ describe("access control", async (it) => {
 					member,
 					owner,
 				},
+				dynamicAccessControl: {
+					enabled: true,
+				},
 			}),
 		],
 		fetchOptions: {
 			customFetchImpl,
 		},
 	});
+	const {
+		organization: { checkRolePermission, hasPermission, create },
+	} = authClient;
 
-	const { headers } = await signInWithTestUser();
+	const { headers, user, session } = await signInWithTestUser();
 
 	const org = await create(
 		{
@@ -1160,9 +1082,10 @@ describe("access control", async (it) => {
 			headers,
 		},
 	);
+	if (!org.data) throw new Error("Organization not created");
 
 	it("should return success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["create"],
@@ -1171,7 +1094,7 @@ describe("access control", async (it) => {
 		expect(canCreateProject).toBe(true);
 
 		// To be removed when `permission` will be removed entirely
-		const canCreateProjectLegacy = checkRolePermission({
+		const canCreateProjectLegacy = await checkRolePermission({
 			role: "admin",
 			permission: {
 				project: ["create"],
@@ -1191,7 +1114,7 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["delete"],
@@ -1201,7 +1124,7 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		const res = checkRolePermission({
+		const res = await checkRolePermission({
 			role: "admin",
 			permissions: {
 				project: ["read"],
@@ -1994,5 +1917,81 @@ describe("Additional Fields", async () => {
 		expect(row).toBeDefined();
 		expect(row.teamOptionalField).toBe("hey3");
 		expect(row.teamRequiredField).toBe("hey4");
+	});
+});
+
+describe("organization hooks", async (it) => {
+	let hooksCalled: string[] = [];
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				organizationHooks: {
+					beforeCreateOrganization: async (data) => {
+						hooksCalled.push("beforeCreateOrganization");
+						return {
+							data: {
+								...data.organization,
+								metadata: { hookCalled: true },
+							},
+						};
+					},
+					afterCreateOrganization: async (data) => {
+						hooksCalled.push("afterCreateOrganization");
+					},
+					beforeCreateInvitation: async (data) => {
+						hooksCalled.push("beforeCreateInvitation");
+					},
+					afterCreateInvitation: async (data) => {
+						hooksCalled.push("afterCreateInvitation");
+					},
+					beforeAddMember: async (data) => {
+						hooksCalled.push("beforeAddMember");
+					},
+					afterAddMember: async (data) => {
+						hooksCalled.push("afterAddMember");
+					},
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("should call organization creation hooks", async () => {
+		hooksCalled = [];
+		const organization = await client.organization.create({
+			name: "Test Org with Hooks",
+			slug: "test-org-hooks",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateOrganization");
+		expect(hooksCalled).toContain("afterCreateOrganization");
+		expect(organization.data?.metadata).toEqual({ hookCalled: true });
+	});
+
+	it("should call invitation hooks", async () => {
+		hooksCalled = [];
+
+		await client.organization.inviteMember({
+			email: "test@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(hooksCalled).toContain("beforeCreateInvitation");
+		expect(hooksCalled).toContain("afterCreateInvitation");
 	});
 });

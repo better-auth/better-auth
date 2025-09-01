@@ -2,6 +2,7 @@ import * as z from "zod/v4";
 import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
+import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { figma } from "./figma";
@@ -33,6 +34,7 @@ import { paypal } from "./paypal";
 export const socialProviders = {
 	apple,
 	atlassian,
+	cognito,
 	discord,
 	facebook,
 	figma,
@@ -83,6 +85,7 @@ export type SocialProviders = {
 
 export * from "./apple";
 export * from "./atlassian";
+export * from "./cognito";
 export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
