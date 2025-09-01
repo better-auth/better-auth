@@ -30,7 +30,7 @@ describe("lastLoginMethod", async () => {
 			},
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
-		expect(cookies.get("last_used_login_method")).toBe("email");
+		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
 	});
 
 	it("should set the last login method in the database", async () => {
