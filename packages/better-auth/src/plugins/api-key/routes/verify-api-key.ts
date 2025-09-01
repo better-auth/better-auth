@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -48,7 +48,7 @@ export async function validateApiKey({
 
 	if (apiKey.expiresAt) {
 		const now = new Date().getTime();
-		const expiresAt = apiKey.expiresAt.getTime();
+		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
 				ctx.context.adapter.delete({
@@ -116,7 +116,7 @@ export async function validateApiKey({
 			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 		}
 
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("TOO_MANY_REQUESTS", {
 			message: ERROR_CODES.USAGE_EXCEEDED,
 			code: "USAGE_EXCEEDED" as const,
 		});
@@ -124,7 +124,7 @@ export async function validateApiKey({
 		let now = new Date().getTime();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
-		let lastTime = (lastRefillAt ?? apiKey.createdAt).getTime();
+		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
 
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
@@ -138,8 +138,7 @@ export async function validateApiKey({
 
 		if (remaining === 0) {
 			// if there are no more remaining requests, than the key is invalid
-
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("TOO_MANY_REQUESTS", {
 				message: ERROR_CODES.USAGE_EXCEEDED,
 				code: "USAGE_EXCEEDED" as const,
 			});
@@ -202,10 +201,15 @@ export function verifyApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				key: z.string({
+				key: z.string().meta({
 					description: "The key to verify",
 				}),
-				permissions: z.record(z.string(), z.array(z.string())).optional(),
+				permissions: z
+					.record(z.string(), z.array(z.string()))
+					.meta({
+						description: "The permissions to verify.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
@@ -228,18 +232,18 @@ export function verifyApiKey({
 				});
 			}
 
-			if (
-				opts.customAPIKeyValidator &&
-				!opts.customAPIKeyValidator({ ctx, key })
-			) {
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
-				});
+			if (opts.customAPIKeyValidator) {
+				const isValid = await opts.customAPIKeyValidator({ ctx, key });
+				if (!isValid) {
+					return ctx.json({
+						valid: false,
+						error: {
+							message: ERROR_CODES.INVALID_API_KEY,
+							code: "KEY_NOT_FOUND" as const,
+						},
+						key: null,
+					});
+				}
 			}
 
 			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);

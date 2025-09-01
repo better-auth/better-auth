@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { useId } from "react";
 
 import clsx from "clsx";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
@@ -69,7 +68,7 @@ export function Intro() {
 					GitHub
 				</IconLink>
 				<IconLink
-					href="https://discord.com/better-auth"
+					href="https://discord.gg/better-auth"
 					icon={DiscordLogoIcon}
 					className="flex-none text-gray-600 dark:text-gray-300"
 				>
@@ -88,21 +87,6 @@ export function IntroFooter() {
 				BETTER-AUTH.
 			</IconLink>
 		</p>
-	);
-}
-
-export function SignUpForm() {
-	let id = useId();
-
-	return (
-		<form className="relative isolate mt-8 flex items-center pr-1">
-			<label htmlFor={id} className="sr-only">
-				Email address
-			</label>
-
-			<div className="absolute inset-0 -z-10 rounded-lg transition peer-focus:ring-4 peer-focus:ring-sky-300/15" />
-			<div className="absolute inset-0 -z-10 rounded-lg bg-white/2.5 ring-1 ring-white/15 transition peer-focus:ring-sky-300" />
-		</form>
 	);
 }
 

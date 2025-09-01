@@ -30,6 +30,11 @@ if you can't set `strict` to `true`, you can enable `strictNullChecks`:
 }
 ```
 
+<Callout type="warn">
+If you're running into issues with TypeScript inference exceeding maximum length the compiler will serialize,
+then please make sure you're following the instructions above, as well as ensuring that both `declaration` and `composite` are not enabled.
+</Callout>
+
 ## Inferring Types
 
 Both the client SDK and the server offer types that can be inferred using the `$Infer` property. Plugins can extend base types like `User` and `Session`, and you can use `$Infer` to infer these types. Additionally, plugins can provide extra types that can also be inferred through `$Infer`.
@@ -127,7 +132,6 @@ export const authClient = createAuthClient({
 If your client and server are in separate projects, you'll need to manually specify the additional fields when creating the auth client.
 
 ```ts
-import type { auth } from "./auth";
 import { inferAdditionalFields } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({

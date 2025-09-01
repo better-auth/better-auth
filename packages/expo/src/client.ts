@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin, Store } from "better-auth";
+import { BetterAuthClientPlugin, Store } from "better-auth/types";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -20,22 +20,53 @@ export function parseSetCookieHeader(
 	header: string,
 ): Map<string, CookieAttributes> {
 	const cookieMap = new Map<string, CookieAttributes>();
-	const cookies = header.split(", ");
+	const cookies = splitSetCookieHeader(header);
 	cookies.forEach((cookie) => {
-		const [nameValue, ...attributes] = cookie.split("; ");
-		const [name, value] = nameValue.split("=");
-
+		const parts = cookie.split(";").map((p) => p.trim());
+		const [nameValue, ...attributes] = parts;
+		const [name, ...valueParts] = nameValue.split("=");
+		const value = valueParts.join("=");
 		const cookieObj: CookieAttributes = { value };
-
 		attributes.forEach((attr) => {
-			const [attrName, attrValue] = attr.split("=");
+			const [attrName, ...attrValueParts] = attr.split("=");
+			const attrValue = attrValueParts.join("=");
 			cookieObj[attrName.toLowerCase() as "value"] = attrValue;
 		});
-
 		cookieMap.set(name, cookieObj);
 	});
-
 	return cookieMap;
+}
+
+function splitSetCookieHeader(setCookie: string): string[] {
+	const parts: string[] = [];
+	let buffer = "";
+	let i = 0;
+	while (i < setCookie.length) {
+		const char = setCookie[i];
+		if (char === ",") {
+			const recent = buffer.toLowerCase();
+			const hasExpires = recent.includes("expires=");
+			const hasGmt = /gmt/i.test(recent);
+			if (hasExpires && !hasGmt) {
+				buffer += char;
+				i += 1;
+				continue;
+			}
+			if (buffer.trim().length > 0) {
+				parts.push(buffer.trim());
+				buffer = "";
+			}
+			i += 1;
+			if (setCookie[i] === " ") i += 1;
+			continue;
+		}
+		buffer += char;
+		i += 1;
+	}
+	if (buffer.trim().length > 0) {
+		parts.push(buffer.trim());
+	}
+	return parts;
 }
 
 interface ExpoClientOptions {
@@ -50,7 +81,7 @@ interface ExpoClientOptions {
 
 interface StoredCookie {
 	value: string;
-	expires: Date | null;
+	expires: string | null;
 }
 
 export function getSetCookie(header: string, prevCookie?: string) {
@@ -59,14 +90,14 @@ export function getSetCookie(header: string, prevCookie?: string) {
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
-		const expires = expiresAt
-			? new Date(String(expiresAt))
-			: maxAge
-				? new Date(Date.now() + Number(maxAge))
+		const expires = maxAge
+			? new Date(Date.now() + Number(maxAge) * 1000)
+			: expiresAt
+				? new Date(String(expiresAt))
 				: null;
 		toSetCookie[key] = {
 			value: cookie["value"],
-			expires,
+			expires: expires ? expires.toISOString() : null,
 		};
 	});
 	if (prevCookie) {
@@ -89,7 +120,7 @@ export function getCookie(cookie: string) {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
 	} catch (e) {}
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
-		if (value.expires && value.expires < new Date()) {
+		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
 		}
 		return `${acc}; ${key}=${value.value}`;

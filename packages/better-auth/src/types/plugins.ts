@@ -105,7 +105,7 @@ export type BetterAuthPlugin = {
 	/**
 	 * The options of the plugin
 	 */
-	options?: Record<string, any>;
+	options?: Record<string, any> | undefined;
 	/**
 	 * types to be inferred
 	 */

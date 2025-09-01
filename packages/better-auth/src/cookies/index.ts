@@ -119,30 +119,21 @@ export async function setCookieCache(
 		);
 
 		const { session, user, ...customFields } = dataToCache;
+		const sessionData = { session: filteredSession, user: session.user, ...customFields };
+	const expiresAtDate = getDate(
+			ctx.context.authCookies.sessionData.options.maxAge || 60,
+			"sec",
+		).getTime();
 
 		const data = base64Url.encode(
-			JSON.stringify({
-				session: {
-					session: filteredSession,
-					user,
-				},
-				customFields,
-				expiresAt: getDate(
-					ctx.context.authCookies.sessionData.options.maxAge || 60,
-					"sec",
-				).getTime(),
+	JSON.stringify({
+				session: sessionData,
+				expiresAt: expiresAtDate,
 				signature: await createHMAC("SHA-256", "base64urlnopad").sign(
 					ctx.context.secret,
 					JSON.stringify({
-						session: {
-							session: filteredSession,
-							user,
-						},
-						customFields,
-						expiresAt: getDate(
-							ctx.context.authCookies.sessionData.options.maxAge || 60,
-							"sec",
-						).getTime(),
+						...sessionData,
+						expiresAt: expiresAtDate,
 					}),
 				),
 			}),

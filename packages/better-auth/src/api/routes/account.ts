@@ -1,7 +1,12 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
-import { generateState, type OAuth2Tokens } from "../../oauth2";
+import {
+	generateState,
+	decryptOAuthToken,
+	setTokenUtil,
+	type OAuth2Tokens,
+} from "../../oauth2";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -86,6 +91,7 @@ export const listUserAccounts = createAuthEndpoint(
 		);
 	},
 );
+
 export const linkSocialAccount = createAuthEndpoint(
 	"/link-social",
 	{
@@ -96,7 +102,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			 * Callback URL to redirect to after the user has signed in.
 			 */
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to redirect to after the user has signed in",
 				})
 				.optional(),
@@ -126,7 +133,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			 * linking a social account compared to the initial authentication.
 			 */
 			scopes: z
-				.array(z.string(), {
+				.array(z.string())
+				.meta({
 					description: "Additional scopes to request from the provider",
 				})
 				.optional(),
@@ -134,9 +142,23 @@ export const linkSocialAccount = createAuthEndpoint(
 			 * The URL to redirect to if there is an error during the link process.
 			 */
 			errorCallbackURL: z
-				.string({
+				.string()
+				.meta({
 					description:
 						"The URL to redirect to if there is an error during the link process",
+				})
+				.optional(),
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z
+				.boolean()
+				.meta({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
 		}),
@@ -234,6 +256,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
+			const linkingUserId = String(linkingUserInfo.user.id);
+
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
@@ -248,15 +272,14 @@ export const linkSocialAccount = createAuthEndpoint(
 			);
 
 			const hasBeenLinked = existingAccounts.find(
-				(a) =>
-					a.providerId === provider.id &&
-					a.accountId === linkingUserInfo.user.id,
+				(a) => a.providerId === provider.id && a.accountId === linkingUserId,
 			);
 
 			if (hasBeenLinked) {
 				return c.json({
-					redirect: false,
+					url: "", // this is for type inference
 					status: true,
+					redirect: false,
 				});
 			}
 
@@ -287,7 +310,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					{
 						userId: session.user.id,
 						providerId: provider.id,
-						accountId: linkingUserInfo.user.id.toString(),
+						accountId: linkingUserId,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 						refreshToken: c.body.idToken.refreshToken,
@@ -315,8 +338,9 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			return c.json({
-				redirect: false,
+				url: "", // this is for type inference
 				status: true,
+				redirect: false,
 			});
 		}
 
@@ -335,7 +359,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );
@@ -406,16 +430,18 @@ export const getAccessToken = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			providerId: z.string({
+			providerId: z.string().meta({
 				description: "The provider ID for the OAuth provider",
 			}),
 			accountId: z
-				.string({
+				.string()
+				.meta({
 					description: "The account ID associated with the refresh token",
 				})
 				.optional(),
 			userId: z
-				.string({
+				.string()
+				.meta({
 					description: "The user ID associated with the account",
 				})
 				.optional(),
@@ -504,34 +530,36 @@ export const getAccessToken = createAuthEndpoint(
 
 		try {
 			let newTokens: OAuth2Tokens | null = null;
-
+			const accessTokenExpired =
+				account.accessTokenExpiresAt &&
+				new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000;
 			if (
 				account.refreshToken &&
-				(!account.accessTokenExpiresAt ||
-					account.accessTokenExpiresAt.getTime() - Date.now() < 5_000) &&
+				accessTokenExpired &&
 				provider.refreshAccessToken
 			) {
 				newTokens = await provider.refreshAccessToken(
 					account.refreshToken as string,
 				);
 				await ctx.context.internalAdapter.updateAccount(account.id, {
-					accessToken: newTokens.accessToken,
+					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
 					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
-					refreshToken: newTokens.refreshToken,
+					refreshToken: await setTokenUtil(newTokens.refreshToken, ctx.context),
 					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
 				});
 			}
-
 			const tokens = {
-				accessToken: newTokens?.accessToken ?? account.accessToken ?? undefined,
+				accessToken: await decryptOAuthToken(
+					newTokens?.accessToken ?? account.accessToken ?? "",
+					ctx.context,
+				),
 				accessTokenExpiresAt:
 					newTokens?.accessTokenExpiresAt ??
 					account.accessTokenExpiresAt ??
 					undefined,
 				scopes: account.scope?.split(",") ?? [],
 				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
-			} satisfies OAuth2Tokens;
-
+			};
 			return ctx.json(tokens);
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
@@ -547,16 +575,18 @@ export const refreshToken = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			providerId: z.string({
+			providerId: z.string().meta({
 				description: "The provider ID for the OAuth provider",
 			}),
 			accountId: z
-				.string({
+				.string()
+				.meta({
 					description: "The account ID associated with the refresh token",
 				})
 				.optional(),
 			userId: z
-				.string({
+				.string()
+				.meta({
 					description: "The user ID associated with the account",
 				})
 				.optional(),
@@ -617,11 +647,6 @@ export const refreshToken = createAuthEndpoint(
 				message: `Either userId or session is required`,
 			});
 		}
-		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} is not supported.`,
-			});
-		}
 		const accounts =
 			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
 		const account = accounts.find((acc) =>
@@ -652,9 +677,9 @@ export const refreshToken = createAuthEndpoint(
 				account.refreshToken as string,
 			);
 			await ctx.context.internalAdapter.updateAccount(account.id, {
-				accessToken: tokens.accessToken,
+				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+				refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshToken: tokens.refreshToken,
 				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
 			return ctx.json(tokens);
@@ -720,7 +745,7 @@ export const accountInfo = createAuthEndpoint(
 			},
 		},
 		body: z.object({
-			accountId: z.string({
+			accountId: z.string().meta({
 				description:
 					"The provider given account id for which to get the account info",
 			}),
@@ -746,7 +771,6 @@ export const accountInfo = createAuthEndpoint(
 				message: `Provider account provider is ${account.providerId} but it is not configured`,
 			});
 		}
-
 		const tokens = await getAccessToken({
 			...ctx,
 			body: {
@@ -755,9 +779,15 @@ export const accountInfo = createAuthEndpoint(
 			},
 			returnHeaders: false,
 		});
-
-		const info = await provider.getUserInfo(tokens);
-
+		if (!tokens.accessToken) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Access token not found",
+			});
+		}
+		const info = await provider.getUserInfo({
+			...tokens,
+			accessToken: tokens.accessToken as string,
+		});
 		return ctx.json(info);
 	},
 );

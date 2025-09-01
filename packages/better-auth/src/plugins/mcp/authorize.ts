@@ -125,10 +125,7 @@ export async function authorizeMCPOAuth(
 	const requestScope =
 		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
 	const invalidScopes = requestScope.filter((scope) => {
-		const isInvalid =
-			!opts.scopes.includes(scope) ||
-			(scope === "offline_access" && query.prompt !== "consent");
-		return isInvalid;
+		return !opts.scopes.includes(scope);
 	});
 	if (invalidScopes.length) {
 		throw ctx.redirect(
@@ -186,7 +183,7 @@ export async function authorizeMCPOAuth(
 					redirectURI: query.redirect_uri,
 					scope: requestScope,
 					userId: session.user.id,
-					authTime: session.session.createdAt.getTime(),
+					authTime: new Date(session.session.createdAt).getTime(),
 					/**
 					 * If the prompt is set to `consent`, then we need
 					 * to require the user to consent to the scopes.
