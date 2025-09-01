@@ -10,7 +10,8 @@ import { toZodSchema, type FieldAttribute } from "../../../db";
 
 export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 	const additionalFieldsSchema = toZodSchema({
-		fields: (options?.schema?.workspaceMember?.additionalFields || {}) as Record<string, FieldAttribute>,
+		fields: (options?.schema?.workspaceMember?.additionalFields ||
+			{}) as Record<string, FieldAttribute>,
 		isClientSide: true,
 	});
 
@@ -102,10 +103,10 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 
 			// Run beforeAddWorkspaceMember hook
 			if (options?.workspaceHooks?.beforeAddWorkspaceMember) {
-				const user = await orgAdapter.findOne({
+				const user = (await orgAdapter.findOne({
 					model: "user",
 					where: [{ field: "id", value: ctx.body.userId }],
-				}) as any;
+				})) as any;
 
 				const response = await options.workspaceHooks.beforeAddWorkspaceMember({
 					member: memberData,
@@ -122,10 +123,10 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 
 			// Run afterAddWorkspaceMember hook
 			if (options?.workspaceHooks?.afterAddWorkspaceMember) {
-				const user = await orgAdapter.findOne({
+				const user = (await orgAdapter.findOne({
 					model: "user",
 					where: [{ field: "id", value: ctx.body.userId }],
-				}) as any;
+				})) as any;
 
 				await options.workspaceHooks.afterAddWorkspaceMember({
 					member,
@@ -219,10 +220,10 @@ export const removeWorkspaceMember = <O extends WorkspaceOptions>(
 			// Run beforeRemoveWorkspaceMember hook
 			if (options?.workspaceHooks?.beforeRemoveWorkspaceMember) {
 				const orgAdapter = ctx.context.adapter;
-				const user = await orgAdapter.findOne({
+				const user = (await orgAdapter.findOne({
 					model: "user",
 					where: [{ field: "id", value: ctx.body.userId }],
-				}) as any;
+				})) as any;
 
 				await options.workspaceHooks.beforeRemoveWorkspaceMember({
 					member: memberToRemove,
@@ -236,10 +237,10 @@ export const removeWorkspaceMember = <O extends WorkspaceOptions>(
 			// Run afterRemoveWorkspaceMember hook
 			if (options?.workspaceHooks?.afterRemoveWorkspaceMember) {
 				const orgAdapter = ctx.context.adapter;
-				const user = await orgAdapter.findOne({
+				const user = (await orgAdapter.findOne({
 					model: "user",
 					where: [{ field: "id", value: ctx.body.userId }],
-				}) as any;
+				})) as any;
 
 				await options.workspaceHooks.afterRemoveWorkspaceMember({
 					member: memberToRemove,

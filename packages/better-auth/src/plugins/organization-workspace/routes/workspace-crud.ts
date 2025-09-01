@@ -90,8 +90,7 @@ export const createWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 
 			// Get organizationId from body or active organization in session
 			const organizationId =
-				ctx.body.organizationId ||
-				session.session.activeOrganizationId;
+				ctx.body.organizationId || session.session.activeOrganizationId;
 
 			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
@@ -248,7 +247,10 @@ export const getWorkspace = <O extends WorkspaceOptions>(options?: O) =>
 
 export const updateWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 	const additionalFieldsSchema = toZodSchema({
-		fields: (options?.schema?.workspace?.additionalFields || {}) as Record<string, FieldAttribute>,
+		fields: (options?.schema?.workspace?.additionalFields || {}) as Record<
+			string,
+			FieldAttribute
+		>,
 		isClientSide: true,
 	});
 

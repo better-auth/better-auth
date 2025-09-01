@@ -12,7 +12,8 @@ export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 	options?: O,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
-		fields: (options?.schema?.workspaceTeamMember?.additionalFields || {}) as Record<string, FieldAttribute>,
+		fields: (options?.schema?.workspaceTeamMember?.additionalFields ||
+			{}) as Record<string, FieldAttribute>,
 		isClientSide: true,
 	});
 
@@ -69,13 +70,13 @@ export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 
 			// Check if team exists and is part of the same organization
 			const orgAdapter = ctx.context.adapter;
-			const team = await orgAdapter.findOne({
+			const team = (await orgAdapter.findOne({
 				model: "team",
 				where: [
 					{ field: "id", value: ctx.body.teamId },
 					{ field: "organizationId", value: workspace.organizationId },
 				],
-			}) as any;
+			})) as any;
 
 			if (!team) {
 				throw new APIError("BAD_REQUEST", {
@@ -202,10 +203,10 @@ export const removeWorkspaceTeamMember = <O extends WorkspaceOptions>(
 
 			// Get team for hooks
 			const orgAdapter = ctx.context.adapter;
-			const team = await orgAdapter.findOne({
+			const team = (await orgAdapter.findOne({
 				model: "team",
 				where: [{ field: "id", value: ctx.body.teamId }],
-			}) as any;
+			})) as any;
 
 			// Run beforeRemoveWorkspaceTeamMember hook
 			if (options?.workspaceHooks?.beforeRemoveWorkspaceTeamMember) {
@@ -358,10 +359,10 @@ export const listWorkspaceTeamMembers = <O extends WorkspaceOptions>(
 			const teamMembersWithDetails = await Promise.all(
 				teamMembers.map(
 					async (teamMember: { teamId: string; [key: string]: unknown }) => {
-						const team = await orgAdapter.findOne({
+						const team = (await orgAdapter.findOne({
 							model: "team",
 							where: [{ field: "id", value: teamMember.teamId }],
-						}) as any;
+						})) as any;
 						return {
 							...teamMember,
 							team,
