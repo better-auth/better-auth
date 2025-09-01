@@ -336,7 +336,6 @@ describe("dynamic access control", async (it) => {
 		expect(testRole2.error.message).toEqual("That role name is already taken.");
 	});
 
-
 	it("should delete a role by id", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
