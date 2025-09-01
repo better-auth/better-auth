@@ -497,6 +497,8 @@ describe("dynamic access control", async (it) => {
 		expect(res).not.toBeNull();
 		expect(res.role).toBe(testRole.data.roleData.role);
 		expect(res.permission).toEqual(testRole.data.roleData.permission);
+		expect(res.color).toBe("#000000");
+		expectTypeOf(res.color).toEqualTypeOf<string>();
 	});
 
 	it("should get a role by name", async () => {
@@ -527,6 +529,8 @@ describe("dynamic access control", async (it) => {
 		expect(res).not.toBeNull();
 		expect(res.role).toBe(testRole.data.roleData.role);
 		expect(res.permission).toEqual(testRole.data.roleData.permission);
+		expect(res.color).toBe("#000000");
+		expectTypeOf(res.color).toEqualTypeOf<string>();
 	});
 
 	// .----------------------------------------.
