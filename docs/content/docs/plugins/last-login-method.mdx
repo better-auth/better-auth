@@ -230,7 +230,7 @@ export const auth = betterAuth({
     plugins: [
         lastLoginMethod({
             // Cookie configuration
-            cookieName: "last_used_login_method", // Default: "last_used_login_method"
+            cookieName: "better-auth.last_used_login_method", // Default: "better-auth.last_used_login_method"
             maxAge: 60 * 60 * 24 * 30, // Default: 30 days in seconds
             
             // Database persistence
@@ -259,7 +259,7 @@ export const auth = betterAuth({
 
 **cookieName**: `string`
 - The name of the cookie used to store the last login method
-- Default: `"last_used_login_method"`
+- Default: `"better-auth.last_used_login_method"`
 
 **maxAge**: `number`  
 - Cookie expiration time in seconds
@@ -288,7 +288,7 @@ import { lastLoginMethodClient } from "better-auth/client/plugins"
 export const authClient = createAuthClient({
     plugins: [
         lastLoginMethodClient({
-            cookieName: "last_used_login_method" // Default: "last_used_login_method"
+            cookieName: "better-auth.last_used_login_method" // Default: "better-auth.last_used_login_method"
         })
     ]
 })
@@ -297,7 +297,7 @@ export const authClient = createAuthClient({
 **cookieName**: `string`
 - The name of the cookie to read the last login method from
 - Must match the server-side `cookieName` configuration
-- Default: `"last_used_login_method"`
+- Default: `"better-auth.last_used_login_method"`
 
 ### Default Method Resolution
 

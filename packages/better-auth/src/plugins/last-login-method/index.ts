@@ -50,7 +50,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		"/sign-up/email",
 	];
 	const config = {
-		cookieName: "last_used_login_method",
+		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
 		customResolveMethod: (ctx) => {
 			if (paths.includes(ctx.path)) {
