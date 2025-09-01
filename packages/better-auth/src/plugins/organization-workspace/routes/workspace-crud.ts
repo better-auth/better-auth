@@ -91,7 +91,7 @@ export const createWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 			// Get organizationId from body or active organization in session
 			const organizationId =
 				ctx.body.organizationId ||
-				(session as { activeOrganizationId?: string }).activeOrganizationId;
+				session.session.activeOrganizationId;
 
 			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {

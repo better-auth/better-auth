@@ -2046,4 +2046,66 @@ describe("Workspace Additional Fields", async (it) => {
 			features: ["new-feature"],
 		});
 	});
+
+	it("should handle session with active organization correctly (regression test)", async () => {
+		// This test prevents regression of the session handling bug where
+		// workspace operations incorrectly accessed session.activeOrganizationId
+		// instead of session.session.activeOrganizationId
+
+		// Create organization first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Session Test Org",
+				slug: "session-test-org",
+			},
+			headers,
+		});
+
+		// Set the organization as active to establish proper session state
+		await auth.api.setActiveOrganization({
+			body: {
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		// This should work without throwing "Active organization required" error
+		// The bug was that createWorkspace was reading from the wrong session property
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Session Test Workspace",
+				description: "Testing session handling",
+				// Don't provide organizationId explicitly to test active org fallback
+			},
+			headers,
+		});
+
+		expect(workspace).toBeDefined();
+		expect(workspace?.name).toBe("Session Test Workspace");
+		expect(workspace?.organizationId).toBe(org!.id);
+
+		// Verify other workspace operations also work with the session
+		const retrievedWorkspace = await auth.api.getWorkspace({
+			query: {
+				workspaceId: workspace!.id,
+			},
+			headers,
+		});
+
+		expect(retrievedWorkspace).toBeDefined();
+		expect(retrievedWorkspace?.id).toBe(workspace!.id);
+
+		// Test update operation with session
+		const updatedWorkspace = await auth.api.updateWorkspace({
+			body: {
+				workspaceId: workspace!.id,
+				data: {
+					description: "Updated via session",
+				},
+			},
+			headers,
+		});
+
+		expect(updatedWorkspace?.description).toBe("Updated via session");
+	});
 });
