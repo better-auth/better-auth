@@ -52,7 +52,7 @@
   "devDependencies": {
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^11.6.0",
+    "better-sqlite3": "^12.2.0",
     "expo-constants": "~17.0.8",
     "expo-crypto": "^13.0.2",
     "expo-linking": "~7.0.5",

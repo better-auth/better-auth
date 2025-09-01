@@ -47,7 +47,7 @@
     "@types/better-sqlite3": "^7.6.12",
     "@types/prompts": "^2.4.9",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^11.6.0",
+    "better-sqlite3": "^12.2.0",
     "c12": "^3.2.0",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
@@ -61,7 +61,7 @@
     "semver": "^7.7.1",
     "tinyexec": "^0.3.1",
     "yocto-spinner": "^0.1.1",
-    "zod": "^4.0.0"
+    "zod": "^4.1.5"
   },
   "files": [
     "dist"

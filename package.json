@@ -34,17 +34,8 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "pnpm": {
-    "overrides": {
-      "mdast-util-frontmatter": "2.0.1",
-      "remark-mdx": "3.0.0",
-      "remark-parse": "11.0.0",
-      "unified": "11.0.4",
-      "whatwg-url": "^14.0.0",
-      "miniflare>zod": "^3"
-    }
-  },
   "resolutions": {
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "miniflare>zod": "^3.25.1"
   }
 }
