@@ -42,7 +42,7 @@ The Last Login Method plugin stores the most recent login method a user used (e.
 
 ### `lastUsedLoginMethod`
 
-An endpoint to retrieve the last method a user used to sign in.
+An endpoint to retrieve the last method a user used to sign in. This can an only be used when the storage value is set to `cookie`.
 
 <APIMethod path="/last-used-login-method" method="GET">
 ```ts
@@ -65,9 +65,26 @@ if (lastLoginMethod) {
 
 ## Options
 
+### `storage`
+
+Choose where the last login method is stored: `"cookie"` or `"local-storage"`.
+Default is `"local-storage"`
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod  } from "better-auth/plugins"
+
+const auth = betterAuth({
+  plugins: [
+    lastLoginMethod({ storage: "cookie" })
+  ]
+})
+```
+
 ### `cookieName`
 
-The name of the cookie used to store the last used login method. Default is `better-auth.last_used_login_method`.
+The name of the cookie used to store the last used login method.
+Default is `better-auth.last_used_login_method`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -84,7 +101,8 @@ const auth = betterAuth({
 
 ### `maxAge`
 
-The duration (in seconds) that the cookie remains valid. Default is `432000 (5 days)`.
+The duration (in seconds) that the cookie remains valid.
+Default is `432000 (5 days)`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -94,6 +112,44 @@ const auth = betterAuth({
   plugins: [
     lastLoginMethod({
       maxAge: 60 * 60 * 24 * 30 // 30 days // [!code highlight]
+    })
+  ]
+})
+```
+
+## Client Options
+
+### `storage`
+
+The storage option you configured in your auth config.
+Default: `"local-storage"`
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { lastLoginMethodClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+  plugins: [
+    lastLoginMethodClient({
+      storage: "cookie" // [!code highlight]
+    })
+  ]
+})
+```
+
+### `key`
+
+The `localStorage` key used to store the last login method.
+Default is `"better-auth.last_used_login_method"`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { lastLoginMethodClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+  plugins: [
+    lastLoginMethodClient({
+      key: "better-auth.last_used_login_method" // [!code highlight]
     })
   ]
 })
