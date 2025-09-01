@@ -327,7 +327,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			slug?: string;
 			logo?: string;
 			metadata?: Record<string, any>;
-		} & InferAdditionalFieldsFromPluginOptions<"organization", O>;
+		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
 		organizationId: string;
 	};
 	return createAuthEndpoint(
