@@ -6,7 +6,7 @@ import type { BetterAuthClientPlugin } from "../../types";
 export interface LastLoginMethodClientConfig {
 	/**
 	 * Name of the cookie to read the last login method from
-	 * @default "last_used_login_method"
+	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string;
 }
@@ -29,7 +29,7 @@ function getCookieValue(name: string): string | null {
 export const lastLoginMethodClient = (
 	config: LastLoginMethodClientConfig = {},
 ) => {
-	const cookieName = config.cookieName || "last_used_login_method";
+	const cookieName = config.cookieName || "better-auth.last_used_login_method";
 
 	return {
 		id: "last-login-method-client",

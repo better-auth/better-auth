@@ -7,7 +7,7 @@ import type { GenericEndpointContext } from "../../types";
 export interface LastLoginMethodOptions {
 	/**
 	 * Name of the cookie to store the last login method
-	 * @default "last_used_login_method"
+	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string;
 	/**
