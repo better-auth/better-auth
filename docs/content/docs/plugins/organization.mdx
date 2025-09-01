@@ -62,7 +62,7 @@ export const auth = betterAuth({
 
 ## Usage
 
-Once you've installed the plugin, you can start using the organization plugin to manage your organization's members and teams. The client plugin will provide you methods under the `organization` namespace. And the server `api` will provide you with the necessary endpoints to manage your organization and gives you easier way to call the functions on your own backend.
+Once you've installed the plugin, you can start using the organization plugin to manage your organization's members and teams. The client plugin will provide you with methods under the `organization` namespace, and the server `api` will provide you with the necessary endpoints to manage your organization and give you an easier way to call the functions on your own backend.
 
 ## Organization
 
@@ -91,7 +91,7 @@ type createOrganization = {
   */
   metadata?: Record<string, any>
   /**
-  * The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.
+  * The user ID of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.
   * @serverOnly
   */
   userId?: string = "some_user_id"
@@ -609,7 +609,7 @@ Active organization is the workspace the user is currently working on. By defaul
 You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
 
 <Callout>
-  In some applications, you may want the ability to un-set an active
+  In some applications, you may want the ability to unset an active
   organization. In this case, you can call this endpoint with `organizationId`
   set to `null`.
 </Callout>
@@ -618,7 +618,7 @@ You can set the active organization by calling the `organization.setActive` func
 ```ts
 type setActiveOrganization = {
     /**
-     * The organization id to set as active. It can be null to unset the active organization.  
+     * The organization ID to set as active. It can be null to unset the active organization.  
      */
     organizationId?: string | null = "org-id"
     /**
@@ -727,7 +727,7 @@ By default, if you don't pass any properties, it will use the active organizatio
 ```ts
 type getFullOrganization = {
     /**
-     * The organization id to get. By default, it will use the active organization.  
+     * The organization ID to get. By default, it will use the active organization.  
      */
     organizationId?: string = "org-id"
     /**
@@ -795,7 +795,7 @@ To remove user owned organization, you can use `organization.delete`
 ```ts
 type deleteOrganization = {
     /*
-    * The organization id to delete.
+    * The organization ID to delete.
     */
     organizationId: string = "org-id"
 }
@@ -1030,7 +1030,7 @@ To list all invitations for a given organization you can use the `listInvitation
 ```ts
 type listInvitations = {
     /**
-     * An optional ID of the organization to list invitations for. If not provided, will default to the users active organization. 
+     * An optional ID of the organization to list invitations for. If not provided, will default to the user's active organization. 
      */
     organizationId?: string = "organization-id"
 }
@@ -1177,7 +1177,7 @@ If you want to add a member directly to an organization without sending an invit
 ```ts
 type addMember = {
     /**
-     * The user Id which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers. 
+     * The user ID which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers. 
      */
     userId?: string | null = "user-id"
     /**
@@ -1209,7 +1209,7 @@ To leave organization you can use `organization.leave` function. This function w
 ```ts
 type leaveOrganization = {
     /**
-     * The organization Id for the member to leave. 
+     * The organization ID for the member to leave. 
      */
     organizationId: string = "organization-id"
 }
@@ -1218,7 +1218,7 @@ type leaveOrganization = {
 
 ## Access Control
 
-The organization plugin providers a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
+The organization plugin provides a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
 
 ### Roles
 
@@ -1451,6 +1451,466 @@ const canCreateProjectAndCreateSale =
   });
 ```
 
+<Callout type="warn">
+  This will not include any dynamic roles as everything is ran syncronously on the client side.
+  Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
+</Callout>
+
+---
+
+## Dynamic Access Control 
+
+Dynamic access control allows you to create roles at runtime for organizations. This is achieved by storing the
+created roles and permissions associated with an organization in a database table.
+
+### Enabling Dynamic Access Control
+
+To enable dynamic access control, pass the `dynamicAccessControl` configuration option with `enabled` set to `true` to both server and client plugins.
+
+Ensure you have pre-defined an `ac` instance on the server auth plugin.
+This is important as this is how we can infer the permissions that are available for use.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { ac } from "@/auth/permissions";
+
+export const auth = betterAuth({
+    plugins: [ // [!code highlight]
+        organization({ // [!code highlight]
+            ac, // Must be defined in order for dynamic access control to work // [!code highlight]
+            dynamicAccessControl: { // [!code highlight]
+              enabled: true, // [!code highlight]
+            }, // [!code highlight]
+        }) // [!code highlight]
+    ] // [!code highlight]
+})
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { organizationClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+    plugins: [ // [!code highlight]
+        organizationClient({ // [!code highlight]
+            dynamicAccessControl: { // [!code highlight]
+              enabled: true, // [!code highlight]
+            }, // [!code highlight]
+        }) // [!code highlight]
+    ] // [!code highlight]
+})
+```
+
+<Callout>
+  This will require you to run migrations to add the new `organizationRole` table to the database.
+</Callout>
+
+
+<Callout type="warn">
+  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran syncronously on the client side.
+  Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
+</Callout>
+
+### Creating a role
+
+To create a new role for an organization at runtime, you can use the `createRole` function.
+
+Only users with roles which contain the `ac` resource with the `create` permission can create a new role.
+By default, only the `admin` and `owner` roles have this permission. You also cannot add permissions that your
+current role in that organization can't already access.
+
+<Callout>
+  TIP: You can validate role names by using the `dynamicAccessControl.validateRoleName` option in the organization plugin config.
+  Learn more [here](#validaterolename).
+</Callout>
+
+
+<APIMethod
+  path="/organization/create-role"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+// To use custom resources or permissions,
+// make sure they are defined in the `ac` instance of your organization config.
+const permission = {
+  project: ["create", "update", "delete"]
+}
+
+type createOrgRole = {
+    /**
+     * A unique name of the role to create.
+     */
+    role: string = "my-unique-role"
+    /**
+     * The permissions to assign to the role.
+     */
+    permission?: Record<string, string[]> = permission,
+    /**
+     * The organization ID which the role will be created in. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+Now you can freely call [`updateMemberRole`](#updating-a-member-role) to update the role of a member with your newly created role!
+
+### Deleting a role
+
+To delete a role, you can use the `deleteRole` function, then provide either a `roleName` or `roleId` parameter along
+with the `organizationId` parameter.
+
+<APIMethod
+  path="/organization/delete-role"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+type deleteOrgRole = {
+    /**
+     * The name of the role to delete. Alternatively, you can pass a `roleId` parameter instead.
+     */
+    roleName?: string = "my-role"
+    /**
+     * The id of the role to delete. Alternatively, you can pass a `roleName` parameter instead.
+     */
+    roleId?: string = "role-id"
+    /**
+     * The organization ID which the role will be deleted in. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+### Listing roles
+
+To list roles, you can use the `listOrgRoles` function.
+This requires the `ac` resource with the `read` permission for the member to be able to list roles.
+
+<APIMethod
+  path="/organization/list-roles"
+  method="GET"
+  requireSession
+  resultVariable="roles"
+>
+```ts
+type listOrgRoles = {
+    /**
+     * The organization ID which the roles are under to list. Defaults to the user's active organization. 
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+### Getting a specific role
+
+To get a specific role, you can use the `getOrgRole` function and pass either a `roleName` or `roleId` parameter.
+This requires the `ac` resource with the `read` permission for the member to be able to get a role.
+
+
+<APIMethod
+  path="/organization/get-role"
+  method="GET"
+  requireSession
+  resultVariable="role"
+>
+```ts
+type getOrgRole = {
+    /**
+     * The name of the role to get. Alternatively, you can pass a `roleId` parameter instead.
+     */
+    roleName?: string = "my-role"
+    /**
+     * The id of the role to get. Alternatively, you can pass a `roleName` parameter instead.
+     */
+    roleId?: string = "role-id"
+    /**
+     * The organization ID which the role will be deleted in. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+### Updating a role
+
+To update a role, you can use the `updateOrgRole` function and pass either a `roleName` or `roleId` parameter.
+
+
+<APIMethod
+  path="/organization/update-role"
+  method="POST"
+  requireSession
+  resultVariable="updatedRole"
+>
+```ts
+type updateOrgRole = {
+    /**
+     * The name of the role to update. Alternatively, you can pass a `roleId` parameter instead.
+     */
+    roleName?: string = "my-role"
+    /**
+     * The id of the role to update. Alternatively, you can pass a `roleName` parameter instead.
+     */
+    roleId?: string = "role-id"
+    /**
+     * The organization ID which the role will be updated in. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+    /**
+     * The data which will be updated
+    */
+    data: {
+      /**
+       * Optionally update the permissions of the role.
+       */
+      permission?: Record<string, string[]> = { project: ["create", "update", "delete"] }
+      /**
+       * Optionally update the name of the role.
+       */
+      roleName?: string = "my-new-role"
+    }
+}
+```
+</APIMethod>
+
+
+### Configuration Options
+
+Below is a list of options that can be passed to the `dynamicAccessControl` object.
+
+#### `enabled`
+
+This option is used to enable or disable dynamic access control. By default, it is disabled.
+
+```ts
+organization({
+  dynamicAccessControl: {
+    enabled: true // [!code highlight]
+  }
+})
+```
+
+#### `validateRoleName`
+
+This function will be called after role name normalization and is expected to return a boolean indicating whether the role name is allowed.
+Useful for keeping a consistent naming convention for roles.
+
+True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role name valid.
+
+```ts 
+organization({
+  dynamicAccessControl: {
+    validateRoleName: ({ role, organizationId, }) => { // [!code highlight]
+      if (role === "pre-reserved-role") { // [!code highlight]
+        return false // Denies the role name // [!code highlight]
+      } // [!code highlight]
+      return true // Accepts the role name // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+#### `allowCreatingRole`
+
+This function is expected to return a boolean indicating whether the creation of a given role is allowed.
+Useful if you want to have custom access control logic for when a role is created.
+
+True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is created.
+
+```ts
+organization({
+  dynamicAccessControl: {
+    allowCreatingRole: ({ role, organizationId, member, session }, ctx) => { // [!code highlight]
+      // Custom validation logic // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+#### `allowUpdatingRole`
+
+This function is expected to return a boolean indicating whether the updating of a given role is allowed.
+Useful if you want to have custom access control logic for when a role is updated.
+
+True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is updated.
+
+
+```ts
+organization({
+  dynamicAccessControl: {
+    allowUpdatingRole: ({ role, organizationId, member, session }, ctx) => { // [!code highlight]
+      // Custom validation logic // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+#### `allowDeletingRole`
+
+This function is expected to return a boolean indicating whether the deletion of a given role is allowed.
+Useful if you want to have custom access control logic for when a role is deleted.
+
+True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is deleted.
+
+
+```ts
+organization({
+  dynamicAccessControl: {
+    allowDeletingRole: ({ role, organizationId, member, session }, ctx) => { // [!code highlight]
+      // Custom validation logic // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+#### `allowListingRoles`
+
+This function is expected to return a boolean indicating whether the listing of roles is allowed.
+Useful if you want to have custom access control logic for when a role is listed.
+
+True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the roles are listed.
+
+```ts
+organization({
+  dynamicAccessControl: {
+    allowListingRoles: ({ roles, organizationId, member, session }, ctx) => { // [!code highlight]
+      // Custom validation logic // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+#### `allowGettingRole`
+
+This function is expected to return a boolean indicating whether the getting of a given role is allowed.
+Useful if you want to have custom access control logic for when a role is retrieved.
+
+True being allowed and false being denied. You can also throw an `APIError` to customize the error message. By default, the role is retrieved.
+
+```ts
+organization({
+  dynamicAccessControl: {
+    allowGettingRole: ({ role, organizationId, member, userId }, ctx) => { // [!code highlight]
+      // Custom validation logic // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+#### `normalizeRoleName`
+
+This function will be called before the role is created and is expected to return a normalized role name.
+By default, role names will be normalized to lowercase.
+
+```ts
+organization({
+  dynamicAccessControl: {
+    normalizeRoleName: ({ role, organizationId }) => role.toLowerCase() // [!code highlight]
+  }
+})
+```
+
+<Callout>
+This is called before [`validateRoleName`](#validaterolename) is called.
+</Callout>
+
+#### `maximumRolesPerOrganization`
+
+This option is used to limit the number of roles that can be created for an organization.
+
+By default, the maximum number of roles that can be created for an organization is 25.
+
+```ts
+organization({
+  dynamicAccessControl: {
+    maximumRolesPerOrganization: 25 // [!code highlight]
+  }
+})
+```
+
+You can also pass a function that returns a number.
+
+```ts
+organization({
+  dynamicAccessControl: {
+    maximumRolesPerOrganization: async (organizationId) => { // [!code highlight]
+      const organization = await getOrganization(organizationId); // [!code highlight]
+      return organization.plan === "pro" ? 100 : 25; // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+### Additional Fields
+
+To add additional fields to the `organizationRole` table, you can pass the `additionalFields` configuration option to the `organization` plugin.
+
+```ts
+organization({
+  schema: {
+    organizationRole: {
+      additionalFields: {
+        // Role colors!
+        color: {
+          type: "string",
+          defaultValue: "#ffffff",
+        },
+        //... other fields
+      },
+    },
+  },
+})
+```
+
+Then, if you don't already use `inferOrgAdditionalFields` to infer the additional fields, you can use it to infer the additional fields.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { organizationClient, inferOrgAdditionalFields } from "better-auth/client/plugins"
+import type { auth } from "./auth"
+
+export const authClient = createAuthClient({
+    plugins: [
+        organizationClient({
+            schema: inferOrgAdditionalFields<typeof auth>()
+        })
+    ]
+})
+```
+Otherwise, you can pass the schema values directly, the same way you do on the org plugin in the server.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { organizationClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    plugins: [
+        organizationClient({
+            schema: {
+                organizationRole: {
+                    additionalFields: {
+                        color: {
+                            type: "string",
+                            defaultValue: "#ffffff",
+                        }
+                    }
+                }
+            }
+        })
+    ]
+})
+```
+
+
+---
+
 ## Teams
 
 Teams allow you to group members within an organization. The teams feature provides additional organization structure and can be used to manage permissions at a more granular level.
@@ -1524,9 +1984,9 @@ Get all teams in an organization:
 ```ts
 type listOrganizationTeams = {
     /**
-     * The organization ID which the teams are under to list. Defaults to the users active organization. 
+     * The organization ID which the teams are under to list. Defaults to the user's active organization. 
      */
-    organizationId?: string = "organziation-id"
+    organizationId?: string = "organization-id"
 }
 ```
 </APIMethod>
@@ -1644,7 +2104,7 @@ type addTeamMember = {
      */
     teamId: string = "team-id"
     /**
-     * The user Id which represents the user to be added as a member.
+     * The user ID which represents the user to be added as a member.
      */
     userId: string = "user-id"
 }
