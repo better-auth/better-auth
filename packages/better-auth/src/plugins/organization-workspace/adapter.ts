@@ -69,9 +69,7 @@ export function getWorkspaceAdapter(
 				model: "workspace",
 				data: {
 					...data,
-					metadata: data.metadata
-						? JSON.stringify(data.metadata)
-						: undefined,
+					metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
@@ -94,7 +92,8 @@ export function getWorkspaceAdapter(
 			return {
 				...workspace,
 				metadata:
-					(workspace as any).metadata && typeof (workspace as any).metadata === "string"
+					(workspace as any).metadata &&
+					typeof (workspace as any).metadata === "string"
 						? JSON.parse((workspace as any).metadata)
 						: (workspace as any).metadata,
 			} as Workspace;
@@ -112,7 +111,8 @@ export function getWorkspaceAdapter(
 			return {
 				...workspace,
 				metadata:
-					(workspace as any).metadata && typeof (workspace as any).metadata === "string"
+					(workspace as any).metadata &&
+					typeof (workspace as any).metadata === "string"
 						? JSON.parse((workspace as any).metadata)
 						: (workspace as any).metadata,
 			} as Workspace;
@@ -133,7 +133,8 @@ export function getWorkspaceAdapter(
 			return {
 				...(workspace as any),
 				metadata:
-					(workspace as any).metadata && typeof (workspace as any).metadata === "string"
+					(workspace as any).metadata &&
+					typeof (workspace as any).metadata === "string"
 						? JSON.parse((workspace as any).metadata)
 						: (workspace as any).metadata,
 			} as Workspace;
