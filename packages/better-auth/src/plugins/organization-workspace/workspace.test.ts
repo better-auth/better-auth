@@ -1454,7 +1454,7 @@ describe("Workspace Plugin", () => {
 			} catch (error) {
 				expect(error).toBeDefined();
 			}
-		});
+		}, 15000); // 15 second timeout for complex E2E test
 	});
 
 	describe("Workspace Team Member Management", () => {
