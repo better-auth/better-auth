@@ -6,13 +6,13 @@ import { workspaceMiddleware, workspaceSessionMiddleware } from "../call";
 import { WORKSPACE_ERROR_CODES } from "../error-codes";
 import { checkRolePermissions } from "../access";
 import type { WorkspaceOptions } from "../types";
-import { toZodSchema } from "../../../db";
+import { toZodSchema, type FieldAttribute } from "../../../db";
 
 export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 	options?: O,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
-		fields: options?.schema?.workspaceTeamMember?.additionalFields || {},
+		fields: (options?.schema?.workspaceTeamMember?.additionalFields || {}) as Record<string, FieldAttribute>,
 		isClientSide: true,
 	});
 
@@ -75,7 +75,7 @@ export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 					{ field: "id", value: ctx.body.teamId },
 					{ field: "organizationId", value: workspace.organizationId },
 				],
-			});
+			}) as any;
 
 			if (!team) {
 				throw new APIError("BAD_REQUEST", {
@@ -96,9 +96,11 @@ export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 			}
 
 			let teamMemberData = {
+				id: crypto.randomUUID(),
 				workspaceId: ctx.body.workspaceId,
 				teamId: ctx.body.teamId,
 				role: ctx.body.role,
+				createdAt: new Date(),
 			};
 
 			// Run beforeAddWorkspaceTeamMember hook
@@ -203,7 +205,7 @@ export const removeWorkspaceTeamMember = <O extends WorkspaceOptions>(
 			const team = await orgAdapter.findOne({
 				model: "team",
 				where: [{ field: "id", value: ctx.body.teamId }],
-			});
+			}) as any;
 
 			// Run beforeRemoveWorkspaceTeamMember hook
 			if (options?.workspaceHooks?.beforeRemoveWorkspaceTeamMember) {
@@ -359,7 +361,7 @@ export const listWorkspaceTeamMembers = <O extends WorkspaceOptions>(
 						const team = await orgAdapter.findOne({
 							model: "team",
 							where: [{ field: "id", value: teamMember.teamId }],
-						});
+						}) as any;
 						return {
 							...teamMember,
 							team,

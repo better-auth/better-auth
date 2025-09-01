@@ -8,7 +8,7 @@ import { checkRolePermissions } from "../access";
 import type { User } from "../../../";
 import type { Organization } from "../../organization";
 import type { WorkspaceOptions, Workspace } from "../types";
-import { toZodSchema } from "../../../db";
+import { toZodSchema, type FieldAttribute } from "../../../db";
 
 export const createWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 	// Simplified schema handling to avoid toZodSchema issues
@@ -248,7 +248,7 @@ export const getWorkspace = <O extends WorkspaceOptions>(options?: O) =>
 
 export const updateWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 	const additionalFieldsSchema = toZodSchema({
-		fields: options?.schema?.workspace?.additionalFields || {},
+		fields: (options?.schema?.workspace?.additionalFields || {}) as Record<string, FieldAttribute>,
 		isClientSide: true,
 	});
 

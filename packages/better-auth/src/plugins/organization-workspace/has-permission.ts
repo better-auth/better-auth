@@ -49,7 +49,7 @@ export async function requirePermission(
 	const hasAccess = await hasPermission(ctx, organizationId, permission);
 
 	if (!hasAccess) {
-		const APIError = await import("better-auth/api").then((m) => m.APIError);
+		const { APIError } = await import("../../api");
 		throw new APIError("FORBIDDEN", {
 			message: `Insufficient permissions for ${permission}`,
 		});
