@@ -19,7 +19,7 @@ type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 		: false
 	: false;
 
-const defaultNormalizeRoleName = (x: { role: string }) => x.role.toLowerCase();
+const normalizeRoleName = (x: { role: string }) => x.role.toLowerCase();
 const DEFAULT_MAXIMUM_ROLES_PER_ORGANIZATION = Number.POSITIVE_INFINITY;
 
 const getAdditionalFields = <
@@ -103,8 +103,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			const permission = ctx.body.permission;
 			const additionalFields = ctx.body.additionalFields;
 
-			// -----
-			// Ensure `ac` is defined in auth config.
 			const ac = options.ac;
 			if (!ac) {
 				ctx.context.logger.error(
@@ -117,7 +115,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
 			// Get the organization id where the role will be created.
 			// We can verify if the org id is valid and associated with the user in the next step when we try to find the member.
 			const organizationId =
@@ -131,13 +128,10 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Normalize the role name.
-			roleName = defaultNormalizeRoleName({
+			roleName = normalizeRoleName({
 				role: roleName,
 			});
 
-			// Check if the role name is already taken by a pre-defined/hard-coded role.
 			await checkIfRoleNameIsTakenByPreDefinedRole({
 				role: roleName,
 				organizationId,
@@ -145,7 +139,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				ctx,
 			});
 
-			// -----
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
 			const member = await ctx.context.adapter.findOne<Member>({
@@ -178,8 +171,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Check if the user has the permission to create a role by checking against `ac` resource on the `create` permission.
 			const canCreateRole = await hasPermission(
 				{
 					options,
@@ -205,8 +196,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Make sure the organization doesn't have too many roles.
 			const maximumRolesPerOrganization =
 				typeof options.dynamicAccessControl?.maximumRolesPerOrganization ===
 				"function"
@@ -241,14 +230,8 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Ensure the provided permission doesn't contain any invalid resources.
-			// We do this by checking it against the `ac.statements` object.
 			await checkForInvalidResources({ ac, ctx, permission });
 
-			// -----
-			// Check if the other permissions that they want on the new role are accessible by the current user's role.
-			// For example, an admin can't delete an org, thus if the admin makes a new role, they can't add the delete-org permission to it.
 			await checkIfMemberHasPermission({
 				ctx,
 				member,
@@ -259,20 +242,14 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				action: "create",
 			});
 
-			// -----
-			// Check if the role name is already taken by a role in the database.
 			await checkIfRoleNameIsTakenByRoleInDB({
 				ctx,
 				organizationId,
 				role: roleName,
 			});
 
-			// -----
-			// Create the new role.
 			const newRole = ac.newRole(permission);
 
-			// -----
-			// Create the new role and store it in the database.
 			const newRoleInDB = await ctx.context.adapter.create<
 				Omit<OrganizationRole, "permission"> & { permission: string }
 			>({
@@ -286,8 +263,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				},
 			});
 
-			// -----
-			// Return data to confirm creation of role.
 			const data = {
 				...newRoleInDB,
 				permission,
@@ -345,8 +320,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Get the organization id where the role will be deleted.
 			// We can verify if the org id is valid and associated with the user in the next step when we try to find the member.
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
@@ -359,7 +332,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
 			const member = await ctx.context.adapter.findOne<Member>({
@@ -392,8 +364,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Check if the user has the permission to create a role by checking against `ac` resource on the `delete` permission.
 			const canDeleteRole = await hasPermission(
 				{
 					options,
@@ -419,9 +389,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Check if the role name they are trying to delete is associated to a pre-defined/hard-coded role.
-			// If so, we can't delete it.
 			if ("roleName" in ctx.body) {
 				const roleName = ctx.body.roleName;
 				const defaultRoles = options.roles
@@ -442,8 +409,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				}
 			}
 
-			// -----
-			// Check if the role name/id exists in the database.
 			let condition: Where;
 			if ("roleName" in ctx.body) {
 				condition = {
@@ -488,14 +453,10 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Convert the `permission` from string to object
 			existingRoleInDB.permission = JSON.parse(
 				existingRoleInDB.permission as never as string,
 			);
 
-			// -----
-			// Delete the role from the database.
 			await ctx.context.adapter.delete({
 				model: "organizationRole",
 				where: [
@@ -509,8 +470,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				],
 			});
 
-			// -----
-			// Return success message.
 			return ctx.json({
 				success: true,
 			});
@@ -539,8 +498,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Get org id
 			const organizationId =
 				ctx.query?.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -552,8 +509,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate org id & get member
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -578,8 +533,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate permissions
 			const canListRoles = await hasPermission(
 				{
 					options,
@@ -605,8 +558,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get all roles in the organization
 			let roles = await ctx.context.adapter.findMany<
 				OrganizationRole & ReturnAdditionalFields
 			>({
@@ -621,15 +572,11 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				],
 			});
 
-			// -----
-			// Convert the `permission` from string to object
 			roles = roles.map((x) => ({
 				...x,
 				permission: JSON.parse(x.permission as never as string),
 			}));
 
-			// -----
-			// Return the roles
 			return ctx.json(roles);
 		},
 	);
@@ -676,8 +623,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Get org id
 			const organizationId =
 				ctx.query?.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -689,8 +634,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate org id & get member
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -715,8 +658,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate permissions
 			const canListRoles = await hasPermission(
 				{
 					options,
@@ -742,8 +683,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get the role, and ensure that it exists.
 			let condition: Where;
 			if ("roleName" in ctx.query) {
 				condition = {
@@ -787,12 +726,8 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Convert the `permission` from string to object
 			role.permission = JSON.parse(role.permission as never as string);
 
-			// -----
-			// Return the role
 			return ctx.json(role as OrganizationRole & ReturnAdditionalFields);
 		},
 	);
@@ -857,8 +792,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// -----
-			// Ensure `ac` is defined in auth config.
 			const ac = options.ac;
 			if (!ac) {
 				ctx.context.logger.error(
@@ -871,8 +804,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get org id
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -884,8 +815,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate org id & get member
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -910,8 +839,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Validate permissions
 			const canUpdateRole = await hasPermission(
 				{
 					options,
@@ -932,8 +859,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// -----
-			// Get the role, and ensure that it exists.
 			let condition: Where;
 			if ("roleName" in ctx.body) {
 				condition = {
@@ -980,8 +905,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				? JSON.parse(role.permission as never as string)
 				: undefined;
 
-			// -----
-			// Update the role
 			const {
 				permission: _,
 				roleName: __,
@@ -995,12 +918,8 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			if (ctx.body.data.permission) {
 				let newPermission = ctx.body.data.permission;
 
-				// -----
-				// Check for invalid resources
 				await checkForInvalidResources({ ac, ctx, permission: newPermission });
 
-				// -----
-				// Check if the new permission is accessible by the current user's role
 				await checkIfMemberHasPermission({
 					ctx,
 					member,
@@ -1011,21 +930,15 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					action: "update",
 				});
 
-				// -----
-				// Update the permission
 				updateData.permission = newPermission;
 			}
 			if (ctx.body.data.roleName) {
 				let newRoleName = ctx.body.data.roleName;
 
-				// -----
-				// Normalize the role name
-				newRoleName = defaultNormalizeRoleName({
+				newRoleName = normalizeRoleName({
 					role: newRoleName,
 				});
 
-				// -----
-				// Check if the role name is already taken
 				await checkIfRoleNameIsTakenByPreDefinedRole({
 					role: newRoleName,
 					organizationId,
@@ -1038,8 +951,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ctx,
 				});
 
-				// -----
-				// Update the role name
 				updateData.role = newRoleName;
 			}
 
@@ -1078,10 +989,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 		},
 	);
 };
-
-// ================================================
-// Helper functions
-// ================================================
 
 async function checkForInvalidResources({
 	ac,
