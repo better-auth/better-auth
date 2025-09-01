@@ -1,10 +1,5 @@
 import type { FieldAttribute } from "../../db";
-import type {
-	User,
-	Session,
-	AuthContext,
-	GenericEndpointContext,
-} from "../../types";
+import type { User, Session, AuthContext } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type {
 	Invitation,
