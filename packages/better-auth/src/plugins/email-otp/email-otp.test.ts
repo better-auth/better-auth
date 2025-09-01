@@ -21,7 +21,7 @@ describe("email-otp", async () => {
 					},
 					sendVerificationOnSignUp: true,
 				}),
-				lastLoginMethod(),
+				lastLoginMethod({ storage: "cookie" }),
 			],
 			emailVerification: {
 				autoSignInAfterVerification: true,
@@ -29,7 +29,10 @@ describe("email-otp", async () => {
 		},
 		{
 			clientOptions: {
-				plugins: [emailOTPClient(), lastLoginMethodClient()],
+				plugins: [
+					emailOTPClient(),
+					lastLoginMethodClient({ storage: "cookie" }),
+				],
 			},
 		},
 	);

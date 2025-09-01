@@ -8,12 +8,12 @@ describe("sign-up", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 			},
-			plugins: [lastLoginMethod()],
+			plugins: [lastLoginMethod({ storage: "cookie" })],
 		},
 		{
 			disableTestUser: true,
 			clientOptions: {
-				plugins: [lastLoginMethodClient()],
+				plugins: [lastLoginMethodClient({ storage: "cookie" })],
 			},
 		},
 	);

@@ -143,12 +143,12 @@ describe("Social Providers", async (c) => {
 					clientSecret: "test",
 				},
 			},
-			plugins: [lastLoginMethod()],
+			plugins: [lastLoginMethod({ storage: "cookie" })],
 		},
 		{
 			disableTestUser: true,
 			clientOptions: {
-				plugins: [lastLoginMethodClient()],
+				plugins: [lastLoginMethodClient({ storage: "cookie" })],
 			},
 		},
 	);

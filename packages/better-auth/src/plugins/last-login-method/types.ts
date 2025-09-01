@@ -1,4 +1,17 @@
-export type LastLoginMethodOptions = {
+export const LAST_USED_LOGIN_METHOD_HEADER = "x-better-auth-last-used";
+
+export type LastLoginMethodClientOptions<Storage> = {
+	storage: Storage;
+	/**
+	 * The key of the last used social provider store in local storage.
+	 *
+	 * @default "better-auth.last_used_login_method"
+	 */
+	key?: string;
+};
+
+export type LastLoginMethodOptions<Storage> = {
+	storage?: Storage;
 	/**
 	 * The name of the last used social provider cookie.
 	 *
@@ -15,4 +28,10 @@ export type LastLoginMethodOptions = {
 	maxAge?: number;
 };
 
-export type RealizedLastLoginMethodOptions = Required<LastLoginMethodOptions>;
+export type RealizedLastLoginMethodOptions<Storage> = Required<
+	LastLoginMethodOptions<Storage>
+>;
+
+export type RealizedLastLoginMethodClientOptions<Storage> = Required<
+	LastLoginMethodClientOptions<Storage>
+>;

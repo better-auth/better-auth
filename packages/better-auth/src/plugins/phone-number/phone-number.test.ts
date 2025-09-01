@@ -121,7 +121,7 @@ describe("phone auth flow", async () => {
 					},
 				}),
 				bearer(),
-				lastLoginMethod(),
+				lastLoginMethod({ storage: "cookie" }),
 			],
 			user: {
 				changeEmail: {
@@ -132,7 +132,10 @@ describe("phone auth flow", async () => {
 
 	const client = createAuthClient({
 		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient(), lastLoginMethodClient()],
+		plugins: [
+			phoneNumberClient(),
+			lastLoginMethodClient({ storage: "cookie" }),
+		],
 		fetchOptions: {
 			customFetchImpl,
 		},

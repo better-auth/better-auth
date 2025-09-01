@@ -61,7 +61,7 @@ describe("anonymous", async () => {
 						},
 					},
 				}),
-				lastLoginMethod(),
+				lastLoginMethod({ storage: "cookie" }),
 			],
 			socialProviders: {
 				google: {
@@ -72,7 +72,7 @@ describe("anonymous", async () => {
 		});
 	const headers = new Headers();
 	const client = createAuthClient({
-		plugins: [anonymousClient(), lastLoginMethodClient()],
+		plugins: [anonymousClient(), lastLoginMethodClient({ storage: "cookie" })],
 		fetchOptions: {
 			customFetchImpl,
 		},

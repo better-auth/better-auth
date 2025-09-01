@@ -1,6 +1,7 @@
-import type {
-	LastLoginMethodOptions,
-	RealizedLastLoginMethodOptions,
+import {
+	LAST_USED_LOGIN_METHOD_HEADER,
+	type LastLoginMethodOptions,
+	type RealizedLastLoginMethodOptions,
 } from "./types";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import type { AuthContext, MiddlewareContext, MiddlewareOptions } from "../..";
@@ -10,8 +11,54 @@ import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 export * from "./types";
 export * from "./client";
 
-export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
-	const opts: RealizedLastLoginMethodOptions = {
+export type LastLoginMethodPlugin<
+	Storage extends "cookie" | "local-storage" = "local-storage",
+> = {
+	id: "last-login-method";
+	endpoints: Storage extends "cookie"
+		? { lastUsedLoginMethod: ReturnType<typeof makeLastUsedLoginMethod> }
+		: {};
+	hooks: BetterAuthPlugin["hooks"];
+};
+
+const makeLastUsedLoginMethod = <Storage>(
+	opts: RealizedLastLoginMethodOptions<Storage>,
+) =>
+	createAuthEndpoint(
+		"/last-used-login-method",
+		{
+			method: "GET",
+			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description:
+						"Get the last used login method the user used to sign in.",
+					operationId: "lastUsedLoginMethod",
+					responses: {
+						"200": {
+							description: "Success - Returns the last used login method",
+							content: {
+								"application/json": {
+									schema: {
+										type: "string",
+										nullable: true,
+										description: "Login Method",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (c) => c.getSignedCookie(opts.cookieName, c.context.secret) ?? null,
+	);
+
+export const lastLoginMethod = <Storage extends "cookie" | "local-storage">(
+	options?: LastLoginMethodOptions<Storage>,
+) => {
+	const opts: RealizedLastLoginMethodOptions<Storage> = {
+		storage: options?.storage ?? ("local-storage" as Storage),
 		cookieName: options?.cookieName ?? "better-auth.last_used_login_method",
 		maxAge: options?.maxAge ?? 432000,
 	};
@@ -35,47 +82,26 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 			const val = typeof value === "string" ? value : value(ctx);
 			if (!val) return;
 
-			await ctx.setSignedCookie(opts.cookieName, val, ctx.context.secret, {
-				httpOnly: true,
-				maxAge: opts.maxAge,
-			});
+			if (opts.storage === "local-storage")
+				ctx.headers?.append(LAST_USED_LOGIN_METHOD_HEADER, val);
+
+			if (opts.storage === "cookie")
+				await ctx.setSignedCookie(opts.cookieName, val, ctx.context.secret, {
+					httpOnly: true,
+					maxAge: opts.maxAge,
+				});
 		}),
 	});
 
+	const lastUsedLoginMethod = makeLastUsedLoginMethod(opts);
+
 	return {
 		id: "last-login-method",
-		endpoints: {
-			lastUsedLoginMethod: createAuthEndpoint(
-				"/last-used-login-method",
-				{
-					method: "GET",
-					requireHeaders: true,
-					metadata: {
-						openapi: {
-							description:
-								"Get the last used login method the user used to sign in.",
-							operationId: "lastUsedLoginMethod",
-							responses: {
-								"200": {
-									description: "Success - Returns the last used login method",
-									content: {
-										"application/json": {
-											schema: {
-												type: "string",
-												nullable: true,
-												description: "Login Method",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (c) =>
-					c.getSignedCookie(opts.cookieName, c.context.secret) ?? null,
-			),
-		},
+		endpoints: (opts.storage === "cookie"
+			? { lastUsedLoginMethod }
+			: {}) as Storage extends "cookie"
+			? { lastUsedLoginMethod: typeof lastUsedLoginMethod }
+			: {},
 		hooks: {
 			after: [
 				makeSignInHook("/callback/:id", (ctx) => {
@@ -110,5 +136,5 @@ export const lastLoginMethod = (options?: LastLoginMethodOptions) => {
 				makeSignInHook("/siwe/verify", "siwe"),
 			],
 		},
-	} satisfies BetterAuthPlugin;
+	} satisfies LastLoginMethodPlugin<Storage>;
 };
