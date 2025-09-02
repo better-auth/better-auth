@@ -6,6 +6,7 @@ import type {
 } from "better-auth";
 import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
+import type { Prettify } from 'better-auth'
 
 export type StripePlan = {
 	/**
@@ -89,6 +90,30 @@ export type StripePlan = {
 		) => Promise<void>;
 	};
 };
+
+const enum StripeMeterAggregationMethod {
+	SUM = "sum",
+	COUNT = "count",
+	LAST = "last",
+}
+
+const enum StripeMeterEventTimeWindow {
+	RAW = "raw",
+	HOURLY = "hourly",
+	DAILY = "daily",
+}
+
+export type StripeMeter<
+	AggregationMethod extends StripeMeterAggregationMethod = StripeMeterAggregationMethod.SUM
+> = {
+	meterId: string;
+	name: string;
+	description?: string;
+	aggregationMethod: AggregationMethod;
+	valueKey?: "value" | (string & {});
+} & Prettify<{
+	eventTimeWindow: AggregationMethod extends StripeMeterAggregationMethod.SUM ? StripeMeterEventTimeWindow : never
+}>
 
 export interface Subscription {
 	/**
@@ -316,6 +341,18 @@ export interface StripeOptions {
 		 */
 		organization?: {
 			enabled: boolean;
+		};
+
+		/**
+		 * Enable usage-based billing
+		 */
+		usage?: {
+			/**
+			 * Enable usage-based billing
+			 */
+			enabled: boolean;
+
+			meters: StripeMeter[] | (() => Promise<StripeMeter[]>);
 		};
 	};
 	/**
