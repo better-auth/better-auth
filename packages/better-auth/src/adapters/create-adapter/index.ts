@@ -380,7 +380,6 @@ export const createAdapter =
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					//@ts-expect-error -Future proofing
 					fieldAttributes.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
@@ -458,7 +457,6 @@ export const createAdapter =
 					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
-						//@ts-expect-error - Future proofing
 						field.type === "json"
 					) {
 						newValue = safeJSONParse(newValue);
