@@ -8,6 +8,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 import type { Accessor } from "solid-js";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
@@ -83,6 +84,7 @@ export function createAuthClient<Option extends ClientOptions>(
 				isPending: boolean;
 				isRefetching: boolean;
 				error: BetterFetchError | null;
+				refetch: (queryParams?: { query?: SessionQueryParams }) => void;
 			}>;
 			$Infer: {
 				Session: NonNullable<Session>;
