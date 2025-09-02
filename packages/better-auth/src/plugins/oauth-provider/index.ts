@@ -23,11 +23,10 @@ import { BetterAuthError } from "../../error";
 export { authServerMetadata, oidcServerMetadata } from "./metadata";
 
 /**
- * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
- * authorization code flow and the token exchange flow. It also implements the
- * userinfo endpoint.
+ * oAuth 2.1 provider plugin for Better Auth.
  *
- * @param options - The options for the OIDC plugin.
+ * @see https://better-auth.com/docs/plugins/oauth-provider
+ * @param options - The options for the oAuth Provider plugin.
  * @returns A Better Auth plugin.
  */
 export const oauthProvider = (options: OAuthOptions) => {
@@ -99,6 +98,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 		disableJWTPlugin: false,
 		storeClientSecret: options.disableJWTPlugin ? "encrypted" : "hashed",
 		storeTokens: "hashed",
+		grantTypes: ["authorization_code", "client_credentials", "refresh_token"],
 		...options,
 		scopes: Array.from(scopes),
 		claims: Array.from(claims),

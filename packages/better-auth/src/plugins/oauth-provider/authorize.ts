@@ -45,6 +45,14 @@ export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
 	options: OAuthOptions,
 ) {
+	// Grant type must include authorization_code to use this endpoint
+	if (
+		options.grantTypes &&
+		!options.grantTypes.includes("authorization_code")
+	) {
+		throw new APIError("NOT_FOUND");
+	}
+
 	const handleRedirect = (url: string) => {
 		const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
 		if (fromFetch) {
