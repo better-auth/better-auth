@@ -1,37 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { checkEndpointConflicts } from "./index";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
-import type { InternalLogger, LogLevel } from "../utils/logger";
 import { createEndpoint } from "better-call";
+import { mockLogger } from "../test/utils";
 
 describe("checkEndpointConflicts", () => {
-	let currentLevel: LogLevel = "debug";
-	let mockLogger = {
-		error: vi.fn(),
-		warn: vi.fn(),
-		info: vi.fn(),
-		debug: vi.fn(),
-		success: vi.fn(),
-		get level(): LogLevel {
-			return currentLevel;
-		},
-	} satisfies InternalLogger;
-
 	const endpoint = createEndpoint.create({});
-
-	beforeEach(() => {
-		currentLevel = "debug";
-		mockLogger = {
-			error: vi.fn(),
-			warn: vi.fn(),
-			info: vi.fn(),
-			debug: vi.fn(),
-			success: vi.fn(),
-			get level(): LogLevel {
-				return currentLevel;
-			},
-		};
-	});
 
 	it("should not log errors when there are no endpoint conflicts", () => {
 		const plugin1: BetterAuthPlugin = {
