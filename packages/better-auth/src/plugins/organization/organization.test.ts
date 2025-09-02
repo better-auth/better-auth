@@ -225,7 +225,6 @@ describe("organization", async (it) => {
 		expect(org?.slug).toBe("test");
 	});
 
-
 	it.each([
 		{
 			role: "owner",
