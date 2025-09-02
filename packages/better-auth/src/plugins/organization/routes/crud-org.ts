@@ -583,10 +583,14 @@ export const getOrganization = <O extends OrganizationOptions>(options: O) =>
 		"/organization/get",
 		{
 			method: "GET",
-			query: z.object({
-				organizationId: z.string().optional(),
-				organizationSlug: z.string().optional(),
-			}),
+			query: z.union([
+				z.object({
+					organizationId: z.string(),
+				}),
+				z.object({
+					organizationSlug: z.string(),
+				}),
+			]),
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -609,18 +613,22 @@ export const getOrganization = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
-			const { organizationId, organizationSlug } = ctx.query;
 			const session = ctx.context.session;
-
-			if (!organizationId && !organizationSlug) {
-				return ctx.json(null, { status: 200 });
-			}
 
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
-			const organization = organizationSlug
-				? await adapter.findOrganizationBySlug(organizationSlug)
-				: await adapter.findOrganizationById(organizationId!);
+			let organization: InferOrganization<O> | null = null;
+			if ("organizationId" in ctx.query) {
+				organization = await adapter.findOrganizationById(
+					ctx.query.organizationId,
+				);
+			} else if ("organizationSlug" in ctx.query) {
+				organization = await adapter.findOrganizationBySlug(
+					ctx.query.organizationSlug,
+				);
+			} else {
+				return ctx.json(null, { status: 200 });
+			}
 
 			if (!organization) {
 				throw new APIError("BAD_REQUEST", {
