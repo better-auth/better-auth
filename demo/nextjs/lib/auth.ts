@@ -193,12 +193,20 @@ export const auth = betterAuth({
 				allowReTrialsForDifferentPlans: true,
 				plans: () => {
 					const PRO_PRICE_ID = {
-						default: process.env.STRIPE_PRO_PRICE_ID ?? "price_1RoxnRHmTADgihIt4y8c0lVE",
-						annual: process.env.STRIPE_PRO_ANNUAL_PRICE_ID ?? "price_1RoxnoHmTADgihItzFvVP8KT",
+						default:
+							process.env.STRIPE_PRO_PRICE_ID ??
+							"price_1RoxnRHmTADgihIt4y8c0lVE",
+						annual:
+							process.env.STRIPE_PRO_ANNUAL_PRICE_ID ??
+							"price_1RoxnoHmTADgihItzFvVP8KT",
 					};
 					const PLUS_PRICE_ID = {
-						default: process.env.STRIPE_PLUS_PRICE_ID ?? "price_1RoxnJHmTADgihIthZTLmrPn",
-						annual: process.env.STRIPE_PLUS_ANNUAL_PRICE_ID ?? "price_1Roxo5HmTADgihItEbJu5llL",
+						default:
+							process.env.STRIPE_PLUS_PRICE_ID ??
+							"price_1RoxnJHmTADgihIthZTLmrPn",
+						annual:
+							process.env.STRIPE_PLUS_ANNUAL_PRICE_ID ??
+							"price_1Roxo5HmTADgihItEbJu5llL",
 					};
 
 					return [
