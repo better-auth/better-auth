@@ -5,7 +5,7 @@ import { parseSetCookieHeader } from "../cookies";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const toSvelteKitHandler = (auth: {
-	handler: (request: Request) => any;
+	handler: (request: Request) => Response | Promise<Response>;
 	options: BetterAuthOptions;
 }) => {
 	return (event: { request: Request }) => auth.handler(event.request);
@@ -18,11 +18,11 @@ export const svelteKitHandler = async ({
 	building,
 }: {
 	auth: {
-		handler: (request: Request) => any;
+		handler: (request: Request) => Response | Promise<Response>;
 		options: BetterAuthOptions;
 	};
-	event: { request: Request; url: URL };
-	resolve: (event: any) => any;
+	event: RequestEvent;
+	resolve: (event: RequestEvent) => Response | Promise<Response>;
 	building: boolean;
 }) => {
 	if (building) {
@@ -53,10 +53,7 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 }
 
 export const sveltekitCookies = (
-	getRequestEvent: () => RequestEvent<
-		Partial<Record<string, string>>,
-		string | null
-	>,
+	getRequestEvent: () => RequestEvent<any, any>,
 ) => {
 	return {
 		id: "sveltekit-cookies",

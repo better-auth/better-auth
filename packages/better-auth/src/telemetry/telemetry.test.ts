@@ -68,6 +68,7 @@ describe("telemetry", () => {
 						enabled: true,
 					},
 				},
+				telemetry: { enabled: true },
 			},
 			{ customTrack: track, skipTestCheck: true },
 		);
@@ -285,6 +286,7 @@ describe("telemetry", () => {
 			createTelemetry(
 				{
 					baseURL: "http://localhost",
+					telemetry: { enabled: true },
 				},
 				{
 					customTrack() {
@@ -305,7 +307,7 @@ describe("telemetry", () => {
 			const track = vi.fn();
 			await expect(
 				createTelemetry(
-					{ baseURL: "https://example.com" },
+					{ baseURL: "https://example.com", telemetry: { enabled: true } },
 					{ customTrack: track, skipTestCheck: true },
 				),
 			).resolves.not.toThrow();
