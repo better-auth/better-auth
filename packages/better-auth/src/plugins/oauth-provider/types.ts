@@ -539,7 +539,7 @@ export interface SchemaClient {
 	 *
 	 * For example, `https://example.com/auth/callback`
 	 */
-	redirectURLs?: string[];
+	redirectUris?: string[];
 	tokenEndpointAuthMethod?:
 		| "none"
 		| "client_secret_basic"

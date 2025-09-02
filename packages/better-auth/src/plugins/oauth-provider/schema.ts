@@ -79,7 +79,7 @@ export const schema = {
 				required: false,
 			},
 			// Authentication Metadata
-			redirectURLs: {
+			redirectUris: {
 				type: "string[]",
 				required: false,
 			},
