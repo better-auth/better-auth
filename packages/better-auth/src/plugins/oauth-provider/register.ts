@@ -195,7 +195,7 @@ export function oAuthToSchema(
 		software_version: softwareVersion,
 		software_statement: softwareStatement,
 		// Authentication Metadata
-		redirect_uris: redirectURLs,
+		redirect_uris: redirectUris,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -235,7 +235,7 @@ export function oAuthToSchema(
 		softwareVersion,
 		softwareStatement,
 		// Authentication Metadata
-		redirectURLs: redirectURLs,
+		redirectUris,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -280,7 +280,7 @@ export function schemaToOAuth(
 		softwareVersion,
 		softwareStatement,
 		// Authentication Metadata
-		redirectURLs,
+		redirectUris,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -325,7 +325,7 @@ export function schemaToOAuth(
 		software_version: softwareVersion,
 		software_statement: softwareStatement,
 		// Authentication Metadata
-		redirect_uris: redirectURLs,
+		redirect_uris: redirectUris,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,

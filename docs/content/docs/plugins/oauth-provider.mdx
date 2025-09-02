@@ -774,6 +774,7 @@ If you are migrating from the [OIDC Provider](/docs/plugins/oidc-provider) to th
     - Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
     - Clients with `type: "user-agent-based"`: set `public: true` and `clientSecret: undefined`
     - Clients with `clientSecret: undefined`: set `public: true`
+- `redirectURLs` renamed to `redirectUris`
 - `metadata` is now stored in database as individual fields instead of a JSON object. Parse the metadata into their respective fields. The OIDC plugin did not utilize this field but this oAuth plugin may utilize them in the future.
 
 #### Table: `oauthAccessToken`
