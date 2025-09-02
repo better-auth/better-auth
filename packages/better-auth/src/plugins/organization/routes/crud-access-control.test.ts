@@ -500,13 +500,6 @@ describe("dynamic access control", async (it) => {
 	});
 
 	it("should update a role's permission by id", async () => {
-		await auth.api.updateMemberRole({
-			body: {
-				memberId: memberInfo.id,
-				role: "admin",
-			},
-			headers,
-		});
 		const testRole = await authClient.organization.createRole(
 			{
 				role: `update-test-role-${crypto.randomUUID()}`,

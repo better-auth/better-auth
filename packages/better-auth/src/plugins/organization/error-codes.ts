@@ -22,6 +22,8 @@ export const ORGANIZATION_ERROR_CODES = {
 	TEAM_NOT_FOUND: "Team not found",
 	YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER:
 		"You cannot leave the organization as the only owner",
+	YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER:
+		"You cannot leave the organization without an owner",
 	YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER:
 		"You are not allowed to delete this member",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION:
@@ -38,7 +40,7 @@ export const ORGANIZATION_ERROR_CODES = {
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:
 		"Inviter is no longer a member of the organization",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
-		"you are not allowed to invite user with this role",
+		"You are not allowed to invite a user with this role",
 	FAILED_TO_RETRIEVE_INVITATION: "Failed to retrieve invitation",
 	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS:
 		"You have reached the maximum number of teams",
