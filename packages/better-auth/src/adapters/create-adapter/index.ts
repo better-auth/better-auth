@@ -409,7 +409,9 @@ export const createAdapter =
 					});
 				}
 
-				transformedData[newFieldName] = newValue;
+				if (newValue !== undefined) {
+					transformedData[newFieldName] = newValue;
+				}
 			}
 			return transformedData;
 		};
