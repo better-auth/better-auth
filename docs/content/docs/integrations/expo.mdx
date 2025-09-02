@@ -362,7 +362,11 @@ const makeAuthenticatedRequest = async () => {
   const headers = {
     "Cookie": cookies, // [!code highlight]
   };
-  const response = await fetch("http://localhost:8081/api/secure-endpoint", { headers });
+  const response = await fetch("http://localhost:8081/api/secure-endpoint", { 
+    headers,
+    // 'include' can interfere with the cookies we just set manually in the headers
+    credentials: "omit" // [!code highlight]
+  });
   const data = await response.json();
   return data;
 };
