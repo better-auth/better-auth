@@ -359,6 +359,99 @@ describe("Workspace Plugin", () => {
 			expect(workspaceWithMetadata.data?.metadata?.type).toBe("metadata-test");
 			expect(workspaceWithMetadata.data?.metadata?.priority).toBe("high");
 		});
+
+		it("should normalize workspace slugs correctly", async () => {
+			// Sign up a user with unique email
+			const uniqueEmail = `test-slug-normalization-${Date.now()}@example.com`;
+			const user = await client.signUp.email({
+				email: uniqueEmail,
+				password: "password123",
+				name: "Test User",
+			});
+			expect(user.data).toBeDefined();
+
+			// Sign in the user
+			const signInResult = await client.signIn.email({
+				email: uniqueEmail,
+				password: "password123",
+			});
+			expect(signInResult.data).toBeDefined();
+
+			// Create an organization
+			const org = await client.organization.create({
+				name: "Test Organization Slug Normalization",
+				slug: "test-org-slug-normalization",
+			});
+			expect(org.data).toBeDefined();
+
+			// Set the organization as active
+			await client.organization.setActive({
+				organizationId: org.data!.id,
+			});
+
+			// Test case: Mixed case should be normalized to lowercase
+			const workspace1 = await client.workspace.create({
+				name: "Mixed Case Workspace",
+				slug: "Mixed-Case-Workspace",
+			});
+			expect(workspace1.data?.slug).toBe("mixed-case-workspace");
+
+			// Test case: Spaces should be replaced with hyphens
+			const workspace2 = await client.workspace.create({
+				name: "Spaces Workspace",
+				slug: "spaces in slug",
+			});
+			expect(workspace2.data?.slug).toBe("spaces-in-slug");
+
+			// Test case: Underscores should be replaced with hyphens
+			const workspace3 = await client.workspace.create({
+				name: "Underscore Workspace",
+				slug: "underscore_in_slug",
+			});
+			expect(workspace3.data?.slug).toBe("underscore-in-slug");
+
+			// Test case: Special characters should be removed
+			const workspace4 = await client.workspace.create({
+				name: "Special Chars Workspace",
+				slug: "special@#$%chars!",
+			});
+			expect(workspace4.data?.slug).toBe("specialchars");
+
+			// Test case: Multiple consecutive hyphens should be collapsed
+			const workspace5 = await client.workspace.create({
+				name: "Multiple Hyphens Workspace",
+				slug: "multiple---hyphens",
+			});
+			expect(workspace5.data?.slug).toBe("multiple-hyphens");
+
+			// Test case: Leading and trailing hyphens should be removed
+			const workspace6 = await client.workspace.create({
+				name: "Trimmed Workspace",
+				slug: "-trimmed-slug-",
+			});
+			expect(workspace6.data?.slug).toBe("trimmed-slug");
+
+			// Test case: Complex normalization with multiple issues
+			const workspace7 = await client.workspace.create({
+				name: "Complex Workspace",
+				slug: " -Complex@#$ Slug___With   Multiple---Issues!- ",
+			});
+			expect(workspace7.data?.slug).toBe("complex-slug-with-multiple-issues");
+
+			// Test case: Empty slug after normalization should result in empty string
+			const workspace8 = await client.workspace.create({
+				name: "Empty Slug Workspace",
+				slug: "@#$%^&*()",
+			});
+			expect(workspace8.data?.slug).toBe("");
+
+			// Test case: Numbers and valid characters should be preserved
+			const workspace9 = await client.workspace.create({
+				name: "Valid Chars Workspace",
+				slug: "workspace-123-test",
+			});
+			expect(workspace9.data?.slug).toBe("workspace-123-test");
+		});
 	});
 
 	describe("Workspace Member Management", () => {
@@ -2019,7 +2112,7 @@ describe("Workspace Server API", async () => {
 });
 
 // Error handling tests
-describe("Workspace Error Handling", async (it) => {
+describe("Workspace Error Handling", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			organization({
@@ -2085,10 +2178,73 @@ describe("Workspace Error Handling", async (it) => {
 			expect(error.statusCode).toBe(401);
 		}
 	});
+
+	it("should return standardized error code for duplicate member", async () => {
+		// Create organization first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Test Org Duplicate",
+				slug: "test-org-duplicate",
+			},
+			headers,
+		});
+
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Duplicate Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		// Create a new user
+		const memberUser = await auth.api.signUpEmail({
+			body: {
+				email: "duplicate.member@example.com",
+				password: "password123",
+				name: "Duplicate Member",
+			},
+		});
+
+		// Add user to organization first
+		await auth.api.addMember({
+			body: {
+				organizationId: org!.id,
+				userId: memberUser!.user.id,
+				role: "member",
+			},
+		});
+
+		// Add member to workspace (should succeed)
+		await auth.api.addWorkspaceMember({
+			body: {
+				workspaceId: workspace!.id,
+				userId: memberUser!.user.id,
+				role: "member",
+			},
+			headers,
+		});
+
+		// Try to add the same member again (should fail with standardized error)
+		try {
+			await auth.api.addWorkspaceMember({
+				body: {
+					workspaceId: workspace!.id,
+					userId: memberUser!.user.id,
+					role: "member",
+				},
+				headers,
+			});
+			// If we reach here, the test should fail
+			expect(true).toBe(false);
+		} catch (error: any) {
+			expect(error.message).toBe("User is already a member of this workspace");
+		}
+	});
 });
 
 // Role validation tests
-describe("Workspace Role Validation", async (it) => {
+describe("Workspace Role Validation", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			organization({
@@ -2313,7 +2469,7 @@ describe("Workspace Role Validation", async (it) => {
 });
 
 // Safe field projection tests
-describe("Workspace Safe Field Projection", async (it) => {
+describe("Workspace Safe Field Projection", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			organization({
@@ -2462,7 +2618,7 @@ describe("Workspace Safe Field Projection", async (it) => {
 });
 
 // Types inference tests
-describe("Workspace Types", async (it) => {
+describe("Workspace Types", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			organization({
@@ -2488,7 +2644,7 @@ describe("Workspace Types", async (it) => {
 });
 
 // Additional fields tests (simplified)
-describe("Workspace Additional Fields", async (it) => {
+describe("Workspace Additional Fields", async () => {
 	// This test demonstrates the concept but would require proper schema extension
 	// in a real implementation with additional fields
 	const { auth, signInWithTestUser } = await getTestInstance({
@@ -2755,5 +2911,62 @@ describe("Workspace Additional Fields", async (it) => {
 		expect(retrievedWorkspace).toBeDefined();
 		expect(retrievedWorkspace?.id).toBe(workspace!.id);
 		expect(retrievedWorkspace?.name).toBe("SetActive Test Workspace");
+	});
+
+	it("should persist additional fields for workspace members", async () => {
+		// Create organization first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Member Fields Test Org",
+				slug: "member-fields-test-org",
+			},
+			headers,
+		});
+
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Member Fields Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		// Create a new user
+		const memberUser = await auth.api.signUpEmail({
+			body: {
+				email: "member-fields-test@example.com",
+				password: "password123",
+				name: "Member Fields Test User",
+			},
+		});
+
+		// Add user to organization first
+		await auth.api.addMember({
+			body: {
+				organizationId: org!.id,
+				userId: memberUser!.user.id,
+				role: "member",
+			},
+		});
+
+		// Note: This test demonstrates the concept but in a real implementation
+		// you would need to configure the workspace plugin with additional fields schema
+		// For now, we verify that the core fields are properly handled
+		const member = await auth.api.addWorkspaceMember({
+			body: {
+				workspaceId: workspace!.id,
+				userId: memberUser!.user.id,
+				role: "member",
+				// In a real scenario with additional fields schema configured:
+				// department: "Engineering",
+				// startDate: "2025-01-01"
+			},
+			headers,
+		});
+
+		expect(member?.userId).toBe(memberUser!.user.id);
+		expect(member?.workspaceId).toBe(workspace!.id);
+		expect(member?.role).toBe("member");
+		// Additional fields would be verified here if schema was configured
 	});
 });

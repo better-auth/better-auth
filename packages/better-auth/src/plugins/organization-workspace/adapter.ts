@@ -176,7 +176,7 @@ export function getWorkspaceAdapter(
 			);
 			const workspaces = await adapter.findMany({
 				model: "workspace",
-				where: workspaceIds.map((id) => ({ field: "id", value: id })),
+				where: [{ field: "id", value: workspaceIds, operator: "in" }],
 			});
 
 			return workspaces.map((workspace: any) => ({

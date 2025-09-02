@@ -53,6 +53,7 @@ export const getSchema = (normalizer: {
 				organizationId: {
 					type: "string",
 					required: true,
+					references: { model: "organization", field: "id" },
 				},
 				metadata: {
 					type: "string",
@@ -81,10 +82,12 @@ export const getSchema = (normalizer: {
 				workspaceId: {
 					type: "string",
 					required: true,
+					references: { model: "workspace", field: "id" },
 				},
 				userId: {
 					type: "string",
 					required: true,
+					references: { model: "user", field: "id" },
 				},
 				role: {
 					type: "string",
@@ -119,15 +122,18 @@ export const getSchema = (normalizer: {
 				workspaceId: {
 					type: "string",
 					required: true,
+					references: { model: "workspace", field: "id" },
 				},
 				teamId: {
 					type: "string",
 					required: true,
+					references: { model: "team", field: "id" },
 				},
 				role: {
 					type: "string",
 					required: true,
 					returned: true,
+					defaultValue: "member",
 					transform:
 						normalizer && normalizer.role
 							? {

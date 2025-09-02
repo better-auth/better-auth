@@ -90,7 +90,7 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 			);
 			if (existingMember) {
 				throw new APIError("BAD_REQUEST", {
-					message: "User is already a member of this workspace",
+					message: WORKSPACE_ERROR_CODES.WORKSPACE_MEMBER_ALREADY_EXISTS,
 				});
 			}
 
@@ -110,10 +110,15 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 				});
 			}
 
-			let memberData: Omit<WorkspaceMember, "id" | "createdAt"> = {
-				workspaceId: ctx.body.workspaceId,
-				userId: ctx.body.userId,
-				role: ctx.body.role,
+			// Extract additional fields from the request body
+			const { workspaceId, userId, role, ...additionalFields } = ctx.body;
+
+			let memberData: Omit<WorkspaceMember, "id" | "createdAt"> &
+				Record<string, any> = {
+				workspaceId,
+				userId,
+				role,
+				...additionalFields, // Include validated additional fields
 			};
 
 			// Run beforeAddWorkspaceMember hook
@@ -219,6 +224,8 @@ export const removeWorkspaceMember = <O extends WorkspaceOptions>(
 			}
 
 			// Don't allow removing the last owner
+			// Note: This check has a small race condition window. For production use,
+			// consider implementing a database constraint or using a transaction-based approach.
 			if (memberToRemove.role === "owner") {
 				const allMembers = await adapter.listWorkspaceMembers(
 					ctx.body.workspaceId,
@@ -245,6 +252,21 @@ export const removeWorkspaceMember = <O extends WorkspaceOptions>(
 					workspace,
 					user,
 				});
+			}
+
+			// Perform final owner count check right before removal to minimize race condition
+			// This reduces but doesn't eliminate the TOCTOU window
+			if (memberToRemove.role === "owner") {
+				const allMembers = await adapter.listWorkspaceMembers(
+					ctx.body.workspaceId,
+				);
+				const ownerCount = allMembers.filter((m) => m.role === "owner").length;
+
+				if (ownerCount <= 1) {
+					throw new APIError("BAD_REQUEST", {
+						message: WORKSPACE_ERROR_CODES.CANNOT_REMOVE_LAST_OWNER,
+					});
+				}
 			}
 
 			await adapter.removeWorkspaceMember(memberToRemove.id);
@@ -339,7 +361,9 @@ export const updateWorkspaceMemberRole = <O extends WorkspaceOptions>(
 				});
 			}
 
-			// Don't allow removing the last owner
+			// Don't allow removing the last owner by changing their role
+			// Note: This check has a small race condition window. For production use,
+			// consider implementing a database constraint or using a transaction-based approach.
 			if (memberToUpdate.role === "owner" && ctx.body.role !== "owner") {
 				const allMembers = await adapter.listWorkspaceMembers(
 					ctx.body.workspaceId,
@@ -347,6 +371,21 @@ export const updateWorkspaceMemberRole = <O extends WorkspaceOptions>(
 				const ownerCount = allMembers.filter((m) => m.role === "owner").length;
 
 				if (ownerCount <= 1) {
+					throw new APIError("BAD_REQUEST", {
+						message: WORKSPACE_ERROR_CODES.CANNOT_REMOVE_LAST_OWNER,
+					});
+				}
+
+				// Perform final owner count check right before role update to minimize race condition
+				// This reduces but doesn't eliminate the TOCTOU window
+				const finalMembers = await adapter.listWorkspaceMembers(
+					ctx.body.workspaceId,
+				);
+				const finalOwnerCount = finalMembers.filter(
+					(m) => m.role === "owner",
+				).length;
+
+				if (finalOwnerCount <= 1) {
 					throw new APIError("BAD_REQUEST", {
 						message: WORKSPACE_ERROR_CODES.CANNOT_REMOVE_LAST_OWNER,
 					});

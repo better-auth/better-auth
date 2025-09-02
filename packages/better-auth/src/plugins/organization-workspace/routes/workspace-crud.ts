@@ -110,7 +110,7 @@ export const createWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 
 			if (!orgMember) {
 				throw new APIError("FORBIDDEN", {
-					message: WORKSPACE_ERROR_CODES.USER_NOT_ORG_MEMBER,
+					message: WORKSPACE_ERROR_CODES.USER_NOT_ORGANIZATION_MEMBER,
 				});
 			}
 
@@ -127,10 +127,23 @@ export const createWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 				});
 			}
 
+			// Normalize slug if provided
+			let normalizedSlug = ctx.body.slug;
+			if (normalizedSlug) {
+				// Apply slug normalization: lowercase, replace spaces/special chars with hyphens
+				normalizedSlug = normalizedSlug
+					.toLowerCase()
+					.trim()
+					.replace(/[^\w\s-]/g, "") // Remove special characters except spaces and hyphens
+					.replace(/[\s_]+/g, "-") // Replace spaces and underscores with hyphens
+					.replace(/-+/g, "-") // Replace multiple consecutive hyphens with single hyphen
+					.replace(/^-+|-+$/g, ""); // Remove leading and trailing hyphens
+			}
+
 			// Check if slug is unique within the organization
-			if (ctx.body.slug) {
+			if (normalizedSlug) {
 				const existing = await adapter.findWorkspaceBySlug(
-					ctx.body.slug,
+					normalizedSlug,
 					organizationId,
 				);
 				if (existing) {
@@ -143,7 +156,7 @@ export const createWorkspace = <O extends WorkspaceOptions>(options?: O) => {
 			// Create workspace
 			let workspaceData = {
 				name: ctx.body.name,
-				slug: ctx.body.slug,
+				slug: normalizedSlug,
 				description: ctx.body.description,
 				organizationId: organizationId,
 				metadata: ctx.body.metadata,
@@ -427,7 +440,7 @@ export const listWorkspaces = <O extends WorkspaceOptions>(options?: O) =>
 
 			if (!orgMember) {
 				throw new APIError("FORBIDDEN", {
-					message: WORKSPACE_ERROR_CODES.USER_NOT_ORG_MEMBER,
+					message: WORKSPACE_ERROR_CODES.USER_NOT_ORGANIZATION_MEMBER,
 				});
 			}
 
