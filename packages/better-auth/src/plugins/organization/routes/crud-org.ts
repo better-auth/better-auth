@@ -327,7 +327,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			slug?: string;
 			logo?: string;
 			metadata?: Record<string, any>;
-		} & InferAdditionalFieldsFromPluginOptions<"organization", O>;
+		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
 		organizationId: string;
 	};
 	return createAuthEndpoint(
@@ -421,13 +421,17 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canUpdateOrg = hasPermission({
-				permissions: {
-					organization: ["update"],
+			const canUpdateOrg = await hasPermission(
+				{
+					permissions: {
+						organization: ["update"],
+					},
+					role: member.role,
+					options: ctx.context.orgOptions,
+					organizationId,
 				},
-				role: member.role,
-				options: ctx.context.orgOptions,
-			});
+				ctx,
+			);
 			if (!canUpdateOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -536,13 +540,17 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canDeleteOrg = hasPermission({
-				role: member.role,
-				permissions: {
-					organization: ["delete"],
+			const canDeleteOrg = await hasPermission(
+				{
+					role: member.role,
+					permissions: {
+						organization: ["delete"],
+					},
+					organizationId,
+					options: ctx.context.orgOptions,
 				},
-				options: ctx.context.orgOptions,
-			});
+				ctx,
+			);
 			if (!canDeleteOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:

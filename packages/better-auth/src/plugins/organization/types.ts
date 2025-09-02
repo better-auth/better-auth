@@ -5,6 +5,7 @@ import type {
 	Invitation,
 	Member,
 	Organization,
+	OrganizationRole,
 	Team,
 	TeamMember,
 } from "./schema";
@@ -55,6 +56,25 @@ export interface OrganizationOptions {
 	 */
 	roles?: {
 		[key in string]?: Role<any>;
+	};
+	/**
+	 * Dynamic access control for the organization plugin.
+	 */
+	dynamicAccessControl?: {
+		/**
+		 * Whether to enable dynamic access control for the organization plugin.
+		 *
+		 * @default false
+		 */
+		enabled?: boolean;
+		/**
+		 * The maximum number of roles that can be created for an organization.
+		 *
+		 * @default Infinite
+		 */
+		maximumRolesPerOrganization?:
+			| number
+			| ((organizationId: string) => Promise<number> | number);
 	};
 	/**
 	 * Support for team.
@@ -271,6 +291,15 @@ export interface OrganizationOptions {
 			modelName?: string;
 			fields?: {
 				[key in keyof Omit<TeamMember, "id">]?: string;
+			};
+		};
+		organizationRole?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<OrganizationRole, "id">]?: string;
+			};
+			additionalFields?: {
+				[key in string]: FieldAttribute;
 			};
 		};
 	};

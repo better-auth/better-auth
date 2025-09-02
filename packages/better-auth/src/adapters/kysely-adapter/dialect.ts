@@ -106,7 +106,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		});
 	}
 
-	if ("createSession" in db) {
+	if ("createSession" in db && typeof window === "undefined") {
 		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
 			undefined;
 		try {
