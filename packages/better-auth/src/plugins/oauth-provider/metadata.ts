@@ -1,5 +1,6 @@
 import type {
 	AuthServerMetadata,
+	GrantType,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "../../oauth-2.1/types";
@@ -14,6 +15,7 @@ export function authServerMetadata(
 	overrides?: {
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
 		public_client_supported?: boolean;
+		grant_types_supported?: GrantType[];
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
@@ -28,10 +30,10 @@ export function authServerMetadata(
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
-		grant_types_supported: [
+		grant_types_supported: overrides?.grant_types_supported ?? [
 			"authorization_code",
-			"refresh_token",
 			"client_credentials",
+			"refresh_token",
 		],
 		token_endpoint_auth_methods_supported: [
 			...(overrides?.public_client_supported
@@ -64,6 +66,7 @@ export function oidcServerMetadata(
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 		public_client_supported: opts.allowUnauthenticatedClientRegistration,
+		grant_types_supported: opts.grantTypes,
 	});
 	const metadata: Omit<
 		OIDCMetadata,

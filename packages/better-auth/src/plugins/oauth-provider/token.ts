@@ -37,6 +37,14 @@ export async function tokenEndpoint(
 	}
 
 	const grantType: GrantType | undefined = body?.grant_type;
+
+	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `unsupported grant_type ${grantType}`,
+			error: "unsupported_grant_type",
+		});
+	}
+
 	switch (grantType) {
 		case "authorization_code":
 			return handleAuthorizationCodeGrant(ctx, opts, body);

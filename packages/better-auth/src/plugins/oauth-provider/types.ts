@@ -122,6 +122,13 @@ export interface OAuthOptions {
 	 */
 	scopes?: string[];
 	/**
+	 * Grant types supported by the token endpoint
+	 *
+	 * @default
+	 * ["authorization_code", "client_credentials", "refresh_token"]
+	 */
+	grantTypes?: GrantType[];
+	/**
 	 * Create access token expirations based on scope.
 	 *
 	 * This is useful for higher-privelege scopes that

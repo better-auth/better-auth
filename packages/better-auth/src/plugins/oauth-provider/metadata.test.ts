@@ -72,8 +72,8 @@ describe("oauth metadata", async () => {
 			response_modes_supported: ["query"],
 			grant_types_supported: [
 				"authorization_code",
-				"refresh_token",
 				"client_credentials",
+				"refresh_token",
 			],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
@@ -121,8 +121,8 @@ describe("oauth metadata", async () => {
 			response_modes_supported: ["query"],
 			grant_types_supported: [
 				"authorization_code",
-				"refresh_token",
 				"client_credentials",
+				"refresh_token",
 			],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
