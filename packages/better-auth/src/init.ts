@@ -30,6 +30,7 @@ import { BetterAuthError } from "./error";
 import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
+import { checkEndpointConflicts } from "./api";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -60,6 +61,7 @@ export const init = async (options: BetterAuthOptions) => {
 		plugins: plugins.concat(internalPlugins),
 	};
 
+	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
