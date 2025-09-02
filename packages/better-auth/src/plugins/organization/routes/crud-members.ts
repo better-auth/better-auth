@@ -52,7 +52,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			}),
 			use: [orgMiddleware],
 			metadata: {
-				SERVER_ONLY: true,
 				$Infer: {
 					body: {} as {
 						userId: string;
