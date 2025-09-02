@@ -839,14 +839,14 @@ describe("Workspace Plugin", () => {
 			});
 
 			const initialCount = initialWorkspaces.data?.length || 0;
-			const initialGeneralWorkspaces = initialWorkspaces.data?.filter(
-				(w: any) => w.name === "General",
-			).length || 0;
+			const initialGeneralWorkspaces =
+				initialWorkspaces.data?.filter((w: any) => w.name === "General")
+					.length || 0;
 
 			// Simulate a retry scenario by manually triggering the organization creation hook
 			// In a real scenario, this could happen if the organization creation is retried
 			// The hook should check for existing workspaces and not create duplicates
-			
+
 			// Since we can't directly trigger the hook, we'll create another organization
 			// with the same user to verify the pattern works across organizations
 			const org2 = await client.organization.create({
@@ -859,9 +859,9 @@ describe("Workspace Plugin", () => {
 				organizationId: org.data!.id,
 			});
 
-			const finalGeneralWorkspaces = finalWorkspaces.data?.filter(
-				(w: any) => w.name === "General",
-			).length || 0;
+			const finalGeneralWorkspaces =
+				finalWorkspaces.data?.filter((w: any) => w.name === "General").length ||
+				0;
 
 			expect(finalGeneralWorkspaces).toBe(initialGeneralWorkspaces);
 			expect(finalGeneralWorkspaces).toBe(1); // Should still have exactly one "General" workspace
@@ -871,9 +871,9 @@ describe("Workspace Plugin", () => {
 				organizationId: org2.data!.id,
 			});
 
-			const org2GeneralWorkspaces = org2Workspaces.data?.filter(
-				(w: any) => w.name === "General",
-			).length || 0;
+			const org2GeneralWorkspaces =
+				org2Workspaces.data?.filter((w: any) => w.name === "General").length ||
+				0;
 
 			expect(org2GeneralWorkspaces).toBe(1); // Should have exactly one "General" workspace
 		});
