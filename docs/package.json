@@ -9,7 +9,7 @@
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts",
-    "scripts:sync-orama": "node --env-file=.env ./scripts/sync-orama.ts"
+    "scripts:sync-orama": "node ./scripts/sync-orama.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
