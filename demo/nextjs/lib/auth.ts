@@ -41,15 +41,6 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-const PRO_PRICE_ID = {
-	default: "price_1RoxnRHmTADgihIt4y8c0lVE",
-	annual: "price_1RoxnoHmTADgihItzFvVP8KT",
-};
-const PLUS_PRICE_ID = {
-	default: "price_1RoxnJHmTADgihIthZTLmrPn",
-	annual: "price_1Roxo5HmTADgihItEbJu5llL",
-};
-
 const baseURL: string | undefined =
 	process.env.VERCEL === "1"
 		? process.env.VERCEL_ENV === "production"
@@ -200,24 +191,35 @@ export const auth = betterAuth({
 			subscription: {
 				enabled: true,
 				allowReTrialsForDifferentPlans: true,
-				plans: [
-					{
-						name: "Plus",
-						priceId: PLUS_PRICE_ID.default,
-						annualDiscountPriceId: PLUS_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
+				plans: () => {
+					const PRO_PRICE_ID = {
+						default: process.env.STRIPE_PRO_PRICE_ID ?? "price_1RoxnRHmTADgihIt4y8c0lVE",
+						annual: process.env.STRIPE_PRO_ANNUAL_PRICE_ID ?? "price_1RoxnoHmTADgihItzFvVP8KT",
+					};
+					const PLUS_PRICE_ID = {
+						default: process.env.STRIPE_PLUS_PRICE_ID ?? "price_1RoxnJHmTADgihIthZTLmrPn",
+						annual: process.env.STRIPE_PLUS_ANNUAL_PRICE_ID ?? "price_1Roxo5HmTADgihItEbJu5llL",
+					};
+
+					return [
+						{
+							name: "Plus",
+							priceId: PLUS_PRICE_ID.default,
+							annualDiscountPriceId: PLUS_PRICE_ID.annual,
+							freeTrial: {
+								days: 7,
+							},
 						},
-					},
-					{
-						name: "Pro",
-						priceId: PRO_PRICE_ID.default,
-						annualDiscountPriceId: PRO_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
+						{
+							name: "Pro",
+							priceId: PRO_PRICE_ID.default,
+							annualDiscountPriceId: PRO_PRICE_ID.annual,
+							freeTrial: {
+								days: 7,
+							},
 						},
-					},
-				],
+					];
+				},
 			},
 		}),
 		deviceAuthorization({
