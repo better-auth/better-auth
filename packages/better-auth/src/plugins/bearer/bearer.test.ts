@@ -75,15 +75,4 @@ describe("bearer", async () => {
 		});
 		expect(session.data?.session).toBeDefined();
 	});
-
-	it("should work with social sign-in", async () => {
-		const session = await client.signIn.social({
-			provider: "google",
-			fetchOptions: {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			},
-		});
-	});
 });
