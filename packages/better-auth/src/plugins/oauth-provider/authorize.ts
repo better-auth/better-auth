@@ -124,7 +124,7 @@ export async function authorizeEndpoint(
 		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs?.find(
+	const redirectURI = client.redirectUris?.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 	if (!redirectURI || !query.redirect_uri) {
