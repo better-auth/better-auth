@@ -4,9 +4,26 @@ import { APIError } from "better-call";
 import { getWorkspaceAdapter } from "../adapter";
 import { workspaceMiddleware, workspaceSessionMiddleware } from "../call";
 import { WORKSPACE_ERROR_CODES } from "../error-codes";
-import { checkRolePermissions } from "../access";
-import type { WorkspaceOptions } from "../types";
+import { checkRolePermissions, getValidRoles } from "../access";
+import type { WorkspaceOptions, WorkspaceMember } from "../types";
 import { toZodSchema, type FieldAttribute } from "../../../db";
+
+// Helper function to create role validation schema
+const createRoleSchema = (options?: WorkspaceOptions) => {
+	const validRoles = getValidRoles(options);
+	return z.enum(validRoles as [string, ...string[]], {
+		message: `Role must be one of: ${validRoles.join(", ")}`,
+	});
+};
+
+// Helper function to project only safe fields from workspace member objects
+const projectSafeMemberFields = (member: WorkspaceMember) => ({
+	id: member.id,
+	workspaceId: member.workspaceId,
+	userId: member.userId,
+	role: member.role,
+	createdAt: member.createdAt,
+});
 
 export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -22,7 +39,7 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 			body: z.object({
 				workspaceId: z.string(),
 				userId: z.string(),
-				role: z.string().default("member"),
+				role: createRoleSchema(options).default("member"),
 				...additionalFieldsSchema.shape,
 			}),
 			use: [workspaceMiddleware, workspaceSessionMiddleware],
@@ -93,12 +110,10 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 				});
 			}
 
-			let memberData = {
-				id: crypto.randomUUID(),
+			let memberData: Omit<WorkspaceMember, "id" | "createdAt"> = {
 				workspaceId: ctx.body.workspaceId,
 				userId: ctx.body.userId,
 				role: ctx.body.role,
-				createdAt: new Date(),
 			};
 
 			// Run beforeAddWorkspaceMember hook
@@ -109,7 +124,7 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 				})) as any;
 
 				const response = await options.workspaceHooks.beforeAddWorkspaceMember({
-					member: memberData,
+					member: memberData as WorkspaceMember, // ID and createdAt will be set by adapter
 					workspace,
 					user,
 				});
@@ -135,7 +150,7 @@ export const addWorkspaceMember = <O extends WorkspaceOptions>(options?: O) => {
 				});
 			}
 
-			return ctx.json(member);
+			return ctx.json(projectSafeMemberFields(member));
 		},
 	);
 };
@@ -263,7 +278,7 @@ export const updateWorkspaceMemberRole = <O extends WorkspaceOptions>(
 			body: z.object({
 				workspaceId: z.string(),
 				userId: z.string(),
-				role: z.string(),
+				role: createRoleSchema(options),
 			}),
 			use: [workspaceMiddleware, workspaceSessionMiddleware],
 			metadata: {
@@ -343,7 +358,7 @@ export const updateWorkspaceMemberRole = <O extends WorkspaceOptions>(
 				ctx.body.role,
 			);
 
-			return ctx.json(updatedMember);
+			return ctx.json(projectSafeMemberFields(updatedMember));
 		},
 	);
 
@@ -394,6 +409,10 @@ export const listWorkspaceMembers = <O extends WorkspaceOptions>(options?: O) =>
 			}
 
 			const members = await adapter.listWorkspaceMembers(workspaceId);
-			return ctx.json(members);
+
+			// Project only safe fields to avoid exposing sensitive additionalFields
+			const safeMembers = members.map(projectSafeMemberFields);
+
+			return ctx.json(safeMembers);
 		},
 	);

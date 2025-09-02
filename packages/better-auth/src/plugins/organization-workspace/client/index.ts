@@ -63,8 +63,10 @@ export const workspaceClient = (
 				create: async (
 					data: {
 						name: string;
+						slug?: string;
 						description?: string;
 						organizationId?: string;
+						metadata?: Record<string, any>;
 					},
 					fetchOptions?: FetchOptions,
 				) => {
@@ -81,8 +83,8 @@ export const workspaceClient = (
 					fetchOptions?: FetchOptions,
 				) => {
 					return await $fetch("/workspace/get", {
-						method: "POST",
-						body: data,
+						method: "GET",
+						query: data,
 						...fetchOptions,
 					});
 				},
@@ -137,7 +139,7 @@ export const workspaceClient = (
 				},
 				setActive: async (
 					data: {
-						workspaceId: string;
+						workspaceId: string | null;
 					},
 					fetchOptions?: FetchOptions,
 				) => {
@@ -164,6 +166,7 @@ export const workspaceClient = (
 				removeMember: async (
 					data: {
 						workspaceId: string;
+						userId: string;
 					},
 					fetchOptions?: FetchOptions,
 				) => {

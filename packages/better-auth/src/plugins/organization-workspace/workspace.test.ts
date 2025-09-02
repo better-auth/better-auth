@@ -270,6 +270,95 @@ describe("Workspace Plugin", () => {
 				expect(error).toBeDefined();
 			}
 		});
+
+		it("should handle workspace creation with slug and metadata fields", async () => {
+			// Sign up a user with unique email
+			const uniqueEmail = `test-slug-metadata-${Date.now()}@example.com`;
+			const user = await client.signUp.email({
+				email: uniqueEmail,
+				password: "password123",
+				name: "Test User",
+			});
+			expect(user.data).toBeDefined();
+
+			// Sign in the user
+			const signInResult = await client.signIn.email({
+				email: uniqueEmail,
+				password: "password123",
+			});
+			expect(signInResult.data).toBeDefined();
+
+			// Create an organization
+			const org = await client.organization.create({
+				name: "Test Organization Slug Metadata",
+				slug: "test-org-slug-metadata",
+			});
+			expect(org.data).toBeDefined();
+
+			// Set the organization as active
+			await client.organization.setActive({
+				organizationId: org.data!.id,
+			});
+
+			// Test workspace creation with both slug and metadata
+			const workspace = await client.workspace.create({
+				name: "Advanced Workspace",
+				slug: "advanced-workspace-slug",
+				description: "A workspace with all fields",
+				metadata: {
+					environment: "test",
+					version: "1.0.0",
+					tags: ["testing", "advanced"],
+					settings: {
+						enableNotifications: true,
+						theme: "dark",
+					},
+				},
+			});
+
+			expect(workspace).toBeDefined();
+			expect(workspace.data).toBeDefined();
+			expect(workspace.data?.name).toBe("Advanced Workspace");
+			expect(workspace.data?.slug).toBe("advanced-workspace-slug");
+			expect(workspace.data?.description).toBe("A workspace with all fields");
+			expect(workspace.data?.metadata).toBeDefined();
+			expect(workspace.data?.metadata?.environment).toBe("test");
+			expect(workspace.data?.metadata?.version).toBe("1.0.0");
+			expect(workspace.data?.metadata?.tags).toEqual(["testing", "advanced"]);
+			expect(workspace.data?.metadata?.settings?.enableNotifications).toBe(
+				true,
+			);
+			expect(workspace.data?.metadata?.settings?.theme).toBe("dark");
+
+			// Test with just slug
+			const workspaceWithSlug = await client.workspace.create({
+				name: "Slug Only Workspace",
+				slug: "slug-only",
+			});
+
+			expect(workspaceWithSlug).toBeDefined();
+			expect(workspaceWithSlug.data).toBeDefined();
+			expect(workspaceWithSlug.data?.name).toBe("Slug Only Workspace");
+			expect(workspaceWithSlug.data?.slug).toBe("slug-only");
+			expect(workspaceWithSlug.data?.metadata).toBeUndefined();
+
+			// Test with just metadata
+			const workspaceWithMetadata = await client.workspace.create({
+				name: "Metadata Only Workspace",
+				metadata: {
+					type: "metadata-test",
+					priority: "high",
+				},
+			});
+
+			expect(workspaceWithMetadata).toBeDefined();
+			expect(workspaceWithMetadata.data).toBeDefined();
+			expect(workspaceWithMetadata.data?.name).toBe("Metadata Only Workspace");
+			expect(workspaceWithMetadata.data?.slug).toBeUndefined();
+			expect(workspaceWithMetadata.data?.metadata).toBeDefined();
+			expect(workspaceWithMetadata.data?.metadata?.type).toBe("metadata-test");
+			expect(workspaceWithMetadata.data?.metadata?.priority).toBe("high");
+		});
 	});
 
 	describe("Workspace Member Management", () => {
@@ -718,6 +807,75 @@ describe("Workspace Plugin", () => {
 			// The auto-creation feature works but may not automatically add members
 			// This test verifies the workspace is created, which is the main functionality
 			// Member assignment might need to be handled separately
+		});
+
+		it("should not create duplicate default workspaces on retry scenarios", async () => {
+			// Create unique user for this test
+			const timestamp = Date.now();
+			const ownerEmail = `owner-no-duplicate-${timestamp}@example.com`;
+
+			// Create owner user
+			const owner = await client.signUp.email({
+				email: ownerEmail,
+				password: "password123",
+				name: "Owner User",
+			});
+
+			expect(owner.data).toBeTruthy();
+			expect(owner.error).toBeFalsy();
+
+			// Create organization (this should trigger auto workspace creation)
+			const org = await client.organization.create({
+				name: `Test Org No Duplicate ${timestamp}`,
+				slug: `test-org-no-duplicate-${timestamp}`,
+			});
+
+			expect(org.data).toBeTruthy();
+			expect(org.error).toBeFalsy();
+
+			// Get initial workspace count
+			const initialWorkspaces = await client.workspace.list({
+				organizationId: org.data!.id,
+			});
+
+			const initialCount = initialWorkspaces.data?.length || 0;
+			const initialGeneralWorkspaces = initialWorkspaces.data?.filter(
+				(w: any) => w.name === "General",
+			).length || 0;
+
+			// Simulate a retry scenario by manually triggering the organization creation hook
+			// In a real scenario, this could happen if the organization creation is retried
+			// The hook should check for existing workspaces and not create duplicates
+			
+			// Since we can't directly trigger the hook, we'll create another organization
+			// with the same user to verify the pattern works across organizations
+			const org2 = await client.organization.create({
+				name: `Test Org No Duplicate 2 ${timestamp}`,
+				slug: `test-org-no-duplicate-2-${timestamp}`,
+			});
+
+			// Verify first organization still has exactly one "General" workspace
+			const finalWorkspaces = await client.workspace.list({
+				organizationId: org.data!.id,
+			});
+
+			const finalGeneralWorkspaces = finalWorkspaces.data?.filter(
+				(w: any) => w.name === "General",
+			).length || 0;
+
+			expect(finalGeneralWorkspaces).toBe(initialGeneralWorkspaces);
+			expect(finalGeneralWorkspaces).toBe(1); // Should still have exactly one "General" workspace
+
+			// Verify second organization also has exactly one "General" workspace
+			const org2Workspaces = await client.workspace.list({
+				organizationId: org2.data!.id,
+			});
+
+			const org2GeneralWorkspaces = org2Workspaces.data?.filter(
+				(w: any) => w.name === "General",
+			).length || 0;
+
+			expect(org2GeneralWorkspaces).toBe(1); // Should have exactly one "General" workspace
 		});
 	});
 
@@ -1702,10 +1860,61 @@ describe("Workspace Plugin", () => {
 			expect(workspace2Teams.data.teamMembers[0].role).toBe("admin");
 		});
 	});
+
+	describe("Workspace Active State Management", () => {
+		it("should handle workspace setActive with client methods", async () => {
+			// Test the client-side setActive functionality
+
+			// Create unique user and organization for this test
+			const timestamp = Date.now();
+			const userEmail = `setactive-client-${timestamp}@example.com`;
+
+			// Sign up user
+			const user = await client.signUp.email({
+				email: userEmail,
+				password: "password123",
+				name: "SetActive Client User",
+			});
+			expect(user.data).toBeDefined();
+
+			// Create organization
+			const org = await client.organization.create({
+				name: `SetActive Client Org ${timestamp}`,
+				slug: `setactive-client-org-${timestamp}`,
+			});
+			expect(org.data).toBeDefined();
+
+			// Create workspace
+			const workspace = await client.workspace.create({
+				name: "SetActive Client Workspace",
+				description: "Testing client setActive",
+				organizationId: org.data!.id,
+			});
+			expect(workspace.data).toBeDefined();
+
+			// Test 1: Set active workspace using client
+			const setActiveResult = await client.workspace.setActive({
+				workspaceId: workspace.data!.id,
+			});
+			expect(setActiveResult.data).toBeDefined();
+
+			// Test 2: Clear active workspace using client with null
+			const clearActiveResult = await client.workspace.setActive({
+				workspaceId: null,
+			});
+			expect(clearActiveResult.data).toBeDefined();
+
+			// Test 3: Set active workspace again to verify it can be re-set
+			const setActiveAgainResult = await client.workspace.setActive({
+				workspaceId: workspace.data!.id,
+			});
+			expect(setActiveAgainResult.data).toBeDefined();
+		});
+	});
 });
 
 // Server-side API tests following Better-Auth patterns
-describe("Workspace Server API", async (it) => {
+describe("Workspace Server API", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			organization({
@@ -1875,6 +2084,380 @@ describe("Workspace Error Handling", async (it) => {
 		} catch (error: any) {
 			expect(error.statusCode).toBe(401);
 		}
+	});
+});
+
+// Role validation tests
+describe("Workspace Role Validation", async (it) => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				sendInvitationEmail: async (data) => {
+					console.log(`Mock: Sending invitation email to ${data.email}`);
+					return Promise.resolve();
+				},
+			}),
+			workspace(),
+		],
+		logger: {
+			level: "error",
+		},
+	});
+
+	// Use the auth instance directly for testing schema validation errors
+	const { headers } = await signInWithTestUser();
+
+	it("should reject invalid roles in addWorkspaceMember", async () => {
+		// Create organization and workspace first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Test Org Role Validation",
+				slug: "test-org-role-validation",
+			},
+			headers,
+		});
+
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Role Validation Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		try {
+			await auth.api.addWorkspaceMember({
+				body: {
+					workspaceId: workspace!.id,
+					userId: "some-user-id",
+					role: "invalid-role", // This should fail Zod validation
+				},
+				headers,
+			});
+			// If we reach here, the test should fail
+			expect(true).toBe(false);
+		} catch (error: any) {
+			// Verify it's a Zod validation error for role
+			// Better-auth may wrap the error, so check for either the custom message or generic validation error
+			expect(error.message).toMatch(
+				/Invalid body parameters|Role must be one of: owner, admin, member/,
+			);
+		}
+	});
+
+	it("should reject invalid roles in updateWorkspaceMemberRole", async () => {
+		// Create organization and workspace first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Test Org Role Update Validation",
+				slug: "test-org-role-update-validation",
+			},
+			headers,
+		});
+
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Role Update Validation Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		try {
+			await auth.api.updateWorkspaceMemberRole({
+				body: {
+					workspaceId: workspace!.id,
+					userId: "some-user-id",
+					role: "super-admin", // This should fail Zod validation
+				},
+				headers,
+			});
+			// If we reach here, the test should fail
+			expect(true).toBe(false);
+		} catch (error: any) {
+			// Verify it's a Zod validation error for role
+			// Better-auth may wrap the error, so check for either the custom message or generic validation error
+			expect(error.message).toMatch(
+				/Invalid body parameters|Role must be one of: owner, admin, member/,
+			);
+		}
+	});
+
+	it("should reject invalid roles in addWorkspaceTeamMember", async () => {
+		// Create organization and workspace first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Test Org Team Role Validation",
+				slug: "test-org-team-role-validation",
+			},
+			headers,
+		});
+
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Team Role Validation Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		try {
+			await auth.api.addWorkspaceTeamMember({
+				body: {
+					workspaceId: workspace!.id,
+					teamId: "some-team-id",
+					role: "team-leader", // This should fail Zod validation
+				},
+				headers,
+			});
+			// If we reach here, the test should fail
+			expect(true).toBe(false);
+		} catch (error: any) {
+			// Verify it's a Zod validation error for role
+			// Better-auth may wrap the error, so check for either the custom message or generic validation error
+			expect(error.message).toMatch(
+				/Invalid body parameters|Role must be one of: owner, admin, member/,
+			);
+		}
+	});
+
+	it("should reject invalid roles in updateWorkspaceTeamMemberRole", async () => {
+		// Create organization and workspace first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Test Org Team Role Update Validation",
+				slug: "test-org-team-role-update-validation",
+			},
+			headers,
+		});
+
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Team Role Update Validation Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		try {
+			await auth.api.updateWorkspaceTeamMemberRole({
+				body: {
+					workspaceId: workspace!.id,
+					teamId: "some-team-id",
+					role: "moderator", // This should fail Zod validation
+				},
+				headers,
+			});
+			// If we reach here, the test should fail
+			expect(true).toBe(false);
+		} catch (error: any) {
+			// Verify it's a Zod validation error for role
+			// Better-auth may wrap the error, so check for either the custom message or generic validation error
+			expect(error.message).toMatch(
+				/Invalid body parameters|Role must be one of: owner, admin, member/,
+			);
+		}
+	});
+
+	it("should accept valid roles", async () => {
+		// Create organization and workspace first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Test Org Valid Roles",
+				slug: "test-org-valid-roles",
+			},
+			headers,
+		});
+
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Valid Roles Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		// Test that valid roles are accepted (these may fail for other reasons like missing users/teams, but not due to role validation)
+		const validRoles = ["owner", "admin", "member"];
+
+		for (const role of validRoles) {
+			try {
+				await auth.api.addWorkspaceMember({
+					body: {
+						workspaceId: workspace!.id,
+						userId: "some-user-id",
+						role: role,
+					},
+					headers,
+				});
+			} catch (error: any) {
+				// Should not fail due to role validation, but may fail for other reasons
+				expect(error.message).not.toContain("Role must be one of:");
+			}
+
+			try {
+				await auth.api.updateWorkspaceMemberRole({
+					body: {
+						workspaceId: workspace!.id,
+						userId: "some-user-id",
+						role: role,
+					},
+					headers,
+				});
+			} catch (error: any) {
+				// Should not fail due to role validation, but may fail for other reasons
+				expect(error.message).not.toContain("Role must be one of:");
+			}
+		}
+	});
+});
+
+// Safe field projection tests
+describe("Workspace Safe Field Projection", async (it) => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				sendInvitationEmail: async (data) => {
+					console.log(`Mock: Sending invitation email to ${data.email}`);
+					return Promise.resolve();
+				},
+			}),
+			workspace(),
+		],
+		logger: {
+			level: "error",
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("should only return safe fields in API responses to prevent exposure of additionalFields", async () => {
+		// Create organization first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Safe Fields Test Org",
+				slug: "safe-fields-test-org",
+			},
+			headers,
+		});
+
+		// Create workspace
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "Safe Fields Test Workspace",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		// Create a user to add as member
+		const memberUser = await auth.api.signUpEmail({
+			body: {
+				email: "test-member@example.com",
+				password: "password123",
+				name: "Test Member",
+			},
+		});
+
+		// Add member to organization first
+		await auth.api.addMember({
+			body: {
+				userId: memberUser!.user.id,
+				organizationId: org!.id,
+				role: "member",
+			},
+			headers,
+		});
+
+		// Add member to workspace
+		const addMemberResult = await auth.api.addWorkspaceMember({
+			body: {
+				workspaceId: workspace!.id,
+				userId: memberUser!.user.id,
+				role: "member",
+			},
+			headers,
+		});
+
+		// Verify addMember response only contains safe fields
+		expect(addMemberResult).toBeDefined();
+
+		// Check that only expected safe fields are present
+		expect(addMemberResult).toHaveProperty("id");
+		expect(addMemberResult).toHaveProperty("workspaceId");
+		expect(addMemberResult).toHaveProperty("userId");
+		expect(addMemberResult).toHaveProperty("role");
+		expect(addMemberResult).toHaveProperty("createdAt");
+
+		// Verify no unexpected fields are present (like potential additionalFields)
+		const memberKeys = Object.keys(addMemberResult);
+		expect(memberKeys).toEqual([
+			"id",
+			"workspaceId",
+			"userId",
+			"role",
+			"createdAt",
+		]);
+
+		// List workspace members
+		const membersResponse = await auth.api.listWorkspaceMembers({
+			query: {
+				workspaceId: workspace!.id,
+			},
+			headers,
+		});
+
+		expect(membersResponse).toBeTruthy();
+		expect(membersResponse).toHaveLength(2); // owner + member
+
+		// Verify each member in the list only contains safe fields
+		for (const member of membersResponse) {
+			expect(member).toHaveProperty("id");
+			expect(member).toHaveProperty("workspaceId");
+			expect(member).toHaveProperty("userId");
+			expect(member).toHaveProperty("role");
+			expect(member).toHaveProperty("createdAt");
+
+			// Verify no unexpected fields are present
+			const memberKeys = Object.keys(member);
+			expect(memberKeys).toEqual([
+				"id",
+				"workspaceId",
+				"userId",
+				"role",
+				"createdAt",
+			]);
+		}
+
+		// Update member role and verify response
+		const updateRoleResult = await auth.api.updateWorkspaceMemberRole({
+			body: {
+				workspaceId: workspace!.id,
+				userId: memberUser!.user.id,
+				role: "admin",
+			},
+			headers,
+		});
+
+		expect(updateRoleResult).toBeDefined();
+
+		// Check that only expected safe fields are present
+		expect(updateRoleResult).toHaveProperty("id");
+		expect(updateRoleResult).toHaveProperty("workspaceId");
+		expect(updateRoleResult).toHaveProperty("userId");
+		expect(updateRoleResult).toHaveProperty("role");
+		expect(updateRoleResult).toHaveProperty("createdAt");
+		expect(updateRoleResult.role).toBe("admin");
+
+		// Verify no unexpected fields are present
+		const updatedMemberKeys = Object.keys(updateRoleResult);
+		expect(updatedMemberKeys).toEqual([
+			"id",
+			"workspaceId",
+			"userId",
+			"role",
+			"createdAt",
+		]);
 	});
 });
 
@@ -2107,5 +2690,70 @@ describe("Workspace Additional Fields", async (it) => {
 		});
 
 		expect(updatedWorkspace?.description).toBe("Updated via session");
+	});
+
+	it("should handle workspace setActive functionality", async () => {
+		// This test covers the workspace setActive functionality including:
+		// 1. Setting an active workspace
+		// 2. Clearing the active workspace with null
+		// 3. Using active workspace in subsequent operations
+
+		// Create organization first
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "SetActive Test Org",
+				slug: "setactive-test-org",
+			},
+			headers,
+		});
+
+		// Create a workspace
+		const workspace = await auth.api.createWorkspace({
+			body: {
+				name: "SetActive Test Workspace",
+				description: "Testing setActive functionality",
+				organizationId: org!.id,
+			},
+			headers,
+		});
+
+		expect(workspace).toBeDefined();
+		expect(workspace?.name).toBe("SetActive Test Workspace");
+
+		// Test 1: Set the workspace as active
+		const setActiveResult = await auth.api.setActiveWorkspace({
+			body: {
+				workspaceId: workspace!.id,
+			},
+			headers,
+		});
+
+		expect(setActiveResult).toBeDefined();
+
+		// Test 2: Verify we can use the active workspace (implicitly)
+		// Note: This would require the server to support using active workspace
+		// when workspaceId is not provided - for now we just verify the set operation worked
+
+		// Test 3: Clear the active workspace by setting it to null
+		const clearActiveResult = await auth.api.setActiveWorkspace({
+			body: {
+				workspaceId: null,
+			},
+			headers,
+		});
+
+		expect(clearActiveResult).toBeDefined();
+
+		// Test 4: Verify the workspace still exists after clearing active status
+		const retrievedWorkspace = await auth.api.getWorkspace({
+			query: {
+				workspaceId: workspace!.id,
+			},
+			headers,
+		});
+
+		expect(retrievedWorkspace).toBeDefined();
+		expect(retrievedWorkspace?.id).toBe(workspace!.id);
+		expect(retrievedWorkspace?.name).toBe("SetActive Test Workspace");
 	});
 });

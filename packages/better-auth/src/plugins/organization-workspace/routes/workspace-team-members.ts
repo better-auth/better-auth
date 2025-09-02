@@ -4,9 +4,26 @@ import { APIError } from "better-call";
 import { getWorkspaceAdapter } from "../adapter";
 import { workspaceMiddleware, workspaceSessionMiddleware } from "../call";
 import { WORKSPACE_ERROR_CODES } from "../error-codes";
-import { checkRolePermissions } from "../access";
-import type { WorkspaceOptions } from "../types";
+import { checkRolePermissions, getValidRoles } from "../access";
+import type { WorkspaceOptions, WorkspaceTeamMember } from "../types";
 import { toZodSchema, type FieldAttribute } from "../../../db";
+
+// Helper function to create role validation schema
+const createRoleSchema = (options?: WorkspaceOptions) => {
+	const validRoles = getValidRoles(options);
+	return z.enum(validRoles as [string, ...string[]], {
+		message: `Role must be one of: ${validRoles.join(", ")}`,
+	});
+};
+
+// Helper function to project only safe fields from workspace team member objects
+const projectSafeTeamMemberFields = (teamMember: WorkspaceTeamMember) => ({
+	id: teamMember.id,
+	workspaceId: teamMember.workspaceId,
+	teamId: teamMember.teamId,
+	role: teamMember.role,
+	createdAt: teamMember.createdAt,
+});
 
 export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 	options?: O,
@@ -24,7 +41,7 @@ export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 			body: z.object({
 				workspaceId: z.string(),
 				teamId: z.string(),
-				role: z.string().default("member"),
+				role: createRoleSchema(options).default("member"),
 				...additionalFieldsSchema.shape,
 			}),
 			use: [workspaceMiddleware, workspaceSessionMiddleware],
@@ -96,19 +113,17 @@ export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 				});
 			}
 
-			let teamMemberData = {
-				id: crypto.randomUUID(),
+			let teamMemberData: Omit<WorkspaceTeamMember, "id" | "createdAt"> = {
 				workspaceId: ctx.body.workspaceId,
 				teamId: ctx.body.teamId,
 				role: ctx.body.role,
-				createdAt: new Date(),
 			};
 
 			// Run beforeAddWorkspaceTeamMember hook
 			if (options?.workspaceHooks?.beforeAddWorkspaceTeamMember) {
 				const hookResult =
 					await options.workspaceHooks.beforeAddWorkspaceTeamMember({
-						teamMember: teamMemberData,
+						teamMember: teamMemberData as WorkspaceTeamMember, // ID and createdAt will be set by adapter
 						workspace,
 						team,
 						user: session.user,
@@ -132,7 +147,7 @@ export const addWorkspaceTeamMember = <O extends WorkspaceOptions>(
 				});
 			}
 
-			return ctx.json({ teamMember });
+			return ctx.json({ teamMember: projectSafeTeamMemberFields(teamMember) });
 		},
 	);
 };
@@ -245,7 +260,7 @@ export const updateWorkspaceTeamMemberRole = <O extends WorkspaceOptions>(
 			body: z.object({
 				workspaceId: z.string(),
 				teamId: z.string(),
-				role: z.string(),
+				role: createRoleSchema(options),
 			}),
 			use: [workspaceMiddleware, workspaceSessionMiddleware],
 			metadata: {
@@ -306,7 +321,9 @@ export const updateWorkspaceTeamMemberRole = <O extends WorkspaceOptions>(
 				ctx.body.role,
 			);
 
-			return ctx.json({ teamMember: updatedTeamMember });
+			return ctx.json({
+				teamMember: projectSafeTeamMemberFields(updatedTeamMember),
+			});
 		},
 	);
 
@@ -354,7 +371,7 @@ export const listWorkspaceTeamMembers = <O extends WorkspaceOptions>(
 				ctx.query.workspaceId,
 			);
 
-			// Get team details for each team member
+			// Get team details for each team member and project safe fields
 			const orgAdapter = ctx.context.adapter;
 			const teamMembersWithDetails = await Promise.all(
 				teamMembers.map(
@@ -364,7 +381,7 @@ export const listWorkspaceTeamMembers = <O extends WorkspaceOptions>(
 							where: [{ field: "id", value: teamMember.teamId }],
 						})) as any;
 						return {
-							...teamMember,
+							...projectSafeTeamMemberFields(teamMember as any),
 							team,
 						};
 					},

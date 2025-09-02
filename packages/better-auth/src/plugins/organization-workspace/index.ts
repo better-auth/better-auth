@@ -219,22 +219,34 @@ export const workspace = <O extends WorkspaceOptions>(options?: O) => {
 							) {
 								const organizationId = (response as { id: string }).id;
 
-								// Create default workspace
+								// Check if organization already has workspaces to avoid duplicates
 								const adapter = ctx.context.adapter;
-								await adapter.create({
+								const existingWorkspaces = await adapter.findMany({
 									model: "workspace",
-									data: {
-										name: opts.defaultWorkspaceName,
-										organizationId,
-										createdAt: new Date(),
-										updatedAt: new Date(),
-									},
+									where: [{ field: "organizationId", value: organizationId }],
 								});
+
+								// Only create default workspace if none exist
+								if (existingWorkspaces.length === 0) {
+									// Create default workspace
+									await adapter.create({
+										model: "workspace",
+										data: {
+											name: opts.defaultWorkspaceName,
+											organizationId,
+											createdAt: new Date(),
+											updatedAt: new Date(),
+										},
+									});
+								}
 							}
 						} catch (error) {
 							// Log error but don't fail the organization creation
 							// eslint-disable-next-line no-console
-							console.error("Failed to create default workspace:", error);
+							ctx.context.logger.error(
+								"Failed to create default workspace:",
+								error,
+							);
 						}
 					}),
 				},

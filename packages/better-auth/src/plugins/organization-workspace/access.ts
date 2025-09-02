@@ -72,3 +72,30 @@ export function checkRolePermissions(params: {
 
 	return true;
 }
+
+// Helper function to validate if a role is allowed
+export function isValidRole(
+	role: string,
+	options?: { roles?: Record<string, unknown> },
+): boolean {
+	// If custom roles are provided, check against them
+	if (options?.roles) {
+		return Object.keys(options.roles).includes(role);
+	}
+
+	// Otherwise, check against default roles
+	return Object.keys(defaultRoles).includes(role);
+}
+
+// Helper function to get all valid roles
+export function getValidRoles(options?: {
+	roles?: Record<string, unknown>;
+}): string[] {
+	// If custom roles are provided, return their keys
+	if (options?.roles) {
+		return Object.keys(options.roles);
+	}
+
+	// Otherwise, return default roles
+	return Object.keys(defaultRoles);
+}
