@@ -87,7 +87,13 @@ export function checkEndpointConflicts(
 			)
 			.join("\n");
 		logger.error(
-			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths:\n${conflictMessages}\n\nTo resolve this, you can:\n1. Use only one of the conflicting plugins\n2. Configure the plugins to use different paths (if supported)\n3. Use alias plugin to avoid conflicts`,
+			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths:
+${conflictMessages}
+
+To resolve this, you can:
+	1. Use only one of the conflicting plugins
+	2. Configure the plugins to use different paths (if supported)
+`,
 		);
 	}
 }
