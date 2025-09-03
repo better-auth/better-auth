@@ -9,6 +9,8 @@ import {
 	oAuthProxy,
 	openAPI,
 	customSession,
+	deviceAuthorization,
+	lastLoginMethod,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -47,16 +49,27 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-const PRO_PRICE_ID = {
-	default: "price_1RoxnRHmTADgihIt4y8c0lVE",
-	annual: "price_1RoxnoHmTADgihItzFvVP8KT",
-};
-const PLUS_PRICE_ID = {
-	default: "price_1RoxnJHmTADgihIthZTLmrPn",
-	annual: "price_1Roxo5HmTADgihItEbJu5llL",
-};
+const baseURL: string | undefined =
+	process.env.VERCEL === "1"
+		? process.env.VERCEL_ENV === "production"
+			? process.env.BETTER_AUTH_URL
+			: process.env.VERCEL_ENV === "preview"
+				? `https://${process.env.VERCEL_URL}`
+				: undefined
+		: undefined;
+
+const cookieDomain: string | undefined =
+	process.env.VERCEL === "1"
+		? process.env.VERCEL_ENV === "production"
+			? ".better-auth.com"
+			: process.env.VERCEL_ENV === "preview"
+				? `.${process.env.VERCEL_URL}`
+				: undefined
+		: undefined;
+
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
+	baseURL,
 	database: {
 		dialect,
 		type: "sqlite",
@@ -120,6 +133,10 @@ export const auth = betterAuth({
 			clientId: process.env.TWITTER_CLIENT_ID || "",
 			clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
 		},
+		paypal: {
+			clientId: process.env.PAYPAL_CLIENT_ID || "",
+			clientSecret: process.env.PAYPAL_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
@@ -182,32 +199,56 @@ export const auth = betterAuth({
 			subscription: {
 				enabled: true,
 				allowReTrialsForDifferentPlans: true,
-				plans: [
-					{
-						name: "Plus",
-						priceId: PLUS_PRICE_ID.default,
-						annualDiscountPriceId: PLUS_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
+				plans: () => {
+					const PRO_PRICE_ID = {
+						default:
+							process.env.STRIPE_PRO_PRICE_ID ??
+							"price_1RoxnRHmTADgihIt4y8c0lVE",
+						annual:
+							process.env.STRIPE_PRO_ANNUAL_PRICE_ID ??
+							"price_1RoxnoHmTADgihItzFvVP8KT",
+					};
+					const PLUS_PRICE_ID = {
+						default:
+							process.env.STRIPE_PLUS_PRICE_ID ??
+							"price_1RoxnJHmTADgihIthZTLmrPn",
+						annual:
+							process.env.STRIPE_PLUS_ANNUAL_PRICE_ID ??
+							"price_1Roxo5HmTADgihItEbJu5llL",
+					};
+
+					return [
+						{
+							name: "Plus",
+							priceId: PLUS_PRICE_ID.default,
+							annualDiscountPriceId: PLUS_PRICE_ID.annual,
+							freeTrial: {
+								days: 7,
+							},
 						},
-					},
-					{
-						name: "Pro",
-						priceId: PRO_PRICE_ID.default,
-						annualDiscountPriceId: PRO_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
+						{
+							name: "Pro",
+							priceId: PRO_PRICE_ID.default,
+							annualDiscountPriceId: PRO_PRICE_ID.annual,
+							freeTrial: {
+								days: 7,
+							},
 						},
-					},
-				],
+					];
+				},
 			},
 		}),
+		deviceAuthorization({
+			expiresIn: "3min",
+			interval: "5s",
+		}),
+		lastLoginMethod(),
 	],
 	trustedOrigins: ["exp://"],
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: process.env.NODE_ENV === "production",
-			domain: ".better-auth.com",
+			domain: cookieDomain,
 		},
 	},
 });

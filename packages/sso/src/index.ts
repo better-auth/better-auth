@@ -589,6 +589,26 @@ export const sso = (options?: SSOOptions) => {
 							message: "Invalid issuer. Must be a valid URL",
 						});
 					}
+					if (ctx.body.organizationId) {
+						const organization = await ctx.context.adapter.findOne({
+							model: "member",
+							where: [
+								{
+									field: "userId",
+									value: user.id,
+								},
+								{
+									field: "organizationId",
+									value: ctx.body.organizationId,
+								},
+							],
+						});
+						if (!organization) {
+							throw new APIError("BAD_REQUEST", {
+								message: "You are not a member of the organization",
+							});
+						}
+					}
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
 						SSOProvider

@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "./options";
+import type { AdapterConfig, CustomAdapter } from "../adapters";
 
 /**
  * Adapter where clause
@@ -77,7 +78,9 @@ export type Adapter = {
 		options: BetterAuthOptions,
 		file?: string,
 	) => Promise<AdapterSchemaCreation>;
-	options?: Record<string, any>;
+	options?: {
+		adapterConfig: AdapterConfig;
+	} & CustomAdapter["options"];
 };
 
 export type AdapterSchemaCreation = {
@@ -111,7 +114,7 @@ export interface SecondaryStorage {
 	 * @param key - Key to get
 	 * @returns - Value of the key
 	 */
-	get: (key: string) => Promise<string | null> | string | null;
+	get: (key: string) => Promise<unknown> | unknown;
 	set: (
 		/**
 		 * Key to store
@@ -125,7 +128,7 @@ export interface SecondaryStorage {
 		 * Time to live in seconds
 		 */
 		ttl?: number,
-	) => Promise<void | null | string> | void;
+	) => Promise<void | null | unknown> | void;
 	/**
 	 *
 	 * @param key - Key to delete

@@ -15,8 +15,9 @@ import { useState, useTransition } from "react";
 import { Loader2, X } from "lucide-react";
 import { signUp } from "@/lib/auth-client";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { getCallbackURL } from "@/lib/shared";
 
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");
@@ -27,7 +28,8 @@ export function SignUp() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const router = useRouter();
-	const [loading, startTransition] = useTransition();
+	const params = useSearchParams();
+  const [loading, startTransition] = useTransition();
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -150,26 +152,24 @@ export function SignUp() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							startTransition(async () => {
-								await signUp.email({
-									email,
-									password,
-									name: `${firstName} ${lastName}`,
-									image: image ? await convertImageToBase64(image) : "",
-									fetchOptions: {
-										onError: (ctx) => {
-											toast.error(ctx.error.message);
-										},
-										onSuccess: async () => {
-											toast.success("Account created successfully!");
-											startTransition(() => {
-												// manually redirect to the dashboard to make sure toast is shown
-												router.push("/dashboard");
-											});
-										},
-									},
-								});
-							});
+              startTransition(async () => {
+                await signUp.email({
+                  email,
+                  password,
+                  name: `${firstName} ${lastName}`,
+                  image: image ? await convertImageToBase64(image) : "",
+                  callbackURL: "/dashboard",
+                  fetchOptions: {
+                    onError: (ctx) => {
+                      toast.error(ctx.error.message);
+                    },
+                    onSuccess: async () => {
+                      toast.success("Successfully signed up");
+                      router.push(getCallbackURL(params));
+                    },
+                  },
+                });
+              })
 						}}
 					>
 						{loading ? (
