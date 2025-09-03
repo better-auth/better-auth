@@ -1,3 +1,5 @@
+import { getColorDepth } from "./color-depth";
+
 export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
 
 export const levels = ["info", "success", "warn", "error", "debug"] as const;
@@ -94,7 +96,7 @@ export const createLogger = (options?: Logger): InternalLogger => {
 	const logLevel = options?.level ?? "error";
 
 	const isDisableColorsSpecified = options?.disableColors !== undefined;
-	const terminalSupportsColor = process.stdout.getColorDepth() !== 1;
+	const terminalSupportsColor = getColorDepth() !== 1;
 	const colorsEnabled = isDisableColorsSpecified
 		? !options.disableColors
 		: terminalSupportsColor;
