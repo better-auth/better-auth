@@ -165,6 +165,7 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
         "createdAt": {
+          "defaultValue": [Function],
           "fieldName": "createdAt",
           "required": true,
           "type": "date",
@@ -222,6 +223,7 @@ exports[`init > should match config 1`] = `
     "session": {
       "fields": {
         "createdAt": {
+          "defaultValue": [Function],
           "fieldName": "createdAt",
           "required": true,
           "type": "date",
