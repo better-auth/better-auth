@@ -116,7 +116,7 @@ export type Adapter = {
 	) => Promise<AdapterSchemaCreation>;
 	options?: {
 		adapterConfig: AdapterConfig;
-	} & CustomAdapter["options"];
+	} & CustomAdapter<any>["options"];
 };
 
 export type AdapterSchemaCreation = {
