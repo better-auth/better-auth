@@ -52,6 +52,6 @@
   "devDependencies": {
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^18.0.0"
+    "stripe": "^18.5.0"
   }
 }
