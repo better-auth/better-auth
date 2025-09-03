@@ -1,0 +1,18 @@
+{
+  "name": "vanilla-node-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:server": "tsx ./src/server.ts",
+    "start:client": "vite"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.4"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*",
+    "better-sqlite3": "^12.2.0"
+  }
+}

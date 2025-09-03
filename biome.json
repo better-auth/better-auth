@@ -12,7 +12,8 @@
       "recommended": false,
       "suspicious": {
         "noImplicitAnyLet": "warn",
-        "noDuplicateObjectKeys": "warn"
+        "noDuplicateObjectKeys": "warn",
+        "noTsIgnore": "error"
       },
       "performance": {
         "noDelete": "error"
@@ -61,7 +62,8 @@
       "!**/.source",
       "!**/.expo",
       "!**/.cache",
-      "!**/dev/cloudflare/drizzle"
+      "!**/dev/cloudflare/drizzle",
+      "!**/playwright-report"
     ]
   }
 }
