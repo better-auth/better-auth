@@ -65,6 +65,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 	 * Will also provide additional types on the user to include role types.
 	 */
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
+		const inServerCall = ctx.request === undefined;
+		if (inServerCall) return {};
+
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("UNAUTHORIZED");
@@ -211,7 +214,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									"The role to set, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
 							}),
 					}),
-					requireHeaders: true,
 					use: [adminMiddleware],
 					metadata: {
 						openapi: {
@@ -247,15 +249,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const canSetRole = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: ctx.context.session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: ctx.context.session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["set-role"],
 						},
 					});
-					if (!canSetRole) {
+
+					if (!canSetRole && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message:
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
@@ -465,15 +470,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const canUpdateUser = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: ctx.context.session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: ctx.context.session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["update"],
 						},
 					});
-					if (!canUpdateUser) {
+
+					if (!canUpdateUser && !inServerCall) {
 						throw ctx.error("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS,
 							code: "YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS",
@@ -603,16 +611,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const session = ctx.context.session;
 					const canListUsers = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["list"],
 						},
 					});
-					if (!canListUsers) {
+
+					if (!canListUsers && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS,
 						});
@@ -719,16 +730,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const session = ctx.context.session;
 					const canListSessions = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: session?.user.role,
 						options: opts,
 						permissions: {
 							session: ["list"],
 						},
 					});
-					if (!canListSessions) {
+
+					if (!canListSessions && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message:
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS_SESSIONS,
@@ -793,16 +807,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const session = ctx.context.session;
 					const canBanUser = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["ban"],
 						},
 					});
-					if (!canBanUser) {
+
+					if (!canBanUser && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
 						});
@@ -891,26 +908,30 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const session = ctx.context.session;
 					const canBanUser = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["ban"],
 						},
 					});
-					if (!canBanUser) {
+
+					if (!canBanUser && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
 						});
 					}
 
-					if (ctx.body.userId === ctx.context.session.user.id) {
+					if (ctx.body.userId === ctx.context.session?.user.id) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 						});
 					}
+
 					const user = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
@@ -987,15 +1008,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const canImpersonateUser = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: ctx.context.session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: ctx.context.session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["impersonate"],
 						},
 					});
-					if (!canImpersonateUser) {
+
+					if (!canImpersonateUser && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message:
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_IMPERSONATE_USERS,
@@ -1017,13 +1041,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx,
 						true,
 						{
-							impersonatedBy: ctx.context.session.user.id,
+							impersonatedBy: ctx.context.session?.user.id,
 							expiresAt: options?.impersonationSessionDuration
 								? getDate(options.impersonationSessionDuration, "sec")
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
 						true,
 					);
+
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -1038,7 +1063,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const adminCookieProp = ctx.context.createAuthCookie("admin_session");
 					await ctx.setSignedCookie(
 						adminCookieProp.name,
-						`${ctx.context.session.session.token}:${
+						`${ctx.context.session?.session.token}:${
 							dontRememberMeCookie || ""
 						}`,
 						ctx.context.secret,
@@ -1077,7 +1102,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				"/admin/stop-impersonating",
 				{
 					method: "POST",
-					requireHeaders: true,
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx<
@@ -1181,16 +1205,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
 					const session = ctx.context.session;
+
 					const canRevokeSession = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: session?.user.role,
 						options: opts,
 						permissions: {
 							session: ["revoke"],
 						},
 					});
-					if (!canRevokeSession) {
+
+					if (!canRevokeSession && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message:
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
@@ -1256,16 +1283,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const session = ctx.context.session;
 					const canRevokeSession = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: session?.user.role,
 						options: opts,
 						permissions: {
 							session: ["revoke"],
 						},
 					});
-					if (!canRevokeSession) {
+
+					if (!canRevokeSession && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message:
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
@@ -1330,22 +1360,25 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const session = ctx.context.session;
 					const canDeleteUser = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["delete"],
 						},
 					});
-					if (!canDeleteUser) {
+
+					if (!canDeleteUser && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 						});
 					}
 
-					if (ctx.body.userId === ctx.context.session.user.id) {
+					if (ctx.body.userId === ctx.context.session?.user.id) {
 						throw new APIError("BAD_REQUEST", {
 							message: ADMIN_ERROR_CODES.YOU_CANNOT_REMOVE_YOURSELF,
 						});
@@ -1421,15 +1454,18 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					const inServerCall = ctx.request === undefined;
+
 					const canSetUserPassword = hasPermission({
-						userId: ctx.context.session.user.id,
-						role: ctx.context.session.user.role,
+						userId: ctx.context.session?.user.id,
+						role: ctx.context.session?.user.role,
 						options: opts,
 						permissions: {
 							user: ["set-password"],
 						},
 					});
-					if (!canSetUserPassword) {
+
+					if (!canSetUserPassword && !inServerCall) {
 						throw new APIError("FORBIDDEN", {
 							message:
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
