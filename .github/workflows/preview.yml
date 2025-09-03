@@ -33,7 +33,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm build
           
       - run: pnpm dlx pkg-pr-new publish --pnpm ./packages/*
