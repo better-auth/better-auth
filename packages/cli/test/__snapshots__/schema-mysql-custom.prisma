@@ -12,11 +12,11 @@ model User {
   id                   String                @id
   name                 String                @db.Text
   email                String
-  emailVerified        Boolean
+  emailVerified        Boolean               @default(false)
   image                String?               @db.Text
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @default(now()) @updatedAt
-  twoFactorEnabled     Boolean?
+  twoFactorEnabled     Boolean?              @default(false)
   username             String?
   displayUsername      String?               @db.Text
   sessions             Session[]
