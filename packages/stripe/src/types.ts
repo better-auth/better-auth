@@ -206,6 +206,12 @@ export interface StripeOptions {
 		ctx: GenericEndpointContext,
 	) => Promise<{}>;
 	/**
+	 * Usage tracking
+	 */
+	usage?: {
+		enabled: boolean;
+	}
+	/**
 	 * Subscriptions
 	 */
 	subscription?: {

@@ -65,18 +65,57 @@ export const user = {
 	},
 } satisfies AuthPluginSchema;
 
+export const usage = {
+	usage: {
+		fields: {
+			timestamp: {
+				type: "date",
+				required: true,
+			},
+			eventType: {
+				type: "string",
+				required: true,
+			},
+			userId: {
+				type: "string",
+				required: true,
+			},
+			/**
+			 * Optional transaction ID to group related usage events (e.g., all events from a single API request)
+			 */
+			transactionId: {
+				type: "string",
+				required: false,
+			},
+			/**
+			 * Key-value pairs to store additional metadata about the usage event
+			 */
+			payload: {
+				type: "json",
+				required: true,
+			}
+		},
+	}
+} satisfies AuthPluginSchema;
+
 export const getSchema = (options: StripeOptions) => {
-	let baseSchema = {};
+	const baseSchema: AuthPluginSchema = Object.assign(
+		{},
+		user,
+	)
 
 	if (options.subscription?.enabled) {
-		baseSchema = {
-			...subscriptions,
-			...user,
-		};
-	} else {
-		baseSchema = {
-			...user,
-		};
+		Object.assign(
+			baseSchema,
+			subscriptions,
+		)
+	}
+
+	if (options.usage?.enabled) {
+		Object.assign(
+			baseSchema,
+			usage,
+		)
 	}
 
 	if (
