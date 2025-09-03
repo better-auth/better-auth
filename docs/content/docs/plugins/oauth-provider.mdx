@@ -232,18 +232,238 @@ type registerOAuthApplication = {
 
 ### Authorize Endpoint
 
+An [OAuth 2.1 authorization endpoint](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-authorization-endpoint). Since many of the details are not yet fully described, parts are adapted from the legacy [OAuth 2.0 Authorization Endpoint Section](https://datatracker.ietf.org/doc/html/rfc6749#section-3.1) but always implements the [differences from OAuth 2.0](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-differences-from-oauth-20).
+
+The Authorization Endpoint is the entry point for initiating an OAuth 2.1 authorization flows, requiring the grant type `authorization_code` in the options grant types list.
+
+#### Simple Example
+
+To register a new OIDC client, use the `oauth2.register` method.
+
+```ts
+const application = await client.oauth2.authorize({
+  response_type: "code", // required
+  client_id: "my_client", // required
+  redirect_uri: "https://client.example.com/callback", // required
+  scope: "openid profile email offline_access",
+  state: "123", // recommended (ex: randomBytes(32).toString('base64url'))
+  code_challenge_method: "S256", // required
+  code_challenge: "456789",
+});
+```
+
+#### Full Method
+
+<APIMethod path="/oauth2/authorize" method="POST">
+```ts
+type authorizeOAuth = {
+  /**
+   * Authorization processing flow being used
+   */
+  response_type: string = "code",
+  /**
+   * Client Id issued by the Authorization Server during registration.
+   */
+  client_id: string = "my_client",
+  /**
+   * Redirect uri to return to after the request
+   */
+  redirect_uri: string = "https://client.example.com/callback",
+  /**
+   * Space-separated list of requested scopes.
+   */
+  scope: string = "openid profile email offline_access",
+  /**
+   * Recommended random state used to mitigate CSRF attacks
+   */
+  state?: string = "https://client.example.com/callback",
+  /**
+   * Challenge derived from the code verifier
+   */
+  code_challenge: string = "123",
+  /**
+   * Method used to derive code_challenge
+   */
+  code_challenge_method: string = "S256",
+  /**
+   * nonce value
+   */
+  nonce?: string = "123",
+  /**
+   * Assert whether the server should prompt a specific authentication flow
+   */
+  prompt?: ["none" | "login" | "consent"] = "none",
+}
+```
+</APIMethod>
+
+#### Parameters
+
+**State**
+
+We recommend sending a state to mitigate cross-site request forgery (CSRF) attacks. This works by ensuring your client only responds to requests that your client initially requested.
+
+Generate a state value from your client and store on your client such as in a secure, HTTP-only cookie or database.
+
+**Code Challenge**
+
+Code challenges helps protect the authorization `code` returned from the authorization endpoint.
+
+To do so, a code challenge is derived from the code verifier, used and sent in a [Proof Key for Code Exchange (PKCE)](https://datatracker.ietf.org/doc/html/rfc7636) to the Authorization Server.
+
+**Example**
+
+```ts
+import { randomBytes, createHash } from 'crypto'
+
+const state = randomBytes(32).toString('base64url');
+const codeVerifier = randomBytes(32).toString('base64url');
+const codeChallenge = createHash("SHA-256")
+  .update(codeVerifier)
+  .digest()
+  .toString('base64url');
+
+const stateData = {
+  codeVerifier,
+  state,
+  redirectUri: '/dashboard',
+};
+
+// pseudocode set cookie
+await signedCookie(
+  "__Secure-auth.client-state",
+  JSON.stringify(stateData), {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: 3600,
+    path: '/api/auth/oauth2/',
+  }
+);
+```
+
+Now at your `redirect_uri`, check to see if the returned state matches the initial state.
+
+```ts
+// pseudocode get cookie
+const stateCookie = JSON.parse(
+  (await getSignedCookie("__Secure-auth.client-state")) ?? '{}',
+);
+
+// Compare states if returned
+if (stateCookie?.state !== query?.state) {
+  throw new Error('Login state does not match.')
+}
+
+const tokens = await client.oauth2.token({
+  client_id: "my_client", // required
+  client_secret: "my_client_secret", // required for confidential clients
+  grant_type: 'authorization_code',
+  code: codeQuery,
+  code_verifier: stateCookie.codeVerifier,
+});
+```
+
 
 ### Token Endpoint
+
+By default, the token endpoint supports providing tokens for the following grants:
+
+- "authorization_code"
+- "client_credentials"
+- "refresh_token"
+
+#### Authorization code grant
+
+The authorization code grant enables clients to obtain access user access tokens and optionally refresh tokens (with the "offline_access" scope).
+
+#### Client credentials grant
+
+The client credentials grant enables clients to obtain machines to obtain access tokens.
+
+#### Refresh token grant
+
+The refresh token grant enables clients to update their access token without needing the user to login again.
 
 
 ### Consent Endpoint
 
+Accept or deny user consent for a set of scopes.
+
+<APIMethod path="/oauth2/consent" method="POST">
+```ts
+type authorizeOAuth = {
+  /**
+   * Accept or deny user consent for a set of scopes
+   */
+  accept: boolean = true,
+}
+```
+</APIMethod>
 
 ### Introspect Endpoint
 
+[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
+
+This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
+
+<APIMethod path="/oauth2/introspect" method="POST">
+```ts
+type introspectOAuth = {
+  /**
+   * Client Id.
+   */
+  client_id: string = "my_client",
+  /**
+   * Client Secret.
+   */
+  client_secret: string = "my_client_secret",
+  /**
+   * An access token or refresh token
+   */
+  token: string = "xyz",
+  /**
+   * Type of token when known.
+   */
+  token_type_hint?: "access_token" | "refresh_token" = "access_token",
+}
+```
+</APIMethod>
 
 ### Revoke Endpoint
 
+[RFC7009](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Revocation.
+
+This endpoint revokes the provided token.
+
+- opaque `access_token`: immediately removes that `access_token` from the database. `refresh_token` is still valid.
+- JWT `access_token`: verifies that token is safe to remove from client storage.
+- `refresh_token`: removes all `access_tokens` granted using that `refresh_token` and removes the `refresh_token` to prevent further token issuance.
+
+For an `access_token` type, 
+
+<APIMethod path="/oauth2/introspect" method="POST">
+```ts
+type introspectOAuth = {
+  /**
+   * Client Id.
+   */
+  client_id: string = "my_client",
+  /**
+   * Client Secret.
+   */
+  client_secret: string = "my_client_secret",
+  /**
+   * An access token or refresh token
+   */
+  token: string = "xyz",
+  /**
+   * Type of token when known.
+   */
+  token_type_hint?: "access_token" | "refresh_token" = "access_token",
+}
+```
+</APIMethod>
 
 ### UserInfo Endpoint
 
@@ -275,7 +495,13 @@ The `getAdditionalUserInfoClaim` function receives the user object, requested sc
 
 #### Openid Configuration
 
+Provides [OpenID connect discovery metadata](https://openid.net/specs/openid-connect-discovery-1_0.html) located at `/.well-known/openid-configuration`.
+
+This endpoint requires the scope `openid`.
+
 #### oAuth Authorization Server
+
+Provides [RFC8414](https://datatracker.ietf.org/doc/html/rfc8414)-compliant metadata located at `/.well-known/oauth-authorization-server`.
 
 
 ## Configuration
