@@ -5,7 +5,24 @@ import type { LiteralString } from "../../types/helper";
 
 import { APIError, createAuthEndpoint } from "../../api";
 
-const getHTML = (apiReference: Record<string, any>) => `<!doctype html>
+type ScalarTheme =
+	| "alternate"
+	| "default"
+	| "moon"
+	| "purple"
+	| "solarized"
+	| "bluePlanet"
+	| "saturn"
+	| "kepler"
+	| "mars"
+	| "deepSpace"
+	| "laserwave"
+	| "none";
+
+const getHTML = (
+	apiReference: Record<string, any>,
+	theme?: ScalarTheme,
+) => `<!doctype html>
 <html>
   <head>
     <title>Scalar API Reference</title>
@@ -23,7 +40,7 @@ const getHTML = (apiReference: Record<string, any>) => `<!doctype html>
 	 <script>
       var configuration = {
 	  	favicon: "data:image/svg+xml;utf8,${encodeURIComponent(logo)}",
-	   	theme: "saturn",
+	   	theme: "${theme || "default"}",
         metaData: {
 			title: "Better Auth API",
 			description: "API Reference for your Better Auth Instance",
@@ -53,6 +70,12 @@ export interface OpenAPIOptions {
 	 * @default false
 	 */
 	disableDefaultReference?: boolean;
+	/**
+	 * Theme of the OpenAPI reference page.
+	 *
+	 * @default "default"
+	 */
+	theme?: ScalarTheme;
 }
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
@@ -83,7 +106,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const schema = await generator(ctx.context, ctx.context.options);
-					return new Response(getHTML(schema), {
+					return new Response(getHTML(schema, options?.theme), {
 						headers: {
 							"Content-Type": "text/html",
 						},

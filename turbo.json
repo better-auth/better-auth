@@ -1,5 +1,11 @@
 {
   "$schema": "https://turborepo.org/schema.json",
+  "globalDependencies": [
+    "package.json",
+    "tsconfig.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
@@ -7,13 +13,8 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/*"],
-      "env": [
-        "TURSO_DATABASE_URL",
-        "TURSO_AUTH_TOKEN",
-        "RESEND_API_KEY",
-        "BETTER_AUTH_EMAIL"
-      ]
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "clean": {},
     "format": {
@@ -26,6 +27,14 @@
     },
     "test": {
       "dependsOn": ["build"],
+      "outputs": []
+    },
+    "e2e:smoke": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "e2e:integration": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "typecheck": {

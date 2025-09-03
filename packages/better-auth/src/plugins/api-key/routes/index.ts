@@ -37,10 +37,10 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 
 let lastChecked: Date | null = null;
 
-export function deleteAllExpiredApiKeys(
+export async function deleteAllExpiredApiKeys(
 	ctx: AuthContext,
 	byPassLastCheckTime = false,
-) {
+): Promise<void> {
 	if (lastChecked && !byPassLastCheckTime) {
 		const now = new Date();
 		const diff = now.getTime() - lastChecked.getTime();
@@ -49,8 +49,8 @@ export function deleteAllExpiredApiKeys(
 		}
 	}
 	lastChecked = new Date();
-	try {
-		return ctx.adapter.deleteMany({
+	await ctx.adapter
+		.deleteMany({
 			model: API_KEY_TABLE_NAME,
 			where: [
 				{
@@ -64,10 +64,10 @@ export function deleteAllExpiredApiKeys(
 					value: null,
 				},
 			],
+		})
+		.catch((error) => {
+			ctx.logger.error(`Failed to delete expired API keys:`, error);
 		});
-	} catch (error) {
-		ctx.logger.error(`Failed to delete expired API keys:`, error);
-	}
 }
 
 export function createApiKeyRoutes({

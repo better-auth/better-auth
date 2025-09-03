@@ -1,0 +1,13 @@
+{
+  "name": "integration",
+  "scripts": {
+    "e2e:integration": "playwright test"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "terminate": "^2.8.0"
+  }
+}

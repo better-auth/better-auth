@@ -352,9 +352,10 @@ export const createAdapter =
 					newMappedKeys[field] || fields[field].fieldName || field;
 				if (
 					value === undefined &&
-					((!fieldAttributes.defaultValue &&
-						!fieldAttributes.transform?.input) ||
-						action === "update")
+					((fieldAttributes.defaultValue === undefined &&
+						!fieldAttributes.transform?.input &&
+						!(action === "update" && fieldAttributes.onUpdate)) ||
+						(action === "update" && !fieldAttributes.onUpdate))
 				) {
 					continue;
 				}
@@ -379,7 +380,6 @@ export const createAdapter =
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					//@ts-expect-error -Future proofing
 					fieldAttributes.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
@@ -408,7 +408,9 @@ export const createAdapter =
 					});
 				}
 
-				transformedData[newFieldName] = newValue;
+				if (newValue !== undefined) {
+					transformedData[newFieldName] = newValue;
+				}
 			}
 			return transformedData;
 		};
@@ -455,7 +457,6 @@ export const createAdapter =
 					} else if (
 						config.supportsJSON === false &&
 						typeof newValue === "string" &&
-						//@ts-expect-error - Future proofing
 						field.type === "json"
 					) {
 						newValue = safeJSONParse(newValue);
@@ -586,7 +587,7 @@ export const createAdapter =
 						.join("\n")
 						.replace("Error:", "Create method with `id` being called at:");
 					console.log(stack);
-					//@ts-ignore
+					//@ts-expect-error
 					unsafeData.id = undefined;
 				}
 				debugLog(

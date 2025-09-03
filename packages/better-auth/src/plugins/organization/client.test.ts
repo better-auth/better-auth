@@ -28,6 +28,9 @@ describe("organization", () => {
 					schema: inferOrgAdditionalFields<typeof auth>(),
 				}),
 			],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+			},
 		});
 		client.organization.create({
 			name: "Test",
@@ -53,6 +56,9 @@ describe("organization", () => {
 					}),
 				}),
 			],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+			},
 		});
 
 		client.organization.create({

@@ -29,11 +29,15 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
                 clientSecret: process.env.MICROSOFT_CLIENT_SECRET as string, // [!code highlight]
                 // Optional
                 tenantId: 'common', // [!code highlight]                
+                authority: "https://login.microsoftonline.com", // Authentication authority URL // [!code highlight]
                 prompt: "select_account", // Forces account selection // [!code highlight]
             }, // [!code highlight]
         },
     })
     ```
+    
+    **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
+    
     </Step>
 
 </Steps>

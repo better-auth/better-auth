@@ -10,7 +10,7 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	if (!options.database) {
 		const tables = getAuthTables(options);
 		const memoryDB = Object.keys(tables).reduce((acc, key) => {
-			// @ts-ignore
+			// @ts-expect-error
 			acc[key] = [];
 			return acc;
 		}, {});

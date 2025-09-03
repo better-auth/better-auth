@@ -305,7 +305,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateOrganization: async (
 			organizationId: string,
-			data: Partial<InferOrganization<O>>,
+			data: Partial<OrganizationInput>,
 		) => {
 			const organization = await adapter.update<InferOrganization<O>>({
 				model: "organization",

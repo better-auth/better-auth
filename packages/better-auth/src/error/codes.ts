@@ -9,7 +9,7 @@ export const BASE_ERROR_CODES = {
 	INVALID_EMAIL_OR_PASSWORD: "Invalid email or password",
 	SOCIAL_ACCOUNT_ALREADY_LINKED: "Social account already linked",
 	PROVIDER_NOT_FOUND: "Provider not found",
-	INVALID_TOKEN: "invalid token",
+	INVALID_TOKEN: "Invalid token",
 	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
 	FAILED_TO_GET_USER_INFO: "Failed to get user info",
 	USER_EMAIL_NOT_FOUND: "User email not found",

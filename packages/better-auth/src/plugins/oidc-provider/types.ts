@@ -1,4 +1,5 @@
-import type { User } from "../../types";
+import type { InferOptionSchema, User } from "../../types";
+import type { schema } from "./schema";
 
 export interface OIDCOptions {
 	/**
@@ -155,6 +156,10 @@ export interface OIDCOptions {
 	 * @default false
 	 */
 	useJWTPlugin?: boolean;
+	/**
+	 * Custom schema for the OIDC plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
 
 export interface AuthorizationQuery {

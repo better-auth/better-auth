@@ -5,6 +5,7 @@ export const defaultStatements = {
 	member: ["create", "update", "delete"],
 	invitation: ["create", "cancel"],
 	team: ["create", "update", "delete"],
+	ac: ["create", "read", "update", "delete"],
 } as const;
 
 export const defaultAc = createAccessControl(defaultStatements);
@@ -14,6 +15,7 @@ export const adminAc = defaultAc.newRole({
 	invitation: ["create", "cancel"],
 	member: ["create", "update", "delete"],
 	team: ["create", "update", "delete"],
+	ac: ["create", "read", "update", "delete"],
 });
 
 export const ownerAc = defaultAc.newRole({
@@ -21,6 +23,7 @@ export const ownerAc = defaultAc.newRole({
 	member: ["create", "update", "delete"],
 	invitation: ["create", "cancel"],
 	team: ["create", "update", "delete"],
+	ac: ["create", "read", "update", "delete"],
 });
 
 export const memberAc = defaultAc.newRole({
@@ -28,6 +31,7 @@ export const memberAc = defaultAc.newRole({
 	member: [],
 	invitation: [],
 	team: [],
+	ac: ["read"], // Allow members to see all roles for their org.
 });
 
 export const defaultRoles = {

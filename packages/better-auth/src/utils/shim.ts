@@ -49,7 +49,6 @@ export const shimEndpoint = (ctx: AuthContext, value: any) => {
 				}
 			}
 		}
-		//@ts-ignore
 		const endpointRes = value({
 			...context,
 			context: {

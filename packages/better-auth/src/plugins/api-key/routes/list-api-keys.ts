@@ -1,4 +1,4 @@
-import { createAuthEndpoint, sessionMiddleware } from "../../../api";
+import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
@@ -15,7 +15,7 @@ export function listApiKeys({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/list",
@@ -191,10 +191,7 @@ export function listApiKeys({
 					permissions: returningApiKey.permissions
 						? safeJSONParse<{
 								[key: string]: string[];
-							}>(
-								//@ts-ignore - From DB this is always a string
-								returningApiKey.permissions,
-							)
+							}>(returningApiKey.permissions)
 						: null,
 				};
 			});

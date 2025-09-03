@@ -170,3 +170,8 @@ export type InferAdditionalFromClient<
 			: {}
 		: {}
 	: {};
+
+export type SessionQueryParams = {
+	disableCookieCache?: boolean;
+	disableRefresh?: boolean;
+};

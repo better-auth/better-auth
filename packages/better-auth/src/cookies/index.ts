@@ -6,7 +6,7 @@ import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { env, isProduction } from "../utils/env";
 import { base64Url } from "@better-auth/utils/base64";
-import { createTime } from "../utils/time";
+import { ms } from "ms";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
@@ -64,8 +64,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
-	const sessionMaxAge =
-		options.session?.expiresIn || createTime(7, "d").toSeconds();
+	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});

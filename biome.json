@@ -12,7 +12,8 @@
       "recommended": false,
       "suspicious": {
         "noImplicitAnyLet": "warn",
-        "noDuplicateObjectKeys": "warn"
+        "noDuplicateObjectKeys": "warn",
+        "noTsIgnore": "error"
       },
       "performance": {
         "noDelete": "error"
@@ -25,7 +26,8 @@
         "noUnusedImports": "warn"
       },
       "nursery": {
-        "noMisusedPromises": "error"
+        "noMisusedPromises": "error",
+        "noFloatingPromises": "error"
       }
     }
   },
@@ -61,7 +63,8 @@
       "!**/.source",
       "!**/.expo",
       "!**/.cache",
-      "!**/dev/cloudflare/drizzle"
+      "!**/dev/cloudflare/drizzle",
+      "!**/playwright-report"
     ]
   }
 }

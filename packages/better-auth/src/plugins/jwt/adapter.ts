@@ -1,5 +1,5 @@
 import type { Adapter } from "../../types";
-import type { Jwk } from "./schema";
+import type { Jwk } from "./types";
 
 export const getJwksAdapter = (adapter: Adapter) => {
 	return {

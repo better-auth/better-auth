@@ -34,7 +34,6 @@ export default async function Page({
 	const { slug } = await params;
 	const page = changelogs.getPage(slug);
 	if (!slug) {
-		//@ts-ignore
 		return <ChangelogPage />;
 	}
 	if (!page) {
