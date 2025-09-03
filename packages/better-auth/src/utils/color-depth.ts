@@ -92,21 +92,8 @@ export function getColorDepth() {
 	}
 
 	if (typeof process !== "undefined" && process.platform === "win32") {
-		// Lazy load for startup performance.
-		if (OSRelease === undefined) {
-			const { release } = require("os") as typeof import("os");
-			OSRelease = release().split(".", 3);
-		}
-		// Windows 10 build 10586 is the first Windows release that supports 256
-		// colors. Windows 10 build 14931 is the first release that supports
-		// 16m/TrueColor.
-		if (+OSRelease[0] >= 10) {
-			const build = +OSRelease[2];
-			if (build >= 14931) return COLORS_16m;
-			if (build >= 10586) return COLORS_256;
-		}
-
-		return COLORS_16;
+		// Windows 10 build 14931 (from 2016) has true color support
+		return COLORS_16m;
 	}
 
 	if (getEnvVar("TMUX")) {
