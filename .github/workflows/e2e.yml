@@ -36,7 +36,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Start Docker Containers
@@ -55,7 +55,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm e2e:smoke
 
       - name: Stop Docker Containers
@@ -95,7 +95,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Start Docker Containers
@@ -108,7 +108,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_REMOTE_ONLY: true
+          TURBO_CACHE: remote:rw
         run: pnpm e2e:integration
 
       - name: Stop Docker Containers
