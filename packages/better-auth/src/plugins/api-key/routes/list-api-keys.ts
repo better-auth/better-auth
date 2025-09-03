@@ -15,7 +15,7 @@ export function listApiKeys({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/list",
@@ -174,11 +174,7 @@ export function listApiKeys({
 				],
 			});
 
-			deleteAllExpiredApiKeys(ctx.context)?.catch((error) => {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: `Failed to delete expired API keys: ${error.message}`,
-				});
-			});
+			deleteAllExpiredApiKeys(ctx.context);
 			apiKeys = apiKeys.map((apiKey) => {
 				return {
 					...apiKey,

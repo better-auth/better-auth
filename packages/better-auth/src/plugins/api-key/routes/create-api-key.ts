@@ -24,7 +24,7 @@ export function createApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
@@ -371,11 +371,7 @@ export function createApiKey({
 				});
 			}
 
-			deleteAllExpiredApiKeys(ctx.context)?.catch((error) => {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: `Failed to delete expired API keys: ${error.message}`,
-				});
-			});
+			deleteAllExpiredApiKeys(ctx.context);
 
 			const key = await keyGenerator({
 				length: opts.defaultKeyLength,
