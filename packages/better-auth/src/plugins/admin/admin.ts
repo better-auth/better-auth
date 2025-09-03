@@ -1063,7 +1063,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const adminCookieProp = ctx.context.createAuthCookie("admin_session");
 					await ctx.setSignedCookie(
 						adminCookieProp.name,
-						`${ctx.context.session?.session.token}:${
+						`${ctx.context.session?.session.token || ""}:${
 							dontRememberMeCookie || ""
 						}`,
 						ctx.context.secret,
