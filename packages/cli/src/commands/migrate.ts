@@ -49,7 +49,8 @@ export async function migrateAction(opts: any) {
 	}
 
 	// Unmark CLI execution before creating telemetry.
-	process.env.BETTER_AUTH_CALLED_FROM_CLI = "false";
+	// biome-ignore lint: Avoid the delete operator which can impact performance.
+	delete process.env.BETTER_AUTH_CALLED_FROM_CLI;
 	const telemetry = await createTelemetry(config);
 
 	if (db.id !== "kysely") {
