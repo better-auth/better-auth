@@ -105,6 +105,17 @@ export const oauthProvider = (options: OAuthOptions) => {
 		clientRegistrationAllowedScopes,
 	};
 
+	// TODO: device_code grant also allows for refresh tokens
+	if (
+		opts.grantTypes &&
+		opts.grantTypes.includes("refresh_token") &&
+		!opts.grantTypes.includes("authorization_code")
+	) {
+		throw new BetterAuthError(
+			"refresh_token grant requires authorization_code grant",
+		);
+	}
+
 	// Both encode and decode refresh tokens must be defined if one is defined
 	if (
 		(opts.encodeRefreshToken && !opts.decodeRefreshToken) ||
@@ -205,7 +216,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					if (opts.scopes?.includes("openid")) {
+					if (opts.scopes && opts.scopes.includes("openid")) {
 						const metadata = oidcServerMetadata(ctx, opts);
 						return ctx.json(metadata);
 					} else {
@@ -229,7 +240,7 @@ export const oauthProvider = (options: OAuthOptions) => {
 					},
 				},
 				async (ctx) => {
-					if (!opts.scopes?.includes("openid")) {
+					if (opts.scopes && !opts.scopes.includes("openid")) {
 						throw new APIError("NOT_FOUND");
 					}
 					const metadata = oidcServerMetadata(ctx, opts);
