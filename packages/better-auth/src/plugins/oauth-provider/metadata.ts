@@ -28,7 +28,11 @@ export function authServerMetadata(
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
-		response_types_supported: ["code"],
+		response_types_supported:
+			overrides?.grant_types_supported &&
+			!overrides.grant_types_supported.includes("authorization_code")
+				? []
+				: ["code"],
 		response_modes_supported: ["query"],
 		grant_types_supported: overrides?.grant_types_supported ?? [
 			"authorization_code",
