@@ -14,8 +14,8 @@ model User {
   email            String
   emailVerified    Boolean
   image            String?     @db.Text
-  createdAt        DateTime
-  updatedAt        DateTime
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now()) @updatedAt
   twoFactorEnabled Boolean?
   username         String?
   displayUsername  String?     @db.Text
@@ -33,7 +33,7 @@ model Session {
   expiresAt DateTime
   token     String
   createdAt DateTime
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   ipAddress String?  @db.Text
   userAgent String?  @db.Text
   userId    String
@@ -57,7 +57,7 @@ model Account {
   scope                 String?   @db.Text
   password              String?   @db.Text
   createdAt             DateTime
-  updatedAt             DateTime
+  updatedAt             DateTime  @updatedAt
 
   @@map("account")
 }
@@ -67,8 +67,8 @@ model Verification {
   identifier String    @db.Text
   value      String    @db.Text
   expiresAt  DateTime
-  createdAt  DateTime?
-  updatedAt  DateTime?
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @default(now()) @updatedAt
 
   @@map("verification")
 }

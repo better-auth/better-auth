@@ -144,7 +144,7 @@ export const getAuthTables = (
 				},
 				emailVerified: {
 					type: "boolean",
-					defaultValue: () => false,
+					defaultValue: false,
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
 				},
