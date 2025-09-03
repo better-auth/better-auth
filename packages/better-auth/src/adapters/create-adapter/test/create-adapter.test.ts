@@ -174,7 +174,6 @@ describe("Create Adapter Helper", async () => {
 			data: { name: "test-name" },
 		});
 		expect(res).toHaveProperty("id");
-		//@ts-ignore
 		expect(res.id).toBe("HARD-CODED-ID");
 	});
 
@@ -238,17 +237,11 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("image");
 				expect(res).toHaveProperty("createdAt");
 				expect(res).toHaveProperty("updatedAt");
-				//@ts-ignore
 				expect(res?.emailVerified).toEqual(false);
-				//@ts-ignore
 				expect(res?.name).toEqual("test-name");
-				//@ts-ignore
 				expect(res?.email).toEqual(undefined);
-				//@ts-ignore
 				expect(res?.image).toEqual(undefined);
-				//@ts-ignore
 				expect(res?.createdAt).toBeInstanceOf(Date);
-				//@ts-ignore
 				expect(res?.updatedAt).toBeInstanceOf(Date);
 			});
 
@@ -258,7 +251,6 @@ describe("Create Adapter Helper", async () => {
 					data: { name: "test-name" },
 				});
 				expect(res).toHaveProperty("id");
-				//@ts-ignore
 				expect(typeof res?.id).toEqual("string");
 
 				const adapterWithoutIdGeneration = await createTestAdapter({
@@ -356,11 +348,9 @@ describe("Create Adapter Helper", async () => {
 							data: { emailVerified: true },
 						});
 						expect(res).toHaveProperty("emailVerified");
-						//@ts-ignore
 						expect(res.emailVerified).toBe(true);
 					});
 				expect(createTRUEParameters.data).toHaveProperty("emailVerified");
-				//@ts-ignore
 				expect(createTRUEParameters.data.emailVerified).toBe(1);
 
 				// Testing false
@@ -384,11 +374,9 @@ describe("Create Adapter Helper", async () => {
 							data: { emailVerified: false },
 						});
 						expect(res).toHaveProperty("emailVerified");
-						//@ts-ignore
 						expect(res.emailVerified).toBe(false);
 					});
 				expect(createFALSEParameters.data).toHaveProperty("emailVerified");
-				//@ts-ignore
 				expect(createFALSEParameters.data.emailVerified).toBe(0);
 			});
 
@@ -403,7 +391,6 @@ describe("Create Adapter Helper", async () => {
 								user: {
 									additionalFields: {
 										preferences: {
-											//@ts-expect-error - Not *technically* implemented yet, however the `createAdapter` helper already supports it.
 											type: "json",
 										},
 									},
@@ -917,11 +904,10 @@ describe("Create Adapter Helper", async () => {
 							update: { emailVerified: true },
 						});
 						expect(res).toHaveProperty("emailVerified");
-						//@ts-ignore
+						//@ts-expect-error
 						expect(res.emailVerified).toBe(true);
 					});
 				expect(updateTRUEParameters.update).toHaveProperty("emailVerified");
-				//@ts-ignore
 				expect(updateTRUEParameters.update.emailVerified).toBe(1);
 
 				// Testing false
@@ -951,11 +937,10 @@ describe("Create Adapter Helper", async () => {
 							update: { emailVerified: false },
 						});
 						expect(res).toHaveProperty("emailVerified");
-						//@ts-ignore
+						//@ts-expect-error
 						expect(res.emailVerified).toBe(false);
 					});
 				expect(createFALSEParameters.update).toHaveProperty("emailVerified");
-				//@ts-ignore
 				expect(createFALSEParameters.update.emailVerified).toBe(0);
 			});
 
@@ -970,7 +955,6 @@ describe("Create Adapter Helper", async () => {
 								user: {
 									additionalFields: {
 										preferences: {
-											//@ts-expect-error - Not *technically* implemented yet, however the `createAdapter` helper already supports it.
 											type: "json",
 										},
 									},
@@ -1484,7 +1468,6 @@ describe("Create Adapter Helper", async () => {
 						});
 
 						expect(res).toHaveProperty("id");
-						//@ts-ignore
 						expect(res?.id).toEqual("1");
 					});
 				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
@@ -1526,7 +1509,6 @@ describe("Create Adapter Helper", async () => {
 						});
 
 						expect(res[0]).toHaveProperty("id");
-						//@ts-ignore
 						expect(res[0].id).toEqual("1");
 					});
 				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
