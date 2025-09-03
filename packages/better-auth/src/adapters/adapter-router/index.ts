@@ -230,7 +230,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					"create",
 					data.data,
 				);
-				return adapter.create(data);
+				return await adapter.create(data);
 			},
 
 			findOne: async (data) => {
@@ -239,7 +239,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					"findOne",
 					data.where,
 				);
-				return adapter.findOne(data);
+				return await adapter.findOne(data);
 			},
 
 			findMany: async (data) => {
@@ -248,12 +248,12 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					"findMany",
 					data.where,
 				);
-				return adapter.findMany(data);
+				return await adapter.findMany(data);
 			},
 
 			count: async (data) => {
 				const adapter = await getAdapterForModel(data.model, "count");
-				return adapter.count(data);
+				return await adapter.count(data);
 			},
 
 			update: async (data) => {
@@ -261,7 +261,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					where: data.where,
 					update: data.update,
 				});
-				return adapter.update(data);
+				return await adapter.update(data);
 			},
 
 			updateMany: async (data) => {
@@ -269,7 +269,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					where: data.where,
 					update: data.update,
 				});
-				return adapter.updateMany(data);
+				return await adapter.updateMany(data);
 			},
 
 			delete: async (data) => {
@@ -278,7 +278,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					"delete",
 					data.where,
 				);
-				return adapter.delete(data);
+				return await adapter.delete(data);
 			},
 
 			deleteMany: async (data) => {
@@ -287,7 +287,7 @@ export const adapterRouter = (config: AdapterRouterConfig) => {
 					"deleteMany",
 					data.where,
 				);
-				return adapter.deleteMany(data);
+				return await adapter.deleteMany(data);
 			},
 
 			createSchema: async (options, file) => {
