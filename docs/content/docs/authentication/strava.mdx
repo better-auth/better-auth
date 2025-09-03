@@ -13,7 +13,7 @@ description: Strava provider setup and usage.
 
   <Step>
         ### Configure the provider
-        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+        To configure the provider, you need to add it to the `socialProviders` option of the auth instance.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
@@ -88,7 +88,7 @@ export const auth = betterAuth({
         strava: {
             clientId: process.env.STRAVA_CLIENT_ID as string,
             clientSecret: process.env.STRAVA_CLIENT_SECRET as string,
-            scope: ["read", "activity:read"], // [!code highlight]
+            scope: ["activity:read"], // [!code highlight]
         },
     },
 })
