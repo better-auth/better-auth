@@ -88,12 +88,6 @@ export const getMCPProtectedResourceMetadata = (
 	options?: OIDCOptions,
 ) => {
 	const baseURL = ctx.context.baseURL;
-	if (!baseURL) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description:
-				"If you're the app developer, please make sure to set the `baseURL` in your auth config.",
-		});
-	}
 
 	return {
 		resource: baseURL,
