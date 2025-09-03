@@ -274,6 +274,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (url.includes("/sign-out")) {
 						await storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
+							...store.atoms.session.get(),
 							data: null,
 							error: null,
 							isPending: false,
