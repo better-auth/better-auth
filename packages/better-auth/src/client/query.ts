@@ -49,7 +49,7 @@ export const useAuthQuery = <T>(
 					})
 				: options;
 
-		return $fetch<T>(path, {
+		$fetch<T>(path, {
 			...opts,
 			query: {
 				...opts?.query,
@@ -93,6 +93,14 @@ export const useAuthQuery = <T>(
 				});
 				await opts?.onRequest?.(context);
 			},
+		}).catch((error) => {
+			value.set({
+				error,
+				data: null,
+				isPending: false,
+				isRefetching: false,
+				refetch: value.value.refetch,
+			});
 		});
 	};
 	initializedAtom = Array.isArray(initializedAtom)
@@ -107,12 +115,10 @@ export const useAuthQuery = <T>(
 				return;
 			}
 			if (isMounted) {
-				// biome-ignore lint/nursery/noFloatingPromises: find a way to handle this in the future
 				fn();
 			} else {
 				onMount(value, () => {
 					setTimeout(() => {
-						// biome-ignore lint/nursery/noFloatingPromises: find a way to handle this in the future
 						fn();
 					}, 0);
 					isMounted = true;
