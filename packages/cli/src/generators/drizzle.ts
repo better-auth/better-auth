@@ -12,7 +12,11 @@ export function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
 		return str;
 	}
-	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
+	return str
+		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
+		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
+		.toLowerCase();
 }
 
 export const generateDrizzleSchema: SchemaGenerator = async ({
