@@ -91,8 +91,13 @@ export type InternalLogger = {
 
 export const createLogger = (options?: Logger): InternalLogger => {
 	const enabled = options?.disabled !== true;
-	const colorsEnabled = options?.disableColors !== true;
 	const logLevel = options?.level ?? "error";
+
+	const isDisableColorsSpecified = options?.disableColors !== undefined;
+	const terminalSupportsColor = process.stdout.getColorDepth() !== 1;
+	const colorsEnabled = isDisableColorsSpecified
+		? !options.disableColors
+		: terminalSupportsColor;
 
 	const LogFunc = (
 		level: LogLevel,
