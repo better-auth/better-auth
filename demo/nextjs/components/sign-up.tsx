@@ -29,7 +29,7 @@ export function SignUp() {
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const router = useRouter();
 	const params = useSearchParams();
-  const [loading, startTransition] = useTransition();
+	const [loading, startTransition] = useTransition();
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -152,24 +152,24 @@ export function SignUp() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-              startTransition(async () => {
-                await signUp.email({
-                  email,
-                  password,
-                  name: `${firstName} ${lastName}`,
-                  image: image ? await convertImageToBase64(image) : "",
-                  callbackURL: "/dashboard",
-                  fetchOptions: {
-                    onError: (ctx) => {
-                      toast.error(ctx.error.message);
-                    },
-                    onSuccess: async () => {
-                      toast.success("Successfully signed up");
-                      router.push(getCallbackURL(params));
-                    },
-                  },
-                });
-              })
+							startTransition(async () => {
+								await signUp.email({
+									email,
+									password,
+									name: `${firstName} ${lastName}`,
+									image: image ? await convertImageToBase64(image) : "",
+									callbackURL: "/dashboard",
+									fetchOptions: {
+										onError: (ctx) => {
+											toast.error(ctx.error.message);
+										},
+										onSuccess: async () => {
+											toast.success("Successfully signed up");
+											router.push(getCallbackURL(params));
+										},
+									},
+								});
+							});
 						}}
 					>
 						{loading ? (
