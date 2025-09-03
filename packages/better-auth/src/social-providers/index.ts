@@ -30,6 +30,7 @@ import { kakao } from "./kakao";
 import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+import { strava } from "./strava";
 
 export const socialProviders = {
 	apple,
@@ -62,6 +63,7 @@ export const socialProviders = {
 	naver,
 	line,
 	paypal,
+	strava,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -115,5 +117,6 @@ export * from "./kakao";
 export * from "./naver";
 export * from "./line";
 export * from "./paypal";
+export * from "./strava";
 
 export type SocialProviderList = typeof socialProviderList;
