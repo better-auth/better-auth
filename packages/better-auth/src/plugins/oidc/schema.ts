@@ -1,8 +1,8 @@
 import type { AuthPluginSchema } from "../../types";
 
 export const schema = {
-	oauthApplication: {
-		modelName: "oauthApplication",
+	oauthClient: {
+		modelName: "oauthClient",
 		fields: {
 			name: {
 				type: "string",
@@ -71,7 +71,7 @@ export const schema = {
 			clientId: {
 				type: "string",
 				references: {
-					model: "oauthApplication",
+					model: "oauthClient",
 					field: "clientId",
 					onDelete: "cascade",
 				},
@@ -102,7 +102,7 @@ export const schema = {
 			clientId: {
 				type: "string",
 				references: {
-					model: "oauthApplication",
+					model: "oauthClient",
 					field: "clientId",
 					onDelete: "cascade",
 				},

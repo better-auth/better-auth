@@ -1,13 +1,15 @@
-import { afterAll, describe, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import type { Client } from "../oidc/types";
+
 import { mcp } from ".";
-import { genericOAuth } from "../generic-oauth";
-import type { Client } from "../oidc-provider/types";
-import { createAuthClient } from "../../client";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { listen } from "listhen";
-import { toNodeHandler } from "../../integrations/node";
+import { afterAll, describe, it } from "vitest";
+
 import { jwt } from "../jwt";
+import { createAuthClient } from "../../client";
+import { genericOAuth } from "../generic-oauth";
+import { toNodeHandler } from "../../integrations/node";
+import { genericOAuthClient } from "../generic-oauth/client";
+import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("mcp", async () => {
 	// Start server on ephemeral port first to get available port
@@ -27,16 +29,13 @@ describe("mcp", async () => {
 			plugins: [
 				mcp({
 					loginPage: "/login",
-					oidcConfig: {
-						loginPage: "/login",
-						requirePKCE: true,
+					requirePKCE: true,
 
-						getAdditionalUserInfoClaim(user, scopes, client) {
-							return {
-								custom: "custom value",
-								userId: user.id,
-							};
-						},
+					getAdditionalUserInfoClaim(user, scopes, client) {
+						return {
+							custom: "custom value",
+							userId: user.id,
+						};
 					},
 				}),
 				jwt(),
@@ -78,7 +77,7 @@ describe("mcp", async () => {
 				token_endpoint_auth_method: "none",
 			},
 			onResponse(context) {
-				expect(context.response.status).toBe(201);
+				expect(context.response.status).toBe(200);
 			},
 		});
 
@@ -317,7 +316,7 @@ describe("mcp", async () => {
 
 	it("should expose OAuth discovery metadata", async ({ expect }) => {
 		const metadata = await serverClient.$fetch(
-			"/.well-known/oauth-authorization-server",
+			"/mcp/.well-known/openid-configuration",
 		);
 
 		expect(metadata.data).toMatchObject({
@@ -325,14 +324,14 @@ describe("mcp", async () => {
 			authorization_endpoint: `${baseURL}/api/auth/mcp/authorize`,
 			token_endpoint: `${baseURL}/api/auth/mcp/token`,
 			userinfo_endpoint: `${baseURL}/api/auth/mcp/userinfo`,
-			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
+			jwks_uri: `${baseURL}/api/auth/jwks`,
 			registration_endpoint: `${baseURL}/api/auth/mcp/register`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			response_types_supported: ["code"],
 			response_modes_supported: ["query"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["RS256", "none"],
+			id_token_signing_alg_values_supported: ["HS256", "none"],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
