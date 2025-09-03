@@ -61,28 +61,36 @@ The username plugin is a lightweight plugin that adds username support to the em
 
 ### Sign up
 
-To sign up a user with username, you can use the existing `signUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
+To sign up a user with username, you can use the existing `signUp.email` function provided by the client.
+The `signUp` function should take a new `username` property in the object.
 
-```ts title="auth-client.ts"
-const data = await authClient.signUp.email({
-    email: "email@domain.com",
-    name: "Test User",
-    password: "password1234",
-    username: "test"
-})
+<APIMethod path="/sign-up/email" method="POST">
+```ts
+type signUpEmail = {
+    /**
+     * The email of the user.
+    */
+    email: string = "email@domain.com"
+    /**
+     * The name of the user.
+    */
+    name: string = "Test User"
+    /**
+     * The password of the user.
+    */
+    password: string = "password1234"
+    /**
+     * The username of the user.
+    */
+    username: string = "test"
+    /**
+     * An optional display username of the user.
+    */
+    displayUsername?: string = "Test User123"
+}
 ```
+</APIMethod>
 
-You can also provide a `displayUsername`
-
-```ts title="auth-client.ts"
-const data = await authClient.signUp.email({
-    email: "email@domain.com",
-    name: "Test User",
-    password: "password1234",
-    username: "test",
-    displayUsername: "Test User123" 
-})
-```
 
 <Callout type="info">
     If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
@@ -90,43 +98,58 @@ const data = await authClient.signUp.email({
 
 ### Sign in
 
-To sign in a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
+To sign in a user with username, you can use the `signIn.username` function provided by the client.
 
-- `username`: The username of the user.
-- `password`: The password of the user.
-
-```ts title="auth-client.ts" 
-const data = await authClient.signIn.username({
-    username: "test",
-    password: "password1234",
-})
+<APIMethod path="/sign-in/username" method="POST">
+```ts
+type signInUsername = {
+    /**
+     * The username of the user.
+    */
+    username: string = "test"
+    /**
+     * The password of the user.
+    */
+    password: string = "password1234"
+}
 ```
+</APIMethod>
 
 ### Update username
 
 To update the username of a user, you can use the `updateUser` function provided by the client.
 
-```ts title="auth-client.ts"
-const data = await authClient.updateUser({
-    username: "new-username"
-})
+<APIMethod path="/update-user" method="POST">
+```ts
+type updateUser = {
+    /**
+     * The username to update.
+    */
+    username?: string = "new-username"
+}
 ```
+</APIMethod>
 
 ### Check if username is available
 
 To check if a username is available, you can use the `isUsernameAvailable` function provided by the client.
 
-```ts title="auth-client.ts"
-const response = await authClient.isUsernameAvailable({
-    username: "new-username"
-});
+<APIMethod path="/is-username-available" method="POST" resultVariable="response">
+```ts
+type isUsernameAvailable = {
+    /**
+     * The username to check.
+    */
+    username: string = "new-username"
+}
 
-if(response.data?.available) {
+if(response?.available) {
     console.log("Username is available");
 } else {
     console.log("Username is not available");
 }
 ```
+</APIMethod>
 
 ## Options
 
