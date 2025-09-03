@@ -614,12 +614,206 @@ const auth = betterAuth({
 })
 ```
 
+### Scopes
+
+Scopes allow clients specific access to specific resources.
+By default, we support the following scopes are supported:
+
+- `openid`: Returns the user's ID (`sub` claim).
+- `profile`: Returns name, picture, given_name, family_name
+- `email`: Returns email and email_verified
+- `offline_access`: Returns a refresh token
+
+The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server, otherwise this is a standard OAuth 2.1 server. All supported scopes must be in this array.
+
+```ts title="auth.ts"
+oidcProvider({
+  scopes: [ "openid", "profile", "offline_access", "read:post", "write:post" ],
+})
+```
+
+### Claims
+
+Claims are fields defined in your access and id tokens. You can add more claims using the `customClaims`.
+
+By internally, we support the following claims are supported: ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "sid", "scope", "azp"].
+
+The claims configuration can only be appended to the internal supported claims. Claims should be namespaced when possible to avoid potential future conflicts.
+
+```ts title="auth.ts"
+oidcProvider({
+  customClaims: [ "locale", "https://example.com/roles" ],
+  // Attach claims to id tokens
+  customIdTokenClaims: (_user: User, _scopes: string[]) => {
+    return {
+      locale: "en-GB",
+    };
+  },
+  // Attach claims to access tokens
+  customJwtClaims: (_user: User, _scopes: string[]) => {
+    return {
+      "https://example.com/roles": ["admin", "editor"],
+    };
+  },
+  // Additional user info claims
+  getAdditionalUserInfoClaim: (_user: User, _scopes: string[]) => {
+    return {
+      locale: "en-GB",
+      "https://example.com/roles": ["admin", "editor"],
+    };
+  },
+})
+```
+
+### Expirations
+
+Each token type and grant type can independently can set a default expiration.
+
+- `accessTokenExpiresIn` defaults 1 hour
+- `m2mAccessTokenExpiresIn` defaults 1 hour
+- `idTokenExpiresIn` defaults 10 hours
+- `refreshTokenExpiresIn` defaults 30 days
+- `codeExpiresIn` defaults 10 minutes
+
+Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privelege scopes that require shorter expiration times. The earliest expiration will take precendence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
+
+```ts title="auth.ts"
+oidcProvider({
+  scopeExpirations: {
+    "write:payments": "5m",
+    "read:payments": "30m",
+  },
+})
+```
+
+
+### Registration
+
+#### Dynamic Client Registration
+
+Dynamic registration allows for authorized registration of both public and confidential clients.
+
+```ts title="auth.ts"
+oidcProvider({
+  allowDynamicClientRegistration: true,
+})
+```
+
+Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header. The is especially useful for an MCP to dynamically register themselves as a public client.
+
+```ts title="auth.ts"
+oidcProvider({
+  allowDynamicClientRegistration: true,
+  allowUnauthenticatedClientRegistration: true,
+})
+```
+
+#### Dynamic Client Registration Expiration
+
+You can additionally set an expiration time for how long a confidential client should last for. By default, dynamically registered confidential clients do not expire.
+
+```ts title="auth.ts"
+oidcProvider({
+  allowDynamicClientRegistration: true,
+  clientRegistrationClientSecretExpiration: "30d",
+})
+```
+
+#### Dynamic Client Registration Scopes
+
+To set a list of default scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationDefaultScopes` field. All scopes must be defined in `scopes`.
+
+```ts title="auth.ts"
+oidcProvider({
+  scopes: ["reader", "editor"],
+  clientRegistrationDefaultScopes: ["reader"],
+})
+```
+
+To also set a list of allowed scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationAllowedScopes` field. These are **in addition** to the `clientRegistrationDefaultScopes`. All scopes must be defined in `scopes`.
+
+```ts title="auth.ts"
+oidcProvider({
+  scopes: ["reader", "editor"],
+  clientRegistrationDefaultScopes: ["reader"],
+  clientRegistrationAllowedScopes: ["editor"],
+})
+```
+
+
+### Storage
+
+By default all secrets are `hashed` by default on the database. This helps protect the `client_secret` in case of a database leak.
+
+- **storeClientSecret**: the storage method of application `client_secrets`. Only when `disableJWTPlugin: true`, the client secret shall rather be `encrypted`.
+- **storeTokens**: the storage method of token values, specifically session refresh tokens and opaque access tokens.
+
+
+### Refresh Token Customization
+
+You can choose to format your session tokens in a different string format using the `encodeRefreshToken` and `decodeRefreshToken` functions.
+
+These functions allow you to add additional functionality on the refresh token itself such as refresh token encryption or storage for session replay attacks.
+
+If defined, both `encodeRefreshToken` and `decodeRefreshToken` functions. must be defined.
+
+Example with change in refresh token format with backwards compatablity with original token-only format:
+
+```ts title="auth.ts"
+oidcProvider({
+  encodeRefreshToken: (token, session) => {
+    const res = session ? `1.${token}.${session}` : token;
+    return res;
+  },
+  decodeRefreshToken: (token) => {
+    const tokenSplit = token.split('.');
+    if (tokenSplit.length === 3 && tokenSplit.at(0) === '1') {
+      return {
+        token: tokenSplit.at(1),
+        sessionId: tokenSplit.at(2),
+      };
+    }
+    return { token };
+  },
+})
+```
+
+Pseudocode for a token encryption:
+
+```ts title="auth.ts"
+import { CompactEncrypt, compactDecrypt } from 'jose'
+
+const secret = "SOME_SECRET_OR_KEY"
+const alg = "A256KW"
+const enc = "A256GCM"
+
+const auth = betterAuth({
+  plugins: [oidcProvider({
+    encodeRefreshToken: (token, session) {
+      const value = JSON.stringify({
+        sessionId: session.id,
+        token,
+      });
+      const jwe = await new CompactEncrypt(Buffer.from(value))
+        .setProtectedHeader({ alg, enc })
+        .encrypt(secret);
+      return jwe;
+    },
+    decodeRefreshToken: (token) {
+      const { plaintext } = await compactDecrypt(token, secret);
+      const payload = new TextDecoder().decode(plaintext);
+      return JSON.parse(payload);
+    },
+  })]
+})
+```
+
 
 ### Advertised Metadata
 
 The metadata endpoint can be customized so that the publicized scopes and claims differ from those which the server can deliver. This can prevent showcasing all your supported scopes and claims on your metadata endpoint.
 
-All scopes and claims inside the advertisedMetadata section must be listed in `scopes` and `customClaims` respectively otherwise initialization will fail.
+All scopes and claims inside the advertisedMetadata section MUST be listed in `scopes` and `customClaims` respectively otherwise initialization will fail.
 
 #### Scopes
 
