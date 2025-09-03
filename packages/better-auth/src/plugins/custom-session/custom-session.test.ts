@@ -8,6 +8,7 @@ import type { BetterAuthOptions } from "../../types";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
 import { multiSessionClient } from "../multi-session/client";
+import { parseSetCookieHeader } from "../../cookies";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
@@ -15,6 +16,14 @@ describe("Custom Session Plugin Tests", async () => {
 	} satisfies BetterAuthOptions;
 	const { auth, signInWithTestUser, testUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			session: {
+				maxAge: 10,
+				updateAge: 0,
+				cookieCache: {
+					enabled: true,
+					maxAge: 10,
+				},
+			},
 			plugins: [
 				...options.plugins,
 				customSession(
@@ -61,7 +70,12 @@ describe("Custom Session Plugin Tests", async () => {
 			fetchOptions: {
 				headers,
 				onResponse(context) {
-					expect(context.response.headers.get("set-cookie")).toBeDefined();
+					const header = context.response.headers.get("set-cookie");
+					expect(header).toBeDefined();
+
+					const cookies = parseSetCookieHeader(header!);
+					expect(cookies.has("better-auth.session_token")).toBe(true);
+					expect(cookies.has("better-auth.session_data")).toBe(true);
 				},
 			},
 		});
