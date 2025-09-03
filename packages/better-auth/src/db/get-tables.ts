@@ -27,7 +27,7 @@ export type BetterAuthDbSchema = Record<
 export const getAuthTables = (
 	options: BetterAuthOptions,
 ): BetterAuthDbSchema => {
-	const pluginSchema = options.plugins?.reduce(
+	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
 			if (!schema) return acc;
@@ -70,7 +70,7 @@ export const getAuthTables = (
 		},
 	} satisfies BetterAuthDbSchema;
 
-	const { user, session, account, ...pluginTables } = pluginSchema || {};
+	const { user, session, account, ...pluginTables } = pluginSchema;
 
 	const sessionTable = {
 		session: {
@@ -91,6 +91,7 @@ export const getAuthTables = (
 					type: "date",
 					required: true,
 					fieldName: options.session?.fields?.createdAt || "createdAt",
+					defaultValue: () => new Date(),
 				},
 				updatedAt: {
 					type: "date",
@@ -241,6 +242,7 @@ export const getAuthTables = (
 					type: "date",
 					required: true,
 					fieldName: options.account?.fields?.createdAt || "createdAt",
+					defaultValue: () => new Date(),
 				},
 				updatedAt: {
 					type: "date",

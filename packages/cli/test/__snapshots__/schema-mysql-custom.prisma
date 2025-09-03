@@ -34,7 +34,7 @@ model Session {
   id                   String   @id
   expiresAt            DateTime
   token                String
-  createdAt            DateTime
+  createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   ipAddress            String?  @db.Text
   userAgent            String?  @db.Text
@@ -59,7 +59,7 @@ model Account {
   refreshTokenExpiresAt DateTime?
   scope                 String?   @db.Text
   password              String?   @db.Text
-  createdAt             DateTime
+  createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
   @@map("account")
