@@ -221,7 +221,7 @@ function App(){
 
 {#if $organizations.isPending}
   <p>Loading...</p>
-{:else if $organizations.data === null}
+{:else if !$organizations.data?.length}
   <p>No organizations found.</p>
 {:else}
   <ul>
