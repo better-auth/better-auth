@@ -48,7 +48,7 @@ export const createInternalAdapter = (
 					const createdUser = await createWithHooks(
 						{
 							// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
+							createdAt: new Date(),
 							updatedAt: new Date(),
 							...user,
 						},
@@ -61,7 +61,7 @@ export const createInternalAdapter = (
 						{
 							...account,
 							userId: createdUser!.id,
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+							// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
