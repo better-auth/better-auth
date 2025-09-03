@@ -47,6 +47,7 @@ export const sessionSchema = z.object({
 	id: z.string(),
 	userId: z.coerce.string(),
 	expiresAt: z.date(),
+	lastLoginAt: z.date().default(() => new Date()),
 	createdAt: z.date().default(() => new Date()),
 	updatedAt: z.date().default(() => new Date()),
 	token: z.string(),

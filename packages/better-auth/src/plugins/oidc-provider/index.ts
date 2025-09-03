@@ -847,6 +847,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 											userId: user.id,
 											expiresAt: accessTokenExpiresAt,
 											token: accessToken,
+											lastLoginAt: new Date(iat * 1000),
 											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
 										},
 										user,

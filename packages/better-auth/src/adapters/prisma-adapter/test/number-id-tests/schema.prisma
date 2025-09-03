@@ -19,10 +19,11 @@ model User {
 }
 
 model Sessions {
-    id        Int      @id @default(autoincrement())
-    userId    Int
-    token     String   @unique
-    expiresAt DateTime
-    createdAt DateTime @default(now())
-    updatedAt DateTime @default(now()) @updatedAt
+    id          Int      @id @default(autoincrement())
+    userId      Int
+    token       String   @unique
+    expiresAt   DateTime
+    lastLoginAt DateTime @default(now())
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @default(now()) @updatedAt
 }

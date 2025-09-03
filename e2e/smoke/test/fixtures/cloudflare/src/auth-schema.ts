@@ -13,6 +13,7 @@ export const user = sqliteTable("user", {
 export const session = sqliteTable("session", {
 	id: text("id").primaryKey(),
 	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	lastLoginAt: integer("last_login_at", { mode: "timestamp" }).notNull(),
 	token: text("token").notNull().unique(),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),

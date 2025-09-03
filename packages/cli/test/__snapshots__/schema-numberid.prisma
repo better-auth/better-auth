@@ -29,15 +29,16 @@ model User {
 }
 
 model Session {
-  id        Int      @id @default(autoincrement())
-  expiresAt DateTime
-  token     String
-  createdAt DateTime
-  updatedAt DateTime
-  ipAddress String?
-  userAgent String?
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          Int      @id @default(autoincrement())
+  expiresAt   DateTime
+  lastLoginAt DateTime
+  token       String
+  createdAt   DateTime
+  updatedAt   DateTime
+  ipAddress   String?
+  userAgent   String?
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
   @@map("session")
