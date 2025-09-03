@@ -63,12 +63,12 @@ model Account {
 }
 
 model Verification {
-  id         String    @id
-  identifier String    @db.Text
-  value      String    @db.Text
+  id         String   @id
+  identifier String   @db.Text
+  value      String   @db.Text
   expiresAt  DateTime
-  createdAt  DateTime? @default(now())
-  updatedAt  DateTime? @default(now()) @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
   @@map("verification")
 }
