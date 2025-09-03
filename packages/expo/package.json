@@ -53,12 +53,12 @@
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
-    "expo-constants": "~17.0.8",
+    "expo-constants": "~17.1.7",
     "expo-crypto": "^13.0.2",
-    "expo-linking": "~7.0.5",
-    "expo-secure-store": "~14.0.1",
-    "expo-web-browser": "~14.0.2",
-    "unbuild": "^3.5.0"
+    "expo-linking": "~7.1.7",
+    "expo-secure-store": "~14.2.3",
+    "expo-web-browser": "~14.2.0",
+    "unbuild": "^3.6.1"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"

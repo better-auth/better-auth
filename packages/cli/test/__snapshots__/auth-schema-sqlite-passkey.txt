@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 export const custom_user = sqliteTable("custom_user", {
-  id: int("id").autoincrement().primaryKey(),
+  id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: integer("email_verified", { mode: "boolean" })
@@ -15,15 +15,10 @@ export const custom_user = sqliteTable("custom_user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(
-    false,
-  ),
-  username: text("username").unique(),
-  displayUsername: text("display_username"),
 });
 
 export const custom_session = sqliteTable("custom_session", {
-  id: int("id").autoincrement().primaryKey(),
+  id: text("id").primaryKey(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
   token: text("token").notNull().unique(),
   createdAt: integer("created_at", { mode: "timestamp" })
@@ -34,16 +29,16 @@ export const custom_session = sqliteTable("custom_session", {
     .notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  userId: integer("user_id")
+  userId: text("user_id")
     .notNull()
     .references(() => custom_user.id, { onDelete: "cascade" }),
 });
 
 export const custom_account = sqliteTable("custom_account", {
-  id: int("id").autoincrement().primaryKey(),
+  id: text("id").primaryKey(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
-  userId: integer("user_id")
+  userId: text("user_id")
     .notNull()
     .references(() => custom_user.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
@@ -66,7 +61,7 @@ export const custom_account = sqliteTable("custom_account", {
 });
 
 export const custom_verification = sqliteTable("custom_verification", {
-  id: int("id").autoincrement().primaryKey(),
+  id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
@@ -79,11 +74,18 @@ export const custom_verification = sqliteTable("custom_verification", {
     .notNull(),
 });
 
-export const twoFactor = sqliteTable("two_factor", {
-  id: int("id").autoincrement().primaryKey(),
-  secret: text("secret").notNull(),
-  backupCodes: text("backup_codes").notNull(),
-  userId: integer("user_id")
+export const passkey = sqliteTable("passkey", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  publicKey: text("public_key").notNull(),
+  userId: text("user_id")
     .notNull()
     .references(() => custom_user.id, { onDelete: "cascade" }),
+  credentialID: text("credential_id").notNull(),
+  counter: integer("counter").notNull(),
+  deviceType: text("device_type").notNull(),
+  backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
+  transports: text("transports"),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  aaguid: text("aaguid"),
 });
