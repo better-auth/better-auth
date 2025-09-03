@@ -10,9 +10,17 @@ export interface OAuth2Tokens {
 	idToken?: string;
 }
 
+export type OAuth2UserInfo = {
+	id: string | number;
+	name?: string;
+	email?: string | null;
+	image?: string;
+	emailVerified: boolean;
+};
+
 export interface OAuthProvider<
 	T extends Record<string, any> = Record<string, any>,
-	O extends Record<string, any> = ProviderOptions,
+	O extends Record<string, any> = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
 	createAuthorizationURL: (data: {
@@ -45,13 +53,7 @@ export interface OAuthProvider<
 			};
 		},
 	) => Promise<{
-		user: {
-			id: string | number;
-			name?: string;
-			email?: string | null;
-			image?: string;
-			emailVerified: boolean;
-		};
+		user: OAuth2UserInfo;
 		data: T;
 	} | null>;
 	/**
@@ -175,7 +177,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 		| "consent"
 		| "login"
 		| "none"
-		| "select_account+consent";
+		| "select_account consent";
 	/**
 	 * The response mode to use for the authorization code request
 	 */
