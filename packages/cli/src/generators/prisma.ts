@@ -163,7 +163,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					builder.model(modelName).blockAttribute(`unique([${fieldName}])`);
 				}
 
-				if (attr.defaultValue) {
+				if (attr.defaultValue !== undefined) {
 					if (field === "createdAt") {
 						fieldBuilder.attribute("default(now())");
 					} else if (typeof attr.defaultValue === "boolean") {
