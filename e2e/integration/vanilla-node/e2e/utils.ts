@@ -49,7 +49,7 @@ export function setup() {
 			});
 
 			await Promise.all([
-				await new Promise<void>((resolve) => {
+				new Promise<void>((resolve) => {
 					server.listen(0, "0.0.0.0", () => {
 						const address = server.address();
 						if (address && typeof address === "object") {
