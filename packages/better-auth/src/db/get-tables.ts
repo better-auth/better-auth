@@ -144,7 +144,7 @@ export const getAuthTables = (
 				},
 				emailVerified: {
 					type: "boolean",
-					defaultValue: () => false,
+					defaultValue: false,
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
 				},
@@ -272,13 +272,13 @@ export const getAuthTables = (
 				},
 				createdAt: {
 					type: "date",
-					required: false,
+					required: true,
 					defaultValue: () => new Date(),
 					fieldName: options.verification?.fields?.createdAt || "createdAt",
 				},
 				updatedAt: {
 					type: "date",
-					required: false,
+					required: true,
 					defaultValue: () => new Date(),
 					onUpdate: () => new Date(),
 					fieldName: options.verification?.fields?.updatedAt || "updatedAt",

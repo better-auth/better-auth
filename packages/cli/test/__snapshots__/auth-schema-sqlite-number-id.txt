@@ -5,7 +5,7 @@ export const custom_user = sqliteTable("custom_user", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: integer("email_verified", { mode: "boolean" })
-    .$defaultFn(() => false)
+    .default(false)
     .notNull(),
   image: text("image"),
   createdAt: integer("created_at", { mode: "timestamp" })
@@ -66,12 +66,13 @@ export const custom_verification = sqliteTable("custom_verification", {
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => /* @__PURE__ */ new Date(),
-  ),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .$defaultFn(() => /* @__PURE__ */ new Date())
-    .$onUpdate(() => /* @__PURE__ */ new Date()),
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
 });
 
 export const twoFactor = sqliteTable("two_factor", {

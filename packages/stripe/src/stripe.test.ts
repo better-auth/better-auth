@@ -180,7 +180,7 @@ describe("stripe", async () => {
 			stripeCustomerId: expect.any(String),
 			status: "incomplete",
 			periodStart: undefined,
-			cancelAtPeriodEnd: undefined,
+			cancelAtPeriodEnd: false,
 			trialStart: undefined,
 			trialEnd: undefined,
 		});
