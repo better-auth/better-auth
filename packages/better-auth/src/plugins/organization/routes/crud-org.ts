@@ -591,14 +591,16 @@ export const getOrganization = <O extends OrganizationOptions>(options: O) =>
 		"/organization/get",
 		{
 			method: "GET",
-			query: z.union([
-				z.object({
-					organizationId: z.string(),
-				}),
-				z.object({
-					organizationSlug: z.string(),
-				}),
-			]),
+			query: z
+				.union([
+					z.object({
+						organizationId: z.string(),
+					}),
+					z.object({
+						organizationSlug: z.string(),
+					}),
+				])
+				.optional(),
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -622,17 +624,18 @@ export const getOrganization = <O extends OrganizationOptions>(options: O) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
+			const query = ctx.query ?? {
+				organizationId: session.session.activeOrganizationId,
+			};
 
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
 			let organization: InferOrganization<O> | null = null;
-			if ("organizationId" in ctx.query) {
-				organization = await adapter.findOrganizationById(
-					ctx.query.organizationId,
-				);
-			} else if ("organizationSlug" in ctx.query) {
+			if ("organizationId" in query && query.organizationId) {
+				organization = await adapter.findOrganizationById(query.organizationId);
+			} else if ("organizationSlug" in query && query.organizationSlug) {
 				organization = await adapter.findOrganizationBySlug(
-					ctx.query.organizationSlug,
+					query.organizationSlug,
 				);
 			} else {
 				return ctx.json(null, { status: 200 });
