@@ -352,7 +352,7 @@ export const createAdapter =
 					newMappedKeys[field] || fields[field].fieldName || field;
 				if (
 					value === undefined &&
-					((!fieldAttributes.defaultValue &&
+					((fieldAttributes.defaultValue === undefined &&
 						!fieldAttributes.transform?.input &&
 						!(action === "update" && fieldAttributes.onUpdate)) ||
 						(action === "update" && !fieldAttributes.onUpdate))
