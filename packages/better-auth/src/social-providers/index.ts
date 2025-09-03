@@ -1,5 +1,4 @@
 import * as z from "zod/v4";
-import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
 import { cognito } from "./cognito";
@@ -30,6 +29,7 @@ import { kakao } from "./kakao";
 import { naver } from "./naver";
 import { line } from "./line";
 import { paypal } from "./paypal";
+import type { OAuthProvider } from "../oauth2";
 
 export const socialProviders = {
 	apple,
@@ -62,6 +62,11 @@ export const socialProviders = {
 	naver,
 	line,
 	paypal,
+} satisfies {
+	[key: string]: (
+		// todo: fix any here
+		config: any,
+	) => OAuthProvider;
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -76,11 +81,11 @@ export const SocialProviderListEnum = z
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
-	[K in SocialProviderList[number]]?: Prettify<
-		Parameters<(typeof socialProviders)[K]>[0] & {
-			enabled?: boolean;
-		}
-	>;
+	[K in SocialProviderList[number]]?: Parameters<
+		(typeof socialProviders)[K]
+	>[0] & {
+		enabled?: boolean;
+	};
 };
 
 export * from "./apple";
