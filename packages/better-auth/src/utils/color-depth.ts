@@ -55,8 +55,6 @@ const TERM_ENVS_REG_EXP = [
 	/^vt220/,
 ];
 
-let OSRelease: string[] | undefined;
-
 // The `getColorDepth` API got inspired by multiple sources such as
 // https://github.com/chalk/supports-color,
 // https://github.com/isaacs/color-support.
