@@ -10,3 +10,9 @@ export type * from "zod/v4/core";
 export type * from "./types/helper";
 // export this as we are referencing OAuth2Tokens in the `refresh-token` api as return type
 export type * from "./oauth2/types";
+
+// telemetry exports for CLI and consumers
+export { createTelemetry } from "./telemetry";
+export { getTelemetryAuthConfig } from "./telemetry/detectors/detect-auth-config";
+export type { TelemetryEvent } from "./telemetry/types";
+export { APIError } from "./api";
