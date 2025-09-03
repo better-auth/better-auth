@@ -49,7 +49,7 @@ export const useAuthQuery = <T>(
 					})
 				: options;
 
-		return $fetch<T>(path, {
+		$fetch<T>(path, {
 			...opts,
 			query: {
 				...opts?.query,
@@ -93,6 +93,14 @@ export const useAuthQuery = <T>(
 				});
 				await opts?.onRequest?.(context);
 			},
+		}).catch((error) => {
+			value.set({
+				error,
+				data: null,
+				isPending: false,
+				isRefetching: false,
+				refetch: value.value.refetch,
+			});
 		});
 	};
 	initializedAtom = Array.isArray(initializedAtom)
