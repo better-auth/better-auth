@@ -556,6 +556,10 @@ importers:
         version: 5.9.2
 
   e2e/integration:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../../packages/better-auth
     devDependencies:
       '@playwright/test':
         specifier: ^1.55.0
