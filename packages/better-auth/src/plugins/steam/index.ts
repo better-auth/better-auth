@@ -284,6 +284,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 					const baseErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
 						`${ctx.context.baseURL}/error`;
+					const baseOrigin = new URL(ctx.context.baseURL).origin;
 
 					if (!ctx?.request?.url) {
 						throw ctx.redirect(`${baseErrorURL}?error=missing_request_url`);
@@ -382,11 +383,14 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						throw ctx.redirect(`${errorURL}?error=steamid_missing`);
 					}
 
-					const profileUrl = `ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamId}`;
-
 					const profileRes = await betterFetch<{
 						response: { players: SteamProfile[] };
-					}>(new URL(profileUrl, STEAM_BASE_URL).toString());
+					}>(
+						new URL(
+							`ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamId}`,
+							STEAM_BASE_URL,
+						).toString(),
+					);
 
 					if (profileRes.error) {
 						ctx.context.logger.error(
@@ -404,14 +408,12 @@ export const steam = (config: SteamAuthPluginOptions) =>
 
 					// Handle account linking flow
 					if (linkAccount === "true") {
-						// Get current user session for account linking
 						const session = await getSessionFromCtx(ctx);
 						if (!session) {
 							throw ctx.redirect(
 								`${errorURL}?error=session_required_for_linking`,
 							);
 						}
-
 						const user = session.user;
 
 						// Check if account is already linked
@@ -449,7 +451,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 							});
 						}
 
-						throw ctx.redirect(callbackURL);
+						throw ctx.redirect(callbackURL || baseOrigin);
 					}
 
 					// Regular sign-in flow
@@ -537,8 +539,6 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						session,
 						user,
 					});
-
-					const baseOrigin = new URL(ctx.context.baseURL).origin;
 
 					throw ctx.redirect(
 						isNewUser
