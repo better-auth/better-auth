@@ -234,7 +234,7 @@ export const APIMethod = ({
 						</Note>
 					) : null}
 					<div className={cn("relative w-full")}>
-						<DynamicCodeBlock 
+						<DynamicCodeBlock
 							code={`${code_prefix}${
 								noResult
 									? ""
