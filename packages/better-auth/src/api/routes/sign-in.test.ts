@@ -1,6 +1,8 @@
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
+import { APIError } from "better-call";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 /**
  * More test can be found in `session.test.ts`
@@ -60,16 +62,18 @@ describe("sign-in", async (it) => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 
-		try {
-			await auth.api.signInEmail({
+		await expect(
+			auth.api.signInEmail({
 				body: {
 					email: testUser.email,
 					password: testUser.password,
 				},
-			});
-		} catch (err: any) {
-			expect(err.body.code).toBe("EMAIL_NOT_VERIFIED");
-		}
+			}),
+		).rejects.toThrowError(
+			new APIError("FORBIDDEN", {
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+			}),
+		);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(2);
 	});
@@ -89,16 +93,18 @@ describe("sign-in", async (it) => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 
-		try {
-			await auth.api.signInEmail({
+		await expect(
+			auth.api.signInEmail({
 				body: {
 					email: testUser.email,
 					password: testUser.password,
 				},
-			});
-		} catch (err: any) {
-			expect(err.body.code).toBe("EMAIL_NOT_VERIFIED");
-		}
+			}),
+		).rejects.toThrowError(
+			new APIError("FORBIDDEN", {
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+			}),
+		);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
