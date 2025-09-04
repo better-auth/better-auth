@@ -22,6 +22,7 @@ import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { polar } from "./polar";
 export const socialProviders = {
 	apple,
 	discord,
@@ -44,6 +45,7 @@ export const socialProviders = {
 	roblox,
 	vk,
 	zoom,
+	polar,
 	notion,
 };
 
@@ -89,6 +91,7 @@ export * from "./vk";
 export * from "./zoom";
 export * from "./kick";
 export * from "./huggingface";
+export * from "./polar";
 export * from "./slack";
 
 export type SocialProviderList = typeof socialProviderList;
