@@ -48,7 +48,7 @@ export interface SteamAuthPluginOptions {
 	 */
 	mapProfileToUser?: (
 		profile: SteamProfile & { email: string },
-	) => Promise<Partial<Omit<User, "id" | "createdAt" | "updatedAt">>>;
+	) => Promise<Omit<Partial<User>, "id" | "createdAt" | "updatedAt">>;
 	/**
 	 * Whether to disable implicit sign up. If true, the user will be redirected to the error callback URL if the user is not found.
 	 * Read more here:
@@ -341,6 +341,16 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						);
 						throw ctx.redirect(
 							`${errorURL}?error=new_user_callback_url_not_trusted`,
+						);
+					}
+
+					if (!isMatch(new URL(errorCallbackURL).origin)) {
+						ctx.context.logger.error(
+							`The new user callback URL provided during sign in with steam is not part of the trusted origins:`,
+							newUserCallbackURL,
+						);
+						throw ctx.redirect(
+							`${errorURL}?error=error_callback_url_not_trusted`,
 						);
 					}
 
