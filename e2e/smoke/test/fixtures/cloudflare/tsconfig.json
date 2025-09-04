@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": ["esnext"],
+    "module": "esnext",
+    "outDir": "./dist",
+    "moduleResolution": "bundler",
+    "types": [
+      "@cloudflare/workers-types/2023-07-01",
+      "@cloudflare/workers-types/experimental",
+      "@cloudflare/vitest-pool-workers"
+    ],
+    "noEmit": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "strict": true
+  }
+}

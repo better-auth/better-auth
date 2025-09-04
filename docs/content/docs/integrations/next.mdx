@@ -157,6 +157,14 @@ export const config = {
 };
 ```
 
+<Callout type="warn">
+	**Security Warning:** The `getSessionCookie` function only checks for the
+	existence of a session cookie; it does **not** validate it. Relying solely
+	on this check for security is dangerous, as anyone can manually create a
+	cookie to bypass it. You must always validate the session on your server for
+	any protected actions or pages.
+</Callout>
+
 <Callout type="info">
 If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
 ```ts

@@ -1,15 +1,15 @@
 import { Command } from "commander";
 import { getConfig } from "../utils/get-config";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { existsSync } from "fs";
 import path from "path";
-import { logger } from "better-auth";
+import { logger, createTelemetry, getTelemetryAuthConfig } from "better-auth";
 import yoctoSpinner from "yocto-spinner";
 import prompts from "prompts";
 import fs from "fs/promises";
 import chalk from "chalk";
 import { getAdapter } from "better-auth/db";
-import { getGenerator } from "../generators";
+import { generateSchema } from "../generators";
 
 export async function generateAction(opts: any) {
 	const options = z
@@ -18,6 +18,7 @@ export async function generateAction(opts: any) {
 			config: z.string().optional(),
 			output: z.string().optional(),
 			y: z.boolean().optional(),
+			yes: z.boolean().optional(),
 		})
 		.parse(opts);
 
@@ -44,7 +45,7 @@ export async function generateAction(opts: any) {
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
-	const schema = await getGenerator({
+	const schema = await generateSchema({
 		adapter,
 		file: options.output,
 		options: config,
@@ -53,10 +54,25 @@ export async function generateAction(opts: any) {
 	spinner.stop();
 	if (!schema.code) {
 		logger.info("Your schema is already up to date.");
+		// telemetry: track generate attempted, no changes
+		try {
+			const telemetry = await createTelemetry(config);
+			await telemetry.publish({
+				type: "cli_generate",
+				payload: {
+					outcome: "no_changes",
+					config: getTelemetryAuthConfig(config, {
+						adapter: adapter.id,
+						database:
+							typeof config.database === "function" ? "adapter" : "kysely",
+					}),
+				},
+			});
+		} catch {}
 		process.exit(0);
 	}
-	if (schema.append || schema.overwrite) {
-		let confirm = options.y;
+	if (schema.overwrite) {
+		let confirm = options.y || options.yes;
 		if (!confirm) {
 			const response = await prompts({
 				type: "confirm",
@@ -87,14 +103,41 @@ export async function generateAction(opts: any) {
 					schema.overwrite ? "overwritten" : "appended"
 				} successfully!`,
 			);
+			// telemetry: track generate success overwrite/append
+			try {
+				const telemetry = await createTelemetry(config);
+				await telemetry.publish({
+					type: "cli_generate",
+					payload: {
+						outcome: schema.overwrite ? "overwritten" : "appended",
+						config: getTelemetryAuthConfig(config),
+					},
+				});
+			} catch {}
 			process.exit(0);
 		} else {
 			logger.error("Schema generation aborted.");
+			// telemetry: track generate aborted
+			try {
+				const telemetry = await createTelemetry(config);
+				await telemetry.publish({
+					type: "cli_generate",
+					payload: {
+						outcome: "aborted",
+						config: getTelemetryAuthConfig(config),
+					},
+				});
+			} catch {}
 			process.exit(1);
 		}
 	}
 
-	let confirm = options.y;
+	if (options.y) {
+		console.warn("WARNING: --y is deprecated. Consider -y or --yes");
+		options.yes = true;
+	}
+
+	let confirm = options.yes;
 
 	if (!confirm) {
 		const response = await prompts({
@@ -109,6 +152,14 @@ export async function generateAction(opts: any) {
 
 	if (!confirm) {
 		logger.error("Schema generation aborted.");
+		// telemetry: track generate aborted before write
+		try {
+			const telemetry = await createTelemetry(config);
+			await telemetry.publish({
+				type: "cli_generate",
+				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
+			});
+		} catch {}
 		process.exit(1);
 	}
 
@@ -125,6 +176,14 @@ export async function generateAction(opts: any) {
 		schema.code,
 	);
 	logger.success(`🚀 Schema was generated successfully!`);
+	// telemetry: track generate success
+	try {
+		const telemetry = await createTelemetry(config);
+		await telemetry.publish({
+			type: "cli_generate",
+			payload: { outcome: "generated", config: getTelemetryAuthConfig(config) },
+		});
+	} catch {}
 	process.exit(0);
 }
 
@@ -139,5 +198,6 @@ export const generate = new Command("generate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option("--output <output>", "the file to output to the generated schema")
-	.option("-y, --y", "automatically answer yes to all prompts", false)
+	.option("-y, --yes", "automatically answer yes to all prompts", false)
+	.option("--y", "(deprecated) same as --yes", false)
 	.action(generateAction);

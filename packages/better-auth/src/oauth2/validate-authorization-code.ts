@@ -1,27 +1,29 @@
-import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./types";
 import { getOAuth2Tokens } from "./utils";
+import { base64 } from "@better-auth/utils/base64";
 
-export async function validateAuthorizationCode({
+export function createAuthorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
 	options,
-	tokenEndpoint,
 	authentication,
 	deviceId,
 	headers,
+	additionalParams = {},
+	resource,
 }: {
 	code: string;
 	redirectURI: string;
-	options: ProviderOptions;
+	options: Partial<ProviderOptions>;
 	codeVerifier?: string;
 	deviceId?: string;
-	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 	headers?: Record<string, string>;
+	additionalParams?: Record<string, string>;
+	resource?: string | string[];
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
@@ -36,15 +38,74 @@ export async function validateAuthorizationCode({
 	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
+	if (resource) {
+		if (typeof resource === "string") {
+			body.append("resource", resource);
+		} else {
+			for (const _resource of resource) {
+				body.append("resource", _resource);
+			}
+		}
+	}
+	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
+	// Fixes compatibility with providers like Notion, Twitter, etc.
 	if (authentication === "basic") {
-		const encodedCredentials = base64Url.encode(
-			`${options.clientId}:${options.clientSecret}`,
+		const encodedCredentials = base64.encode(
+			`${options.clientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		body.set("client_id", options.clientId);
-		body.set("client_secret", options.clientSecret);
+		options.clientId && body.set("client_id", options.clientId);
+		if (options.clientSecret) {
+			body.set("client_secret", options.clientSecret);
+		}
 	}
+
+	for (const [key, value] of Object.entries(additionalParams)) {
+		if (!body.has(key)) body.append(key, value);
+	}
+
+	return {
+		body,
+		headers: requestHeaders,
+	};
+}
+
+export async function validateAuthorizationCode({
+	code,
+	codeVerifier,
+	redirectURI,
+	options,
+	tokenEndpoint,
+	authentication,
+	deviceId,
+	headers,
+	additionalParams = {},
+	resource,
+}: {
+	code: string;
+	redirectURI: string;
+	options: Partial<ProviderOptions>;
+	codeVerifier?: string;
+	deviceId?: string;
+	tokenEndpoint: string;
+	authentication?: "basic" | "post";
+	headers?: Record<string, string>;
+	additionalParams?: Record<string, string>;
+	resource?: string | string[];
+}) {
+	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
+		code,
+		codeVerifier,
+		redirectURI,
+		options,
+		authentication,
+		deviceId,
+		headers,
+		additionalParams,
+		resource,
+	});
+
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,

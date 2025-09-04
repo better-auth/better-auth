@@ -66,38 +66,6 @@ To use a provider that is not supported out of the box, you can use the [Generic
 
 ## Example usage
 
-### Slack Example
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { genericOAuth } from "better-auth/plugins";
-
-export const auth = betterAuth({
-  // ... other config options
-  plugins: [
-    genericOAuth({
-      config: [
-        {
-          providerId: "slack",
-          clientId: process.env.SLACK_CLIENT_ID as string,
-          clientSecret: process.env.SLACK_CLIENT_SECRET as string,
-          authorizationUrl: "https://slack.com/oauth/v2/authorize",
-          tokenUrl: "https://slack.com/api/oauth.v2.access",
-          scopes: ["users:read", "users:read.email"], // and more...
-        },
-      ],
-    }),
-  ],
-});
-```
-
-```ts title="sign-in.ts"
-const response = await authClient.signIn.oauth2({
-  providerId: "slack",
-  callbackURL: "/dashboard", // the path to redirect to after the user is authenticated
-});
-```
-
 ### Instagram Example
 
 ```ts title="auth.ts"

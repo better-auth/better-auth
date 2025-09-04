@@ -1,0 +1,42 @@
+{/* -------------------------------------------------------- */}
+{/*                   APIMethod component                    */}
+{/* -------------------------------------------------------- */}
+
+<APIMethod
+  path="/subscription/restore"
+  method="POST"
+  requireSession
+>
+```ts
+type restoreSubscription = {
+    /**
+     * Reference id of the subscription to restore. 
+     */
+    referenceId?: string = '123'
+    /**
+     * The id of the subscription to restore. 
+     */
+    subscriptionId: string = 'sub_123'
+}
+```
+</APIMethod>
+
+{/* -------------------------------------------------------- */}
+{/*                JSDOC For the endpoint                    */}
+{/* -------------------------------------------------------- */}
+
+/**
+ * ### Endpoint
+ * 
+ * POST `/subscription/restore`
+ * 
+ * ### API Methods
+ * 
+ * **server:**
+ * `auth.api.restoreSubscription`
+ * 
+ * **client:**
+ * `authClient.subscription.restore`
+ * 
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/subscription#api-method-subscription-restore)
+ */

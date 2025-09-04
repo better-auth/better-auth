@@ -8,6 +8,7 @@ import { vi } from "vitest";
 import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
+import { expect, describe, it, beforeEach } from "vitest";
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -179,7 +180,9 @@ describe("stripe", async () => {
 			stripeCustomerId: expect.any(String),
 			status: "incomplete",
 			periodStart: undefined,
-			cancelAtPeriodEnd: undefined,
+			cancelAtPeriodEnd: false,
+			trialStart: undefined,
+			trialEnd: undefined,
 		});
 	});
 
@@ -352,6 +355,117 @@ describe("stripe", async () => {
 			periodStart: expect.any(Date),
 			periodEnd: expect.any(Date),
 			plan: "starter",
+		});
+	});
+
+	it("should handle subscription webhook events with trial", async () => {
+		const { id: testReferenceId } = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "test@email.com",
+			},
+		});
+		const { id: testSubscriptionId } = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: testReferenceId,
+				stripeCustomerId: "cus_mock123",
+				status: "incomplete",
+				plan: "starter",
+			},
+		});
+		const mockCheckoutSessionEvent = {
+			type: "checkout.session.completed",
+			data: {
+				object: {
+					mode: "subscription",
+					subscription: testSubscriptionId,
+					metadata: {
+						referenceId: testReferenceId,
+						subscriptionId: testSubscriptionId,
+					},
+				},
+			},
+		};
+
+		const mockSubscription = {
+			id: testSubscriptionId,
+			status: "active",
+			items: {
+				data: [
+					{
+						price: { id: process.env.STRIPE_PRICE_ID_1 },
+						quantity: 1,
+					},
+				],
+			},
+			current_period_start: Math.floor(Date.now() / 1000),
+			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+			trial_start: Math.floor(Date.now() / 1000),
+			trial_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			subscriptions: {
+				...stripeOptions.stripeClient.subscriptions,
+				retrieve: vi.fn().mockResolvedValue(mockSubscription),
+			},
+			webhooks: {
+				constructEventAsync: vi
+					.fn()
+					.mockResolvedValue(mockCheckoutSessionEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(testOptions)],
+		});
+
+		const testCtx = await testAuth.$context;
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockCheckoutSessionEvent),
+			},
+		);
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		const updatedSubscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "id",
+					value: testSubscriptionId,
+				},
+			],
+		});
+
+		expect(updatedSubscription).toMatchObject({
+			id: testSubscriptionId,
+			status: "active",
+			periodStart: expect.any(Date),
+			periodEnd: expect.any(Date),
+			plan: "starter",
+			trialStart: expect.any(Date),
+			trialEnd: expect.any(Date),
 		});
 	});
 
@@ -560,6 +674,10 @@ describe("stripe", async () => {
 				subscription: expect.any(Object),
 				stripeSubscription: expect.any(Object),
 				plan: expect.any(Object),
+			}),
+			expect.objectContaining({
+				context: expect.any(Object),
+				_flag: expect.any(String),
 			}),
 		);
 
@@ -816,5 +934,64 @@ describe("stripe", async () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	it("should only call Stripe customers.create once for signup and upgrade", async () => {
+		const userRes = await authClient.signUp.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ ...testUser, email: "single-create@email.com" },
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
+	});
+
+	it("should create billing portal session", async () => {
+		await authClient.signUp.email(
+			{
+				...testUser,
+				email: "billing-portal@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "billing-portal@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+		const billingPortalRes = await authClient.subscription.billingPortal({
+			returnUrl: "/dashboard",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(billingPortalRes.data?.redirect).toBe(true);
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: expect.any(String),
+			return_url: "http://localhost:3000/dashboard",
+		});
 	});
 });

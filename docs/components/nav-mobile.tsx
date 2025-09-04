@@ -33,7 +33,6 @@ export const NavbarProvider = ({ children }: { children: React.ReactNode }) => {
 	const toggleDocsNavbar = () => {
 		setIsDocsOpen((prevIsOpen) => !prevIsOpen);
 	};
-	// @ts-ignore
 	return (
 		<NavbarContext.Provider
 			value={{ isOpen, toggleNavbar, isDocsOpen, toggleDocsNavbar }}

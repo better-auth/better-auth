@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -62,10 +62,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						callbackURL: z.string({
+						callbackURL: z.string().meta({
 							description: "The URL to redirect to after the proxy",
 						}),
-						cookies: z.string({
+						cookies: z.string().meta({
 							description: "The cookies to set after the proxy",
 						}),
 					}),

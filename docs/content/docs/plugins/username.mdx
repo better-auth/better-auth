@@ -3,7 +3,7 @@ title: Username
 description: Username plugin
 ---
 
-The username plugin wraps the email and password authenticator and adds username support. This allows users to sign in and sign up with their username instead of their email.
+The username plugin is a lightweight plugin that adds username support to the email and password authenticator. This allows users to sign in and sign up with their username instead of their email.
 
 ## Installation
 
@@ -59,63 +59,97 @@ The username plugin wraps the email and password authenticator and adds username
 
 ## Usage
 
-### Sign up with username
+### Sign up
 
-To sign up a user with username, you can use the existing `signUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
+To sign up a user with username, you can use the existing `signUp.email` function provided by the client.
+The `signUp` function should take a new `username` property in the object.
 
-```ts title="auth-client.ts"
-const data = await authClient.signUp.email({
-    email: "email@domain.com",
-    name: "Test User",
-    password: "password1234",
-    username: "test"
-})
+<APIMethod path="/sign-up/email" method="POST">
+```ts
+type signUpEmail = {
+    /**
+     * The email of the user.
+    */
+    email: string = "email@domain.com"
+    /**
+     * The name of the user.
+    */
+    name: string = "Test User"
+    /**
+     * The password of the user.
+    */
+    password: string = "password1234"
+    /**
+     * The username of the user.
+    */
+    username: string = "test"
+    /**
+     * An optional display username of the user.
+    */
+    displayUsername?: string = "Test User123"
+}
 ```
+</APIMethod>
 
-### Sign in with username
 
-To sign in a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
+<Callout type="info">
+    If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
+</Callout>
 
-- `username`: The username of the user.
-- `password`: The password of the user.
+### Sign in
 
-```ts title="auth-client.ts" 
-const data = await authClient.signIn.username({
-    username: "test",
-    password: "password1234",
-})
+To sign in a user with username, you can use the `signIn.username` function provided by the client.
+
+<APIMethod path="/sign-in/username" method="POST">
+```ts
+type signInUsername = {
+    /**
+     * The username of the user.
+    */
+    username: string = "test"
+    /**
+     * The password of the user.
+    */
+    password: string = "password1234"
+}
 ```
+</APIMethod>
 
 ### Update username
 
 To update the username of a user, you can use the `updateUser` function provided by the client.
 
-```ts title="auth-client.ts"
-const data = await authClient.updateUser({
-    username: "new-username"
-})
+<APIMethod path="/update-user" method="POST">
+```ts
+type updateUser = {
+    /**
+     * The username to update.
+    */
+    username?: string = "new-username"
+}
 ```
+</APIMethod>
 
-## Schema
+### Check if username is available
 
-The plugin requires 1 field to be added to the user table:
+To check if a username is available, you can use the `isUsernameAvailable` function provided by the client.
 
-<DatabaseTable
-    fields={[
-        { 
-            name: "username", 
-            type: "string", 
-            description: "The username of the user",
-            isUnique: true
-        },
-        { 
-            name: "displayUsername", 
-            type: "string", 
-            description: "Non normalized username of the user",
-            isUnique: true
-        },
-    ]}
-/>
+<APIMethod path="/is-username-available" method="POST" resultVariable="response">
+```ts
+type isUsernameAvailable = {
+    /**
+     * The username to check.
+    */
+    username: string = "new-username"
+}
+
+if(response?.available) {
+    console.log("Username is available");
+} else {
+    console.log("Username is not available");
+}
+```
+</APIMethod>
 
 ## Options
 
@@ -153,7 +187,7 @@ const auth = betterAuth({
 })
 ```
 
-### Username Validator 
+### Username Validator
 
 A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters, underscores, and dots.
 
@@ -168,8 +202,113 @@ const auth = betterAuth({
                 if (username === "admin") {
                     return false
                 }
+                return true
             }
         })
     ]
 })
 ```
+
+### Display Username Validator
+
+A function that validates the display username. The function should return false if the display username is invalid. By default, no validation is applied to display username.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            displayUsernameValidator: (displayUsername) => {
+                // Allow only alphanumeric characters, underscores, and hyphens
+                return /^[a-zA-Z0-9_-]+$/.test(displayUsername)
+            }
+        })
+    ]
+})
+```
+
+### Username Normalization
+
+A function that normalizes the username, or `false` if you want to disable normalization.
+
+By default, usernames are normalized to lowercase, so "TestUser" and "testuser", for example, are considered the same username. The `username` field will contain the normalized (lower case) username, while `displayUsername` will contain the original `username`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            usernameNormalization: (username) => {
+                return username.toLowerCase()
+                    .replaceAll("0", "o")
+                    .replaceAll("3", "e")
+                    .replaceAll("4", "a");
+            }
+        })
+    ]
+})
+```
+
+### Display Username Normalization
+
+A function that normalizes the display username, or `false` to disable normalization.
+
+By default, display usernames are not normalized. When only `username` is provided during signup or update, the `displayUsername` will be set to match the original `username` value (before normalization). You can also explicitly set a `displayUsername` which will be preserved as-is. For custom normalization, provide a function that takes the display username as input and returns the normalized version.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            displayUsernameNormalization: (displayUsername) => displayUsername.toLowerCase(),
+        })
+    ]   
+})
+```
+
+### Validation Order
+
+By default, username and display username are validated before normalization. You can change this behavior by setting `validationOrder` to `post-normalization`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            validationOrder: {
+                username: "post-normalization",
+                displayUsername: "post-normalization",
+            }
+        })
+    ]
+})
+```
+
+## Schema
+
+The plugin requires 2 fields to be added to the user table:
+
+<DatabaseTable
+    fields={[
+        { 
+            name: "username", 
+            type: "string", 
+            description: "The username of the user",
+            isUnique: true
+        },
+        { 
+            name: "displayUsername", 
+            type: "string", 
+            description: "Non normalized username of the user",
+            isUnique: true
+        },
+    ]}
+/>

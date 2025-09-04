@@ -29,7 +29,7 @@ You can read more about server/client plugins in our <Link href="/docs/concepts/
 </Callout>
 
 ### Creating the server plugin
-Go ahead and find a suitable location create an your birthday plugin folder, with an `index.ts` file within.
+Go ahead and find a suitable location to create your birthday plugin folder, with an `index.ts` file within.
 <Files>
   <Folder name="birthday-plugin" defaultOpen>
     <File name="index.ts" />
@@ -127,7 +127,7 @@ import { createAuthMiddleware } from "better-auth/plugins";
   //...
   handler: createAuthMiddleware(async (ctx) => {
     const { birthday } = ctx.body;
-    if(!birthday instanceof Date) {
+    if(!(birthday instanceof Date)) {
       throw new APIError("BAD_REQUEST", { message: "Birthday must be of type Date." });
     }
 

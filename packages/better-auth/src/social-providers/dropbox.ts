@@ -20,7 +20,9 @@ export interface DropboxProfile {
 	profile_photo_url: string;
 }
 
-export interface DropboxOptions extends ProviderOptions<DropboxProfile> {}
+export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
+	accessType?: "offline" | "online" | "legacy";
+}
 
 export const dropbox = (options: DropboxOptions) => {
 	const tokenEndpoint = "https://api.dropboxapi.com/oauth2/token";
@@ -37,6 +39,10 @@ export const dropbox = (options: DropboxOptions) => {
 			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
+			const additionalParams: Record<string, string> = {};
+			if (options.accessType) {
+				additionalParams.token_access_type = options.accessType;
+			}
 			return await createAuthorizationURL({
 				id: "dropbox",
 				options,
@@ -45,6 +51,7 @@ export const dropbox = (options: DropboxOptions) => {
 				state,
 				redirectURI,
 				codeVerifier,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

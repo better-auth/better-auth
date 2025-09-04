@@ -3,11 +3,20 @@ import {
 	type BetterAuthDbSchema,
 	type FieldAttribute,
 } from "better-auth/db";
+import type { BetterAuthOptions } from "better-auth/types";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
+import prettier from "prettier";
 
-export function convertToSnakeCase(str: string) {
-	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+export function convertToSnakeCase(str: string, camelCase?: boolean) {
+	if (camelCase) {
+		return str;
+	}
+	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
+	return str
+		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
+		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
+		.toLowerCase();
 }
 
 export const generateDrizzleSchema: SchemaGenerator = async ({
@@ -27,7 +36,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 	const fileExist = existsSync(filePath);
 
-	let code: string = generateImport({ databaseType, tables });
+	let code: string = generateImport({ databaseType, tables, options });
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
@@ -41,29 +50,31 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 				);
 			}
-			name = convertToSnakeCase(name);
-
+			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
 				if (options.advanced?.database?.useNumberId) {
 					if (databaseType === "pg") {
-						return `serial('${name}').primaryKey()`;
+						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
-						return `int('${name}').autoIncrement().primaryKey()`;
+						return `int('${name}')`;
 					} else {
 						// using sqlite
-						return `integer({ mode: 'number' }).primaryKey({ autoIncrement: true })`;
+						return `integer('${name}')`;
+					}
+				}
+				if (field.references.field) {
+					if (databaseType === "mysql") {
+						return `varchar('${name}', { length: 36 })`;
 					}
 				}
 				return `text('${name}')`;
 			}
-
 			const type = field.type as
 				| "string"
 				| "number"
 				| "boolean"
 				| "date"
 				| `${"string" | "number"}[]`;
-
 			const typeMap: Record<
 				typeof type,
 				Record<typeof databaseType, string>
@@ -117,7 +128,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		let id: string = "";
 
 		if (options.advanced?.database?.useNumberId) {
-			id = `int("id").autoincrement.primaryKey()`;
+			if (databaseType === "pg") {
+				id = `serial("id").primaryKey()`;
+			} else {
+				id = `int("id").autoincrement().primaryKey()`;
+			}
 		} else {
 			if (databaseType === "mysql") {
 				id = `varchar('id', { length: 36 }).primaryKey()`;
@@ -130,19 +145,37 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
 			modelName,
+			adapter.options?.camelCase,
 		)}", {
 					id: ${id},
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field]!;
 							let type = getType(field, attr);
-							if (attr.defaultValue) {
+							if (
+								attr.defaultValue !== null &&
+								typeof attr.defaultValue !== "undefined"
+							) {
 								if (typeof attr.defaultValue === "function") {
-									type += `.$defaultFn(${attr.defaultValue})`;
+									if (
+										attr.type === "date" &&
+										attr.defaultValue.toString().includes("new Date()")
+									) {
+										type += `.defaultNow()`;
+									} else {
+										type += `.$defaultFn(${attr.defaultValue})`;
+									}
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
+								}
+							}
+							// Add .$onUpdate() for fields with onUpdate property
+							// Supported for all database types: PostgreSQL, MySQL, and SQLite
+							if (attr.onUpdate && attr.type === "date") {
+								if (typeof attr.onUpdate === "function") {
+									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
 							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
@@ -150,7 +183,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											attr.references.model,
+											tables[attr.references.model]?.modelName ||
+												attr.references.model,
 											adapter.options,
 										)}.${attr.references.field}, { onDelete: '${
 											attr.references.onDelete || "cascade"
@@ -162,9 +196,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				});`;
 		code += `\n${schema}\n`;
 	}
-
+	const formattedCode = await prettier.format(code, {
+		parser: "typescript",
+	});
 	return {
-		code: code,
+		code: formattedCode,
 		fileName: filePath,
 		overwrite: fileExist,
 	};
@@ -173,12 +209,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 function generateImport({
 	databaseType,
 	tables,
-}: { databaseType: "sqlite" | "mysql" | "pg"; tables: BetterAuthDbSchema }) {
+	options,
+}: {
+	databaseType: "sqlite" | "mysql" | "pg";
+	tables: BetterAuthDbSchema;
+	options: BetterAuthOptions;
+}) {
 	let imports: string[] = [];
 
 	const hasBigint = Object.values(tables).some((table) =>
 		Object.values(table.fields).some((field) => field.bigint),
 	);
+
+	const useNumberId = options.advanced?.database?.useNumberId;
 
 	imports.push(`${databaseType}Table`);
 	imports.push(
@@ -190,7 +233,44 @@ function generateImport({
 	);
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
-	imports.push(databaseType === "mysql" ? "int" : "integer");
+	if (databaseType === "mysql") {
+		// Only include int for MySQL if actually needed
+		const hasNonBigintNumber = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					(field.type === "number" || field.type === "number[]") &&
+					!field.bigint,
+			),
+		);
+		const needsInt = !!useNumberId || hasNonBigintNumber;
+		if (needsInt) {
+			imports.push("int");
+		}
+	} else if (databaseType === "pg") {
+		// Only include integer for PG if actually needed
+		const hasNonBigintNumber = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					(field.type === "number" || field.type === "number[]") &&
+					!field.bigint,
+			),
+		);
+		const hasFkToId = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) => field.references?.field === "id",
+			),
+		);
+		// handles the references field with useNumberId
+		const needsInteger =
+			hasNonBigintNumber ||
+			(options.advanced?.database?.useNumberId && hasFkToId);
+		if (needsInteger) {
+			imports.push("integer");
+		}
+	} else {
+		imports.push("integer");
+	}
+	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
 
 	return `import { ${imports
 		.map((x) => x.trim())

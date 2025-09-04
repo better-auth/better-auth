@@ -14,6 +14,7 @@ import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
 import { signJWT } from "../../crypto/jwt";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import type { Account } from "../../types";
 
 let email = "";
 vi.mock("../../oauth2", async (importOriginal) => {
@@ -64,6 +65,7 @@ describe("account", async () => {
 			accountLinking: {
 				allowDifferentEmails: true,
 			},
+			encryptOAuthTokens: true,
 		},
 	});
 
@@ -136,12 +138,26 @@ describe("account", async () => {
 				expect(location).toContain("/callback");
 			},
 		});
-
 		const { headers: headers2 } = await signInWithTestUser();
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers2 },
 		});
 		expect(accounts.data?.length).toBe(2);
+	});
+
+	it("should encrypt access token and refresh token", async () => {
+		const { headers: headers2 } = await signInWithTestUser();
+		const account = await ctx.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "providerId", value: "google" }],
+		});
+		expect(account).toBeTruthy();
+		expect(account?.accessToken).not.toBe("test");
+		const accessToken = await client.getAccessToken({
+			providerId: "google",
+			fetchOptions: { headers: headers2 },
+		});
+		expect(accessToken.data?.accessToken).toBe("test");
 	});
 
 	it("should pass custom scopes to authorization URL", async () => {
@@ -333,9 +349,9 @@ describe("account", async () => {
 
 		const accountToUnlink = previousAccounts.data![0];
 		const unlinkAccountId = accountToUnlink.accountId;
-		const providerId = accountToUnlink.provider;
+		const providerId = accountToUnlink.providerId;
 		const accountsWithSameProvider = previousAccounts.data!.filter(
-			(account) => account.provider === providerId,
+			(account) => account.providerId === providerId,
 		);
 		if (accountsWithSameProvider.length <= 1) {
 			return;
@@ -396,7 +412,7 @@ describe("account", async () => {
 		});
 
 		const googleAccounts = previousAccounts.data!.filter(
-			(account) => account.provider === "google",
+			(account) => account.providerId === "google",
 		);
 		expect(googleAccounts.length).toBeGreaterThan(1);
 
@@ -418,7 +434,7 @@ describe("account", async () => {
 		});
 
 		const remainingGoogleAccounts = accountsAfterUnlink.data!.filter(
-			(account) => account.provider === "google",
+			(account) => account.providerId === "google",
 		);
 		expect(remainingGoogleAccounts.length).toBe(1);
 	});

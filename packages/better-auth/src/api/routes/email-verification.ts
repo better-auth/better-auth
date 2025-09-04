@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
@@ -68,13 +68,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z
-				.string({
-					description: "The email to send the verification email to",
-				})
-				.email(),
+			email: z.email().meta({
+				description: "The email to send the verification email to",
+			}),
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to use for email verification callback",
 				})
 				.optional(),
@@ -191,11 +190,12 @@ export const verifyEmail = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string({
+			token: z.string().meta({
 				description: "The token to verify the email",
 			}),
 			callbackURL: z
-				.string({
+				.string()
+				.meta({
 					description: "The URL to redirect to after email verification",
 				})
 				.optional(),
@@ -397,17 +397,25 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
-		await ctx.context.options.emailVerification?.onEmailVerification?.(
-			user.user,
-			ctx.request,
-		);
-		await ctx.context.internalAdapter.updateUserByEmail(
+		if (ctx.context.options.emailVerification?.onEmailVerification) {
+			await ctx.context.options.emailVerification.onEmailVerification(
+				user.user,
+				ctx.request,
+			);
+		}
+		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 			parsed.email,
 			{
 				emailVerified: true,
 			},
 			ctx,
 		);
+		if (ctx.context.options.emailVerification?.afterEmailVerification) {
+			await ctx.context.options.emailVerification.afterEmailVerification(
+				updatedUser,
+				ctx.request,
+			);
+		}
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
 			if (!currentSession || currentSession.user.email !== parsed.email) {

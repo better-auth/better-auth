@@ -23,6 +23,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "maximumNameLength"
 			| "disableKeyHashing"
 			| "minimumNameLength"
+			| "requireName"
 			| "enableMetadata"
 			| "disableSessionForAPIKeys"
 			| "startingCharactersConfig"
@@ -36,10 +37,10 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 
 let lastChecked: Date | null = null;
 
-export function deleteAllExpiredApiKeys(
+export async function deleteAllExpiredApiKeys(
 	ctx: AuthContext,
 	byPassLastCheckTime = false,
-) {
+): Promise<void> {
 	if (lastChecked && !byPassLastCheckTime) {
 		const now = new Date();
 		const diff = now.getTime() - lastChecked.getTime();
@@ -48,8 +49,8 @@ export function deleteAllExpiredApiKeys(
 		}
 	}
 	lastChecked = new Date();
-	try {
-		return ctx.adapter.deleteMany({
+	await ctx.adapter
+		.deleteMany({
 			model: API_KEY_TABLE_NAME,
 			where: [
 				{
@@ -57,11 +58,16 @@ export function deleteAllExpiredApiKeys(
 					operator: "lt",
 					value: new Date(),
 				},
+				{
+					field: "expiresAt",
+					operator: "ne",
+					value: null,
+				},
 			],
+		})
+		.catch((error) => {
+			ctx.logger.error(`Failed to delete expired API keys:`, error);
 		});
-	} catch (error) {
-		ctx.logger.error(`Failed to delete expired API keys:`, error);
-	}
 }
 
 export function createApiKeyRoutes({
@@ -69,9 +75,10 @@ export function createApiKeyRoutes({
 	opts,
 	schema,
 }: {
-	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
-		| Promise<string>
-		| string;
+	keyGenerator: (options: {
+		length: number;
+		prefix: string | undefined;
+	}) => Promise<string> | string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 }) {

@@ -65,20 +65,35 @@ describe("Email Verification", async () => {
 	});
 
 	it("should sign after verification", async () => {
-		const { testUser, signInWithUser, client } = await getTestInstance({
-			emailAndPassword: {
-				enabled: true,
-				requireEmailVerification: true,
-			},
-			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
-					token = _token;
-					mockSendEmail(user.email, url);
+		const { testUser, signInWithUser, client, sessionSetter } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
 				},
-				autoSignInAfterVerification: true,
+				emailVerification: {
+					async sendVerificationEmail({ user, url, token: _token }) {
+						token = _token;
+						mockSendEmail(user.email, url);
+					},
+					autoSignInAfterVerification: true,
+				},
+			});
+
+		const { headers } = await signInWithUser(testUser.email, testUser.password);
+
+		// Attempt to update user info
+		const updateRes = await client.updateUser({
+			name: "New Name",
+			image: "https://example.com/image.jpg",
+			fetchOptions: {
+				headers,
 			},
 		});
-		await signInWithUser(testUser.email, testUser.password);
+
+		expect(updateRes.data).toBeNull();
+		expect(updateRes.error!.status).toBe(401);
+		expect(updateRes.error!.statusText).toBe("UNAUTHORIZED");
 
 		let sessionToken = "";
 		const res = await client.verifyEmail({
@@ -88,10 +103,18 @@ describe("Email Verification", async () => {
 			fetchOptions: {
 				onSuccess(context) {
 					sessionToken = context.response.headers.get("set-auth-token") || "";
+					sessionSetter(headers)(context);
 				},
 			},
 		});
 		expect(sessionToken.length).toBeGreaterThan(10);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session!.user.emailVerified).toBe(true);
 	});
 
 	it("should use custom expiresIn", async () => {
@@ -154,6 +177,41 @@ describe("Email Verification", async () => {
 		expect(res.data?.status).toBe(true);
 		expect(onEmailVerificationMock).toHaveBeenCalledWith(
 			expect.objectContaining({ email: testUser.email }),
+			expect.any(Object),
+		);
+	});
+
+	it("should call afterEmailVerification callback when email is verified", async () => {
+		const afterEmailVerificationMock = vi.fn();
+		const { auth, client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+					mockSendEmail(user.email, url);
+				},
+				afterEmailVerification: afterEmailVerificationMock,
+			},
+		});
+
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(afterEmailVerificationMock).toHaveBeenCalledWith(
+			expect.objectContaining({ email: testUser.email, emailVerified: true }),
 			expect.any(Object),
 		);
 	});

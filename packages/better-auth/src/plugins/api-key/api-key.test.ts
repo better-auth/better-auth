@@ -146,6 +146,37 @@ describe("api-key", async () => {
 		expect(apiKey.rateLimitEnabled).toBe(true);
 	});
 
+	it("should require name in API keys if configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						requireName: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { user } = await signInWithTestUser();
+		let err: any;
+		try {
+			const apiKeyResult = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+		} catch (error) {
+			err = error;
+		}
+		expect(err).toBeDefined();
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
+	});
+
 	it("should respect rateLimit configuration from plugin options", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance(
 			{
@@ -567,6 +598,72 @@ describe("api-key", async () => {
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.remaining).toEqual(remaining);
+	});
+
+	it("should create API Key with remaining explicitly set to null", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: null,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+	});
+
+	it("should create API Key with remaining explicitly set to null and refillAmount and refillInterval are also set", async () => {
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: null,
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
+	});
+
+	it("should create API Key with remaining explicitly set to 0 and refillAmount also set", async () => {
+		const remaining = 0;
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: remaining,
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBe(remaining);
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
+	});
+
+	it("should create API Key with remaining undefined and default value of null is respected with refillAmount and refillInterval provided", async () => {
+		const refillAmount = 10; // Arbitrary non-null value
+		const refillInterval = 1000;
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				refillAmount: refillAmount,
+				refillInterval: refillInterval,
+				userId: user.id,
+			},
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toBeNull();
+		expect(apiKey.refillAmount).toBe(refillAmount);
+		expect(apiKey.refillInterval).toBe(refillInterval);
 	});
 
 	it("should create API key with invalid metadata", async () => {
@@ -1651,7 +1748,7 @@ describe("api-key", async () => {
 			result.error = error;
 		}
 
-		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.status).toEqual("TOO_MANY_REQUESTS");
 		expect(result.error?.body?.message).toEqual(ERROR_CODES.USAGE_EXCEEDED);
 		expect(result.error?.body?.code).toEqual("USAGE_EXCEEDED");
 	});
@@ -1788,6 +1885,55 @@ describe("api-key", async () => {
 		});
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.permissions).toEqual(permissions);
+	});
+
+	it("should authenticate with API key for endpoints other than /get-session", async () => {
+		const { data: testApiKey } = await client.apiKey.create(
+			{ name: "test-auth-key" },
+			{ headers },
+		);
+
+		if (!testApiKey) throw new Error("Failed to create API key");
+
+		const apiKeyHeaders = new Headers();
+		apiKeyHeaders.set("x-api-key", testApiKey.key);
+
+		const listResult = await client.apiKey.list({}, { headers: apiKeyHeaders });
+		expect(listResult.data).toBeDefined();
+		expect(listResult.error).toBeNull();
+		expect(Array.isArray(listResult.data)).toBe(true);
+
+		await client.apiKey.delete({ keyId: testApiKey.id }, { headers });
+	});
+
+	it("should set session context for all authenticated API key requests", async () => {
+		// This test verifies that ctx.context.session is properly set
+		// for all API key authenticated requests, not just /get-session
+
+		// Create an API key using the main auth instance
+		const testApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				name: "session-context-test",
+			},
+		});
+
+		const apiKeyHeaders = new Headers();
+		apiKeyHeaders.set("x-api-key", testApiKey.key);
+
+		const listResult = await auth.api.listApiKeys({
+			headers: apiKeyHeaders,
+		});
+
+		expect(listResult).toBeDefined();
+		expect(Array.isArray(listResult)).toBe(true);
+
+		const verifyResult = await auth.api.verifyApiKey({
+			body: { key: testApiKey.key },
+		});
+
+		expect(verifyResult.valid).toBe(true);
+		expect(verifyResult.key).toBeDefined();
 	});
 
 	it("should have permissions as an object from getApiKey", async () => {

@@ -26,7 +26,7 @@ export interface ApiKeyOptions {
 	customAPIKeyValidator?: (options: {
 		ctx: GenericEndpointContext;
 		key: string;
-	}) => boolean;
+	}) => boolean | Promise<boolean>;
 	/**
 	 * custom key generation function
 	 */
@@ -78,6 +78,12 @@ export interface ApiKeyOptions {
 	 * @default 32
 	 */
 	maximumPrefixLength?: number;
+	/**
+	 * Whether to require a name for the API key.
+	 *
+	 * @default false
+	 */
+	requireName?: boolean;
 	/**
 	 * The minimum length of the prefix.
 	 *

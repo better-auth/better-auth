@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -17,14 +17,14 @@ export function getApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/get",
 		{
 			method: "GET",
 			query: z.object({
-				id: z.string({
+				id: z.string().meta({
 					description: "The id of the Api Key",
 				}),
 			}),
@@ -205,10 +205,7 @@ export function getApiKey({
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];
-						}>(
-							//@ts-ignore - From DB this is always a string
-							returningApiKey.permissions,
-						)
+						}>(returningApiKey.permissions)
 					: null,
 			});
 		},

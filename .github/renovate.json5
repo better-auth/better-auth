@@ -1,0 +1,46 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    'schedule:weekly',
+    'group:allNonMajor',
+    ':disablePeerDependencies',
+    'customManagers:biomeVersions',
+    'helpers:pinGitHubActionDigestsToSemver',
+  ],
+  labels: [
+    'dependencies',
+  ],
+  rangeStrategy: 'bump',
+  postUpdateOptions: [
+    'pnpmDedupe',
+  ],
+  ignorePaths: [
+    '**/node_modules/**',
+  ],
+  packageRules: [
+    {
+      groupName: 'github-actions',
+      matchManagers: [
+        'github-actions',
+      ],
+    },
+    {
+      groupName: 'better-auth dependencies',
+      matchManagers: [
+        'npm',
+      ],
+      matchFileNames: [
+        'packages/better-auth/**',
+      ],
+    },
+  ],
+  ignoreDeps: [
+    '@biomejs/biome',
+    '@types/node',
+    'drizzle-orm',
+    'node',
+    'npm',
+    'pnpm',
+  ],
+}

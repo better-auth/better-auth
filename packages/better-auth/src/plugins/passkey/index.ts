@@ -12,7 +12,7 @@ import type {
 } from "@simplewebauthn/server";
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
@@ -133,6 +133,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							authenticatorAttachment: z
 								.enum(["platform", "cross-platform"])
 								.optional(),
+							name: z.string().optional(),
 						})
 						.optional(),
 					metadata: {
@@ -148,6 +149,11 @@ export const passkey = (options?: PasskeyOptions) => {
 												description: `Type of authenticator to use for registration. 
                           "platform" for device-specific authenticators, 
                           "cross-platform" for authenticators that can be used across devices.`,
+												required: false,
+											},
+											name: {
+												description: `Optional custom name for the passkey. 
+                          This can help identify the passkey when managing multiple credentials.`,
 												required: false,
 											},
 										},
@@ -271,7 +277,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						rpName: opts.rpName || ctx.context.appName,
 						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
-						userName: session.user.email || session.user.id,
+						userName: ctx.query?.name || session.user.email || session.user.id,
 						userDisplayName: session.user.email || session.user.id,
 						attestationType: "none",
 						excludeCredentials: userPasskeys.map((passkey) => ({
@@ -329,7 +335,8 @@ export const passkey = (options?: PasskeyOptions) => {
 					body: z
 						.object({
 							email: z
-								.string({
+								.string()
+								.meta({
 									description: "The email address of the user",
 								})
 								.optional(),
@@ -491,11 +498,10 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.any({
-							description: "The response from the authenticator",
-						}),
+						response: z.any(),
 						name: z
-							.string({
+							.string()
+							.meta({
 								description: "Name of the passkey",
 							})
 							.optional(),
@@ -622,7 +628,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.record(z.any()),
+						response: z.record(z.any(), z.any()),
 					}),
 					metadata: {
 						openapi: {
@@ -773,6 +779,21 @@ export const passkey = (options?: PasskeyOptions) => {
 					}
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET `/passkey/list-user-passkeys`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.listPasskeys`
+			 *
+			 * **client:**
+			 * `authClient.passkey.listUserPasskeys`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-list-user-passkeys)
+			 */
 			listPasskeys: createAuthEndpoint(
 				"/passkey/list-user-passkeys",
 				{
@@ -818,12 +839,30 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/passkey/delete-passkey`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.deletePasskey`
+			 *
+			 * **client:**
+			 * `authClient.passkey.deletePasskey`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-delete-passkey)
+			 */
 			deletePasskey: createAuthEndpoint(
 				"/passkey/delete-passkey",
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string(),
+						id: z.string().meta({
+							description:
+								'The ID of the passkey to delete. Eg: "some-passkey-id"',
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -867,13 +906,32 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 				},
 			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/passkey/update-passkey`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.updatePasskey`
+			 *
+			 * **client:**
+			 * `authClient.passkey.updatePasskey`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-update-passkey)
+			 */
 			updatePasskey: createAuthEndpoint(
 				"/passkey/update-passkey",
 				{
 					method: "POST",
 					body: z.object({
-						id: z.string(),
-						name: z.string(),
+						id: z.string().meta({
+							description: `The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
+						}),
+						name: z.string().meta({
+							description: `The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {

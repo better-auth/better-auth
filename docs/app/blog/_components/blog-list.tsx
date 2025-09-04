@@ -6,6 +6,7 @@ import { GitHubIcon, BookIcon, XIcon } from "./icons";
 import { Glow } from "./default-changelog";
 import { StarField } from "./stat-field";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
+import Image from "next/image";
 
 export async function BlogPage() {
 	const posts = blogs.getPages();
@@ -40,7 +41,7 @@ export async function BlogPage() {
 							GitHub
 						</IconLink>
 						<IconLink
-							href="https://discord.com/better-auth"
+							href="https://discord.gg/better-auth"
 							icon={DiscordLogoIcon}
 							className="flex-none text-gray-600 dark:text-gray-300"
 						>
@@ -54,47 +55,58 @@ export async function BlogPage() {
 					</p>
 				</div>
 			</div>
-			<div className="py-6 lg:py-10 px-6">
+			<div className="py-6 lg:py-10 px-3">
 				<div className="flex flex-col gap-2">
 					{posts.map((post) => (
-						<article
+						<div
+							className="group/blog flex flex-col gap-3 transition-colors p-4"
 							key={post.slugs.join("/")}
-							className="group relative flex flex-col space-y-2"
 						>
-							<div className="flex gap-2">
-								{/* {post.data?.image && (
+							<article className="group relative flex flex-col space-y-2 flex-3/4 py-1">
+								<div className="flex gap-2">
+									<div className="flex flex-col gap-2  border-b border-dashed pb-2">
+										<p className="text-xs opacity-50">
+											{formatBlogDate(post.data.date)}
+										</p>
+										<h2 className="text-2xl font-bold">{post.data?.title}</h2>
+									</div>
+								</div>
+								{post.data?.image && (
 									<Image
 										src={post.data.image}
 										alt={post.data.title}
 										width={402}
 										height={252}
-										className="rounded-md border bg-muted w-4/12 transition-colors"
+										className="rounded-md w-full bg-muted transition-colors"
 									/>
-								)} */}
-								<div className="flex flex-col gap-2  border-b border-dashed pb-2">
-									<p className="text-xs opacity-50">
-										{formatBlogDate(post.data.date)}
-									</p>
-									<h2 className="text-2xl font-bold">{post.data?.title}</h2>
-									<p className="text-muted-foreground">
-										{post.data?.description.substring(0, 100)}...
-									</p>
+								)}
+								<div className="flex gap-2">
+									<div className="flex flex-col gap-2  border-b border-dashed pb-2">
+										<p className="text-muted-foreground">
+											{post.data?.description.substring(0, 100)}...
+										</p>
+									</div>
 								</div>
-							</div>
-							<p className="text-xs opacity-50">
-								{post.data.structuredData.contents[0].content.substring(0, 250)}
-								...
-							</p>
-							<Link href={`/blog/${post.slugs.join("/")}`}>
-								<p className="text-xs underline">Read More</p>
-							</Link>
-							<Link
-								href={`/blog/${post.slugs.join("/")}`}
-								className="absolute inset-0"
-							>
-								<span className="sr-only">View Article</span>
-							</Link>
-						</article>
+								<p className="text-xs opacity-50">
+									{post.data.structuredData.contents[0].content.substring(
+										0,
+										250,
+									)}
+									...
+								</p>
+								<Link href={`/blog/${post.slugs.join("/")}`}>
+									<p className="text-xs group-hover/blog:underline underline-offset-4 transition-all">
+										Read More
+									</p>
+								</Link>
+								<Link
+									href={`/blog/${post.slugs.join("/")}`}
+									className="absolute inset-0"
+								>
+									<span className="sr-only">View Article</span>
+								</Link>
+							</article>
+						</div>
 					))}
 				</div>
 			</div>
