@@ -1,4 +1,4 @@
-import { describe, expect } from "vitest";
+import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 
@@ -43,5 +43,63 @@ describe("sign-in", async (it) => {
 		});
 		expect(session?.session.ipAddress).toBe(headerObj["X-Forwarded-For"]);
 		expect(session?.session.userAgent).toBe(headerObj["User-Agent"]);
+	});
+
+	it("verification email will be sent if sendOnSignIn is enabled", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailVerification: {
+				sendOnSignIn: true,
+				sendVerificationEmail,
+			},
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+
+		try {
+			await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+		} catch (err: any) {
+			expect(err.body.code).toBe("EMAIL_NOT_VERIFIED");
+		}
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(2);
+	});
+
+	it("verification email will not be sent if sendOnSignIn is disabled", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailVerification: {
+				sendOnSignIn: false,
+				sendVerificationEmail,
+			},
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+
+		try {
+			await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+		} catch (err: any) {
+			expect(err.body.code).toBe("EMAIL_NOT_VERIFIED");
+		}
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 });
