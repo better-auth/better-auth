@@ -75,10 +75,7 @@ export async function validateApiKey({
 		const apiKeyPermissions = apiKey.permissions
 			? safeJSONParse<{
 					[key: string]: string[];
-				}>(
-					//@ts-ignore - from DB, this value is always a string
-					apiKey.permissions,
-				)
+				}>(apiKey.permissions)
 			: null;
 
 		if (!apiKeyPermissions) {
@@ -194,7 +191,7 @@ export function verifyApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",
@@ -295,10 +292,7 @@ export function verifyApiKey({
 			returningApiKey.permissions = returningApiKey.permissions
 				? safeJSONParse<{
 						[key: string]: string[];
-					}>(
-						//@ts-ignore - from DB, this value is always a string
-						returningApiKey.permissions,
-					)
+					}>(returningApiKey.permissions)
 				: null;
 
 			return ctx.json({

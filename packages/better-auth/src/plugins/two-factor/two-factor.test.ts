@@ -197,7 +197,7 @@ async function testTwoFactor(strategy: TrustedDeviceStrategy) {
 				},
 			],
 		});
-		expect(dbUser?.twoFactorEnabled).toBe(null);
+		expect(dbUser?.twoFactorEnabled).toBe(false);
 		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
 	});

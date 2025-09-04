@@ -4,16 +4,7 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import {
-	z,
-	ZodArray,
-	ZodBoolean,
-	ZodNumber,
-	ZodObject,
-	ZodOptional,
-	ZodString,
-	ZodType,
-} from "zod/v4";
+import { z, ZodObject, ZodOptional, ZodType } from "zod/v4";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
@@ -78,19 +69,11 @@ export interface Path {
 	};
 }
 
+type AllowedType = "string" | "number" | "boolean" | "array" | "object";
+const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
 function getTypeFromZodType(zodType: ZodType<any>) {
-	if (zodType instanceof ZodString) {
-		return "string";
-	} else if (zodType instanceof ZodNumber) {
-		return "number";
-	} else if (zodType instanceof ZodBoolean) {
-		return "boolean";
-	} else if (zodType instanceof ZodObject) {
-		return "object";
-	} else if (zodType instanceof ZodArray) {
-		return "array";
-	}
-	return "string";
+	const type = zodType.type;
+	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
 function getFieldSchema(field: FieldAttribute) {
@@ -149,7 +132,7 @@ function getRequestBody(options: EndpointOptions): any {
 		options.body instanceof ZodObject ||
 		options.body instanceof ZodOptional
 	) {
-		// @ts-ignore
+		// @ts-expect-error
 		const shape = options.body.shape;
 		if (!shape) return undefined;
 		const properties: Record<string, any> = {};
@@ -319,7 +302,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			}
 		});
 
-		// @ts-ignore
+		// @ts-expect-error
 		acc[modelName] = {
 			type: "object",
 			properties,
