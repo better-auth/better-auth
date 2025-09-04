@@ -110,7 +110,13 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
 			undefined;
 		try {
-			({ DatabaseSync } = await import("node:sqlite"));
+			// Ignore both Vite and Webpack for dynamic import as they both try to pre-bundle 'node:sqlite' which might fail
+			// It's okay because we are in a try-catch block
+			({ DatabaseSync } = await import(
+				/* @vite-ignore */
+				/* webpackIgnore: true */
+				"node:sqlite"
+			));
 		} catch (error: unknown) {
 			if (
 				error !== null &&
