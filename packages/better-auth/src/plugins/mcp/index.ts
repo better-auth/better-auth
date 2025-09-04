@@ -105,6 +105,12 @@ export const getMCPProtectedResourceMetadata = (
 	};
 };
 
+/**
+ * MCP plugin for Better Auth.
+ *
+ * @see https://better-auth.com/docs/plugins/mcp
+ * @deprecated Use [oauthProvider](../oauth-provider/index.ts) instead
+ */
 export const mcp = (options: MCPOptions) => {
 	const opts = {
 		codeExpiresIn: 600,

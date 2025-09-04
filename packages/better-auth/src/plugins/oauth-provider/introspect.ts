@@ -34,7 +34,7 @@ async function validateJwtAccessToken(
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
-	if (!jwtPlugin) throw new APIError();
+	if (!jwtPlugin) throw new APIError("INTERNAL_SERVER_ERROR");
 
 	// Validate JWT against the JWKs
 	const jwksResult = jwtPluginOptions?.jwks?.remoteUrl
