@@ -9,6 +9,7 @@ import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { defaultKeyHasher } from "../";
+import { createApiKey } from "./create-api-key";
 
 export async function validateApiKey({
 	hashedKey,
@@ -48,7 +49,7 @@ export async function validateApiKey({
 
 	if (apiKey.expiresAt) {
 		const now = new Date().getTime();
-		const expiresAt = apiKey.expiresAt.getTime();
+		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
 				ctx.context.adapter.delete({
@@ -75,10 +76,7 @@ export async function validateApiKey({
 		const apiKeyPermissions = apiKey.permissions
 			? safeJSONParse<{
 					[key: string]: string[];
-				}>(
-					//@ts-ignore - from DB, this value is always a string
-					apiKey.permissions,
-				)
+				}>(apiKey.permissions)
 			: null;
 
 		if (!apiKeyPermissions) {
@@ -124,7 +122,7 @@ export async function validateApiKey({
 		let now = new Date().getTime();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
-		let lastTime = (lastRefillAt ?? apiKey.createdAt).getTime();
+		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
 
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
@@ -194,7 +192,7 @@ export function verifyApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",
@@ -295,10 +293,7 @@ export function verifyApiKey({
 			returningApiKey.permissions = returningApiKey.permissions
 				? safeJSONParse<{
 						[key: string]: string[];
-					}>(
-						//@ts-ignore - from DB, this value is always a string
-						returningApiKey.permissions,
-					)
+					}>(returningApiKey.permissions)
 				: null;
 
 			return ctx.json({

@@ -59,6 +59,7 @@ export default defineBuildConfig({
 		"svelte/compiler",
 		"@sveltejs/vite-plugin-svelte",
 		"csstype",
+		"siwe",
 	],
 	entries: [
 		"./src/index.ts",
@@ -95,6 +96,7 @@ export default defineBuildConfig({
 		"./src/plugins/bearer/index.ts",
 		"./src/plugins/captcha/index.ts",
 		"./src/plugins/custom-session/index.ts",
+		"./src/plugins/device-authorization/index.ts",
 		"./src/plugins/email-otp/index.ts",
 		"./src/plugins/generic-oauth/index.ts",
 		"./src/plugins/jwt/index.ts",
@@ -113,6 +115,7 @@ export default defineBuildConfig({
 		"./src/plugins/username/index.ts",
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
+		"./src/plugins/siwe/index.ts",
 		"./src/test-utils/index.ts",
 	],
 });

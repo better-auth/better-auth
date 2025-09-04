@@ -140,6 +140,36 @@ describe("Admin plugin", async () => {
 		testNonAdminUser.password,
 	);
 
+	it("should allow admin to get user", async () => {
+		const res = await client.admin.getUser(
+			{
+				query: {
+					id: testNonAdminUser.id,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		expect(res.data?.email).toBe(testNonAdminUser.email);
+	});
+
+	it("should not allow non-admin to get user", async () => {
+		const res = await client.admin.getUser(
+			{
+				query: {
+					id: testNonAdminUser.id,
+				},
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_GET_USER");
+	});
+
 	it("should allow admin to create users", async () => {
 		const res = await client.admin.createUser(
 			{
@@ -742,6 +772,7 @@ describe("Admin plugin", async () => {
 				data: {
 					name: "Updated Name",
 					customField: "custom value",
+					role: ["member", "user"],
 				},
 			},
 			{
@@ -749,6 +780,7 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.name).toBe("Updated Name");
+		expect(res.data?.role).toBe("member,user");
 	});
 
 	it("should not allow non-admin to update user", async () => {

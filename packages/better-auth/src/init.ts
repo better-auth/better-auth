@@ -1,7 +1,12 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getMigrations } from "./db";
-import { getAuthTables } from "./db/get-tables";
+import {
+	type BetterAuthDbSchema,
+	createInternalAdapter,
+	getAuthTables,
+	getMigrations,
+} from "./db";
+import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
 import type {
 	Adapter,
@@ -19,7 +24,7 @@ import {
 	getCookies,
 } from "./cookies";
 import { createLogger } from "./utils/logger";
-import { socialProviderList, socialProviders } from "./social-providers";
+import { type SocialProviders, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
 import { env, isProduction } from "./utils/env";
@@ -27,13 +32,16 @@ import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 import type { LiteralUnion } from "./types/helper";
 import { BetterAuthError } from "./error";
+import { createTelemetry } from "./telemetry";
+import type { TelemetryEvent } from "./telemetry/types";
+import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
+import { checkEndpointConflicts } from "./api";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
-
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	const secret =
@@ -57,26 +65,30 @@ export const init = async (options: BetterAuthOptions) => {
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
 	};
+
+	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers = Object.keys(options.socialProviders || {})
-		.map((key) => {
-			const value = options.socialProviders?.[key as "github"]!;
-			if (!value || value.enabled === false) {
+	const providers: OAuthProvider[] = (
+		Object.entries(
+			options.socialProviders || {},
+		) as unknown as Entries<SocialProviders>
+	)
+		.map(([key, config]) => {
+			if (config == null) {
 				return null;
 			}
-			if (!value.clientId) {
+			if (config.enabled === false) {
+				return null;
+			}
+			if (!config.clientId) {
 				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			const provider = socialProviders[
-				key as (typeof socialProviderList)[number]
-			](
-				value as any, // TODO: fix this
-			);
+			const provider = socialProviders[key](config as never);
 			(provider as OAuthProvider).disableImplicitSignUp =
-				value.disableImplicitSignUp;
+				config.disableImplicitSignUp;
 			return provider;
 		})
 		.filter((x) => x !== null);
@@ -91,7 +103,15 @@ export const init = async (options: BetterAuthOptions) => {
 		return generateId(size);
 	};
 
-	const ctx: AuthContext = {
+	const { publish } = await createTelemetry(options, {
+		adapter: adapter.id,
+		database:
+			typeof options.database === "function"
+				? "adapter"
+				: getKyselyDatabaseType(options.database) || "unknown",
+	});
+
+	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -120,7 +140,7 @@ export const init = async (options: BetterAuthOptions) => {
 				(options.secondaryStorage ? "secondary-storage" : "memory"),
 		},
 		authCookies: cookies,
-		logger: logger,
+		logger,
 		generateId: generateIdFunc,
 		session: null,
 		secondaryStorage: options.secondaryStorage,
@@ -140,6 +160,7 @@ export const init = async (options: BetterAuthOptions) => {
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
+			logger,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
 			generateId: generateIdFunc,
 		}),
@@ -154,6 +175,7 @@ export const init = async (options: BetterAuthOptions) => {
 			const { runMigrations } = await getMigrations(options);
 			await runMigrations();
 		},
+		publishTelemetry: publish,
 	};
 	let { context } = runPluginInit(ctx);
 	return context;
@@ -205,7 +227,7 @@ export type AuthContext = {
 	generateId: (options: {
 		model: LiteralUnion<Models, string>;
 		size?: number;
-	}) => string;
+	}) => string | false;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
@@ -216,8 +238,9 @@ export type AuthContext = {
 		};
 		checkPassword: typeof checkPassword;
 	};
-	tables: ReturnType<typeof getAuthTables>;
+	tables: BetterAuthDbSchema;
 	runMigrations: () => Promise<void>;
+	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
 
 function runPluginInit(ctx: AuthContext) {
@@ -249,6 +272,7 @@ function runPluginInit(ctx: AuthContext) {
 	dbHooks.push(options.databaseHooks);
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
+		logger: ctx.logger,
 		hooks: dbHooks.filter((u) => u !== undefined),
 		generateId: ctx.generateId,
 	});

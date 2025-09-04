@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import {
 	generateState,
-	getAccessTokenUtil,
+	decryptOAuthToken,
 	setTokenUtil,
 	type OAuth2Tokens,
 } from "../../oauth2";
@@ -36,7 +36,7 @@ export const listUserAccounts = createAuthEndpoint(
 											id: {
 												type: "string",
 											},
-											provider: {
+											providerId: {
 												type: "string",
 											},
 											createdAt: {
@@ -47,25 +47,25 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
-										},
-										accountId: {
-											type: "string",
-										},
-										scopes: {
-											type: "array",
-											items: {
+											accountId: {
 												type: "string",
 											},
+											scopes: {
+												type: "array",
+												items: {
+													type: "string",
+												},
+											},
 										},
+										required: [
+											"id",
+											"providerId",
+											"createdAt",
+											"updatedAt",
+											"accountId",
+											"scopes",
+										],
 									},
-									required: [
-										"id",
-										"provider",
-										"createdAt",
-										"updatedAt",
-										"accountId",
-										"scopes",
-									],
 								},
 							},
 						},
@@ -82,7 +82,7 @@ export const listUserAccounts = createAuthEndpoint(
 		return c.json(
 			accounts.map((a) => ({
 				id: a.id,
-				provider: a.providerId,
+				providerId: a.providerId,
 				createdAt: a.createdAt,
 				updatedAt: a.updatedAt,
 				accountId: a.accountId,
@@ -146,6 +146,19 @@ export const linkSocialAccount = createAuthEndpoint(
 				.meta({
 					description:
 						"The URL to redirect to if there is an error during the link process",
+				})
+				.optional(),
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z
+				.boolean()
+				.meta({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
 		}),
@@ -243,6 +256,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
+			const linkingUserId = String(linkingUserInfo.user.id);
+
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
@@ -257,16 +272,14 @@ export const linkSocialAccount = createAuthEndpoint(
 			);
 
 			const hasBeenLinked = existingAccounts.find(
-				(a) =>
-					a.providerId === provider.id &&
-					a.accountId === linkingUserInfo.user.id,
+				(a) => a.providerId === provider.id && a.accountId === linkingUserId,
 			);
 
 			if (hasBeenLinked) {
 				return c.json({
-					redirect: false,
 					url: "", // this is for type inference
 					status: true,
+					redirect: false,
 				});
 			}
 
@@ -297,7 +310,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					{
 						userId: session.user.id,
 						providerId: provider.id,
-						accountId: linkingUserInfo.user.id.toString(),
+						accountId: linkingUserId,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 						refreshToken: c.body.idToken.refreshToken,
@@ -325,9 +338,9 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			return c.json({
-				redirect: false,
 				url: "", // this is for type inference
 				status: true,
+				redirect: false,
 			});
 		}
 
@@ -346,7 +359,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );
@@ -517,11 +530,12 @@ export const getAccessToken = createAuthEndpoint(
 
 		try {
 			let newTokens: OAuth2Tokens | null = null;
-
+			const accessTokenExpired =
+				account.accessTokenExpiresAt &&
+				new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000;
 			if (
 				account.refreshToken &&
-				(!account.accessTokenExpiresAt ||
-					account.accessTokenExpiresAt.getTime() - Date.now() < 5_000) &&
+				accessTokenExpired &&
 				provider.refreshAccessToken
 			) {
 				newTokens = await provider.refreshAccessToken(
@@ -534,9 +548,8 @@ export const getAccessToken = createAuthEndpoint(
 					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
 				});
 			}
-
 			const tokens = {
-				accessToken: await getAccessTokenUtil(
+				accessToken: await decryptOAuthToken(
 					newTokens?.accessToken ?? account.accessToken ?? "",
 					ctx.context,
 				),
@@ -546,8 +559,7 @@ export const getAccessToken = createAuthEndpoint(
 					undefined,
 				scopes: account.scope?.split(",") ?? [],
 				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
-			} satisfies OAuth2Tokens;
-
+			};
 			return ctx.json(tokens);
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
@@ -759,7 +771,6 @@ export const accountInfo = createAuthEndpoint(
 				message: `Provider account provider is ${account.providerId} but it is not configured`,
 			});
 		}
-
 		const tokens = await getAccessToken({
 			...ctx,
 			body: {
@@ -768,9 +779,15 @@ export const accountInfo = createAuthEndpoint(
 			},
 			returnHeaders: false,
 		});
-
-		const info = await provider.getUserInfo(tokens);
-
+		if (!tokens.accessToken) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Access token not found",
+			});
+		}
+		const info = await provider.getUserInfo({
+			...tokens,
+			accessToken: tokens.accessToken as string,
+		});
 		return ctx.json(info);
 	},
 );

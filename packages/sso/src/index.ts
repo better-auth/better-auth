@@ -1,5 +1,6 @@
 import {
 	generateState,
+	type Account,
 	type BetterAuthPlugin,
 	type OAuth2Tokens,
 	type Session,
@@ -65,6 +66,14 @@ export interface SAMLConfig {
 	signingKey: string;
 	certificate: string;
 	attributeConsumingServiceIndex: number;
+	mapping?: {
+		id?: string;
+		email?: string;
+		name?: string;
+		firstName?: string;
+		lastName?: string;
+		extraFields?: Record<string, string>;
+	};
 }
 
 export interface SSOProvider {
@@ -148,6 +157,11 @@ export interface SSOOptions {
 	 * @default 10
 	 */
 	providersLimit?: number | ((user: User) => Promise<number> | number);
+	/**
+	 * Trust the email verified flag from the provider.
+	 * @default false
+	 */
+	trustEmailVerified?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -549,7 +563,7 @@ export const sso = (options?: SSOOptions) => {
 					const limit =
 						typeof options?.providersLimit === "function"
 							? await options.providersLimit(user)
-							: options?.providersLimit ?? 10;
+							: (options?.providersLimit ?? 10);
 
 					if (!limit) {
 						throw new APIError("FORBIDDEN", {
@@ -574,6 +588,26 @@ export const sso = (options?: SSOOptions) => {
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid issuer. Must be a valid URL",
 						});
+					}
+					if (ctx.body.organizationId) {
+						const organization = await ctx.context.adapter.findOne({
+							model: "member",
+							where: [
+								{
+									field: "userId",
+									value: user.id,
+								},
+								{
+									field: "organizationId",
+									value: ctx.body.organizationId,
+								},
+							],
+						});
+						if (!organization) {
+							throw new APIError("BAD_REQUEST", {
+								message: "You are not a member of the organization",
+							});
+						}
 					}
 					const provider = await ctx.context.adapter.create<
 						Record<string, any>,
@@ -623,6 +657,7 @@ export const sso = (options?: SSOOptions) => {
 										privateKey: body.samlConfig.privateKey,
 										decryptionPvk: body.samlConfig.decryptionPvk,
 										additionalParams: body.samlConfig.additionalParams,
+										mapping: body.mapping,
 									})
 								: null,
 							organizationId: body.organizationId,
@@ -1093,7 +1128,9 @@ export const sso = (options?: SSOOptions) => {
 							),
 							id: idToken[mapping.id || "sub"],
 							email: idToken[mapping.email || "email"],
-							emailVerified: idToken[mapping.emailVerified || "email_verified"],
+							emailVerified: options?.trustEmailVerified
+								? idToken[mapping.emailVerified || "email_verified"]
+								: false,
 							name: idToken[mapping.name || "name"],
 							image: idToken[mapping.image || "picture"],
 						} as {
@@ -1149,7 +1186,9 @@ export const sso = (options?: SSOOptions) => {
 							name: userInfo.name || userInfo.email,
 							id: userInfo.id,
 							image: userInfo.image,
-							emailVerified: userInfo.emailVerified || false,
+							emailVerified: options?.trustEmailVerified
+								? userInfo.emailVerified || false
+								: false,
 						},
 						account: {
 							idToken: tokenResponse.idToken,
@@ -1325,6 +1364,9 @@ export const sso = (options?: SSOOptions) => {
 								.filter(Boolean)
 								.join(" ") || parsedResponse.extract.attributes?.displayName,
 						attributes: parsedResponse.extract.attributes,
+						emailVerified: options?.trustEmailVerified
+							? ((attributes?.[mapping.emailVerified] || false) as boolean)
+							: false,
 					};
 
 					let user: User;
@@ -1340,6 +1382,37 @@ export const sso = (options?: SSOOptions) => {
 					});
 
 					if (existingUser) {
+						const accounts = await ctx.context.adapter.findOne<Account>({
+							model: "account",
+							where: [
+								{ field: "userId", value: existingUser.id },
+								{ field: "providerId", value: provider.providerId },
+								{ field: "accountId", value: userInfo.id },
+							],
+						});
+						if (!accounts) {
+							const isTrustedProvider =
+								ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
+									provider.providerId,
+								);
+							if (!isTrustedProvider) {
+								throw ctx.redirect(
+									`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
+								);
+							}
+							await ctx.context.adapter.create<Account>({
+								model: "account",
+								data: {
+									userId: existingUser.id,
+									providerId: provider.providerId,
+									accountId: userInfo.id,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+									accessToken: "",
+									refreshToken: "",
+								},
+							});
+						}
 						user = existingUser;
 					} else {
 						user = await ctx.context.adapter.create({
@@ -1347,7 +1420,26 @@ export const sso = (options?: SSOOptions) => {
 							data: {
 								email: userInfo.email,
 								name: userInfo.name,
-								emailVerified: true,
+								emailVerified: options?.trustEmailVerified
+									? userInfo.emailVerified || false
+									: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+							},
+						});
+						await ctx.context.adapter.create<Account>({
+							model: "account",
+							data: {
+								userId: user.id,
+								providerId: provider.providerId,
+								accountId: userInfo.id,
+								accessToken: "",
+								refreshToken: "",
+								accessTokenExpiresAt: new Date(),
+								refreshTokenExpiresAt: new Date(),
+								scope: "",
+								createdAt: new Date(),
+								updatedAt: new Date(),
 							},
 						});
 					}

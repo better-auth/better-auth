@@ -12,7 +12,11 @@ export function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
 		return str;
 	}
-	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
+	return str
+		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
+		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
+		.toLowerCase();
 }
 
 export const generateDrizzleSchema: SchemaGenerator = async ({
@@ -127,7 +131,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
 			} else {
-				id = `int("id").autoincrement.primaryKey()`;
+				id = `int("id").autoincrement().primaryKey()`;
 			}
 		} else {
 			if (databaseType === "mysql") {
@@ -148,13 +152,30 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						.map((field) => {
 							const attr = fields[field]!;
 							let type = getType(field, attr);
-							if (attr.defaultValue) {
+							if (
+								attr.defaultValue !== null &&
+								typeof attr.defaultValue !== "undefined"
+							) {
 								if (typeof attr.defaultValue === "function") {
-									type += `.$defaultFn(${attr.defaultValue})`;
+									if (
+										attr.type === "date" &&
+										attr.defaultValue.toString().includes("new Date()")
+									) {
+										type += `.defaultNow()`;
+									} else {
+										type += `.$defaultFn(${attr.defaultValue})`;
+									}
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
+								}
+							}
+							// Add .$onUpdate() for fields with onUpdate property
+							// Supported for all database types: PostgreSQL, MySQL, and SQLite
+							if (attr.onUpdate && attr.type === "date") {
+								if (typeof attr.onUpdate === "function") {
+									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
 							return `${field}: ${type}${attr.required ? ".notNull()" : ""}${
@@ -162,7 +183,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											attr.references.model,
+											tables[attr.references.model]?.modelName ||
+												attr.references.model,
 											adapter.options,
 										)}.${attr.references.field}, { onDelete: '${
 											attr.references.onDelete || "cascade"
@@ -211,7 +233,43 @@ function generateImport({
 	);
 	imports.push(hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "");
 	imports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
-	imports.push(databaseType === "mysql" ? "int" : "integer");
+	if (databaseType === "mysql") {
+		// Only include int for MySQL if actually needed
+		const hasNonBigintNumber = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					(field.type === "number" || field.type === "number[]") &&
+					!field.bigint,
+			),
+		);
+		const needsInt = !!useNumberId || hasNonBigintNumber;
+		if (needsInt) {
+			imports.push("int");
+		}
+	} else if (databaseType === "pg") {
+		// Only include integer for PG if actually needed
+		const hasNonBigintNumber = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					(field.type === "number" || field.type === "number[]") &&
+					!field.bigint,
+			),
+		);
+		const hasFkToId = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) => field.references?.field === "id",
+			),
+		);
+		// handles the references field with useNumberId
+		const needsInteger =
+			hasNonBigintNumber ||
+			(options.advanced?.database?.useNumberId && hasFkToId);
+		if (needsInteger) {
+			imports.push("integer");
+		}
+	} else {
+		imports.push("integer");
+	}
 	imports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
 
 	return `import { ${imports
