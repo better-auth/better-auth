@@ -10,8 +10,8 @@ catalogs:
       specifier: ^1.1.18
       version: 1.1.18
     better-call:
-      specifier: 1.0.16
-      version: 1.0.16
+      specifier: ^1.0.17
+      version: 1.0.17
     typescript:
       specifier: ^5.9.2
       version: 5.9.2
@@ -179,7 +179,7 @@ importers:
         version: link:../../packages/better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.16
+        version: 1.0.17
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.2.0
@@ -626,7 +626,7 @@ importers:
         version: 13.1.2
       better-call:
         specifier: 'catalog:'
-        version: 1.0.16
+        version: 1.0.17
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -885,7 +885,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.16
+        version: 1.0.17
       express:
         specifier: ^5.1.0
         version: 5.1.0
@@ -901,7 +901,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.16
+        version: 1.0.17
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@24.3.0)
@@ -5783,8 +5783,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@1.0.16:
-    resolution: {integrity: sha512-42dgJ1rOtc0anOoxjXPOWuel/Z/4aeO7EJ2SiXNwvlkySSgjXhNjAjTMWa8DL1nt6EXS3jl3VKC3mPsU/lUgVA==}
+  better-call@1.0.17:
+    resolution: {integrity: sha512-iCO3gIPvTcJLkIKwdEOEKHptn536mOJiU5aKSgsp4IpI/5UDb/b5xOzaN9+CdDWLtKuOg9qCsbEaR8g/L2F0hg==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -16213,7 +16213,9 @@ snapshots:
       metro-runtime: 0.83.1
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.79.5': {}
 
@@ -18098,7 +18100,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@1.0.16:
+  better-call@1.0.17:
     dependencies:
       '@better-fetch/fetch': 1.1.18
       rou3: 0.5.1
