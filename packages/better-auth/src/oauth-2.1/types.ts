@@ -278,3 +278,41 @@ export interface OAuthClient {
 	//---- All other metadata ----//
 	[key: string]: any;
 }
+
+/**
+ * Resource metadata server as defined by RFC 9728
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc9728#Terminology
+ */
+export interface ResourceServerMetadata {
+	/**
+	 * The protected resource's resource identifier,
+	 * which is a URL that uses the https scheme and
+	 * has no fragment component. It also SHOULD NOT
+	 * include a query component, but it may if
+	 * necessary.
+	 *
+	 * This SHOULD match the aud field of your JWT.
+	 */
+	resource: string;
+	/**
+	 * Each server should pertain to one issuer.
+	 *
+	 * MCP requires at least one server.
+	 *
+	 * @default [`${baseUrl}/.well-known/oauth-authorization-server`]
+	 */
+	authorization_servers?: string[];
+	jwks_uri?: string;
+	scopes_supported?: string[];
+	bearer_methods_supported?: string[];
+	resource_signing_alg_values_supported?: JWSAlgorithms[];
+	resource_name?: string;
+	resource_documentation?: string;
+	resource_policy_uri?: string;
+	resource_tos_uri?: string;
+	tls_client_certificate_bound_access_tokens?: boolean;
+	authorization_details_types_supported?: string;
+	dpop_signing_alg_values_supported?: JWSAlgorithms;
+	dpop_bound_access_tokens_required?: boolean;
+}
