@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "./options";
+import type { AdapterConfig, CustomAdapter } from "../adapters";
 
 /**
  * Adapter where clause
@@ -77,7 +78,9 @@ export type Adapter = {
 		options: BetterAuthOptions,
 		file?: string,
 	) => Promise<AdapterSchemaCreation>;
-	options?: Record<string, any>;
+	options?: {
+		adapterConfig: AdapterConfig;
+	} & CustomAdapter["options"];
 };
 
 export type AdapterSchemaCreation = {

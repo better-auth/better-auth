@@ -772,6 +772,7 @@ describe("Admin plugin", async () => {
 				data: {
 					name: "Updated Name",
 					customField: "custom value",
+					role: ["member", "user"],
 				},
 			},
 			{
@@ -779,6 +780,7 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.name).toBe("Updated Name");
+		expect(res.data?.role).toBe("member,user");
 	});
 
 	it("should not allow non-admin to update user", async () => {

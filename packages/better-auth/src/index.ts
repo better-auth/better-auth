@@ -15,3 +15,4 @@ export type * from "./oauth2/types";
 export { createTelemetry } from "./telemetry";
 export { getTelemetryAuthConfig } from "./telemetry/detectors/detect-auth-config";
 export type { TelemetryEvent } from "./telemetry/types";
+export { APIError } from "./api";

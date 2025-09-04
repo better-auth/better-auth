@@ -28,6 +28,7 @@ import { base64 } from "@better-auth/utils/base64";
 import { getJwtToken } from "../jwt/sign";
 import type { jwt } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
+import { mergeSchema } from "../../db";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -785,7 +786,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						family_name: user.name.split(" ")[1],
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: new Date(user.updatedAt).toISOString(),
 					};
 					const email = {
 						email: user.email,
@@ -1475,7 +1476,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				},
 			),
 		},
-		schema,
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";
