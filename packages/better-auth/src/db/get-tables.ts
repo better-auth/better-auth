@@ -167,7 +167,23 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.user?.fields?.updatedAt || "updatedAt",
 				},
-				...user?.fields,
+
+				...(user?.fields ? (() => {
+					const result: Record<string, any> = {};
+					Object.entries(user.fields).forEach(([fieldName, fieldConfig]) => {
+						const mappedFieldName = options.user?.fields?.[fieldName as keyof typeof options.user.fields];
+
+						if (mappedFieldName) {
+							result[fieldName] = {
+								...fieldConfig,
+								fieldName: mappedFieldName,
+							};
+						} else {
+							result[fieldName] = fieldConfig;
+						}
+					});
+					return result;
+				})() : {}),
 				...options.user?.additionalFields,
 			},
 			order: 1,

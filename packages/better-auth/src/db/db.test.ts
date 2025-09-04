@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
+import { admin } from "../plugins/admin";
+import { getAuthTables } from "./get-tables";
 
 describe("db", async () => {
 	it("should work with custom model names", async () => {
@@ -95,5 +97,31 @@ describe("db", async () => {
 			},
 		});
 		expect(session?.user.email).toBe("test@email.com");
+	});
+
+	it("should work with admin plugin field mappings", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				fields: {
+					email: "user_email",
+					role: "user_role",
+					banReason: "user_banReason",
+				} 
+			},
+			plugins: [admin()],
+		});
+
+		const tables = getAuthTables(auth.options);
+
+		expect(tables.user.fields.email.fieldName).toBe("user_email");
+
+		expect(tables.user.fields.role).toBeDefined();
+		expect(tables.user.fields.role.fieldName).toBe("user_role");
+
+		expect(tables.user.fields.banReason).toBeDefined();
+		expect(tables.user.fields.banReason.fieldName).toBe("user_banReason");
+
+		expect(tables.user.fields.banned).toBeDefined();
+		expect(tables.user.fields.banExpires).toBeDefined();
 	});
 });
