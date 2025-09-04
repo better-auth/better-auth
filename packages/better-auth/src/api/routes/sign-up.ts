@@ -11,7 +11,8 @@ import type {
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
-
+import { getOrgAdapter } from "../../plugins/organization/adapter";
+import type { OrganizationOptions } from "../../plugins/organization/types";
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
@@ -241,6 +242,61 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 				});
 			}
+			let activeOrganizationId: string | undefined = undefined;
+			const orgOptions = ctx.context.options.plugins?.find(
+				(p) => p.id === "organization",
+			)?.options as OrganizationOptions;
+			if (orgOptions?.autoCreateOrganizationOnSignUp) {
+				const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
+				const slugify = (text: string) => {
+					return text
+						.toString()
+						.toLowerCase()
+						.replace(/\s+/g, "-")
+						.replace(/[^\w\-]+/g, "")
+						.replace(/\-\-+/g, "-")
+						.replace(/^-+/, "")
+						.replace(/-+$/, "");
+				};
+				const organization = await orgAdapter.createOrganization({
+					organization: {
+						name: createdUser.name,
+						slug: slugify(createdUser.name),
+						createdAt: new Date(),
+					},
+				});
+				if (organization) {
+					activeOrganizationId = organization.id;
+					if (
+						orgOptions?.teams?.enabled &&
+						orgOptions.teams.defaultTeam?.enabled !== false
+					) {
+						const defaultTeam =
+							(await orgOptions.teams.defaultTeam?.customCreateDefaultTeam?.(
+								organization,
+								ctx.request,
+							)) ||
+							(await orgAdapter.createTeam({
+								organizationId: organization.id,
+								name: `${organization.name}`,
+								createdAt: new Date(),
+							}));
+
+						await orgAdapter.createMember({
+							teamId: defaultTeam.id,
+							userId: createdUser.id,
+							organizationId: organization.id,
+							role: orgOptions.creatorRole || "owner",
+						});
+					} else {
+						await orgAdapter.createMember({
+							userId: createdUser.id,
+							organizationId: organization.id,
+							role: orgOptions.creatorRole || "owner",
+						});
+					}
+				}
+			}
 			await ctx.context.internalAdapter.linkAccount(
 				{
 					userId: createdUser.id,
@@ -290,25 +346,26 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					},
 				});
 			}
-
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
 				ctx,
-				rememberMe === false,
+				false,
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 				});
 			}
-			await setSessionCookie(
-				ctx,
-				{
-					session,
-					user: createdUser,
-				},
-				rememberMe === false,
-			);
+			if (orgOptions && activeOrganizationId) {
+				await getOrgAdapter(ctx.context, orgOptions).setActiveOrganization(
+					session.token,
+					activeOrganizationId,
+				);
+			}
+			await setSessionCookie(ctx, {
+				session,
+				user: createdUser,
+			});
 			return ctx.json({
 				token: session.token,
 				user: {
