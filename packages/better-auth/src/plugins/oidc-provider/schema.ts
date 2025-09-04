@@ -37,6 +37,11 @@ export const schema = {
 			userId: {
 				type: "string",
 				required: false,
+				references: {
+					model: "user",
+					field: "id",
+					onDelete: "cascade",
+				},
 			},
 			createdAt: {
 				type: "date",
@@ -65,10 +70,20 @@ export const schema = {
 			},
 			clientId: {
 				type: "string",
+				references: {
+					model: "oauthApplication",
+					field: "clientId",
+					onDelete: "cascade",
+				},
 			},
 			userId: {
 				type: "string",
 				required: false,
+				references: {
+					model: "user",
+					field: "id",
+					onDelete: "cascade",
+				},
 			},
 			scopes: {
 				type: "string",
@@ -86,9 +101,19 @@ export const schema = {
 		fields: {
 			clientId: {
 				type: "string",
+				references: {
+					model: "oauthApplication",
+					field: "clientId",
+					onDelete: "cascade",
+				},
 			},
 			userId: {
 				type: "string",
+				references: {
+					model: "user",
+					field: "id",
+					onDelete: "cascade",
+				},
 			},
 			scopes: {
 				type: "string",

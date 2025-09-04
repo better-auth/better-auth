@@ -3,6 +3,7 @@ import { scryptAsync } from "@noble/hashes/scrypt";
 import { getRandomValues } from "@better-auth/utils";
 import { hex } from "@better-auth/utils/hex";
 import { hexToBytes } from "@noble/hashes/utils";
+import { BetterAuthError } from "../error";
 
 const config = {
 	N: 16384,
@@ -35,6 +36,9 @@ export const verifyPassword = async ({
 	password: string;
 }) => {
 	const [salt, key] = hash.split(":");
+	if (!salt || !key) {
+		throw new BetterAuthError("Invalid password hash");
+	}
 	const targetKey = await generateKey(password, salt!);
 	return constantTimeEqual(targetKey, hexToBytes(key));
 };

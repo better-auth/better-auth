@@ -488,8 +488,12 @@ export const username = (options?: UsernameOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						ctx.body.displayUsername ||= ctx.body.username;
-						ctx.body.username ||= ctx.body.displayUsername;
+						if (ctx.body.username && !ctx.body.displayUsername) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+						if (ctx.body.displayUsername && !ctx.body.username) {
+							ctx.body.username = ctx.body.displayUsername;
+						}
 					}),
 				},
 			],

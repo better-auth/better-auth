@@ -5,8 +5,13 @@ import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 
-export const accountSchema = z.object({
+export const coreSchema = z.object({
 	id: z.string(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
+});
+
+export const accountSchema = coreSchema.extend({
 	providerId: z.string(),
 	accountId: z.string(),
 	userId: z.coerce.string(),
@@ -29,36 +34,25 @@ export const accountSchema = z.object({
 	 * Password is only stored in the credential provider
 	 */
 	password: z.string().nullish(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 });
 
-export const userSchema = z.object({
-	id: z.string(),
+export const userSchema = coreSchema.extend({
 	email: z.string().transform((val) => val.toLowerCase()),
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
 	image: z.string().nullish(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 });
 
-export const sessionSchema = z.object({
-	id: z.string(),
+export const sessionSchema = coreSchema.extend({
 	userId: z.coerce.string(),
 	expiresAt: z.date(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 	token: z.string(),
 	ipAddress: z.string().nullish(),
 	userAgent: z.string().nullish(),
 });
 
-export const verificationSchema = z.object({
-	id: z.string(),
+export const verificationSchema = coreSchema.extend({
 	value: z.string(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
 	expiresAt: z.date(),
 	identifier: z.string(),
 });

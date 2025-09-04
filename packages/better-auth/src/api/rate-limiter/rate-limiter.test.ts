@@ -89,7 +89,6 @@ describe(
 			for (let i = 0; i < 25; i++) {
 				const response = await client.listSessions({
 					fetchOptions: {
-						// @ts-ignore
 						query: {
 							"test-query": Math.random().toString(),
 						},

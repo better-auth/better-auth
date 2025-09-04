@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.0.2-beta.8",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.15.0",
   "scripts": {
     "build": "turbo --filter \"./packages/*\" build",
     "dev": "turbo --filter \"./packages/*\" dev",
@@ -17,28 +17,21 @@
     "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
     "test": "turbo --filter \"./packages/*\" test",
+    "e2e:smoke": "turbo --filter \"./e2e/*\" e2e:smoke",
+    "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
     "typecheck": "turbo --filter \"./packages/*\" typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",
     "@types/node": "^24.3.0",
-    "bumpp": "^9.8.1",
-    "cross-env": "^7.0.3",
-    "dotenv-cli": "^7.4.4",
-    "simple-git-hooks": "^2.11.1",
-    "taze": "^0.18.0",
-    "tinyglobby": "^0.2.10",
-    "turbo": "^2.3.3",
+    "bumpp": "^10.2.3",
+    "tinyglobby": "^0.2.14",
+    "turbo": "^2.5.6",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "pnpm": {
-    "overrides": {
-      "mdast-util-frontmatter": "2.0.1",
-      "remark-mdx": "3.0.0",
-      "remark-parse": "11.0.0",
-      "unified": "11.0.4",
-      "whatwg-url": "^14.0.0"
-    }
+  "resolutions": {
+    "zod": "^4.1.5",
+    "miniflare>zod": "^3.25.1"
   }
 }

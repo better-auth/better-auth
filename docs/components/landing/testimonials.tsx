@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils";
 import { Icons } from "../icons";
 import Link from "next/link";
+import { noSSR } from "foxact/no-ssr";
+import { Suspense } from "react";
 
 const testimonials = [
 	{
@@ -179,17 +181,20 @@ holy sh** is it good, works so nice with typescript + drizzle`,
 		avatar: "/people-say/egoist.png",
 		social: <Icons.x />,
 	},
-].sort(() => Math.random() - 0.5);
+];
 
 type TestimonialProps = (typeof testimonials)[number];
 
 const TestimonialItem = ({
 	reverse = false,
 	testimonials,
+	noSsr,
 }: {
 	reverse?: boolean;
 	testimonials: TestimonialProps[];
+	noSsr?: boolean;
 }) => {
+	noSsr && noSSR();
 	const animeSeconds = testimonials.length * 10;
 	return (
 		<div className="max-w-full mx-auto">
@@ -259,12 +264,31 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<TestimonialItem
-						reverse
-						testimonials={Array(15)
-							.fill(testimonials.slice(0, Math.floor(testimonials.length / 2)))
-							.flat()}
-					/>
+					<Suspense
+						fallback={
+							<TestimonialItem
+								testimonials={Array(15)
+									.fill(
+										testimonials.slice(
+											Math.floor(testimonials.length / 2) + 1,
+											testimonials.length - 1,
+										),
+									)
+									.flat()}
+							/>
+						}
+					>
+						<TestimonialItem
+							noSsr
+							reverse
+							testimonials={Array(15)
+								.sort(() => Math.random() - 0.5)
+								.fill(
+									testimonials.slice(0, Math.floor(testimonials.length / 2)),
+								)
+								.flat()}
+						/>
+					</Suspense>
 				</div>
 				<div
 					style={{
@@ -273,16 +297,33 @@ export const Testimonial = () => {
 					}}
 					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
-					<TestimonialItem
-						testimonials={Array(15)
-							.fill(
-								testimonials.slice(
-									Math.floor(testimonials.length / 2) + 1,
-									testimonials.length - 1,
-								),
-							)
-							.flat()}
-					/>
+					<Suspense
+						fallback={
+							<TestimonialItem
+								testimonials={Array(15)
+									.fill(
+										testimonials.slice(
+											Math.floor(testimonials.length / 2) + 1,
+											testimonials.length - 1,
+										),
+									)
+									.flat()}
+							/>
+						}
+					>
+						<TestimonialItem
+							noSsr
+							testimonials={Array(15)
+								.sort(() => Math.random() - 0.5)
+								.fill(
+									testimonials.slice(
+										Math.floor(testimonials.length / 2) + 1,
+										testimonials.length - 1,
+									),
+								)
+								.flat()}
+						/>
+					</Suspense>
 				</div>
 			</div>
 		</div>

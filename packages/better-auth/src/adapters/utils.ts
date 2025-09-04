@@ -6,6 +6,13 @@ export function withApplyDefault(
 	action: "create" | "update",
 ) {
 	if (action === "update") {
+		// Apply onUpdate if value is undefined
+		if (value === undefined && field.onUpdate !== undefined) {
+			if (typeof field.onUpdate === "function") {
+				return field.onUpdate();
+			}
+			return field.onUpdate;
+		}
 		return value;
 	}
 	if (value === undefined || value === null) {

@@ -22,7 +22,6 @@ import type {
 	Request as ExpressRequest,
 	Response as ExpressResponse,
 } from "express";
-// @ts-ignore
 import express from "express";
 import bodyParser from "body-parser";
 import { randomUUID } from "crypto";

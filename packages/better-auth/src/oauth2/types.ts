@@ -20,7 +20,7 @@ export type OAuth2UserInfo = {
 
 export interface OAuthProvider<
 	T extends Record<string, any> = Record<string, any>,
-	O extends Record<string, any> = ProviderOptions,
+	O extends Record<string, any> = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
 	createAuthorizationURL: (data: {

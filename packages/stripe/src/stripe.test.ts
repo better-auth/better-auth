@@ -180,7 +180,9 @@ describe("stripe", async () => {
 			stripeCustomerId: expect.any(String),
 			status: "incomplete",
 			periodStart: undefined,
-			cancelAtPeriodEnd: undefined,
+			cancelAtPeriodEnd: false,
+			trialStart: undefined,
+			trialEnd: undefined,
 		});
 	});
 
@@ -353,6 +355,117 @@ describe("stripe", async () => {
 			periodStart: expect.any(Date),
 			periodEnd: expect.any(Date),
 			plan: "starter",
+		});
+	});
+
+	it("should handle subscription webhook events with trial", async () => {
+		const { id: testReferenceId } = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "test@email.com",
+			},
+		});
+		const { id: testSubscriptionId } = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: testReferenceId,
+				stripeCustomerId: "cus_mock123",
+				status: "incomplete",
+				plan: "starter",
+			},
+		});
+		const mockCheckoutSessionEvent = {
+			type: "checkout.session.completed",
+			data: {
+				object: {
+					mode: "subscription",
+					subscription: testSubscriptionId,
+					metadata: {
+						referenceId: testReferenceId,
+						subscriptionId: testSubscriptionId,
+					},
+				},
+			},
+		};
+
+		const mockSubscription = {
+			id: testSubscriptionId,
+			status: "active",
+			items: {
+				data: [
+					{
+						price: { id: process.env.STRIPE_PRICE_ID_1 },
+						quantity: 1,
+					},
+				],
+			},
+			current_period_start: Math.floor(Date.now() / 1000),
+			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+			trial_start: Math.floor(Date.now() / 1000),
+			trial_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			subscriptions: {
+				...stripeOptions.stripeClient.subscriptions,
+				retrieve: vi.fn().mockResolvedValue(mockSubscription),
+			},
+			webhooks: {
+				constructEventAsync: vi
+					.fn()
+					.mockResolvedValue(mockCheckoutSessionEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(testOptions)],
+		});
+
+		const testCtx = await testAuth.$context;
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockCheckoutSessionEvent),
+			},
+		);
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		const updatedSubscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "id",
+					value: testSubscriptionId,
+				},
+			],
+		});
+
+		expect(updatedSubscription).toMatchObject({
+			id: testSubscriptionId,
+			status: "active",
+			periodStart: expect.any(Date),
+			periodEnd: expect.any(Date),
+			plan: "starter",
+			trialStart: expect.any(Date),
+			trialEnd: expect.any(Date),
 		});
 	});
 

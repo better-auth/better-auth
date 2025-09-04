@@ -24,6 +24,6 @@
     "editor.defaultFormatter": "biomejs.biome"
   },
   "[mdx]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "unifiedjs.vscode-mdx"
   }
 }

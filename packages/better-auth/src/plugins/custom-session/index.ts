@@ -1,5 +1,9 @@
 import * as z from "zod/v4";
-import { createAuthEndpoint, getSession } from "../../api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+	getSession,
+} from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -7,6 +11,7 @@ import type {
 	InferSession,
 	InferUser,
 } from "../../types";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 
 const getSessionQuerySchema = z.optional(
 	z.object({
@@ -31,6 +36,14 @@ const getSessionQuerySchema = z.optional(
 	}),
 );
 
+export type CustomSessionPluginOptions = {
+	/**
+	 * This option is used to determine if the list-device-sessions endpoint should be mutated to the custom session data.
+	 * @default false
+	 */
+	shouldMutateListDeviceSessionsEndpoint?: boolean;
+};
+
 export const customSession = <
 	Returns extends Record<string, any>,
 	O extends BetterAuthOptions = BetterAuthOptions,
@@ -43,9 +56,27 @@ export const customSession = <
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
 	options?: O,
+	pluginOptions?: CustomSessionPluginOptions,
 ) => {
 	return {
 		id: "custom-session",
+		hooks: {
+			after: [
+				{
+					matcher: (ctx) =>
+						ctx.path === "/multi-session/list-device-sessions" &&
+						(pluginOptions?.shouldMutateListDeviceSessionsEndpoint ?? false),
+					handler: createAuthMiddleware(async (ctx) => {
+						const response = await getEndpointResponse<[]>(ctx);
+						if (!response) return;
+						const newResponse = await Promise.all(
+							response.map(async (v) => await fn(v, ctx)),
+						);
+						return ctx.json(newResponse);
+					}),
+				},
+			],
+		},
 		endpoints: {
 			getSession: createAuthEndpoint(
 				"/get-session",

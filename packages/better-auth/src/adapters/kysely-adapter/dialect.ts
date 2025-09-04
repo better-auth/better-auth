@@ -82,14 +82,14 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = db;
 	}
 
-	if ("aggregate" in db) {
+	if ("aggregate" in db && !("createSession" in db)) {
 		dialect = new SqliteDialect({
 			database: db,
 		});
 	}
 
 	if ("getConnection" in db) {
-		// @ts-ignore - mysql2/promise
+		// @ts-expect-error - mysql2/promise
 		dialect = new MysqlDialect(db);
 	}
 
@@ -106,7 +106,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		});
 	}
 
-	if ("createSession" in db) {
+	if ("createSession" in db && typeof window === "undefined") {
 		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
 			undefined;
 		try {

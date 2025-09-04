@@ -69,7 +69,7 @@ describe("Drizzle Adapter Tests", async () => {
 	await runAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const db = opts.database;
-			//@ts-ignore
+			//@ts-expect-error
 			opts.database = undefined;
 			const merged = merge(opts, customOptions);
 			merged.database = db;
@@ -144,7 +144,7 @@ describe("Drizzle Adapter Number Id Test", async () => {
 	await runNumberIdAdapterTest({
 		getAdapter: async (customOptions = {}) => {
 			const db = opts.database;
-			//@ts-ignore
+			//@ts-expect-error
 			opts.database = undefined;
 			const merged = merge(opts, customOptions);
 			merged.database = db;

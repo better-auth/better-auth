@@ -2,9 +2,9 @@ import { loadConfig } from "c12";
 import type { BetterAuthOptions } from "better-auth";
 import { logger } from "better-auth";
 import path from "path";
-// @ts-ignore
+// @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
-// @ts-ignore
+// @ts-expect-error
 import babelPresetReact from "@babel/preset-react";
 import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";

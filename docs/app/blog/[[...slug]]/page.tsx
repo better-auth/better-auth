@@ -15,7 +15,6 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Pre } from "fumadocs-ui/components/codeblock";
-import { DocsBody } from "fumadocs-ui/page";
 import { Glow } from "../_components/default-changelog";
 import { IconLink } from "../_components/changelog-layout";
 import { BookIcon, GitHubIcon, XIcon } from "../_components/icons";
@@ -23,6 +22,7 @@ import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "../_components/stat-field";
 import Image from "next/image";
 import { BlogPage } from "../_components/blog-list";
+import { Callout } from "@/components/ui/callout";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
@@ -119,7 +119,7 @@ export default async function Page({
 			</div>
 			<div className="flex-1 min-h-0 h-screen overflow-y-auto px-4 relative md:px-8 pb-12 md:py-12">
 				<div className="absolute top-0 left-0 h-full -translate-x-full w-px bg-gradient-to-b from-black/5 dark:from-white/10 via-black/3 dark:via-white/5 to-transparent"></div>
-				<DocsBody>
+				<div className="prose">
 					<MDX
 						components={{
 							...defaultMdxComponents,
@@ -151,9 +151,22 @@ export default async function Page({
 							DatabaseTable,
 							Accordion,
 							Accordions,
+							Callout: ({
+								children,
+								type,
+								...props
+							}: {
+								children: React.ReactNode;
+								type?: "info" | "warn" | "error" | "success" | "warning";
+								[key: string]: any;
+							}) => (
+								<Callout type={type} {...props}>
+									{children}
+								</Callout>
+							),
 						}}
 					/>
-				</DocsBody>
+				</div>
 			</div>
 		</div>
 	);

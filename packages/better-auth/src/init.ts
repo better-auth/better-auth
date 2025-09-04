@@ -1,7 +1,12 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getMigrations } from "./db";
-import { getAuthTables } from "./db/get-tables";
+import {
+	type BetterAuthDbSchema,
+	createInternalAdapter,
+	getAuthTables,
+	getMigrations,
+} from "./db";
+import type { Entries } from "type-fest";
 import { getAdapter } from "./db/utils";
 import type {
 	Adapter,
@@ -19,7 +24,7 @@ import {
 	getCookies,
 } from "./cookies";
 import { createLogger } from "./utils/logger";
-import { socialProviderList, socialProviders } from "./social-providers";
+import { type SocialProviders, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
 import { env, isProduction } from "./utils/env";
@@ -30,6 +35,7 @@ import { BetterAuthError } from "./error";
 import { createTelemetry } from "./telemetry";
 import type { TelemetryEvent } from "./telemetry/types";
 import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
+import { checkEndpointConflicts } from "./api";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -60,26 +66,29 @@ export const init = async (options: BetterAuthOptions) => {
 		plugins: plugins.concat(internalPlugins),
 	};
 
+	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers = Object.keys(options.socialProviders || {})
-		.map((key) => {
-			const value = options.socialProviders?.[key as "github"]!;
-			if (!value || value.enabled === false) {
+	const providers: OAuthProvider[] = (
+		Object.entries(
+			options.socialProviders || {},
+		) as unknown as Entries<SocialProviders>
+	)
+		.map(([key, config]) => {
+			if (config == null) {
 				return null;
 			}
-			if (!value.clientId) {
+			if (config.enabled === false) {
+				return null;
+			}
+			if (!config.clientId) {
 				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			const provider = socialProviders[
-				key as (typeof socialProviderList)[number]
-			](
-				value as any, // TODO: fix this
-			);
+			const provider = socialProviders[key](config as never);
 			(provider as OAuthProvider).disableImplicitSignUp =
-				value.disableImplicitSignUp;
+				config.disableImplicitSignUp;
 			return provider;
 		})
 		.filter((x) => x !== null);
@@ -229,7 +238,7 @@ export type AuthContext = {
 		};
 		checkPassword: typeof checkPassword;
 	};
-	tables: ReturnType<typeof getAuthTables>;
+	tables: BetterAuthDbSchema;
 	runMigrations: () => Promise<void>;
 	publishTelemetry: (event: TelemetryEvent) => Promise<void>;
 };
