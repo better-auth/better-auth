@@ -161,10 +161,13 @@ export const tiktok = (options: TiktokOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+						authentication: "post",
+						extraParams: {
+							client_key: options.clientKey,
+						},
 					});
 				},
 		async getUserInfo(token) {

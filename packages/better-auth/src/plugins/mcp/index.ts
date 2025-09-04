@@ -28,6 +28,7 @@ import { logger } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
+	resource?: string;
 	oidcConfig?: OIDCOptions;
 }
 
@@ -85,15 +86,15 @@ export const getMCPProviderMetadata = (
 
 export const getMCPProtectedResourceMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: MCPOptions,
 ) => {
 	const baseURL = ctx.context.baseURL;
 
 	return {
-		resource: baseURL,
+		resource: options?.resource ?? new URL(baseURL).origin,
 		authorization_servers: [baseURL],
-		jwks_uri: options?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
-		scopes_supported: options?.metadata?.scopes_supported ?? [
+		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
+		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
 			"profile",
 			"email",

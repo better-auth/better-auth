@@ -4,16 +4,7 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import {
-	z,
-	ZodArray,
-	ZodBoolean,
-	ZodNumber,
-	ZodObject,
-	ZodOptional,
-	ZodString,
-	ZodType,
-} from "zod/v4";
+import { z, ZodObject, ZodOptional, ZodType } from "zod/v4";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";

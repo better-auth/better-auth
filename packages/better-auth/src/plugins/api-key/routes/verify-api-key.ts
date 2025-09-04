@@ -9,7 +9,6 @@ import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { defaultKeyHasher } from "../";
-import { createApiKey } from "./create-api-key";
 
 export async function validateApiKey({
 	hashedKey,
