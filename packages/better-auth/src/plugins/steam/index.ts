@@ -439,7 +439,10 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						}
 
 						// Update user info if configured
-						if (ctx.context.options.account?.accountLinking?.updateUserInfoOnLink === true) {
+						if (
+							ctx.context.options.account?.accountLinking
+								?.updateUserInfoOnLink === true
+						) {
 							await ctx.context.internalAdapter.updateUser(user.id, {
 								name: profile.realname || user.name,
 								image: profile.avatarfull || user.image,
