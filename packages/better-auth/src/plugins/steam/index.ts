@@ -1,4 +1,8 @@
-import { createAuthEndpoint } from "../../api";
+import {
+	createAuthEndpoint,
+	getSessionFromCtx,
+	sessionMiddleware,
+} from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
@@ -50,6 +54,11 @@ export interface SteamAuthPluginOptions {
 	 * https://better-auth.com/docs/concepts/oauth#other-provider-configurations
 	 */
 	disableImplicitSignUp?: boolean;
+	/**
+	 * Whether to enable account linking.
+	 * @default false
+	 */
+	accountLinking?: boolean;
 }
 
 export const steam = (config: SteamAuthPluginOptions) =>
@@ -60,6 +69,27 @@ export const steam = (config: SteamAuthPluginOptions) =>
 				"/sign-in/steam",
 				{
 					method: "POST",
+					metadata: {
+						openapi: {
+							description: "Sign in with Steam using OpenID",
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: { type: "string" },
+													redirect: { type: "boolean" },
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 					body: z.object({
 						email: z
 							.string()
@@ -146,7 +176,8 @@ export const steam = (config: SteamAuthPluginOptions) =>
 					query: z.object({
 						email: z
 							.string()
-							.meta({ description: "The email to use for the user" }),
+							.meta({ description: "The email to use for the user" })
+							.optional(),
 						errorCallbackURL: z
 							.string()
 							.meta({
@@ -174,6 +205,12 @@ export const steam = (config: SteamAuthPluginOptions) =>
 							})
 							.optional()
 							.default("false"),
+						linkAccount: z
+							.string()
+							.meta({
+								description: "Flag to indicate this is for account linking",
+							})
+							.optional(),
 						"openid.ns": z
 							.string()
 							.meta({
@@ -257,6 +294,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						errorCallbackURL = baseErrorURL,
 						newUserCallbackURL = callbackURL,
 						requestSignUp: requestSignUpString,
+						linkAccount,
 						...params
 					} = ctx.query;
 
@@ -302,33 +340,6 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						throw ctx.redirect(
 							`${errorURL}?error=new_user_callback_url_not_trusted`,
 						);
-					}
-
-					if (
-						newUserCallbackURL &&
-						!isMatch(new URL(newUserCallbackURL).origin)
-					) {
-						ctx.context.logger.error(
-							`The new user callback URL provided during sign in with steam is not part of the trusted origins:`,
-							newUserCallbackURL,
-						);
-						throw ctx.redirect(
-							`${errorURL}?error=new_user_callback_url_not_trusted`,
-						);
-					}
-
-					const isValidEmail = z
-						.string()
-						.email()
-						.safeParse(email || "");
-
-					// If no email, throw. We need this since Steam OAuth doesn't provide an email.
-					if (!isValidEmail.success) {
-						ctx.context.logger.error(
-							`Invalid email during sign in with steam:`,
-							isValidEmail.error,
-						);
-						throw ctx.redirect(`${errorURL}?error=invalid_email`);
 					}
 
 					params["openid.mode"] = "check_authentication";
@@ -388,6 +399,87 @@ export const steam = (config: SteamAuthPluginOptions) =>
 
 					if (!profile) {
 						throw ctx.redirect(`${errorURL}?error=steam_profile_not_found`);
+					}
+
+					// Handle account linking flow
+					if (linkAccount === "true") {
+						// Get current user session for account linking
+						const session = await getSessionFromCtx(ctx);
+						if (!session) {
+							throw ctx.redirect(
+								`${errorURL}?error=session_required_for_linking`,
+							);
+						}
+
+						const user = session.user;
+
+						// Check if account is already linked
+						const existingAccount =
+							await ctx.context.internalAdapter.findAccount(steamId);
+						if (existingAccount) {
+							if (existingAccount.userId !== user.id) {
+								throw ctx.redirect(
+									`${errorURL}?error=account_already_linked_to_different_user`,
+								);
+							}
+							// Account already linked to this user, redirect to success
+							throw ctx.redirect(callbackURL);
+						}
+
+						// Check account linking configuration
+						const accountLinking = ctx.context.options.account?.accountLinking;
+						if (!accountLinking?.enabled) {
+							throw ctx.redirect(`${errorURL}?error=account_linking_disabled`);
+						}
+
+						const trustedProviders = accountLinking.trustedProviders;
+						const isTrustedProvider = trustedProviders?.includes("steam");
+
+						if (!isTrustedProvider) {
+							throw ctx.redirect(
+								`${errorURL}?error=steam_not_trusted_provider`,
+							);
+						}
+
+						// Create the account link
+						const newAccount = await ctx.context.internalAdapter.createAccount({
+							userId: user.id,
+							providerId: "steam",
+							accountId: steamId,
+						});
+
+						if (!newAccount) {
+							throw ctx.redirect(`${errorURL}?error=account_creation_failed`);
+						}
+
+						// Update user info if configured
+						if (accountLinking.updateUserInfoOnLink === true) {
+							await ctx.context.internalAdapter.updateUser(user.id, {
+								name: profile.realname || user.name,
+								image: profile.avatarfull || user.image,
+							});
+						}
+
+						throw ctx.redirect(callbackURL);
+					}
+
+					// Regular sign-in flow
+					if (!email) {
+						ctx.context.logger.error(
+							`Email is required for sign in with steam`,
+						);
+						throw ctx.redirect(`${errorURL}?error=email_required`);
+					}
+
+					const isValidEmail = z.string().email().safeParse(email);
+
+					// If no email, throw. We need this since Steam OAuth doesn't provide an email.
+					if (!isValidEmail.success) {
+						ctx.context.logger.error(
+							`Invalid email during sign in with steam:`,
+							isValidEmail.error,
+						);
+						throw ctx.redirect(`${errorURL}?error=invalid_email`);
 					}
 
 					let account = await ctx.context.internalAdapter.findAccount(steamId);
@@ -464,6 +556,81 @@ export const steam = (config: SteamAuthPluginOptions) =>
 							? newUserCallbackURL || callbackURL || baseOrigin
 							: callbackURL || baseOrigin,
 					);
+				},
+			),
+			linkAccountWithSteam: createAuthEndpoint(
+				"/link-social/steam",
+				{
+					method: "POST",
+					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Link a Steam account to the current user",
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: { type: "string" },
+													redirect: { type: "boolean" },
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					body: z.object({
+						callbackURL: z.string().meta({
+							description:
+								"The URL to redirect to after the user has linked their account.",
+						}),
+						errorCallbackURL: z.string().meta({
+							description: "The URL to redirect to if an error occurs.",
+						}),
+						disableRedirect: z
+							.boolean()
+							.meta({ description: "Whether to disable redirect." }),
+					}),
+				},
+				async (ctx) => {
+					const frontendOrigin = new URL(
+						ctx.request?.url || ctx.context.baseURL,
+					).origin;
+					const callbackURL = ctx.body.callbackURL;
+					const errorCallbackURL = ctx.body.errorCallbackURL;
+
+					const queryParams = new URLSearchParams({
+						callbackURL,
+						errorCallbackURL,
+						linkAccount: "true", // Flag to indicate this is for account linking
+					});
+
+					const openidQueryParams = new URLSearchParams({
+						"openid.ns": "http://specs.openid.net/auth/2.0",
+						"openid.mode": "checkid_setup",
+						"openid.realm": frontendOrigin,
+						"openid.identity":
+							"http://specs.openid.net/auth/2.0/identifier_select",
+						"openid.claimed_id":
+							"http://specs.openid.net/auth/2.0/identifier_select",
+						"openid.return_to": `${
+							ctx.context.baseURL
+						}/steam/callback?${decodeURIComponent(queryParams.toString())}`,
+					});
+					const openidURL = new URL(
+						`/openid/login?${openidQueryParams.toString()}`,
+						`https://steamcommunity.com`,
+					);
+
+					return ctx.json({
+						url: openidURL.toString(),
+						redirect: !ctx.body.disableRedirect,
+					});
 				},
 			),
 		},

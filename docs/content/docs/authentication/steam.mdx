@@ -136,3 +136,53 @@ export const auth = betterAuth({
     ]
 });
 ```
+
+### accountLinking
+
+Whether to enable account linking. By default it is disabled.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        steam({
+            accountLinking: true,
+        })
+    ]
+});
+```
+
+To link an account with Steam, you can use the `linkAccountWithSteam` endpoint.
+
+<APIMethod path="/link-social/steam" method="POST" noResult requireSession>
+```ts
+type linkAccountWithSteam = {
+    /**
+     * The URL to redirect to after the user has linked their account.
+    */
+    callbackURL?: string = "/welcome"
+    /**
+     * The URL to redirect to if an error occurs.
+     */
+    errorCallbackURL?: string = "/error"
+    /**
+     * Disable automatic redirection to the provider.
+     * This is useful if you want to handle the redirection
+	 * yourself like in a popup or a different tab.
+     */
+    disableRedirect?: boolean = false
+}
+```
+</APIMethod>
+
+And unlinking uses the normal unlinkAccount endpoint.
+
+<APIMethod path="/unlink-account" method="POST" noResult requireSession>
+```ts
+type unlinkAccount = {
+    /**
+     * The provider ID to unlink. In this case it would be "steam"
+     */
+    providerId: string = "steam"
+}
+```
+</APIMethod>
