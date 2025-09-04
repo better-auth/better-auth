@@ -30,6 +30,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 				}
 				return props.data;
 			},
+			transaction: false,
 		},
 		adapter: ({ getFieldName, options, debugLog }) => {
 			function convertWhereClause(where: CleanedWhere[], model: string) {

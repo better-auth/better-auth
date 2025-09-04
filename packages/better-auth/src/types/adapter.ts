@@ -70,6 +70,13 @@ export type Adapter = {
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
+	 * Execute multiple operations in a transaction.
+	 * If the adapter doesn't support transactions, operations will be executed sequentially.
+	 */
+	transaction: (
+		callback: (tx: Omit<Adapter, "transaction">) => Promise<void>,
+	) => Promise<void>;
+	/**
 	 *
 	 * @param options
 	 * @param file - file path if provided by the user

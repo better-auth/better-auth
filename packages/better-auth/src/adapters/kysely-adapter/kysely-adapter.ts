@@ -1,5 +1,10 @@
-import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
-import type { Where } from "../../types";
+import {
+	createAdapter,
+	type AdapterDebugLogs,
+	type AdapterConfig,
+	type CreateCustomAdapter,
+} from "../create-adapter";
+import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
@@ -22,24 +27,13 @@ interface KyselyAdapterConfig {
 	usePlural?: boolean;
 }
 
-export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
-	createAdapter({
-		config: {
-			adapterId: "kysely",
-			adapterName: "Kysely Adapter",
-			usePlural: config?.usePlural,
-			debugLogs: config?.debugLogs,
-			supportsBooleans:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsDates:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
-					? false
-					: true,
-			supportsJSON: false,
-		},
-		adapter: ({ getFieldName, schema }) => {
+export const kyselyAdapter = (
+	db: Kysely<any>,
+	config?: KyselyAdapterConfig,
+) => {
+	let lazyOptions: BetterAuthOptions | null = null;
+	const createCustomAdapter = (db: Kysely<any>): CreateCustomAdapter => {
+		return ({ getFieldName, schema }) => {
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -307,5 +301,43 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 				},
 				options: config,
 			};
+		};
+	};
+	let adapterOptions: {
+		config: AdapterConfig;
+		adapter: CreateCustomAdapter;
+	} | null = null;
+	adapterOptions = {
+		config: {
+			adapterId: "kysely",
+			adapterName: "Kysely Adapter",
+			usePlural: config?.usePlural,
+			debugLogs: config?.debugLogs,
+			supportsBooleans:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsDates:
+				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+					? false
+					: true,
+			supportsJSON: false,
+			transaction: (cb) =>
+				db.transaction().execute((trx) => {
+					const adapter = createAdapter({
+						config: adapterOptions!.config,
+						adapter: createCustomAdapter(trx),
+					})(lazyOptions!);
+					return cb(adapter);
+				}),
 		},
-	});
+		adapter: createCustomAdapter(db),
+	};
+
+	const adapter = createAdapter(adapterOptions);
+
+	return (options: BetterAuthOptions): Adapter => {
+		lazyOptions = options;
+		return adapter(options);
+	};
+};

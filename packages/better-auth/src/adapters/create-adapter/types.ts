@@ -1,6 +1,7 @@
 import type { FieldAttribute } from "../../db";
 import type { BetterAuthDbSchema } from "../../db/get-tables";
 import type {
+	Adapter,
 	AdapterSchemaCreation,
 	BetterAuthOptions,
 	Where,
@@ -89,6 +90,17 @@ export interface AdapterConfig {
 	 * @default true
 	 */
 	supportsBooleans?: boolean;
+	/**
+	 * Execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
+	 *
+	 */
+	transaction?:
+		| false
+		| ((
+				callback: (trx: Omit<Adapter, "transaction">) => Promise<void>,
+		  ) => Promise<void>);
 	/**
 	 * Disable id generation for the `create` method.
 	 *

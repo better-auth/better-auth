@@ -1,8 +1,13 @@
-import { ObjectId, type Db } from "mongodb";
+import { ObjectId, type Db, type ClientSession } from "mongodb";
 import type { BetterAuthOptions, Where } from "../../types";
 import { createAdapter, type AdapterDebugLogs } from "../create-adapter";
 
 export interface MongoDBAdapterConfig {
+	/**
+	 * MongoDB Client Session for transactions.
+	 * If not provided, operations will be executed without a session.
+	 */
+	session?: ClientSession;
 	/**
 	 * Enable debug logs for the adapter
 	 *
@@ -39,6 +44,8 @@ export const mongodbAdapter = (db: Db, config?: MongoDBAdapterConfig) => {
 				_id: "id",
 			},
 			supportsNumericIds: false,
+			// todo: implement transactions
+			transaction: false,
 			customTransformInput({
 				action,
 				data,

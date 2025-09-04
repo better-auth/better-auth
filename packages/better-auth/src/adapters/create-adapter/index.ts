@@ -45,9 +45,14 @@ const colors = {
 	},
 };
 
+const createAsIsTransaction =
+	(adapter: Adapter) =>
+	(fn: (trx: Omit<Adapter, "transaction">) => Promise<void>) =>
+		fn(adapter);
+
 export const createAdapter =
 	({
-		adapter,
+		adapter: customAdapter,
 		config: cfg,
 	}: {
 		config: AdapterConfig;
@@ -315,7 +320,7 @@ export const createAdapter =
 			return fields[defaultFieldName];
 		};
 
-		const adapterInstance = adapter({
+		const adapterInstance = customAdapter({
 			options,
 			schema,
 			debugLog,
@@ -560,7 +565,14 @@ export const createAdapter =
 			}) as any;
 		};
 
-		return {
+		let lazyLoadTransaction: Adapter["transaction"] | null = null;
+		const adapter: Adapter = {
+			transaction: async (cb) => {
+				lazyLoadTransaction ??= config.transaction
+					? config.transaction
+					: createAsIsTransaction(adapter);
+				return lazyLoadTransaction(cb);
+			},
 			create: async <T extends Record<string, any>, R = T>({
 				data: unsafeData,
 				model: unsafeModel,
@@ -1016,6 +1028,7 @@ export const createAdapter =
 					}
 				: {}),
 		};
+		return adapter;
 	};
 
 function formatTransactionId(transactionId: number) {

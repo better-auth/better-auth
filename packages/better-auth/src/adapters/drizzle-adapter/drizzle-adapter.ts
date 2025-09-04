@@ -60,6 +60,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			transaction: (cb) => db.transaction(cb),
 		},
 		adapter: ({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {
