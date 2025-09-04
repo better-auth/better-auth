@@ -11,6 +11,7 @@ export type SteamProfile = {
 	steamid: string;
 	communityvisibilitystate: number;
 	profilestate: number;
+	personaname: string;
 	profileurl: string;
 	avatar: string;
 	avatarmedium: string;
@@ -27,10 +28,28 @@ export type SteamProfile = {
 };
 
 export interface SteamAuthPluginOptions {
+	/**
+	 * Your Steam API key.
+	 *
+	 * Register a key here:
+	 * https://steamcommunity.com/dev/apikey
+	 */
 	steamApiKey: string;
+	/**
+	 * A function to map the Steam profile to a user.
+	 *
+	 * @param profile The Steam profile.
+	 * @returns The Better Auth user.
+	 */
 	mapProfileToUser?: (
 		profile: SteamProfile & { email: string },
-	) => Promise<User>;
+	) => Promise<Omit<User, "id" | "createdAt" | "updatedAt">>;
+	/**
+	 * Whether to disable implicit sign up. If true, the user will be redirected to the error callback URL if the user is not found.
+	 * Read more here:
+	 * https://better-auth.com/docs/concepts/oauth#other-provider-configurations
+	 */
+	disableImplicitSignUp?: boolean;
 }
 
 export const steam = (config: SteamAuthPluginOptions) =>
@@ -42,28 +61,64 @@ export const steam = (config: SteamAuthPluginOptions) =>
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						errorCallbackURL: z.string().optional(),
-						callbackURL: z.string().optional(),
-						newUserCallbackURL: z.string().optional(),
-						disableRedirect: z.boolean().optional(),
+						email: z
+							.string()
+							.meta({ description: "The email to use for the user" }),
+						errorCallbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
+						callbackURL: z
+							.string()
+							.meta({
+								description:
+									"The URL to redirect to after the user is signed in",
+							})
+							.optional(),
+						newUserCallbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to if the user is new",
+							})
+							.optional(),
+						disableRedirect: z
+							.boolean()
+							.meta({ description: "Whether to disable redirect" })
+							.optional(),
+						requestSignUp: z
+							.boolean()
+							.meta({
+								description:
+									"Whether to sign up the user if disableImplicitSignUp is enabled",
+							})
+							.optional(),
 					}),
 				},
 				async (ctx) => {
-					const callbackURL = ctx.body.callbackURL || "/";
+					const frontendOrigin = new URL(
+						ctx.request?.url || ctx.context.baseURL,
+					).origin;
+					const callbackURL =
+						ctx.body.callbackURL || new URL("/", frontendOrigin).toString();
 					const email = ctx.body.email;
-					const errorCallbackURL = ctx.body.errorCallbackURL || undefined;
+					const errorCallbackURL = ctx.body.errorCallbackURL
+						? new URL(ctx.body.errorCallbackURL, frontendOrigin).toString()
+						: undefined;
+					const requestSignUp = ctx.body.requestSignUp?.toString() || "false";
 
 					const queryParams = new URLSearchParams({
 						callbackURL,
 						email,
 						...(errorCallbackURL ? { errorCallbackURL } : {}),
+						...(requestSignUp ? { requestSignUp } : {}),
 					});
 
 					const openidQueryParams = new URLSearchParams({
 						"openid.ns": "http://specs.openid.net/auth/2.0",
 						"openid.mode": "checkid_setup",
-						"openid.realm": new URL(ctx.context.baseURL).origin,
+						"openid.realm": frontendOrigin,
 						"openid.identity":
 							"http://specs.openid.net/auth/2.0/identifier_select",
 						"openid.claimed_id":
@@ -86,32 +141,145 @@ export const steam = (config: SteamAuthPluginOptions) =>
 
 			steamCallback: createAuthEndpoint(
 				"/steam/callback",
-				{ method: "GET" },
+				{
+					method: "GET",
+					query: z.object({
+						email: z
+							.string()
+							.meta({ description: "The email to use for the user" }),
+						errorCallbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
+						callbackURL: z
+							.string()
+							.meta({
+								description:
+									"The URL to redirect to after the user is signed in",
+							})
+							.optional(),
+						newUserCallbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to if the user is new",
+							})
+							.optional(),
+						requestSignUp: z
+							.enum(["true", "false"])
+							.meta({
+								description:
+									"Whether to sign up the user if disableImplicitSignUp is enabled",
+							})
+							.optional()
+							.default("false"),
+						"openid.ns": z
+							.string()
+							.meta({
+								description: "The namespace of the OpenID request",
+							})
+							.optional()
+							.default("http://specs.openid.net/auth/2.0"),
+						"openid.mode": z
+							.string()
+							.meta({
+								description: "The mode of the OpenID request",
+							})
+							.optional()
+							.default("id_res"),
+						"openid.op_endpoint": z
+							.string()
+							.meta({
+								description: "The OP endpoint of the OpenID request",
+							})
+							.optional()
+							.default("https://steamcommunity.com/openid/login"),
+						"openid.claimed_id": z
+							.string()
+							.meta({
+								description: "The claimed ID of the OpenID request",
+							})
+							.optional(),
+						"openid.identity": z
+							.string()
+							.meta({
+								description: "The identity of the OpenID request",
+							})
+							.optional(),
+						"openid.return_to": z
+							.string()
+							.meta({
+								description: "The return to of the OpenID request",
+							})
+							.optional(),
+						"openid.response_nonce": z
+							.string()
+							.meta({
+								description: "The response nonce of the OpenID request",
+							})
+							.optional(),
+						"openid.assoc_handle": z
+							.string()
+							.meta({
+								description: "The assoc handle of the OpenID request",
+							})
+							.optional(),
+						"openid.signed": z
+							.string()
+							.meta({
+								description: "The signed of the OpenID request",
+							})
+							.optional(),
+						"openid.sig": z
+							.string()
+							.meta({
+								description: "The sig of the OpenID request",
+							})
+							.optional(),
+					}),
+					metadata: {
+						client: false,
+					},
+				},
 				async (ctx) => {
 					const baseErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
 						`${ctx.context.baseURL}/error`;
 
-					// If no request, throw.
 					if (!ctx?.request?.url) {
 						throw ctx.redirect(`${baseErrorURL}?error=missing_request_url`);
 					}
 
-					const searchParamEntries = new URL(
-						ctx.request.url,
-					).searchParams.entries();
-
-					const {
+					let {
 						email,
-						callbackURL,
-						errorCallbackURL,
-						newUserCallbackURL,
+						callbackURL = `${ctx.context.baseURL}/`,
+						errorCallbackURL = baseErrorURL,
+						newUserCallbackURL = callbackURL,
+						requestSignUp: requestSignUpString,
 						...params
-					} = Object.fromEntries(searchParamEntries);
+					} = ctx.query;
+
+					if (!callbackURL.startsWith("http")) {
+						callbackURL = new URL(callbackURL, ctx.context.baseURL).toString();
+					}
+					if (!errorCallbackURL.startsWith("http")) {
+						errorCallbackURL = new URL(
+							errorCallbackURL,
+							ctx.context.baseURL,
+						).toString();
+					}
+					if (!newUserCallbackURL.startsWith("http")) {
+						newUserCallbackURL = new URL(
+							newUserCallbackURL,
+							ctx.context.baseURL,
+						).toString();
+					}
+					let requestSignUp = requestSignUpString === "true";
 
 					const errorURL = errorCallbackURL || baseErrorURL;
 
-					const trustedOrigins =
+					const trustedOrigins: string[] =
 						typeof ctx.context.options.trustedOrigins === "function"
 							? await ctx.context.options.trustedOrigins(ctx.request)
 							: ctx.context.options.trustedOrigins || [];
@@ -167,7 +335,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 
 					const verifyRes = await betterFetch<string>(
 						`https://steamcommunity.com/openid/login?${new URLSearchParams(
-							params,
+							params || {},
 						).toString()}`,
 						{
 							method: "POST",
@@ -175,6 +343,10 @@ export const steam = (config: SteamAuthPluginOptions) =>
 					);
 
 					if (verifyRes.error) {
+						ctx.context.logger.error(
+							`Steam OpenID validation failed:`,
+							verifyRes.error,
+						);
 						ctx.context.logger.error(
 							`An error occurred while verifying the Steam OpenID:`,
 							verifyRes.error,
@@ -184,6 +356,10 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						);
 					}
 					if (!verifyRes.data.includes("is_valid:true")) {
+						ctx.context.logger.error(
+							`Steam OpenID validation failed:`,
+							verifyRes.data,
+						);
 						throw ctx.redirect(
 							`${errorURL}?error=steam_openid_validation_failed`,
 						);
@@ -217,7 +393,13 @@ export const steam = (config: SteamAuthPluginOptions) =>
 					let account = await ctx.context.internalAdapter.findAccount(steamid);
 					let user: User | null = null;
 					let isNewUser = false;
-					if (!account) {
+
+					if (
+						!account &&
+						(typeof config.disableImplicitSignUp === "boolean"
+							? config.disableImplicitSignUp && requestSignUp
+							: true)
+					) {
 						isNewUser = true;
 						const userDetails = await config.mapProfileToUser?.({
 							...profile,
@@ -250,7 +432,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 							);
 							throw ctx.redirect(`${errorURL}?error=account_creation_failed`);
 						}
-					} else {
+					} else if (account) {
 						user = await ctx.context.internalAdapter.findUserById(
 							account.userId,
 						);
@@ -261,6 +443,8 @@ export const steam = (config: SteamAuthPluginOptions) =>
 							);
 							throw ctx.redirect(`${errorURL}?error=user_not_found`);
 						}
+					} else {
+						throw ctx.redirect(`${errorURL}?error=account_not_found`);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -276,11 +460,9 @@ export const steam = (config: SteamAuthPluginOptions) =>
 					const baseOrigin = new URL(ctx.context.baseURL).origin;
 
 					throw ctx.redirect(
-						new URL(
-							isNewUser
-								? newUserCallbackURL || callbackURL || baseOrigin
-								: callbackURL || baseOrigin,
-						).toString(),
+						isNewUser
+							? newUserCallbackURL || callbackURL || baseOrigin
+							: callbackURL || baseOrigin,
 					);
 				},
 			),
