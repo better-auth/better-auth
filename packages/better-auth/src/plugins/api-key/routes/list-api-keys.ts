@@ -1,4 +1,4 @@
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../../api";
+import { createAuthEndpoint, sessionMiddleware } from "../../../api";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
