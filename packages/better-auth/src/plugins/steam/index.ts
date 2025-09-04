@@ -57,7 +57,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 		id: "steam",
 		endpoints: {
 			signInWithSteam: createAuthEndpoint(
-				"/sign-in/social/steam",
+				"/sign-in/steam",
 				{
 					method: "POST",
 					body: z.object({
@@ -365,12 +365,12 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						);
 					}
 
-					const steamid = params["openid.claimed_id"]?.split("/").pop();
-					if (!steamid) {
+					const steamId = params["openid.claimed_id"]?.split("/").pop();
+					if (!steamId) {
 						throw ctx.redirect(`${errorURL}?error=steamid_missing`);
 					}
 
-					const profileUrl = `ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamid}`;
+					const profileUrl = `ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamId}`;
 
 					const profileRes = await betterFetch<{
 						response: { players: SteamProfile[] };
@@ -390,7 +390,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						throw ctx.redirect(`${errorURL}?error=steam_profile_not_found`);
 					}
 
-					let account = await ctx.context.internalAdapter.findAccount(steamid);
+					let account = await ctx.context.internalAdapter.findAccount(steamId);
 					let user: User | null = null;
 					let isNewUser = false;
 
@@ -421,7 +421,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 							throw ctx.redirect(`${errorURL}?error=user_creation_failed`);
 						}
 						account = await ctx.context.internalAdapter.createAccount({
-							accountId: steamid,
+							accountId: steamId,
 							providerId: "steam",
 							userId: user.id,
 						});

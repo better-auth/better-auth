@@ -18,7 +18,7 @@ Steam authentication is setup differently from other providers, as Steam does no
 
     Once you have your API key, add that to your environment variables:
 
-    ```env title=".env"
+    ```
     STEAM_API_KEY=your-api-key
     ```
 </Step>
@@ -34,26 +34,50 @@ Steam authentication is setup differently from other providers, as Steam does no
     export const auth = betterAuth({
         plugins: [
             steam({
-                steamApiKey: process.env.STEAM_API_KEY,
+                steamApiKey: process.env.STEAM_API_KEY, // Pass the env you defined previously
             })
         ]
-    })
+    });
     ```
 </Step>
 
 <Step>
     ### Sign in with Steam
 
-    To sign in with Steam, call the `signIn.social.steam` method.
+    To sign in with Steam, call the `signIn.steam` method.
     
     You will need to pass the email of the user to the `email` option, as Steam does not provide an email address.
 
+    <APIMethod path="/sign-in/steam" method="POST" isClientOnly>
     ```ts
-    authClient.signIn.social.steam({
-        email: "user@example.com",
-        callbackURL: "/dashboard",
-        newUserCallbackURL: "/onboarding"
-    });
+    type signInSteam = {
+        /**
+         * The email of the user.
+         */
+        email: string = "user@example.com"
+        /**
+         * An optional URL to redirect to after the user is signed in.
+         */
+        callbackURL?: string = "/dashboard"
+        /**
+         * An optional URL to redirect to if an error occurs.
+         */
+        errorCallbackURL?: string = "/error"
+        /**
+         * An optional URL to redirect to if the user is signing up for the first time.
+        */
+        newUserCallbackURL?: string = "/onboarding"
+        /**
+         * Whether to disable redirect.
+         */
+        disableRedirect?: boolean = false
+        /**
+         * Whether to request sign up. Useful when disableImplicitSignUp is true for this provider.
+         */
+        requestSignUp?: boolean = true
+    }
     ```
+    </APIMethod>
 </Step>
 </Steps>
+
