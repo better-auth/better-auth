@@ -1,6 +1,6 @@
 import { Endpoint } from "./endpoint";
 // import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
+import { DynamicCodeBlock } from "./ui/dynamic-code-block";
 import {
 	Table,
 	TableBody,
@@ -234,7 +234,7 @@ export const APIMethod = ({
 						</Note>
 					) : null}
 					<div className={cn("relative w-full")}>
-						<DynamicCodeBlock
+						<DynamicCodeBlock 
 							code={`${code_prefix}${
 								noResult
 									? ""
