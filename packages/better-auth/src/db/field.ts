@@ -1,4 +1,4 @@
-import type { ZodSchema } from "zod/v4";
+import type { ZodType } from "zod/v4";
 import type { BetterAuthOptions } from "../types";
 import type { LiteralString } from "../types/helper";
 
@@ -7,6 +7,7 @@ export type FieldType =
 	| "number"
 	| "boolean"
 	| "date"
+	| "json"
 	| `${"string" | "number"}[]`
 	| Array<LiteralString>;
 
@@ -43,6 +44,13 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * be used when creating a new record.
 	 */
 	defaultValue?: Primitive | (() => Primitive);
+	/**
+	 * Update value for the field
+	 *
+	 * Note: This will create an onUpdate trigger on the database level for supported adapters.
+	 * It will be called when updating a record.
+	 */
+	onUpdate?: () => Primitive;
 	/**
 	 * transform the value before storing it.
 	 */
@@ -82,8 +90,8 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * A zod schema to validate the value.
 	 */
 	validator?: {
-		input?: ZodSchema;
-		output?: ZodSchema;
+		input?: ZodType;
+		output?: ZodType;
 	};
 	/**
 	 * The name of the field on the database.
