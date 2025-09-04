@@ -48,7 +48,7 @@ export interface SteamAuthPluginOptions {
 	 */
 	mapProfileToUser?: (
 		profile: SteamProfile & { email: string },
-	) => Promise<Omit<User, "id" | "createdAt" | "updatedAt">>;
+	) => Promise<Partial<Omit<User, "id" | "createdAt" | "updatedAt">>>;
 	/**
 	 * Whether to disable implicit sign up. If true, the user will be redirected to the error callback URL if the user is not found.
 	 * Read more here:
