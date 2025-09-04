@@ -265,7 +265,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							],
 						})
-					: null;
+					: referenceId
+						? await ctx.context.adapter.findOne<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+						: null;
 
 				if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 					throw new APIError("BAD_REQUEST", {
@@ -329,12 +334,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							(sub) => sub.status === "active" || sub.status === "trialing",
 						),
 					);
+
 				const activeSubscription = activeSubscriptions.find((sub) =>
 					subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId
 						? sub.id === subscriptionToUpdate?.stripeSubscriptionId ||
 							sub.id === ctx.body.subscriptionId
-						: true,
+						: false,
 				);
+
 				const subscriptions = subscriptionToUpdate
 					? [subscriptionToUpdate]
 					: await ctx.context.adapter.findMany<Subscription>({
