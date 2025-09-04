@@ -200,7 +200,7 @@ Once a user is signed in, you'll want to access the user session. Better Auth al
 
 Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented using nanostore and has support for each supported framework and vanilla client, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
 
-<Tabs items={["React", "Vue","Svelte", "Solid", "Vanilla"]} defaultValue="React">
+<Tabs items={["React", "Vue","Svelte", "Solid", "Vanilla"]} defaultValue="react">
     <Tab value="React">
         ```tsx title="user.tsx"
         import { authClient } from "@/lib/auth-client" // import the auth client // [!code highlight] 

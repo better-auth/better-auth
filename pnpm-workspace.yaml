@@ -1,17 +1,18 @@
 packages:
   - packages/**
-  - dev/**
   - docs
-  - examples/**
   - demo/*
+  - e2e/**
+neverBuiltDependencies: []
 catalogs:
   react18:
-    '@types/react': ^18.3.14
-    '@types/react-dom': ^18.3.2
-    react: 18.3.1
-    react-dom: 18.3.1
+    '@types/react': ^19.1.12
+    '@types/react-dom': ^19.1.9
+    react: 19.1.1
+    react-dom: 19.1.1
 catalog:
-  "better-call": "^1.0.8"
+  "better-call": "1.0.16"
   "@better-fetch/fetch": "^1.1.18"
-  "unbuild": "^3.5.0"
-  "typescript": "^5.7.3"
+  "unbuild": "^3.6.1"
+  "typescript": "^5.9.2"
+  "vitest": "^3.2.4"
