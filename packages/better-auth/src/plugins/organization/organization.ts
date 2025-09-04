@@ -491,7 +491,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		/**
 		 * ### Endpoint
 		 *
-		 * POST `/organization/list-user-teams`
+		 * GET `/organization/list-user-teams`
 		 *
 		 * ### API Methods
 		 *
