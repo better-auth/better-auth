@@ -106,7 +106,7 @@ describe("db", async () => {
 					email: "user_email",
 					role: "user_role",
 					banReason: "user_banReason",
-				} 
+				},
 			},
 			plugins: [admin()],
 		});

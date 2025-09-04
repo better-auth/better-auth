@@ -168,10 +168,15 @@ export const getAuthTables = (
 					fieldName: options.user?.fields?.updatedAt || "updatedAt",
 				},
 
-		...(user?.fields? (() => {
+				...(user?.fields
+					? (() => {
 							const result: Record<string, FieldAttribute> = {};
-							const aliasMap = options.user?.fields as Record<string, string> | undefined;
-							for (const [fieldName, fieldConfig] of Object.entries(user.fields)) {
+							const aliasMap = options.user?.fields as
+								| Record<string, string>
+								| undefined;
+							for (const [fieldName, fieldConfig] of Object.entries(
+								user.fields,
+							)) {
 								const mapped = aliasMap?.[fieldName];
 								result[fieldName] = mapped
 									? { ...fieldConfig, fieldName: mapped }
