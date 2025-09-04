@@ -33,26 +33,6 @@ export function Endpoint({
 		>
 			<Method method={method} />
 			<span className="font-mono text-sm text-muted-foreground">{path}</span>
-			<div className="absolute right-2" slot="copy">
-				<Button
-					variant="ghost"
-					size="icon"
-					className="transition-all duration-150 ease-in-out opacity-0 cursor-pointer scale-80 group-hover:opacity-100"
-					onClick={() => {
-						setCopying(true);
-						navigator.clipboard.writeText(path);
-						setTimeout(() => {
-							setCopying(false);
-						}, 1000);
-					}}
-				>
-					{copying ? (
-						<Check className="duration-150 ease-in-out size-4 zoom-in" />
-					) : (
-						<Copy className="size-4" />
-					)}
-				</Button>
-			</div>
 		</div>
 	);
 }
