@@ -1,4 +1,5 @@
 import {
+	APIError,
 	createAuthEndpoint,
 	getSessionFromCtx,
 	sessionMiddleware,
@@ -426,21 +427,6 @@ export const steam = (config: SteamAuthPluginOptions) =>
 							throw ctx.redirect(callbackURL);
 						}
 
-						// Check account linking configuration
-						const accountLinking = ctx.context.options.account?.accountLinking;
-						if (!accountLinking?.enabled) {
-							throw ctx.redirect(`${errorURL}?error=account_linking_disabled`);
-						}
-
-						const trustedProviders = accountLinking.trustedProviders;
-						const isTrustedProvider = trustedProviders?.includes("steam");
-
-						if (!isTrustedProvider) {
-							throw ctx.redirect(
-								`${errorURL}?error=steam_not_trusted_provider`,
-							);
-						}
-
 						// Create the account link
 						const newAccount = await ctx.context.internalAdapter.createAccount({
 							userId: user.id,
@@ -453,7 +439,7 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						}
 
 						// Update user info if configured
-						if (accountLinking.updateUserInfoOnLink === true) {
+						if (ctx.context.options.account?.accountLinking?.updateUserInfoOnLink === true) {
 							await ctx.context.internalAdapter.updateUser(user.id, {
 								name: profile.realname || user.name,
 								image: profile.avatarfull || user.image,
@@ -585,24 +571,38 @@ export const steam = (config: SteamAuthPluginOptions) =>
 						},
 					},
 					body: z.object({
-						callbackURL: z.string().meta({
-							description:
-								"The URL to redirect to after the user has linked their account.",
-						}),
-						errorCallbackURL: z.string().meta({
-							description: "The URL to redirect to if an error occurs.",
-						}),
+						callbackURL: z
+							.string()
+							.meta({
+								description:
+									"The URL to redirect to after the user has linked their account.",
+							})
+							.optional(),
+						errorCallbackURL: z
+							.string()
+							.meta({
+								description: "The URL to redirect to if an error occurs.",
+							})
+							.optional(),
 						disableRedirect: z
 							.boolean()
-							.meta({ description: "Whether to disable redirect." }),
+							.meta({ description: "Whether to disable redirect." })
+							.optional(),
 					}),
 				},
 				async (ctx) => {
+					if (config.accountLinking !== true) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Account linking is disabled",
+						});
+					}
+
 					const frontendOrigin = new URL(
 						ctx.request?.url || ctx.context.baseURL,
 					).origin;
-					const callbackURL = ctx.body.callbackURL;
-					const errorCallbackURL = ctx.body.errorCallbackURL;
+					const callbackURL = ctx.body.callbackURL || `${ctx.context.baseURL}/`;
+					const errorCallbackURL =
+						ctx.body.errorCallbackURL || `${ctx.context.baseURL}/error`;
 
 					const queryParams = new URLSearchParams({
 						callbackURL,
