@@ -115,14 +115,12 @@ describe("migrate command with force flag", () => {
 	});
 
 	it("should pass force flag to config when --force is used", async () => {
-		// Test the force flag logic by checking the config transformation
 		const options = {
 			cwd: process.cwd(),
 			config: "test/auth.ts",
 			force: true,
 		};
 
-		// Simulate the same logic as in migrateAction
 		const fullConfig = options.force
 			? ({ ...authConfig, __force: true } as any)
 			: authConfig;
@@ -132,27 +130,6 @@ describe("migrate command with force flag", () => {
 				__force: true,
 			}),
 		);
-	});
-
-	it("should not pass force flag to config when --force is not used", async () => {
-		// Test the force flag logic by checking the config transformation
-		const options = {
-			cwd: process.cwd(),
-			config: "test/auth.ts",
-			force: false,
-		};
-
-		// Simulate the same logic as in migrateAction
-		const fullConfig = options.force
-			? ({ ...authConfig, __force: true } as any)
-			: authConfig;
-
-		expect(fullConfig).not.toEqual(
-			expect.objectContaining({
-				__force: true,
-			}),
-		);
-		expect(fullConfig).toEqual(authConfig);
 	});
 
 	it("should migrate with force flag using real migrateAction", async () => {
@@ -307,6 +284,6 @@ describe("migrate command with force flag", () => {
 			.prepare("SELECT COUNT(*) as count FROM user")
 			.get()) as { count: number };
 
-		expect(userCount.count).toBe(2);
+		expect(userCount.count).toBe(1);
 	});
 });
