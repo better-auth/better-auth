@@ -7,6 +7,7 @@ import {
 	gt,
 	gte,
 	inArray,
+	notInArray,
 	like,
 	lt,
 	lte,
@@ -171,6 +172,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 						return [inArray(schemaModel[field], w.value)];
 					}
 
+					if (w.operator === "not_in") {
+						if (!Array.isArray(w.value)) {
+							throw new BetterAuthError(
+								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+							);
+						}
+						return [notInArray(schemaModel[field], w.value)];
+					}
+
 					if (w.operator === "contains") {
 						return [like(schemaModel[field], `%${w.value}%`)];
 					}
@@ -220,6 +230,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 								);
 							}
 							return inArray(schemaModel[field], w.value);
+						}
+						if (w.operator === "not_in") {
+							if (!Array.isArray(w.value)) {
+								throw new BetterAuthError(
+									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+								);
+							}
+							return notInArray(schemaModel[field], w.value);
 						}
 						return eq(schemaModel[field], w.value);
 					}),

@@ -36,10 +36,66 @@ import {
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
-import { logger } from "../utils/logger";
+import { type InternalLogger, logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
+
+export function checkEndpointConflicts(
+	options: BetterAuthOptions,
+	logger: InternalLogger,
+) {
+	const endpointRegistry = new Map<
+		string,
+		{ pluginId: string; endpointKey: string }[]
+	>();
+
+	options.plugins?.forEach((plugin) => {
+		if (plugin.endpoints) {
+			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
+				if (endpoint && "path" in endpoint) {
+					const path = endpoint.path;
+					if (!endpointRegistry.has(path)) {
+						endpointRegistry.set(path, []);
+					}
+					endpointRegistry.get(path)!.push({
+						pluginId: plugin.id,
+						endpointKey: key,
+					});
+				}
+			}
+		}
+	});
+
+	const conflicts: { path: string; plugins: string[] }[] = [];
+	for (const [path, entries] of endpointRegistry.entries()) {
+		if (entries.length > 1) {
+			const uniquePlugins = [...new Set(entries.map((e) => e.pluginId))];
+			conflicts.push({
+				path,
+				plugins: uniquePlugins,
+			});
+		}
+	}
+
+	if (conflicts.length > 0) {
+		const conflictMessages = conflicts
+			.map(
+				(conflict) =>
+					`  - "${conflict.path}" used by plugins: ${conflict.plugins.join(", ")}`,
+			)
+			.join("\n");
+		logger.error(
+			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths:
+${conflictMessages}
+
+To resolve this, you can:
+	1. Use only one of the conflicting plugins
+	2. Configure the plugins to use different paths (if supported)
+`,
+		);
+	}
+}
 
 export function getEndpoints<
 	C extends AuthContext,

@@ -202,7 +202,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 
 						if (
 							context.data?.redirect &&
-							context.request.url.toString().includes("/sign-in") &&
+							(context.request.url.toString().includes("/sign-in") ||
+								context.request.url.toString().includes("/link-social")) &&
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
@@ -274,6 +275,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (url.includes("/sign-out")) {
 						await storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
+							...store.atoms.session.get(),
 							data: null,
 							error: null,
 							isPending: false,

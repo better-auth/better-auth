@@ -3,16 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start:server": "tsx ./src/server.ts",
     "start:client": "vite"
   },
   "devDependencies": {
-    "typescript": "^5.9.2",
-    "vite": "^7.1.3",
-    "tsx": "^4.19.2"
+    "vite": "^7.1.4"
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "better-sqlite3": "^11.7.0"
+    "better-sqlite3": "^12.2.0"
   }
 }
