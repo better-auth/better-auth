@@ -368,6 +368,14 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!(await validator(username))) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
