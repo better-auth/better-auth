@@ -71,7 +71,7 @@ interface MagicLinkopts<DS extends z.ZodType> {
 		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
 }
 
-export const magicLink = <DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodAny>>(options: MagicLinkopts) => {
+export const magicLink = <DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodAny>>(options: MagicLinkopts<DS>) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
@@ -92,7 +92,7 @@ export const magicLink = <DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodA
 	}
 
 	const additionalDataSchema = 
-		options.additionalDataSchema ?? (z.record(z.any(), z.any()) as unknown as DS);
+		(options.additionalDataSchema ?? z.record(z.any(), z.any())) as DS;
 
 	return {
 		id: "magic-link",
@@ -148,6 +148,8 @@ export const magicLink = <DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodA
 							.string()
 							.meta({
 								description: "URL to redirect after error.",
+							})
+							.optional(),
 						additionalData: additionalDataSchema.optional(),
 					}),
 					metadata: {
