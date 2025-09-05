@@ -531,7 +531,7 @@ describe("mcp", async () => {
 		it("should return 401 if the request is not authenticated returning the right WWW-Authenticate header", async ({
 			expect,
 		}) => {
-			// we test the handle using a newly instantiated request instead of the server since it's not handled by
+			// Test the handler using a newly instantiated Request instead of the server, since this route isn't handled by the server
 			const response = await withMcpAuth(auth, async () => {
 				// it will never be reached since the request is not authenticated
 				return new Response("unnecessary");
