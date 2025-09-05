@@ -1069,8 +1069,8 @@ describe("generate command with force flag", () => {
 		const secondSchemaContent = secondSchema.code;
 		expect(secondSchemaContent?.length).toBeGreaterThan(0);
 
-		expect(() => {
-			generateMigrations({
+		expect(async () => {
+			await generateMigrations({
 				file: "test-force-regenerate.sql",
 				options: {
 					database: db,
