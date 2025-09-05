@@ -9,6 +9,25 @@ import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
 import type { GenericEndpointContext } from "../../types";
 
+type JsonValue =
+	| string
+	| number
+	| boolean
+	| null
+	| JsonValue[]
+	| { [key: string]: JsonValue };
+
+const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
+	z.union([
+		z.string(),
+		z.number(),
+		z.boolean(),
+		z.null(),
+		z.array(jsonSchema),
+		z.record(z.string(), jsonSchema),
+	]),
+);
+
 interface MagicLinkopts<DS extends z.ZodType> {
 	/**
 	 * Time in seconds until the magic link expires.
@@ -31,8 +50,9 @@ interface MagicLinkopts<DS extends z.ZodType> {
 	 * Zod schema for the additionalData property of the sendMagicLink function.
 	 * This schema is used to validate and type-safeguard the additional data passed to the sign-in endpoint.
 	 *
-	 * @default z.record(z.any(), z.any())
+	 * @default z.record(z.string(), typeof jsonSchema)
 	 * @see {@link https://zod.dev/basics}
+	 * @type jsonSchema is a Zod schema that validates JSON-serializable values.
 	 */
 	additionalDataSchema?: DS;
 	/**
@@ -71,7 +91,7 @@ interface MagicLinkopts<DS extends z.ZodType> {
 }
 
 export const magicLink = <
-	DS extends z.ZodType = z.ZodRecord<z.ZodString, z.ZodAny>,
+	DS extends z.ZodType<JsonValue> = z.ZodRecord<z.ZodString, typeof jsonSchema>,
 >(
 	options: MagicLinkopts<DS>,
 ) => {
@@ -95,7 +115,7 @@ export const magicLink = <
 	}
 
 	const additionalDataSchema = (options.additionalDataSchema ??
-		z.record(z.any(), z.any())) as DS;
+		z.record(z.string(), jsonSchema)) as DS;
 
 	return {
 		id: "magic-link",
