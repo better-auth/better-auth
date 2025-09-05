@@ -70,7 +70,7 @@ export const GET = oAuthDiscoveryMetadata(auth);
 
 Add a route to expose protected resource metadata for MCP clients:
 
-```ts title=".well-known/oauth-authorization-server/route.ts"
+```ts title="/.well-known/oauth-protected-resource/route.ts"
 import { oAuthProtectedResourceMetadata } from "better-auth/plugins";
 import { auth } from "@/lib/auth";
 
