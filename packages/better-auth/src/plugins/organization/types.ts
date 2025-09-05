@@ -57,12 +57,6 @@ export interface OrganizationOptions {
 	 */
 	ac?: AccessControl;
 	/**
-	 * Require membership in an organization to perform CRUD operations.
-	 *
-	 * @default true
-	 */
-	requireMembership?: boolean;
-	/**
 	 * Custom permissions for roles.
 	 */
 	roles?: {
