@@ -61,6 +61,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) =>
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			disableIdGeneration: false,
+			supportsJSON: false,
+			supportsJSONB: false,
+			supportsDates: true,
+			supportsNumbers: true,
+			supportsNumericIds: true,
+			supportsArrays: false,
+			supportsBooleans: true,
 		},
 		adapter: ({ getFieldName, debugLog }) => {
 			function getSchema(model: string) {

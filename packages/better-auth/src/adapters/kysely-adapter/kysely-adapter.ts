@@ -38,6 +38,11 @@ export const kyselyAdapter = (db: Kysely<any>, config?: KyselyAdapterConfig) =>
 					? false
 					: true,
 			supportsJSON: false,
+			supportsJSONB: false,
+			disableIdGeneration: false,
+			supportsNumericIds: true,
+			supportsNumbers: true,
+			supportsArrays: false,
 		},
 		adapter: ({ getFieldName, schema }) => {
 			const withReturning = async (
