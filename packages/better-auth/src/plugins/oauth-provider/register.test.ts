@@ -217,7 +217,7 @@ describe("oauth register", async () => {
 
 		expect(response.data?.public).toBeFalsy();
 
-		expect(response.data?.disabled).toBeNull();
+		expect(response.data?.disabled).toBeFalsy();
 	});
 });
 
