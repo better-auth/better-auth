@@ -31,6 +31,7 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
+	getOrganization,
 	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
@@ -166,6 +167,22 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
 		 */
 		getFullOrganization: getFullOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.getOrganization`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-organization)
+		 */
+		getOrganization: getOrganization(options as O),
 		/**
 		 * ### Endpoint
 		 *
@@ -485,7 +502,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * **client:**
 		 * `authClient.organization.setActiveTeam`
 		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-set-active-team)
 		 */
 		setActiveTeam: setActiveTeam(options as O),
 		/**
@@ -501,7 +518,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * **client:**
 		 * `authClient.organization.listUserTeams`
 		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-set-active-team)
 		 */
 		listUserTeams: listUserTeams(options as O),
 		/**
@@ -517,7 +534,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * **client:**
 		 * `authClient.organization.listTeamMembers`
 		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-set-active-team)
 		 */
 		listTeamMembers: listTeamMembers(options as O),
 		/**
@@ -533,7 +550,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * **client:**
 		 * `authClient.organization.addTeamMember`
 		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-team-member)
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-add-team-member)
 		 */
 		addTeamMember: addTeamMember(options as O),
 		/**
@@ -549,7 +566,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		 * **client:**
 		 * `authClient.organization.removeTeamMember`
 		 *
-		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-remove-team-member)
 		 */
 		removeTeamMember: removeTeamMember(options as O),
 	};
