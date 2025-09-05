@@ -84,6 +84,11 @@ type signInMagicLink = {
      * redirected to the callbackURL with an `error` query parameter.
      */
     errorCallbackURL?: string = "/error"
+    /**
+     * If you want to provide additional data to the `sendMagicLink` function you can do so in key-value
+     * pairs here. See below on how to make a schema to validate these values.
+     */
+    additionalData?: Record<string, JsonValue> = { message: "Hello from better-auth!" }
 }
 ```
 </APIMethod>
@@ -122,20 +127,9 @@ type magicLinkVerify = {
 ```
 </APIMethod>
 
-### Additional properties
+### Additional Data
 
-If you want to pass any arbitrary data to your `sendMagicLink` function, you can specify the `additionalData` field in the request body of the `signIn.magicLink` function. This can be useful to pass information from the client to your mailing logic.
-
-```ts title="magic-link.ts"
-const { data, error } = await authClient.signIn.magicLink({
-  email: "user@email.com",
-  additionalData: {
-    message: "Hello from better-auth!",
-  },
-});
-```
-
-The record is now available to use in the `sendMagicLink` function.
+If you want to include additional data for your sendMagicLink function, for type-safety and runtime schema validation you can supply a [Zod schema](https://zod.dev/) to the plugin through options.
 
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
@@ -153,8 +147,6 @@ export const auth = betterAuth({
     ]
 })
 ```
-
-For type-safety and runtime schema validation, you can supply a [Zod schema](https://zod.dev/) to the plugin through options.
 
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
@@ -175,7 +167,7 @@ export const auth = betterAuth({
 })
 ```
 <Callout type="warn">
-  If no `additionalDataSchema` is provided, the type will default to `Record<string, any>` and the value is not validated during runtime.
+  If no `additionalDataSchema` is provided, the type will default to `Record<string, JsonValue>` and the value is not validated during runtime. JsonValue is a "generic" type that is constrained to only types that can be serialized into JSON.
 </Callout>
 
 ## Configuration Options
