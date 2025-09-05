@@ -244,3 +244,56 @@ describe("mssql", async () => {
 		});
 	});
 });
+
+describe("supportsDates configuration", () => {
+	it("should respect explicit supportsDates: false for postgres", () => {
+		const adapter = kyselyAdapter(mysqlKy, {
+			type: "postgres",  // Usually defaults to true
+			supportsDates: false,  // Override to false
+		});
+		
+		// Access the internal config to verify the setting
+		const adapterInstance = adapter({
+			database: { db: mysqlKy, type: "postgres" },
+			user: { fields: {} },
+		});
+		
+		expect(adapterInstance.options.adapterConfig.supportsDates).toBe(false);
+	});
+
+	it("should respect explicit supportsDates: true for sqlite", () => {
+		const adapter = kyselyAdapter(sqliteKy, {
+			type: "sqlite",  // Usually defaults to false
+			supportsDates: true,  // Override to true
+		});
+		
+		const adapterInstance = adapter({
+			database: { db: sqliteKy, type: "sqlite" },
+			user: { fields: {} },
+		});
+		
+		expect(adapterInstance.options.adapterConfig.supportsDates).toBe(true);
+	});
+
+	it("should use default behavior when supportsDates is not specified", () => {
+		// Test postgres default (true)
+		const postgresAdapter = kyselyAdapter(mysqlKy, {
+			type: "postgres",
+		});
+		const postgresInstance = postgresAdapter({
+			database: { db: mysqlKy, type: "postgres" },
+			user: { fields: {} },
+		});
+		expect(postgresInstance.options.adapterConfig.supportsDates).toBe(true);
+
+		// Test sqlite default (false)
+		const sqliteAdapter = kyselyAdapter(sqliteKy, {
+			type: "sqlite",
+		});
+		const sqliteInstance = sqliteAdapter({
+			database: { db: sqliteKy, type: "sqlite" },
+			user: { fields: {} },
+		});
+		expect(sqliteInstance.options.adapterConfig.supportsDates).toBe(false);
+	});
+});
