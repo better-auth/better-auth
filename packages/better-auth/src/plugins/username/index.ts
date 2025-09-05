@@ -202,7 +202,7 @@ export const username = (options?: UsernameOptions) => {
 									},
 								},
 								422: {
-									description: "Unprocessable Content. Validation error",
+									description: "Unprocessable Entity. Validation error",
 									content: {
 										"application/json": {
 											schema: {

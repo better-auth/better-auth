@@ -690,7 +690,7 @@ export const changeEmail = createAuthEndpoint(
 						},
 					},
 					"422": {
-						description: "Unprocessable Content. Email already exists",
+						description: "Unprocessable Entity. Email already exists",
 						content: {
 							"application/json": {
 								schema: {
