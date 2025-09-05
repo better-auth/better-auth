@@ -145,7 +145,7 @@ export const checkMcp = async <
 
 /**
  * A request middleware handler that checks and responds with
- * a www-authenticate header for unauthenticated responses.
+ * a WWW-Authenticate header for unauthenticated responses.
  *
  * Passes through authenticated tokens.
  * Provides valid Jwt payloads on `req.context.jwt`.
