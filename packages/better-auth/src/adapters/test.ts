@@ -380,26 +380,7 @@ async function adapterTest(
 			onTestFailed(async () => {
 				await printDebugLogs();
 			});
-			// const newUser1 = await (await adapter()).create<User>({
-			// 	model: "user",
-			// 	data: {
-			// 		name: "user",
-			// 		email: "test-email1@email.com",
-			// 		emailVerified: true,
-			// 		createdAt: new Date(),
-			// 		updatedAt: new Date(),
-			// 	},
-			// });
-			// const newUser2 = await (await adapter()).create<User>({
-			// 	model: "user",
-			// 	data: {
-			// 		name: "user",
-			// 		email: "test-email2@email.com",
-			// 		emailVerified: true,
-			// 		createdAt: new Date(),
-			// 		updatedAt: new Date(),
-			// 	},
-			// });
+
 			const newUser3 = await (await adapter()).create<User>({
 				model: "user",
 				data: {
