@@ -14,7 +14,7 @@ export const isSuperAdmin = <O extends OrganizationOptions>(
 ): boolean => {
 	const user = ctx.context.session?.user;
 	const adminPlugin = getAdminPlugin(ctx);
-	let adminRoles = adminPlugin.options?.adminRoles ?? ["admin"];
+	let adminRoles = adminPlugin?.options?.adminRoles ?? ["admin"];
 	if (!options?.allowSuperAdmin || !adminPlugin || !user?.role) {
 		return false;
 	}
