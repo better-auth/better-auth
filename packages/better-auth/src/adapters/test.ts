@@ -369,6 +369,60 @@ async function adapterTest(
 		},
 	);
 
+	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_OPERATORS)(
+		`${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_OPERATORS
+		}`,
+		async ({ onTestFailed }) => {
+			await resetDebugLogs();
+			onTestFailed(async () => {
+				await printDebugLogs();
+			});
+			const newUser1 = await (await adapter()).create<User>({
+				model: "user",
+				data: {
+					name: "user",
+					email: "test-email1@email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const newUser2 = await (await adapter()).create<User>({
+				model: "user",
+				data: {
+					name: "user",
+					email: "test-email2@email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const newUser3 = await (await adapter()).create<User>({
+				model: "user",
+				data: {
+					name: "user",
+					email: "test-email3email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const res = await (await adapter()).findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						operator: "not_in",
+						value: [newUser1.id, newUser2.id],
+					},
+				],
+			});
+			expect(res.length).toBe(1);
+			expect(res[0]?.id).toBe(newUser3.id);
+		},
+	);
+
 	test.skipIf(disabledTests?.SHOULD_WORK_WITH_REFERENCE_FIELDS)(
 		`${testPrefix ? `${testPrefix} - ` : ""}${
 			adapterTests.SHOULD_WORK_WITH_REFERENCE_FIELDS
