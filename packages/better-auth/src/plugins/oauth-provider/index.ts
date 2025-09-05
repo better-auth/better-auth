@@ -15,12 +15,22 @@ import { tokenEndpoint } from "./token";
 import { userinfoEndpoint } from "./userinfo";
 import { mergeSchema } from "../../db";
 import { registerEndpoint } from "./register";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import {
+	authServerMetadata,
+	oidcServerMetadata,
+	protectedResourceMetadata,
+} from "./metadata";
 import { getJwtPlugin } from "./utils";
 import { introspectEndpoint } from "./introspect";
 import { revokeEndpoint } from "./revoke";
 import { BetterAuthError } from "../../error";
 export { authServerMetadata, oidcServerMetadata } from "./metadata";
+export {
+	oAuthProviderAuthServerMetadata,
+	oAuthProviderOpenIdConfigMetadata,
+	oAuthProviderProtectedResourceMetadata,
+} from "./metadata";
+export { mcpHandler, checkMcp } from "./mcp";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -244,6 +254,20 @@ export const oauthProvider = (options: OAuthOptions) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const metadata = oidcServerMetadata(ctx, opts);
+					return ctx.json(metadata);
+				},
+			),
+			getMCPProtectedResource: createAuthEndpoint(
+				"/.well-known/oauth-protected-resource",
+				{
+					method: "GET",
+					metadata: {
+						isAction: false,
+						client: false,
+					},
+				},
+				async (ctx) => {
+					const metadata = protectedResourceMetadata(ctx, opts);
 					return ctx.json(metadata);
 				},
 			),
