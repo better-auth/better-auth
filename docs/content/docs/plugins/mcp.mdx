@@ -57,7 +57,7 @@ The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It ha
 
 ### OAuth Discovery Metadata
 
-Add a route to expose OAuth metadata for MCP clients:
+Better Auth already handles the `/api/auth/.well-known/oauth-authorization-server` route automatically but some client may fail to parse the `WWW-Authenticate` header and default to `/.well-known/oauth-authorization-server` (this can happen, for example, if your CORS configuration doesn't expose the `WWW-Authenticate`). For this reason it's better to add a route to expose OAuth metadata for MCP clients:
 
 ```ts title=".well-known/oauth-authorization-server/route.ts"
 import { oAuthDiscoveryMetadata } from "better-auth/plugins";
@@ -68,7 +68,7 @@ export const GET = oAuthDiscoveryMetadata(auth);
 
 ### OAuth Protected Resource Metadata
 
-Add a route to expose protected resource metadata for MCP clients:
+Better Auth already handles the `/api/auth/.well-known/oauth-protected-resource` route automatically but some client may fail to parse the `WWW-Authenticate` header and default to `/.well-known/oauth-protected-resource` (this can happen, for example, if your CORS configuration doesn't expose the `WWW-Authenticate`). For this reason it's better to add a route to expose OAuth metadata for MCP clients:
 
 ```ts title="/.well-known/oauth-protected-resource/route.ts"
 import { oAuthProtectedResourceMetadata } from "better-auth/plugins";
