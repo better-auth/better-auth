@@ -1,9 +1,5 @@
 import type { oauthProvider } from "../oauth-provider";
-import {
-	handleMcpErrors,
-	McpUnauthenticatedError,
-} from "../../oauth-2.1/errors";
-import type { ResourceServerMetadata } from "../../oauth-2.1/types";
+import { handleMcpErrors } from "../../oauth-2.1/errors";
 import type { AuthContext, GenericEndpointContext } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import { getJwtPlugin } from "./utils";
@@ -39,8 +35,6 @@ export const checkMcp = async <
 	clientId,
 	clientSecret,
 	accessToken,
-	baseUrl,
-	path,
 	forceServerValidation,
 	scopes,
 }: {
@@ -48,8 +42,6 @@ export const checkMcp = async <
 	clientId: string;
 	clientSecret: string;
 	accessToken?: string;
-	baseUrl: string;
-	path?: string;
 	forceServerValidation?: boolean;
 	/** If supplied, checks whether scopes are valid */
 	scopes?: string[];
@@ -92,19 +84,17 @@ export const checkMcp = async <
 		} catch (error) {
 			if (error instanceof Error) {
 				if (error.name === "JWTExpired") {
-					throw new McpUnauthenticatedError("token expired", baseUrl, path);
+					throw new APIError("UNAUTHORIZED", {
+						message: "token expired",
+					});
 				} else if (error.name === "JWTClaimValidationFailed") {
-					throw new McpUnauthenticatedError(
-						"jwt invalid due to audience or issuer mismatch",
-						baseUrl,
-						path,
-					);
+					throw new APIError("UNAUTHORIZED", {
+						message: "jwt invalid due to audience or issuer mismatch",
+					});
 				} else if (error.name === "JWKSNoMatchingKey") {
-					throw new McpUnauthenticatedError(
-						"no matching key in jwks",
-						baseUrl,
-						path,
-					);
+					throw new APIError("UNAUTHORIZED", {
+						message: "no matching key in jwks",
+					});
 				} else if (error.name === "JWSInvalid") {
 					// continue - likely an opaque token
 				} else {
@@ -181,12 +171,6 @@ export const mcpHandler = <
 	},
 ) => {
 	return async (req: Request) => {
-		const url = new URL(req.url);
-		const baseUrl =
-			url.protocol + "//" + url.hostname + (url.port ? ":" + url.port : "");
-		let path = url.pathname;
-		if (path.endsWith("/")) path = path.slice(0, -1);
-
 		const authorization = req.headers?.get("authorization") ?? undefined;
 		const accessToken = authorization?.startsWith("Bearer ")
 			? authorization.replace("Bearer ", "")
@@ -196,72 +180,15 @@ export const mcpHandler = <
 				...opts,
 				auth,
 				accessToken,
-				baseUrl,
-				path,
 			});
 			if (!req.context) req.context = {};
 			req.context.jwt = token;
 		} catch (error) {
-			return handleMcpErrors(error);
+			return handleMcpErrors(error, {
+				baseUrl: auth.options.baseURL ?? auth.baseURL,
+				path: auth.options.basePath,
+			});
 		}
 		return handler(req);
-	};
-};
-
-/**
- * Creates a discovery endpoint on an MCP
- * resource server about its MCP auth server.
- */
-export const oAuthDiscoveryMetadata = <Auth extends AuthContext>(
-	auth: Auth,
-	metadata?: ResourceServerMetadata,
-) => {
-	return async (req: Request) => {
-		const mcpMetadata = metadata;
-		if (!mcpMetadata) {
-			return new Response(
-				JSON.stringify({
-					message: "endpoint missing metadata",
-				}),
-				{
-					status: 400,
-				},
-			);
-		}
-
-		// Check authorization_servers
-		let authorizationServers = mcpMetadata.authorization_servers;
-		const baseUrl = auth.options.baseURL;
-		if (!authorizationServers) {
-			authorizationServers = [
-				`${baseUrl}/.well-known/oauth-authorization-server`,
-			];
-		}
-		if (!authorizationServers.length) {
-			return new Response(
-				JSON.stringify({
-					message: "at least one authorization server is required",
-				}),
-				{
-					status: 400,
-				},
-			);
-		}
-
-		const mcpOverridesMetadata: ResourceServerMetadata = {
-			...mcpMetadata,
-			authorization_servers: authorizationServers,
-		};
-		return new Response(JSON.stringify(mcpOverridesMetadata), {
-			status: 200,
-			headers: {
-				"Content-Type": "application/json",
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-			},
-		});
 	};
 };
