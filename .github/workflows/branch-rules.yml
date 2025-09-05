@@ -1,0 +1,42 @@
+name: Branch Rules
+
+on:
+  pull_request:
+    branches:
+      - main
+      - canary
+      - 'v*-staging'
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Filter changed files
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.base_ref }}
+          filters: |
+            # 'src' filter matches any file NOT in the docs/ directory
+            src:
+              - '!docs/**'
+            # 'docs' filter matches any file in the docs/ directory
+            docs:
+              - 'docs/**'
+
+      - name: Enforce docs-only PRs target main
+        if: steps.filter.outputs.docs == 'true' && steps.filter.outputs.src == 'false' && github.base_ref != 'main'
+        run: |
+          echo "Error: Pull requests that only change documentation must target the 'main' branch."
+          exit 1
+
+      - name: Enforce code change PRs target canary or staging
+        if: steps.filter.outputs.src == 'true' && github.base_ref != 'canary' && !startsWith(github.base_ref, 'v')
+        run: |
+          echo "Error: Pull requests with code changes must target 'canary' or a versioned staging branch (e.g., 'v1.2.3-staging')."
+          exit 1
