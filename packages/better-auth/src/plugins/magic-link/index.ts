@@ -31,11 +31,10 @@ interface MagicLinkopts<DS extends z.ZodType> {
 	 * Zod schema for the additionalData property of the sendMagicLink function.
 	 * This schema is used to validate and type-safeguard the additional data passed to the sign-in endpoint.
 	 *
-	 * @default z.record(z.any())
+	 * @default z.record(z.any(), z.any())
 	 * @see {@link https://zod.dev/basics}
 	 */
 	additionalDataSchema?: DS;
-
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -154,7 +153,12 @@ export const magicLink = <
 								description: "URL to redirect after error.",
 							})
 							.optional(),
-						additionalData: additionalDataSchema.optional(),
+						additionalData: additionalDataSchema
+							.meta({
+								description:
+									"Additional data to pass to the sendMagicLink function",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
