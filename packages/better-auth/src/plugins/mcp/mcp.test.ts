@@ -1,6 +1,6 @@
 import { afterAll, describe, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { mcp } from ".";
+import { mcp, withMcpAuth } from ".";
 import { genericOAuth } from "../generic-oauth";
 import type { Client } from "../oidc-provider/types";
 import { createAuthClient } from "../../client";
@@ -525,5 +525,25 @@ describe("mcp", async () => {
 		expect((tokenRequest.error as any).error_description).toContain(
 			"code verifier is missing",
 		);
+	});
+
+	describe("withMCPAuth", () => {
+		it("should return 401 if the request is not authenticated returning the right WWW-Authenticate header", async ({
+			expect,
+		}) => {
+			// we test the handle using a newly instantiated request instead of the server since it's not handled by
+			const response = await withMcpAuth(auth, async () => {
+				// it will never be reached since the request is not authenticated
+				return new Response("unnecessary");
+			})(new Request(`${baseURL}/mcp`));
+
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(
+				`Bearer resource_metadata="${baseURL}/api/auth/.well-known/oauth-protected-resource"`,
+			);
+			expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+				"WWW-Authenticate",
+			);
+		});
 	});
 });
