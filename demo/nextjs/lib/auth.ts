@@ -26,29 +26,28 @@ import { Stripe } from "stripe";
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
 
-const libsql = new LibsqlDialect({
-	url: process.env.TURSO_DATABASE_URL || "",
-	authToken: process.env.TURSO_AUTH_TOKEN || "",
-});
-
-const mysql = process.env.USE_MYSQL
-	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
-	: null;
-
-const dialect = process.env.USE_MYSQL ? mysql : libsql;
+const dialect = (() => {
+	if (process.env.USE_MYSQL) {
+		if (!process.env.MYSQL_DATABASE_URL) {
+			throw new Error(
+				"Using MySQL dialect without MYSQL_DATABASE_URL. Please set it in your environment variables.",
+			);
+		}
+		return new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""));
+	} else {
+		if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+			return new LibsqlDialect({
+				url: process.env.TURSO_DATABASE_URL,
+				authToken: process.env.TURSO_AUTH_TOKEN,
+			});
+		}
+	}
+	return null;
+})();
 
 if (!dialect) {
 	throw new Error("No dialect found");
 }
-
-const PRO_PRICE_ID = {
-	default: "price_1RoxnRHmTADgihIt4y8c0lVE",
-	annual: "price_1RoxnoHmTADgihItzFvVP8KT",
-};
-const PLUS_PRICE_ID = {
-	default: "price_1RoxnJHmTADgihIthZTLmrPn",
-	annual: "price_1Roxo5HmTADgihItEbJu5llL",
-};
 
 const baseURL: string | undefined =
 	process.env.VERCEL === "1"
@@ -72,7 +71,7 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	baseURL,
 	database: {
-		dialect: libsql,
+		dialect,
 		type: "sqlite",
 	},
 	emailVerification: {
@@ -200,24 +199,43 @@ export const auth = betterAuth({
 			subscription: {
 				enabled: true,
 				allowReTrialsForDifferentPlans: true,
-				plans: [
-					{
-						name: "Plus",
-						priceId: PLUS_PRICE_ID.default,
-						annualDiscountPriceId: PLUS_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
+				plans: () => {
+					const PRO_PRICE_ID = {
+						default:
+							process.env.STRIPE_PRO_PRICE_ID ??
+							"price_1RoxnRHmTADgihIt4y8c0lVE",
+						annual:
+							process.env.STRIPE_PRO_ANNUAL_PRICE_ID ??
+							"price_1RoxnoHmTADgihItzFvVP8KT",
+					};
+					const PLUS_PRICE_ID = {
+						default:
+							process.env.STRIPE_PLUS_PRICE_ID ??
+							"price_1RoxnJHmTADgihIthZTLmrPn",
+						annual:
+							process.env.STRIPE_PLUS_ANNUAL_PRICE_ID ??
+							"price_1Roxo5HmTADgihItEbJu5llL",
+					};
+
+					return [
+						{
+							name: "Plus",
+							priceId: PLUS_PRICE_ID.default,
+							annualDiscountPriceId: PLUS_PRICE_ID.annual,
+							freeTrial: {
+								days: 7,
+							},
 						},
-					},
-					{
-						name: "Pro",
-						priceId: PRO_PRICE_ID.default,
-						annualDiscountPriceId: PRO_PRICE_ID.annual,
-						freeTrial: {
-							days: 7,
+						{
+							name: "Pro",
+							priceId: PRO_PRICE_ID.default,
+							annualDiscountPriceId: PRO_PRICE_ID.annual,
+							freeTrial: {
+								days: 7,
+							},
 						},
-					},
-				],
+					];
+				},
 			},
 		}),
 		deviceAuthorization({

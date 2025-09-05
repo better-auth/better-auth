@@ -13,7 +13,9 @@ test.describe("cross domain", async () => {
 
 		const page = await browser.newPage();
 
-		await page.goto(`http://test.com:${ref.clientPort}/`);
+		await page.goto(
+			`http://test.com:${ref.clientPort}/?port=${ref.serverPort}`,
+		);
 		await page.locator("text=Ready").waitFor();
 
 		await expect(

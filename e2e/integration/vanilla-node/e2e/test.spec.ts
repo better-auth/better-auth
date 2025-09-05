@@ -9,7 +9,9 @@ test.describe("vanilla-node", async () => {
 	test("signIn with existing email and password should work", async ({
 		page,
 	}) => {
-		await page.goto(`http://localhost:${ref.clientPort}/`);
+		await page.goto(
+			`http://localhost:${ref.clientPort}/?port=${ref.serverPort}`,
+		);
 		await page.locator("text=Ready").waitFor();
 
 		await expect(

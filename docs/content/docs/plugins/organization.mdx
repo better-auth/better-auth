@@ -75,7 +75,7 @@ const metadata = { someKey: "someValue" };
 
 type createOrganization = {
   /**
-   The organization name.
+  * The organization name.
   */
   name: string = "My Organization"
   /**
@@ -513,7 +513,7 @@ export const auth = betterAuth({
 
 To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implements a reactive way to get the organizations that the user is a member of.
 
-<Tabs items={["React", "Vue", "Svelte"]} defaultValue="React">
+<Tabs items={["React", "Vue", "Svelte"]} default="React">
 <Tab value="React">
 ```tsx title="client.tsx"
 import { authClient } from "@/lib/auth-client"
@@ -521,13 +521,12 @@ import { authClient } from "@/lib/auth-client"
 function App(){
 const { data: organizations } = authClient.useListOrganizations()
 return (
-
-<div>
-  {organizations.map((org) => (
-    <p>{org.name}</p>
-  ))}
-</div>
-) }
+  <div>
+    {organizations.map((org) => (
+      <p>{org.name}</p>
+    ))}
+  </div>)
+}
 ```
 </Tab>
 
@@ -588,7 +587,6 @@ Or alternatively, you can call `organization.list` if you don't want to use a ho
 <APIMethod path="/organization/list" method="GET">
   ```ts
   type listOrganizations = {
-    
   }
   ```
 </APIMethod>
@@ -1160,7 +1158,6 @@ To get the current member of the active organization you can use the `organizati
 >
   ```ts 
   type getActiveMember = {
-
   }
   ```
 </APIMethod>
@@ -1948,7 +1945,6 @@ List all teams that the current user is a part of.
 <APIMethod path="/organization/list-user-teams" method="GET">
   ```ts 
   type listUserTeams = {
-    
   }
   ```
 </APIMethod>
