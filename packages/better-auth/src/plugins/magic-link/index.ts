@@ -28,7 +28,7 @@ const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
 	]),
 );
 
-interface MagicLinkopts<DS extends z.ZodType> {
+interface MagicLinkOptions<DS extends z.ZodType> {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -93,12 +93,12 @@ interface MagicLinkopts<DS extends z.ZodType> {
 export const magicLink = <
 	DS extends z.ZodType<JsonValue> = z.ZodRecord<z.ZodString, typeof jsonSchema>,
 >(
-	options: MagicLinkopts<DS>,
+	options: MagicLinkOptions<DS>,
 ) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies MagicLinkopts<DS>;
+	} satisfies MagicLinkOptions<DS>;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
