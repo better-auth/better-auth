@@ -438,12 +438,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx,
 				);
 
-				const alreadyHasTrial = subscription.status === "trialing";
+				const hasEverTrialed = subscriptions.some((s) => {
+					const samePlan = s.plan?.toLowerCase() === plan.name.toLowerCase();
+					const hadTrial =
+						!!(s.trialStart || s.trialEnd) || s.status === "trialing";
+					return samePlan && hadTrial;
+				});
+
 				const freeTrial =
-					!alreadyHasTrial && plan.freeTrial
-						? {
-								trial_period_days: plan.freeTrial.days,
-							}
+					!hasEverTrialed && plan.freeTrial
+						? { trial_period_days: plan.freeTrial.days }
 						: undefined;
 
 				let priceIdToUse: string | undefined = undefined;
