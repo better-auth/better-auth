@@ -638,7 +638,9 @@ export const getOrganization = <O extends OrganizationOptions>(options: O) =>
 					query.organizationSlug,
 				);
 			} else {
-				return ctx.json(null, { status: 200 });
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
 			}
 
 			if (!organization) {
