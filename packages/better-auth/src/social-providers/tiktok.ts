@@ -120,7 +120,7 @@ export interface TiktokProfile extends Record<string, any> {
 export interface TiktokOptions
 	extends Omit<ProviderOptions, "clientId" | "clientSecret" | "clientKey"> {
 	// Client ID is not used in TikTok, we delete it from the options
-	clientId: never;
+	clientId?: never;
 	clientSecret: string;
 	clientKey: string;
 }
@@ -148,7 +148,10 @@ export const tiktok = (options: TiktokOptions) => {
 			return validateAuthorizationCode({
 				code,
 				redirectURI: options.redirectURI || redirectURI,
-				options,
+				options: {
+					clientKey: options.clientKey,
+					clientSecret: options.clientSecret,
+				},
 				tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
 			});
 		},
@@ -158,10 +161,13 @@ export const tiktok = (options: TiktokOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+						authentication: "post",
+						extraParams: {
+							client_key: options.clientKey,
+						},
 					});
 				},
 		async getUserInfo(token) {

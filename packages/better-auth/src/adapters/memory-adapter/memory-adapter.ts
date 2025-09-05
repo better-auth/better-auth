@@ -49,8 +49,14 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 							if (!Array.isArray(value)) {
 								throw new Error("Value must be an array");
 							}
-							// @ts-ignore
+							// @ts-expect-error
 							return value.includes(record[field]);
+						} else if (operator === "not_in") {
+							if (!Array.isArray(value)) {
+								throw new Error("Value must be an array");
+							}
+							// @ts-expect-error
+							return !value.includes(record[field]);
 						} else if (operator === "contains") {
 							return record[field].includes(value);
 						} else if (operator === "starts_with") {
@@ -66,7 +72,7 @@ export const memoryAdapter = (db: MemoryDB, config?: MemoryAdapterConfig) =>
 			return {
 				create: async ({ model, data }) => {
 					if (options.advanced?.database?.useNumberId) {
-						// @ts-ignore
+						// @ts-expect-error
 						data.id = db[model].length + 1;
 					}
 					if (!db[model]) {

@@ -13,7 +13,7 @@ import type { BetterAuthClientPlugin } from "../../client/types";
 import { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
-import { hasPermission } from "./has-permission";
+import { clientSideHasPermission } from "./has-permission";
 import type { FieldAttribute } from "../../db";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { OrganizationOptions } from "./types";
@@ -47,6 +47,14 @@ interface OrganizationClientOptions {
 				[key: string]: FieldAttribute;
 			};
 		};
+		organizationRole?: {
+			additionalFields?: {
+				[key: string]: FieldAttribute;
+			};
+		};
+	};
+	dynamicAccessControl?: {
+		enabled: boolean;
 	};
 }
 
@@ -118,9 +126,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					enabled: CO["teams"] extends { enabled: true } ? true : false;
 				};
 				schema: Schema;
+				dynamicAccessControl: {
+					enabled: CO["dynamicAccessControl"] extends { enabled: true }
+						? true
+						: false;
+				};
 			}>
 		>,
-		getActions: ($fetch) => ({
+		getActions: ($fetch, _$store, co) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as Organization,
@@ -138,7 +151,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 						role: R;
 					},
 				) => {
-					const isAuthorized = hasPermission({
+					const isAuthorized = clientSideHasPermission({
 						role: data.role as string,
 						options: {
 							ac: options?.ac,
@@ -202,6 +215,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		},
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
+			"/organization/list-user-teams": "GET",
 		},
 		atomListeners: [
 			{

@@ -1,4 +1,6 @@
-export function safeJSONParse<T>(data: string): T | null {
+import { logger } from "./logger";
+
+export function safeJSONParse<T>(data: unknown): T | null {
 	function reviver(_: string, value: any): any {
 		if (typeof value === "string") {
 			const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
@@ -12,8 +14,12 @@ export function safeJSONParse<T>(data: string): T | null {
 		return value;
 	}
 	try {
+		if (typeof data !== "string") {
+			return data as T;
+		}
 		return JSON.parse(data, reviver);
-	} catch {
+	} catch (e) {
+		logger.error("Error parsing JSON", { error: e });
 		return null;
 	}
 }
