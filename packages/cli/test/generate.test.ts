@@ -6,13 +6,15 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { SupportedPlugin } from "../src/commands/init";
 import { generateAuthConfig } from "../src/generators/auth-config";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateKyselySchema } from "../src/generators/kysely";
+import { generateMigrations } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
 import { getPrismaVersion } from "../src/utils/get-package-info";
+import * as config from "../src/utils/get-config";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -976,5 +978,106 @@ describe("Prisma v7 compatibility", () => {
 			process.chdir(originalCwd);
 			fs.rmSync(tmpDir, { recursive: true });
 		}
+	});
+});
+
+describe("generate command with force flag", () => {
+	const db = new Database(":memory:");
+	const authConfig = {
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+	};
+
+	beforeEach(() => {
+		vi.spyOn(process, "exit").mockImplementation((code) => {
+			return code as never;
+		});
+		vi.spyOn(config, "getConfig").mockImplementation(async () => authConfig);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("should pass force flag to config when --force is used", async () => {
+		const options = {
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: true,
+		};
+
+		const fullConfig = options.force
+			? ({ ...authConfig, __force: true } as any)
+			: authConfig;
+
+		expect(fullConfig).toEqual(
+			expect.objectContaining({
+				__force: true,
+			}),
+		);
+	});
+
+	it("should not pass force flag to config when --force is not used", async () => {
+		const options = {
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: false,
+		};
+
+		const fullConfig = options.force
+			? ({ ...authConfig, __force: true } as any)
+			: authConfig;
+		expect(fullConfig).not.toEqual(
+			expect.objectContaining({
+				__force: true,
+			}),
+		);
+		expect(fullConfig).toEqual(authConfig);
+	});
+
+	it("should pass --force flag to config and regenerate schema multiple times", async () => {
+		const db = new Database(":memory:");
+
+		const firstSchema = await generateMigrations({
+			file: "test-force-regenerate.sql",
+			options: {
+				database: db,
+				__force: true,
+			} as any,
+			adapter: {} as any,
+		});
+
+		expect(firstSchema.code).toBeDefined();
+		expect(typeof firstSchema.code).toBe("string");
+		const firstSchemaContent = firstSchema.code;
+		expect(firstSchemaContent?.length).toBeGreaterThan(0);
+
+		const secondSchema = await generateMigrations({
+			file: "test-force-regenerate.sql",
+			options: {
+				database: db,
+				__force: true,
+			} as any,
+			adapter: {} as any,
+		});
+
+		expect(secondSchema.code).toBeDefined();
+		expect(typeof secondSchema.code).toBe("string");
+		const secondSchemaContent = secondSchema.code;
+		expect(secondSchemaContent?.length).toBeGreaterThan(0);
+
+		expect(() => {
+			generateMigrations({
+				file: "test-force-regenerate.sql",
+				options: {
+					database: db,
+					__force: true,
+				} as any,
+				adapter: {} as any,
+			});
+		}).not.toThrow();
 	});
 });

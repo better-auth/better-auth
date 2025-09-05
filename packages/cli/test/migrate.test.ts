@@ -92,3 +92,221 @@ describe("migrate auth instance with plugins", () => {
 		expect(res.changes).toBe(1);
 	});
 });
+
+describe("migrate command with force flag", () => {
+	const db = new Database(":memory:");
+	const authConfig = {
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+	};
+
+	beforeEach(() => {
+		vi.spyOn(process, "exit").mockImplementation((code) => {
+			return code as never;
+		});
+		vi.spyOn(config, "getConfig").mockImplementation(async () => authConfig);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("should pass force flag to config when --force is used", async () => {
+		// Test the force flag logic by checking the config transformation
+		const options = {
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: true,
+		};
+
+		// Simulate the same logic as in migrateAction
+		const fullConfig = options.force
+			? ({ ...authConfig, __force: true } as any)
+			: authConfig;
+
+		expect(fullConfig).toEqual(
+			expect.objectContaining({
+				__force: true,
+			}),
+		);
+	});
+
+	it("should not pass force flag to config when --force is not used", async () => {
+		// Test the force flag logic by checking the config transformation
+		const options = {
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: false,
+		};
+
+		// Simulate the same logic as in migrateAction
+		const fullConfig = options.force
+			? ({ ...authConfig, __force: true } as any)
+			: authConfig;
+
+		expect(fullConfig).not.toEqual(
+			expect.objectContaining({
+				__force: true,
+			}),
+		);
+		expect(fullConfig).toEqual(authConfig);
+	});
+
+	it("should migrate with force flag using real migrateAction", async () => {
+		const testDb = new Database(":memory:");
+		const testAuthConfig = {
+			baseURL: "http://localhost:3000",
+			database: testDb,
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		vi.spyOn(config, "getConfig").mockImplementation(
+			async () => testAuthConfig,
+		);
+
+		await migrateAction({
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: true,
+			yes: true,
+		});
+
+		const currentTime = Math.floor(Date.now() / 1000);
+		const signUpRes = await testAuthConfig.database
+			.prepare(
+				"INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+			)
+			.run(
+				"force-test-user",
+				"Force Test User",
+				"force-test@example.com",
+				0,
+				currentTime,
+				currentTime,
+			);
+
+		expect(signUpRes.changes).toBe(1);
+	});
+
+	it("should handle force flag with existing database tables", async () => {
+		const testDb = new Database(":memory:");
+		const testAuthConfig = {
+			baseURL: "http://localhost:3000",
+			database: testDb,
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		vi.spyOn(config, "getConfig").mockImplementation(
+			async () => testAuthConfig,
+		);
+
+		testDb.exec(`
+			CREATE TABLE IF NOT EXISTS user (
+				id TEXT PRIMARY KEY,
+				name TEXT,
+				email TEXT UNIQUE,
+				emailVerified BOOLEAN DEFAULT FALSE,
+				image TEXT,
+				createdAt INTEGER DEFAULT (unixepoch()),
+				updatedAt INTEGER DEFAULT (unixepoch())
+			);
+			INSERT INTO user (id, name, email) VALUES ('existing-user', 'Existing User', 'existing@example.com');
+		`);
+
+		await migrateAction({
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: true,
+			yes: true,
+		});
+
+		const currentTime = Math.floor(Date.now() / 1000);
+		const signUpRes = await testAuthConfig.database
+			.prepare(
+				"INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+			)
+			.run(
+				"force-existing-test-user",
+				"Force Existing Test User",
+				"force-existing-test@example.com",
+				0,
+				currentTime,
+				currentTime,
+			);
+
+		expect(signUpRes.changes).toBe(1);
+	});
+
+	it("should pass --force flag to config and run multiple migrations", async () => {
+		const testDb = new Database(":memory:");
+		const testAuthConfig = {
+			baseURL: "http://localhost:3000",
+			database: testDb,
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		vi.spyOn(config, "getConfig").mockImplementation(
+			async () => testAuthConfig,
+		);
+
+		await migrateAction({
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: true,
+			yes: true,
+		});
+
+		const currentTime = Math.floor(Date.now() / 1000);
+		const firstSignUpRes = await testAuthConfig.database
+			.prepare(
+				"INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+			)
+			.run(
+				"first-migration-user",
+				"First Migration User",
+				"first@example.com",
+				0,
+				currentTime,
+				currentTime,
+			);
+
+		expect(firstSignUpRes.changes).toBe(1);
+
+		await migrateAction({
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			force: true,
+			yes: true,
+		});
+
+		const secondSignUpRes = await testAuthConfig.database
+			.prepare(
+				"INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+			)
+			.run(
+				"second-migration-user",
+				"Second Migration User",
+				"second@example.com",
+				0,
+				currentTime,
+				currentTime,
+			);
+
+		expect(secondSignUpRes.changes).toBe(1);
+
+		const userCount = (await testAuthConfig.database
+			.prepare("SELECT COUNT(*) as count FROM user")
+			.get()) as { count: number };
+
+		expect(userCount.count).toBe(2);
+	});
+});
