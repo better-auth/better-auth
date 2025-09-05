@@ -36,13 +36,14 @@ export const createInternalAdapter = (
 
 	return {
 		createOAuthUser: async (
-			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
+			user: Omit<User, "id" | "createdAt" | "updatedAt">,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
 			const createdUser = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...user,
@@ -54,7 +55,8 @@ export const createInternalAdapter = (
 			const createdAccount = await createWithHooks(
 				{
 					...account,
-					userId: createdUser!.id || user.id,
+					userId: createdUser!.id,
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
@@ -75,9 +77,9 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
-					emailVerified: false,
 					...user,
 					email: user.email?.toLowerCase(),
 				},
@@ -95,6 +97,7 @@ export const createInternalAdapter = (
 		) => {
 			const createdAccount = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...account,
@@ -122,7 +125,11 @@ export const createInternalAdapter = (
 				for (const session of validSessions) {
 					const sessionStringified = await secondaryStorage.get(session.token);
 					if (sessionStringified) {
-						const s = JSON.parse(sessionStringified);
+						const s = safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(sessionStringified);
+						if (!s) return [];
 						const parsedSession = parseSessionOutput(ctx.options, {
 							...s.session,
 							expiresAt: new Date(s.session.expiresAt),
@@ -234,6 +241,7 @@ export const createInternalAdapter = (
 					: getDate(sessionExpiration, "sec"),
 				userId,
 				token: generateId(32),
+				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				...(overrideAll ? rest : {}),
@@ -292,7 +300,11 @@ export const createInternalAdapter = (
 					return null;
 				}
 				if (sessionStringified) {
-					const s = JSON.parse(sessionStringified);
+					const s = safeJSONParse<{
+						session: Session;
+						user: User;
+					}>(sessionStringified);
+					if (!s) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -354,7 +366,11 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
-						const s = JSON.parse(sessionStringified);
+						const s = safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(sessionStringified);
+						if (!s) return [];
 						const session = {
 							session: {
 								...s.session,
@@ -426,10 +442,11 @@ export const createInternalAdapter = (
 								const currentSession = await secondaryStorage.get(sessionToken);
 								let updatedSession: Session | null = null;
 								if (currentSession) {
-									const parsedSession = JSON.parse(currentSession) as {
+									const parsedSession = safeJSONParse<{
 										session: Session;
 										user: User;
-									};
+									}>(currentSession);
+									if (!parsedSession) return null;
 									updatedSession = {
 										...parsedSession.session,
 										...data,
@@ -699,9 +716,10 @@ export const createInternalAdapter = (
 		) => {
 			const _account = await createWithHooks(
 				{
-					...account,
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
+					...account,
 				},
 				"account",
 				undefined,
@@ -879,6 +897,7 @@ export const createInternalAdapter = (
 		) => {
 			const verification = await createWithHooks(
 				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...data,
