@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.3.8-beta.10",
+  "version": "1.3.9-beta.1",
   "main": "dist/index.cjs",
   "license": "MIT",
   "keywords": [
@@ -52,6 +52,6 @@
   "devDependencies": {
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^18.0.0"
+    "stripe": "^18.5.0"
   }
 }

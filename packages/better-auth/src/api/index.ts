@@ -3,7 +3,6 @@ import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares/origin-check";
-import { BetterAuthError } from "../error";
 import {
 	callbackOAuth,
 	forgetPassword,

@@ -66,6 +66,17 @@ import { auth } from "../../../lib/auth";
 export const GET = oAuthDiscoveryMetadata(auth);
 ```
 
+### OAuth Protected Resource Metadata
+
+Add a route to expose protected resource metadata for MCP clients:
+
+```ts title=".well-known/oauth-authorization-server/route.ts"
+import { oAuthProtectedResourceMetadata } from "better-auth/plugins";
+import { auth } from "@/lib/auth";
+
+export const GET = oAuthProtectedResourceMetadata(auth);
+```
+
 ### MCP Session Handling
 
 You can use the helper function `withMcpAuth` to get the session and handle unauthenticated calls automatically.
@@ -175,6 +186,11 @@ The MCP plugin accepts the following configuration options:
         description: "Path to the login page where users will be redirected for authentication",
         type: "string",
         required: true
+    },
+    resource: {
+        description: "The resource that should be returned by the protected resource metadata endpoint",
+        type: "string",
+        required: false
     },
     oidcConfig: {
         description: "Optional OIDC configuration options",

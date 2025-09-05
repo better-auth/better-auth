@@ -42,6 +42,7 @@ export const SparklesCore = (props: ParticlesProps) => {
 	const particlesLoaded = async (container?: Container) => {
 		if (container) {
 			console.log(container);
+			// biome-ignore lint/nursery/noFloatingPromises: add error handling is not important
 			controls.start({
 				opacity: 1,
 				transition: {
