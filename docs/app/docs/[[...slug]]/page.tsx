@@ -75,7 +75,7 @@ export default async function Page({
 							return (
 								<CodeBlockTabs
 									{...props}
-									className="p-0 rounded-lg border-b bg-fd-secondary"
+									className="p-0 border-0 rounded-lg bg-fd-secondary"
 								>
 									<div {...props}>{props.children}</div>
 								</CodeBlockTabs>
