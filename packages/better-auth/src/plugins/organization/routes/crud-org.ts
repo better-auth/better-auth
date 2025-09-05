@@ -20,7 +20,7 @@ import {
 	toZodSchema,
 	type InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
-import {isSuperAdmin} from "../admin";
+import { isSuperAdmin } from "../admin";
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O,
@@ -421,17 +421,20 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canUpdateOrg = isSuperAdmin(options, ctx) || member && await hasPermission(
-				{
-					permissions: {
-						organization: ["update"],
-					},
-					role: member.role,
-					options: ctx.context.orgOptions,
-					organizationId,
-				},
-				ctx,
-			);
+			const canUpdateOrg =
+				isSuperAdmin(options, ctx) ||
+				(member &&
+					(await hasPermission(
+						{
+							permissions: {
+								organization: ["update"],
+							},
+							role: member.role,
+							options: ctx.context.orgOptions,
+							organizationId,
+						},
+						ctx,
+					)));
 			if (!canUpdateOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -555,7 +558,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				if (!canDeleteOrg) {
 					throw new APIError("FORBIDDEN", {
 						message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 					});
 				}
 			}
@@ -863,8 +866,9 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
-
-export const listAllOrganizations = <O extends OrganizationOptions>(options: O) =>
+export const listAllOrganizations = <O extends OrganizationOptions>(
+	options: O,
+) =>
 	createAuthEndpoint(
 		"/organization/list-all",
 		{
@@ -872,7 +876,8 @@ export const listAllOrganizations = <O extends OrganizationOptions>(options: O) 
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
-					description: "List all organizations. This endpoint is only available to super admins",
+					description:
+						"List all organizations. This endpoint is only available to super admins",
 					responses: {
 						"200": {
 							description: "Success",
@@ -893,7 +898,9 @@ export const listAllOrganizations = <O extends OrganizationOptions>(options: O) 
 		},
 		async (ctx) => {
 			if (!isSuperAdmin(options, ctx)) {
-				throw new APIError("UNAUTHORIZED", {message: "Only super admins may list all organizations."});
+				throw new APIError("UNAUTHORIZED", {
+					message: "Only super admins may list all organizations.",
+				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const organizations = await adapter.listAllOrganizations();
