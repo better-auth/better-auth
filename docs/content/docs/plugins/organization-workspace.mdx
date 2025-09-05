@@ -1,0 +1,855 @@
+---
+title: Organization Workspace
+description: The workspace plugin adds workspaces as sub-entities under organizations with comprehensive member management and permission controls.
+---
+
+Workspaces provide an additional layer of organization within your teams. Create project-specific spaces, manage member access at the workspace level, and streamline collaboration with granular permission controls.
+
+## Installation
+
+<Steps>
+<Step>
+### Add the plugin to your **auth** config
+
+The workspace plugin requires the organization plugin to be installed first.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization, workspace } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization(), // [!code highlight]
+        workspace() // [!code highlight]
+    ]
+})
+```
+</Step>
+
+<Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+        <Tab value="migrate">
+        ```bash
+        npx @better-auth/cli migrate
+        ```
+        </Tab>
+        <Tab value="generate">
+        ```bash
+        npx @better-auth/cli generate
+        ```
+        </Tab>
+    </Tabs>
+    See the [Schema](#schema) section to add the fields manually.
+</Step>
+
+<Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { organizationClient, workspaceClient } from "better-auth/client/plugins"
+
+    export const authClient = createAuthClient({
+        plugins: [
+            organizationClient(), // [!code highlight]
+            workspaceClient() // [!code highlight]
+        ]
+    })
+    ```
+</Step>
+</Steps>
+
+## Usage
+
+Once you've installed the plugin, you can start using the workspace plugin to manage workspaces within your organizations. The client plugin provides methods under the `workspace` namespace, and the server `api` provides the necessary endpoints for backend integration.
+
+## Workspace Management
+
+### Create a Workspace
+
+<APIMethod path="/workspace/create" method="POST" requireSession>
+  ```ts
+  type createWorkspace = {
+    /**
+     * The workspace name.
+    */
+    name: string = "My Workspace"
+    /**
+     * The workspace slug (optional).
+    */
+    slug?: string = "my-workspace"
+    /**
+     * The workspace description.
+    */
+    description?: string = "A workspace for our team"
+    /**
+     * The organization ID. If not provided, uses the active organization.
+    */
+    organizationId?: string = "org-id"
+    /**
+    * The metadata of the workspace.
+    */
+    metadata?: Record<string, any> = { project: "alpha", priority: "high" }
+  }
+  ```
+</APIMethod>
+
+### List Workspaces
+
+Get all workspaces for an organization or the current user.
+
+<APIMethod path="/workspace/list" method="GET" requireSession>
+```ts
+type listWorkspaces = {
+    /**
+     * The organization ID to list workspaces for. If not provided, uses the active organization or returns user's workspaces.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+### Get Workspace
+
+Retrieve details of a specific workspace.
+
+<APIMethod path="/workspace/get" method="GET" requireSession>
+```ts
+type getWorkspace = {
+    /**
+     * The workspace ID. If not provided, uses the active workspace.
+     */
+    workspaceId?: string = "workspace-id"
+}
+```
+</APIMethod>
+
+### Update Workspace
+
+<APIMethod path="/workspace/update" method="POST" requireSession>
+```ts
+type updateWorkspace = {
+    /**
+     * The workspace ID to update.
+     */
+    workspaceId: string = "workspace-id"
+    /**
+     * The data to update.
+     */
+    data: {
+        /**
+         * The workspace name.
+         */
+        name?: string = "Updated Name"
+        /**
+         * The workspace slug.
+         */
+        slug?: string = "updated-slug"
+        /**
+         * The workspace description.
+         */
+        description?: string = "Updated description"
+        /**
+         * The workspace metadata.
+         */
+        metadata?: Record<string, any> = { status: "active" }
+    }
+}
+```
+</APIMethod>
+
+### Delete Workspace
+
+<APIMethod path="/workspace/delete" method="POST" requireSession>
+```ts
+type deleteWorkspace = {
+    /**
+     * The workspace ID to delete.
+     */
+    workspaceId: string = "workspace-id"
+}
+```
+</APIMethod>
+
+### Set Active Workspace
+
+Set or unset the active workspace for the current session.
+
+<APIMethod path="/workspace/set-active" method="POST" requireSession>
+```ts
+type setActiveWorkspace = {
+    /**
+     * The workspace ID to set as active. Set to null to unset the active workspace.
+     */
+    workspaceId: string | null = "workspace-id"
+}
+```
+</APIMethod>
+
+## Workspace Members
+
+### Add Member to Workspace
+
+Add an organization member to a workspace with a specific role.
+
+<APIMethod path="/workspace/add-member" method="POST" requireSession>
+```ts
+type addWorkspaceMember = {
+    /**
+     * The workspace ID.
+     */
+    workspaceId: string = "workspace-id"
+    /**
+     * The user ID of the member to add.
+     */
+    userId: string = "user-id"
+    /**
+     * The role to assign to the member.
+     */
+    role: string = "member"
+}
+```
+</APIMethod>
+
+<Callout>
+  Users must be members of the organization before they can be added to workspaces within that organization.
+</Callout>
+
+### List Workspace Members
+
+<APIMethod path="/workspace/list-members" method="GET" requireSession>
+```ts
+type listWorkspaceMembers = {
+    /**
+     * The workspace ID. If not provided, uses the active workspace.
+     */
+    workspaceId?: string = "workspace-id"
+}
+```
+</APIMethod>
+
+### Update Member Role
+
+<APIMethod path="/workspace/update-member-role" method="POST" requireSession>
+```ts
+type updateWorkspaceMemberRole = {
+    /**
+     * The workspace ID.
+     */
+    workspaceId: string = "workspace-id"
+    /**
+     * The user ID of the member.
+     */
+    userId: string = "user-id"
+    /**
+     * The new role to assign.
+     */
+    role: string = "admin"
+}
+```
+</APIMethod>
+
+### Remove Member from Workspace
+
+<APIMethod path="/workspace/remove-member" method="POST" requireSession>
+```ts
+type removeWorkspaceMember = {
+    /**
+     * The workspace ID.
+     */
+    workspaceId: string = "workspace-id"
+    /**
+     * The user ID of the member to remove.
+     */
+    userId: string = "user-id"
+}
+```
+</APIMethod>
+
+## Team Integration
+
+The workspace plugin integrates with organization teams, allowing you to add entire teams to workspaces.
+
+### Add Team to Workspace
+
+<APIMethod path="/workspace/add-team-member" method="POST" requireSession>
+```ts
+type addWorkspaceTeamMember = {
+    /**
+     * The workspace ID.
+     */
+    workspaceId: string = "workspace-id"
+    /**
+     * The team ID to add.
+     */
+    teamId: string = "team-id"
+    /**
+     * The role to assign to the team.
+     */
+    role: string = "member"
+}
+```
+</APIMethod>
+
+### List Workspace Teams
+
+<APIMethod path="/workspace/list-team-members" method="GET" requireSession>
+```ts
+type listWorkspaceTeamMembers = {
+    /**
+     * The workspace ID.
+     */
+    workspaceId: string = "workspace-id"
+}
+```
+</APIMethod>
+
+### Update Team Role
+
+<APIMethod path="/workspace/update-team-member-role" method="POST" requireSession>
+```ts
+type updateWorkspaceTeamMemberRole = {
+    /**
+     * The workspace ID.
+     */
+    workspaceId: string = "workspace-id"
+    /**
+     * The team ID.
+     */
+    teamId: string = "team-id"
+    /**
+     * The new role to assign.
+     */
+    role: string = "admin"
+}
+```
+</APIMethod>
+
+### Remove Team from Workspace
+
+<APIMethod path="/workspace/remove-team-member" method="POST" requireSession>
+```ts
+type removeWorkspaceTeamMember = {
+    /**
+     * The workspace ID.
+     */
+    workspaceId: string = "workspace-id"
+    /**
+     * The team ID to remove.
+     */
+    teamId: string = "team-id"
+}
+```
+</APIMethod>
+
+## Permissions and Access Control
+
+The workspace plugin follows a hierarchical permission system that builds on organization-level permissions.
+
+### Permission Hierarchy
+
+**Organization Level:**
+- `owner` and `admin` roles can create, update, and delete workspaces
+- `member` role can only access workspaces they're assigned to
+
+**Workspace Level:**
+- `owner` - Full control over the workspace (assigned to workspace creator)
+- `admin` - Can manage workspace members and settings
+- `member` - Can participate in the workspace
+
+### Default Permissions
+
+By default, the workspace plugin defines these permissions:
+
+**Workspace Permissions:**
+- `workspace:create` - Create new workspaces
+- `workspace:read` - View workspace details
+- `workspace:update` - Update workspace information
+- `workspace:delete` - Delete workspaces
+
+**Member Management:**
+- `workspace-member:add` - Add members to workspace
+- `workspace-member:remove` - Remove members from workspace
+- `workspace-member:update-role` - Update member roles
+
+### Custom Workspace Permissions
+
+You can define custom permissions for workspace operations:
+
+```ts title="permissions.ts"
+import { createAccessControl } from "better-auth/plugins/access";
+
+const statement = {
+    workspace: ["create", "read", "update", "delete"],
+    "workspace-member": ["add", "remove", "update-role"],
+    project: ["create", "edit", "share"] // Custom workspace-specific permissions
+} as const;
+
+const ac = createAccessControl(statement);
+
+const workspaceMember = ac.newRole({
+    workspace: ["read"],
+    project: ["create", "edit"]
+});
+
+const workspaceAdmin = ac.newRole({
+    workspace: ["read", "update"],
+    "workspace-member": ["add", "remove", "update-role"],
+    project: ["create", "edit", "share"]
+});
+```
+
+## Auto Workspace Creation
+
+By default, a "General" workspace is automatically created when a new organization is created.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization, workspace } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization(),
+        workspace({
+            createDefaultWorkspace: true, // default: true
+            defaultWorkspaceName: "General" // default: "General"
+        })
+    ]
+})
+```
+
+To disable auto-creation:
+
+```ts title="auth.ts"
+workspace({
+    createDefaultWorkspace: false
+})
+```
+
+## Workspace Hooks
+
+Customize workspace operations with lifecycle hooks:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization, workspace } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization(),
+        workspace({
+            workspaceHooks: {
+                beforeCreateWorkspace: async ({ workspace, organization, user }) => {
+                    // Run custom logic before workspace creation
+                    return {
+                        data: {
+                            ...workspace,
+                            metadata: {
+                                ...workspace.metadata,
+                                createdBy: user.name
+                            }
+                        }
+                    }
+                },
+                afterCreateWorkspace: async ({ workspace, organization, user }) => {
+                    // Run custom logic after workspace creation
+                    await setupDefaultChannels(workspace.id)
+                },
+                beforeAddWorkspaceMember: async ({ member, workspace, user }) => {
+                    // Validate member addition
+                    const plan = await getOrganizationPlan(workspace.organizationId)
+                    if (plan === 'free' && memberCount > 5) {
+                        throw new Error('Free plan limited to 5 workspace members')
+                    }
+                },
+                afterAddWorkspaceMember: async ({ member, workspace, user }) => {
+                    // Send welcome notification
+                    await sendWorkspaceWelcome(user.email, workspace.name)
+                }
+            }
+        })
+    ]
+})
+```
+
+## Advanced Usage
+
+### Complex Metadata Support
+
+Workspaces support rich metadata for storing custom configuration:
+
+```ts
+const workspace = await authClient.workspace.create({
+    name: "Development Workspace",
+    metadata: {
+        settings: {
+            theme: "dark",
+            notifications: true,
+            features: ["chat", "video", "files"]
+        },
+        permissions: {
+            allowGuests: false,
+            maxMembers: 50
+        },
+        integrations: {
+            slack: { channelId: "C1234567890" },
+            github: { repoId: "repo-123" }
+        }
+    }
+})
+```
+
+### Multi-Organization Scenarios
+
+Users can have different roles across organizations and workspaces:
+
+```ts
+// User is admin in Org A, member in Org B
+// Can create workspaces in Org A, but only participate in Org B workspaces
+
+// List workspaces across all organizations user has access to
+const allWorkspaces = await authClient.workspace.list()
+
+// List workspaces for specific organization
+const orgWorkspaces = await authClient.workspace.list({
+    organizationId: "org-a-id"
+})
+```
+
+### Reactive Workspace State
+
+Use workspace hooks for reactive UI updates:
+
+<Tabs items={['React', 'Vue', 'Svelte']}>
+    <Tab value="React">
+    ```tsx title="workspace-selector.tsx"
+    import { authClient } from "@/lib/auth-client"
+
+    function WorkspaceSelector() {
+        const { data: workspaces } = authClient.workspace.useListWorkspaces()
+        const { data: activeWorkspace } = authClient.workspace.useActiveWorkspace()
+        
+        const setActiveWorkspace = async (workspaceId: string) => {
+            await authClient.workspace.setActive({ workspaceId })
+        }
+
+        return (
+            <select 
+                value={activeWorkspace?.id || ''} 
+                onChange={(e) => setActiveWorkspace(e.target.value)}
+            >
+                <option value="">Select workspace...</option>
+                {workspaces?.map(workspace => (
+                    <option key={workspace.id} value={workspace.id}>
+                        {workspace.name}
+                    </option>
+                ))}
+            </select>
+        )
+    }
+    ```
+    </Tab>
+    <Tab value="Vue">
+    ```vue title="workspace-selector.vue"
+    <script setup lang="ts">
+    import { authClient } from "@/lib/auth-client"
+    
+    const workspaces = authClient.workspace.useListWorkspaces()
+    const activeWorkspace = authClient.workspace.useActiveWorkspace()
+    
+    const setActiveWorkspace = (workspaceId: string) => {
+        authClient.workspace.setActive({ workspaceId })
+    }
+    </script>
+
+    <template>
+        <select 
+            :value="activeWorkspace.data?.id || ''" 
+            @change="setActiveWorkspace($event.target.value)"
+        >
+            <option value="">Select workspace...</option>
+            <option 
+                v-for="workspace in workspaces.data" 
+                :key="workspace.id" 
+                :value="workspace.id"
+            >
+                {{ workspace.name }}
+            </option>
+        </select>
+    </template>
+    ```
+    </Tab>
+    <Tab value="Svelte">
+    ```svelte title="workspace-selector.svelte"
+    <script lang="ts">
+    import { authClient } from "$lib/auth-client"
+    
+    const workspaces = authClient.workspace.useListWorkspaces()
+    const activeWorkspace = authClient.workspace.useActiveWorkspace()
+    
+    const setActiveWorkspace = (workspaceId: string) => {
+        authClient.workspace.setActive({ workspaceId })
+    }
+    </script>
+
+    <select 
+        value={$activeWorkspace.data?.id || ''} 
+        on:change={(e) => setActiveWorkspace(e.target.value)}
+    >
+        <option value="">Select workspace...</option>
+        {#if $workspaces.data}
+            {#each $workspaces.data as workspace}
+                <option value={workspace.id}>
+                    {workspace.name}
+                </option>
+            {/each}
+        {/if}
+    </select>
+    ```
+    </Tab>
+</Tabs>
+
+## Schema
+
+The workspace plugin adds the following tables to the database:
+
+### Workspace
+
+Table Name: `workspace`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each workspace",
+      isPrimaryKey: true
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the workspace"
+    },
+    {
+      name: "slug",
+      type: "string",
+      description: "The slug of the workspace",
+      isOptional: true
+    },
+    {
+      name: "description",
+      type: "string",
+      description: "The description of the workspace",
+      isOptional: true
+    },
+    {
+      name: "organizationId",
+      type: "string",
+      description: "The ID of the organization",
+      isForeignKey: true
+    },
+    {
+      name: "metadata",
+      type: "string",
+      description: "Additional metadata for the workspace (JSON stringified)",
+      isOptional: true
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the workspace was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the workspace was last updated"
+    },
+  ]}
+  />
+
+### Workspace Member
+
+Table Name: `workspaceMember`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each workspace member",
+      isPrimaryKey: true
+    },
+    {
+      name: "workspaceId",
+      type: "string",
+      description: "The ID of the workspace",
+      isForeignKey: true
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true
+    },
+    {
+      name: "role",
+      type: "string",
+      description: "The role of the user in the workspace"
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the member was added to the workspace"
+    },
+  ]}
+  />
+
+### Workspace Team Member
+
+Table Name: `workspaceTeamMember`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each workspace team member",
+      isPrimaryKey: true
+    },
+    {
+      name: "workspaceId",
+      type: "string",
+      description: "The ID of the workspace",
+      isForeignKey: true
+    },
+    {
+      name: "teamId",
+      type: "string",
+      description: "The ID of the team",
+      isForeignKey: true
+    },
+    {
+      name: "role",
+      type: "string",
+      description: "The role of the team in the workspace"
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the team was added to the workspace"
+    },
+  ]}
+  />
+
+### Session Extension
+
+Table Name: `session`
+
+The following field is added to the session table:
+
+<DatabaseTable
+  fields={[
+    {
+      name: "activeWorkspaceId",
+      type: "string",
+      description: "The ID of the active workspace",
+      isOptional: true
+    },
+  ]}
+  />
+
+### Customizing the Schema
+
+To change the schema table name or fields, you can pass `schema` option to the workspace plugin.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [
+    organization(),
+    workspace({
+      schema: {
+        workspace: {
+          modelName: "workspaces",  //map the workspace table to workspaces
+          fields: {
+            name: "title" //map the name field to title
+          },
+          additionalFields: {
+            // Add a new field to the workspace table
+            priority: {
+              type: "string",
+              input: true,
+              required: false
+            }
+          }
+        }
+      }
+    })
+  ]
+})
+```
+
+#### Additional Fields
+
+You can easily add custom fields to the `workspace`, `workspaceMember`, and `workspaceTeamMember` tables.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [
+    organization(),
+    workspace({
+      schema: {
+        workspace: {
+          additionalFields: {
+            priority: {
+              type: "string",
+              input: true,
+              required: false
+            },
+            archived: {
+              type: "boolean",
+              input: true,
+              required: false,
+              defaultValue: false
+            }
+          }
+        },
+        workspaceMember: {
+          additionalFields: {
+            joinedDate: {
+              type: "date",
+              input: true,
+              required: false
+            }
+          }
+        }
+      }
+    })
+  ]
+})
+```
+
+## Options
+
+**createDefaultWorkspace**: `boolean` - Whether to automatically create a default workspace when an organization is created. Default: `true`.
+
+**defaultWorkspaceName**: `string` - The name of the default workspace created for new organizations. Default: `"General"`.
+
+**schema**: `object` - Schema configuration for customizing table names, fields, and adding additional fields.
+
+**workspaceHooks**: `object` - Lifecycle hooks for workspace operations:
+  - `beforeCreateWorkspace` - Runs before workspace creation
+  - `afterCreateWorkspace` - Runs after workspace creation  
+  - `beforeAddWorkspaceMember` - Runs before adding members
+  - `afterAddWorkspaceMember` - Runs after adding members
+  - `beforeRemoveWorkspaceMember` - Runs before removing members
+  - `afterRemoveWorkspaceMember` - Runs after removing members
+  - `beforeAddWorkspaceTeamMember` - Runs before adding teams
+  - `afterAddWorkspaceTeamMember` - Runs after adding teams
+  - `beforeRemoveWorkspaceTeamMember` - Runs before removing teams
+  - `afterRemoveWorkspaceTeamMember` - Runs after removing teams
+
+**roles**: `object` - Custom role definitions for workspace-specific permissions (follows the same pattern as organization roles).
