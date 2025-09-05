@@ -25,7 +25,7 @@ export interface UseStoreOptions<SomeStore> {
 /**
  * Subscribe to store changes and get store's value.
  *
- * Can be user with store builder too.
+ * Can be used with store builder too.
  *
  * ```js
  * import { useStore } from 'nanostores/react'
