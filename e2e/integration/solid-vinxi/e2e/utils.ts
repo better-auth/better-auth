@@ -62,7 +62,10 @@ export function setup() {
 					clientChild.stdout.on("data", (data) => {
 						const message = data.toString();
 						// find: http://localhost:XXXX/ for vinxi dev server
-						if (message.includes("Local:") && message.includes("http://localhost:")) {
+						if (
+							message.includes("Local:") &&
+							message.includes("http://localhost:")
+						) {
 							const match = message.match(/http:\/\/localhost:(\d+)/);
 							if (match) {
 								ref.clientPort = Number(match[1]);
