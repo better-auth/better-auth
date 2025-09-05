@@ -18,7 +18,7 @@ export function updateApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/update",
@@ -351,7 +351,7 @@ export function updateApiKey({
 						message: ERROR_CODES.INVALID_METADATA_TYPE,
 					});
 				}
-				//@ts-ignore - we need this to be a string to save into DB.
+				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.metadata =
 					schema.apikey.fields.metadata.transform.input(metadata);
 			}
@@ -383,7 +383,7 @@ export function updateApiKey({
 			}
 
 			if (permissions !== undefined) {
-				//@ts-ignore - we need this to be a string to save into DB.
+				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.permissions = JSON.stringify(permissions);
 			}
 
@@ -430,10 +430,7 @@ export function updateApiKey({
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];
-						}>(
-							//@ts-ignore - from DB, this value is always a string
-							returningApiKey.permissions,
-						)
+						}>(returningApiKey.permissions)
 					: null,
 			});
 		},

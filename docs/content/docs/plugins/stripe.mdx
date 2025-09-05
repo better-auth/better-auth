@@ -396,6 +396,10 @@ To create a [Stripe billing portal session](https://docs.stripe.com/api/customer
 ```ts
 type createBillingPortal = {
     /**
+    * The IETF language tag of the locale customer portal is displayed in. If blank or auto, browser's locale is used.
+    */
+    locale?: string
+    /**
      * Reference id of the subscription to upgrade. 
      */
     referenceId?: string = "123"
@@ -406,6 +410,9 @@ type createBillingPortal = {
 }
 ```
 </APIMethod>
+<Callout type="info" >
+For supported locales, see the [IETF language tag documentation](https://docs.stripe.com/js/appendix/supported_locales).
+</Callout>
         
 This endpoint creates a Stripe billing portal session and returns a URL in the response as `data.url`. You can redirect users to this URL to allow them to manage their subscription, payment methods, and billing history.
 

@@ -22,7 +22,7 @@ import {
 } from "../../../db";
 
 export const createOrganization = <O extends OrganizationOptions>(
-	options: O,
+	options?: O,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -162,12 +162,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				...orgData
 			} = ctx.body;
 
-			let hookResponse:
-				| {
-						data: Record<string, any>;
-				  }
-				| undefined = undefined;
-
 			if (options.organizationCreation?.beforeCreate) {
 				const response = await options.organizationCreation.beforeCreate(
 					{
@@ -180,7 +174,24 @@ export const createOrganization = <O extends OrganizationOptions>(
 					ctx.request,
 				);
 				if (response && typeof response === "object" && "data" in response) {
-					hookResponse = response;
+					ctx.body = {
+						...ctx.body,
+						...response.data,
+					};
+				}
+			}
+
+			if (options?.organizationHooks?.beforeCreateOrganization) {
+				const response =
+					await options?.organizationHooks.beforeCreateOrganization({
+						organization: orgData,
+						user,
+					});
+				if (response && typeof response === "object" && "data" in response) {
+					ctx.body = {
+						...ctx.body,
+						...response.data,
+					};
 				}
 			}
 
@@ -188,7 +199,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				organization: {
 					...orgData,
 					createdAt: new Date(),
-					...(hookResponse?.data || {}),
 				},
 			});
 
@@ -239,6 +249,14 @@ export const createOrganization = <O extends OrganizationOptions>(
 					},
 					ctx.request,
 				);
+			}
+
+			if (options?.organizationHooks?.afterCreateOrganization) {
+				await options?.organizationHooks.afterCreateOrganization({
+					organization,
+					user,
+					member,
+				});
 			}
 
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
@@ -297,7 +315,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	);
 
 export const updateOrganization = <O extends OrganizationOptions>(
-	options: O,
+	options?: O,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -309,7 +327,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			slug?: string;
 			logo?: string;
 			metadata?: Record<string, any>;
-		} & InferAdditionalFieldsFromPluginOptions<"organization", O>;
+		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
 		organizationId: string;
 	};
 	return createAuthEndpoint(
@@ -403,23 +421,48 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canUpdateOrg = hasPermission({
-				permissions: {
-					organization: ["update"],
+			const canUpdateOrg = await hasPermission(
+				{
+					permissions: {
+						organization: ["update"],
+					},
+					role: member.role,
+					options: ctx.context.orgOptions,
+					organizationId,
 				},
-				role: member.role,
-				options: ctx.context.orgOptions,
-			});
+				ctx,
+			);
 			if (!canUpdateOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				});
 			}
+			if (options?.organizationHooks?.beforeUpdateOrganization) {
+				const response =
+					await options.organizationHooks.beforeUpdateOrganization({
+						organization: ctx.body.data,
+						user: session.user,
+						member,
+					});
+				if (response && typeof response === "object" && "data" in response) {
+					ctx.body.data = {
+						...ctx.body.data,
+						...response.data,
+					};
+				}
+			}
 			const updatedOrg = await adapter.updateOrganization(
 				organizationId,
 				ctx.body.data,
 			);
+			if (options?.organizationHooks?.afterUpdateOrganization) {
+				await options.organizationHooks.afterUpdateOrganization({
+					organization: updatedOrg,
+					user: session.user,
+					member,
+				});
+			}
 			return ctx.json(updatedOrg);
 		},
 	);
@@ -459,12 +502,24 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const session = await ctx.context.getSession(ctx);
-			if (!session) {
-				return ctx.json(null, {
-					status: 401,
+			const disableOrganizationDeletion =
+				ctx.context.orgOptions.organizationDeletion?.disabled ||
+				ctx.context.orgOptions.disableOrganizationDeletion;
+			if (disableOrganizationDeletion) {
+				if (ctx.context.orgOptions.organizationDeletion?.disabled) {
+					ctx.context.logger.info(
+						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
+					);
+				}
+				throw new APIError("NOT_FOUND", {
+					message: "Organization deletion is disabled",
 				});
 			}
+			const session = await ctx.context.getSession(ctx);
+			if (!session) {
+				throw new APIError("UNAUTHORIZED", { status: 401 });
+			}
+
 			const organizationId = ctx.body.organizationId;
 			if (!organizationId) {
 				return ctx.json(null, {
@@ -480,21 +535,22 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				organizationId: organizationId,
 			});
 			if (!member) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message:
-							ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-					},
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canDeleteOrg = hasPermission({
-				role: member.role,
-				permissions: {
-					organization: ["delete"],
+			const canDeleteOrg = await hasPermission(
+				{
+					role: member.role,
+					permissions: {
+						organization: ["delete"],
+					},
+					organizationId,
+					options: ctx.context.orgOptions,
 				},
-				options: ctx.context.orgOptions,
-			});
+				ctx,
+			);
 			if (!canDeleteOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -507,23 +563,20 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				 */
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
-			const option = ctx.context.orgOptions.organizationDeletion;
-			if (option?.disabled) {
-				throw new APIError("FORBIDDEN");
-			}
+
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
 				throw new APIError("BAD_REQUEST");
 			}
-			if (option?.beforeDelete) {
-				await option.beforeDelete({
+			if (options?.organizationHooks?.beforeDeleteOrganization) {
+				await options.organizationHooks.beforeDeleteOrganization({
 					organization: org,
 					user: session.user,
 				});
 			}
 			await adapter.deleteOrganization(organizationId);
-			if (option?.afterDelete) {
-				await option.afterDelete({
+			if (options?.organizationHooks?.afterDeleteOrganization) {
+				await options.organizationHooks.afterDeleteOrganization({
 					organization: org,
 					user: session.user,
 				});
