@@ -1,0 +1,46 @@
+name: Branch Rules
+
+on:
+  pull_request:
+    branches:
+      - main
+      - canary
+      - 'v*-staging'
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+              fetch-depth: 0
+
+      - name: Determine changed files
+        id: files
+        run: |
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.head_ref }})
+          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+
+      - name: Enforce branch rules
+        run: |
+          CHANGED_FILES="${{ steps.files.outputs.changed_files }}"
+          ONLY_DOCS=true
+          for f in $CHANGED_FILES; do
+            if [[ $f != docs/* ]]; then
+              ONLY_DOCS=false
+              break
+            fi
+          done
+
+          if $ONLY_DOCS; then
+            if [[ "${GITHUB_BASE_REF}" != "main" ]]; then
+              echo "Docs-only PRs must target 'main'"
+              exit 1
+            fi
+          else
+            if [[ "${GITHUB_BASE_REF}" != "canary" ]] && ! [[ "${GITHUB_BASE_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-staging$ ]]; then
+              echo "PRs affecting non-docs must target 'canary' or a versioned staging branch"
+              exit 1
+            fi
+          fi
