@@ -19,7 +19,7 @@ jobs:
       - name: Determine changed files
         id: files
         run: |
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.head_ref }})
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD)
           echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
 
       - name: Enforce branch rules
