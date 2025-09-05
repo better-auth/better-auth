@@ -50,7 +50,7 @@ interface MagicLinkOptions<DS extends z.ZodType> {
 	 * Zod schema for the additionalData property of the sendMagicLink function.
 	 * This schema is used to validate and type-safeguard the additional data passed to the sign-in endpoint.
 	 *
-	 * @default z.record(z.string(), typeof jsonSchema)
+	 * @default z.record(z.string(), jsonSchema)
 	 * @see {@link https://zod.dev/basics}
 	 * @type jsonSchema is a Zod schema that validates JSON-serializable values.
 	 */
