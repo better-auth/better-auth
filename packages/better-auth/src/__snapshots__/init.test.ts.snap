@@ -15,6 +15,7 @@ exports[`init > should match config 1`] = `
       "adapterConfig": {
         "adapterId": "kysely",
         "adapterName": "Kysely Adapter",
+        "bypassTransactions": false,
         "debugLogs": false,
         "supportsBooleans": false,
         "supportsDates": false,
@@ -25,6 +26,7 @@ exports[`init > should match config 1`] = `
       "debugLogs": false,
       "type": "sqlite",
     },
+    "transaction": [Function],
     "update": [Function],
     "updateMany": [Function],
   },

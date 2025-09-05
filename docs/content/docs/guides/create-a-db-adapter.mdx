@@ -81,18 +81,26 @@ export const myAdapter = (config: CustomAdapterConfig = {}) =>
     config: {
       // ...
     },
+    // Define only when transactions are supported.
+    context: {
+      // ...
+    },
     adapter: ({}) => {
       return {
-        create: async ({ data, model, select }) => {
+        create: async ({ data, model, select }, ctx) => {
           // ...
         },
-        update: async ({ data, model, select }) => {
+        update: async ({ data, model, select }, ctx) => {
           // ...
         },
-        updateMany: async ({ data, model, select }) => {
+        updateMany: async ({ data, model, select }, ctx) => {
           // ...
         },
-        delete: async ({ data, model, select }) => {
+        delete: async ({ data, model, select }, ctx) => {
+          // ...
+        },
+        // Define only when context is defined.
+        transaction: async (callback, ctx) => {
           // ...
         },
         // ...
@@ -145,6 +153,7 @@ adapter: ({
   - This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options to convert the `model` to the `schema` version.
 - We will automatically fill in any missing fields you return based on the user's `schema` configuration.
 - Any method that includes a `select` parameter, is only for the purpose of getting data from your database more efficiently. You do not need to worry about only returning what the `select` parameter states, as we will handle that for you.
+- All methods receive an `ctx` parameter that contains the adapter context. When called within a transaction, this context should include transaction-specific information.
 
 ### `create` method
 
@@ -170,9 +179,9 @@ parameters:
 </Callout>
 
 ```ts title="Example"
-create: async ({ model, data, select }) => {
+create: async ({ model, data, select }, ctx) => {
   // Example of inserting data into the database.
-  return await db.insert(model).values(data);
+  return await ctx.db.insert(model).values(data);
 };
 ```
 
@@ -192,9 +201,9 @@ parameters:
 </Callout>
 
 ```ts title="Example"
-update: async ({ model, where, update }) => {
+update: async ({ model, where, update }, ctx) => {
   // Example of updating data in the database.
-  return await db.update(model).set(update).where(where);
+  return await ctx.db.update(model).set(update).where(where);
 };
 ```
 
@@ -211,9 +220,9 @@ parameters:
 <Callout>Make sure to return the number of records that were updated.</Callout>
 
 ```ts title="Example"
-updateMany: async ({ model, where, update }) => {
+updateMany: async ({ model, where, update }, ctx) => {
   // Example of updating multiple records in the database.
-  return await db.update(model).set(update).where(where);
+  return await ctx.db.update(model).set(update).where(where);
 };
 ```
 
@@ -227,9 +236,9 @@ parameters:
 - `where`: The `where` clause to delete the record by.
 
 ```ts title="Example"
-delete: async ({ model, where }) => {
+delete: async ({ model, where }, ctx) => {
   // Example of deleting a record from the database.
-  await db.delete(model).where(where);
+  await ctx.db.delete(model).where(where);
 }
 ```
 
@@ -245,9 +254,9 @@ parameters:
 <Callout>Make sure to return the number of records that were deleted.</Callout>
 
 ```ts title="Example"
-deleteMany: async ({ model, where }) => {
+deleteMany: async ({ model, where }, ctx) => {
   // Example of deleting multiple records from the database.
-  return await db.delete(model).where(where);
+  return await ctx.db.delete(model).where(where);
 };
 ```
 
@@ -264,9 +273,9 @@ parameters:
 <Callout>Make sure to return the data that is found in the database.</Callout>
 
 ```ts title="Example"
-findOne: async ({ model, where, select }) => {
+findOne: async ({ model, where, select }, ctx) => {
   // Example of finding a single record in the database.
-  return await db.select().from(model).where(where).limit(1);
+  return await ctx.db.select().from(model).where(where).limit(1);
 };
 ```
 
@@ -287,9 +296,9 @@ parameters:
 </Callout>
 
 ```ts title="Example"
-findMany: async ({ model, where, limit, sortBy, offset }) => {
+findMany: async ({ model, where, limit, sortBy, offset }, ctx) => {
   // Example of finding multiple records in the database.
-  return await db
+  return await ctx.db
     .select()
     .from(model)
     .where(where)
@@ -311,11 +320,61 @@ parameters:
 <Callout>Make sure to return the number of records that were counted.</Callout>
 
 ```ts title="Example"
-count: async ({ model, where }) => {
+count: async ({ model, where }, ctx) => {
   // Example of counting the number of records in the database.
-  return await db.select().from(model).where(where).count();
+  return await ctx.db.select().from(model).where(where).count();
 };
 ```
+
+### `transaction` method (optional)
+
+The `transaction` method allows you to execute multiple database operations within a single transaction. This ensures data consistency by rolling back all changes if any operation fails.
+
+<Callout>
+If your database doesn't support transactions or you want to opt out of using them, you can set `bypassTransactions: true` in your adapter config. When transactions are bypassed, the callback will be executed with the current context without any transaction wrapping.
+</Callout>
+
+parameters:
+
+- `callback`: A function that receives a transaction context and performs database operations.
+- `ctx`: The current adapter context.
+
+<Callout>
+The transaction context is the same type as your adapter context but may contain transaction-specific information.
+</Callout>
+
+```ts title="Example"
+transaction: async (callback, ctx) => {
+  // Example of implementing database transactions
+  return ctx.db.transaction((tx) => {
+    return callback({
+      ...ctx,
+      db: tx,
+    });
+  });
+};
+```
+
+<Callout type="warn">
+If your adapter doesn't implement the `transaction` method, Better-Auth will automatically bypass transactions and execute the callback with the current context.
+</Callout>
+
+#### Using Transactions in Practice
+
+Transactions are automatically used by Better-Auth for operations that require data consistency.
+
+When implementing an adapter you should ensure that your adapter methods properly use the transaction context when provided.
+
+```ts title="Example"
+create: async ({ model, data, select }, ctx) => {
+  // Example of inserting data into the database with transaction support
+  return await ctx.db.insert(model).values(data);
+};
+```
+
+<Callout>
+For databases that don't support transactions (like Cloudflare D1), set `bypassTransactions: true` in your adapter config to avoid transaction-related errors.
+</Callout>
 
 ### `options` (optional)
 
@@ -471,6 +530,23 @@ const adapter = myAdapter({
     create: true,
     update: true,
   },
+});
+```
+
+### `bypassTransactions`
+
+Opt out of using database transactions. When set to `true`, any transaction calls will execute the callback with the current context without any transaction wrapping.
+
+<Callout>
+This is particularly useful for databases that don't support transactions or when you want to disable transaction functionality for performance reasons.
+</Callout>
+
+```ts title="Example"
+// Disable transactions for databases that don't support them
+const adapter = myAdapter({
+  // This value then gets passed into the `bypassTransactions`
+  // option in the createAdapter `config` object.
+  bypassTransactions: true,
 });
 ```
 

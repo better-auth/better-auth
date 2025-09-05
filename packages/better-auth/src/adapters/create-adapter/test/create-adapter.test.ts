@@ -2,11 +2,13 @@ import { describe, test, expect } from "vitest";
 import { createAdapter } from "..";
 import type {
 	AdapterConfig,
+	AdapterContext,
 	CleanedWhere,
 	CreateCustomAdapter,
 } from "../types";
 import type { BetterAuthOptions, User, Where } from "../../../types";
 import { betterAuth } from "../../../auth";
+import { createRandomStringGenerator } from "@better-auth/utils/random";
 
 /*
 
@@ -22,6 +24,7 @@ The rest are just edge cases.
 async function createTestAdapter(
 	props: {
 		config?: Partial<AdapterConfig>;
+		context?: AdapterContext;
 		options?: BetterAuthOptions;
 		adapter?: (
 			...args: Parameters<CreateCustomAdapter>
@@ -50,6 +53,7 @@ async function createTestAdapter(
 			supportsDates: true,
 			supportsBooleans: true,
 		},
+		context,
 		options = {},
 		adapter = () => ({}),
 	} = props;
@@ -66,56 +70,65 @@ async function createTestAdapter(
 			},
 			config,
 		),
+		context,
+		// @ts-expect-error
 		adapter: (...args) => {
 			const x = adapter(...args) as Partial<ReturnType<CreateCustomAdapter>>;
 			return {
-				async create(data) {
+				async create(data, ctx) {
 					if (x.create) {
-						return await x.create(data);
+						return await x.create(data, ctx);
 					}
 					return data.data;
 				},
-				async update(data) {
+				async update(data, ctx) {
 					if (x.update) {
-						return await x.update(data);
+						return await x.update(data, ctx);
 					}
 					return data.update;
 				},
-				async updateMany(data) {
+				async updateMany(data, ctx) {
 					if (x.updateMany) {
-						return await x.updateMany(data);
+						return await x.updateMany(data, ctx);
 					}
 					return 0;
 				},
-				async count(data) {
+				async count(data, ctx) {
 					if (x.count) {
-						return await x.count(data);
+						return await x.count(data, ctx);
 					}
 					return 0;
 				},
-				async delete(data) {
+				async delete(data, ctx) {
 					if (x.delete) {
-						return await x.delete(data);
+						return await x.delete(data, ctx);
 					}
 					return;
 				},
-				async deleteMany(data) {
+				async deleteMany(data, ctx) {
 					if (x.deleteMany) {
-						return await x.deleteMany(data);
+						return await x.deleteMany(data, ctx);
 					}
 					return 0;
 				},
-				async findMany(data) {
+				async findMany(data, ctx) {
 					if (x.findMany) {
-						return await x.findMany(data);
+						return await x.findMany(data, ctx);
 					}
 					return [];
 				},
-				async findOne(data) {
+				async findOne(data, ctx) {
 					if (x.findOne) {
-						return await x.findOne(data);
+						return await x.findOne(data, ctx);
 					}
 					return null;
+				},
+				async transaction(callback, ctx) {
+					if (x.transaction) {
+						return await x.transaction(callback, ctx);
+					}
+
+					return callback(ctx);
 				},
 				options: x.options ?? {},
 			};
@@ -1501,6 +1514,479 @@ describe("Create Adapter Helper", async () => {
 				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
 				expect(parameters.where?.[0].value).toEqual(1);
 			});
+		});
+	});
+
+	describe("Transactions", () => {
+		test("Should execute transaction callback when adapter supports transactions", async () => {
+			let ctx: AdapterContext | undefined = undefined;
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {
+						inTransaction: false,
+					},
+				},
+				adapter() {
+					return {
+						create: async ({ data }, context) => {
+							ctx = context;
+							return data;
+						},
+						transaction: async (callback, ctx) => {
+							return callback({
+								...ctx,
+								db: {
+									inTransaction: true,
+								},
+							});
+						},
+					};
+				},
+			});
+
+			const res = await adapter.transaction((tx) => {
+				return adapter.create({ data: {}, model: "user" }, tx);
+			});
+
+			expect(ctx).toEqual({ db: { inTransaction: true } });
+		});
+
+		test("Should execute transaction callback with current context when adapter doesn't support transactions", async () => {
+			let ctx: AdapterContext | undefined = undefined;
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {
+						inTransaction: false,
+					},
+				},
+				adapter() {
+					return {
+						create: async ({ data }, context) => {
+							ctx = context;
+							return data;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.transaction((tx) => {
+				return adapter.create({ data: {}, model: "user" }, tx);
+			});
+
+			expect(ctx).toEqual({
+				db: {
+					inTransaction: false,
+				},
+			});
+		});
+
+		test("Should execute transaction callback without context when no base context is defined", async () => {
+			let ctx: AdapterContext | undefined = undefined;
+
+			const adapter = await createTestAdapter({
+				adapter() {
+					return {
+						create: async ({ data }, context) => {
+							ctx = context;
+							return data;
+						},
+						async transaction(callback, ctx) {
+							return await callback({
+								...ctx,
+								db: {
+									inTransaction: true,
+								},
+							});
+						},
+					};
+				},
+			});
+
+			const res = await adapter.transaction((tx) => {
+				return adapter.create({ data: {}, model: "user" }, tx);
+			});
+
+			expect(ctx).not.toBeDefined();
+		});
+
+		test("Should handle transaction errors properly", async () => {
+			const adapter = await createTestAdapter({
+				context: {
+					db: {
+						inTransaction: false,
+					},
+				},
+				adapter(args_0) {
+					return {
+						transaction: async (callback, ctx) => {
+							try {
+								return await callback({
+									...ctx,
+									db: {
+										inTransaction: true,
+									},
+								});
+							} catch (error) {
+								throw error;
+							}
+						},
+					};
+				},
+			});
+
+			const errorMsg = "Transaction failed";
+
+			await expect(
+				adapter.transaction(async () => {
+					throw new Error(errorMsg);
+				}),
+			).rejects.toThrow(errorMsg);
+		});
+
+		test("Should handle transaction with multiple operations and error handling", async () => {
+			let operations: string[] = [];
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+					operations,
+				},
+				adapter(args_0) {
+					return {
+						async create({ data, model }) {
+							operations.push(`create-${model}`);
+							return data;
+						},
+						async update({ update, model }) {
+							operations.push(`update-${model}`);
+							return update;
+						},
+						async delete({ model }) {
+							operations.push(`delete-${model}`);
+						},
+						async transaction(callback) {
+							try {
+								return await callback({
+									db: {},
+									operations,
+								});
+							} catch (error) {
+								// Simulate rollback by clearing operations
+								operations = [];
+								throw error;
+							}
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.transaction(async () => {
+					await adapter.create({ model: "user", data: { name: "user1" } });
+					await adapter.create({ model: "session", data: { userId: "user1" } });
+					throw new Error("Simulated failure");
+					await adapter.update({
+						model: "user",
+						where: [{ field: "name", value: "user1" }],
+						update: { name: "user1-updated" },
+					});
+					return "failure";
+				}),
+			).rejects.toThrow("Simulated failure");
+
+			expect(operations).toEqual([]);
+
+			const successResult = await adapter.transaction(async () => {
+				await adapter.create({ model: "user", data: { name: "user1" } });
+				await adapter.create({ model: "session", data: { userId: "user1" } });
+				await adapter.update({
+					model: "user",
+					where: [{ field: "name", value: "user1" }],
+					update: { name: "user1-updated" },
+				});
+				return "success";
+			});
+
+			expect(successResult).toBe("success");
+			expect(operations).toEqual([
+				"create-user",
+				"create-session",
+				"update-user",
+			]);
+		});
+
+		test("Should handle nested transaction contexts correctly", async () => {
+			let currentLevel = 0;
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+					currentLevel,
+				},
+				adapter() {
+					return {
+						async create({ data }, ctx) {
+							currentLevel = ctx.currentLevel;
+							return data;
+						},
+						transaction: async (callback, ctx) => {
+							return await callback({
+								db: {},
+								currentLevel: ctx.currentLevel + 1,
+							});
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: {},
+			});
+
+			expect(currentLevel).toEqual(0);
+
+			await adapter.transaction(async (tx) => {
+				await adapter.create(
+					{
+						model: "user",
+						data: {},
+					},
+					tx,
+				);
+			});
+			expect(currentLevel).toEqual(1);
+
+			await adapter.transaction(async (tx1) => {
+				await adapter.transaction(async (tx2) => {
+					await adapter.create(
+						{
+							model: "user",
+							data: {},
+						},
+						tx2,
+					);
+				}, tx1);
+			});
+			expect(currentLevel).toEqual(2);
+		});
+
+		test("Should not affect operations outside transaction by rollback", async () => {
+			let operations: string[] = [];
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {
+						inTransaction: false,
+					},
+				},
+				adapter() {
+					return {
+						async create({ data, model }, ctx) {
+							if (ctx.db.inTransaction) {
+								operations.push(`tx:create-${model}`);
+							} else {
+								operations.push(`outside:create-${model}`);
+							}
+							return data;
+						},
+						async transaction(callback, ctx) {
+							return callback({
+								...ctx,
+								db: {
+									inTransaction: true,
+								},
+							});
+						},
+					};
+				},
+			});
+
+			const outsideOp = adapter.create({
+				model: "user",
+				data: {},
+			});
+
+			await adapter.transaction(async (tx) => {
+				await adapter.create(
+					{
+						model: "user",
+						data: {},
+					},
+					tx,
+				);
+				await new Promise((r) => setTimeout(r, 10));
+				await adapter.create(
+					{
+						model: "session",
+						data: {},
+					},
+					tx,
+				);
+			});
+
+			await outsideOp;
+
+			expect(operations).toEqual([
+				"outside:create-user",
+				"tx:create-user",
+				"tx:create-session",
+			]);
+		});
+
+		test("Should ensure isolation between concurrent transactions", async () => {
+			let operations: string[] = [];
+
+			const genId = createRandomStringGenerator("0-9", "A-Z", "a-z");
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+					txId: undefined,
+				},
+				adapter(args_0) {
+					return {
+						async create({ data, model }, ctx) {
+							operations.push(`${ctx.txId ?? 0}:${model}`);
+							return data;
+						},
+						async transaction(callback, ctx) {
+							const txId = genId(8);
+							return callback({
+								...ctx,
+								txId,
+							});
+						},
+					};
+				},
+			});
+
+			await Promise.all([
+				adapter.transaction(async (tx) => {
+					await adapter.create({ model: "user", data: {} }, tx);
+					await new Promise((r) => setTimeout(r, 30));
+					await adapter.create({ model: "session", data: {} }, tx);
+				}),
+				adapter.transaction(async (tx) => {
+					await adapter.create({ model: "user", data: {} }, tx);
+					await new Promise((r) => setTimeout(r, 30));
+					await adapter.create({ model: "session", data: {} }, tx);
+				}),
+			]);
+
+			const txIds = new Set(operations.map((op) => op.split(":")[0]));
+			expect(txIds.size).toBe(2);
+			expect(operations).toHaveLength(4);
+		});
+
+		test("Should return values correctly from transaction callback", async () => {
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+				},
+				adapter(args_0) {
+					return {
+						async transaction(callback, ctx) {
+							return callback(ctx);
+						},
+					};
+				},
+			});
+
+			const value = {
+				id: "12345",
+			};
+			const result = await adapter.transaction(async () => value);
+			expect(result).toEqual(value);
+		});
+
+		test("Should rollback nested transaction properly", async () => {
+			let operations: string[] = [];
+
+			const adapter = await createTestAdapter({
+				context: {
+					db: {},
+					level: 0,
+				},
+				adapter(args_0) {
+					return {
+						async create({ data, model }, ctx) {
+							operations.push(`${ctx.level}:${model}`);
+							return data;
+						},
+						async transaction(callback, ctx) {
+							try {
+								return await callback({
+									...ctx,
+									level: ctx.level + 1,
+								});
+							} catch (err) {
+								operations = [];
+								throw err;
+							}
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.transaction(async (tx1) => {
+					await adapter.create({ model: "user", data: {} }, tx1);
+					await adapter.transaction(async (tx2) => {
+						await adapter.create({ model: "session", data: {} }, tx2);
+						throw new Error("Fail inner");
+					}, tx1);
+				}),
+			).rejects.toThrow("Fail inner");
+
+			expect(operations).toEqual([]);
+		});
+
+		test("Should bypass transactions when bypassTransactions is enabled", async () => {
+			let transactionCalled = false;
+			let operations: string[] = [];
+
+			const adapter = await createTestAdapter({
+				config: {
+					bypassTransactions: true,
+				},
+				context: {
+					db: {
+						inTransaction: false,
+					},
+				},
+				adapter(args_0) {
+					return {
+						async create({ data, model }, ctx) {
+							operations.push(
+								`${ctx.db.inTransaction ? "tx" : "outside"}:${model}`,
+							);
+							return data;
+						},
+						async transaction(callback, ctx) {
+							transactionCalled = true;
+							return callback({
+								...ctx,
+								db: {
+									inTransaction: true,
+								},
+							});
+						},
+					};
+				},
+			});
+
+			const result = await adapter.transaction(async (tx) => {
+				await adapter.create({ model: "user", data: {} }, tx);
+				await adapter.create({ model: "session", data: {} }, tx);
+				return "success";
+			});
+
+			expect(transactionCalled).toBe(false);
+			expect(result).toBe("success");
+			expect(operations).toEqual(["outside:user", "outside:session"]);
 		});
 	});
 });
