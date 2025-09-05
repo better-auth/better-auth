@@ -3,16 +3,13 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { oauthProvider, type OAuthOptions } from ".";
 import { jwt } from "../jwt";
 import { createAuthClient, type BetterAuthClientPlugin } from "../../client";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
+import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "..";
 import type { JwtOptions } from "../jwt";
 import { signJWT } from "../jwt/sign";
 import { oauthProviderClient } from "./client";
 import { checkMcp } from "./mcp";
-import {
-	handleMcpErrors,
-	McpUnauthenticatedError,
-} from "../../oauth-2.1/errors";
+import { handleMcpErrors } from "../../oauth-2.1/errors";
 import { generateKeyPair, SignJWT } from "jose";
 import { generateRandomString } from "../../crypto";
 import { storeToken } from "./utils";
@@ -171,8 +168,14 @@ describe("mcp - checkMcp", async () => {
 			});
 			expect.unreachable();
 		} catch (error) {
-			expect(() => handleMcpErrors(error)).not.toThrow();
-			const res = handleMcpErrors(error);
+			expect(() =>
+				handleMcpErrors(error, {
+					baseUrl: authServerBaseUrl,
+				}),
+			).not.toThrow();
+			const res = handleMcpErrors(error, {
+				baseUrl: authServerBaseUrl,
+			});
 			expect(res.status).toBe(400);
 		}
 	});
@@ -219,10 +222,16 @@ describe("mcp - checkMcp", async () => {
 			});
 			expect.unreachable();
 		} catch (error) {
-			expect(() => handleMcpErrors(error)).not.toThrow();
-			const res = handleMcpErrors(error);
+			expect(() =>
+				handleMcpErrors(error, {
+					baseUrl: authServerBaseUrl,
+				}),
+			).not.toThrow();
+			const res = handleMcpErrors(error, {
+				baseUrl: authServerBaseUrl,
+			});
 			expect(res?.headers.get("www-authenticate")).toBe(
-				`Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-authorization-server"`,
+				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-authorization-server"`,
 			);
 			const body = await res?.text();
 			expect(body).toBe("jwt invalid due to audience or issuer mismatch");
@@ -261,10 +270,16 @@ describe("mcp - checkMcp", async () => {
 			});
 			expect.unreachable();
 		} catch (error) {
-			expect(() => handleMcpErrors(error)).not.toThrow();
-			const res = handleMcpErrors(error);
+			expect(() =>
+				handleMcpErrors(error, {
+					baseUrl: authServerBaseUrl,
+				}),
+			).not.toThrow();
+			const res = handleMcpErrors(error, {
+				baseUrl: authServerBaseUrl,
+			});
 			expect(res?.headers.get("www-authenticate")).toBe(
-				`Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-authorization-server"`,
+				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-authorization-server"`,
 			);
 			const body = await res?.text();
 			expect(body).toBe("no matching key in jwks");
@@ -291,8 +306,14 @@ describe("mcp - checkMcp", async () => {
 			});
 			expect.unreachable();
 		} catch (error) {
-			expect(() => handleMcpErrors(error)).not.toThrow();
-			const res = handleMcpErrors(error);
+			expect(() =>
+				handleMcpErrors(error, {
+					baseUrl: authServerBaseUrl,
+				}),
+			).not.toThrow();
+			const res = handleMcpErrors(error, {
+				baseUrl: authServerBaseUrl,
+			});
 			expect(res.status).toBe(403);
 		}
 	});
@@ -374,8 +395,14 @@ describe("mcp - checkMcp", async () => {
 			});
 			expect.unreachable();
 		} catch (error) {
-			expect(() => handleMcpErrors(error)).not.toThrow();
-			const res = handleMcpErrors(error);
+			expect(() =>
+				handleMcpErrors(error, {
+					baseUrl: authServerBaseUrl,
+				}),
+			).not.toThrow();
+			const res = handleMcpErrors(error, {
+				baseUrl: authServerBaseUrl,
+			});
 			expect(res.status).toBe(403);
 		}
 	});

@@ -19,6 +19,7 @@ export type AuthMethod =
 // | "private_key_jwt" // must also add alg_values_supported for that endpoint
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
 export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
+export type BearerMethodsSupported = "header" | "body" | "query";
 
 /**
  * Metadata for authentication servers.
@@ -82,8 +83,6 @@ export interface AuthServerMetadata {
 	grant_types_supported: GrantType[];
 	/**
 	 * Supported token endpoint authentication methods.
-	 *
-	 * only `client_secret_basic` and `client_secret_post` are supported.
 	 *
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
@@ -305,7 +304,7 @@ export interface ResourceServerMetadata {
 	authorization_servers?: string[];
 	jwks_uri?: string;
 	scopes_supported?: string[];
-	bearer_methods_supported?: string[];
+	bearer_methods_supported?: BearerMethodsSupported[];
 	resource_signing_alg_values_supported?: JWSAlgorithms[];
 	resource_name?: string;
 	resource_documentation?: string;

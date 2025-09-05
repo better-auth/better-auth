@@ -2,6 +2,7 @@ import type {
 	AuthServerMetadata,
 	GrantType,
 	OIDCMetadata,
+	ResourceServerMetadata,
 	TokenEndpointAuthMethod,
 } from "../../oauth-2.1/types";
 import type { GenericEndpointContext } from "../../types";
@@ -24,7 +25,7 @@ export function authServerMetadata(
 		issuer: opts?.jwt?.issuer ?? baseURL,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
-		jwks_uri: opts?.jwks?.remoteUrl ? opts.jwks.remoteUrl : `${baseURL}/jwks`,
+		jwks_uri: opts?.jwks?.remoteUrl ?? `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
@@ -93,3 +94,119 @@ export function oidcServerMetadata(
 	};
 	return metadata;
 }
+
+export function protectedResourceMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+) {
+	const baseURL = ctx.context.baseURL;
+	const jwtPluginOptions = opts.disableJWTPlugin
+		? undefined
+		: getJwtPlugin(ctx.context).options;
+
+	return {
+		resource: jwtPluginOptions?.jwt?.audience ?? baseURL,
+		authorization_servers: [baseURL],
+		jwks_uri: jwtPluginOptions?.jwks?.remoteUrl ?? `${baseURL}/jwks`,
+		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+	} satisfies ResourceServerMetadata;
+}
+
+/**
+ * Provides an exportable `/.well-known/oauth-authorization-server`.
+ *
+ * Useful when basePath prevents the endpoint from being located at the root
+ * and must be provided manually.
+ */
+export const oAuthProviderAuthServerMetadata = <
+	Auth extends {
+		api: {
+			getOAuthServerConfig: (...args: any) => any;
+		};
+	},
+>(
+	auth: Auth,
+	headers?: HeadersInit,
+) => {
+	return async (request: Request) => {
+		const res = await auth.api.getOAuthServerConfig();
+		return new Response(JSON.stringify(res), {
+			status: 200,
+			headers: {
+				// We should cache here because it is unlikely this will
+				// change frequently and if it does shouldn't be more than
+				// for 15 seconds in a change period
+				"Cache-Control":
+					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
+				...headers,
+				"Content-Type": "application/json",
+			},
+		});
+	};
+};
+
+/**
+ * Provides an exportable `/.well-known/openid-configuration`.
+ *
+ * Useful when basePath prevents the endpoint from being located at the root
+ * and must be provided manually.
+ */
+export const oAuthProviderOpenIdConfigMetadata = <
+	Auth extends {
+		api: {
+			getOpenIdConfig: (...args: any) => any;
+		};
+	},
+>(
+	auth: Auth,
+	headers: HeadersInit,
+) => {
+	return async (request: Request) => {
+		const res = await auth.api.getOpenIdConfig();
+		return new Response(JSON.stringify(res), {
+			status: 200,
+			headers: {
+				// We should cache here because it is unlikely this will
+				// change frequently and if it does shouldn't be more than
+				// for 15 seconds in a change period
+				"Cache-Control":
+					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
+				...headers,
+				"Content-Type": "application/json",
+			},
+		});
+	};
+};
+
+/**
+ * Provides an exportable `/.well-known/oauth-protected-resource`.
+ *
+ * Useful when basePath prevents the endpoint from being located at the root
+ * and must be provided manually.
+ */
+export const oAuthProviderProtectedResourceMetadata = <
+	Auth extends {
+		api: {
+			getMCPProtectedResource: (...args: any) => any;
+		};
+	},
+>(
+	auth: Auth,
+	headers?: HeadersInit,
+) => {
+	return async (request: Request) => {
+		const res = await auth.api.getMCPProtectedResource();
+		return new Response(JSON.stringify(res), {
+			status: 200,
+			headers: {
+				// We should cache here because it is unlikely this will
+				// change frequently and if it does shouldn't be more than
+				// for 15 seconds in a change period
+				"Cache-Control":
+					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
+				...headers,
+				"Content-Type": "application/json",
+			},
+		});
+	};
+};
